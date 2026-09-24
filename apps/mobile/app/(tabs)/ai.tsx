@@ -1,116 +1,64 @@
-import { FlashList } from "@shopify/flash-list";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter, useNavigation } from "expo-router";
-import { useLayoutEffect, useState } from "react";
-import { RefreshControl, StyleSheet, View } from "react-native";
-import { FAB, IconButton, List, Snackbar } from "react-native-paper";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { Conversation } from "../ai/[id]";
 import { api } from "../../src/api";
+import { getAiSession, setAiSession, subscribeAiSession } from "../../src/ai-session";
 import { useAuth } from "../../src/auth";
-import { Card, EmptyState, LoadingState, colors } from "../../src/chrome";
-import { relativeTime } from "../../src/format";
-import { usePull } from "../../src/query-cache";
+import { EmptyState, LoadingState } from "../../src/chrome";
 
-type SessionRow = {
-  id: string;
-  title: string;
-  updated_at?: string;
-  running?: boolean;
-  awaitingApproval?: boolean;
-};
-
+type SessionRow = { id: string; title: string };
 type Options = {
   defaultModel: string;
-  models: { id: string; name: string }[];
+  models: { id: string }[];
   preferences?: { default_model?: string | null };
 };
 
 export default function AI() {
-  const router = useRouter();
-  const navigation = useNavigation();
   const client = useQueryClient();
   const { session } = useAuth();
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
-  const query = useQuery({
-    queryKey: ["ai-sessions", session?.origin],
-    enabled: !!session,
-    queryFn: async () => {
-      const data = await api<SessionRow[] | { items: SessionRow[] }>("/ai/sessions?archived=false");
-      return Array.isArray(data) ? data : data.items;
-    },
-  });
-  const pull = usePull(() => query.refetch());
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => <IconButton icon="cog-outline" onPress={() => router.push("/ai/settings")} />,
-    });
-  }, [navigation, router]);
+  const [picked, setPicked] = useState(getAiSession());
+  const [error, setError] = useState("");
+  const origin = session?.origin ?? "";
+  const seenOrigin = useRef(origin);
 
-  async function create() {
-    if (!session || busy) return;
-    setBusy(true);
-    try {
-      const options = await api<Options>("/ai/options");
-      const modelId = options.preferences?.default_model || options.defaultModel || options.models[0]?.id;
-      if (!modelId) throw new Error("还没有可用的模型");
-      const created = await api<{ id: string; title: string }>("/ai/sessions", {
-        body: { title: "新对话", modelId },
-      });
-      await client.invalidateQueries({ queryKey: ["ai-sessions", session.origin] });
-      router.push({ pathname: "/ai/[id]", params: { id: created.id, title: created.title || "新对话" } });
-    } catch (reason) {
-      setNotice(reason instanceof Error ? reason.message : "无法新建对话");
-    } finally {
-      setBusy(false);
-    }
-  }
+  useEffect(() => subscribeAiSession(setPicked), []);
 
-  if (query.isLoading) return <LoadingState />;
-  if (query.isError) {
-    return <EmptyState title={query.error instanceof Error ? query.error.message : "加载失败"} />;
-  }
-  return (
-    <View style={styles.page}>
-      <FlashList
-        data={query.data ?? []}
-        estimatedItemSize={84}
-        contentContainerStyle={{ paddingBottom: 96 }}
-        refreshControl={
-          <RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} />
+  useEffect(() => {
+    if (seenOrigin.current === origin) return;
+    seenOrigin.current = origin;
+    setAiSession(null);
+    setError("");
+  }, [origin]);
+
+  useEffect(() => {
+    if (!session || picked) return;
+    let cancel = false;
+    void (async () => {
+      try {
+        const data = await api<SessionRow[] | { items: SessionRow[] }>("/ai/sessions?archived=false");
+        const rows = Array.isArray(data) ? data : data.items;
+        if (cancel) return;
+        if (rows[0]) {
+          setAiSession(rows[0].id);
+          return;
         }
-        ListEmptyComponent={<EmptyState title="还没有对话" detail="点右下角开始新的对话" />}
-        renderItem={({ item }) => (
-          <Card>
-            <List.Item
-              title={item.title || "新的对话"}
-              titleStyle={{ color: colors.ink }}
-              descriptionStyle={{ color: colors.muted }}
-              description={
-                item.awaitingApproval
-                  ? "等待确认"
-                  : item.running
-                    ? "正在回复"
-                    : item.updated_at
-                      ? relativeTime(item.updated_at)
-                      : ""
-              }
-              left={(props) => <List.Icon {...props} color={colors.accent} icon="creation" />}
-              onPress={() =>
-                router.push({ pathname: "/ai/[id]", params: { id: item.id, title: item.title || "对话" } })
-              }
-            />
-          </Card>
-        )}
-      />
-      <FAB icon="plus" style={styles.fab} color="#fff" loading={busy} onPress={() => void create()} />
-      <Snackbar visible={!!notice} onDismiss={() => setNotice("")} duration={2800}>
-        {notice}
-      </Snackbar>
-    </View>
-  );
-}
+        const options = await api<Options>("/ai/options");
+        const modelId = options.preferences?.default_model || options.defaultModel || options.models[0]?.id;
+        if (!modelId) throw new Error("还没有可用的模型");
+        const created = await api<{ id: string }>("/ai/sessions", { body: { title: "新对话", modelId } });
+        if (cancel) return;
+        await client.invalidateQueries({ queryKey: ["ai-sessions", session.origin] });
+        setAiSession(created.id);
+      } catch (reason) {
+        if (!cancel) setError(reason instanceof Error ? reason.message : "无法打开对话");
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [client, picked, session]);
 
-const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.bg },
-  fab: { position: "absolute", right: 16, bottom: 16, backgroundColor: colors.accent },
-});
+  if (error) return <EmptyState title={error} />;
+  if (!picked) return <LoadingState label="正在打开对话…" />;
+  return <Conversation key={picked} sessionId={picked} />;
+}

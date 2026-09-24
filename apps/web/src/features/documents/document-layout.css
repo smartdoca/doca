@@ -48,6 +48,17 @@ html[data-editor-shell="mobile"] .markdown-toolbar {
   max-width: 100%;
   overflow: auto;
 }
+html[data-editor-shell="mobile"] .editor-columns,
+html[data-editor-shell="mobile"] .editor-columns.with-comments,
+html[data-editor-shell="mobile"] .compact-document .editor-columns,
+html[data-editor-shell="mobile"] .compact-document .editor-columns.with-comments {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
 html[data-editor-shell="mobile"] .sk-block-gutter,
 html[data-editor-shell="mobile"] .sk-block-menu,
 html[data-editor-shell="mobile"] .sk-floating,
@@ -55,6 +66,8 @@ html[data-editor-shell="mobile"] .exmd-selection-toolbar,
 html[data-editor-shell="mobile"] .selection-comment-floating,
 html[data-editor-shell="mobile"] .document-outline,
 html[data-editor-shell="mobile"] .outline-floating-toggle,
+html[data-editor-shell="mobile"] .document-scroll-buttons,
+html[data-editor-shell="mobile"] .content-comments,
 html[data-editor-shell="mobile"] #document-page-width-slot {
   display: none !important;
 }
@@ -91,6 +104,77 @@ html[data-editor-shell="mobile"] .markdown-body pre,
 html[data-editor-shell="mobile"] .cm-scroller,
 html[data-editor-shell="mobile"] .katex-display {
   overflow-x: auto;
+}
+html[data-editor-shell="mobile"] .sk-page-shell,
+html[data-editor-shell="mobile"] .sk-editor,
+html[data-editor-shell="mobile"] [data-slate-editor="true"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
+html[data-editor-shell="mobile"] [data-slate-editor="true"],
+html[data-editor-shell="mobile"] [data-slate-editor="true"] * {
+  max-width: 100%;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  white-space: pre-wrap !important;
+}
+html[data-editor-shell="mobile"] .sk-columns {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+}
+html[data-editor-shell="mobile"] .sk-column {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+html[data-editor-shell="mobile"] [data-slate-editor="true"] .sk-code,
+html[data-editor-shell="mobile"] .sk-code,
+html[data-editor-shell="mobile"] .sk-code-body,
+html[data-editor-shell="mobile"] .sk-code-editor,
+html[data-editor-shell="mobile"] .markdown-body pre,
+html[data-editor-shell="mobile"] .cm-scroller {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+}
+html[data-editor-shell="mobile"] [data-slate-editor="true"] .sk-code,
+html[data-editor-shell="mobile"] [data-slate-editor="true"] .sk-code *,
+html[data-editor-shell="mobile"] .sk-code,
+html[data-editor-shell="mobile"] .sk-code *,
+html[data-editor-shell="mobile"] .sk-code-body,
+html[data-editor-shell="mobile"] .sk-code-body pre,
+html[data-editor-shell="mobile"] .markdown-body pre,
+html[data-editor-shell="mobile"] .cm-scroller,
+html[data-editor-shell="mobile"] .cm-scroller * {
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+html[data-editor-shell="mobile"] [data-slate-editor="true"] .sk-code *,
+html[data-editor-shell="mobile"] .sk-code *,
+html[data-editor-shell="mobile"] .cm-scroller * {
+  max-width: none !important;
+}
+html[data-editor-shell="mobile"] .sk-table-block,
+html[data-editor-shell="mobile"] .sk-table-scroll {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+  overflow-x: auto !important;
+}
+html[data-editor-shell="mobile"] [data-slate-editor="true"] .sk-table-block * {
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  max-width: none !important;
+}
+html[data-editor-shell="mobile"] .sk-table-block table {
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
 }
 html[data-editor-shell="mobile"] .sk-page img,
 html[data-editor-shell="mobile"] .markdown-body img {

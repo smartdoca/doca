@@ -2,6 +2,8 @@ import { expect, it } from "vitest";
 import {
   answerSegments,
   folderExplorerHash,
+  navigationHref,
+  resolveExplorerClick,
   isFolderExplorerHref,
   isMailHref,
   keepsAssistantSession,
@@ -106,6 +108,29 @@ it("appends unused file cards when ensureCards is on", () => {
     { type: "text", text: "文件已就绪。" },
     { type: "file", file },
   ]);
+});
+
+it("replaces a handwritten file link with the delivered card", () => {
+  const file = {
+    id: "file-3",
+    name: "武汉大学品牌声誉深度分析报告.pdf",
+    path: "我的文件夹 / 武汉大学品牌声誉深度分析报告.pdf",
+    href: "/files?path=%5B%7B%22type%22%3A%22system%22%2C%22id%22%3A%22root%22%7D%5D&focus=file-3",
+    downloadUrl: "/api/v1/files/items/file-3/content?download=1",
+  };
+  const segments = answerSegments(
+    "您可以点击下方卡片访问该文件：[武汉大学品牌声誉深度分析报告.pdf](#/files?path=我的文件夹)",
+    [],
+    { files: [file] },
+  );
+  expect(segments.map((item) => item.type)).toEqual(["text", "file"]);
+  expect(segments[1]).toMatchObject({ type: "file", file });
+  expect(navigationHref("#/files?path=我的文件夹")).toBe(false);
+  expect(navigationHref(file.href)).toBe(true);
+  expect(
+    resolveExplorerClick("#/files?path=我的文件夹", [file], file.name),
+  ).toBe(file.href);
+  expect(resolveExplorerClick("#/files?path=我的文件夹", [])).toBe("");
 });
 
 it("recognizes personal and shared folder explorer hrefs", () => {

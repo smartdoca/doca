@@ -4,6 +4,7 @@ import type { Actor } from "@core/modules/identity/passwords.js";
 import { aiConfig } from "@core/modules/ai/config.js";
 import { processProjections } from "@core/modules/automation/jobs.js";
 import {
+  annotateWebSources,
   enqueueKnowledge,
   enqueueMissingKnowledge,
   hideKnowledgeLink,
@@ -177,6 +178,7 @@ export function registerKnowledge(
         limit: 8,
       };
       const result = await searchWeb((await aiConfig(db)).webSearch, req.body.query.trim(), undefined, fetch, constraints);
+      const sources = annotateWebSources(req.body.query.trim(), result.sources);
       const detail = {
         query: req.body.query.trim(),
         site: req.body.site?.trim() ?? "",
@@ -184,7 +186,7 @@ export function registerKnowledge(
         freshness: req.body.freshness ?? "any",
         language: req.body.language ?? "any",
         searched: result.query,
-        sources: result.sources,
+        sources,
       };
       await db.updateTable("knowledge_gaps").set({
         status: "ready",

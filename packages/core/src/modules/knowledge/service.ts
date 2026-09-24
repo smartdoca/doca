@@ -7,6 +7,8 @@ export type KnowledgeKind = "document" | "file" | "mail" | "folder" | "library";
 const segmenter = new Intl.Segmenter("zh-CN", { granularity: "word" });
 const stopWords = new Set([
   "文件", "文档", "内容", "这个", "我们", "可以", "一个", "以及", "the", "and", "with",
+  "相关", "文章", "汇总", "说明", "介绍", "进行", "通过", "如果", "没有", "已经", "一种",
+  "资料", "问题", "笔记", "notes", "guide", "file",
 ]);
 
 export type KnowledgeIndexer = {
@@ -67,6 +69,37 @@ export function knowledgeTerms(value: string) {
   for (const token of normalized.split(/\s+/))
     if (/^[\p{Script=Han}]{2,8}$/u.test(token) && !stopWords.has(token)) terms.add(token);
   return [...terms].slice(0, 24);
+}
+
+export function contentTerms(value: string) {
+  return knowledgeTerms(value).filter((term) => !stopWords.has(term));
+}
+
+export function matchKnowledge(query: string, text: string) {
+  const queryTerms = contentTerms(query);
+  if (!queryTerms.length) return null;
+  const haystack = text.toLocaleLowerCase();
+  const terms = queryTerms.filter((term) => haystack.includes(term));
+  if (!terms.length) return null;
+  const singleRare = terms.length === 1 && terms[0]!.length >= 4;
+  if (queryTerms.length >= 2 && terms.length < 2 && !singleRare) return null;
+  const lead = queryTerms.length < 2 || terms.length >= 2;
+  return { terms, lead, score: terms.length / queryTerms.length + (lead ? 0.2 : 0) };
+}
+
+export function annotateWebSources<T extends { title: string; snippet?: string }>(query: string, sources: T[]) {
+  const queryTerms = contentTerms(query);
+  return sources.map((source) => {
+    const haystack = `${source.title}\n${source.snippet ?? ""}`.toLocaleLowerCase();
+    const terms = queryTerms.filter((term) => haystack.includes(term));
+    const lead = queryTerms.length < 2 ? terms.length > 0 : terms.length >= 2;
+    return { ...source, terms, lead };
+  }).sort((left, right) => Number(right.lead) - Number(left.lead) || right.terms.length - left.terms.length);
+}
+
+function termsInBoth(left: string, right: string) {
+  const other = right.toLocaleLowerCase();
+  return contentTerms(left).filter((term) => other.includes(term)).slice(0, 4);
 }
 
 function chunkKey(kind: string, sourceId: string, ordinal: number) {
@@ -186,11 +219,11 @@ async function clearSource(db: DB, kind: string, id: string) {
 }
 
 async function rememberSimilar(db: DB, kind: string, id: string, title: string, text: string, readers: string[]) {
-  const terms = knowledgeTerms(`${title}\n${text}`);
+  const terms = contentTerms(`${title}\n${text}`);
   if (terms.length < 2) return;
   const rows = await db.selectFrom("knowledge_chunks").select(["source_kind", "source_id", "title", "text", "reader_ids"]).orderBy("updated_at", "desc").limit(300).execute();
   const seen = new Set<string>();
-  const matches: Array<{ kind: string; id: string; score: number; title: string }> = [];
+  const matches: Array<{ kind: string; id: string; score: number; title: string; shared: string[] }> = [];
   for (const row of rows) {
     if (row.source_kind === kind && row.source_id === id) continue;
     const key = `${row.source_kind}:${row.source_id}`;
@@ -198,14 +231,15 @@ async function rememberSimilar(db: DB, kind: string, id: string, title: string, 
     const theirReaders = JSON.parse(row.reader_ids) as string[];
     if (!readers.some((reader) => theirReaders.includes(reader) || reader.startsWith("visibility:"))) continue;
     seen.add(key);
-    const theirs = new Set(knowledgeTerms(`${row.title}\n${row.text}`));
-    const shared = terms.filter((term) => theirs.has(term));
-    const score = shared.length / terms.length;
-    if (shared.length >= 2 && score >= 0.34)
-      matches.push({ kind: row.source_kind, id: row.source_id, score, title: row.title });
+    const shared = termsInBoth(`${title}\n${text}`, `${row.title}\n${row.text}`);
+    if (shared.length < 2) continue;
+    const theirs = contentTerms(`${row.title}\n${row.text}`);
+    const score = shared.length / Math.max(new Set([...terms, ...theirs]).size, 1);
+    matches.push({ kind: row.source_kind, id: row.source_id, score, title: row.title, shared });
   }
   const now = new Date().toISOString();
   for (const match of matches.sort((a, b) => b.score - a.score).slice(0, 6)) {
+    const reason = `共用「${match.shared.join("、")}」`;
     await db
       .insertInto("knowledge_links")
       .values({
@@ -216,12 +250,12 @@ async function rememberSimilar(db: DB, kind: string, id: string, title: string, 
         to_id: match.id,
         relation: "similar",
         score: Number(match.score.toFixed(3)),
-        reason: `与「${match.title.slice(0, 40)}」用词接近`,
+        reason,
         created_at: now,
       })
       .onConflict((oc) => oc.columns(["from_kind", "from_id", "to_kind", "to_id", "relation"]).doUpdateSet({
         score: Number(match.score.toFixed(3)),
-        reason: `与「${match.title.slice(0, 40)}」用词接近`,
+        reason,
       }))
       .execute();
   }
@@ -293,36 +327,55 @@ export async function rebuildKnowledge(
   return { chunks: docs.length };
 }
 
-function adjusted(score: number, judgment?: string) {
-  if (judgment === "useful") return score + 0.25;
-  if (judgment === "irrelevant") return score - 0.4;
+function adjusted(score: number, feedback: { judgment: string; query: string } | undefined, query: string) {
+  if (!feedback) return score;
+  const same = feedback.query.trim().toLocaleLowerCase() === query.trim().toLocaleLowerCase();
+  const related = same || contentTerms(feedback.query).some((term) => contentTerms(query).includes(term));
+  if (!related) return score;
+  if (feedback.judgment === "useful") return score + 0.25;
+  if (feedback.judgment === "irrelevant") return score - 0.4;
   return score;
 }
 
-type KnowledgeHit = { id: string; title: string; text: string; anchor: string; sourceKind: string; sourceId: string; score: number };
+type KnowledgeHit = {
+  id: string;
+  title: string;
+  text: string;
+  anchor: string;
+  sourceKind: string;
+  sourceId: string;
+  score: number;
+  terms: string[];
+  lead: boolean;
+  hash: string;
+};
 
-async function lexicalHits(db: DB, userId: string, query: string, feedback: Map<string, string>) {
-  const terms = knowledgeTerms(query);
+async function lexicalHits(db: DB, userId: string, query: string, feedback: Map<string, { judgment: string; query: string }>) {
   const pattern = readerTokensFor(userId).map((token) => `%"${token}"%`);
   const rows = await db.selectFrom("knowledge_chunks").selectAll().where((eb) => eb.or(pattern.map((value) => eb("reader_ids", "like", value)))).limit(400).execute();
   return rows.flatMap((row) => {
     if (!canReadChunk(JSON.parse(row.reader_ids), userId)) return [];
-    const haystack = `${row.title}\n${row.text}`.toLocaleLowerCase();
-    const covered = terms.filter((term) => haystack.includes(term)).length;
-    const score = adjusted(terms.length ? covered / terms.length : 0, feedback.get(row.id));
+    const matched = matchKnowledge(query, `${row.title}\n${row.text}`);
+    if (!matched) return [];
+    const score = adjusted(matched.score, feedback.get(row.id), query);
     if (score <= 0) return [];
-    return [{ id: row.id, title: row.title, text: row.text, anchor: row.anchor, sourceKind: row.source_kind, sourceId: row.source_id, score }];
+    return [{
+      id: row.id,
+      title: row.title,
+      text: row.text,
+      anchor: row.anchor,
+      sourceKind: row.source_kind,
+      sourceId: row.source_id,
+      score,
+      terms: matched.terms,
+      lead: matched.lead,
+      hash: row.content_hash,
+    }];
   });
 }
 
-function covers(terms: string[], value: string) {
-  const haystack = value.toLocaleLowerCase();
-  return terms.some((term) => haystack.includes(term));
-}
-
 async function materializeKnowledgeMatches(db: DB, userId: string, query: string, indexer?: KnowledgeIndexer) {
-  const terms = knowledgeTerms(query);
-  if (!terms.length) return false;
+  if (!contentTerms(query).length) return false;
   let rebuilt = 0;
   const documents = await db
     .selectFrom("resources as r")
@@ -335,9 +388,9 @@ async function materializeKnowledgeMatches(db: DB, userId: string, query: string
     .execute();
   for (const document of documents) {
     if (rebuilt >= 8) break;
-    if (!covers(terms, `${document.title}\n${document.text ?? ""}`)) continue;
+    if (!matchKnowledge(query, `${document.title}\n${document.text ?? ""}`)) continue;
     const existing = await db.selectFrom("knowledge_chunks").select(["title", "text"]).where("source_kind", "=", "document").where("source_id", "=", document.id).execute();
-    if (existing.some((row) => covers(terms, `${row.title}\n${row.text}`))) continue;
+    if (existing.some((row) => matchKnowledge(query, `${row.title}\n${row.text}`))) continue;
     const record = await documentReaders(db, document.id);
     if (!record.alive || !canReadChunk(record.readers, userId)) continue;
     await rebuildKnowledge(db, "document", document.id, indexer);
@@ -354,9 +407,9 @@ async function materializeKnowledgeMatches(db: DB, userId: string, query: string
     .execute();
   for (const file of files) {
     if (rebuilt >= 8) break;
-    if (!covers(terms, `${file.name}\n${file.ai_description_override ?? ""}\n${file.ai_description ?? ""}`)) continue;
+    if (!matchKnowledge(query, `${file.name}\n${file.ai_description_override ?? ""}\n${file.ai_description ?? ""}`)) continue;
     const existing = await db.selectFrom("knowledge_chunks").select(["title", "text"]).where("source_kind", "=", "file").where("source_id", "=", file.id).execute();
-    if (existing.some((row) => covers(terms, `${row.title}\n${row.text}`))) continue;
+    if (existing.some((row) => matchKnowledge(query, `${row.title}\n${row.text}`))) continue;
     const record = await fileRecord(db, file.id);
     if (!record.alive || !canReadChunk(record.readers, userId)) continue;
     await rebuildKnowledge(db, "file", file.id, indexer);
@@ -373,9 +426,9 @@ async function materializeKnowledgeMatches(db: DB, userId: string, query: string
   for (const message of messages) {
     if (rebuilt >= 8) break;
     if (!mailKnowledgeIncluded(message.knowledge_scope, message.starred)) continue;
-    if (!covers(terms, `${message.subject ?? ""}\n${message.ai_tags ?? ""}\n${message.snippet ?? ""}\n${message.body_text ?? ""}`)) continue;
+    if (!matchKnowledge(query, `${message.subject ?? ""}\n${message.ai_tags ?? ""}\n${message.snippet ?? ""}\n${message.body_text ?? ""}`)) continue;
     const existing = await db.selectFrom("knowledge_chunks").select(["title", "text"]).where("source_kind", "=", "mail").where("source_id", "=", message.id).execute();
-    if (existing.some((row) => covers(terms, `${row.title}\n${row.text}`))) continue;
+    if (existing.some((row) => matchKnowledge(query, `${row.title}\n${row.text}`))) continue;
     const record = await mailRecord(db, message.id);
     if (!record.alive || !canReadChunk(record.readers, userId)) continue;
     await rebuildKnowledge(db, "mail", message.id, indexer);
@@ -424,30 +477,47 @@ export async function searchKnowledgeChunks(
 ) {
   const tokens = readerTokensFor(userId);
   const remote = await indexer?.search(tokens, query).catch(() => null);
-  const feedbackRows = await db.selectFrom("knowledge_feedback").select(["chunk_id", "judgment", "created_at"]).where("user_id", "=", userId).orderBy("created_at", "desc").limit(500).execute();
-  const feedback = new Map<string, string>();
-  for (const row of feedbackRows) if (!feedback.has(row.chunk_id)) feedback.set(row.chunk_id, row.judgment);
+  const feedbackRows = await db.selectFrom("knowledge_feedback").select(["chunk_id", "judgment", "query", "created_at"]).where("user_id", "=", userId).orderBy("created_at", "desc").limit(500).execute();
+  const feedback = new Map<string, { judgment: string; query: string }>();
+  for (const row of feedbackRows) if (!feedback.has(row.chunk_id)) feedback.set(row.chunk_id, { judgment: row.judgment, query: row.query });
   let hits: KnowledgeHit[] = [];
   if (remote?.length) {
     const rows = await db.selectFrom("knowledge_chunks").selectAll().where("id", "in", remote.map((hit) => hit.id)).execute();
     const rank = new Map(remote.map((hit) => [hit.id, hit.score]));
-    const terms = knowledgeTerms(query);
-    hits = rows.filter((row) => canReadChunk(JSON.parse(row.reader_ids), userId)).map((row) => ({
-      id: row.id,
-      title: row.title,
-      text: row.text,
-      anchor: row.anchor,
-      sourceKind: row.source_kind,
-      sourceId: row.source_id,
-      score: adjusted(rank.get(row.id) ?? 0, feedback.get(row.id)),
-    })).filter((hit) => !terms.length || covers(terms, `${hit.title}\n${hit.text}`));
+    hits = rows.flatMap((row) => {
+      if (!canReadChunk(JSON.parse(row.reader_ids), userId)) return [];
+      const matched = matchKnowledge(query, `${row.title}\n${row.text}`);
+      if (!matched) return [];
+      const remoteScore = rank.get(row.id) ?? 0;
+      const semantic = remoteScore > 1 ? remoteScore / (remoteScore + 1) : remoteScore;
+      return [{
+        id: row.id,
+        title: row.title,
+        text: row.text,
+        anchor: row.anchor,
+        sourceKind: row.source_kind,
+        sourceId: row.source_id,
+        score: adjusted(matched.score + semantic * 0.15, feedback.get(row.id), query),
+        terms: matched.terms,
+        lead: matched.lead,
+        hash: row.content_hash,
+      }];
+    });
   }
-  if (!hits.length) hits = await lexicalHits(db, userId, query, feedback);
+  const lexical = await lexicalHits(db, userId, query, feedback);
+  const merged = new Map(hits.map((hit) => [hit.id, hit]));
+  for (const hit of lexical) if (!merged.has(hit.id)) merged.set(hit.id, hit);
+  hits = [...merged.values()];
   if (!hits.length && await materializeKnowledgeMatches(db, userId, query, indexer))
     hits = await lexicalHits(db, userId, query, feedback);
-  hits.sort((a, b) => b.score - a.score);
+  hits.sort((a, b) => Number(b.lead) - Number(a.lead) || b.score - a.score);
   const seen = new Set<string>();
+  const seenHash = new Set<string>();
   hits = hits.filter((hit) => {
+    if (hit.hash) {
+      if (seenHash.has(hit.hash)) return false;
+      seenHash.add(hit.hash);
+    }
     const key = `${hit.sourceKind}:${hit.sourceId}`;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -533,11 +603,78 @@ export async function knowledgeGraph(db: DB, userId: string) {
     });
   }
   const gaps = await db.selectFrom("knowledge_gaps").selectAll().where("user_id", "=", userId).orderBy("created_at", "desc").limit(20).execute();
+  for (const gap of gaps) {
+    if (gap.status !== "open") continue;
+    const covered = visible.some((row) => matchKnowledge(gap.query, `${row.title}\n${row.text}`)?.lead);
+    if (!covered) continue;
+    await db.updateTable("knowledge_gaps").set({ status: "covered" }).where("id", "=", gap.id).execute();
+    gap.status = "covered";
+  }
+  const listed = [...sources.values()];
   return {
-    sources: [...sources.values()],
+    sources: listed,
     links: visibleLinks.slice(0, 40),
     gaps,
+    topics: clusterTopics(listed, visibleLinks),
   };
+}
+
+function clusterTopics(
+  sources: Array<{ kind: string; id: string; title: string; chunks: number }>,
+  links: Array<{ from_kind: string; from_id: string; to_kind: string; to_id: string; relation: string }>,
+) {
+  const list = sources.slice(0, 120);
+  const parent = list.map((_, index) => index);
+  const find = (index: number): number => {
+    let cursor = index;
+    while (parent[cursor] !== cursor) cursor = parent[cursor]!;
+    parent[index] = cursor;
+    return cursor;
+  };
+  const unite = (left: number, right: number) => {
+    const a = find(left);
+    const b = find(right);
+    if (a !== b) parent[b] = a;
+  };
+  const titles = list.map((source) => source.title.toLocaleLowerCase());
+  const terms = list.map((source) => contentTerms(source.title));
+  const frequency = new Map<string, number>();
+  for (const row of terms) for (const term of new Set(row)) frequency.set(term, (frequency.get(term) ?? 0) + 1);
+  for (let i = 0; i < list.length; i += 1) {
+    for (let j = i + 1; j < list.length; j += 1) {
+      if (titles[i] && titles[i] === titles[j]) unite(i, j);
+      const shared = terms[i]!.filter((term) => titles[j]!.includes(term));
+      if (shared.length >= 2 || (shared.length === 1 && (frequency.get(shared[0]!) ?? 0) <= 4)) unite(i, j);
+    }
+  }
+  const index = new Map(list.map((source, position) => [`${source.kind}:${source.id}`, position]));
+  for (const link of links) {
+    if (link.relation !== "similar") continue;
+    const from = index.get(`${link.from_kind}:${link.from_id}`);
+    const to = index.get(`${link.to_kind}:${link.to_id}`);
+    if (from !== undefined && to !== undefined) unite(from, to);
+  }
+  const groups = new Map<number, typeof list>();
+  for (let index = 0; index < list.length; index += 1) {
+    const root = find(index);
+    const group = groups.get(root) ?? [];
+    group.push(list[index]!);
+    groups.set(root, group);
+  }
+  return [...groups.values()].map((group) => {
+    const counts = new Map<string, number>();
+    for (const source of group) for (const term of contentTerms(source.title)) counts.set(term, (counts.get(term) ?? 0) + 1);
+    const distinctTitles = new Set(group.map((source) => source.title));
+    const sharedLabel = [...counts.entries()].filter((entry) => entry[1] >= 2).sort((left, right) => right[1] - left[1] || right[0].length - left[0].length)[0]?.[0];
+    const label = distinctTitles.size === 1 ? group[0]!.title : sharedLabel || group[0]!.title;
+    return {
+      label,
+      sources: group.map((source) => ({
+        ...source,
+        words: contentTerms(source.title).filter((term) => group.some((other) => other.id !== source.id && other.title.toLocaleLowerCase().includes(term))).slice(0, 4).join("、"),
+      })),
+    };
+  }).sort((left, right) => right.sources.length - left.sources.length);
 }
 
 async function endpointVisible(db: DB, userId: string, kind: string, id: string) {
@@ -583,9 +720,9 @@ export async function suggestFolder(db: DB, userId: string, folderId: string) {
     if (!terms.length) continue;
     for (const document of documents) {
       if (!canReadChunk(JSON.parse(document.reader_ids), userId)) continue;
-      const shared = terms.filter((term) => `${document.title}\n${document.text}`.toLocaleLowerCase().includes(term));
-      if (shared.length < 1 || shared.length / terms.length < 0.5) continue;
-      const reason = `文件夹中的「${file.name}」与文档「${document.title}」接近，建议归入同一主题`;
+      const shared = contentTerms(file.name.replace(/\.[a-z0-9]{1,8}$/i, "")).filter((term) => `${document.title}\n${document.text}`.toLocaleLowerCase().includes(term));
+      if (!shared.length) continue;
+      const reason = `共用「${shared.slice(0, 4).join("、")}」。文件夹中的「${file.name}」与文档「${document.title}」接近，建议归入同一主题`;
       await upsertOrganizeLink(db, "folder", folderId, "document", document.source_id, shared.length / terms.length, reason);
       created.push(reason);
       break;
@@ -601,11 +738,9 @@ export async function suggestLibrary(db: DB, userId: string, libraryId: string) 
   const created = [];
   for (let i = 0; i < docs.length; i += 1) {
     for (const other of docs.slice(i + 1)) {
-      const left = knowledgeTerms(docs[i]!.title);
-      const right = knowledgeTerms(other.title);
-      const shared = left.filter((term) => right.includes(term));
-      if (shared.length < 1) continue;
-      const reason = `知识库中「${docs[i]!.title}」和「${other.title}」主题接近，可以放在相邻目录`;
+      const shared = contentTerms(docs[i]!.title).filter((term) => other.title.toLocaleLowerCase().includes(term));
+      if (!shared.length) continue;
+      const reason = `共用「${shared.slice(0, 4).join("、")}」。知识库中「${docs[i]!.title}」和「${other.title}」主题接近，可以放在相邻目录`;
       await upsertOrganizeLink(db, "library", libraryId, "document", other.id, 0.5, reason);
       created.push(reason);
       break;

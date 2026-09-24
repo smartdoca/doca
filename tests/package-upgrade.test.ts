@@ -123,6 +123,7 @@ it.each([
   "slatetsx-kit-editor-0.4.4-1ce051a28e12.tgz",
   "slatetsx-kit-editor-0.4.5-8abdc3393b1c.tgz",
   "slatetsx-kit-editor-0.4.6-6d262e749438.tgz",
+  "slatetsx-kit-editor-0.4.7-9d7dc617a269.tgz",
 ])(
   "rich checkpoint from %s restores without rewriting identities or emitting local edits",
   async (artifact) => {

@@ -3,7 +3,7 @@ import { FileText, FolderOpen, Library, Mail, Search, X } from "lucide-react";
 import { api } from "@web/shared/api.js";
 import "./knowledge-relations.css";
 
-type Source = { kind: string; id: string; title: string; chunks: number; copies?: number };
+type Source = { kind: string; id: string; title: string; chunks: number; copies?: number; words?: string };
 type KnowledgeLink = {
   id: string;
   from_kind: string;
@@ -17,7 +17,8 @@ type KnowledgeLink = {
   toTitle: string;
 };
 type Gap = { id: string; query: string; status: string; detail: string; created_at: string };
-type WebSource = { title: string; url: string; snippet: string };
+type Topic = { label: string; sources: Source[] };
+type WebSource = { title: string; url: string; snippet: string; terms?: string[]; lead?: boolean };
 type Freshness = "any" | "day" | "week" | "month" | "year";
 type SearchLanguage = "any" | "zh" | "en";
 type Capture = {
@@ -32,8 +33,8 @@ type Capture = {
   selected: string[];
   step: "form" | "results";
 };
-type Graph = { sources: Source[]; links: KnowledgeLink[]; gaps: Gap[] };
-type Hit = { id: string; title: string; text: string; sourceKind: string; sourceId: string; score: number };
+type Graph = { sources: Source[]; links: KnowledgeLink[]; gaps: Gap[]; topics?: Topic[] };
+type Hit = { id: string; title: string; text: string; sourceKind: string; sourceId: string; score: number; terms?: string[] };
 type Focus = { kind: string; id: string } | null;
 
 const kindLabel: Record<string, string> = {
@@ -57,6 +58,13 @@ function openOriginal(kind: string, id: string) {
   if (kind === "document" || kind === "library") location.hash = `/r/${id}`;
   else if (kind === "mail") location.hash = "/mail";
   else location.hash = "/files";
+}
+
+function gapMatches(gap: Gap, title: string, label: string) {
+  const query = gap.query.trim().toLocaleLowerCase();
+  const name = title.trim().toLocaleLowerCase();
+  if (query.length >= 2 && (name.includes(query) || query.includes(name))) return true;
+  return label.trim().length >= 2 && query.includes(label.trim().toLocaleLowerCase());
 }
 
 function compactSources(sources: Source[]) {
@@ -125,9 +133,17 @@ export function KnowledgeRelations() {
   }, [focus?.kind, focus?.id]);
 
   const sources = useMemo(() => compactSources(graph?.sources ?? []), [graph]);
-  const visibleSources = sources.slice(0, 12);
-  const foldedSources = Math.max(0, (graph?.sources.length ?? 0) - visibleSources.length);
-  const links = useMemo(() => compactLinks(focus ? focusLinks : graph?.links ?? []), [focus, focusLinks, graph]);
+  const topics = useMemo(() => (
+    graph?.topics?.length
+      ? graph.topics.map((topic) => ({ label: topic.label, sources: compactSources(topic.sources) }))
+      : sources.map((source) => ({ label: source.title, sources: [source] }))
+  ), [graph, sources]);
+  const currentTopic = focus ? topics.find((topic) => topic.sources.some((source) => source.kind === focus.kind && source.id === focus.id)) : undefined;
+  const focusSource = currentTopic?.sources.find((source) => source.kind === focus?.kind && source.id === focus?.id);
+  const sameTopic = (currentTopic?.sources ?? []).filter((source) => source.kind !== focus?.kind || source.id !== focus?.id);
+  const links = useMemo(() => compactLinks(focusLinks), [focusLinks]);
+  const organizeLinks = links.filter((link) => link.relation === "organize");
+  const relatedGaps = (graph?.gaps ?? []).filter((gap) => focusSource && gapMatches(gap, focusSource.title, currentTopic?.label ?? ""));
   const counts = useMemo(() => {
     const tally = new Map<string, number>();
     for (const source of sources) tally.set(source.kind, (tally.get(source.kind) ?? 0) + 1);
@@ -188,7 +204,7 @@ export function KnowledgeRelations() {
       language: detail?.language ?? "any",
       searched: detail?.searched ?? "",
       sources,
-      selected: sources.map((source) => source.url),
+      selected: sources.filter((source) => source.lead).map((source) => source.url),
       step: gap.status === "ready" && sources.length ? "results" : "form",
     });
   }
@@ -209,7 +225,7 @@ export function KnowledgeRelations() {
         ...capture,
         searched: detail.searched,
         sources: detail.sources,
-        selected: detail.sources.map((source) => source.url),
+        selected: detail.sources.filter((source) => source.lead).map((source) => source.url),
         step: "results",
         gap: { ...capture.gap, status: "ready" },
       });
@@ -247,7 +263,7 @@ export function KnowledgeRelations() {
   return (
     <section className="knowledge-relations">
       <header>
-        <p>原文保持不动。在这里查找、看相似项，并确认要不要把联网资料收进知识库。</p>
+        <p>原文保持不动。按主题看关系，点开一条再看同主题、整理建议和相关缺口。</p>
         <form onSubmit={(event) => void search(event)}>
           <Search size={16} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="在你能看的文档、文件、邮件里查找" aria-label="查找知识" />
@@ -271,53 +287,82 @@ export function KnowledgeRelations() {
           {(graph?.gaps.length ?? 0) > 0 && <span><b>{graph?.gaps.length}</b>缺口</span>}
         </div>
       )}
-      <div className="knowledge-columns">
-        <section>
-          <h2>来源 <small>{visibleSources.length ? `${visibleSources.length} 条` : ""}</small></h2>
-          <ul>
-            {visibleSources.map((source) => (
-              <li key={`${source.kind}:${source.id}`} className="knowledge-source">
-                <button onClick={() => { location.hash = `/knowledge?source=${source.kind}:${source.id}`; }}>
-                  <KindIcon kind={source.kind} />
-                  <span>
-                    <strong title={source.title}>{source.title}</strong>
-                    <small>{kindLabel[source.kind] ?? source.kind} · {source.chunks} 块{(source.copies ?? 1) > 1 ? ` · ${source.copies} 份` : ""}</small>
-                  </span>
-                </button>
-              </li>
-            ))}
-            {!visibleSources.length && <li className="knowledge-empty">{busy ? "正在整理来源…" : "还没有可显示的知识片段。"}</li>}
-            {foldedSources > 0 && <li className="knowledge-empty">同名和其余 {foldedSources} 条已折叠，优先显示文档。</li>}
-          </ul>
-        </section>
-        <section>
-          <h2>{focus ? "这条的相关项" : "相似与整理"} <small>{links.length ? `${links.length} 条` : ""}</small></h2>
-          <ul>
-            {links.map((link) => (
-              <li key={link.id} className="knowledge-link">
-                <div className="knowledge-copy">
-                  <div className="knowledge-line">
-                    <i className={link.relation === "organize" ? "is-organize" : ""}>{link.relation === "organize" ? "整理" : "相似"}</i>
-                    <strong title={`${link.fromTitle || kindLabel[link.from_kind]} → ${link.toTitle || kindLabel[link.to_kind]}`}>
-                      {link.fromTitle || kindLabel[link.from_kind]} → {link.toTitle || kindLabel[link.to_kind]}
-                    </strong>
+      {!focus && (
+        <div className="knowledge-topics">
+          {topics.map((topic) => (
+            <section key={`${topic.label}:${topic.sources[0]?.id ?? topic.label}`}>
+              <h2>{topic.label} <small>{topic.sources.length} 条</small></h2>
+              <ul>
+                {topic.sources.slice(0, 8).map((source) => (
+                  <li key={`${source.kind}:${source.id}`} className="knowledge-source">
+                    <button onClick={() => { location.hash = `/knowledge?source=${source.kind}:${source.id}`; }}>
+                      <KindIcon kind={source.kind} />
+                      <span>
+                        <strong title={source.title}>{source.title}</strong>
+                        <small>{kindLabel[source.kind] ?? source.kind} · {source.chunks} 块{(source.copies ?? 1) > 1 ? ` · ${source.copies} 份` : ""}{source.words ? ` · 共用 ${source.words}` : ""}</small>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+          {!topics.length && <p className="knowledge-empty">{busy ? "正在整理来源…" : "还没有可显示的知识片段。"}</p>}
+        </div>
+      )}
+      {focus && (
+        <div className="knowledge-columns">
+          <section>
+            <h2>同主题 <small>{sameTopic.length ? `${sameTopic.length} 条` : ""}</small></h2>
+            <ul>
+              {sameTopic.map((source) => (
+                <li key={`${source.kind}:${source.id}`} className="knowledge-source">
+                  <button onClick={() => { location.hash = `/knowledge?source=${source.kind}:${source.id}`; }}>
+                    <KindIcon kind={source.kind} />
+                    <span>
+                      <strong title={source.title}>{source.title}</strong>
+                      <small>{kindLabel[source.kind] ?? source.kind}{source.words ? ` · 共用 ${source.words}` : ""}</small>
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {!sameTopic.length && <li className="knowledge-empty">没有共用实词的其他条目。</li>}
+            </ul>
+          </section>
+          <section>
+            <h2>整理建议 <small>{organizeLinks.length ? `${organizeLinks.length} 条` : ""}</small></h2>
+            <ul>
+              {organizeLinks.map((link) => (
+                <li key={link.id} className="knowledge-link">
+                  <div className="knowledge-copy">
+                    <div className="knowledge-line">
+                      <i className="is-organize">整理</i>
+                      <strong title={`${link.fromTitle} → ${link.toTitle}`}>{link.fromTitle || kindLabel[link.from_kind]} → {link.toTitle || kindLabel[link.to_kind]}</strong>
+                    </div>
+                    {link.reason && <p>{link.reason}</p>}
                   </div>
-                  {link.reason && <p>{link.reason}</p>}
-                </div>
-                <button onClick={() => void hide(link.id)}>忽略</button>
-              </li>
-            ))}
-            {!links.length && <li className="knowledge-empty">还没有相似项或整理建议。整理建议不会移动文件。</li>}
-          </ul>
-        </section>
-        <section>
-          <h2>资料缺口 <small>{graph?.gaps.length ? `${graph.gaps.length} 条` : ""}</small></h2>
-          <ul>
-            {(graph?.gaps ?? []).map((gap) => <GapRow key={gap.id} gap={gap} busy={busy} onOpen={openCapture} />)}
-            {!graph?.gaps.length && <li className="knowledge-empty">本地找不到时，缺口会出现在这里。联网结果要你确认后才入库。</li>}
-          </ul>
-        </section>
-      </div>
+                  <button onClick={() => void hide(link.id)}>忽略</button>
+                </li>
+              ))}
+              {!organizeLinks.length && <li className="knowledge-empty">没有需要确认的归类建议。确认建议不会移动文件。</li>}
+            </ul>
+          </section>
+          <section>
+            <h2>相关缺口 <small>{relatedGaps.length ? `${relatedGaps.length} 条` : ""}</small></h2>
+            <ul>
+              {relatedGaps.map((gap) => <GapRow key={gap.id} gap={gap} busy={busy} onOpen={openCapture} />)}
+              {!relatedGaps.length && <li className="knowledge-empty">这条主题下还没有未收录的问题。</li>}
+            </ul>
+          </section>
+        </div>
+      )}
+      <section className="knowledge-gaps">
+        <h2>资料缺口 <small>{graph?.gaps.length ? `${graph.gaps.length} 条` : ""}</small></h2>
+        <ul>
+          {(graph?.gaps ?? []).map((gap) => <GapRow key={gap.id} gap={gap} busy={busy} onOpen={openCapture} />)}
+          {!graph?.gaps.length && <li className="knowledge-empty">本地找不到时，缺口会出现在这里。联网结果要你确认后才入库。</li>}
+        </ul>
+      </section>
       {capture && (
         <CapturePanel
           capture={capture}
@@ -338,6 +383,7 @@ export function KnowledgeRelations() {
                 <strong title={hit.title}>{hit.title}</strong>
                 <small>{kindLabel[hit.sourceKind] ?? hit.sourceKind} · {hit.score.toFixed(2)}</small>
               </header>
+              {!!hit.terms?.length && <p className="knowledge-terms">命中：{hit.terms.join("、")}</p>}
               <p>{hit.text.slice(0, 220)}</p>
               <footer>
                 <button onClick={() => void feedback(hit, "useful")}>有用</button>
@@ -355,7 +401,7 @@ export function KnowledgeRelations() {
 function GapRow({ gap, busy, onOpen }: { gap: Gap; busy: boolean; onOpen: (gap: Gap) => void }) {
   const detail = gap.status === "ready" ? safeDetail(gap.detail) : null;
   const count = detail?.sources?.length ?? 0;
-  const status = gap.status === "filled" ? "已收入知识库" : gap.status === "ready" ? `已找到 ${count} 条，请选择后收录` : "本地没有足够资料";
+  const status = gap.status === "filled" ? "已收入知识库" : gap.status === "covered" ? "已有资料" : gap.status === "ready" ? `已找到 ${count} 条，请选择后收录` : "本地没有足够资料";
   return (
     <li className="knowledge-gap">
       <div className="knowledge-copy">
@@ -430,7 +476,7 @@ function CapturePanel({ capture, busy, onChange, onSearch, onSave, onClose }: {
                     />
                     <span>
                       <strong>{source.title}</strong>
-                      <small>{sourceHost(source.url)}</small>
+                      <small>{sourceHost(source.url)}{source.terms?.length ? ` · 命中：${source.terms.join("、")}` : " · 未对上实词"}</small>
                       <em>{source.snippet}</em>
                     </span>
                   </label>
@@ -441,6 +487,7 @@ function CapturePanel({ capture, busy, onChange, onSearch, onSave, onClose }: {
           <footer>
             <button type="button" onClick={() => onChange({ ...capture, step: "form" })}>修改限制</button>
             <button type="button" disabled={!capture.sources.length || capture.selected.length === capture.sources.length} onClick={() => onChange({ ...capture, selected: capture.sources.map((source) => source.url) })}>全选</button>
+            <button type="button" disabled={!capture.selected.length} onClick={() => onChange({ ...capture, selected: [] })}>全不选</button>
             <button type="button" className="primary" disabled={busy || !chosen.length} onClick={onSave}>收入选中的 {chosen.length} 条</button>
           </footer>
         </div>

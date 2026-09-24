@@ -7,6 +7,7 @@ import { WebView } from "react-native-webview";
 import { api } from "../../src/api";
 import { useAuth } from "../../src/auth";
 import { DocumentPanel } from "../../src/document-panel";
+import { mobileEditorScript } from "../../src/mobile-editor-css";
 
 export default function Document() {
   const { id, title } = useLocalSearchParams<{ id: string; title?: string }>();
@@ -48,6 +49,8 @@ export default function Document() {
         sharedCookiesEnabled
         thirdPartyCookiesEnabled
         setSupportMultipleWindows={false}
+        injectedJavaScriptBeforeContentLoaded={mobileEditorScript}
+        injectedJavaScript={mobileEditorScript}
         onMessage={(event) => {
           try {
             const message = JSON.parse(event.nativeEvent.data) as { type?: string; title?: string };

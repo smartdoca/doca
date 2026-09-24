@@ -56,6 +56,43 @@ export function isFolderExplorerHref(href: string) {
   );
 }
 
+export function navigationHref(href: string) {
+  const raw = href.trim().replace(/^#/, "");
+  const split = raw.indexOf("?");
+  const path = new URLSearchParams(split === -1 ? "" : raw.slice(split + 1)).get("path");
+  if (path == null) return true;
+  try {
+    const value = JSON.parse(path) as unknown;
+    return (
+      Array.isArray(value) &&
+      value.every(
+        (item) =>
+          !!item &&
+          typeof item === "object" &&
+          typeof (item as { id?: unknown }).id === "string" &&
+          typeof (item as { type?: unknown }).type === "string",
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function resolveExplorerClick(
+  href: string,
+  files: FileDelivery[],
+  label = "",
+) {
+  if (navigationHref(href)) return href;
+  const text = label.trim();
+  const named = files.find(
+    (file) => file.href && (text === file.name || text.endsWith(file.name)),
+  );
+  if (named?.href) return named.href;
+  if (files.length === 1 && files[0]?.href) return files[0].href;
+  return "";
+}
+
 const MARK = "(?:`{1,3}|\\*{1,2}|_{1,2})";
 
 function pathPatterns(path: string, icons: string) {
@@ -67,6 +104,10 @@ function pathPatterns(path: string, icons: string) {
     ),
     new RegExp(`(?:^|\\n)${MARK}?${escaped}${MARK}?(?=\\n|$)`, "g"),
   ];
+}
+
+function namedLinkPatterns(name: string) {
+  return [new RegExp(`\\[${escapeRegExp(name)}\\]\\([^)\\n]+\\)`, "g")];
 }
 
 function hrefPatterns(href: string) {
@@ -125,6 +166,10 @@ function collectHits(
     }
     if (file.href) {
       for (const pattern of hrefPatterns(file.href)) add(pattern, { type: "file", file });
+    }
+    if (file.name && (file.name.includes(".") || file.name.length >= 4)) {
+      for (const pattern of namedLinkPatterns(file.name))
+        add(pattern, { type: "file", file });
     }
   }
   for (const mail of mails) {

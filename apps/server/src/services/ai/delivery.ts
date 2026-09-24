@@ -250,6 +250,54 @@ export function jobAssistantAnswer(options: {
   return meaningful || EMPTY_JOB_ANSWER;
 }
 
+export function fileCopyRequested(text: string) {
+  return /复制|拷贝|克隆|另存为?|做(?:一)?[份个]副本|创建副本|新建副本|\bcopy\b/i.test(
+    text,
+  );
+}
+
+export function fileSendRequested(text: string) {
+  const t = text.trim();
+  if (!t) return false;
+  if (/文件卡片|把这个文件|再发给我|发给我一下/.test(t)) return true;
+  if (fileCopyRequested(t)) return false;
+  if (/(?:写|起草|生成|制作|总结|摘要)/.test(t) && !/(?:找|发给|卡片)/.test(t))
+    return false;
+  return /(?:需要|找|查找|搜索|发给我|发我).{0,80}[\w\u4e00-\u9fff ._-]{0,80}\.(?:pdf|docx|xlsx|pptx|png|jpe?g|webp|zip)/i.test(
+    t,
+  );
+}
+
+export function unverifiedFileDelivery(
+  userText: string,
+  answer: string,
+  hasFileReceipt: boolean,
+): DeliveryReview | null {
+  if (hasFileReceipt || !fileSendRequested(userText)) return null;
+  if (
+    /(?:没有找到|未找到|找不到|不存在)/.test(answer) &&
+    !/(?:已找到|已为您找到|点击)/.test(answer)
+  )
+    return null;
+  const claimed =
+    /已[^。！？\n]{0,16}(?:找到|创建|复制)|已发给|文件卡片|点击(?:下方)?(?:卡片|链接)|\[(?:[^\]]+\.(?:pdf|docx|xlsx|pptx|png|jpe?g|webp|zip))\]\([^)]+\)/i.test(
+      answer,
+    );
+  if (!claimed) return null;
+  return {
+    verdict: "revise",
+    summary:
+      "文件没有真正发给用户：本轮没有文件卡片回执。请调用 file_search 或 file_browse，使用已有文件的 fileId。工具会发出卡片，打开地址用返回的 href（含 focus）。不要 file_manage copy，不要自己写 markdown 链接。「N 份相同副本」是说已经有重复文件，选出一份即可。",
+    checks: [
+      {
+        requirement: "查找或发送已有文件必须有文件卡片回执",
+        passed: false,
+        evidence: "本轮没有文件卡片回执；手写链接不能代替卡片。",
+      },
+    ],
+  };
+}
+
 export function unverifiedFolderDelivery(
   text: string,
   hasFolderReceipt: boolean,

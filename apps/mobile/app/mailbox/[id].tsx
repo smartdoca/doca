@@ -19,18 +19,41 @@ type Message = {
   unread: boolean;
 };
 
+function one(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 export default function Mailbox() {
-  const { id, title } = useLocalSearchParams<{ id: string; title?: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    title?: string;
+    folderId?: string;
+    unread?: string;
+    starred?: string;
+    q?: string;
+  }>();
+  const id = one(params.id) ?? "";
+  const title = one(params.title);
+  const folderId = one(params.folderId);
+  const unread = one(params.unread);
+  const starred = one(params.starred);
+  const q = one(params.q);
   const navigation = useNavigation();
   const router = useRouter();
   const { session } = useAuth();
   useLayoutEffect(() => {
     navigation.setOptions({ title: title || "邮箱" });
   }, [navigation, title]);
+  const queryText = new URLSearchParams({
+    ...(folderId ? { folderId } : {}),
+    ...(unread ? { unread } : {}),
+    ...(starred ? { starred } : {}),
+    ...(q ? { q } : {}),
+  }).toString();
   const query = useQuery({
-    queryKey: ["mail-messages", session?.origin, id],
+    queryKey: ["mail-messages", session?.origin, id, queryText],
     enabled: !!session && !!id,
-    queryFn: () => api<{ items: Message[] }>(`/mail/mailboxes/${id}/messages`),
+    queryFn: () => api<{ items: Message[] }>(`/mail/mailboxes/${id}/messages${queryText ? `?${queryText}` : ""}`),
   });
   const pull = usePull(() => query.refetch());
   if (query.isLoading) return <LoadingState />;

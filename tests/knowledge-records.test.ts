@@ -119,12 +119,30 @@ it("lists similar candidates and records a gap when nothing matches", async () =
   await request("POST", "/knowledge/rebuild", { kind: "document", id: other.json().id });
   const related = await request("POST", "/knowledge/related", { kind: "document", id: other.json().id });
   expect(related.statusCode, related.body).toBe(200);
-  expect(related.json().links.some((link: { relation: string }) => link.relation === "similar")).toBe(true);
+  const similar = related.json().links.find((link: { relation: string; reason: string }) => link.relation === "similar");
+  expect(similar?.reason).toContain("共用");
 
   const missing = await request("POST", "/knowledge/search", { query: "zzzz-missing-topic" });
   expect(missing.json().items).toEqual([]);
   const graph = await request("GET", "/knowledge/graph");
   expect(graph.json().gaps.some((gap: { query: string; status: string }) => gap.query === "zzzz-missing-topic" && gap.status === "open")).toBe(true);
+});
+
+it("marks an open gap covered once a local document matches the query", async () => {
+  const missing = await request("POST", "/knowledge/search", { query: "星港巡检纪要" });
+  expect(missing.json().items).toEqual([]);
+  const created = await request("POST", "/resources", {
+    kind: "document",
+    format: "markdown",
+    title: "星港巡检纪要",
+    markdown: "# 星港巡检纪要\n\n星港巡检纪要已经写入本地文档。",
+  });
+  expect(created.statusCode, created.body).toBe(200);
+  await request("POST", "/knowledge/rebuild", { kind: "document", id: created.json().id });
+  const graph = await request("GET", "/knowledge/graph");
+  expect(graph.json().gaps.some((gap: { query: string; status: string }) => gap.query === "星港巡检纪要" && gap.status === "covered")).toBe(true);
+  const found = await request("POST", "/knowledge/search", { query: "星港巡检纪要" });
+  expect(found.json().items[0].terms.join("、")).toContain("星港");
 });
 
 it("suggests folder and library organization without moving files", async () => {

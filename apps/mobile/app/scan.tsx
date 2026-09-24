@@ -11,7 +11,7 @@ import { removeAccount } from "../src/session";
 
 export default function ScanLogin() {
   const navigation = useNavigation();
-  const { accounts, refresh } = useAuth();
+  const { accounts, session, refresh } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const [payload, setPayload] = useState("");
   const [pending, setPending] = useState<{ origin: string; code: string } | null>(null);
@@ -41,7 +41,7 @@ export default function ScanLogin() {
     accept(data);
   }
 
-  const account = accounts.find((item) => item.origin === pending?.origin);
+  const account = session ?? accounts.find((item) => item.origin === pending?.origin);
 
   async function confirm() {
     if (!pending || !account) return;
@@ -88,11 +88,10 @@ export default function ScanLogin() {
         {pending ? (
           <View>
             <Text style={styles.title}>确认登录网页</Text>
-            <Text style={styles.copy}>{pending.origin}</Text>
             {account ? (
-              <Text style={styles.copy}>将使用「{account.name}」确认，不会切换手机当前服务器。</Text>
+              <Text style={styles.copy}>将使用当前服务器 {account.origin.replace(/^https?:\/\//, "")} 上的「{account.name}」确认。</Text>
             ) : (
-              <Text style={styles.copy}>这个服务器还没有登录。请先在设置里添加并登录它，再回来扫码。</Text>
+              <Text style={styles.copy}>请先在设置里登录要确认的服务器，再回来扫码。</Text>
             )}
             {account ? (
               <Pressable style={styles.button} disabled={busy} onPress={() => void confirm()}>
