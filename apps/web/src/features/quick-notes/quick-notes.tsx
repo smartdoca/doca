@@ -1,5 +1,6 @@
 import type { UploadContext } from "slatetsx-kit-editor";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Feather,
   LockKeyhole,
@@ -9,9 +10,11 @@ import {
   Sparkles,
   Paperclip,
   X,
-  Pencil,
   RefreshCw,
   SquareCheck,
+  Plus,
+  ChevronLeft,
+  PictureInPicture2,
 } from "lucide-react";
 import { api, assetUrl, uploadFile } from "@web/shared/api.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
@@ -27,9 +30,27 @@ import {
   type NoteContent,
   type QuickNote,
 } from "@core/shared/quick-notes.js";
+import { useNotesFloat } from "@web/features/quick-notes/notes-float-store.js";
 import "@web/features/quick-notes/quick-notes.css";
 
+function useHeaderSlot(id: string) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setSlot(document.getElementById(id));
+  }, [id]);
+  return slot;
+}
+
 const base = "/quick-notes";
+type NotesOpenTarget = {
+  note: QuickNote | null;
+  creating: boolean;
+  stamp: string;
+  trash: boolean;
+  query: string;
+};
+let openTarget: NotesOpenTarget | null = null;
+let openTargetGeneration = 0;
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message : "操作失败，请重试";
 const stamp = (date: string) =>
@@ -39,10 +60,32 @@ const stamp = (date: string) =>
     hour: "2-digit",
     minute: "2-digit",
   });
-const collapsible = (n: QuickNote) =>
-  noteText(n.content).length > 180 ||
-  noteText(n.content).split("\n").length > 7 ||
-  n.assets.length > 2;
+const notePreview = (note: QuickNote) => {
+  const text = noteText(note.content)
+    .replace(/^(\[[ x]\] |- |\d+\. )/gm, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 80);
+  if (text) return text;
+  if (note.assets.some((asset) => asset.mime.startsWith("image/"))) return "图片";
+  if (note.assets.length) return "附件";
+  return "无附加文本";
+};
+function useNarrow(query = "(max-width: 800px)") {
+  const [narrow, setNarrow] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(query).matches : false,
+  );
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const apply = () => setNarrow(media.matches);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [query]);
+  return narrow;
+}
 type Draft = {
   id: string;
   content: NoteContent;
@@ -135,11 +178,15 @@ function NoteForm({
   note,
   saved,
   close,
+  autosaveNew = false,
+  quiet = false,
 }: {
   userId: string;
   note?: QuickNote;
   saved: (note: QuickNote) => void;
   close?: () => void;
+  autosaveNew?: boolean;
+  quiet?: boolean;
 }) {
   const cacheKey = `doca.quick-note.${userId}.${note?.id ?? "new"}`;
   const [draft, setDraft] = useState(() => loadDraft(cacheKey, note));
@@ -188,7 +235,7 @@ function NoteForm({
     if (!hasContent(current.current)) return false;
     const sent = structuredClone(current.current),
       signature = fingerprint(sent);
-    if (note && signature === acknowledged.current) return true;
+    if (version.current && signature === acknowledged.current) return true;
     busy.current = true;
     let committed = false;
     if (alive.current) {
@@ -210,11 +257,22 @@ function NoteForm({
       current.current.version = result.version;
       acknowledged.current = signature;
       committed = true;
-      if (fingerprint(current.current) === signature) {
-        try {
+      try {
+        if (fingerprint(current.current) !== signature) {
+          const pending = {
+            ...current.current,
+            id: result.id,
+            version: result.version,
+          };
+          localStorage.setItem(
+            `doca.quick-note.${userId}.${result.id}`,
+            JSON.stringify(pending),
+          );
+        }
+        if (!note || fingerprint(current.current) === signature)
           localStorage.removeItem(cacheKey);
-        } catch {}
-      } else persist(current.current);
+        else persist(current.current);
+      } catch {}
       savedCallback.current(result);
       if (alive.current) setSaveState("已保存到云端");
       return fingerprint(current.current) === signature;
@@ -255,6 +313,16 @@ function NoteForm({
     }, 900);
     return () => clearTimeout(timer);
   }, [draft, note, conflict, uploading, saving, error]);
+  useEffect(() => {
+    if (note || !autosaveNew || conflict || uploading || saving || error) return;
+    if (!hasContent(current.current)) return;
+    if (version.current && fingerprint(current.current) === acknowledged.current)
+      return;
+    const timer = setTimeout(() => {
+      void saveRef.current();
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [draft, note, autosaveNew, conflict, uploading, saving, error]);
   useEffect(() => {
     alive.current = true;
     const warn = (event: BeforeUnloadEvent) => {
@@ -311,7 +379,7 @@ function NoteForm({
         <QuickNoteEditor
           key={editorKey}
           initial={draft.content}
-          autoFocus={!!note}
+          autoFocus={!!note || autosaveNew}
           onChange={(content) => {
             const before = inlineNoteAssets(current.current.content),
               after = inlineNoteAssets(content);
@@ -330,7 +398,7 @@ function NoteForm({
             if (alive.current) setUploading(pending);
           }}
           submit={() => void submit()}
-          disabled={!note && saving}
+          disabled={!note && saving && !autosaveNew}
         />
         <NoteAssets
           assets={outsideAssets(draft.content, draft.assets)}
@@ -418,8 +486,9 @@ function NoteForm({
       )}
       <div className="note-form-footer">
         <span className="note-status" role="status">
-          {note || error || saving ? saveState : "⌘ Enter 记下"}
+          {note || error || saving || autosaveNew ? saveState : "⌘ Enter 记下"}
         </span>
+        {!quiet && (
         <div>
           {close && (error || conflict) && (
             <button onClick={close}>收起并保留草稿</button>
@@ -435,6 +504,7 @@ function NoteForm({
             </span>
           </button>
         </div>
+        )}
       </div>
     </div>
   );
@@ -442,23 +512,32 @@ function NoteForm({
 
 export function QuickNotes({
   userId,
+  presentation = "page",
 }: {
   userId: string;
   changed: () => void;
+  presentation?: "page" | "card";
 }) {
   const ai = useAI();
+  const float = useNotesFloat(userId);
+  const narrow = useNarrow();
+  const cardFocus = useRef(presentation === "card" ? openTarget : null);
   const [items, setItems] = useState<QuickNote[]>([]),
     [next, setNext] = useState<number | null>(null);
-  const [query, setQuery] = useState(""),
-    [trash, setTrash] = useState(false),
+  const [query, setQuery] = useState(cardFocus.current?.query ?? ""),
+    [trash, setTrash] = useState(cardFocus.current?.trash ?? false),
     [refresh, setRefresh] = useState(0);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [newKey, setNewKey] = useState(0);
   const [selected, setSelected] = useState<string[]>([]),
-    [editing, setEditing] = useState<string | null>(null),
-    [expanded, setExpanded] = useState<string[]>([]);
+    [activeId, setActiveId] = useState<string | null>(cardFocus.current?.note?.id ?? null),
+    [creating, setCreating] = useState(cardFocus.current?.creating ?? false),
+    [draftStamp, setDraftStamp] = useState(cardFocus.current?.stamp ?? ""),
+    [cardView, setCardView] = useState<"list" | "note">(
+      cardFocus.current?.note || cardFocus.current?.creating ? "note" : "list",
+    );
+  const [pinned, setPinned] = useState<QuickNote | null>(cardFocus.current?.note ?? null);
   const [batchMode, setBatchMode] = useState(false);
   const [deleteTargets, setDeleteTargets] = useState<QuickNote[] | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -481,7 +560,6 @@ export function QuickNotes({
     setError("");
     setSelected([]);
     setBatchMode(false);
-    setEditing(null);
     const timer = setTimeout(() => {
       void api<{ items: QuickNote[]; nextOffset: number | null }>(
         url(),
@@ -505,8 +583,53 @@ export function QuickNotes({
       controller.abort();
     };
   }, [query, trash, refresh]);
-  const updateSaved = (note: QuickNote) =>
+  useEffect(() => {
+    if (presentation === "card" || narrow || creating || trash) return;
+    if (activeId && items.some((note) => note.id === activeId)) return;
+    if (items[0]) setActiveId(items[0].id);
+  }, [items, narrow, creating, trash, activeId, presentation]);
+  useEffect(() => {
+    if (presentation !== "card" || !cardFocus.current) return;
+    const generation = openTargetGeneration;
+    const timer = window.setTimeout(() => {
+      if (generation === openTargetGeneration) openTarget = null;
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [presentation]);
+  const updateSaved = (note: QuickNote) => {
+    setPinned((current) => (current?.id === note.id ? note : current));
     setItems((rows) => rows.map((n) => (n.id === note.id ? note : n)));
+  };
+  const active =
+    items.find((note) => note.id === activeId) ??
+    (pinned?.id === activeId ? pinned : null);
+  function openNote(id: string) {
+    setCreating(false);
+    setActiveId(id);
+    setCardView("note");
+  }
+  function startNew() {
+    setTrash(false);
+    setQuery("");
+    setBatchMode(false);
+    setDraftStamp(stamp(new Date().toISOString()));
+    setCreating(true);
+    setActiveId(null);
+    setNewKey((value) => value + 1);
+    setCardView("note");
+  }
+  function backToList() {
+    setCreating(false);
+    setActiveId(null);
+    setCardView("list");
+  }
+  function acceptCreated(note: QuickNote) {
+    setCreating(false);
+    setActiveId(note.id);
+    setItems((rows) => [note, ...rows.filter((item) => item.id !== note.id)]);
+    setTrash(false);
+    setRefresh((value) => value + 1);
+  }
   async function restoreNote(note: QuickNote) {
     setMutating(note.id);
     setError("");
@@ -550,6 +673,7 @@ export function QuickNotes({
       }
       setItems((rows) => rows.filter((n) => !removed.has(n.id)));
       setSelected((ids) => ids.filter((id) => !removed.has(id)));
+      setActiveId((id) => (id && removed.has(id) ? null : id));
       if (failed.length) {
         setDeleteTargets(failed);
         setDeleteError(
@@ -585,133 +709,173 @@ export function QuickNotes({
       }),
     );
   }
+  const showList = presentation === "page" || cardView === "list";
+  const showNote = presentation === "page" || cardView === "note";
+  const reading = creating || !!activeId;
+  const headerSlot = useHeaderSlot(presentation === "page" ? "notes-header-slot" : "");
+  const headerTools =
+    headerSlot &&
+    createPortal(
+      <>
+        <span className="files-topbar-separator">/</span>
+        <span className="notes-topbar-private">
+          <LockKeyhole size={12} />
+          仅自己可见
+        </span>
+        <button
+          type="button"
+          className="note-icon-button notes-topbar-float"
+          aria-pressed={float.state.open}
+          aria-label={float.state.open ? "关闭悬浮" : "开启悬浮"}
+          title={float.state.open ? "关闭悬浮" : "悬浮窗口"}
+          onClick={() => {
+            if (float.state.open) {
+              float.patch({ open: false, collapsed: false });
+              return;
+            }
+            openTarget = {
+              note: creating ? null : active,
+              creating,
+              stamp: draftStamp,
+              trash,
+              query,
+            };
+            openTargetGeneration += 1;
+            float.patch({ open: true, collapsed: false });
+          }}
+        >
+          <PictureInPicture2 size={16} />
+        </button>
+      </>,
+      headerSlot,
+    );
+  if (presentation === "page" && float.state.open) {
+    return (
+      <>
+        {headerTools}
+        <section className="quick-notes-hosted" aria-label="随手记已在悬浮窗口" />
+      </>
+    );
+  }
   return (
-    <section className="quick-notes-page">
-      <aside className="note-writing-pane" aria-label="记录想法">
-        <div className="quick-notes-heading">
-          <div>
-            <h1>
-              <Feather size={25} />
-              随手记
-            </h1>
-          </div>
-          <span className="note-private">
-            <LockKeyhole size={13} />
-            仅自己可见
-          </span>
+    <>
+      {headerTools}
+    <section
+      className={`quick-notes-page ${presentation === "card" ? "is-card" : ""} ${reading ? "is-reading" : ""} ${batchMode ? "is-selecting" : ""}`}
+    >
+      <aside className="note-list-pane" aria-label="随手记列表" hidden={!showList}>
+        <div className="note-list-search-row">
+          <label className="note-list-search">
+            <Search size={14} />
+            <input
+              aria-label="搜索随手记"
+              placeholder="搜索"
+              value={query}
+              maxLength={200}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="note-icon-button"
+            aria-label="新建随手记"
+            title="新建随手记"
+            disabled={trash}
+            onClick={startNew}
+          >
+            <Plus size={16} />
+          </button>
         </div>
-        <div className="note-compose-card">
-          <NoteForm
-            key={newKey}
-            userId={userId}
-            saved={() => {
-              setNewKey((k) => k + 1);
-              setQuery("");
-              setTrash(false);
-              setRefresh((n) => n + 1);
-            }}
-          />
-        </div>
-      </aside>
-      <div className={`note-browsing-pane ${batchMode ? "is-selecting" : ""}`}>
         <div className="note-list-tools">
           <div className="note-tabs">
             <button
+              type="button"
               className={!trash ? "active" : ""}
-              onClick={() => setTrash(false)}
+              onClick={() => {
+                setTrash(false);
+                setCreating(false);
+                setActiveId(null);
+                setSelected([]);
+              }}
             >
-              全部记录
+              全部
             </button>
             <button
+              type="button"
               className={trash ? "active" : ""}
-              onClick={() => setTrash(true)}
+              onClick={() => {
+                setTrash(true);
+                setCreating(false);
+                setActiveId(null);
+                setBatchMode(false);
+                setSelected([]);
+              }}
             >
               <Trash2 size={14} />
               已删除
             </button>
           </div>
-          {searchOpen || query ? (
-            <div className="note-search">
-              <Search size={15} />
-              <input
-                aria-label="搜索随手记"
-                autoFocus
-                placeholder="搜索记录…"
-                value={query}
-                maxLength={200}
-                onChange={(e) => setQuery(e.target.value)}
-                onBlur={() => {
-                  if (!query) setSearchOpen(false);
-                }}
-              />
-            </div>
-          ) : (
-            <button
-              aria-label="搜索随手记"
-              title="搜索随手记"
-              onClick={() => setSearchOpen(true)}
-            >
-              <Search size={17} />
-            </button>
-          )}
           {!trash && (
             <button
-              className="note-batch-toggle"
+              type="button"
+              className="note-icon-button note-batch-toggle"
               aria-pressed={batchMode}
-              disabled={loading || !!editing || !items.length}
-              title={editing ? "请先完成当前编辑" : "批量选择"}
+              disabled={loading || !items.length}
+              aria-label="批量选择"
+              title="批量选择"
               onClick={() => {
                 setBatchMode((value) => !value);
                 setSelected([]);
               }}
             >
-              <SquareCheck size={16} />
-              {batchMode ? "退出选择" : "批量选择"}
+              <SquareCheck size={15} />
             </button>
           )}
           <button
+            type="button"
+            className="note-icon-button"
             title="刷新记录"
             aria-label="刷新记录"
-            onClick={() => setRefresh((n) => n + 1)}
+            onClick={() => setRefresh((value) => value + 1)}
           >
             <RefreshCw size={15} />
           </button>
         </div>
         {batchMode && (
           <div className="note-selection-bar">
-            <span>
-              {selected.length
-                ? `已选择 ${selected.length} 条`
-                : "请选择卡片（最多 20 条）"}
-            </span>
-            <button
-              onClick={() => setSelected(items.slice(0, 20).map((n) => n.id))}
-            >
-              {items.length > 20 ? "选择前 20 条" : "全选"}
-            </button>
-            <button disabled={!selected.length} onClick={() => setSelected([])}>
-              清空
-            </button>
-            <button
-              disabled={!selected.length}
-              className="note-batch-delete"
-              onClick={() =>
-                askDelete(items.filter((n) => selected.includes(n.id)))
-              }
-            >
-              <Trash2 size={14} />
-              删除所选
-            </button>
-            <button
-              className="primary"
-              disabled={!selected.length}
-              onClick={() =>
-                organize(items.filter((n) => selected.includes(n.id)))
-              }
-            >
-              <Sparkles size={15} />
-              AI 整理
-            </button>
+            <span>{selected.length ? `已选 ${selected.length}` : "选择记录"}</span>
+            <div className="note-selection-actions">
+              <button
+                type="button"
+                title="最多 20 条"
+                onClick={() => setSelected(items.slice(0, 20).map((note) => note.id))}
+              >
+                全选
+              </button>
+              <button type="button" disabled={!selected.length} onClick={() => setSelected([])}>
+                清空
+              </button>
+              <button
+                type="button"
+                className="note-selection-icon note-batch-delete"
+                disabled={!selected.length}
+                aria-label="删除所选"
+                title="删除所选"
+                onClick={() => askDelete(items.filter((note) => selected.includes(note.id)))}
+              >
+                <Trash2 size={14} />
+              </button>
+              <button
+                type="button"
+                className="note-selection-icon"
+                disabled={!selected.length}
+                aria-label="AI 整理"
+                title="AI 整理"
+                onClick={() => organize(items.filter((note) => selected.includes(note.id)))}
+              >
+                <Sparkles size={14} />
+              </button>
+            </div>
           </div>
         )}
         {error && (
@@ -719,170 +883,172 @@ export function QuickNotes({
             {error}
           </p>
         )}
-        <div className="note-browsing-content">
+        <div className="note-list-scroll">
           {loading ? (
             <div className="note-empty" role="status">
               正在加载记录…
             </div>
-          ) : !items.length ? (
+          ) : !items.length && !creating ? (
             <div className="note-empty">
-              <Feather size={36} />
               <h3>
-                {query
-                  ? "没有找到相关记录"
-                  : trash
-                    ? "没有已删除的记录"
-                    : "从一个小想法开始"}
+                {query ? "没有找到相关记录" : trash ? "没有已删除的记录" : "无随手记"}
               </h3>
               <p>
                 {query
                   ? "换个关键词试试。"
                   : trash
-                    ? "删除的卡片可以在这里恢复。"
-                    : "不必起标题，也不用先想好放在哪里。"}
+                    ? "删除的记录可以在这里恢复。"
+                    : "点加号记下第一条。"}
               </p>
             </div>
           ) : (
-            <div className="note-grid">
-              {items.map((n) => (
-                <article
-                  key={n.id}
-                  data-note-id={n.id}
-                  className={`note-card ${selected.includes(n.id) ? "selected" : ""} ${editing === n.id ? "is-editing" : ""}`}
+            <div className="note-rows" role="listbox" aria-label="随手记标题">
+              {creating && !trash && (
+                <button type="button" className="note-row is-active" onClick={() => setCardView("note")}>
+                  <span className="note-row-copy">
+                    <span className="note-row-title">{draftStamp}</span>
+                    <span className="note-row-preview">新随手记</span>
+                  </span>
+                </button>
+              )}
+              {items.map((note) => (
+                <div
+                  key={note.id}
+                  className={`note-row ${!creating && activeId === note.id ? "is-active" : ""}`}
+                  data-note-id={note.id}
                 >
-                  <header>
-                    <time dateTime={n.updated_at}>{stamp(n.updated_at)}</time>
-                    {batchMode && !trash && editing !== n.id && (
-                      <label className="note-select">
-                        <input
-                          type="checkbox"
-                          aria-label={`选择 ${stamp(n.created_at)} 的记录`}
-                          checked={selected.includes(n.id)}
-                          disabled={
-                            !selected.includes(n.id) && selected.length >= 20
-                          }
-                          onChange={(e) =>
-                            setSelected((s) =>
-                              e.target.checked
-                                ? [...s, n.id]
-                                : s.filter((id) => id !== n.id),
-                            )
-                          }
-                        />
-                        <span>选择</span>
-                      </label>
-                    )}
-                  </header>
-                  {editing === n.id && !trash ? (
-                    <div
-                      className="note-card-editor"
-                      role="region"
-                      aria-label="编辑随手记"
-                    >
-                      <NoteForm
-                        userId={userId}
-                        note={n}
-                        saved={updateSaved}
-                        close={() =>
-                          setEditing((current) =>
-                            current === n.id ? null : current,
+                  {batchMode && !trash && (
+                    <label className="note-select">
+                      <input
+                        type="checkbox"
+                        aria-label={`选择 ${stamp(note.created_at)} 的记录`}
+                        checked={selected.includes(note.id)}
+                        disabled={!selected.includes(note.id) && selected.length >= 20}
+                        onChange={(event) =>
+                          setSelected((ids) =>
+                            event.target.checked
+                              ? [...ids, note.id]
+                              : ids.filter((id) => id !== note.id),
                           )
                         }
                       />
-                    </div>
-                  ) : (
-                    <>
-                      <div
-                        className={`note-card-content ${!collapsible(n) || expanded.includes(n.id) ? "expanded" : ""}`}
-                      >
-                        <QuickNoteBody content={n.content} />
-                        <NoteAssets
-                          assets={outsideAssets(n.content, n.assets)}
-                        />
-                      </div>
-                      {collapsible(n) && (
-                        <button
-                          className="note-expand"
-                          onClick={() =>
-                            setExpanded((ids) =>
-                              ids.includes(n.id)
-                                ? ids.filter((id) => id !== n.id)
-                                : [...ids, n.id],
-                            )
-                          }
-                        >
-                          {expanded.includes(n.id) ? "收起" : "展开内容"}
-                        </button>
-                      )}
-                      <footer>
-                        {trash ? (
-                          <button
-                            disabled={mutating === n.id}
-                            onClick={() => void restoreNote(n)}
-                          >
-                            <RotateCcw size={14} />
-                            恢复
-                          </button>
-                        ) : (
-                          <>
-                            <button
-                              disabled={batchMode}
-                              onClick={() => setEditing(n.id)}
-                            >
-                              <Pencil size={14} />
-                              编辑
-                            </button>
-                            <button onClick={() => organize([n])}>
-                              <Sparkles size={14} />
-                              整理
-                            </button>
-                            <button
-                              className="note-delete"
-                              disabled={mutating === n.id}
-                              aria-label="删除记录"
-                              title="移到已删除，可恢复"
-                              onClick={() => askDelete([n])}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </>
-                        )}
-                      </footer>
-                    </>
+                    </label>
                   )}
-                </article>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={!creating && activeId === note.id}
+                    className="note-row-open"
+                    onClick={() => openNote(note.id)}
+                  >
+                    <span className="note-row-title">{stamp(note.created_at)}</span>
+                    <span className="note-row-preview">{notePreview(note)}</span>
+                  </button>
+                </div>
               ))}
             </div>
           )}
           {!loading && next !== null && (
             <button
+              type="button"
               className="note-load-more"
+              disabled={mutating === "load"}
               onClick={async () => {
-                const g = generation.current;
+                const generationId = generation.current;
                 setMutating("load");
                 try {
                   const page = await api<{
                     items: QuickNote[];
                     nextOffset: number | null;
                   }>(url(next));
-                  if (g === generation.current) {
+                  if (generationId === generation.current) {
                     setItems((old) => [
-                      ...new Map(
-                        [...old, ...page.items].map((n) => [n.id, n]),
-                      ).values(),
+                      ...new Map([...old, ...page.items].map((note) => [note.id, note])).values(),
                     ]);
                     setNext(page.nextOffset);
                   }
-                } catch (e) {
-                  setError(errorText(e));
+                } catch (exception) {
+                  setError(errorText(exception));
                 } finally {
                   setMutating(null);
                 }
               }}
-              disabled={mutating === "load"}
             >
               加载更多
             </button>
+          )}
+        </div>
+      </aside>
+      <div className="note-content-pane" aria-label="随手记内容" hidden={!showNote}>
+        {(creating || active) && (
+          <div className="note-content-head">
+            <button
+              type="button"
+              className="note-back"
+              aria-label="返回列表"
+              onClick={backToList}
+            >
+              <ChevronLeft size={18} />
+              <span>全部</span>
+            </button>
+            <h2>{creating ? draftStamp : active ? stamp(active.created_at) : ""}</h2>
+            <div className="note-content-actions">
+              {trash && active ? (
+                <button
+                  type="button"
+                  disabled={mutating === active.id}
+                  onClick={() => void restoreNote(active)}
+                >
+                  <RotateCcw size={14} />
+                  恢复
+                </button>
+              ) : active && !creating ? (
+                <>
+                  <button type="button" onClick={() => organize([active])}>
+                    <Sparkles size={14} />
+                    整理
+                  </button>
+                  <button
+                    type="button"
+                    className="note-delete"
+                    aria-label="删除记录"
+                    title="移到已删除，可恢复"
+                    onClick={() => askDelete([active])}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </div>
+        )}
+        <div className="note-content-body">
+          {creating && !trash ? (
+            <NoteForm
+              key={newKey}
+              userId={userId}
+              autosaveNew
+              saved={acceptCreated}
+            />
+          ) : active && trash ? (
+            <div className="note-readonly">
+              <QuickNoteBody content={active.content} />
+              <NoteAssets assets={outsideAssets(active.content, active.assets)} />
+            </div>
+          ) : active ? (
+            <NoteForm key={active.id} userId={userId} note={active} quiet saved={updateSaved} />
+          ) : (
+            <div className="note-empty">
+              <Feather size={36} />
+              <h3>{query ? "没有找到相关记录" : trash ? "没有已删除的记录" : "无随手记"}</h3>
+              <p>
+                {query
+                  ? "换个关键词试试。"
+                  : trash
+                    ? "删除的记录可以在这里恢复。"
+                    : "从左边选择一条，或新建一条。"}
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -920,5 +1086,6 @@ export function QuickNotes({
         </Dialog>
       )}
     </section>
+    </>
   );
 }

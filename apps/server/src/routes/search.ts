@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { publishIntegrationEvents } from "@core/modules/automation/events.js";
 import { processProjections } from "@core/modules/automation/jobs.js";
 import { mailKnowledgeIncluded } from "@core/modules/mail/scope.js";
+import { mailAttachmentIncluded } from "@core/modules/mail/search-scope.js";
 import type { Actor } from "@core/modules/identity/passwords.js";
 import { fail } from "@core/shared/errors.js";
 import { createContent } from "@core/workflows/resources.js";
@@ -660,12 +661,15 @@ export async function registerSearch(
             throw error;
         }
         if (row) {
-          const items = await db
+          const storedItems = await db
             .selectFrom("file_items")
-            .select(["id", "name", "mime", "ai_description_override"])
+            .select(["id", "name", "mime", "ai_description_override", "parent_id", "metadata"])
             .where("storage_object_id", "=", row.storage_object_id)
             .where("deleted_at", "is", null)
             .execute();
+          const items = [];
+          for (const item of storedItems)
+            if (await mailAttachmentIncluded(db, item.parent_id, item.metadata)) items.push(item);
           const documentId = fileObjectDocumentId(row.storage_object_id);
           if (
             !items.length ||

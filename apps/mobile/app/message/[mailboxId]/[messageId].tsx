@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLocalSearchParams, useNavigation } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useLayoutEffect } from "react";
 import { StyleSheet, View } from "react-native";
-import { Text } from "react-native-paper";
+import { Button, Text } from "react-native-paper";
 import { WebView } from "react-native-webview";
 import { api } from "../../../src/api";
 import { useAuth } from "../../../src/auth";
@@ -22,6 +22,7 @@ export default function Message() {
     title?: string;
   }>();
   const navigation = useNavigation();
+  const router = useRouter();
   const { session } = useAuth();
   useLayoutEffect(() => {
     navigation.setOptions({ title: title || "邮件" });
@@ -44,6 +45,23 @@ export default function Message() {
         <Text variant="bodyMedium" style={styles.from}>
           {message.from.name || message.from.email}
         </Text>
+        <Button
+          mode="text"
+          textColor={colors.accent}
+          style={styles.reply}
+          onPress={() =>
+            router.push({
+              pathname: "/compose",
+              params: {
+                mailboxId,
+                to: message.from.email,
+                subject: message.subject?.startsWith("回复：") ? message.subject : `回复：${message.subject || ""}`,
+              },
+            })
+          }
+        >
+          回复
+        </Button>
       </View>
       <WebView
         style={styles.body}
@@ -78,6 +96,7 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: "#fff" },
   head: { paddingHorizontal: 16, paddingTop: 12 },
   from: { marginTop: 8, color: colors.secondary },
+  reply: { alignSelf: "flex-start", marginTop: 4 },
   body: { flex: 1, backgroundColor: "#fff" },
   status: { margin: 24, color: colors.secondary },
 });

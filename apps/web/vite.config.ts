@@ -1,10 +1,78 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { createReadStream, existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import react from "@vitejs/plugin-react";
+import { defineConfig, type Plugin } from "vite";
 import { prismjsLanguageEsm } from "./prismjs-language-esm.ts";
+
+const cadFiles = [
+  ["@mlightcad/libredwg-converter", "libredwg-parser-worker.js"],
+  ["@mlightcad/libredwg-converter", "libredwg-web.wasm"],
+  ["@mlightcad/cad-simple-viewer", "mtext-renderer-worker.js"],
+] as const;
+
+function packageRoot(pkg: string) {
+  const entry = fileURLToPath(import.meta.resolve(pkg));
+  let dir = dirname(entry);
+  while (true) {
+    const manifest = join(dir, "package.json");
+    if (existsSync(manifest)) {
+      const parsed = JSON.parse(readFileSync(manifest, "utf8")) as { name?: string };
+      if (parsed.name === pkg) return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) throw new Error(`找不到 ${pkg}`);
+    dir = parent;
+  }
+}
+
+function cadAssetPath(pkg: string, file: string) {
+  return join(packageRoot(pkg), "dist", file);
+}
+
+function cadPreviewAssets(): Plugin {
+  const files = () =>
+    cadFiles.flatMap(([pkg, file]) => {
+      try {
+        const path = cadAssetPath(pkg, file);
+        return existsSync(path) ? [{ file, path }] : [];
+      } catch {
+        return [];
+      }
+    });
+  return {
+    name: "doca-cad-preview-assets",
+    configureServer(server) {
+      server.middlewares.use("/cad", (req, res, next) => {
+        if (req.method !== "GET" && req.method !== "HEAD") return next();
+        const name = decodeURIComponent((req.url ?? "").split("?")[0]!.replace(/^\//, ""));
+        const hit = files().find((item) => item.file === name);
+        if (!hit) return next();
+        res.setHeader("Content-Type", name.endsWith(".wasm") ? "application/wasm" : "text/javascript");
+        res.setHeader("Cache-Control", "no-cache");
+        if (req.method === "HEAD") {
+          res.statusCode = 200;
+          res.end();
+          return;
+        }
+        createReadStream(hit.path).pipe(res);
+      });
+    },
+    generateBundle() {
+      for (const item of files()) {
+        this.emitFile({
+          type: "asset",
+          fileName: `cad/${item.file}`,
+          source: readFileSync(item.path),
+        });
+      }
+    },
+  };
+}
+
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
-  plugins: [react(), prismjsLanguageEsm()],
+  plugins: [react(), prismjsLanguageEsm(), cadPreviewAssets()],
   css: {
     postcss: {
       plugins: [

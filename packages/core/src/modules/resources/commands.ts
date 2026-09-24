@@ -49,6 +49,7 @@ import {
   get,
   nextTreeOrder,
   update,
+  type Context,
 } from "./context.js";
 async function isCollaborator(
   tx: DB | Transaction<Schema>,
@@ -65,6 +66,89 @@ async function isCollaborator(
     .executeTakeFirst();
   if (granted) return true;
   return false;
+}
+async function erasePurgedResources(ctx: Context, actor: Actor, ids: string[]) {
+  for (let offset = 0; offset < ids.length; offset += 200) {
+    const batch = ids.slice(offset, offset + 200);
+    await ctx.tx
+      .updateTable("resources")
+      .set({ parent_id: null, library_id: null })
+      .where("id", "in", batch)
+      .execute();
+    await ctx.tx
+      .updateTable("comments")
+      .set({ parent_id: null })
+      .where("resource_id", "in", batch)
+      .execute();
+  }
+  for (let offset = 0; offset < ids.length; offset += 200) {
+    const batch = ids.slice(offset, offset + 200);
+    await ctx.tx
+      .updateTable("audit_events")
+      .set({ resource_id: null })
+      .where("resource_id", "in", batch)
+      .execute();
+    await ctx.tx
+      .updateTable("quick_note_compilations")
+      .set({ document_id: null })
+      .where("document_id", "in", batch)
+      .execute();
+    // Copies may share object keys. Revoke these attachment records, leave
+    // physical object reclamation to storage GC rather than deleting live copies.
+    await ctx.tx
+      .updateTable("assets")
+      .set({ resource_id: null, deleted_at: new Date().toISOString() })
+      .where("resource_id", "in", batch)
+      .execute();
+    await ctx.tx
+      .deleteFrom("file_items")
+      .where("parent_type", "=", "document")
+      .where("parent_id", "in", batch)
+      .execute();
+    await ctx.tx
+      .deleteFrom("document_references")
+      .where("target_id", "in", batch)
+      .execute();
+    for (const table of [
+      "notifications",
+      "comments",
+      "grants",
+      "reactions",
+      "resource_visits",
+      "visit_events",
+      "user_activity",
+      "share_links",
+      "document_versions",
+      "document_updates",
+      "document_states",
+      "access_invitations",
+      "access_requests",
+      "document_reference_index",
+      "document_references",
+    ] as const) {
+      if (table === "document_references")
+        await ctx.tx
+          .deleteFrom(table)
+          .where("source_id", "in", batch)
+          .execute();
+      else
+        await ctx.tx
+          .deleteFrom(table)
+          .where("resource_id", "in", batch)
+          .execute();
+    }
+  }
+  for (let offset = 0; offset < ids.length; offset += 200)
+    await ctx.tx
+      .deleteFrom("resources")
+      .where("id", "in", ids.slice(offset, offset + 200))
+      .execute();
+  for (const id of ids)
+    await emitIntegrationEvent(ctx.tx, "resource.purged", {
+      resourceId: id,
+      actorId: actor.id,
+    });
+  return { ok: true, count: ids.length };
 }
 export function createResourceCommands(
   db: DB,
@@ -651,84 +735,27 @@ export function createResourceCommands(
           if (ctx.resources.some(x => ids.includes(x.id) && x.moderation_hold)) fail(403, "审计保留文档不能永久删除");
           // Explicit IDs + versions are frozen in the confirmation dialog. Newly trashed
           // or restored resources cannot accidentally join this permanent deletion.
-          for (let offset = 0; offset < ids.length; offset += 200) {
-            const batch = ids.slice(offset, offset + 200);
-            await ctx.tx
-              .updateTable("resources")
-              .set({ parent_id: null, library_id: null })
-              .where("id", "in", batch)
-              .execute();
-            await ctx.tx
-              .updateTable("comments")
-              .set({ parent_id: null })
-              .where("resource_id", "in", batch)
-              .execute();
-          }
-          for (let offset = 0; offset < ids.length; offset += 200) {
-            const batch = ids.slice(offset, offset + 200);
-            await ctx.tx
-              .updateTable("audit_events")
-              .set({ resource_id: null })
-              .where("resource_id", "in", batch)
-              .execute();
-            // Copies may share object keys. Revoke these attachment records, leave
-            // physical object reclamation to storage GC rather than deleting live copies.
-            await ctx.tx
-              .updateTable("assets")
-              .set({ resource_id: null, deleted_at: new Date().toISOString() })
-              .where("resource_id", "in", batch)
-              .execute();
-            await ctx.tx
-              .deleteFrom("file_items")
-              .where("parent_type", "=", "document")
-              .where("parent_id", "in", batch)
-              .execute();
-            await ctx.tx
-              .deleteFrom("document_references")
-              .where("target_id", "in", batch)
-              .execute();
-            for (const table of [
-              "notifications",
-              "comments",
-              "grants",
-              "reactions",
-              "resource_visits",
-              "visit_events",
-              "user_activity",
-              "share_links",
-              "document_versions",
-              "document_updates",
-              "document_states",
-              "access_invitations",
-              "access_requests",
-              "document_reference_index",
-              "document_references",
-            ] as const) {
-              if (table === "document_references")
-                await ctx.tx
-                  .deleteFrom(table)
-                  .where("source_id", "in", batch)
-                  .execute();
-              else
-                await ctx.tx
-                  .deleteFrom(table)
-                  .where("resource_id", "in", batch)
-                  .execute();
-            }
-          }
-          for (let offset = 0; offset < ids.length; offset += 200)
-            await ctx.tx
-              .deleteFrom("resources")
-              .where("id", "in", ids.slice(offset, offset + 200))
-              .execute();
-          for (const id of ids)
-            await emitIntegrationEvent(ctx.tx, "resource.purged", {
-              resourceId: id,
-              actorId: actor.id,
-            });
-          return { ok: true, count: ids.length };
+          return erasePurgedResources(ctx, actor, ids);
         },
       );
+    },
+    purgeDeleted(actor: Actor, id: string, version: number) {
+      return run(actor, [id], [id], async (ctx) => {
+        const root = get(ctx, id, "purge", true);
+        check(root, version);
+        if (!root.deleted_at) fail(409, "文件已恢复，请刷新回收站后重试");
+        const tree = descendants(ctx, root);
+        if (tree.some((item) => !item.deleted_at))
+          fail(409, "包含仍在使用的子文档，不能永久删除");
+        for (const item of tree) get(ctx, item.id, "purge", true);
+        if (tree.some((item) => item.moderation_hold))
+          fail(403, "审计保留文档不能永久删除");
+        return erasePurgedResources(
+          ctx,
+          actor,
+          tree.map((item) => item.id),
+        );
+      });
     },
     trash(actor: Actor, id: string, version: number, restore = false) {
       return run(actor, [id], [id], async (ctx) => {

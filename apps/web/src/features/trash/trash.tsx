@@ -181,7 +181,10 @@ export function EmptyTrash({ done }: { done: () => void }) {
 
 type FileTrashItem = { id: string; kind: "folder" | "file"; name: string; version: number; deletedAt: string | null };
 export function FileTrash() {
-  const [items, setItems] = useState<FileTrashItem[]>([]), [error, setError] = useState("");
+  const [items, setItems] = useState<FileTrashItem[]>([]),
+    [error, setError] = useState(""),
+    [purgeTarget, setPurgeTarget] = useState<FileTrashItem | null>(null),
+    [busy, setBusy] = useState(false);
   async function load() {
     try {
       const data = await api<{ folders: FileTrashItem[]; files: FileTrashItem[] }>("/files/trash");
@@ -194,9 +197,69 @@ export function FileTrash() {
     catch (e) { setError(e instanceof Error ? e.message : "恢复失败"); }
   }
   async function purge(item: FileTrashItem) {
-    if (!window.confirm(`永久删除“${item.name}”？此操作不可恢复。`)) return;
-    try { await api("/files/trash/purge", "POST", { kind: item.kind, id: item.id }); await load(); }
-    catch (e) { setError(e instanceof Error ? e.message : "永久删除失败"); }
+    setBusy(true);
+    setError("");
+    try {
+      await api("/files/trash/purge", "POST", { kind: item.kind, id: item.id });
+      setItems((current) => current.filter((row) => row.id !== item.id || row.kind !== item.kind));
+      setPurgeTarget(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "永久删除失败");
+    } finally {
+      setBusy(false);
+    }
   }
-  return <section className="file-trash-section"><div className="file-trash-heading"><div><h3>文件和文件夹</h3><p>文档删除时，其中的文件会随文档一起恢复或清理。</p></div><span>{items.length} 项</span></div><Feedback message={error} tone="error" />{items.length ? <div className="file-trash-list">{items.map((item) => <div key={item.kind + item.id}><span className="file-trash-icon">{item.kind === "folder" ? <Folder size={17} /> : <FileText size={17} />}</span><strong title={item.name}>{item.name}</strong><small>{item.kind === "folder" ? "文件夹" : "文件"}</small><button className="icon" onClick={() => void restore(item)} aria-label={`恢复${item.name}`}><RotateCcw size={15} /></button><button className="icon danger" onClick={() => void purge(item)} aria-label={`永久删除${item.name}`}><Trash2 size={15} /></button></div>)}</div> : <p className="file-trash-empty">文件回收站为空</p>}</section>;
+  return (
+    <section className="file-trash-section">
+      <div className="file-trash-heading">
+        <div>
+          <h3>文件和文件夹</h3>
+          <p>文档删除时，其中的文件会随文档一起恢复或清理。</p>
+        </div>
+        <span>{items.length} 项</span>
+      </div>
+      <Feedback message={error} tone="error" />
+      {items.length ? (
+        <div className="file-trash-list">
+          {items.map((item) => (
+            <div key={item.kind + item.id}>
+              <span className="file-trash-icon">
+                {item.kind === "folder" ? <Folder size={17} /> : <FileText size={17} />}
+              </span>
+              <strong title={item.name}>{item.name}</strong>
+              <small>{item.kind === "folder" ? "文件夹" : "文件"}</small>
+              <button type="button" className="icon" onClick={() => void restore(item)} aria-label={`恢复${item.name}`}>
+                <RotateCcw size={15} />
+              </button>
+              <button type="button" className="icon danger" onClick={() => setPurgeTarget(item)} aria-label={`永久删除${item.name}`}>
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="file-trash-empty">文件回收站为空</p>
+      )}
+      {purgeTarget && (
+        <Dialog
+          title="永久删除"
+          close={() => {
+            if (!busy) setPurgeTarget(null);
+          }}
+          className="modal-compact"
+        >
+          <p className="warning">永久删除「{purgeTarget.name}」？此操作无法恢复。</p>
+          <footer>
+            <button type="button" disabled={busy} onClick={() => setPurgeTarget(null)}>
+              取消
+            </button>
+            <button type="button" className="danger" disabled={busy} onClick={() => void purge(purgeTarget)}>
+              {busy ? "正在删除…" : "永久删除"}
+            </button>
+          </footer>
+        </Dialog>
+      )}
+    </section>
+  );
 }

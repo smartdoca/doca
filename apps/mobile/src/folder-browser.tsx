@@ -8,9 +8,9 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { useCallback, useRef, useState } from "react";
-import { Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-import { Button, Dialog, FAB, List, Portal, Snackbar, Text, TextInput } from "react-native-paper";
+import { Button, Dialog, FAB, IconButton, List, Portal, Snackbar, Text, TextInput } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { api } from "./api";
@@ -223,6 +223,28 @@ export function FolderBrowser({
     await upload(asset.uri, filename);
   }
 
+  async function downloadFile(item: FileItem) {
+    if (!session || !FileSystem.cacheDirectory) {
+      setNotice("当前环境不能下载文件");
+      return;
+    }
+    setBusy(true);
+    try {
+      const safe = item.name.replace(/[^\w.\u4e00-\u9fff-]+/g, "_");
+      const destination = FileSystem.cacheDirectory + item.id + "-" + safe;
+      const downloaded = await FileSystem.downloadAsync(
+        `${session.origin}/api/v1/files/items/${item.id}/content?download=1`,
+        destination,
+        { headers: { Authorization: `Bearer ${session.token}` } },
+      );
+      await Sharing.shareAsync(downloaded.uri, { mimeType: item.mime || "application/octet-stream", dialogTitle: item.name });
+    } catch (reason) {
+      fail(reason);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function openFile(item: FileItem) {
     if (!session || !FileSystem.cacheDirectory) {
       setNotice("当前环境不能预览文件");
@@ -296,31 +318,46 @@ export function FolderBrowser({
           const actionable = item.kind === "folder" ? !item.virtual && !item.locked : !item.locked;
           const body = (
             <Card>
-              <List.Item
-                title={item.name}
-                titleStyle={{ color: colors.ink }}
-                descriptionStyle={{ color: colors.muted }}
-                description={item.kind === "folder" ? "文件夹" : fileSize(item.size)}
-                left={(props) =>
-                  item.kind === "file" && item.mime.startsWith("image/") && session ? (
-                    <View style={[props.style, styles.thumbWrap]}>
-                      <FileThumb id={item.id} origin={session.origin} token={session.token} />
-                    </View>
-                  ) : (
-                    <List.Icon {...props} color={colors.accent} icon={item.kind === "folder" ? "folder" : fileIcon(item.mime)} />
-                  )
-                }
-                onPress={() => {
-                  if (item.kind === "folder") {
-                    router.push({
-                      pathname: "/folder/[id]",
-                      params: { id: item.id, title: item.name, parentType: item.type },
-                    });
-                    return;
+              <View style={styles.fileRow}>
+                <List.Item
+                  style={styles.fileItem}
+                  title={item.name}
+                  titleStyle={{ color: colors.ink }}
+                  descriptionStyle={{ color: colors.muted }}
+                  description={item.kind === "folder" ? "文件夹" : fileSize(item.size)}
+                  left={(props) =>
+                    item.kind === "file" && item.mime.startsWith("image/") && session ? (
+                      <View style={[props.style, styles.thumbWrap]}>
+                        <FileThumb id={item.id} origin={session.origin} token={session.token} />
+                      </View>
+                    ) : (
+                      <List.Icon {...props} color={colors.accent} icon={item.kind === "folder" ? "folder" : fileIcon(item.mime)} />
+                    )
                   }
-                  void openFile(item);
-                }}
-              />
+                  onPress={() => {
+                    if (item.kind === "folder") {
+                      router.push({
+                        pathname: "/folder/[id]",
+                        params: { id: item.id, title: item.name, parentType: item.type },
+                      });
+                      return;
+                    }
+                    void openFile(item);
+                  }}
+                />
+                {item.kind === "file" ? (
+                  <IconButton
+                    icon="download"
+                    accessibilityLabel={`下载${item.name}`}
+                    onPress={() => {
+                      Alert.alert("下载文件", `确定下载「${item.name}」吗？`, [
+                        { text: "取消", style: "cancel" },
+                        { text: "下载", onPress: () => void downloadFile(item) },
+                      ]);
+                    }}
+                  />
+                ) : null}
+              </View>
             </Card>
           );
           if (!actionable) return body;
@@ -470,6 +507,8 @@ const styles = StyleSheet.create({
   openExternal: { margin: 12 },
   previewTextWrap: { padding: 16, gap: 12 },
   previewText: { color: colors.ink, fontSize: 15, lineHeight: 22 },
+  fileRow: { flexDirection: "row", alignItems: "center" },
+  fileItem: { flex: 1 },
   thumbWrap: { justifyContent: "center" },
   thumb: { width: 40, height: 40, borderRadius: 6, backgroundColor: colors.lineSoft },
 });

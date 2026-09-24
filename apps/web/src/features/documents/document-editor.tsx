@@ -277,10 +277,11 @@ function RichDocument({
     return () => clearTimeout(t);
   }, [targetComment, ready, detail.comments.length]);
   const contentHost = useRef<HTMLDivElement | null>(null);
-  const pageLayout = documentPageLayout(availableWidth, pageWidth, !outlineCollapsed);
+  const mobileEditor = /^#\/m\/r\//.test(location.hash);
+  const pageLayout = documentPageLayout(availableWidth, mobileEditor ? "fluid" : pageWidth, mobileEditor ? false : !outlineCollapsed);
   const compact = !pageLayout.commentsInline;
   const commentsOpen = compact ? commentDrawerOpen : commentsChoice;
-  const outlineInline = pageLayout.outlineInline && !outlineCollapsed;
+  const outlineInline = !mobileEditor && pageLayout.outlineInline && !outlineCollapsed;
   // Automatic squeezing closes the drawer, but preserves the inline preference
   // for when space returns. Only an explicit comment action opens the drawer.
   useLayoutEffect(() => setCommentDrawerOpen(false), [compact]);
@@ -921,7 +922,7 @@ function RichDocument({
         always={outlineCollapsed}
         inlineAvailable={pageLayout.outlineInline}
         restore={() => setOutlineCollapsed(false)}
-        hidden={presenting}
+        hidden={presenting || mobileEditor}
         navigate={(id) =>
           handle.current?.scrollToBlock(id, {
             behavior: "smooth",
@@ -931,8 +932,8 @@ function RichDocument({
       />
       <div className={`editor-columns ${commentsOpen ? "with-comments" : ""} ${!outlineInline ? "outline-collapsed" : ""}`}
         style={{
-          gridTemplateColumns: `${outlineInline ? "200px " : ""}minmax(0, 1fr)${commentsOpen && !compact ? " 280px" : ""}`,
-          minWidth: pageLayout.paper ? pageLayout.paper + 40 + (outlineInline ? 216 : 0) + (commentsOpen && !compact ? 296 : 0) : 0,
+          gridTemplateColumns: mobileEditor ? "minmax(0, 1fr)" : `${outlineInline ? "200px " : ""}minmax(0, 1fr)${commentsOpen && !compact ? " 280px" : ""}`,
+          minWidth: mobileEditor ? 0 : pageLayout.paper ? pageLayout.paper + 40 + (outlineInline ? 216 : 0) + (commentsOpen && !compact ? 296 : 0) : 0,
         }}>
         {ready && (
           <ModelFind handle={handle} revision={revision} canEdit={editable} />
@@ -950,7 +951,7 @@ function RichDocument({
         />}
         <div
           className="editor-content"
-          style={{ maxWidth: pageLayout.paper || "none" }}
+          style={{ maxWidth: mobileEditor ? "none" : pageLayout.paper || "none" }}
           ref={contentHost}
           onClick={(e) => {
             const card = (e.target as HTMLElement).closest(".sk-attachment");

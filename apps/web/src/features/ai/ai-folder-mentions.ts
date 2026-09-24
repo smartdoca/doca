@@ -172,6 +172,15 @@ function collectHits(
         add(pattern, { type: "file", file });
     }
   }
+  for (const match of text.matchAll(/\[[^\]]*下载[^\]]*\]\([^)\n]+\)/gi)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    if (overlaps(start, end)) continue;
+    const file =
+      orderedFiles.find((item) => match[0].includes(item.name)) ??
+      (orderedFiles.length === 1 ? orderedFiles[0] : undefined);
+    if (file) hits.push({ type: "file", file, start, end });
+  }
   for (const mail of mails) {
     if (!mail.href) continue;
     for (const pattern of hrefPatterns(mail.href)) add(pattern, { type: "mail", mail });

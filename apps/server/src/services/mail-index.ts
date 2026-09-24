@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { enqueueProjection } from "@core/modules/automation/jobs.js";
 import { enqueueKnowledge } from "@core/modules/knowledge/service.js";
 import { queueMobilePush } from "@core/modules/mobile/push.js";
-import { mailKnowledgeIncluded } from "@core/modules/mail/scope.js";
+import { mailKnowledgeIncluded, parseMailAttachment } from "@core/modules/mail/scope.js";
 import type { MailboxRecord } from "@core/modules/mail/access.js";
 import type { DB, Schema } from "@db/index.js";
 import type { MailMessage, MailMessageDetail } from "../adapters/stalwart.js";
@@ -100,15 +100,32 @@ export async function indexMailMessage(
   return messageId;
 }
 
+async function requeueMailFiles(db: DB, mailboxId?: string, remoteId?: string) {
+  let query = db
+    .selectFrom("file_items")
+    .select(["id", "parent_id", "metadata"])
+    .where("deleted_at", "is", null);
+  query = mailboxId
+    ? query.where("parent_id", "=", `mail:${mailboxId}`)
+    : query.where("parent_id", "like", "mail:%");
+  const files = await query.execute();
+  for (const file of files) {
+    if (remoteId && parseMailAttachment(file.parent_id, file.metadata)?.messageId !== remoteId) continue;
+    await enqueueProjection(db, "search-file", file.id, { fileId: file.id });
+    await enqueueKnowledge(db, "file", file.id);
+  }
+}
+
 export async function queueMailIndex(db: DB, messageId: string) {
   const row = await db
     .selectFrom("mail_messages as m")
     .leftJoin("mailboxes as b", "b.id", "m.mailbox_id")
-    .select(["m.starred", "m.ai_tags", "b.knowledge_scope", "b.deleted_at"])
+    .select(["m.starred", "m.ai_tags", "m.mailbox_id", "m.remote_id", "b.knowledge_scope", "b.deleted_at"])
     .where("m.id", "=", messageId)
     .executeTakeFirst();
   await enqueueProjection(db, "search-mail", messageId, { messageId });
   await enqueueKnowledge(db, "mail", messageId);
+  if (row) await requeueMailFiles(db, row.mailbox_id, row.remote_id);
   if (row && !row.deleted_at && mailKnowledgeIncluded(row.knowledge_scope, row.starred) && !row.ai_tags.trim())
     await enqueueProjection(db, "mail-tag", messageId, { messageId });
 }
@@ -116,21 +133,24 @@ export async function queueMailIndex(db: DB, messageId: string) {
 export async function queueMailboxIndex(db: DB, mailboxId: string) {
   const rows = await db.selectFrom("mail_messages").select("id").where("mailbox_id", "=", mailboxId).execute();
   for (const row of rows) await queueMailIndex(db, row.id);
+  await requeueMailFiles(db, mailboxId);
 }
 
 export async function reconcileMailIndex(db: DB) {
   const rows = await db.selectFrom("mail_messages").select("id").execute();
   for (const row of rows) await queueMailIndex(db, row.id);
+  await requeueMailFiles(db);
 }
 
 export async function unindexMailMessage(db: DB, mailboxId: string, remoteId: string) {
   const stored = await db
     .selectFrom("mail_messages")
-    .select("id")
+    .select(["id", "mailbox_id", "remote_id"])
     .where("mailbox_id", "=", mailboxId)
     .where("remote_id", "=", remoteId)
     .executeTakeFirst();
   if (!stored) return;
   await db.deleteFrom("mail_messages").where("id", "=", stored.id).execute();
   await queueMailIndex(db, stored.id);
+  await requeueMailFiles(db, stored.mailbox_id, stored.remote_id);
 }

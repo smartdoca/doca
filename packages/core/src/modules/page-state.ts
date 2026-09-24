@@ -11,10 +11,30 @@ export type MailScratch = {
   html: string;
 };
 
+/** Floating quick-notes window. Shared by the web client and page-state writes. */
+export type NotesFloatState = {
+  open: boolean;
+  collapsed: boolean;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export const notesFloatDefaults: NotesFloatState = {
+  open: false,
+  collapsed: false,
+  x: 28,
+  y: 76,
+  width: 380,
+  height: 560,
+};
+
 export type PageStateKey =
   | `mail.draft.${string}`
   | "ui.locale"
   | "ui.filesView"
+  | "ui.notesFloat"
   | "ai.model";
 
 export function mailDraftKey(mailboxId: string) {
@@ -22,7 +42,8 @@ export function mailDraftKey(mailboxId: string) {
 }
 
 export function parsePageStateKey(key: string): PageStateKey | null {
-  if (key === "ui.locale" || key === "ui.filesView" || key === "ai.model") return key;
+  if (key === "ui.locale" || key === "ui.filesView" || key === "ui.notesFloat" || key === "ai.model")
+    return key;
   const draft = /^mail\.draft\.([0-9a-f-]{36})$/i.exec(key);
   if (draft && UUID.test(draft[1]!)) return `mail.draft.${draft[1]}`;
   return null;
@@ -43,7 +64,26 @@ export function normalizePageStateValue(key: PageStateKey, value: unknown): unkn
       throw new Error("模型标识无效");
     return value.trim();
   }
+  if (key === "ui.notesFloat") return normalizeNotesFloat(value);
   return normalizeMailScratch(value);
+}
+
+export function normalizeNotesFloat(value: unknown): NotesFloatState {
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const num = (field: string, fallback: number, min: number, max: number) => {
+    const raw = record[field];
+    const parsed = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : Number.NaN;
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, parsed));
+  };
+  return {
+    open: record.open === true,
+    collapsed: record.collapsed === true,
+    x: num("x", notesFloatDefaults.x, -4000, 8000),
+    y: num("y", notesFloatDefaults.y, -4000, 8000),
+    width: num("width", notesFloatDefaults.width, 280, 960),
+    height: num("height", notesFloatDefaults.height, 320, 960),
+  };
 }
 
 export function normalizeMailScratch(value: unknown): MailScratch {

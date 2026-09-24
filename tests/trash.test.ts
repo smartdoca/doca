@@ -123,6 +123,76 @@ it("purges a complete library subtree and related rows but preserves unrelated f
       .execute(),
   ).not.toHaveLength(0);
 });
+it("purges one trashed root together with already trashed descendants", async () => {
+  const lib = await content.create(owner, {
+    kind: "library",
+    format: "rich_text",
+    title: "Library",
+  });
+  const doc = await content.create(owner, {
+    kind: "document",
+    format: "rich_text",
+    title: "Child",
+    libraryId: lib.id,
+  });
+  const now = new Date().toISOString();
+  await db
+    .insertInto("quick_note_compilations")
+    .values({
+      id: "compile-1",
+      owner_id: owner.id,
+      sources: "[]",
+      request_hash: "hash",
+      instruction: "note",
+      model_id: "model",
+      status: "done",
+      markdown: "",
+      error: "",
+      document_id: doc.id,
+      created_at: now,
+      updated_at: now,
+    })
+    .execute();
+  await content.trash(owner, lib.id, lib.version);
+  const root = (await content.list(owner, { scope: "trash" })).items.find(
+    (item) => item.id === lib.id,
+  )!;
+  const result = await content.purgeDeleted(owner, root.id, root.version);
+  expect(result.count).toBe(2);
+  expect(await db.selectFrom("resources").selectAll().execute()).toHaveLength(0);
+  expect(
+    await db
+      .selectFrom("quick_note_compilations")
+      .select("document_id")
+      .executeTakeFirst(),
+  ).toEqual({ document_id: null });
+});
+it("refuses to purge a trashed parent that still has a live child", async () => {
+  const lib = await content.create(owner, {
+    kind: "library",
+    format: "rich_text",
+    title: "Library",
+  });
+  const doc = await content.create(owner, {
+    kind: "document",
+    format: "rich_text",
+    title: "Child",
+    libraryId: lib.id,
+  });
+  await content.trash(owner, lib.id, lib.version);
+  await db
+    .updateTable("resources")
+    .set({ deleted_at: null, delete_batch: null })
+    .where("id", "=", doc.id)
+    .execute();
+  const root = (await content.list(owner, { scope: "trash" })).items.find(
+    (item) => item.id === lib.id,
+  )!;
+  await expect(
+    content.purgeDeleted(owner, root.id, root.version),
+  ).rejects.toThrow("子文档");
+  expect(await db.selectFrom("resources").selectAll().execute()).toHaveLength(2);
+});
 it("rejects unauthorized, duplicate, active, stale or restored purge targets atomically", async () => {
   const a = await make("A"),
     b = await make("B");

@@ -18,6 +18,7 @@ export default function Document() {
   useLayoutEffect(() => {
     navigation.setOptions({
       title: heading,
+      headerShadowVisible: true,
       headerRight: () => <IconButton icon="dots-horizontal" onPress={() => setPanel(true)} />,
     });
   }, [heading, navigation]);
@@ -66,6 +67,6 @@ export default function Document() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1 },
+  page: { flex: 1, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#e5e6eb" },
   status: { margin: 24 },
 });

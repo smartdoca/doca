@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigation, useRouter } from "expo-router";
 import { useLayoutEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
-import { IconButton, Text } from "react-native-paper";
+import { FAB, IconButton, Text } from "react-native-paper";
 import { api } from "../../src/api";
 import { useAuth } from "../../src/auth";
 import { EmptyState, LoadingState, colors } from "../../src/chrome";
@@ -64,6 +64,7 @@ export default function MailHome() {
   }
 
   return (
+    <View style={styles.page}>
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
       <View style={styles.account}>
         <View style={styles.avatar}>
@@ -125,6 +126,13 @@ export default function MailHome() {
         </View>
       ) : null}
     </ScrollView>
+    <FAB
+      icon="email-edit-outline"
+      style={styles.fab}
+      color="#fff"
+      onPress={() => router.push({ pathname: "/compose", params: { mailboxId: current.id } })}
+    />
+    </View>
   );
 }
 
@@ -196,4 +204,5 @@ const styles = StyleSheet.create({
   },
   switchRow: { paddingVertical: 8 },
   cancel: { color: colors.accent, textAlign: "center", paddingVertical: 8 },
+  fab: { position: "absolute", right: 16, bottom: 16, backgroundColor: colors.accent },
 });

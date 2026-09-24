@@ -2097,6 +2097,14 @@ export function AIChat({ full = false }: { full?: boolean }) {
                 streaming={active && event.status === "loading"}
               />
             </Suspense>
+          ) : event.image && !event.detail && !event.resourceId ? (
+            <AIGeneratedImage
+              sessionId={ai.sessionId}
+              image={event.image}
+              currentDocument={
+                ai.resource?.kind === "document" ? ai.resource : undefined
+              }
+            />
           ) : (
             <>
               <ThoughtChain

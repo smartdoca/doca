@@ -252,7 +252,7 @@
   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   gap: 28px;
-  align-items: start;
+  align-items: stretch;
   margin: 0 0 24px;
   padding: 16px 18px 8px;
   border: 1px solid #e6e8ee;
@@ -265,12 +265,23 @@
   font-size: 17px;
 }
 .home-activity-day {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  height: 0;
+  min-height: 100%;
   padding-top: 4px;
 }
 .home-activity-day h3 {
+  flex: none;
   margin: 4px 0 8px;
   font-size: 15px;
+}
+.home-activity-docs {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 .home-activity .activity-grid.month {
   margin: 12px 0;
@@ -368,6 +379,10 @@
 @media (max-width: 900px) {
   .home-activity {
     grid-template-columns: 1fr;
+  }
+  .home-activity-day {
+    height: auto;
+    max-height: 420px;
   }
 }
 .quick-actions > button {
@@ -1050,4 +1065,32 @@
 }
 .document-table-row {
   cursor: pointer;
+}
+.dashboard-trash .document-table-head,
+.dashboard-trash .document-table-row {
+  grid-template-columns:
+    minmax(190px, 2.4fr) minmax(100px, 1fr) minmax(75px, 0.8fr)
+    minmax(110px, 1fr) minmax(110px, 1fr) auto;
+}
+.trash-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.trash-row-actions button {
+  padding: 4px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+@media (max-width: 1100px) {
+  .dashboard-trash .document-table-head,
+  .dashboard-trash .document-table-row {
+    grid-template-columns: minmax(170px, 2fr) minmax(80px, 1fr) 75px 105px auto;
+  }
+}
+@media (max-width: 700px) {
+  .dashboard-trash .document-table-head,
+  .dashboard-trash .document-table-row {
+    grid-template-columns: minmax(165px, 2fr) 90px 100px auto;
+  }
 }

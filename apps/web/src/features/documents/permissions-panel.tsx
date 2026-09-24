@@ -96,7 +96,8 @@ export function PermissionDialog({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
-  const [page, setPage] = useState<keyof typeof titles>("main");
+  const [trail, setTrail] = useState<Array<keyof typeof titles>>(["main"]);
+  const page = trail[trail.length - 1] ?? "main";
   const [person, setPerson] = useState<{
       id: string;
       display_name: string;
@@ -137,7 +138,7 @@ export function PermissionDialog({
   useEffect(() => {
     let alive = true;
     setData(null);
-    setPage("main");
+    setTrail(["main"]);
     setPerson(null);
     setSourceMember(null);
     setError("");
@@ -163,11 +164,27 @@ export function PermissionDialog({
     return () => previous?.focus();
   }, [embedded]);
   function navigate(next: keyof typeof titles) {
-    setPage(next);
+    setTrail((current) => {
+      if (current[current.length - 1] === next) return current;
+      if (next === "main") return ["main"];
+      return [...current, next];
+    });
     setNotice("");
     setError("");
     setRemoving(null);
   }
+  function back() {
+    if (page === "sources") setSourceMember(null);
+    setTrail((current) =>
+      current.length > 1 ? current.slice(0, -1) : ["main"],
+    );
+    setNotice("");
+    setError("");
+    setRemoving(null);
+  }
+  useEffect(() => {
+    panel.current?.querySelector(".permissions-body")?.scrollTo(0, 0);
+  }, [page]);
   async function sourceAction(
     source: Member["sourceDetails"][number],
     action: "update" | "delete",
@@ -277,7 +294,7 @@ export function PermissionDialog({
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.stopPropagation();
-          page === "main" ? close() : navigate("main");
+          page === "main" ? close() : back();
         }
       }}
     >
@@ -285,9 +302,14 @@ export function PermissionDialog({
         <div className="permissions-heading">
           {page !== "main" && (
             <button
+              type="button"
               className="icon"
-              aria-label="返回分享"
-              onClick={() => navigate("main")}
+              aria-label="返回"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                back();
+              }}
             >
               <ArrowLeft size={18} />
             </button>

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { enqueueProjection } from "../automation/jobs.js";
 import { mailKnowledgeIncluded } from "../mail/scope.js";
+import { mailAttachmentIncluded } from "../mail/search-scope.js";
 import type { DB } from "../../../../db/src/index.js";
 
 export type KnowledgeKind = "document" | "file" | "mail" | "folder" | "library";
@@ -169,12 +170,13 @@ async function fileRecord(db: DB, id: string) {
     .innerJoin("file_storage_objects as o", "o.id", "f.storage_object_id")
     .leftJoin("file_extracts as e", "e.storage_object_id", "o.id")
     .select([
-      "f.id", "f.name", "f.owner_id", "f.parent_type", "f.parent_id", "f.deleted_at",
+      "f.id", "f.name", "f.owner_id", "f.parent_type", "f.parent_id", "f.metadata", "f.deleted_at",
       "f.ai_description_override", "o.ai_description", "e.result as extract", "e.status as extract_status",
     ])
     .where("f.id", "=", id)
     .executeTakeFirst();
-  if (!item || item.deleted_at) return { alive: false, title: "", text: "", readers: [] as string[] };
+  if (!item || item.deleted_at || !(await mailAttachmentIncluded(db, item.parent_id, item.metadata)))
+    return { alive: false, title: "", text: "", readers: [] as string[] };
   const readers = new Set<string>([item.owner_id]);
   if (item.parent_type === "document") {
     for (const reader of (await documentReaders(db, item.parent_id)).readers) readers.add(reader);
@@ -448,9 +450,11 @@ export async function enqueueMissingKnowledge(db: DB) {
     await enqueueKnowledge(db, "document", document.id);
     queued += 1;
   }
-  const files = await db.selectFrom("file_items").select("id").where("deleted_at", "is", null).where("parent_type", "!=", "document").execute();
+  const files = await db.selectFrom("file_items").select(["id", "parent_id", "metadata"]).where("deleted_at", "is", null).where("parent_type", "!=", "document").execute();
   for (const file of files) {
-    if (present.has(`file:${file.id}`)) continue;
+    const included = await mailAttachmentIncluded(db, file.parent_id, file.metadata);
+    const has = present.has(`file:${file.id}`);
+    if (included === has) continue;
     await enqueueKnowledge(db, "file", file.id);
     queued += 1;
   }

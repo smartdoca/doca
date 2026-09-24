@@ -264,13 +264,48 @@ it("keeps mailbox search on starred mail unless the mailbox opts in fully", asyn
   const hidden = await request("POST", "/knowledge/search", { query: "普通闲聊" });
   expect(hidden.json().items).toEqual([]);
 
+  const upload = await request(
+    "POST",
+    "/files/items?filename=plain-note.txt",
+    Buffer.from("附件占位"),
+    cookie,
+    "application/octet-stream",
+  );
+  expect(upload.statusCode, upload.body).toBe(200);
+  const attachmentId = upload.json().id as string;
+  await db.updateTable("file_items").set({
+    parent_type: "system",
+    parent_id: `mail:${mailboxId}`,
+    metadata: JSON.stringify({ mailboxId, messageId: plain, attachmentId: "a1" }),
+  }).where("id", "=", attachmentId).execute();
+  const extract = JSON.stringify({ parts: [{ type: "text", text: "普通闲聊附件不应进入搜索" }] });
+  await db.insertInto("file_extracts").values({
+    storage_object_id: upload.json().storage_object_id,
+    status: "ready",
+    result: extract,
+    error: null,
+    updated_at: now,
+  }).onConflict((oc) => oc.column("storage_object_id").doUpdateSet({ status: "ready", result: extract, error: null })).execute();
+  const plainFile = await request("POST", "/knowledge/rebuild", { kind: "file", id: attachmentId });
+  expect(plainFile.json().chunks).toBe(0);
+  const plainFound = await request("POST", "/knowledge/search", { query: "不应进入搜索" });
+  expect(plainFound.json().items).toEqual([]);
+
+  await db.updateTable("file_items").set({
+    metadata: JSON.stringify({ mailboxId, messageId: starred, attachmentId: "a1" }),
+  }).where("id", "=", attachmentId).execute();
+  const starredFile = await request("POST", "/knowledge/rebuild", { kind: "file", id: attachmentId });
+  expect(starredFile.json().chunks).toBeGreaterThan(0);
+
   await db.updateTable("mailboxes").set({ knowledge_scope: "all" }).where("id", "=", mailboxId).execute();
   const all = await request("POST", "/knowledge/rebuild", { kind: "mail", id: plain });
   expect(all.json().chunks).toBeGreaterThan(0);
 
   await db.updateTable("mailboxes").set({ knowledge_scope: "off" }).where("id", "=", mailboxId).execute();
   const off = await request("POST", "/knowledge/rebuild", { kind: "mail", id: starred });
+  const offFile = await request("POST", "/knowledge/rebuild", { kind: "file", id: attachmentId });
   expect(off.json().chunks).toBe(0);
+  expect(offFile.json().chunks).toBe(0);
   const gone = await request("POST", "/knowledge/search", { query: "园区巡检" });
   expect(gone.json().items).toEqual([]);
 });

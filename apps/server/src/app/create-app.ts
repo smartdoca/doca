@@ -8,7 +8,7 @@ import { passwordIdentity } from "@core/modules/identity/accounts.js";
 import {registrationProfile} from "@core/modules/identity/accounts.js";
 import {profilePolicy} from "@core/modules/identity/naming.js";
 import {requireSecurity} from "@core/modules/identity/security.js";
-import { adminUserDetails, createAdminUser } from "../routes/admin-users.js";
+import { adminUserDetails, createAdminUser, resetUserPassword } from "../routes/admin-users.js";
 import { registerAccounts } from "../routes/accounts.js";
 import { registerEntitlements } from "../routes/entitlements.js";
 import { type MessagingRuntime } from "../adapters/messaging.js";
@@ -810,6 +810,18 @@ export async function createApp(
       return { ok: true };
     },
   );
+  route<{ password: string }>(
+    "POST",
+    "/admin/users/:id/password",
+    "管理员重置用户密码",
+    object({ password }),
+    async (req) => {
+      const a = admin(req);
+      limit(`password-reset:${a.id}`, 20);
+      await resetUserPassword(db, a, req.params.id!, req.body.password);
+      return { ok: true };
+    },
+  );
   api.get(
     "/api/v1/admin/settings",
     { schema: { summary: "读取系统设置", tags: ["Administration"] } },
@@ -1171,6 +1183,13 @@ export async function createApp(
           action === "restore",
         ),
     );
+  route<{ version: number }>(
+    "POST",
+    "/resources/:id/purge",
+    "永久删除回收站中的一项及其已删除的子文档",
+    object({ version }),
+    (req, a) => library.purgeDeleted(a, req.params.id!, req.body.version),
+  );
   route<{ kind: "like" | "favorite" | "pin"; enabled: boolean }>(
     "PUT",
     "/resources/:id/reaction",

@@ -338,7 +338,7 @@
   grid-template-columns:
     minmax(220px, 2fr) minmax(110px, 1.1fr) minmax(100px, 0.9fr)
     minmax(165px, 1.2fr) minmax(90px, 0.8fr) minmax(90px, 0.8fr)
-    minmax(150px, 1.2fr);
+    minmax(220px, 1.4fr);
   align-items: center;
   gap: 18px;
   padding: 18px 24px;

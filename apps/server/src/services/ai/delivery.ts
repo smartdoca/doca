@@ -268,6 +268,35 @@ export function fileSendRequested(text: string) {
   );
 }
 
+export function secretValueProvided(text: string) {
+  const t = text.trim();
+  if (!t || /不要(?:保存|记住|写入)|别(?:保存|记住)/.test(t)) return false;
+  if (/(?:sk-|ghp_|github_pat_|xox[baprs]-|AKIA)[A-Za-z0-9_-]{8,}/.test(t))
+    return true;
+  return /(?:密钥|令牌|token|api[_ ]?key|密码|secret)\s*[:：=是为]\s*\S{8,}/i.test(
+    t,
+  );
+}
+
+export function unverifiedSecretDelivery(
+  userText: string,
+  secretsWritten: number,
+): DeliveryReview | null {
+  if (secretsWritten > 0 || !secretValueProvided(userText)) return null;
+  return {
+    verdict: "revise",
+    summary:
+      "密钥还没进密码本。请立刻 secret_write：key 以字母开头，只含字母、数字和下划线（如 API_KEY），value 用用户给出的原文。备忘里只写 {{KEY}}，回复不要出现密钥。",
+    checks: [
+      {
+        requirement: "用户给出的密钥必须写入密码本",
+        passed: false,
+        evidence: "本轮没有 secret_write 成功回执。",
+      },
+    ],
+  };
+}
+
 export function unverifiedFileDelivery(
   userText: string,
   answer: string,

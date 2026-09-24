@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { deflateSync } from "node:zlib";
 import sharp from "sharp";
-import { zipSync, strToU8 } from "fflate";
+import { unzipSync, zipSync, strToU8 } from "fflate";
 import { relevantSkillFormats } from "@core/modules/ai/skills.js";
 import { extractAttachmentText } from "../apps/server/src/services/ai/attachments.js";
 import { extractFileParts } from "../apps/server/src/services/ai/extract-content.js";
@@ -30,6 +30,20 @@ it("creates Word, Markdown, Excel and PDF files from report text", () => {
   expect(markdown.body.toString("utf8")).toContain("已完成");
   const word = createExportFile("word", { content: "调研结论\n第二段" });
   expect(extractAttachmentText("report.docx", word.body)).toContain("调研结论");
+  const report = createExportFile("word", {
+    content:
+      "# 平台概况\n\n- 开发者规模\n\n|项目|说明|\n|---|---|\n|定价|订阅|\n\n见 [官网](https://github.com/pricing)",
+  });
+  const packed = unzipSync(report.body);
+  const documentXml = new TextDecoder().decode(packed["word/document.xml"]);
+  const rels = new TextDecoder().decode(packed["word/_rels/document.xml.rels"]);
+  expect(documentXml).toContain("Heading1");
+  expect(documentXml).toContain("w:tbl");
+  expect(documentXml).not.toContain("# 平台概况");
+  expect(rels).toContain("https://github.com/pricing");
+  expect(packed["word/styles.xml"]).toBeTruthy();
+  expect(extractAttachmentText("report.docx", report.body)).toContain("平台概况");
+  expect(extractAttachmentText("report.docx", report.body)).toContain("订阅");
   expect(
     parseTable("|项目|金额|\n|---|---|\n|差旅|1200|"),
   ).toEqual([

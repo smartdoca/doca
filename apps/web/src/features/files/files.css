@@ -2296,3 +2296,36 @@ button.shared-folder-row:hover { background: #f7f9fc; }
 .file-large-preview.image-only .file-large-preview-actions .icon:hover {
   background: rgba(22, 26, 36, .78);
 }
+.file-preview-content:has(.dwg-preview),
+.file-large-preview-content:has(.dwg-preview) {
+  display: flex;
+  background: #1b212b;
+}
+.file-preview-content:has(.dwg-preview) {
+  margin: 0;
+  border-radius: 0;
+}
+.dwg-preview {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  overflow: hidden;
+  background: #1b212b;
+}
+.dwg-preview-host,
+.dwg-preview-stage {
+  width: 100%;
+  height: 100%;
+}
+.dwg-preview-stage canvas {
+  display: block;
+}
+.dwg-preview-status {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  min-height: 0;
+  background: rgba(248, 249, 251, .94);
+}

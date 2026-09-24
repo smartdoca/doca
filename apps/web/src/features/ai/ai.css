@@ -141,7 +141,7 @@ body.ai-panel-resizing {
 }
 .ai-answer {
   font-size: 13px;
-  line-height: 1.65;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 .ai-answer > div {
@@ -150,32 +150,51 @@ body.ai-panel-resizing {
   padding: 0 !important;
   background: transparent !important;
 }
-.ai-answer h1,
-.ai-answer h2,
-.ai-answer h3 {
-  font-size: 1.15em;
-  line-height: 1.5;
-  margin: 10px 0 5px;
+.ai-answer .x-markdown-light {
+  --margin-block: 0 0 4px 0;
+  --margin-li: 0 0 2px 0;
+  --margin-ul-ol: 2px 0 4px 18px;
+  --hr-margin: 8px 0;
+  --table-margin: 4px 0 8px 0;
+  --margin-pre: 4px 0;
+  --padding-code: 8px 10px;
+  --td-th-padding: 3px 8px;
+  --font-size: 13px;
+  line-height: 1.45;
 }
-.ai-answer .x-markdown :is(p, ul, ol, blockquote) {
-  margin-block: 5px;
+.ai-answer :is(.x-markdown, .x-markdown-light) :is(h1, h2, h3, h4) {
+  font-size: 14px;
+  line-height: 1.35;
+  margin: 8px 0 2px;
 }
-.ai-answer .x-markdown :is(p, li) {
+.ai-answer :is(.x-markdown, .x-markdown-light) h1 {
+  font-size: 15px;
+}
+.ai-answer :is(.x-markdown, .x-markdown-light) :is(p, ul, ol, blockquote) {
+  margin: 0 0 4px;
+}
+.ai-answer :is(.x-markdown, .x-markdown-light) :is(p, li) {
   font-size: inherit;
-  line-height: inherit;
+  line-height: 1.45;
+  margin: 0 0 4px;
 }
-.ai-answer .x-markdown li {
-  margin-block: 2px;
+.ai-answer :is(.x-markdown, .x-markdown-light) li > p {
+  margin: 0;
 }
-.ai-answer .x-markdown :is(ul, ol) {
-  padding-inline-start: 22px;
+.ai-answer :is(.x-markdown, .x-markdown-light) li::marker {
+  font-size: 13px;
+  line-height: 1.45;
 }
-.ai-answer .x-markdown :is(h1, h2, h3, h4) {
-  margin-block: 10px 5px;
-  line-height: 1.5;
+.ai-answer :is(.x-markdown, .x-markdown-light) :is(ul, ol) {
+  margin: 2px 0 4px;
+  padding-inline-start: 1.2em;
 }
-.ai-answer .x-markdown hr {
-  margin-block: 12px;
+.ai-answer :is(.x-markdown, .x-markdown-light) hr {
+  margin: 8px 0;
+}
+.ai-answer :is(.x-markdown, .x-markdown-light) blockquote {
+  margin: 4px 0;
+  padding: 2px 8px;
 }
 .ai-answer pre {
   max-width: 100%;
@@ -1616,12 +1635,22 @@ body.ai-panel-resizing {
   font-size: 11px;
   white-space: nowrap;
 }
+.ai-bubble-list.ai-bubble-list .ant-bubble.ai-step-bubble:has(.ai-generated-image) {
+  padding-block: 0;
+}
+.ai-bubble-list.ai-bubble-list .ant-bubble.ai-step-bubble:has(.ai-generated-image) + .ant-bubble.ai-response-bubble {
+  padding-top: 2px;
+}
 .ai-generated-image {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   max-width: 320px;
-  margin: 8px 0;
+  margin: 0;
+}
+.ai-generated-image .ant-image {
+  display: block;
+  line-height: 0;
 }
 .ai-approval-card {
   margin-top: 8px;
