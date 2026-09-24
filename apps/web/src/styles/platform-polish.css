@@ -184,13 +184,12 @@ body,
 .user-mention.is-self,
 .document-user-mention.is-self,
 .comment-mention.is-self {
-  display: inline-flex;
-  align-items: center;
+  display: inline;
   background: #3370ff;
   color: #fff;
-  padding: 1px 8px 2px;
+  padding: 0 8px;
   border-radius: 999px;
-  line-height: 1;
+  line-height: inherit;
   vertical-align: baseline;
 }
 .user-mention .user-badge,
@@ -199,14 +198,8 @@ body,
   display: inline;
   font: inherit;
   color: inherit;
-}
-.user-mention.is-self .user-badge,
-.document-user-mention.is-self .user-badge,
-.comment-mention.is-self .user-badge {
-  display: inline-flex;
-  align-items: center;
-  line-height: 1;
-  transform: translateY(-1px);
+  line-height: inherit;
+  vertical-align: baseline;
 }
 .user-mention.is-self .user-badge[role="button"]:hover,
 .document-user-mention.is-self .user-badge[role="button"]:hover,
