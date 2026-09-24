@@ -157,6 +157,7 @@ export function Admin() {
     [busy, setBusy] = useState(false),
     [creating, setCreating] = useState(false),
     [target, setTarget] = useState<Member | null>(null),
+    [passwordTarget, setPasswordTarget] = useState<Member | null>(null),
     [refresh, setRefresh] = useState(0);
   useEffect(() => {
     if (creating)
@@ -303,7 +304,7 @@ export function Admin() {
           </div>
         </nav>
         <main className="admin-content">
-          {error && !creating && !target && (
+          {error && !creating && !target && !passwordTarget && (
             <Feedback message={error} tone="error" />
           )}
           {message && <Feedback message={message} tone="success" />}
@@ -429,7 +430,7 @@ export function Admin() {
               <div className="admin-section-heading">
                 <div>
                   <h2>用户管理</h2>
-                  <p>创建账号，管理用户的访问状态。</p>
+                  <p>创建账号，管理访问状态，并在密码丢失时重置密码。</p>
                 </div>
                 <button
                   className="primary"
@@ -558,6 +559,17 @@ export function Admin() {
                           >
                             编辑
                           </button>
+                          {(!accountPolicy || accountPolicy.passwordEnabled) && (
+                            <button
+                              className="text-action"
+                              onClick={() => {
+                                setError("");
+                                setPasswordTarget(u);
+                              }}
+                            >
+                              重置密码
+                            </button>
+                          )}
                           <button
                             className="text-action"
                             onClick={() => setMembershipTarget(u.id)}
@@ -864,6 +876,85 @@ export function Admin() {
               </button>
               <button className="primary" disabled={busy}>
                 创建账号
+              </button>
+            </footer>
+          </form>
+        </Dialog>
+      )}
+      {passwordTarget && (
+        <Dialog
+          title="重置密码"
+          close={() => {
+            if (!busy) {
+              setError("");
+              setPasswordTarget(null);
+            }
+          }}
+          className="modal-compact"
+        >
+          <form
+            className="admin-account-form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const form = new FormData(e.currentTarget);
+              const next = String(form.get("password") ?? "");
+              const again = String(form.get("confirm") ?? "");
+              if (next !== again) {
+                setError("两次输入的密码不一致");
+                return;
+              }
+              if (
+                await act(
+                  () =>
+                    api("/admin/users/" + passwordTarget.id + "/password", "POST", {
+                      password: next,
+                    }),
+                  "密码已重置，该用户需要用新密码重新登录",
+                )
+              )
+                setPasswordTarget(null);
+            }}
+          >
+            <p>
+              为「{passwordTarget.display_name}」设置新密码。对方当前的登录会全部退出。请把新密码告知对方，这里不会再次显示。
+            </p>
+            <label>
+              新密码 *
+              <input
+                name="password"
+                type="password"
+                required
+                minLength={12}
+                maxLength={128}
+                autoComplete="new-password"
+                placeholder="至少 12 个字符"
+              />
+            </label>
+            <label>
+              再次输入 *
+              <input
+                name="confirm"
+                type="password"
+                required
+                minLength={12}
+                maxLength={128}
+                autoComplete="new-password"
+              />
+            </label>
+            {error && <Feedback message={error} tone="error" />}
+            <footer>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setError("");
+                  setPasswordTarget(null);
+                }}
+              >
+                取消
+              </button>
+              <button className="primary" disabled={busy}>
+                确认重置
               </button>
             </footer>
           </form>

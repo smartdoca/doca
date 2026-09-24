@@ -10,6 +10,7 @@ import {
 } from "slatetsx-kit-editor";
 import { lookupUsers, mentionHandle, mentionLabel, type MentionUser } from "@web/features/comments/rich-comments.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
+import { UserMention } from "@web/shared/components/user-mention.js";
 export const mentionUrl = (id: string) => `#/u/${id}`;
 import { mentionCodec } from "@core/modules/documents/codecs/rich-runtime.js";
 export const mentionPlugin = createAtomicInlineExtension({
@@ -17,11 +18,11 @@ export const mentionPlugin = createAtomicInlineExtension({
   decode: (data, identity) =>
     mentionCodec.decode(data, identity) as CustomElement,
   render: (e) => (
-    <span className="document-user-mention">
-      <UserBadge id={String(e.userId)} name={String(e.label)} noAvatar>
-        @{String(e.label)}
-      </UserBadge>
-    </span>
+    <UserMention
+      id={String(e.userId)}
+      name={String(e.label)}
+      className="document-user-mention"
+    />
   ),
 }).plugin;
 const mentionTextBefore = (editor: Editor, anchor: Point) => {

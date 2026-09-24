@@ -3,11 +3,13 @@ import type { DB } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import {
   createUser,
+  hashPassword,
   type Actor,
 } from "@core/modules/identity/passwords.js";
 import {
   identityPolicy,
   normalizeContact,
+  passwordAllowed,
   securityAudit,
 } from "@core/modules/identity/accounts.js";
 import {
@@ -181,5 +183,36 @@ export async function createAdminUser(
       contacts: { email, phone },
     });
     return u;
+  });
+}
+
+export async function resetUserPassword(
+  db: DB,
+  actor: Actor,
+  userId: string,
+  password: string,
+) {
+  if (!actor.admin) fail(403, "需要管理员权限");
+  if (password.length < 12 || password.length > 128)
+    fail(400, "密码需为 12–128 位");
+  const hash = await hashPassword(password);
+  return transact(db, async (tx) => {
+    await passwordAllowed(tx);
+    const user =
+      (await tx
+        .selectFrom("users")
+        .select(["id", "public_id"])
+        .where("id", "=", userId)
+        .executeTakeFirst()) ?? fail(404, "用户不存在");
+    await tx
+      .updateTable("users")
+      .set({ password_hash: hash })
+      .where("id", "=", user.id)
+      .execute();
+    await tx.deleteFrom("sessions").where("user_id", "=", user.id).execute();
+    await securityAudit(tx, actor.id, user.id, "password.admin_reset", {
+      username: user.public_id,
+    });
+    return { ok: true };
   });
 }

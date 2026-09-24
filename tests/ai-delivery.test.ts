@@ -8,6 +8,8 @@ import {
   missingReviewCriteria,
   fileCopyRequested,
   fileSendRequested,
+  secretValueProvided,
+  unverifiedSecretDelivery,
   unverifiedDocumentDelivery,
   unverifiedFileDelivery,
   unverifiedFolderDelivery,
@@ -306,6 +308,15 @@ it("finds an existing file instead of copying it, and requires a card", () => {
   expect(
     unverifiedFileDelivery("把这个文件再发给我一下", "没有找到这个文件。", false),
   ).toBeNull();
+});
+
+it("requires a password-book write when the user supplies a secret", () => {
+  const given = "GitHub 密钥：ghp_exampletokenvalue1234";
+  expect(secretValueProvided(given)).toBe(true);
+  expect(secretValueProvided("帮我写一篇密钥管理说明")).toBe(false);
+  expect(secretValueProvided("密钥：abc，不要保存")).toBe(false);
+  expect(unverifiedSecretDelivery(given, 0)?.verdict).toBe("revise");
+  expect(unverifiedSecretDelivery(given, 1)).toBeNull();
 });
 
 it("does not treat research questions as folder-create requests", () => {

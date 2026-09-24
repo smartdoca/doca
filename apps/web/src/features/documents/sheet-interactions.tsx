@@ -8,6 +8,7 @@ import type {
 } from "@online-office/univer-sheet";
 import { lookupUsers, type MentionUser } from "@web/features/comments/rich-comments.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
+import { UserMention } from "@web/shared/components/user-mention.js";
 import { assetUrl } from "@web/shared/api.js";
 import {
   guessMime,
@@ -136,7 +137,7 @@ export function renderSheetObject(
   onPreview?: (file: PreviewSource) => void,
 ) {
   if (object.kind === "mention")
-    return <UserBadge id={object.id} name={object.label} noAvatar />;
+    return <UserMention id={object.id} name={object.label} />;
   if (object.kind === "link") {
     try {
       const url = new URL(object.id);

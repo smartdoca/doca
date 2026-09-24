@@ -2663,13 +2663,15 @@ export function registerFiles(
       const actor = auth(req);
       await transact(db, async (tx) => {
         if (req.body.kind === "file") {
-          await enqueueFileSearch(tx, req.body.id);
-          await tx
+          const deleted = await tx
             .deleteFrom("file_items")
             .where("id", "=", req.body.id)
             .where("owner_id", "=", actor.id)
             .where("deleted_at", "is not", null)
-            .execute();
+            .executeTakeFirst();
+          if (Number(deleted.numDeletedRows) < 1)
+            fail(404, "回收站文件不存在");
+          await enqueueFileSearch(tx, req.body.id);
           return;
         }
         const root = await tx

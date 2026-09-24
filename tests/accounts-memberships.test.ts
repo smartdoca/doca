@@ -885,6 +885,37 @@ it("enforces publication and collaboration quotas while keeping restriction and 
   ).toBe(200);
 });
 
+it("lets an administrator replace a lost password and end existing sessions", async () => {
+  const next = "replacement-password";
+  expect(
+    (await req("POST", `/admin/users/${userId}/password`, user, { password: next }))
+      .statusCode,
+  ).toBe(403);
+  expect(
+    (await req("POST", `/admin/users/${userId}/password`, admin, { password: "short" }))
+      .statusCode,
+  ).toBe(400);
+  const reset = await req("POST", `/admin/users/${userId}/password`, admin, {
+    password: next,
+  });
+  expect(reset.statusCode, reset.body).toBe(200);
+  expect((await req("GET", "/me", user)).statusCode).toBe(401);
+  expect(
+    (await req("POST", "/auth/login", "", { login: "alice", password })).statusCode,
+  ).toBe(401);
+  const login = await req("POST", "/auth/login", "", {
+    login: "alice",
+    password: next,
+  });
+  expect(login.statusCode, login.body).toBe(200);
+  const audit = await db
+    .selectFrom("security_audit")
+    .select(["action", "details"])
+    .where("user_id", "=", userId)
+    .where("action", "=", "password.admin_reset")
+    .executeTakeFirstOrThrow();
+  expect(audit.details).not.toContain(next);
+});
 it("admin user creation follows required profile fields and corrections can replace lost contacts without verification", async () => {
   await accountPolicy({ requiredEmail: true, requiredPhone: true });
   const missing = await req("POST", "/admin/users", admin, {

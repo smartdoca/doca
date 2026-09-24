@@ -10,11 +10,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { Alert, Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Composer, GiftedChat, InputToolbar, type IMessage } from "react-native-gifted-chat";
 import { IconButton } from "react-native-paper";
-import Markdown from "react-native-markdown-display";
 import EventSource from "react-native-sse";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, uuid } from "../../src/api";
-import { openAiHref } from "../../src/ai-open";
+import { AnswerBody, ApprovalCards, type ApprovalItem, type MailDraft } from "../../src/ai-answer";
 import { AiTrace, type TraceEvent, type TraceOperation } from "../../src/ai-trace";
 import { useAuth } from "../../src/auth";
 import { colors } from "../../src/chrome";
@@ -34,7 +33,7 @@ type ApiMessage = {
   createdAt: string;
   attachments?: ChatAttachment[];
 };
-type ChatMessage = IMessage & { attachments?: ChatAttachment[] };
+type ChatMessage = IMessage & { attachments?: ChatAttachment[]; revision?: number };
 type PendingFile = {
   localId: string;
   name: string;
@@ -48,7 +47,13 @@ type Job = {
   id: string;
   status: string;
   error?: string | null;
-  progress?: { text?: string; reasoning?: string; events?: TraceEvent[] };
+  progress?: {
+    text?: string;
+    reasoning?: string;
+    events?: TraceEvent[];
+    approvals?: ApprovalItem[];
+    mailCompose?: MailDraft;
+  };
 };
 type Detail = {
   session: { id: string; title: string; model_id: string | null };
@@ -66,7 +71,16 @@ type JobEvent = {
   id: string;
   status: string;
   error?: string | null;
-  progress?: { text?: string; appendText?: boolean; reasoning?: string; appendReasoning?: boolean; events?: TraceEvent[]; eventOffset?: number };
+  progress?: {
+    text?: string;
+    appendText?: boolean;
+    reasoning?: string;
+    appendReasoning?: boolean;
+    events?: TraceEvent[];
+    eventOffset?: number;
+    approvals?: ApprovalItem[];
+    mailCompose?: MailDraft;
+  };
 };
 
 const activeStatus = new Set(["queued", "running", "awaiting_approval"]);
@@ -117,20 +131,6 @@ function tracesFrom(jobs: Job[]) {
   return next;
 }
 
-const assistantMarkdown = StyleSheet.create({
-  body: { color: colors.ink, fontSize: 16, lineHeight: 24 },
-  paragraph: { marginTop: 0, marginBottom: 8 },
-  link: { color: colors.accent },
-  code_inline: { backgroundColor: "#f2f3f5", color: colors.ink, paddingHorizontal: 4, borderRadius: 4 },
-  fence: { backgroundColor: "#f5f6f7", color: colors.ink, padding: 12, borderRadius: 8 },
-  heading1: { color: colors.ink, fontSize: 22, fontWeight: "700", marginBottom: 8 },
-  heading2: { color: colors.ink, fontSize: 18, fontWeight: "700", marginBottom: 6 },
-  heading3: { color: colors.ink, fontSize: 16, fontWeight: "700", marginBottom: 4 },
-  blockquote: { backgroundColor: "#f5f6f7", borderLeftColor: colors.accent, borderLeftWidth: 3, paddingLeft: 10 },
-  bullet_list: { marginBottom: 8 },
-  ordered_list: { marginBottom: 8 },
-});
-
 function linkedJob(id: string | number) {
   const value = String(id);
   if (value.startsWith("live:")) return value.slice(5);
@@ -155,6 +155,8 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
   const [reasoning, setReasoning] = useState<Record<string, string>>({});
   const [typing, setTyping] = useState(false);
   const [error, setError] = useState("");
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [deciding, setDeciding] = useState(false);
   const buffers = useRef(new Map<string, string>());
   const reasons = useRef(new Map<string, string>());
   const tracesRef = useRef<Record<string, TraceEvent[]>>({});
@@ -176,6 +178,9 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
     queryFn: () => api<Options>("/ai/options"),
   });
   const refetch = detail.refetch;
+  useEffect(() => {
+    if (detail.data?.jobs) setJobs(detail.data.jobs);
+  }, [detail.data]);
   const rememberTraces = useCallback((next: Record<string, TraceEvent[]>) => {
     tracesRef.current = next;
     setTraces(next);
@@ -275,16 +280,32 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
           ),
         );
         setTyping(!buffers.current.get(data.id));
-      } else if (patch?.events) {
+      } else if (patch?.events || patch?.mailCompose || patch?.approvals) {
         setMessages((current) =>
           merge(
             current.filter((item) => !String(item._id).startsWith("live:")),
             buffers.current,
             traced,
-          ).map((item) => (linkedJob(item._id) === data.id ? { ...item } : item)),
+          ),
         );
       }
-      if (data.status === "awaiting_approval") setError("这个操作需要在网页上确认");
+      setJobs((current) => {
+        const previous = current.find((job) => job.id === data.id);
+        const next: Job = {
+          id: data.id,
+          status: data.status,
+          error: data.error,
+          progress: {
+            ...previous?.progress,
+            approvals: patch && "approvals" in patch ? patch.approvals : previous?.progress?.approvals,
+            mailCompose: patch?.mailCompose ?? previous?.progress?.mailCompose,
+          },
+        };
+        return [next, ...current.filter((job) => job.id !== data.id)];
+      });
+      setMessages((current) =>
+        current.map((item) => (linkedJob(item._id) === data.id ? { ...item, revision: Date.now() } : item)),
+      );
       if (doneStatus.has(data.status)) {
         watch.current.delete(data.id);
         if (data.error) setError(data.error);
@@ -562,6 +583,37 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
     }
   }
 
+  async function decide(jobId: string, approvalId: string, approved: boolean) {
+    if (deciding) return;
+    setDeciding(true);
+    setError("");
+    try {
+      await api(`/ai/jobs/${jobId}/approval`, { body: { approvalId, approved } });
+      setJobs((current) =>
+        current.map((job) =>
+          job.id === jobId
+            ? {
+                ...job,
+                status: approved ? "queued" : "cancelled",
+                progress: {
+                  ...job.progress,
+                  approvals: job.progress?.approvals?.map((item) =>
+                    item.id === approvalId ? { ...item, state: approved ? "approved" : "rejected" } : item,
+                  ),
+                },
+              }
+            : job,
+        ),
+      );
+      running.current = approved;
+      startStream();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "审批失败");
+    } finally {
+      setDeciding(false);
+    }
+  }
+
   if (detail.isLoading) {
     return <Text style={styles.status}>正在加载…</Text>;
   }
@@ -586,7 +638,7 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
         messagesContainerStyle={{ backgroundColor: colors.bg }}
         onLongPress={() => undefined}
         textInputProps={{ placeholderTextColor: colors.muted }}
-        listViewProps={{ keyboardShouldPersistTaps: "handled" }}
+        listViewProps={{ keyboardShouldPersistTaps: "handled", removeClippedSubviews: false }}
         renderBubble={(props) => {
           const text = props.currentMessage?.text ?? "";
           const jobId = linkedJob(props.currentMessage?._id ?? "");
@@ -594,28 +646,20 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
           const operations = jobId
             ? (detail.data?.operations ?? []).filter((item) => item.job_id === jobId)
             : [];
+          const drafts = jobs.flatMap((job) =>
+            job.id === jobId && job.progress?.mailCompose ? [job.progress.mailCompose] : [],
+          );
           if (props.position === "left") {
             return (
-              <View style={styles.assistant}>
+              <View style={styles.assistant} collapsable={false}>
                 <Text style={styles.assistantName}>Doca</Text>
                 <AiTrace
                   router={router}
                   events={events}
-                  operations={operations}
                   reasoning={jobId ? reasoning[jobId] : undefined}
                   answer={text}
                 />
-                {text ? (
-                  <Markdown
-                    style={assistantMarkdown}
-                    onLinkPress={(url) => {
-                      if (openAiHref(router, url)) return false;
-                      return true;
-                    }}
-                  >
-                    {text}
-                  </Markdown>
-                ) : null}
+                <AnswerBody text={text} events={events} operations={operations} drafts={drafts} router={router} />
               </View>
             );
           }
@@ -642,6 +686,17 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
         }
         renderChatFooter={() => (
           <View>
+            <ApprovalCards
+              busy={deciding}
+              items={jobs.flatMap((job) =>
+                job.status === "awaiting_approval"
+                  ? (job.progress?.approvals ?? [])
+                      .filter((approval) => approval.state === "pending")
+                      .map((approval) => ({ jobId: job.id, approval }))
+                  : [],
+              )}
+              onDecide={(jobId, approvalId, approved) => void decide(jobId, approvalId, approved)}
+            />
             {pending.length ? (
               <ScrollView
                 horizontal

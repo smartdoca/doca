@@ -1,12 +1,13 @@
 export const mobileEditorCss = `
 html, body { width: 100% !important; max-width: 100% !important; overflow-x: hidden !important; }
+.app-shell.mobile-editor-shell > .workspace { padding-top: 12px !important; }
 .editor-columns, .editor-columns.with-comments, .compact-document .editor-columns {
-  display: block !important; width: 100% !important; max-width: 100% !important; min-width: 0 !important; padding: 0 !important;
+  display: block !important; width: 100% !important; max-width: 100% !important; min-width: 0 !important; padding: 8px 0 0 !important;
 }
 .editor-content, .sk-page-shell, .sk-editor, .sk-page, [data-slate-editor="true"] {
   width: 100% !important; max-width: 100% !important; min-width: 0 !important; box-sizing: border-box !important;
 }
-.sk-page { margin: 0 !important; padding: 12px 16px 72px !important; border: 0 !important; box-shadow: none !important; }
+.sk-page { margin: 0 !important; padding: 20px 16px 72px !important; border: 0 !important; box-shadow: none !important; }
 [data-slate-editor="true"], [data-slate-editor="true"] * {
   max-width: 100%; overflow-wrap: anywhere !important; word-break: break-word !important; white-space: pre-wrap !important;
 }
@@ -29,7 +30,8 @@ html, body { width: 100% !important; max-width: 100% !important; overflow-x: hid
 }
 .sk-table-block table { width: max-content; min-width: 100%; max-width: none; }
 .sk-page img, .markdown-body img { max-width: 100%; height: auto; }
-.sk-block-gutter, .sk-block-menu, .sk-floating, .document-scroll-buttons, .document-outline, .content-comments {
+.sk-block-gutter, .sk-block-menu, .sk-floating, .document-scroll-buttons, .document-outline,
+.outline-floating-toggle, .outline-drawer-host, .content-comments, .note-float, .note-float-pill {
   display: none !important;
 }
 `;

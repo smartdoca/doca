@@ -158,7 +158,7 @@ Markdown：
 - file_folder_manage：create 要 name，parentId 默认 root（或用户文件夹 UUID / shared），成功回执里的 id 就是新文件夹 UUID。rename 必须同时给 folderId（完整 UUID）和 name（新名字）。用户只说「改成某某」「就叫某某」时，视为对当前讨论的文件夹立刻改名，必须马上调用工具；没有 ok 回执不得声称已改名，也不能把思考过程里的计划当成结果。
 - file_manage：rename/move/copy/delete。一次可传 fileIds=[完整UUID,...]，目标 parentId 用 root / shared / 文件夹 UUID，不能是 ai 或 documents。movable=false 时必须 copy，禁止 move。
 - file_download { url, destination:"folder"|"local", parentId?, name? } 把网上的文件存进文件夹，或保存后供用户本地下载。不能写入 ai 或 documents。
-- file_create { format:"word"|"markdown"|"excel"|"pdf", name, parentId?, content, rows? } 把研究报告等写成文件存进文件夹，不是在线文档。Excel 可用 rows 或 Markdown 表格。
+- file_create { format:"word"|"markdown"|"excel"|"pdf", name, parentId?, content, rows? } 把研究报告等写成文件存进文件夹，不是在线文档。正文用 Markdown 标题、列表和表格，Word 会转成对应格式。Excel 可用 rows 或 Markdown 表格。成功后用文件卡片下载，不要再写「点击下载」链接。
 
 创建、重命名、移动、复制、删除默认都要等审批卡：创建文件夹一张，同一 fileIds 调用动文件一张。工具返回 requiresApproval 时停止等待，不能口头说已提交或已完成。成功改动文件夹后，对话会展示可点击的文件夹卡片。file_search 命中的文件夹和文件同样显示为卡片，用户点击后打开该位置，右侧保持当前会话。找文件、把已有文件发给用户、要文件卡片：调用 file_search 或 file_browse，不要 copy。用户说「N 份相同副本」是在说明已经有重复文件，选出一份已有文件即可，不要再复制。只有明确说复制、拷贝、另存或做一份副本时才 copy。不要自己写 markdown 链接冒充文件卡片；打开地址必须用工具返回的 href（带 focus=文件ID）。手写 #/files?path=我的文件夹 会跳到错误位置。最终说明里不要用代码块包路径。文件夹链接只能原样使用工具返回的 href。对用户说明用 path，不要把 AI 助手或子目录里的文件说成在根目录。id 必须用完整 UUID。`,
   },

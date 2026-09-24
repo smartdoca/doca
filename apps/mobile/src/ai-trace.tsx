@@ -26,17 +26,28 @@ export type TraceOperation = {
     id?: string;
     resourceId?: string;
     title?: string;
+    name?: string;
     format?: string;
     kind?: string;
+    href?: string;
+    path?: string;
+    shared?: boolean;
+    mime?: string;
   };
 };
 
-type Card = { key: string; eyebrow: string; title: string; href?: string; documentId?: string };
+export type DeliveryCard = {
+  key: string;
+  eyebrow: string;
+  title: string;
+  href?: string;
+  documentId?: string;
+};
 
-function cardsFor(events: TraceEvent[], operations: TraceOperation[]): Card[] {
-  const cards: Card[] = [];
+export function deliveryCards(events: TraceEvent[], operations: TraceOperation[]): DeliveryCard[] {
+  const cards: DeliveryCard[] = [];
   const seen = new Set<string>();
-  const add = (card: Card) => {
+  const add = (card: DeliveryCard) => {
     if (seen.has(card.key)) return;
     seen.add(card.key);
     cards.push(card);
@@ -77,8 +88,27 @@ function cardsFor(events: TraceEvent[], operations: TraceOperation[]): Card[] {
   }
   for (const operation of operations) {
     const result = operation.result;
-    const id = result?.id || result?.resourceId;
-    if (!id || !result?.title) continue;
+    if (!result) continue;
+    if (result.kind === "file_folder" && result.href && (result.name || result.title)) {
+      add({
+        key: `op-folder:${operation.id}`,
+        eyebrow: result.shared ? "共享文件夹" : "文件夹",
+        title: result.name || result.title || "文件夹",
+        href: result.href,
+      });
+      continue;
+    }
+    if (result.kind === "file_item" && (result.name || result.title)) {
+      add({
+        key: `op-file:${operation.id}`,
+        eyebrow: result.mime?.startsWith("image/") ? "图片" : "文件",
+        title: result.name || result.title || "文件",
+        href: result.href,
+      });
+      continue;
+    }
+    const id = result.id || result.resourceId;
+    if (!id || !result.title) continue;
     add({
       key: `op:${operation.id}`,
       eyebrow: result.kind === "library" ? "知识库" : result.format || "文档",
@@ -92,18 +122,15 @@ function cardsFor(events: TraceEvent[], operations: TraceOperation[]): Card[] {
 export function AiTrace({
   router,
   events,
-  operations,
   reasoning,
   answer,
 }: {
   router: Nav;
   events: TraceEvent[];
-  operations: TraceOperation[];
   reasoning?: string;
   answer?: string;
 }) {
   const steps = events.filter((event) => event.kind === "tool" || event.kind === "status");
-  const cards = cardsFor(events, operations);
   const thought =
     reasoning?.trim() ||
     events
@@ -124,7 +151,7 @@ export function AiTrace({
   }, [hasAnswer]);
   const open = stepsOpen;
   const thoughtVisible = thoughtOpen;
-  if (!steps.length && !cards.length && !thought) return null;
+  if (!steps.length && !thought) return null;
   return (
     <View style={styles.wrap}>
       {thought ? (
@@ -158,30 +185,17 @@ export function AiTrace({
             </Pressable>
           ))
         : null}
-      {cards.map((card) => (
-        <Pressable
-          key={card.key}
-          style={styles.card}
-          onPress={() => {
-            if (card.href && openAiHref(router, card.href)) return;
-            if (card.eyebrow === "知识库" && card.documentId) {
-              router.push({ pathname: "/library/[id]", params: { id: card.documentId, title: card.title } });
-              return;
-            }
-            openDocument(router, card.documentId);
-          }}
-        >
-          <View style={styles.cardCopy}>
-            <Text style={styles.eyebrow}>{card.eyebrow}</Text>
-            <Text style={styles.cardTitle} numberOfLines={2}>
-              {card.title}
-            </Text>
-          </View>
-          <Text style={styles.arrow}>↗</Text>
-        </Pressable>
-      ))}
     </View>
   );
+}
+
+export function openDeliveryCard(router: Nav, card: DeliveryCard) {
+  if (card.href && openAiHref(router, card.href)) return;
+  if (card.eyebrow === "知识库" && card.documentId) {
+    router.push({ pathname: "/library/[id]", params: { id: card.documentId, title: card.title } });
+    return;
+  }
+  openDocument(router, card.documentId);
 }
 
 const styles = StyleSheet.create({
@@ -206,19 +220,4 @@ const styles = StyleSheet.create({
   stepCopy: { flex: 1 },
   stepText: { color: colors.ink, fontSize: 13, lineHeight: 18 },
   stepDetail: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  cardCopy: { flex: 1, gap: 2 },
-  eyebrow: { color: colors.muted, fontSize: 12 },
-  cardTitle: { color: colors.ink, fontSize: 15, fontWeight: "600" },
-  arrow: { color: colors.accent, fontSize: 16 },
 });

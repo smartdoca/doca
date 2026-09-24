@@ -25,9 +25,9 @@ html[data-editor-shell="mobile"] .editor-content,
 html[data-editor-shell="mobile"] .editor-columns,
 html[data-editor-shell="mobile"] .markdown-document,
 html[data-editor-shell="mobile"] .doca-markdown {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
 }
 html[data-editor-shell="mobile"] .document-view:not(.surface-view) .main-scroll {
   overflow-x: hidden;
@@ -48,16 +48,24 @@ html[data-editor-shell="mobile"] .markdown-toolbar {
   max-width: 100%;
   overflow: auto;
 }
+html[data-editor-shell="mobile"] .app-shell.mobile-editor-shell > .workspace {
+  padding-top: 12px;
+}
+html[data-editor-shell="mobile"] .editor-fixed-toolbar,
+html[data-editor-shell="mobile"] .markdown-toolbar {
+  top: 0;
+  margin-top: 0;
+}
 html[data-editor-shell="mobile"] .editor-columns,
 html[data-editor-shell="mobile"] .editor-columns.with-comments,
 html[data-editor-shell="mobile"] .compact-document .editor-columns,
 html[data-editor-shell="mobile"] .compact-document .editor-columns.with-comments {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  padding: 0;
-  grid-template-columns: minmax(0, 1fr);
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  padding: 8px 0 0;
+  grid-template-columns: minmax(0, 1fr) !important;
 }
 html[data-editor-shell="mobile"] .sk-block-gutter,
 html[data-editor-shell="mobile"] .sk-block-menu,
@@ -66,9 +74,12 @@ html[data-editor-shell="mobile"] .exmd-selection-toolbar,
 html[data-editor-shell="mobile"] .selection-comment-floating,
 html[data-editor-shell="mobile"] .document-outline,
 html[data-editor-shell="mobile"] .outline-floating-toggle,
+html[data-editor-shell="mobile"] .outline-drawer-host,
 html[data-editor-shell="mobile"] .document-scroll-buttons,
 html[data-editor-shell="mobile"] .content-comments,
-html[data-editor-shell="mobile"] #document-page-width-slot {
+html[data-editor-shell="mobile"] #document-page-width-slot,
+html[data-editor-shell="mobile"] .note-float,
+html[data-editor-shell="mobile"] .note-float-pill {
   display: none !important;
 }
 html[data-editor-shell="mobile"] .editor-content .sk-page,
@@ -82,7 +93,7 @@ html[data-editor-shell="mobile"] .markdown-body {
 }
 html[data-editor-shell="mobile"] .editor-content .sk-page,
 html[data-editor-shell="mobile"] .document-editor-shell[data-page-width] .editor-content .sk-page {
-  padding: 12px 16px 72px !important;
+  padding: 20px 16px 72px !important;
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
@@ -339,7 +350,7 @@ html[data-editor-shell="mobile"] .markdown-body img {
   scrollbar-gutter: stable;
 }
 @media (max-width: 1200px) {
-  .app-shell:not(.public-view):not(.personal-document-view) {
+  .app-shell:not(.public-view):not(.personal-document-view):not(.mobile-editor-shell) {
     grid-template-columns: 56px minmax(0, 1fr);
   }
   .app-shell > .sidebar {

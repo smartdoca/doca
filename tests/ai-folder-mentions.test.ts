@@ -133,6 +133,24 @@ it("replaces a handwritten file link with the delivered card", () => {
   expect(resolveExplorerClick("#/files?path=我的文件夹", [])).toBe("");
 });
 
+it("turns a handwritten download link into the delivered file card", () => {
+  const file = {
+    id: "file-4",
+    name: "GitHub 平台调研报告.docx",
+    path: "我的文件夹 / GitHub 平台调研报告.docx",
+    href: "/files?path=%5B%5D&focus=file-4",
+    downloadUrl: "/api/v1/files/items/file-4/content?download=1",
+  };
+  const segments = answerSegments(
+    "调研报告已生成。\n\n[点击下载报告](https://example.invalid/report.docx)",
+    [],
+    { files: [file], ensureCards: true },
+  );
+  expect(segments.filter((item) => item.type === "file")).toEqual([
+    { type: "file", file },
+  ]);
+});
+
 it("recognizes personal and shared folder explorer hrefs", () => {
   expect(isFolderExplorerHref("/files?path=%5B%5D")).toBe(true);
   expect(isFolderExplorerHref("/files?path=%5B%5D&focus=file-1")).toBe(true);

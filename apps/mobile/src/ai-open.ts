@@ -4,8 +4,22 @@ type Nav = {
 
 type TrailItem = { type?: string; id?: string; name?: string };
 
+function normalizeHref(href: string) {
+  let raw = href.trim();
+  if (/^https?:/i.test(raw)) {
+    try {
+      const url = new URL(raw);
+      raw = `${url.hash.replace(/^#/, "") || url.pathname}${url.search}`;
+    } catch {
+      return "";
+    }
+  }
+  raw = raw.replace(/^#/, "").replace(/^\/m(?=\/)/, "");
+  return raw;
+}
+
 export function openAiHref(router: Nav, href: string) {
-  const raw = href.trim().replace(/^#/, "");
+  const raw = normalizeHref(href);
   if (!raw) return false;
   const split = raw.indexOf("?");
   const path = (split === -1 ? raw : raw.slice(0, split)).replace(/\/+$/, "") || "/";

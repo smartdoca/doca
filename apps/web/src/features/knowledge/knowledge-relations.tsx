@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { FileText, FolderOpen, Library, Mail, Search, X } from "lucide-react";
+import { File, FileText, Folder, Library, Mail, Search, X } from "lucide-react";
 import { api } from "@web/shared/api.js";
 import "./knowledge-relations.css";
 
@@ -92,6 +92,51 @@ function compactLinks(links: KnowledgeLink[]) {
     if (!grouped.has(key)) grouped.set(key, link);
   }
   return [...grouped.values()];
+}
+
+function pickHub(sources: Source[], focus: Focus) {
+  if (focus) {
+    const current = sources.find((source) => source.kind === focus.kind && source.id === focus.id);
+    if (current) return current;
+  }
+  return [...sources].sort((a, b) => b.chunks - a.chunks || (kindRank[a.kind] ?? 9) - (kindRank[b.kind] ?? 9))[0];
+}
+
+function edgeWords(from: Source, to: Source) {
+  const words = [...new Set(`${from.words ?? ""}、${to.words ?? ""}`.split("、").map((word) => word.trim()).filter(Boolean))];
+  const shared = words.filter((word) => {
+    const token = word.toLocaleLowerCase();
+    return from.title.toLocaleLowerCase().includes(token) && to.title.toLocaleLowerCase().includes(token);
+  });
+  if (shared.length) return shared.slice(0, 3).join("、");
+  if (from.title.trim() && from.title.trim().toLocaleLowerCase() === to.title.trim().toLocaleLowerCase()) return "同名";
+  return "";
+}
+
+function reasonWords(reason: string) {
+  return reason.match(/共用「([^」]+)」/)?.[1] || reason.replace(/\s+/g, " ").trim().slice(0, 24);
+}
+
+function pairLabel(hub: Source, spoke: Source, links: KnowledgeLink[]) {
+  const words = edgeWords(hub, spoke);
+  if (words) return `共用 ${words}`;
+  const hubTitle = hub.title.toLocaleLowerCase();
+  const spokeTitle = spoke.title.toLocaleLowerCase();
+  const link = links.find((item) => {
+    if (item.relation !== "similar") return false;
+    const ids = new Set([`${item.from_kind}:${item.from_id}`, `${item.to_kind}:${item.to_id}`]);
+    if (ids.has(`${hub.kind}:${hub.id}`) && ids.has(`${spoke.kind}:${spoke.id}`)) return true;
+    const titles = [item.fromTitle, item.toTitle].map((title) => title.toLocaleLowerCase());
+    return titles.includes(hubTitle) && titles.includes(spokeTitle);
+  });
+  const fromReason = link ? reasonWords(link.reason) : "";
+  return fromReason ? `共用 ${fromReason}` : "";
+}
+
+function linkOther(link: KnowledgeLink, hub: Source) {
+  const fromSame = link.from_kind === hub.kind && (link.from_id === hub.id || link.fromTitle === hub.title);
+  if (fromSame) return { kind: link.to_kind, id: link.to_id, title: link.toTitle || kindLabel[link.to_kind] || "未命名" };
+  return { kind: link.from_kind, id: link.from_id, title: link.fromTitle || kindLabel[link.from_kind] || "未命名" };
 }
 
 export function KnowledgeRelations() {
@@ -263,7 +308,7 @@ export function KnowledgeRelations() {
   return (
     <section className="knowledge-relations">
       <header>
-        <p>原文保持不动。按主题看关系，点开一条再看同主题、整理建议和相关缺口。</p>
+        <p>原文保持不动。关系图按主题连线，线上是共用的词。点开一条，只看它自己的邻域。</p>
         <form onSubmit={(event) => void search(event)}>
           <Search size={16} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="在你能看的文档、文件、邮件里查找" aria-label="查找知识" />
@@ -273,7 +318,8 @@ export function KnowledgeRelations() {
       {error && <p className="knowledge-relations-error" role="alert">{error}</p>}
       {focus && (
         <div className="knowledge-focus">
-          <strong>当前：{kindLabel[focus.kind] ?? focus.kind}</strong>
+          <strong>{focusSource?.title || (kindLabel[focus.kind] ?? focus.kind)}</strong>
+          {focusSource && <small>{kindLabel[focus.kind] ?? focus.kind}</small>}
           <button onClick={() => openOriginal(focus.kind, focus.id)}>打开原文</button>
           <button onClick={() => { location.hash = "/knowledge"; }}>看全部</button>
         </div>
@@ -287,75 +333,55 @@ export function KnowledgeRelations() {
           {(graph?.gaps.length ?? 0) > 0 && <span><b>{graph?.gaps.length}</b>缺口</span>}
         </div>
       )}
-      {!focus && (
-        <div className="knowledge-topics">
-          {topics.map((topic) => (
-            <section key={`${topic.label}:${topic.sources[0]?.id ?? topic.label}`}>
-              <h2>{topic.label} <small>{topic.sources.length} 条</small></h2>
-              <ul>
-                {topic.sources.slice(0, 8).map((source) => (
-                  <li key={`${source.kind}:${source.id}`} className="knowledge-source">
-                    <button onClick={() => { location.hash = `/knowledge?source=${source.kind}:${source.id}`; }}>
-                      <KindIcon kind={source.kind} />
-                      <span>
-                        <strong title={source.title}>{source.title}</strong>
-                        <small>{kindLabel[source.kind] ?? source.kind} · {source.chunks} 块{(source.copies ?? 1) > 1 ? ` · ${source.copies} 份` : ""}{source.words ? ` · 共用 ${source.words}` : ""}</small>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+      <div className="knowledge-map">
+        {!focus && <MapLegend counts={counts} />}
+        {!focus && topics.filter((topic) => topic.sources.length > 1).map((topic) => (
+          <TopicCluster key={`${topic.label}:${topic.sources[0]?.id ?? topic.label}`} label={topic.label} sources={topic.sources} links={graph?.links ?? []} />
+        ))}
+        {!focus && topics.some((topic) => topic.sources.length === 1) && (
+          <section className="knowledge-map-card">
+            <h2>尚未连线 <small>{topics.filter((topic) => topic.sources.length === 1).length} 条</small></h2>
+            <p className="knowledge-map-note">这些条目之间没有共用实词，所以不画连线。</p>
+            <div className="knowledge-lones">
+              {topics.filter((topic) => topic.sources.length === 1).map((topic) => topic.sources[0]!).map((source) => (
+                <KnowledgeNode key={`${source.kind}:${source.id}`} source={source} onOpen={() => { location.hash = `/knowledge?source=${source.kind}:${source.id}`; }} />
+              ))}
+            </div>
+          </section>
+        )}
+        {!focus && !topics.length && <p className="knowledge-empty">{busy ? "正在整理来源…" : "还没有可显示的知识片段。"}</p>}
+        {focus && currentTopic && focusSource && currentTopic.sources.length > 1 && (
+          <TopicCluster label={currentTopic.label} sources={currentTopic.sources} links={[...focusLinks, ...(graph?.links ?? [])]} focus={focus} limit={8} />
+        )}
+        {focus && focusSource && sameTopic.length === 0 && (
+          <section className="knowledge-map-card">
+            <h2>同主题</h2>
+            <div className="knowledge-lones">
+              <KnowledgeNode source={focusSource} hub onOpen={() => openOriginal(focusSource.kind, focusSource.id)} />
+            </div>
+            <p className="knowledge-map-note">没有共用实词的其他条目。</p>
+          </section>
+        )}
+        {focus && focusSource && (
+          organizeLinks.length ? (
+            <OrganizeCluster hub={focusSource} links={organizeLinks} onHide={(id) => void hide(id)} />
+          ) : (
+            <section className="knowledge-map-card">
+              <h2>整理建议</h2>
+              <p className="knowledge-map-note">没有需要确认的归类建议。确认后只保留关系，不会移动文件。</p>
             </section>
-          ))}
-          {!topics.length && <p className="knowledge-empty">{busy ? "正在整理来源…" : "还没有可显示的知识片段。"}</p>}
-        </div>
-      )}
-      {focus && (
-        <div className="knowledge-columns">
-          <section>
-            <h2>同主题 <small>{sameTopic.length ? `${sameTopic.length} 条` : ""}</small></h2>
-            <ul>
-              {sameTopic.map((source) => (
-                <li key={`${source.kind}:${source.id}`} className="knowledge-source">
-                  <button onClick={() => { location.hash = `/knowledge?source=${source.kind}:${source.id}`; }}>
-                    <KindIcon kind={source.kind} />
-                    <span>
-                      <strong title={source.title}>{source.title}</strong>
-                      <small>{kindLabel[source.kind] ?? source.kind}{source.words ? ` · 共用 ${source.words}` : ""}</small>
-                    </span>
-                  </button>
-                </li>
-              ))}
-              {!sameTopic.length && <li className="knowledge-empty">没有共用实词的其他条目。</li>}
-            </ul>
-          </section>
-          <section>
-            <h2>整理建议 <small>{organizeLinks.length ? `${organizeLinks.length} 条` : ""}</small></h2>
-            <ul>
-              {organizeLinks.map((link) => (
-                <li key={link.id} className="knowledge-link">
-                  <div className="knowledge-copy">
-                    <div className="knowledge-line">
-                      <i className="is-organize">整理</i>
-                      <strong title={`${link.fromTitle} → ${link.toTitle}`}>{link.fromTitle || kindLabel[link.from_kind]} → {link.toTitle || kindLabel[link.to_kind]}</strong>
-                    </div>
-                    {link.reason && <p>{link.reason}</p>}
-                  </div>
-                  <button onClick={() => void hide(link.id)}>忽略</button>
-                </li>
-              ))}
-              {!organizeLinks.length && <li className="knowledge-empty">没有需要确认的归类建议。确认建议不会移动文件。</li>}
-            </ul>
-          </section>
-          <section>
+          )
+        )}
+        {focus && (
+          <section className="knowledge-gaps">
             <h2>相关缺口 <small>{relatedGaps.length ? `${relatedGaps.length} 条` : ""}</small></h2>
             <ul>
               {relatedGaps.map((gap) => <GapRow key={gap.id} gap={gap} busy={busy} onOpen={openCapture} />)}
               {!relatedGaps.length && <li className="knowledge-empty">这条主题下还没有未收录的问题。</li>}
             </ul>
           </section>
-        </div>
-      )}
+        )}
+      </div>
       <section className="knowledge-gaps">
         <h2>资料缺口 <small>{graph?.gaps.length ? `${graph.gaps.length} 条` : ""}</small></h2>
         <ul>
@@ -526,9 +552,99 @@ function safeDetail(detail: string) {
   }
 }
 
+function MapLegend({ counts }: { counts: Array<{ kind: string; count: number }> }) {
+  const kinds = counts.map((item) => item.kind);
+  return (
+    <div className="knowledge-legend" aria-label="图例">
+      {kinds.map((kind) => (
+        <span key={kind}><i className={`is-${kind}`} />{kindLabel[kind] ?? kind}</span>
+      ))}
+      <span><i className="is-line" />共用实词</span>
+      <span><i className="is-dash" />整理建议</span>
+    </div>
+  );
+}
+
+function TopicCluster({ label, sources, links, focus = null, limit = 6 }: { label: string; sources: Source[]; links: KnowledgeLink[]; focus?: Focus; limit?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const hub = pickHub(sources, focus);
+  if (!hub || sources.length < 2) return null;
+  const rest = sources.filter((source) => source !== hub);
+  const shown = expanded ? rest : rest.slice(0, limit);
+  const hidden = rest.length - shown.length;
+  return (
+    <section className="knowledge-map-card" aria-label={`${label}的关系`}>
+      <h2>{label} <small>{sources.length} 条 · {rest.length} 条连线</small></h2>
+      <div className="knowledge-cluster">
+        <div className="knowledge-cluster-hub">
+          <KnowledgeNode source={hub} hub onOpen={() => { location.hash = `/knowledge?source=${hub.kind}:${hub.id}`; }} />
+        </div>
+        <div className="knowledge-cluster-spokes">
+          {shown.map((spoke) => {
+            const labelText = pairLabel(hub, spoke, links);
+            return (
+              <div className="knowledge-spoke" key={`${spoke.kind}:${spoke.id}`}>
+                <div className="knowledge-edge" title={labelText}>{labelText ? <span>{labelText}</span> : null}</div>
+                <KnowledgeNode source={spoke} onOpen={() => { location.hash = `/knowledge?source=${spoke.kind}:${spoke.id}`; }} />
+              </div>
+            );
+          })}
+          {hidden > 0 && <button type="button" className="knowledge-more" onClick={() => setExpanded(true)}>还有 {hidden} 条</button>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OrganizeCluster({ hub, links, onHide }: { hub: Source; links: KnowledgeLink[]; onHide: (id: string) => void }) {
+  return (
+    <section className="knowledge-map-card is-organize" aria-label="整理建议">
+      <h2>整理建议 <small>{links.length} 条 · 确认后不移动文件</small></h2>
+      <div className="knowledge-cluster">
+        <div className="knowledge-cluster-hub">
+          <KnowledgeNode source={hub} hub onOpen={() => { location.hash = `/knowledge?source=${hub.kind}:${hub.id}`; }} />
+        </div>
+        <div className="knowledge-cluster-spokes">
+          {links.map((link) => {
+            const other = linkOther(link, hub);
+            const words = reasonWords(link.reason);
+            return (
+              <div className="knowledge-spoke" key={link.id}>
+                <div className="knowledge-edge" title={link.reason || words}><span>{words || "整理"}</span></div>
+                <div className="knowledge-spoke-actions">
+                  <KnowledgeNode
+                    source={{ kind: other.kind, id: other.id, title: other.title, chunks: 0 }}
+                    onOpen={() => { location.hash = `/knowledge?source=${other.kind}:${other.id}`; }}
+                  />
+                  <button type="button" onClick={() => onHide(link.id)}>忽略</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function KnowledgeNode({ source, hub = false, onOpen }: { source: Source; hub?: boolean; onOpen: () => void }) {
+  const copies = (source.copies ?? 1) > 1 ? ` · ${source.copies} 份` : "";
+  const meta = source.chunks > 0 ? `${kindLabel[source.kind] ?? source.kind} · ${source.chunks} 块${copies}` : (kindLabel[source.kind] ?? source.kind);
+  return (
+    <button type="button" className={`knowledge-node is-${source.kind}${hub ? " is-hub" : ""}`} onClick={onOpen} title={source.title}>
+      <span className="knowledge-node-icon"><KindIcon kind={source.kind} /></span>
+      <span>
+        <strong>{source.title || "未命名"}</strong>
+        <small>{meta}</small>
+      </span>
+    </button>
+  );
+}
+
 function KindIcon({ kind }: { kind: string }) {
-  if (kind === "file") return <FolderOpen size={15} />;
+  if (kind === "file") return <File size={15} />;
   if (kind === "mail") return <Mail size={15} />;
-  if (kind === "library" || kind === "folder") return <Library size={15} />;
+  if (kind === "folder") return <Folder size={15} />;
+  if (kind === "library") return <Library size={15} />;
   return <FileText size={15} />;
 }

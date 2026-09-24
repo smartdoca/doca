@@ -114,6 +114,21 @@ importers:
       '@mendable/firecrawl-js':
         specifier: ^4.40.0
         version: 4.40.0(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)
+      '@mlightcad/cad-simple-viewer':
+        specifier: 1.7.1
+        version: 1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@mlightcad/three-renderer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0))(lodash-es@4.17.21)(three@0.172.0)
+      '@mlightcad/data-model':
+        specifier: ^1.14.12
+        version: 1.14.12
+      '@mlightcad/libredwg-converter':
+        specifier: ^3.14.12
+        version: 3.14.12(@mlightcad/data-model@1.14.12)
+      '@mlightcad/mtext-renderer':
+        specifier: ^0.12.13
+        version: 0.12.13(three@0.172.0)
+      '@mlightcad/three-renderer':
+        specifier: 1.7.1
+        version: 1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0)
       '@modelcontextprotocol/sdk':
         specifier: 1.30.0
         version: 1.30.0(supports-color@8.1.1)(zod@4.6.4)
@@ -122,10 +137,10 @@ importers:
         version: file:vendor/online-office-univer-sheet-0.2.0-rc.16-28d030d4ac18.tgz(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@open-file-viewer/core':
         specifier: 0.1.47
-        version: 0.1.47(lodash-es@4.18.1)(pdfjs-dist@5.7.284)
+        version: 0.1.47(@mlightcad/cad-simple-viewer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@mlightcad/three-renderer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0))(lodash-es@4.17.21)(three@0.172.0))(@mlightcad/data-model@1.14.12)(@mlightcad/libredwg-web@0.7.14)(lodash-es@4.17.21)(pdfjs-dist@5.7.284)
       '@open-file-viewer/react':
         specifier: 0.1.47
-        version: 0.1.47(@open-file-viewer/core@0.1.47(lodash-es@4.18.1)(pdfjs-dist@5.7.284))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 0.1.47(@open-file-viewer/core@0.1.47(@mlightcad/cad-simple-viewer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@mlightcad/three-renderer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0))(lodash-es@4.17.21)(three@0.172.0))(@mlightcad/data-model@1.14.12)(@mlightcad/libredwg-web@0.7.14)(lodash-es@4.17.21)(pdfjs-dist@5.7.284))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@sinclair/typebox':
         specifier: ^0.34.52
         version: 0.34.52
@@ -171,6 +186,9 @@ importers:
       kysely:
         specifier: ^0.29.5
         version: 0.29.5
+      lodash-es:
+        specifier: 4.17.21
+        version: 4.17.21
       lucide-react:
         specifier: ^1.41.0
         version: 1.43.0(react@19.2.8)
@@ -220,8 +238,11 @@ importers:
         specifier: 0.118.2
         version: 0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1)
       slatetsx-kit-editor:
-        specifier: file:vendor/slatetsx-kit-editor-0.4.8-4c18691da1e6.tgz
-        version: file:vendor/slatetsx-kit-editor-0.4.8-4c18691da1e6.tgz(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1)
+        specifier: file:vendor/slatetsx-kit-editor-0.4.9-707329637545.tgz
+        version: file:vendor/slatetsx-kit-editor-0.4.9-707329637545.tgz(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1)
+      three:
+        specifier: 0.172.0
+        version: 0.172.0
       ws:
         specifier: ^8.21.3
         version: 8.21.3
@@ -2364,6 +2385,60 @@ packages:
   '@mermaid-js/parser@1.2.1':
     resolution: {integrity: sha512-n12NohV3mrUyUL2o93IgG/ifeW9FTyeJn3zDxkhwa8MJ9Fxg3HQMlA3RiGmD/3UnJvheztkjjQAjA2T4LmUcpw==}
 
+  '@mlightcad/cad-simple-viewer@1.7.1':
+    resolution: {integrity: sha512-IHMDxJfnQWL6n4lx78VKluxH9w+B0fJFWWl23E2zdMiO2/nxuHtU3RlptS6hsohlk2T1SKl5SPWzLcgtV14dAg==}
+    peerDependencies:
+      '@mlightcad/data-model': ^1.14.8
+      '@mlightcad/mtext-renderer': ^0.12.12
+      '@mlightcad/three-renderer': 1.7.1
+      lodash-es: 4.17.21
+      three: ^0.172.0
+
+  '@mlightcad/common@1.14.12':
+    resolution: {integrity: sha512-qnwB9EXU8ILwV2ScUkg9i37Ld6q46Sf5Z+gdjDzCTY0vIovb+YOFvwu4dlMeU9/dq0pzrNyUJe0BPPBHiKBxOA==}
+
+  '@mlightcad/data-model@1.14.12':
+    resolution: {integrity: sha512-Z/NdiLOvQV9Ps1Mg8nD+OqA4wtSQePeVEXyokQVUM8IhuTfP/bs8TCrKLkCBu3U4paXC6Tj/NkQIeHwx4cyWAA==}
+
+  '@mlightcad/geometry-engine@3.14.12':
+    resolution: {integrity: sha512-IsobKLF4qTZ/7PLO8xWK11LF2Q2J2zD96df+FZ1VEQ6iuOwXmOaW9ruVw0rt3bqBjOLnIwCOXAFh1v5boAqkZQ==}
+    peerDependencies:
+      '@mlightcad/common': 1.14.12
+
+  '@mlightcad/graphic-interface@3.14.12':
+    resolution: {integrity: sha512-zatqjWn2LyoZ5LLh9tcKJ21OXPLJNeqskxU6jcdGXSFBbRzMLFtbiv0KGnuhg/EhiOPuKhrjoKgSx/lk42AnDQ==}
+    peerDependencies:
+      '@mlightcad/common': 1.14.12
+      '@mlightcad/geometry-engine': 3.14.12
+
+  '@mlightcad/libredwg-converter@3.14.12':
+    resolution: {integrity: sha512-qb4ryTaTQxUfyWZk6PB6m3Z8fqWp/LOFAKH+yq9PM4IiSLXgp2uhN37FrAyd1AepP+bf9dup3/nq5FOExrU3UQ==}
+    peerDependencies:
+      '@mlightcad/data-model': 1.14.12
+
+  '@mlightcad/libredwg-web@0.7.14':
+    resolution: {integrity: sha512-5zuTw+x5o/qj9czjkcf2o3PWuh8v+XEEFM9ZEMEhVRaJySZ6+C7Ua6y6hyGcwJ3WfmXhWAHEdVYsKtx4XAlvfA==}
+    engines: {node: '>=20'}
+
+  '@mlightcad/mtext-parser@1.5.1':
+    resolution: {integrity: sha512-fOs7Qi54YwKtcyPe1VzVeFxveDWpvDnzwonZijsG3bBxohYxrX+Q2p3XvqaUBIkVNQbnHBFEU/TDOfjIPGy0gw==}
+
+  '@mlightcad/mtext-renderer@0.12.13':
+    resolution: {integrity: sha512-bV9BIcxE5HpkwfWgCGnnckEkav3bqYKRCuFnl5VPslxq3+T3LPmotMj9eAuUpmaMDtK4Iaho0QTZs/srJqKBSw==}
+    peerDependencies:
+      three: ^0.172.0
+
+  '@mlightcad/shx-parser@1.4.5':
+    resolution: {integrity: sha512-wFY0X7vnuq1IYdP6JRggb7LHcKho1P8zmcWGtXa6XYthwyKZCUoZCswTXr7J26pbzyhBB7KsiCcCL48iwIevdQ==}
+
+  '@mlightcad/three-renderer@1.7.1':
+    resolution: {integrity: sha512-Eg5Dh7ZRjy82pIg8YDRHV+bzd/FXC5JEcQZwS1pALZq21jIREofA4bFLAT4JnAOE2oSrLjGxzO6aKBC0QVUVvw==}
+    peerDependencies:
+      '@mlightcad/data-model': ^1.14.8
+      '@mlightcad/mtext-renderer': ^0.12.12
+      '@velipso/polybool': ^1.1.1
+      three: ^0.172.0
+
   '@modelcontextprotocol/core@2.0.0':
     resolution: {integrity: sha512-pJCEwGG7Lfr/+PQp9ZTwKXNeO5wzbfKL7H3MYpCorM4oFBoQrdjnBgEoqG+RjhsvS1FKrDbKux+M1HhlnGWqcA==}
     engines: {node: '>=20'}
@@ -4325,6 +4400,9 @@ packages:
     peerDependencies:
       '@urql/core': ^5.0.0
 
+  '@velipso/polybool@1.1.1':
+    resolution: {integrity: sha512-HlWrm/wloLkUDHPQ1AgUdXysKL3y+rqV94udU5CVTtEPci5v6WjEfozNJTOOSwCsz50ySIxJK4gABqfbx1sD7A==}
+
   '@vitejs/plugin-react@6.1.1':
     resolution: {integrity: sha512-yxLaQV9gkhS8ezJqCM6+ndU7mDY6gqAg75NQ+0IjwEI8IYOmQCgkRwHKVSfWXW076DsqMo0Dk+0FK1U+M5RgFw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -5445,6 +5523,9 @@ packages:
   electron-to-chromium@1.5.433:
     resolution: {integrity: sha512-5lCAbyZBjtmUt/RAGHRqrL2q0oEFRThDAsZHHDn9XHa89Qw7gMYOeSicBTy+AHfvo0r6vwsZvqNJTQIQy1BLzA==}
 
+  emf-converter@2.0.2:
+    resolution: {integrity: sha512-QLUufb45P3LlOudCoizBtJpO8cBw8LayH0mkvkRvIjvMlb6junwP0EXgUkdDyZUEF2QSEZUPV8rO8DS5rsJmkA==}
+
   emf-converter@2.0.4:
     resolution: {integrity: sha512-9+u7ZcnaDwFrEyn5z7YPzJEj6UtlpFSbxMQxwA0yAa93G3FBciUPLrgf7/qM1lipM+pP544EYafQRprSL0DscQ==}
     peerDependencies:
@@ -6209,6 +6290,9 @@ packages:
     resolution: {integrity: sha512-IKXpvIzjnC9XTAUbVBcMfGS0EPaIXtW6v+zr+RRp+hqULEpo0owZax6wyRwPOJbWbzjYspQwusTsfVr0ifh4uQ==}
     engines: {node: '>=0.10.0'}
 
+  idb@8.0.3:
+    resolution: {integrity: sha512-LtwtVyVYO5BqRvcsKuB2iUMnHwPVByPCXFXOpuU96IZPPoPN6xjOGxZQ74pgSVVLQWtUOYgyeL4GE98BY5D3wg==}
+
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
 
@@ -6806,6 +6890,9 @@ packages:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
     engines: {node: '>=10'}
 
+  lodash-es@4.17.21:
+    resolution: {integrity: sha512-mKnC+QJ9pWVzv+C4/U3rRsHapFfHvQFoFB92e52xeyGMcX6/OlIl78je1u8vePzYZSkkogMPJ2yjxxsb89cxyw==}
+
   lodash-es@4.18.1:
     resolution: {integrity: sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A==}
 
@@ -6867,6 +6954,10 @@ packages:
   log-symbols@2.2.0:
     resolution: {integrity: sha512-VeIAFslyIerEJLXHziedo2basKbMKtTw3vfn5IzG0XTjhAVEJyNHnL2p7vc+wBDSdQuUpNw3M2u6xb9QsAY5Eg==}
     engines: {node: '>=4'}
+
+  loglevel@1.9.2:
+    resolution: {integrity: sha512-HgMmCqIJSAKqo68l0rS2AanEWfkxaZ5wNiEFb5ggm08lDs9Xl2KxBlX3PTcaD2chBM1gXAYf491/M2Rv8Jwayg==}
+    engines: {node: '>= 0.6.0'}
 
   long@5.3.2:
     resolution: {integrity: sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==}
@@ -8393,9 +8484,9 @@ packages:
   slate@0.118.1:
     resolution: {integrity: sha512-6H1DNgnSwAFhq/pIgf+tLvjNzH912M5XrKKhP9Frmbds2zFXdSJ6L/uFNyVKxQIkPzGWPD0m+wdDfmEuGFH5Tg==}
 
-  slatetsx-kit-editor@file:vendor/slatetsx-kit-editor-0.4.8-4c18691da1e6.tgz:
-    resolution: {integrity: sha512-mOgkclWFEqFiyykbVif1FIc/Kt1JMQAdKoLP+7sYeYiCapNWwtGLp3bxjY7Ub4mls+czJEK8ynWFcmFpr82zZw==, tarball: file:vendor/slatetsx-kit-editor-0.4.8-4c18691da1e6.tgz}
-    version: 0.4.8
+  slatetsx-kit-editor@file:vendor/slatetsx-kit-editor-0.4.9-707329637545.tgz:
+    resolution: {integrity: sha512-GHNPo8lSeb4d/bWRwMJ7gOVhpWJqlWjpGRYATFcixXp8JocHBnGTuDDERfqikYTRvSb3GablOCtEHfart4mVfg==, tarball: file:vendor/slatetsx-kit-editor-0.4.9-707329637545.tgz}
+    version: 0.4.9
     peerDependencies:
       katex: ^0.18.7
       react: '>=18.2.0'
@@ -8648,6 +8739,9 @@ packages:
     resolution: {integrity: sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==}
     engines: {node: '>=20'}
 
+  three@0.172.0:
+    resolution: {integrity: sha512-6HMgMlzU97MsV7D/tY8Va38b83kz8YJX+BefKjspMNAv0Vx6dxMogHOrnRl/sbMIs3BPUKijPqDqJ/+UwJbIow==}
+
   three@0.184.0:
     resolution: {integrity: sha512-wtTRjG92pM5eUg/KuUnHsqSAlPM296brTOcLgMRqEeylYTh/CdtvKUvCyyCQTzFuStieWxvZb8mVTMvdPyUpxg==}
 
@@ -8789,6 +8883,10 @@ packages:
 
   uc.micro@2.1.0:
     resolution: {integrity: sha512-ARDJmphmdvUk6Glw7y9DQ2bFkKBHwQHLi2lsaH6PPmz/Ka9sFOBsBluozhDltWmnv9u/cF6Rt87znRTPV+yp/A==}
+
+  uid@2.0.2:
+    resolution: {integrity: sha512-u3xV3X7uzvi5b1MncmZo3i2Aw222Zk1keqLA1YkHldREkAhAqi65wuPfe7lHx8H/Wzy+8CE7S7uS3jekIM5s8g==}
+    engines: {node: '>=8'}
 
   uint8array-extras@1.5.0:
     resolution: {integrity: sha512-rvKSBiC5zqCCiDZ9kAOszZcDvdAHwwIKJG33Ykj43OKcWsnmcBRL09YTU4nOeHZ8Y2a7l1MgTd08SBe9A8Qj6A==}
@@ -11919,6 +12017,62 @@ snapshots:
     dependencies:
       '@chevrotain/types': 11.1.2
 
+  '@mlightcad/cad-simple-viewer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@mlightcad/three-renderer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0))(lodash-es@4.17.21)(three@0.172.0)':
+    dependencies:
+      '@mlightcad/data-model': 1.14.12
+      '@mlightcad/mtext-renderer': 0.12.13(three@0.172.0)
+      '@mlightcad/three-renderer': 1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0)
+      lodash-es: 4.17.21
+      three: 0.172.0
+
+  '@mlightcad/common@1.14.12':
+    dependencies:
+      loglevel: 1.9.2
+
+  '@mlightcad/data-model@1.14.12':
+    dependencies:
+      '@mlightcad/common': 1.14.12
+      '@mlightcad/geometry-engine': 3.14.12(@mlightcad/common@1.14.12)
+      '@mlightcad/graphic-interface': 3.14.12(@mlightcad/common@1.14.12)(@mlightcad/geometry-engine@3.14.12(@mlightcad/common@1.14.12))
+      emf-converter: 2.0.2
+      uid: 2.0.2
+
+  '@mlightcad/geometry-engine@3.14.12(@mlightcad/common@1.14.12)':
+    dependencies:
+      '@mlightcad/common': 1.14.12
+
+  '@mlightcad/graphic-interface@3.14.12(@mlightcad/common@1.14.12)(@mlightcad/geometry-engine@3.14.12(@mlightcad/common@1.14.12))':
+    dependencies:
+      '@mlightcad/common': 1.14.12
+      '@mlightcad/geometry-engine': 3.14.12(@mlightcad/common@1.14.12)
+
+  '@mlightcad/libredwg-converter@3.14.12(@mlightcad/data-model@1.14.12)':
+    dependencies:
+      '@mlightcad/data-model': 1.14.12
+      '@mlightcad/libredwg-web': 0.7.14
+
+  '@mlightcad/libredwg-web@0.7.14': {}
+
+  '@mlightcad/mtext-parser@1.5.1': {}
+
+  '@mlightcad/mtext-renderer@0.12.13(three@0.172.0)':
+    dependencies:
+      '@mlightcad/mtext-parser': 1.5.1
+      '@mlightcad/shx-parser': 1.4.5
+      iconv-lite: 0.7.3
+      idb: 8.0.3
+      opentype.js: 2.0.0
+      three: 0.172.0
+
+  '@mlightcad/shx-parser@1.4.5': {}
+
+  '@mlightcad/three-renderer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0)':
+    dependencies:
+      '@mlightcad/data-model': 1.14.12
+      '@mlightcad/mtext-renderer': 0.12.13(three@0.172.0)
+      '@velipso/polybool': 1.1.1
+      three: 0.172.0
+
   '@modelcontextprotocol/core@2.0.0':
     dependencies:
       zod: 4.6.4
@@ -12063,7 +12217,7 @@ snapshots:
       - '@types/react'
       - '@types/react-dom'
 
-  '@open-file-viewer/core@0.1.47(lodash-es@4.18.1)(pdfjs-dist@5.7.284)':
+  '@open-file-viewer/core@0.1.47(@mlightcad/cad-simple-viewer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@mlightcad/three-renderer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0))(lodash-es@4.17.21)(three@0.172.0))(@mlightcad/data-model@1.14.12)(@mlightcad/libredwg-web@0.7.14)(lodash-es@4.17.21)(pdfjs-dist@5.7.284)':
     dependencies:
       '@aiden0z/pptx-renderer': 1.3.0(pdfjs-dist@5.7.284)
       '@kenjiuno/msgreader': 1.28.0
@@ -12091,15 +12245,18 @@ snapshots:
       xlsx: '@stackline/xlsx@1.0.7'
       xz-decompress: 0.2.3
     optionalDependencies:
-      lodash-es: 4.18.1
+      '@mlightcad/cad-simple-viewer': 1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@mlightcad/three-renderer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0))(lodash-es@4.17.21)(three@0.172.0)
+      '@mlightcad/data-model': 1.14.12
+      '@mlightcad/libredwg-web': 0.7.14
+      lodash-es: 4.17.21
       pdfjs-dist: 5.7.284
     transitivePeerDependencies:
       - '@napi-rs/canvas'
       - geotiff
 
-  '@open-file-viewer/react@0.1.47(@open-file-viewer/core@0.1.47(lodash-es@4.18.1)(pdfjs-dist@5.7.284))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@open-file-viewer/react@0.1.47(@open-file-viewer/core@0.1.47(@mlightcad/cad-simple-viewer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@mlightcad/three-renderer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0))(lodash-es@4.17.21)(three@0.172.0))(@mlightcad/data-model@1.14.12)(@mlightcad/libredwg-web@0.7.14)(lodash-es@4.17.21)(pdfjs-dist@5.7.284))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
-      '@open-file-viewer/core': 0.1.47(lodash-es@4.18.1)(pdfjs-dist@5.7.284)
+      '@open-file-viewer/core': 0.1.47(@mlightcad/cad-simple-viewer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@mlightcad/three-renderer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0))(lodash-es@4.17.21)(three@0.172.0))(@mlightcad/data-model@1.14.12)(@mlightcad/libredwg-web@0.7.14)(lodash-es@4.17.21)(pdfjs-dist@5.7.284)
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
@@ -14982,6 +15139,10 @@ snapshots:
       '@urql/core': 5.2.0
       wonka: 6.3.6
 
+  '@velipso/polybool@1.1.1':
+    dependencies:
+      tslib: 2.8.1
+
   '@vitejs/plugin-react@6.1.1(vite@8.2.2(@types/node@26.5.0)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
@@ -16283,6 +16444,8 @@ snapshots:
 
   electron-to-chromium@1.5.433: {}
 
+  emf-converter@2.0.2: {}
+
   emf-converter@2.0.4: {}
 
   emoji-regex@8.0.0: {}
@@ -17258,6 +17421,8 @@ snapshots:
     dependencies:
       safer-buffer: 2.1.2
 
+  idb@8.0.3: {}
+
   ieee754@1.2.1: {}
 
   ignore@5.3.2: {}
@@ -17841,6 +18006,8 @@ snapshots:
     dependencies:
       p-locate: 5.0.0
 
+  lodash-es@4.17.21: {}
+
   lodash-es@4.18.1: {}
 
   lodash.camelcase@4.3.0: {}
@@ -17882,6 +18049,8 @@ snapshots:
   log-symbols@2.2.0:
     dependencies:
       chalk: 2.4.2
+
+  loglevel@1.9.2: {}
 
   long@5.3.2: {}
 
@@ -19939,7 +20108,7 @@ snapshots:
       immer: 10.2.0
       tiny-warning: 1.0.3
 
-  slatetsx-kit-editor@file:vendor/slatetsx-kit-editor-0.4.8-4c18691da1e6.tgz(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1):
+  slatetsx-kit-editor@file:vendor/slatetsx-kit-editor-0.4.9-707329637545.tgz(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1):
     dependencies:
       '@antv/x6': 2.19.2
       '@antv/x6-plugin-clipboard': 2.1.6(@antv/x6@2.19.2)
@@ -20199,6 +20368,8 @@ snapshots:
     dependencies:
       real-require: 1.0.0
 
+  three@0.172.0: {}
+
   three@0.184.0: {}
 
   throat@5.0.0: {}
@@ -20300,6 +20471,10 @@ snapshots:
   uc.micro@1.0.6: {}
 
   uc.micro@2.1.0: {}
+
+  uid@2.0.2:
+    dependencies:
+      '@lukeed/csprng': 1.1.0
 
   uint8array-extras@1.5.0: {}
 

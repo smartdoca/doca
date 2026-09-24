@@ -9,7 +9,7 @@ import {
   aiDefaults,
   saveAIConfig,
 } from "../packages/core/src/modules/ai/config.js";
-import { createApp } from "../apps/server/src/bootstrap/app.js";
+import { createApp } from "../apps/server/src/app/create-app.js";
 const root = await mkdtemp(join(tmpdir(), "doca-notes-qa-"));
 const db = await openDatabase({ driver: "sqlite", path: ":memory:" });
 await createUser(
@@ -26,13 +26,22 @@ await saveAIConfig(
   {
     ...aiDefaults,
     defaultModel: "test",
+    vendors: [
+      {
+        id: "isolated",
+        name: "隔离测试",
+        provider: "openai",
+        baseUrl: "https://isolated.invalid/v1",
+        apiKey: "not-real",
+        enabled: true,
+      },
+    ],
     models: [
       {
         id: "test",
+        vendorId: "isolated",
         model: "test",
         alias: "隔离测试模型",
-        baseUrl: "https://isolated.invalid/v1",
-        apiKey: "not-real",
         enabled: true,
         levels: [],
         tools: true,

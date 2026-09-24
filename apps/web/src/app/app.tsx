@@ -37,6 +37,7 @@ import {
 import { Select } from "@web/shared/components/select.js";
 import { realtime } from "@web/features/documents/realtime.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
+import { setCurrentUserId } from "@web/shared/components/user-mention.js";
 import React, { lazy, Suspense, useEffect, useState, useRef } from "react";
 import {
   BookOpen,
@@ -116,6 +117,7 @@ const DocumentEditor = lazy(() =>
   import("@web/features/documents/document-editor.js").then((m) => ({ default: m.DocumentEditor })),
 );
 const QuickNotes = lazy(() => import("@web/features/quick-notes/quick-notes.js").then(m => ({ default: m.QuickNotes })));
+const QuickNotesFloat = lazy(() => import("@web/features/quick-notes/quick-notes-float.js").then(m => ({ default: m.QuickNotesFloat })));
 
 const titles: Record<string, string> = {
   todos: "工单",
@@ -350,6 +352,9 @@ export function App() {
     setMe(m);
     setBootstrap((b) => (b ? { ...b, user: m.user } : b));
   }
+  useEffect(() => {
+    setCurrentUserId(bootstrap?.user?.id ?? null);
+  }, [bootstrap?.user?.id]);
   useEffect(() => {
     if (!bootstrap?.user) {
       setMe(null);
@@ -949,7 +954,7 @@ export function App() {
           </button>
           {currentLibraryId && (
             <nav>
-              {!librarySettingsPage && <><button className="ai-navigation-entry" onClick={() => navigate("ai")}><Sparkles size={16} />AI 助手</button><button onClick={() => navigate("notes")}><Feather size={16} />随手记</button></>}
+              {!librarySettingsPage && <><button className="ai-navigation-entry" onClick={() => navigate("ai")}><Sparkles size={16} />AI 助手</button><button onClick={() => { navigate("notes"); window.dispatchEvent(new CustomEvent("doca-notes-float-attention")); }}><Feather size={16} />随手记</button></>}
               <a
                 className={librarySettingsPage ? "active" : ""}
                 href={librarySettingsUrl(currentLibraryId)}
@@ -997,7 +1002,10 @@ export function App() {
                     <button
                       key={key as string}
                       className={`${key === "ai" ? "ai-navigation-entry" : ""} ${key === "trash" ? "sidebar-trash-navigation-entry" : ""} ${!resourceId && (scope === key || (key === "mail" && mailPage)) ? "active" : ""}`}
-                      onClick={() => navigate(key as string)}
+                      onClick={() => {
+                        navigate(key as string);
+                        if (key === "notes") window.dispatchEvent(new CustomEvent("doca-notes-float-attention"));
+                      }}
                     >
                       <I size={16} />
                       {title as string}
@@ -1067,6 +1075,13 @@ export function App() {
                 <strong>邮箱</strong>
                 <span className="files-topbar-separator">/</span>
                 <span id="mail-header-mailbox" />
+              </div>
+            )}
+            {!resourceId && scope === "notes" && user && (
+              <div className="files-topbar-title">
+                <Feather size={17} aria-hidden="true" />
+                <strong>随手记</strong>
+                <span id="notes-header-slot" />
               </div>
             )}
             {!resourceId && scope === "knowledge" && user && (
@@ -1492,6 +1507,11 @@ export function App() {
           close={() => setModal("")}
           saved={reload}
         />
+      )}
+      {user && !mobileShell && (
+        <Suspense fallback={null}>
+          <QuickNotesFloat userId={user.id} />
+        </Suspense>
       )}
     </div>
     </AIProvider>

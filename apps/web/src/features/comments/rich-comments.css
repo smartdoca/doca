@@ -60,9 +60,7 @@
 }
 .comment-mention {
   color: #3370ff;
-  background: #edf2ff;
-  border-radius: 3px;
-  padding: 0 2px;
+  border-radius: 4px;
 }
 .rich-comment-body p {
   white-space: pre-wrap;

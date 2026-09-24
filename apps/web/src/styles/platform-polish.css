@@ -175,14 +175,44 @@ body,
 .user-card-link.link {
   color: #3370ff;
 }
-.document-user-mention {
+.user-mention,
+.document-user-mention,
+.comment-mention {
   color: #3370ff;
-  background: #edf2ff;
   border-radius: 4px;
 }
-.document-user-mention .user-badge {
+.user-mention.is-self,
+.document-user-mention.is-self,
+.comment-mention.is-self {
+  display: inline-flex;
+  align-items: center;
+  background: #3370ff;
+  color: #fff;
+  padding: 1px 8px 2px;
+  border-radius: 999px;
+  line-height: 1;
+  vertical-align: baseline;
+}
+.user-mention .user-badge,
+.document-user-mention .user-badge,
+.comment-mention .user-badge {
   display: inline;
   font: inherit;
+  color: inherit;
+}
+.user-mention.is-self .user-badge,
+.document-user-mention.is-self .user-badge,
+.comment-mention.is-self .user-badge {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+.user-mention.is-self .user-badge[role="button"]:hover,
+.document-user-mention.is-self .user-badge[role="button"]:hover,
+.comment-mention.is-self .user-badge[role="button"]:hover {
+  background: transparent;
+  color: #fff;
 }
 .legacy-mention-anchor {
   font-size: 0;
@@ -752,7 +782,8 @@ body,
 .file-trash-heading p { margin: 4px 0 0; color: #8a94a2; font-size: 12px; }
 .file-trash-heading > span { color: #8a94a2; font-size: 12px; }
 .file-trash-list { margin-top: 10px; }
-.file-trash-list > div { display: grid; grid-template-columns: 28px minmax(0, 1fr) 60px 28px 28px; align-items: center; gap: 8px; min-height: 38px; border-top: 1px solid #f0f2f5; }
+.file-trash-list > div { display: grid; grid-template-columns: 28px minmax(0, 1fr) 72px 36px 36px; align-items: center; gap: 8px; min-height: 38px; border-top: 1px solid #f0f2f5; }
+.file-trash-list button.icon { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 .file-trash-list strong { overflow: hidden; color: #4a5565; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .file-trash-list small { color: #9aa2ad; font-size: 11px; }
 .file-trash-icon { display: inline-flex; color: #7195d8; }

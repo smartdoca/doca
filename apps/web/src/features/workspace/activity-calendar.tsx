@@ -146,19 +146,21 @@ export function ActivityCalendar({ refresh = 0 }: { refresh?: number }) {
       </div>
       <div className="home-activity-day">
         <h3>{selected ? dayTitle(selected, today) : "选择日期"}</h3>
-        {selected &&
-          data?.documents.map((d) => (
-            <a className="activity-document" key={d.id} href={`#/r/${d.id}`}>
-              <FileIcon r={{ kind: "document", format: d.format ?? "rich_text" }} size="compact" />
-              <span>{d.title}</span>
-              <small>{d.editedAt ? "创作 / 编辑" : "阅读"}</small>
-            </a>
-          ))}
-        {selected && data && !data.documents.length && (
-          <p className="subtle">当天暂无可查看的文档活动</p>
-        )}
-        {!selected && <p className="subtle">选择一天，查看当天阅读和创作的文档。</p>}
-        {!data && selected && <p className="subtle">正在加载创作记录…</p>}
+        <div className="home-activity-docs">
+          {selected &&
+            data?.documents.map((d) => (
+              <a className="activity-document" key={d.id} href={`#/r/${d.id}`}>
+                <FileIcon r={{ kind: "document", format: d.format ?? "rich_text" }} size="compact" />
+                <span>{d.title}</span>
+                <small>{d.editedAt ? "创作 / 编辑" : "阅读"}</small>
+              </a>
+            ))}
+          {selected && data && !data.documents.length && (
+            <p className="subtle">当天暂无可查看的文档活动</p>
+          )}
+          {!selected && <p className="subtle">选择一天，查看当天阅读和创作的文档。</p>}
+          {!data && selected && <p className="subtle">正在加载创作记录…</p>}
+        </div>
       </div>
       {error && <Feedback message={error} tone="error" />}
       {tip &&

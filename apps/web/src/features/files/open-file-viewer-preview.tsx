@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactElement } from "react";
 import { MarkdownPreview } from "exmd-collaborative-editor";
 import type { FileItem } from "@web/shared/api.js";
 import { fileUrl } from "@web/shared/api.js";
+import { isDwgFile } from "./dwg-file.js";
+import { DwgFilePreview } from "./dwg-preview.js";
 import "exmd-collaborative-editor/style.css";
 import "@web/features/documents/markdown.css";
 
@@ -98,6 +100,7 @@ function GenericFilePreview({ file }: { file: PreviewSource }) {
 
 export function OpenFileViewerPreview({ file }: { file: FileItem | PreviewSource }) {
   const source = asSource(file);
+  if (isDwgFile(source.name, source.mime)) return <DwgFilePreview file={source} />;
   if (isMarkdown(source)) return <MarkdownFilePreview file={source} />;
   if (source.mime.startsWith("image/")) {
     return <img className="file-preview-image file-preview-image-direct" src={source.url} alt={source.name} />;

@@ -19,6 +19,7 @@ import type {
   CommentInline,
 } from "@core/modules/interactions/community.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
+import { UserMention } from "@web/shared/components/user-mention.js";
 import { Avatar } from "@web/features/account/profile.js";
 import { relativeTime } from "@web/features/documents/document-experience.js";
 import "@web/features/comments/rich-comments.css";
@@ -82,15 +83,12 @@ export function CommentContent({ comment }: { comment: Comment }) {
               n.type === "text" ? (
                 <span key={j}>{n.text}</span>
               ) : (
-                <span
+                <UserMention
                   key={j}
+                  id={n.userId}
+                  name={n.label}
                   className="comment-mention"
-                  title={`@${n.publicId ?? n.userId}`}
-                >
-                  <UserBadge id={n.userId} name={n.label} noAvatar>
-                    @{n.label}
-                  </UserBadge>
-                </span>
+                />
               ),
             )}
           </p>

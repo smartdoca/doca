@@ -33,6 +33,7 @@ import { FileIcon, TypeFilter } from "@web/features/documents/document-controls.
 import { DocumentReactionButtons, type ReactionChange } from "@web/features/documents/document-reactions.js";
 import { HoverTip } from "@web/shared/components/hover-tip.js";
 import { CoverDialog, ResourceActionDialog } from "@web/features/documents/uploads.js";
+import { Dialog } from "@web/features/documents/dialogs.js";
 import { assetUrl } from "@web/shared/api.js";
 import { librarySettingsUrl } from "@web/features/documents/library.js";
 import { listTime as date } from "@web/shared/utils/list-time.js";
@@ -68,7 +69,9 @@ export function Dashboard({
       action: "rename" | "trash" | "restore" | "cover";
     } | null>(null),
     [localRefresh, setLocalRefresh] = useState(0),
-    [preview, setPreview] = useState<Resource | null>(null);
+    [preview, setPreview] = useState<Resource | null>(null),
+    [purgeTarget, setPurgeTarget] = useState<Resource | null>(null),
+    [purgeBusy, setPurgeBusy] = useState(false);
   const libraries = section === "libraries",
     trash = section === "trash",
     mine = section === "mine",
@@ -209,10 +212,56 @@ export function Dashboard({
   );
   return (
     <section
-      className={`dashboard${!libraries && !trash && !mine ? " dashboard-home" : ""}`}
+      className={`dashboard${trash ? " dashboard-trash" : ""}${!libraries && !trash && !mine ? " dashboard-home" : ""}`}
     >
       {preview && (
         <TrashPreview resource={preview} close={() => setPreview(null)} />
+      )}
+      {purgeTarget && (
+        <Dialog
+          title="永久删除"
+          close={() => {
+            if (!purgeBusy) setPurgeTarget(null);
+          }}
+          className="modal-compact"
+        >
+          <p className="warning">
+            永久删除「{purgeTarget.title}」及其回收站中的子文档？历史版本和评论会一并删除，无法恢复。
+          </p>
+          <Feedback message={error} tone="error" />
+          <footer>
+            <button
+              type="button"
+              disabled={purgeBusy}
+              onClick={() => setPurgeTarget(null)}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="danger"
+              disabled={purgeBusy}
+              onClick={async () => {
+                setPurgeBusy(true);
+                setError("");
+                try {
+                  await api(`/resources/${purgeTarget.id}/purge`, "POST", {
+                    version: purgeTarget.version,
+                  });
+                  setPurgeTarget(null);
+                  setLocalRefresh((n) => n + 1);
+                  changed();
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setPurgeBusy(false);
+                }
+              }}
+            >
+              {purgeBusy ? "正在删除…" : "永久删除"}
+            </button>
+          </footer>
+        </Dialog>
       )}
       {searchOpen && (
         <GlobalSearch
@@ -516,9 +565,23 @@ export function Dashboard({
                   {date(sort === "visited_at" ? r.visited_at : r.updated_at)}
                 </time>
                 {trash ? (
-                  <button onClick={() => void mutate(r, "restore")}>
-                    恢复
-                  </button>
+                  <div className="trash-row-actions">
+                    <button
+                      type="button"
+                      onClick={() => void mutate(r, "restore")}
+                    >
+                      恢复
+                    </button>
+                    {roleRank(r.role) >= 5 && (
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => setPurgeTarget(r)}
+                      >
+                        删除
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <button
                     className="icon"

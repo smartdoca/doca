@@ -24,6 +24,7 @@ const sharp = require("sharp");
       { login: "notesqa", password: "isolated-notes-qa-2026" },
       "POST",
     );
+    await api("/me/page-state?key=ui.notesFloat", undefined, "DELETE");
     const png = await sharp(
       Buffer.from(
         '<svg width="480" height="260"><rect width="480" height="260" fill="#e8efe4"/><circle cx="240" cy="130" r="70" fill="#829579"/><path d="M210 135l20 20 40-50" fill="none" stroke="white" stroke-width="8" stroke-linecap="round"/></svg>',
@@ -68,67 +69,76 @@ const sharp = require("sharp");
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(origin + "/#/notes");
+    const textRow = page.locator(`[data-note-id="${textId}"]`);
+    await textRow.waitFor();
+    const split = await page.evaluate(() => {
+      const list = document.querySelector(".note-list-pane").getBoundingClientRect();
+      const content = document.querySelector(".note-content-pane").getBoundingClientRect();
+      return { list: list.right, content: content.left, listColor: getComputedStyle(document.querySelector(".note-list-pane")).backgroundColor };
+    });
+    assert.ok(split.list <= split.content + 1, `list sits left of the note: ${JSON.stringify(split)}`);
+    assert.equal(split.listColor, "rgb(255, 255, 255)");
+    await textRow.click();
     const editor = page.getByRole("textbox", { name: "随手记正文" });
     await editor.waitFor();
-    const surface = page.locator(".note-compose-card .note-writing-surface");
-    const initial = (await surface.boundingBox()).height;
-    assert.ok(initial <= 180, `compact initial input: ${initial}`);
-    const textCard = page.locator(`[data-note-id="${textId}"]`);
-    await textCard.waitFor();
-    const gap = await textCard.evaluate((card) => {
-      const header = card.querySelector("header").getBoundingClientRect();
-      const body = card
-        .querySelector("[data-slate-string]")
-        .getBoundingClientRect();
-      return body.top - header.bottom;
+    await editor.getByText("一个念头，随时记下。").waitFor();
+    const pageTitle = await page.evaluate(() => {
+      const title = document.querySelector(".files-topbar-title strong").getBoundingClientRect();
+      const tools = document.querySelector(".global-header-tools").getBoundingClientRect();
+      const search = document.querySelector(".note-list-search-row").getBoundingClientRect();
+      const date = document.querySelector(".note-content-head h2").getBoundingClientRect();
+      const mid = (box) => box.top + box.height / 2;
+      return {
+        header: Math.abs(mid(title) - mid(tools)),
+        columns: Math.abs(mid(search) - mid(date)),
+        text: document.querySelector(".files-topbar-title strong").textContent,
+      };
     });
-    assert.ok(gap <= 12, `text follows timestamp closely: ${gap}`);
-    const oldCard = page.locator(`[data-note-id="${oldId}"]`);
-    assert.equal(
-      await oldCard.locator(".note-body").count(),
-      0,
-      "image-only legacy note has no empty body",
-    );
-    const imageGap = await oldCard.evaluate(
-      (card) =>
-        card.querySelector(".note-assets").getBoundingClientRect().top -
-        card.querySelector("header").getBoundingClientRect().bottom,
-    );
-    assert.ok(imageGap <= 8, `image follows timestamp: ${imageGap}`);
-    for (const selector of [".note-writing-pane", ".note-browsing-pane"])
-      assert.equal(
-        await page
-          .locator(selector)
-          .evaluate((el) => getComputedStyle(el).backgroundColor),
-        "rgb(255, 255, 255)",
-      );
+    assert.equal(pageTitle.text, "随手记");
+    assert.ok(pageTitle.header < 3, `title and header tools differ by ${pageTitle.header}px`);
+    assert.ok(pageTitle.columns < 3, `search and note heading differ by ${pageTitle.columns}px`);
+    await page.screenshot({ path: "/tmp/doca-quick-notes-page.png" });
+    await page.getByRole("button", { name: "开启悬浮" }).click();
+    const floating = page.getByRole("region", { name: "随手记悬浮窗口" });
+    await floating.waitFor();
+    await page.getByRole("region", { name: "随手记已在悬浮窗口" }).waitFor();
+    assert.equal(await floating.getByRole("tab").count(), 0);
+    await floating.getByRole("button", { name: "返回列表" }).waitFor();
+    await floating.getByRole("textbox", { name: "随手记正文" }).getByText("一个念头，随时记下。").waitFor();
+    await floating.getByRole("button", { name: "返回列表" }).click();
+    await floating.getByRole("button", { name: "新建随手记" }).waitFor();
+    assert.equal(await page.locator(".note-list-pane").count(), 1);
+    await floating.getByRole("button", { name: "批量选择" }).click();
+    await floating.getByRole("button", { name: "全选" }).waitFor();
+    const batch = await floating.locator(".note-selection-bar").evaluate((el) => {
+      const bar = el.getBoundingClientRect();
+      const buttons = [...el.querySelectorAll("button")].map((node) => node.getBoundingClientRect());
+      return {
+        oneRow: buttons.every((box) => Math.abs(box.top - buttons[0].top) < 2),
+        inside: bar.height < 48,
+      };
+    });
+    assert.equal(batch.oneRow, true);
+    assert.equal(batch.inside, true);
+    await floating.screenshot({ path: "/tmp/doca-notes-float-batch.png" });
+    await floating.getByRole("button", { name: "批量选择" }).click();
+    await floating.locator(`[data-note-id="${textId}"]`).waitFor();
+    await floating.screenshot({ path: "/tmp/doca-notes-float.png" });
+    await page.getByRole("button", { name: "折叠悬浮窗口" }).click();
+    const pill = page.locator(".note-float-pill");
+    await pill.waitFor();
+    await pill.getByRole("button", { name: "关闭悬浮" }).click();
+    await floating.waitFor({ state: "detached" });
+    await pill.waitFor({ state: "detached" });
+    await page.getByRole("button", { name: "新建随手记" }).click();
     await editor.click();
     await page.keyboard.insertText("记录灵感\n".repeat(4));
-    assert.ok(
-      (await surface.boundingBox()).height > initial,
-      "input grows with text",
-    );
-    await page.keyboard.insertText("记录灵感\n".repeat(70));
-    const scroll = await page
-      .locator(".note-compose-card .sk-page")
-      .evaluate((el) => ({
-        height: el.getBoundingClientRect().height,
-        scroll: el.scrollHeight,
-        client: el.clientHeight,
-      }));
-    assert.ok(
-      scroll.height <= 421 && scroll.scroll > scroll.client,
-      JSON.stringify(scroll),
-    );
     // Fresh draft: exercise native file paste and its built-in preview.
     await page.evaluate(() => {
       for (const key of Object.keys(localStorage))
         if (key.startsWith("doca.quick-note.") && key.endsWith(".new"))
           localStorage.removeItem(key);
     });
-    await page.reload();
-    await editor.waitFor();
-    await editor.click();
     await editor.evaluate((el, bytes) => {
       const data = new DataTransfer();
       data.items.add(
@@ -142,9 +152,9 @@ const sharp = require("sharp");
         }),
       );
     }, Array.from(png));
-    await page.locator(".note-compose-card .sk-image img").waitFor();
+    await page.locator(".note-content-pane .sk-image img").waitFor();
     const save = page.getByRole("button", { name: "记下", exact: true });
-    await save.click();
+    if (await save.isVisible().catch(() => false)) await save.click();
     await page.waitForFunction(async () => {
       const { items } = await (await fetch("/api/v1/quick-notes")).json();
       return items.some((n) =>
@@ -152,7 +162,7 @@ const sharp = require("sharp");
       );
     });
     await page.getByRole("button", { name: "刷新记录", exact: true }).click();
-    await page.locator(".note-card .sk-image img").first().waitFor();
+    await page.locator(".note-content-pane .sk-image img").first().waitFor();
     const records = (await api("/quick-notes")).items;
     const native = records.find((n) =>
       n.content.some((b) => b.type === "image" && b.path),
@@ -176,15 +186,7 @@ const sharp = require("sharp");
     );
     assert.deepEqual(errors, []);
     console.log(
-      "PASS compact auto-growing input, maxHeight scrolling, white split panes, compact text/image-only cards, native image paste/save, mobile overflow",
-    );
-    console.log(
-      JSON.stringify({
-        initial,
-        textGap: gap,
-        imageGap,
-        maxHeight: scroll.height,
-      }),
+      "PASS title list and content pane, floating window, native image paste/save, mobile overflow",
     );
   } finally {
     await browser.close();
