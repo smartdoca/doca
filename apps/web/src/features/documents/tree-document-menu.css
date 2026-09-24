@@ -1,0 +1,47 @@
+.tree-row .tree-more {
+  width: 24px;
+  height: 26px;
+  min-width: 24px;
+  padding: 3px;
+  flex: none;
+  opacity: 0;
+}
+.tree-row .hover-add {
+  width: 24px;
+  min-width: 24px;
+  padding: 3px;
+  flex: none;
+}
+.tree-row:hover .tree-more,
+.tree-row:focus-within .tree-more,
+.tree-row .tree-more[aria-expanded="true"] {
+  opacity: 1;
+}
+.tree-document-menu {
+  position: fixed;
+  z-index: 120;
+  width: 200px;
+  padding: 6px;
+  border: 1px solid var(--line, #dee0e3);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  box-shadow: 0 6px 24px #1f232924;
+}
+.tree-document-menu > button {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: transparent;
+  border: 0;
+}
+.tree-document-menu > button:hover:not(:disabled) {
+  background: var(--hover);
+}
+@media (hover: none) {
+  .tree-row .tree-more {
+    opacity: 1;
+  }
+}

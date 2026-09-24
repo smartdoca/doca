@@ -1,0 +1,207 @@
+--- a/src/insertMenu.tsx
++++ b/src/insertMenu.tsx
+@@ -0,0 +1,8 @@
++import { createContext, useContext } from 'react'
++import type { BlockType } from './types'
++export const InsertMenuContext = createContext<readonly BlockType[] | undefined>(undefined)
++/** Menu configuration only; hosts still validate persisted content and resources. */
++export function useInsertMenu() {
++  const types = useContext(InsertMenuContext)
++  return (type: BlockType) => types === undefined || types.includes(type)
++}
+--- a/src/insertMenu.test.tsx
++++ b/src/insertMenu.test.tsx
+@@ -0,0 +1,27 @@
++// @vitest-environment jsdom
++import { act, createElement } from 'react'
++import { createRoot } from 'react-dom/client'
++import { expect, it } from 'vitest'
++import { RichTextEditor } from './RichTextEditor'
++
++it('filters portal block insertion menus per instance while keeping defaults complete', async () => {
++  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
++  for (const restricted of [true, false]) {
++    const host = document.createElement('div'); document.body.append(host); const root = createRoot(host)
++    try {
++      await act(async () => root.render(createElement(RichTextEditor, {
++        initialValue: [{id: crypto.randomUUID(), type: 'paragraph', children: [{text: ''}]}],
++        insertMenu: restricted ? ['paragraph', 'image', 'attachment'] : undefined,
++        ariaLabel: 'Quick note body',
++      })))
++      expect(host.querySelector('[data-slate-editor]')?.getAttribute('aria-label')).toBe('Quick note body')
++      const grip = host.querySelector('.sk-block-gutter button')!
++      await act(async () => grip.dispatchEvent(new MouseEvent('click', {bubbles: true})))
++      const menu = document.querySelector('.sk-block-menu-portal')!
++      expect(menu).not.toBeNull()
++      expect(menu.textContent).toContain('附件')
++      expect(menu.textContent?.includes('思维导图')).toBe(!restricted)
++      expect(menu.textContent?.includes('公式')).toBe(!restricted)
++    } finally { await act(async () => root.unmount()); host.remove() }
++  }
++})
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -230,6 +230,11 @@
+ }
+ 
+ export interface RichTextEditorProps {
++  /** Optional insertion-menu allowlist (slash and block menus). Omit for all blocks.
++   * This configures UI, not clipboard validation or a document schema restriction. */
++  insertMenu?: readonly BlockType[]
++  /** Accessible name for the editable surface. */
++  ariaLabel?: string
+   /** Keep the first block as H1; Enter creates a normal paragraph. */
+   firstLineTitle?: boolean
+   titlePlaceholder?: string
+--- a/src/RichTextEditor.tsx
++++ b/src/RichTextEditor.tsx
+@@ -1,3 +1,4 @@
++import { InsertMenuContext } from './insertMenu'
+ import { applyDocumentProjection } from './slateCommands'
+ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+ import { createEditor, Editor, Element, Node, Path, Point, Range, Text, Transforms, type Descendant, type Operation } from 'slate'
+@@ -28,7 +29,7 @@
+ 
+ const ATOMIC_COPY_TYPES = new Set<RichElement['type']>(['columns', 'formula', 'table', 'image', 'video', 'flowchart', 'mindmap', 'attachment', 'card', 'code-block', 'divider'])
+ 
+-export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(function RichTextEditor({ initialValue = defaultValue, value, onChange, placeholder, titlePlaceholder, bodyPlaceholder, mode = 'edit', autoFocus = false, className = '', largeDocumentThreshold = 300, collaboration, resources, comments, formulaRenderer, firstLineTitle = false, language = zhCN, onOutlineChange, onReady, onUploadStateChange, plugins = EMPTY_PLUGINS }, forwardedRef) {
++export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(function RichTextEditor({ insertMenu, ariaLabel, initialValue = defaultValue, value, onChange, placeholder, titlePlaceholder, bodyPlaceholder, mode = 'edit', autoFocus = false, className = '', largeDocumentThreshold = 300, collaboration, resources, comments, formulaRenderer, firstLineTitle = false, language = zhCN, onOutlineChange, onReady, onUploadStateChange, plugins = EMPTY_PLUGINS }, forwardedRef) {
+   const firstLineTitleRef = useRef(firstLineTitle)
+   firstLineTitleRef.current = firstLineTitle
+   const editor = useMemo(() => {
+@@ -357,7 +358,7 @@
+     return ensureStableIds(structuredClone(document.length ? document : [{ type: 'paragraph', id: createId(), children: [{ text: '' }] }]))
+   }, [])
+   const resolvedPlaceholder = placeholder || language.placeholder
+-  return <EditorI18nProvider language={language}><div className={`sk-editor ${isReadOnly ? 'is-readonly' : ''} ${largeDocument ? 'is-large-document' : ''} ${className}`} data-title-mode={firstLineTitle || undefined} data-revision={revision}>
++  return <InsertMenuContext.Provider value={insertMenu}><EditorI18nProvider language={language}><div className={`sk-editor ${isReadOnly ? 'is-readonly' : ''} ${largeDocument ? 'is-large-document' : ''} ${className}`} data-title-mode={firstLineTitle || undefined} data-revision={revision}>
+     <Slate editor={editor} initialValue={initialDocument} onChange={handleChange}>
+       <ResourceProvider editor={editor} config={resourceConfig} readOnly={isReadOnly} onStateChange={onUploadStateChange} runtimeRef={resourceRuntime}>
+       <BlockSelectionProvider value={blockSelection}>
+@@ -402,12 +403,12 @@
+             Transforms.select(editor, Editor.end(editor, []))
+             ReactEditor.focus(editor)
+           }}>
+-            <Editable className="sk-editable" decorate={decorate} renderElement={renderElement} renderLeaf={renderLeaf} placeholder={firstLineTitle ? undefined : resolvedPlaceholder} readOnly={isReadOnly} autoFocus={autoFocus} spellCheck onKeyDown={handleKeyDown} onBlur={() => collaboration?.presence?.publish(null)} onPointerDownCapture={() => { selectAllRequested.current = false }} onCopyCapture={handleCopy} onCopy={handleCopy} onPaste={handlePaste} />
++            <Editable aria-label={ariaLabel} className="sk-editable" decorate={decorate} renderElement={renderElement} renderLeaf={renderLeaf} placeholder={firstLineTitle ? undefined : resolvedPlaceholder} readOnly={isReadOnly} autoFocus={autoFocus} spellCheck onKeyDown={handleKeyDown} onBlur={() => collaboration?.presence?.publish(null)} onPointerDownCapture={() => { selectAllRequested.current = false }} onCopyCapture={handleCopy} onCopy={handleCopy} onPaste={handlePaste} />
+           </div>
+         </div>
+         {!isReadOnly && <><FloatingToolbar /><SlashMenu /></>}
+       </BlockSelectionProvider>
+       </ResourceProvider>
+     </Slate>
+-  </div></EditorI18nProvider>
++  </div></EditorI18nProvider></InsertMenuContext.Provider>
+ })
+--- a/src/components/BlockHandle.tsx
++++ b/src/components/BlockHandle.tsx
+@@ -1,3 +1,4 @@
++import { useInsertMenu } from '../insertMenu'
+ import { BlockTypeIcon } from './BlockTypeIcon'
+ import { useEditorI18n } from '../i18n'
+ import { fileResourceKind } from '../media'
+@@ -25,6 +26,7 @@
+   const { t } = useEditorI18n()
+ 
+   const editor = useSlateStatic()
++  const allowed = useInsertMenu()
+   const readOnly = useReadOnly()
+   const resources = useResourceRuntime()
+   const blockSelection = useBlockSelection()
+@@ -91,7 +93,7 @@
+     const at = topPath(); Editor.withoutNormalizing(editor, () => { Transforms.removeNodes(editor, { at }); Transforms.insertNodes(editor, node, { at }) }); setOpen(false)
+   }
+   const pickImage = (insert: (node: RichElement) => void) => {
+-    const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*,video/*'
++    const input = document.createElement('input'); input.type = 'file'; input.accept = allowed('video') ? 'image/*,video/*' : 'image/*'
+     input.onchange = () => { const file = input.files?.[0]; if (file) void resources.upload(fileResourceKind(file), file, insert) }
+     input.click()
+   }
+@@ -150,16 +152,16 @@
+         <button className={element.align === 'right' ? 'is-active' : ''} title={t("ui.alignRight")} onMouseDown={e => { e.preventDefault(); align('right') }}><AlignRight size={16} /></button>
+       </div>
+       {isEmpty && <><div className="sk-block-menu-rule" /><div className="sk-block-menu-label">{t("ui.insertContent")}</div><div className="sk-create-blocks">
+-        <button onMouseDown={e => { e.preventDefault(); pickImage(replaceCurrent) }}><BlockTypeIcon type="image" size={17} /><span><b>{t('media.imageVideo')}</b><small>{t('media.hint')}</small></span></button>
+-        <button onMouseDown={e => { e.preventDefault(); replaceCurrent({ type: 'code-block', id: createId(), language: 'typescript', children: [{ text: '' }] }) }}><BlockTypeIcon type="code-block" size={17} /><span><b>{t("ui.codeBlock")}</b><small>{t("ui.withLanguageSelection")}</small></span></button>
+-        {!isNestedBlock && <TablePickerPopover className="sk-create-table-trigger" onSelect={(rows, columns) => replaceCurrent(createTable(rows, columns))}><BlockTypeIcon type="table" size={17} /><span><b>{t("ui.table")}</b><small>{t("ui.chooseRowsAndColumns")}</small></span><ChevronRight size={14} /></TablePickerPopover>}
+-        <button onMouseDown={e => { e.preventDefault(); replaceCurrent({ type: 'card', id: createId(), color: '#eef6ff', icon: '💡', children: [{ type: 'paragraph', id: createId(), children: [{ text: '' }] }] }) }}><BlockTypeIcon type="card" size={17} /><span><b>{t("ui.card")}</b><small>{t("ui.highlightInformation")}</small></span></button>
+-        <button onMouseDown={e => { e.preventDefault(); replaceCurrent({ type: 'divider', id: createId(), children: [{ text: '' }] }) }}><BlockTypeIcon type="divider" size={17} /><span><b>{t("ui.divider")}</b><small>{t("ui.separateContent")}</small></span></button>
+-        <button onMouseDown={e => { e.preventDefault(); pickAttachment(replaceCurrent) }}><BlockTypeIcon type="attachment" size={17} /><span><b>{t("ui.attachment")}</b><small>{t("ui.uploadAnyFile")}</small></span></button>
+-        <button onMouseDown={e => { e.preventDefault(); replaceCurrent(createDiagram('flowchart')) }}><BlockTypeIcon type="flowchart" size={17} /><span><b>{t("ui.flowchart")}</b><small>{t("ui.openDiagramEditor")}</small></span></button>
+-        <button onMouseDown={e => { e.preventDefault(); replaceCurrent(createDiagram('mindmap')) }}><BlockTypeIcon type="mindmap" size={17} /><span><b>{t("ui.mindMap")}</b><small>{t("ui.openDiagramEditor")}</small></span></button>
+-        {!isNestedBlock && <InsertSubmenu label={t('columns.title')} icon={<BlockTypeIcon type="columns" size={17} />}>{([2, 3, 4] as const).map(count => <button key={count} onMouseDown={e => { e.preventDefault(); replaceCurrent(createColumnsBlock(count)) }}>{t('columns.count', { 0: count })}</button>)}</InsertSubmenu>}
+-        <button onMouseDown={e => { e.preventDefault(); replaceCurrent({ type: 'formula', id: createId(), source: '', children: [{ text: '' }] }) }}><BlockTypeIcon type="formula" size={17} /><span><b>{t('formula.title')}</b><small>{t('formula.hint')}</small></span></button>
++        {allowed('image') && <button onMouseDown={e => { e.preventDefault(); pickImage(replaceCurrent) }}><BlockTypeIcon type="image" size={17} /><span><b>{allowed('video') ? t('media.imageVideo') : t('ui.image')}</b><small>{t('media.hint')}</small></span></button>}
++        {allowed('code-block') && <button onMouseDown={e => { e.preventDefault(); replaceCurrent({ type: 'code-block', id: createId(), language: 'typescript', children: [{ text: '' }] }) }}><BlockTypeIcon type="code-block" size={17} /><span><b>{t("ui.codeBlock")}</b><small>{t("ui.withLanguageSelection")}</small></span></button>}
++        {!isNestedBlock && allowed('table') && <TablePickerPopover className="sk-create-table-trigger" onSelect={(rows, columns) => replaceCurrent(createTable(rows, columns))}><BlockTypeIcon type="table" size={17} /><span><b>{t("ui.table")}</b><small>{t("ui.chooseRowsAndColumns")}</small></span><ChevronRight size={14} /></TablePickerPopover>}
++        {allowed('card') && <button onMouseDown={e => { e.preventDefault(); replaceCurrent({ type: 'card', id: createId(), color: '#eef6ff', icon: '💡', children: [{ type: 'paragraph', id: createId(), children: [{ text: '' }] }] }) }}><BlockTypeIcon type="card" size={17} /><span><b>{t("ui.card")}</b><small>{t("ui.highlightInformation")}</small></span></button>}
++        {allowed('divider') && <button onMouseDown={e => { e.preventDefault(); replaceCurrent({ type: 'divider', id: createId(), children: [{ text: '' }] }) }}><BlockTypeIcon type="divider" size={17} /><span><b>{t("ui.divider")}</b><small>{t("ui.separateContent")}</small></span></button>}
++        {allowed('attachment') && <button onMouseDown={e => { e.preventDefault(); pickAttachment(replaceCurrent) }}><BlockTypeIcon type="attachment" size={17} /><span><b>{t("ui.attachment")}</b><small>{t("ui.uploadAnyFile")}</small></span></button>}
++        {allowed('flowchart') && <button onMouseDown={e => { e.preventDefault(); replaceCurrent(createDiagram('flowchart')) }}><BlockTypeIcon type="flowchart" size={17} /><span><b>{t("ui.flowchart")}</b><small>{t("ui.openDiagramEditor")}</small></span></button>}
++        {allowed('mindmap') && <button onMouseDown={e => { e.preventDefault(); replaceCurrent(createDiagram('mindmap')) }}><BlockTypeIcon type="mindmap" size={17} /><span><b>{t("ui.mindMap")}</b><small>{t("ui.openDiagramEditor")}</small></span></button>}
++        {!isNestedBlock && allowed('columns') && <InsertSubmenu label={t('columns.title')} icon={<BlockTypeIcon type="columns" size={17} />}>{([2, 3, 4] as const).map(count => <button key={count} onMouseDown={e => { e.preventDefault(); replaceCurrent(createColumnsBlock(count)) }}>{t('columns.count', { 0: count })}</button>)}</InsertSubmenu>}
++        {allowed('formula') && <button onMouseDown={e => { e.preventDefault(); replaceCurrent({ type: 'formula', id: createId(), source: '', children: [{ text: '' }] }) }}><BlockTypeIcon type="formula" size={17} /><span><b>{t('formula.title')}</b><small>{t('formula.hint')}</small></span></button>}
+       </div></>}
+     </>
+     if (element.type === 'image') return <>
+@@ -201,17 +203,17 @@
+ 
+   const openMenu = () => { keepMenu(); if (!open) document.dispatchEvent(new CustomEvent('sk:block-menu-open', { detail: element.id })); setOpen(true) }
+   const insertionItems = (after: boolean) => <>
+-    {!isNestedBlock && ([2, 3, 4] as const).map(count => <button key={count} onMouseDown={e => { e.preventDefault(); insertNode(createColumnsBlock(count), after) }}><BlockTypeIcon type="columns" size={15} />{t('columns.count', { 0: count })}</button>)}
++    {!isNestedBlock && allowed('columns') && ([2, 3, 4] as const).map(count => <button key={count} onMouseDown={e => { e.preventDefault(); insertNode(createColumnsBlock(count), after) }}><BlockTypeIcon type="columns" size={15} />{t('columns.count', { 0: count })}</button>)}
+     <button onMouseDown={e => { e.preventDefault(); insertEmpty(after) }}><Pilcrow size={15} /> {t("ui.emptyTextBlock")}</button>
+-    <button onMouseDown={e => { e.preventDefault(); insertNode({ type: 'code-block', id: createId(), language: 'typescript', children: [{ text: '' }] }, after) }}><BlockTypeIcon type="code-block" size={15} /> {t("ui.codeBlock")}</button>
+-    <button onMouseDown={e => { e.preventDefault(); pickImage(node => insertNode(node, after)) }}><BlockTypeIcon type="image" size={15} /> {t('media.imageVideo')}</button>
+-    <button onMouseDown={e => { e.preventDefault(); pickAttachment(node => insertNode(node, after)) }}><BlockTypeIcon type="attachment" size={15} /> {t("ui.attachment")}</button>
+-    {!isNestedBlock && <TablePickerPopover className="sk-create-table-trigger" onSelect={(rows, columns) => insertNode(createTable(rows, columns), after)}><BlockTypeIcon type="table" size={15} /> {t("ui.table")}<ChevronRight className="sk-menu-chevron" size={14} /></TablePickerPopover>}
+-    <button onMouseDown={e => { e.preventDefault(); insertNode(createDiagram('flowchart'), after) }}><BlockTypeIcon type="flowchart" size={15} /> {t("ui.flowchart")}</button>
+-    <button onMouseDown={e => { e.preventDefault(); insertNode(createDiagram('mindmap'), after) }}><BlockTypeIcon type="mindmap" size={15} /> {t("ui.mindMap")}</button>
+-    <button onMouseDown={e => { e.preventDefault(); insertNode({ type: 'card', id: createId(), color: '#eef6ff', icon: '💡', children: [{ type: 'paragraph', id: createId(), children: [{ text: '' }] }] }, after) }}><BlockTypeIcon type="card" size={15} /> {t("ui.card")}</button>
+-    <button onMouseDown={e => { e.preventDefault(); insertNode({ type: 'formula', id: createId(), source: '', children: [{ text: '' }] }, after) }}><BlockTypeIcon type="formula" size={15} /> {t('formula.title')}</button>
+-    <button onMouseDown={e => { e.preventDefault(); insertNode({ type: 'divider', id: createId(), children: [{ text: '' }] }, after) }}><BlockTypeIcon type="divider" size={15} /> {t("ui.divider")}</button>
++    {allowed('code-block') && <button onMouseDown={e => { e.preventDefault(); insertNode({ type: 'code-block', id: createId(), language: 'typescript', children: [{ text: '' }] }, after) }}><BlockTypeIcon type="code-block" size={15} /> {t("ui.codeBlock")}</button>}
++    {allowed('image') && <button onMouseDown={e => { e.preventDefault(); pickImage(node => insertNode(node, after)) }}><BlockTypeIcon type="image" size={15} /> {allowed('video') ? t('media.imageVideo') : t('ui.image')}</button>}
++    {allowed('attachment') && <button onMouseDown={e => { e.preventDefault(); pickAttachment(node => insertNode(node, after)) }}><BlockTypeIcon type="attachment" size={15} /> {t("ui.attachment")}</button>}
++    {!isNestedBlock && allowed('table') && <TablePickerPopover className="sk-create-table-trigger" onSelect={(rows, columns) => insertNode(createTable(rows, columns), after)}><BlockTypeIcon type="table" size={15} /> {t("ui.table")}<ChevronRight className="sk-menu-chevron" size={14} /></TablePickerPopover>}
++    {allowed('flowchart') && <button onMouseDown={e => { e.preventDefault(); insertNode(createDiagram('flowchart'), after) }}><BlockTypeIcon type="flowchart" size={15} /> {t("ui.flowchart")}</button>}
++    {allowed('mindmap') && <button onMouseDown={e => { e.preventDefault(); insertNode(createDiagram('mindmap'), after) }}><BlockTypeIcon type="mindmap" size={15} /> {t("ui.mindMap")}</button>}
++    {allowed('card') && <button onMouseDown={e => { e.preventDefault(); insertNode({ type: 'card', id: createId(), color: '#eef6ff', icon: '💡', children: [{ type: 'paragraph', id: createId(), children: [{ text: '' }] }] }, after) }}><BlockTypeIcon type="card" size={15} /> {t("ui.card")}</button>}
++    {allowed('formula') && <button onMouseDown={e => { e.preventDefault(); insertNode({ type: 'formula', id: createId(), source: '', children: [{ text: '' }] }, after) }}><BlockTypeIcon type="formula" size={15} /> {t('formula.title')}</button>}
++    {allowed('divider') && <button onMouseDown={e => { e.preventDefault(); insertNode({ type: 'divider', id: createId(), children: [{ text: '' }] }, after) }}><BlockTypeIcon type="divider" size={15} /> {t("ui.divider")}</button>}
+   </>
+   const menu = open ? createPortal(<div ref={menuRef} className="sk-block-menu sk-block-menu-portal" role="menu" contentEditable={false} style={menuPosition} onMouseEnter={keepMenu} onMouseLeave={leaveMenu} onKeyDown={event => { if (event.key === 'Escape') { keepMenu(); setOpen(false) } }}>
+     {contextualMenu()}
+--- a/src/components/SlashMenu.tsx
++++ b/src/components/SlashMenu.tsx
+@@ -1,3 +1,4 @@
++import { useInsertMenu } from '../insertMenu'
+ import { BlockTypeIcon } from './BlockTypeIcon'
+ import { useEffect, useMemo, useRef, useState } from 'react'
+ import { Editor, Element, Range, Transforms } from 'slate'
+@@ -19,6 +20,7 @@
+ 
+ export function SlashMenu() {
+   const editor = useSlate()
++  const allowed = useInsertMenu()
+   const resources = useResourceRuntime()
+   const { t } = useEditorI18n()
+   const [query, setQuery] = useState<string | null>(null)
+@@ -49,7 +51,7 @@
+     { title: t('divider'), hint: t('dividerHint'), kind: 'divider', keywords: 'divider hr 分割线', run: () => insert({ type: 'divider', id: createId(), children: emptyText() }) },
+     { title: t('table'), hint: t('tableHint'), kind: 'table', keywords: 'table 表格', run: () => undefined },
+     ...([2, 3, 4] as const).map(count => ({ title: t('columns.count', { 0: count }), hint: t('columns.hint'), kind: 'columns' as BlockType, keywords: 'columns 分列', run: () => insert(createColumnsBlock(count)) })),
+-    { title: t('media.imageVideo'), hint: t('media.hint'), kind: 'image', keywords: 'image video 图片 视频', run: () => pickFile('image/*,video/*', file => { deleteTrigger(); setQuery(null); void resources.upload(fileResourceKind(file), file, node => insertBlock(editor, node)) }) },
++    { title: allowed('video') ? t('media.imageVideo') : t('ui.image'), hint: t('media.hint'), kind: 'image', keywords: 'image video 图片 视频', run: () => pickFile(allowed('video') ? 'image/*,video/*' : 'image/*', file => { deleteTrigger(); setQuery(null); void resources.upload(fileResourceKind(file), file, node => insertBlock(editor, node)) }) },
+     { title: t('flowchart'), hint: t('flowchartHint'), kind: 'flowchart', keywords: 'flow 流程图', run: () => insert(diagram('flowchart')) },
+     { title: t('mindmap'), hint: t('mindmapHint'), kind: 'mindmap', keywords: 'mind map 思维导图', run: () => insert(diagram('mindmap')) },
+     { title: t('card'), hint: t('cardHint'), kind: 'card', keywords: 'card 卡片', run: () => insert({ type: 'card', id: createId(), color: '#eef6ff', icon: '💡', children: [{ type: 'paragraph', id: createId(), children: emptyText() }] }) },
+@@ -69,7 +71,7 @@
+     document.addEventListener('selectionchange', onSelection)
+     return () => document.removeEventListener('selectionchange', onSelection)
+   }, [editor])
+-  const filtered = useMemo(() => query === null ? [] : commands.filter(c => (!insideCell || (c.title !== t('table') && c.keywords !== 'columns 分列')) && `${c.title} ${c.keywords}`.toLowerCase().includes(query.toLowerCase())), [query, insideCell, t])
++  const filtered = useMemo(() => query === null ? [] : commands.filter(c => allowed(c.kind) && (!insideCell || (c.title !== t('table') && c.keywords !== 'columns 分列')) && `${c.title} ${c.keywords}`.toLowerCase().includes(query.toLowerCase())), [query, insideCell, t, allowed])
+   useEffect(() => setActive(0), [query])
+   useEffect(() => {
+     menuRef.current?.querySelectorAll<HTMLElement>(':scope > button, :scope > .sk-table-picker-trigger')[active]?.scrollIntoView?.({ block: 'nearest' })

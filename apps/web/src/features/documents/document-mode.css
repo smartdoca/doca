@@ -1,0 +1,38 @@
+.document-mode-switch,
+.document-mode-readonly {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  flex: none;
+  margin: 0;
+  color: #646a73;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.document-mode-switch {
+  position: relative;
+}
+.document-mode-switch > svg {
+  position: absolute;
+  left: 10px;
+  z-index: 1;
+  pointer-events: none;
+}
+.document-mode-switch > .select-control {
+  width: 94px;
+}
+.document-mode-switch .select-trigger {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 9px 0 32px;
+  gap: 8px;
+  font-size: 13px;
+  color: inherit;
+}
+.document-mode-readonly {
+  padding-inline: 6px;
+}
+#editor-toolbar-slot[hidden] {
+  display: none;
+}

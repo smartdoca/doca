@@ -1,0 +1,83 @@
+.outline-floating-toggle {
+  position: fixed;
+  left: calc(var(--outline-left) + 12px);
+  top: calc(var(--outline-top) + var(--outline-launcher-offset, 12px));
+  z-index: 26;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: #646a73;
+  background: white;
+  border: 1px solid #dee0e3;
+  border-radius: 6px;
+  box-shadow: 0 3px 12px #1f232914;
+}
+.outline-floating-toggle:hover {
+  color: #3370ff;
+  background: #f0f4ff;
+}
+/* Dialog portals to body: never depend on an editor ancestor for positioning. */
+.modal-shade.outline-drawer-shade {
+  left: var(--outline-left);
+  top: var(--outline-top);
+  padding: 0;
+  justify-content: flex-start;
+  align-items: stretch;
+  background: #1f23292e;
+}
+.modal.outline-drawer-panel {
+  width: min(280px, 85%);
+  max-width: 280px;
+  max-height: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 0 10px 10px 0;
+  padding: 16px 10px;
+  display: flex;
+  flex-direction: column;
+  animation: outline-slide-in 160ms ease-out;
+}
+.outline-drawer-panel > header {
+  flex: none;
+  padding: 0 8px;
+}
+.outline-drawer-panel h2 {
+  font-size: 16px;
+}
+.outline-drawer-links {
+  overflow-y: auto;
+  min-height: 0;
+  padding-top: 12px;
+}
+.outline-drawer-links button {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  padding: 9px 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.outline-drawer-links button:hover {
+  background: #edf2ff;
+  color: #3370ff;
+}
+@keyframes outline-slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal.outline-drawer-panel {
+    animation: none;
+  }
+}

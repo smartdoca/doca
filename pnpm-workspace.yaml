@@ -1,0 +1,65 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+allowBuilds:
+  better-sqlite3: true
+  esbuild: true
+  leveldown: false
+  protobufjs: false
+overrides:
+  yjs: 13.6.32
+  # Leafer plugins share a global Creator registry with the canvas engine.
+  # Caret peers must not install a second engine (2.2.x) beside aidcanvas's 2.1.0.
+  '@leafer-in/editor': 2.1.0
+  '@leafer-in/export': 2.1.0
+  '@leafer-in/resize': 2.1.0
+  '@leafer-in/interface': 2.1.0
+  '@leafer-ui/core': 2.1.0
+  '@leafer-ui/draw': 2.1.0
+  '@leafer-ui/interface': 2.1.0
+  '@leafer/interface': 2.1.0
+  'leafer-ui': 2.1.0
+  '@leafer-ui/app': 2.1.0
+  '@leafer-ui/bounds': 2.1.0
+  '@leafer-ui/color': 2.1.0
+  '@leafer-ui/data': 2.1.0
+  '@leafer-ui/decorator': 2.1.0
+  '@leafer-ui/display-module': 2.1.0
+  '@leafer-ui/display': 2.1.0
+  '@leafer-ui/effect': 2.1.0
+  '@leafer-ui/event': 2.1.0
+  '@leafer-ui/external': 2.1.0
+  '@leafer-ui/hit': 2.1.0
+  '@leafer-ui/interaction-web': 2.1.0
+  '@leafer-ui/interaction': 2.1.0
+  '@leafer-ui/paint': 2.1.0
+  '@leafer-ui/partner': 2.1.0
+  '@leafer-ui/render': 2.1.0
+  '@leafer-ui/text': 2.1.0
+  '@leafer-ui/web': 2.1.0
+  '@leafer/canvas-web': 2.1.0
+  '@leafer/canvas': 2.1.0
+  '@leafer/core': 2.1.0
+  '@leafer/data': 2.1.0
+  '@leafer/debug': 2.1.0
+  '@leafer/decorator': 2.1.0
+  '@leafer/display-module': 2.1.0
+  '@leafer/display': 2.1.0
+  '@leafer/event': 2.1.0
+  '@leafer/file': 2.1.0
+  '@leafer/helper': 2.1.0
+  '@leafer/image-web': 2.1.0
+  '@leafer/image': 2.1.0
+  '@leafer/layout': 2.1.0
+  '@leafer/layouter': 2.1.0
+  '@leafer/list': 2.1.0
+  '@leafer/math': 2.1.0
+  '@leafer/partner': 2.1.0
+  '@leafer/path': 2.1.0
+  '@leafer/platform': 2.1.0
+  '@leafer/renderer': 2.1.0
+  '@leafer/selector': 2.1.0
+  '@leafer/task': 2.1.0
+  '@leafer/watcher': 2.1.0
+  '@leafer/web-core': 2.1.0
