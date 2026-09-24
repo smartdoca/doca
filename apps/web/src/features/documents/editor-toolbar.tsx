@@ -78,14 +78,13 @@ export function EditorToolbar({
     if (!handle || disabled) return;
     const editor = handle.editor;
     try {
-      // Restore the range captured on mousedown, before the command. A live
-      // range tracked through the mark split, then selected again, is what
-      // moves the highlight: the browser expands it when <u>/<s> leaves mount,
-      // and slate-react adopts that wider DOM range. The editor command already
-      // keeps the model selection on the same characters.
+      // The button click can drop the DOM selection. Put back the range from
+      // mousedown only in that case. An expanded range that differs is the
+      // user's current selection, or one the browser already grew; selecting
+      // the snapshot would paint the mark on the wrong characters.
       if (preserveSelection && savedSelection.current) {
         const current = editor.selection;
-        if (!current || !Range.equals(current, savedSelection.current))
+        if (!current || Range.isCollapsed(current))
           Transforms.select(editor, savedSelection.current);
       }
       fn(handle);

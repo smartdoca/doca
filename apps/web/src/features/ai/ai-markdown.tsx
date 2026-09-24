@@ -14,6 +14,8 @@ import {
   folderExplorerHash,
   isFolderExplorerHref,
   isMailHref,
+  navigationHref,
+  resolveExplorerClick,
 } from "@web/features/ai/ai-folder-mentions.js";
 const markdownConfig = {
   gfm: true,
@@ -200,7 +202,13 @@ function AIAnswer({
           if (onFolder && (isFolderExplorerHref(href) || isMailHref(href))) {
             event.preventDefault();
             event.stopPropagation();
-            onFolder(folderExplorerHash(href).slice(1));
+            const next = isMailHref(href)
+              ? href
+              : navigationHref(href)
+                ? href
+                : resolveExplorerClick(href, files ?? [], link.textContent ?? "");
+            if (!next) return;
+            onFolder(folderExplorerHash(next).slice(1));
           }
         }}
       >

@@ -6,7 +6,10 @@ import {
   folderMutationRequested,
   jobAssistantAnswer,
   missingReviewCriteria,
+  fileCopyRequested,
+  fileSendRequested,
   unverifiedDocumentDelivery,
+  unverifiedFileDelivery,
   unverifiedFolderDelivery,
   unverifiedImageDelivery,
   spreadsheetImageInsertRequested,
@@ -272,6 +275,37 @@ it("rejects folder rename claims without a folder tool receipt", () => {
       folderName: "无敌猫猫",
     }),
   ).toBe("已更新文件夹「无敌猫猫」。");
+});
+
+it("finds an existing file instead of copying it, and requires a card", () => {
+  const ask =
+    "需要武汉大学品牌声誉深度分析报告.pdf（2 份相同副本）";
+  expect(fileCopyRequested(ask)).toBe(false);
+  expect(fileSendRequested(ask)).toBe(true);
+  expect(fileCopyRequested("把这个 pdf 复制到我的文件夹")).toBe(true);
+  expect(fileSendRequested("把这个文件再发给我一下")).toBe(true);
+  expect(fileSendRequested("你要把这个文件卡片发给我")).toBe(true);
+  expect(fileSendRequested("帮我写一份 pdf 报告")).toBe(false);
+  expect(
+    unverifiedFileDelivery(
+      "把这个文件再发给我一下",
+      "已为您找到《武汉大学品牌声誉深度分析报告.pdf》，文件位于您的「我的文件夹」中。",
+      false,
+    )?.verdict,
+  ).toBe("revise");
+  expect(
+    unverifiedFileDelivery(
+      "你要把这个文件卡片发给我",
+      "您可以点击下方卡片访问该文件：[武汉大学品牌声誉深度分析报告.pdf](#/files?path=我的文件夹)",
+      false,
+    )?.verdict,
+  ).toBe("revise");
+  expect(
+    unverifiedFileDelivery(ask, "已找到该文件。", true),
+  ).toBeNull();
+  expect(
+    unverifiedFileDelivery("把这个文件再发给我一下", "没有找到这个文件。", false),
+  ).toBeNull();
 });
 
 it("does not treat research questions as folder-create requests", () => {

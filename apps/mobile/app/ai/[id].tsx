@@ -141,8 +141,10 @@ function linkedJob(id: string | number) {
 const prompts = ["帮我列一个提纲", "把这段话写得更清楚", "总结今天要做的事"];
 const screenWidth = Dimensions.get("window").width;
 
-export default function Conversation() {
-  const { id, title } = useLocalSearchParams<{ id: string; title?: string }>();
+export function Conversation({ sessionId, heading }: { sessionId?: string; heading?: string }) {
+  const params = useLocalSearchParams<{ id: string; title?: string }>();
+  const id = sessionId || (typeof params.id === "string" ? params.id : "");
+  const title = heading ?? (typeof params.title === "string" ? params.title : undefined);
   const navigation = useNavigation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -869,3 +871,7 @@ const styles = StyleSheet.create({
   },
   sendIdle: { backgroundColor: "#c9cdd4" },
 });
+
+export default function ConversationRoute() {
+  return <Conversation />;
+}

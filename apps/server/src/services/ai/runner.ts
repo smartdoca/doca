@@ -46,7 +46,9 @@ import {
   deliveryWorkflow,
   unverifiedImageDelivery,
   unverifiedDocumentDelivery,
+  unverifiedFileDelivery,
   unverifiedFolderDelivery,
+  fileCopyRequested,
   folderMutationRequested,
   spreadsheetImageInsertRequested,
   jobAssistantAnswer,
@@ -541,23 +543,29 @@ export function createAIRunner(
     };
     const mailMessageHref = (mailboxId: string, messageId: string) =>
       `/mail/${mailboxId}?message=${encodeURIComponent(messageId)}`;
-    const publishFile = async (file: {
-      id: string;
-      name: string;
-      path?: string;
-      href?: string;
-      downloadUrl: string;
-      mime?: string;
-      local?: boolean;
-    }) => {
+    const publishFile = async (
+      file: {
+        id: string;
+        name: string;
+        path?: string;
+        href?: string;
+        downloadUrl: string;
+        mime?: string;
+        local?: boolean;
+      },
+      notice?: string,
+    ) => {
       const id = `file-${file.id}`;
+      const text =
+        notice ??
+        (file.local
+          ? `已保存文件「${file.name}」，可下载到本机`
+          : `已保存文件「${file.name}」`);
       const event =
         progress.events!.find((e) => e.id === id) ??
-        addEvent("status", `已保存文件「${file.name}」`, id, "success");
+        addEvent("status", text, id, "success");
       event.file = file;
-      event.text = file.local
-        ? `已保存文件「${file.name}」，可下载到本机`
-        : `已保存文件「${file.name}」`;
+      event.text = text;
       await publish(true);
     };
     let awaitingApproval = false;
@@ -727,7 +735,7 @@ export function createAIRunner(
           }),
         };
       }
-      return describeFileCopy(parentType, parentId);
+      return { ...describeFileCopy(parentType, parentId), href: "" };
     }
     async function explainMissingFolder(id: string): Promise<never> {
       const resource = await db.selectFrom("resources").select(["id", "title", "kind"]).where("id", "=", id).where("deleted_at", "is", null).executeTakeFirst();
@@ -862,16 +870,19 @@ export function createAIRunner(
         })
         .execute();
     }
-    async function recordFileDelivery(file: {
-      id: string;
-      name: string;
-      path?: string;
-      href?: string;
-      downloadUrl: string;
-      mime?: string;
-      local?: boolean;
-    }) {
-      await publishFile(file);
+    async function recordFileDelivery(
+      file: {
+        id: string;
+        name: string;
+        path?: string;
+        href?: string;
+        downloadUrl: string;
+        mime?: string;
+        local?: boolean;
+      },
+      notice?: string,
+    ) {
+      await publishFile(file, notice);
       const id = operationId(rootJobId, { kind: "file_item", fileId: file.id });
       const previous = await db
         .selectFrom("ai_operations")
@@ -1681,7 +1692,7 @@ export function createAIRunner(
         id: "file_search",
         ...withCallExamples(
           "file_search",
-          "按名称或描述搜索文件和文件夹，返回 id、name、path、parentId、href。命中的文件夹会显示为可点击卡片。搜文档正文请用 knowledge_search。可按 folderId 限定范围（root / ai / shared / documents / UUID）。",
+          "按名称或描述搜索文件和文件夹，返回 id、name、path、href、folderId。命中的文件夹和文件都会显示为可点击卡片，打开地址用返回的 href（含 focus）。找文件或把已有文件发给用户时用这个工具，不要为了发卡片去 copy。「N 份相同副本」表示已经有重复文件。搜文档正文请用 knowledge_search。可按 folderId 限定范围（root / ai / shared / documents / UUID）。",
         ),
         inputSchema: z.object({ query: z.string().min(1).max(500), folderId: z.string().max(80).optional(), limit: z.number().int().min(1).max(50).default(20) }),
         execute: async ({ query, folderId, limit }) => {
@@ -1763,14 +1774,34 @@ export function createAIRunner(
               copies.find((copy) => copy.id === preferred.fileId) ??
               copies.find((copy) => copy.parent_id === preferred.parentId) ??
               copies[0]!;
+            const href = fileExplorerHref(
+              (await fileLocation(preferred.parentType, preferred.parentId)).href,
+              row.id,
+            );
+            const path = `${preferred.path} / ${row.name}`;
+            if (files.length < 8 && href) {
+              await recordFileDelivery(
+                {
+                  id: row.id,
+                  name: row.name,
+                  path,
+                  href,
+                  downloadUrl: `/api/v1/files/items/${row.id}/content?download=1`,
+                  mime: row.mime,
+                },
+                `文件「${row.name}」`,
+              );
+            }
             files.push({
               id: row.id,
               name: row.name,
               mime: row.mime,
               size: row.size,
-              path: `${preferred.path} / ${row.name}`,
+              path,
+              href,
               folderId: preferred.parentId,
               movable: !preferred.copyOnly,
+              copies: locations.length,
               locations: locations.map((location) => ({
                 id: location.fileId,
                 folderId: location.parentId,
@@ -1786,10 +1817,17 @@ export function createAIRunner(
         id: "file_manage",
         ...withCallExamples(
           "file_manage",
-          "对文件重命名、移动、复制或删除。fileId 或 fileIds 必须是完整 UUID。移动/复制目标 parentId：root / shared / 文件夹 UUID，不能是 ai 或 documents。AI 助手和文档系统里的文件只能 copy。创建、修改、删除默认需要审批；一批 fileIds 一张审批卡。",
+          "对文件重命名、移动、复制或删除。fileId 或 fileIds 必须是完整 UUID。移动/复制目标 parentId：root / shared / 文件夹 UUID，不能是 ai 或 documents。AI 助手和文档系统里的文件只能 copy。查找、发送已有文件或发文件卡片不要 copy；「N 份相同副本」不是复制请求。只有用户明确说复制、拷贝、另存或做一份副本时才 copy。创建、修改、删除默认需要审批；一批 fileIds 一张审批卡。",
         ),
         inputSchema: z.object({ action: z.enum(["rename", "move", "copy", "delete"]), fileId: z.string().max(80).optional(), fileIds: z.array(z.string().max(80)).max(20).optional(), version: z.number().int().optional(), name: z.string().max(255).optional(), parentId: z.string().max(80).optional() }),
         execute: async (args) => {
+          if (args.action === "copy" && !fileCopyRequested(input.text))
+            return {
+              ok: false,
+              copied: false,
+              error:
+                "这不是复制请求。用户在查找或索取已有文件，不要创建副本。「N 份相同副本」表示已经存在的重复文件。请改用 file_search 或 file_browse，选一份已有文件；工具会发出文件卡片，打开地址用返回的 href。只有用户明确说复制、拷贝、另存或做一份副本时才 copy。",
+            };
           const ids = [...new Set((args.fileIds?.length ? args.fileIds : args.fileId ? [args.fileId] : []).map((id) => requireUuid(id, "文件")))];
           if (!ids.length) fail(400, "需要 fileId 或 fileIds（完整 UUID）。");
           if (args.action === "rename" && ids.length !== 1) fail(400, "重命名一次只能处理一个文件。");
@@ -3374,6 +3412,24 @@ export function createAIRunner(
             );
             await publish(true);
             return folderReview;
+          }
+          const hasFileReceipt =
+            progress.events!.some((e) => !!e.file) ||
+            recovery.some((r) => r.kind === "file_item");
+          const fileReview = unverifiedFileDelivery(
+            input.text,
+            progress.text,
+            hasFileReceipt,
+          );
+          if (fileReview) {
+            addEvent(
+              "status",
+              "未发现文件卡片，正在重新发给用户",
+              undefined,
+              "error",
+            );
+            await publish(true);
+            return fileReview;
           }
           const hasSpreadsheetImage = insertedImages.size > 0;
           if (

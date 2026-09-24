@@ -66,6 +66,7 @@ export default function RootLayout() {
                   <Stack.Screen name="mailbox/[id]" options={{ title: "邮箱" }} />
                   <Stack.Screen name="message/[mailboxId]/[messageId]" options={{ title: "邮件" }} />
                   <Stack.Screen name="ai/[id]" options={{ title: "对话" }} />
+                  <Stack.Screen name="note/[id]" options={{ title: "随手记" }} />
                 </Stack>
               </AuthProvider>
             </QueryClientProvider>

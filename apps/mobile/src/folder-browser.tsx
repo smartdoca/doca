@@ -8,7 +8,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { useCallback, useRef, useState } from "react";
-import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { Button, Dialog, FAB, List, Portal, Snackbar, Text, TextInput } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -37,7 +37,7 @@ type FileItem = {
   version: number;
 };
 type Preview =
-  | { kind: "image" | "web" | "external"; uri: string; name: string; mime: string }
+  | { kind: "image" | "web" | "external"; uri: string; fileUri: string; name: string; mime: string }
   | { kind: "text"; name: string; text: string; mime: string };
 type Page = { folders: Folder[]; files: FileItem[] };
 type Row = ({ kind: "folder" } & Folder) | ({ kind: "file" } & FileItem);
@@ -54,6 +54,13 @@ function fileIcon(mime: string) {
   if (mime.startsWith("audio/")) return "file-music";
   return "file-outline";
 }
+
+const systemFolders: Folder[] = [
+  { id: "documents", name: "系统文件夹", type: "system", virtual: true, locked: true, version: 0 },
+  { id: "ai", name: "AI助手", type: "system", virtual: true, locked: true, version: 0 },
+  { id: "mail", name: "邮件", type: "system", virtual: true, locked: true, version: 0 },
+  { id: "shared", name: "共享文件夹", type: "system", virtual: true, locked: true, version: 0 },
+];
 
 function previewKind(mime: string) {
   if (mime.startsWith("image/")) return "image" as const;
@@ -97,6 +104,7 @@ export function FolderBrowser({
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const writable = parentType !== "document";
   const query = useQuery({
     queryKey: ["files", session?.origin, parentType, parentId],
@@ -235,7 +243,12 @@ export function FolderBrowser({
         setPreview({ kind, name: item.name, mime: item.mime, text: text.length > 20000 ? text.slice(0, 20000) + "\n…" : text });
         return;
       }
-      setPreview({ kind, uri: downloaded.uri, name: item.name, mime: item.mime });
+      const uri =
+        kind === "web" && Platform.OS === "android"
+          ? await FileSystem.getContentUriAsync(downloaded.uri).catch(() => downloaded.uri)
+          : downloaded.uri;
+      setPreviewFailed(false);
+      setPreview({ kind, uri, fileUri: downloaded.uri, name: item.name, mime: item.mime });
     } catch (reason) {
       fail(reason);
     } finally {
@@ -252,8 +265,13 @@ export function FolderBrowser({
   if (query.isError) {
     return <EmptyState title={query.error instanceof Error ? query.error.message : "加载失败"} />;
   }
+  const roots = parentType === "system" && parentId === "root" ? systemFolders : [];
+  const rootIds = new Set(roots.map((item) => item.id));
   const rows: Row[] = [
-    ...(query.data?.folders ?? []).map((item) => ({ kind: "folder" as const, ...item })),
+    ...roots.map((item) => ({ kind: "folder" as const, ...item })),
+    ...(query.data?.folders ?? [])
+      .filter((item) => !rootIds.has(item.id))
+      .map((item) => ({ kind: "folder" as const, ...item })),
     ...(query.data?.files ?? []).map((item) => ({ kind: "file" as const, ...item })),
   ];
 
@@ -378,17 +396,36 @@ export function FolderBrowser({
             <Text style={styles.previewTitle} numberOfLines={1}>
               {preview?.name}
             </Text>
-            <Button onPress={() => setPreview(null)}>关闭</Button>
+            <Button onPress={() => { setPreview(null); setPreviewFailed(false); }}>关闭</Button>
           </View>
           {preview?.kind === "image" ? <Image source={{ uri: preview.uri }} style={styles.previewImage} contentFit="contain" /> : null}
           {preview?.kind === "web" ? (
-            <WebView
-              style={styles.previewWeb}
-              source={{ uri: preview.uri }}
-              originWhitelist={["*"]}
-              allowingReadAccessToURL={FileSystem.cacheDirectory ?? undefined}
-              allowsInlineMediaPlayback
-            />
+            <View style={styles.previewWeb}>
+              {previewFailed ? (
+                <Text style={styles.previewText}>这个文件没法在应用内打开，可以用其他应用打开。</Text>
+              ) : (
+                <WebView
+                  style={styles.previewWeb}
+                  source={{ uri: preview.uri }}
+                  originWhitelist={["*"]}
+                  allowFileAccess
+                  allowFileAccessFromFileURLs
+                  allowUniversalAccessFromFileURLs
+                  allowingReadAccessToURL={FileSystem.cacheDirectory ?? undefined}
+                  allowsInlineMediaPlayback
+                  onError={() => setPreviewFailed(true)}
+                  onHttpError={() => setPreviewFailed(true)}
+                />
+              )}
+              <Button
+                mode="contained"
+                buttonColor={colors.accent}
+                style={styles.openExternal}
+                onPress={() => void Sharing.shareAsync(preview.fileUri, { mimeType: preview.mime, dialogTitle: preview.name })}
+              >
+                用其他应用打开
+              </Button>
+            </View>
           ) : null}
           {preview?.kind === "text" ? (
             <ScrollView contentContainerStyle={styles.previewTextWrap}>
@@ -401,7 +438,7 @@ export function FolderBrowser({
               <Button
                 mode="contained"
                 buttonColor={colors.accent}
-                onPress={() => void Sharing.shareAsync(preview.uri, { mimeType: preview.mime, dialogTitle: preview.name })}
+                onPress={() => void Sharing.shareAsync(preview.fileUri, { mimeType: preview.mime, dialogTitle: preview.name })}
               >
                 用其他应用打开
               </Button>
@@ -430,6 +467,7 @@ const styles = StyleSheet.create({
   previewTitle: { flex: 1, color: colors.ink, fontSize: 16, fontWeight: "600" },
   previewImage: { flex: 1, width: "100%", backgroundColor: "#111" },
   previewWeb: { flex: 1, backgroundColor: "#fff" },
+  openExternal: { margin: 12 },
   previewTextWrap: { padding: 16, gap: 12 },
   previewText: { color: colors.ink, fontSize: 15, lineHeight: 22 },
   thumbWrap: { justifyContent: "center" },
