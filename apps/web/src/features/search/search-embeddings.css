@@ -1,0 +1,63 @@
+.search-embedding-settings {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border, #e3e8f0);
+}
+.search-embedding-settings > button {
+  margin-top: 12px;
+}
+.search-embedding-settings details {
+  margin: 12px 0;
+}
+.search-embedding-settings textarea {
+  width: 100%;
+  max-width: 440px;
+}
+.search-embedding-settings form > button.danger {
+  display: block;
+  margin-top: 12px;
+}
+.search-embedding-diagnostics {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border, #e3e8f0);
+  border-radius: 10px;
+  background: var(--surface-muted, #f8fafc);
+}
+.search-embedding-diagnostics summary {
+  cursor: pointer;
+  color: var(--text-secondary, #64748b);
+}
+.search-embedding-diagnostics dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 20px;
+  margin: 12px 0 0;
+}
+.search-embedding-diagnostics dl div {
+  min-width: 0;
+}
+.search-embedding-diagnostics dt {
+  color: var(--text-secondary, #64748b);
+  font-size: 12px;
+}
+.search-embedding-diagnostics dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+.search-embedding-diagnostics pre {
+  margin: 12px 0 0;
+  padding: 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 8px;
+  background: #fff;
+  color: #9f1239;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (max-width: 640px) {
+  .search-embedding-diagnostics dl {
+    grid-template-columns: 1fr;
+  }
+}

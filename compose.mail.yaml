@@ -1,0 +1,75 @@
+# Local WildDuck stack for Doca mail.
+# Mongo/Redis from DaoCloud. WildDuck runs from the npm package installed in .local/wildduck
+# (ghcr.io/zone-eu/wildduck is not reachable from this machine).
+#
+# API:  http://127.0.0.1:18080
+# IMAP: 127.0.0.1:1143
+#
+# Admin API token: WILDDUCK_API_ACCESS_TOKEN (default below is local-only).
+name: doca-mail
+
+services:
+  mongo:
+    image: m.daocloud.io/docker.io/library/mongo:7
+    container_name: doca-wildduck-mongo
+    restart: unless-stopped
+    volumes:
+      - wildduck_mongo:/data/db
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'mongosh --quiet --eval "db.adminCommand({ ping: 1 }).ok" | grep 1 >/dev/null'
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  redis:
+    image: m.daocloud.io/docker.io/library/redis:alpine
+    container_name: doca-wildduck-redis
+    restart: unless-stopped
+    volumes:
+      - wildduck_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  wildduck:
+    image: m.daocloud.io/docker.io/library/node:22-bookworm-slim
+    container_name: doca-wildduck
+    restart: unless-stopped
+    working_dir: /opt/node_modules/wildduck
+    command: ["node", "server.js"]
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18080:8080"
+      - "127.0.0.1:1143:143"
+    volumes:
+      - ./.local/wildduck:/opt:ro
+    environment:
+      TZ: Asia/Shanghai
+      APPCONF_dbs_mongo: mongodb://mongo:27017/wildduck
+      APPCONF_dbs_redis: redis://redis:6379/3
+      APPCONF_dbs_sender: zone-mta
+      APPCONF_processes: "1"
+      APPCONF_api_host: 0.0.0.0
+      APPCONF_api_port: "8080"
+      APPCONF_api_accessToken: ${WILDDUCK_API_ACCESS_TOKEN:-doca-local-wildduck-token}
+      APPCONF_emailDomain: ${MAIL_DOMAIN:-heyphp.com}
+      APPCONF_imap_host: 0.0.0.0
+      APPCONF_imap_port: "143"
+      APPCONF_imap_secure: "false"
+      APPCONF_imap_disableSTARTTLS: "true"
+      APPCONF_pop3_enabled: "false"
+      APPCONF_log_level: info
+
+volumes:
+  wildduck_mongo:
+  wildduck_redis:

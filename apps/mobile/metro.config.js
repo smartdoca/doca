@@ -1,0 +1,27 @@
+const path = require("path");
+const { getDefaultConfig } = require("expo/metro-config");
+
+const projectRoot = __dirname;
+const workspaceRoot = path.resolve(projectRoot, "../..");
+const config = getDefaultConfig(projectRoot);
+
+// pnpm keeps real packages in the workspace store, outside this app folder.
+config.watchFolders = [workspaceRoot];
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, "node_modules"),
+  path.resolve(workspaceRoot, "node_modules"),
+];
+
+const mobileModules = path.resolve(projectRoot, "node_modules");
+const singletonReact = new Set(["react", "react/jsx-runtime", "react/jsx-dev-runtime"]);
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (singletonReact.has(moduleName)) {
+    return {
+      type: "sourceFile",
+      filePath: require.resolve(moduleName, { paths: [mobileModules] }),
+    };
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
+module.exports = config;

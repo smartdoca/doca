@@ -1,0 +1,6 @@
+interface:
+  display_name: "Doca 统一协同开发"
+  short_description: "统一文档与表格的版本、增量保存、在线选区、升级适配与验收要求"
+  default_prompt: "使用 $doca-collaboration 检查并实现本次组件或宿主的协同改造，区分已实现能力与待适配协议。"
+policy:
+  allow_implicit_invocation: true

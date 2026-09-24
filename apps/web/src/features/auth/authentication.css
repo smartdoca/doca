@@ -1,0 +1,437 @@
+.authentication-card .card-heading > div {
+  min-width: 0;
+}
+.authentication-card .card-heading p,
+.identity-card .card-heading p {
+  font-size: 13px;
+  color: #8f959e;
+  margin: 6px 0 0;
+  line-height: 1.7;
+}
+.authentication-card form {
+  display: flex;
+  flex-direction: column;
+}
+.policy-row {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  justify-content: space-between;
+  padding: 22px 0;
+  border-bottom: 1px solid #eff0f1;
+}
+.policy-row strong,
+.provider-row strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+}
+.policy-row small,
+.provider-row small {
+  display: block;
+  color: #8f959e;
+  font-size: 12px;
+  margin-top: 6px;
+  line-height: 1.6;
+}
+.policy-row .select-control {
+  width: 240px;
+  flex: none;
+}
+.provider-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 0;
+  border-bottom: 1px solid #eff0f1;
+}
+.provider-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.provider-row button {
+  flex: none;
+  font-size: 13px;
+}
+.provider-icon {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 10px;
+  background: #f1f3f7;
+  color: #646a73;
+  font-size: 19px;
+  font-weight: 700;
+}
+.provider-icon.google {
+  color: #4285f4;
+  background: #edf3ff;
+}
+.provider-icon.github {
+  color: #24292f;
+}
+.provider-icon.wechat {
+  color: #07a858;
+  background: #e8f8ee;
+}
+.provider-icon.qq {
+  color: #1995e7;
+  background: #eaf6ff;
+}
+.provider-icon.oidc {
+  color: #5b5bd6;
+  background: #f0efff;
+}
+.auth-security-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #646a73;
+  background: #f6f8fb;
+  padding: 14px 16px;
+  border-radius: 6px;
+  margin: 20px 0;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.auth-security-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+.auth-provider-empty {
+  text-align: center;
+  padding: 28px 20px;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  color: #8f959e;
+}
+.auth-provider-empty strong {
+  color: #646a73;
+  font-size: 15px;
+}
+.auth-provider-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+.auth-provider-empty small {
+  font-size: 12px;
+}
+.provider-form {
+  gap: 18px !important;
+}
+.provider-form small {
+  font-size: 12px;
+  color: #8f959e;
+  line-height: 1.7;
+}
+.auth-feedback {
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: #edf3ff;
+  color: #245bdb;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.external-login {
+  margin: 22px 0 10px;
+}
+.external-login > span {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #8f959e;
+  margin-bottom: 14px;
+}
+.external-login > span:before,
+.external-login > span:after {
+  content: "";
+  height: 1px;
+  background: #e4e7ed;
+  flex: 1;
+}
+.external-login > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.external-login button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 8px;
+}
+.external-login .provider-icon {
+  width: 26px;
+  height: 26px;
+  font-size: 15px;
+}
+.reauth-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding-top: 12px;
+}
+.reauth-form > label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+.reauth-form > button {
+  height: 38px;
+  flex: none;
+}
+.personal-settings-content .identity-card {
+  display: block;
+}
+.identity-card .card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.identity-card > small {
+  display: block;
+  margin-top: 16px;
+  line-height: 1.8;
+}
+.identity-card h2 {
+  margin: 0 !important;
+}
+@media (max-width: 650px) {
+  .policy-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .policy-row .select-control {
+    width: 100%;
+  }
+  .provider-row {
+    flex-wrap: wrap;
+  }
+  .authentication-card .card-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}
+
+.account-verification,
+.source-fields,
+.membership-settings fieldset {
+  min-width: 0;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  padding: 14px;
+  margin: 12px 0;
+}
+.account-verification label,
+.source-fields label,
+.membership-settings label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+.account-verification label input:not([type="checkbox"]) {
+  flex: 1;
+  min-width: 160px;
+}
+.account-verification small {
+  color: #257552;
+}
+.account-login-tabs,
+.verification-code {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+.verification-code input {
+  flex: 1;
+  min-width: 140px;
+}
+.account-login-tabs button[aria-pressed="true"] {
+  background: #e7f2ed;
+  color: #245d49;
+}
+form.auth-card.account-login-card {
+  position: relative;
+  padding: 0;
+}
+form.auth-card.account-login-card:has(.qr-corner) {
+  overflow: hidden;
+}
+form.auth-card.account-login-card .auth-card-body,
+form.auth-card.account-login-card .qr-login-overlay {
+  padding: 38px;
+}
+form.auth-card.account-login-card.is-scanning .auth-card-body {
+  visibility: hidden;
+}
+.qr-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 3;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  line-height: 0;
+}
+.qr-corner:hover,
+.qr-corner:focus-visible {
+  background: transparent;
+  border-color: transparent;
+}
+.qr-corner-tip {
+  position: absolute;
+  top: 16px;
+  right: calc(100% + 6px);
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: #e8f0ff;
+  color: var(--brand, #3370ff);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.qr-corner-tip::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -5px;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-left-color: #e8f0ff;
+  border-right: 0;
+}
+.qr-corner-mark {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  color: #fff;
+  background: var(--brand, #3370ff);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+.qr-corner-mark svg {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+}
+.qr-corner:hover .qr-corner-mark {
+  background: #245bdb;
+}
+.qr-login-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  text-align: center;
+}
+.qr-login-overlay h2 {
+  width: 100%;
+  margin-bottom: 4px;
+  text-align: center;
+}
+.qr-login {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+.qr-login svg {
+  width: 200px;
+  height: 200px;
+}
+.qr-login p {
+  margin: 0;
+  color: #646a73;
+  text-align: center;
+}
+.auth-card .qr-login .text-button {
+  width: auto;
+}
+@media (max-width: 700px) {
+  form.auth-card.account-login-card .auth-card-body,
+  form.auth-card.account-login-card .qr-login-overlay {
+    padding: 28px;
+  }
+}
+.source-field {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #edf0f3;
+}
+.source-field strong {
+  min-width: 68px;
+}
+.source-field input:not([type="checkbox"]) {
+  flex: 1;
+  min-width: 180px;
+}
+.account-table-scroll {
+  max-width: 100%;
+  overflow: auto;
+  margin: 16px 0;
+}
+.account-table-scroll table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+}
+.account-table-scroll th,
+.account-table-scroll td {
+  padding: 10px;
+  border-bottom: 1px solid #e4e8ed;
+  white-space: nowrap;
+}
+.account-table-scroll input {
+  min-width: 105px;
+  max-width: 180px;
+}
+.capability-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(130px, 1fr) minmax(
+      160px,
+      1fr
+    );
+  gap: 12px;
+  align-items: center;
+  margin: 10px 0;
+}
+.membership-settings h3 {
+  margin-top: 28px;
+}
+@media (max-width: 720px) {
+  .capability-row {
+    grid-template-columns: 1fr;
+  }
+  .source-field {
+    align-items: flex-start;
+  }
+  .admin-user-row .text-action {
+    font-size: 12px;
+    padding: 4px;
+  }
+}

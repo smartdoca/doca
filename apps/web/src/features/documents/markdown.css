@@ -1,0 +1,125 @@
+.markdown-document {
+  flex: 0 0 auto;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+.doca-markdown .exmd-editor.app-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: none;
+  overscroll-behavior: none;
+}
+.doca-markdown .workspace {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+.doca-markdown .editor-pane,
+.doca-markdown .preview-pane {
+  /* The host hands off vertical scrolling only after this pane reaches its end. */
+  overscroll-behavior-y: contain;
+}
+/* CodeMirror draws selection behind the text layer. Opaque active-line paint
+   from the SDK hides it, even though the native range is still selected. */
+.doca-markdown .cm-activeLine {
+  background: rgb(120 130 150 / 4%) !important;
+}
+.doca-markdown .cm-editor .cm-scroller .cm-selectionBackground {
+  background: #dce6ff;
+}
+.doca-markdown .cm-editor.cm-focused .cm-scroller .cm-selectionBackground {
+  background: #b9ceff;
+}
+.markdown-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+}
+.markdown-toolbar > .region-comment-add {
+  flex: none;
+  margin-right: 12px;
+  border-left: 1px solid #dfe3ea;
+  color: #b88700;
+  border-radius: 0;
+  width: 36px;
+  height: 32px;
+}
+.markdown-toolbar > .toolbar {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.markdown-toolbar .toolbar {
+  justify-content: center;
+  gap: 4px;
+  border-bottom: 0;
+  min-height: 44px;
+  padding: 4px 12px;
+}
+.markdown-toolbar .toolbar-spacer {
+  flex: 0;
+}
+.markdown-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.markdown-preview-only .markdown-body {
+  max-width: 100%;
+}
+.type-icon.markdown,
+.tree-row .document-type-icon.type-markdown {
+  color: #7950b8;
+  background: #f3edff;
+}
+.markdown-sdk-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+.markdown-document:has(.region-comments-drawer) .markdown-sdk-container {
+  width: calc(100% - 360px);
+}
+@media (max-width: 800px) {
+  .markdown-document:has(.region-comments-drawer) .markdown-sdk-container {
+    width: 100%;
+  }
+}
+.markdown-document .region-comment-controls {
+  top: 36px;
+}
+.markdown-document .region-comments-drawer {
+  overflow-anchor: none;
+}
+.markdown-document .region-comments-drawer > header {
+  position: sticky;
+  top: -16px;
+  z-index: 3;
+  background: var(--surface, #fff);
+  padding-block: 12px;
+}
+.markdown-document .linked-comment-draft {
+  position: sticky;
+  top: 40px;
+  z-index: 2;
+  background: var(--surface, #fff);
+}
+.markdown-document .linked-comment-pagination:not(:empty) {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  background: var(--surface, #fff);
+  padding-block: 8px;
+}

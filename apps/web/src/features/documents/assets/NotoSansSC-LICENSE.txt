@@ -1,0 +1,12 @@
+Noto Sans SC Regular (pre-subsetted for PDF export)
+
+Copyright 2014-2021 Adobe (http://www.adobe.com/)
+Copyright 2014-2021 Google (http://www.google.com/get/noto/)
+Copyright 2014-2021 The Noto Project Authors
+
+This font is derived from Noto Sans SC and is distributed under the SIL Open Font License, Version 1.1.
+The complete license text is available at:
+https://scripts.sil.org/OFL
+
+Source:
+https://github.com/google/fonts/tree/main/ofl/notosanssc

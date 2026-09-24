@@ -1,0 +1,235 @@
+.search-settings-layout {
+  display: grid;
+  gap: 20px;
+}
+.search-settings-layout > .search-settings-card {
+  min-width: 0;
+  margin: 0;
+  padding: 24px;
+  border: 1px solid var(--line, #e3e8f0);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+.search-settings-layout .search-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 22px;
+}
+.search-card-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.search-settings-layout p,
+.search-settings-layout small {
+  color: var(--muted, #667085);
+  font-size: 12px;
+  line-height: 1.65;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.search-card-heading p {
+  margin-top: 6px;
+}
+.search-status-badge {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 20px;
+  color: var(--muted, #667085);
+  background: var(--hover, #f3f5f8);
+  font-size: 12px;
+}
+.search-status-badge.is-active {
+  color: #16845b;
+  background: #edf8f1;
+}
+.search-settings-layout form {
+  display: grid;
+  gap: 16px;
+  max-width: none;
+  margin: 0;
+}
+.search-settings-layout label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+}
+.search-settings-layout input:not([type="checkbox"]),
+.search-settings-layout select,
+.search-settings-layout textarea,
+.search-settings-layout .select-control {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.search-settings-layout .search-setting-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.search-setting-toggle small {
+  display: block;
+  margin-top: 4px;
+  font-weight: 400;
+}
+.search-setting-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: var(--primary, #4263eb);
+}
+.search-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.search-connection-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+}
+.search-connection-credentials {
+  border-top: 1px solid var(--line, #e3e8f0);
+  margin-top: 20px;
+  padding-top: 20px;
+}
+.search-connection-credentials form {
+  gap: 14px;
+}
+.search-connection-credentials .service-credentials-fields {
+  margin: 0;
+  gap: 8px;
+}
+.search-settings-layout .search-settings-details,
+.search-settings-layout .search-embedding-settings details {
+  margin: 0;
+  color: var(--muted, #667085);
+  font-size: 12px;
+}
+.search-settings-details summary,
+.search-embedding-settings summary {
+  cursor: pointer;
+  padding: 6px 0;
+}
+.search-settings-layout details[open] > :not(summary) {
+  margin-top: 12px;
+}
+.search-index-status {
+  padding: 16px 18px;
+  border-radius: 8px;
+  background: var(--hover, #f6f8fb);
+}
+.search-status-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.search-status-title span {
+  color: var(--muted, #667085);
+}
+.search-index-status dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 16px 0 12px;
+  gap: 12px;
+}
+.search-index-status dt {
+  font-size: 12px;
+  color: var(--muted, #667085);
+}
+.search-index-status dd {
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.search-sync-error {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid #f3b8b8;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: #b42318;
+}
+.search-sync-error strong,
+.search-sync-error p,
+.search-sync-error small {
+  display: block;
+  color: inherit;
+}
+.search-sync-error p {
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+.search-sync-error small {
+  margin-top: 5px;
+}
+.search-sync-diagnostics {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-top: 1px solid #f3b8b8;
+}
+.search-sync-diagnostics summary {
+  cursor: pointer;
+  color: inherit;
+}
+.search-sync-diagnostics p {
+  margin: 8px 0 0;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+.search-sync-diagnostics pre {
+  margin: 8px 0 0;
+  padding: 8px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.7);
+  color: inherit;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.search-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line, #e3e8f0);
+}
+.search-settings-layout button {
+  width: auto;
+  justify-self: start;
+  white-space: nowrap;
+}
+.search-settings-layout .search-embedding-settings > p {
+  margin-top: 14px;
+}
+.search-settings-layout .search-embedding-settings > form,
+.search-settings-layout .search-embedding-settings > p + form {
+  margin-top: 16px;
+}
+@media (max-width: 640px) {
+  .search-settings-layout > .search-settings-card {
+    padding: 18px;
+  }
+  .search-field-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .search-connection-row {
+    grid-template-columns: 1fr;
+  }
+  .search-card-heading {
+    flex-wrap: wrap;
+  }
+}

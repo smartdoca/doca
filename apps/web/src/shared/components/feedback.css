@@ -1,0 +1,108 @@
+.feedback-stack {
+  position: fixed;
+  top: 76px;
+  right: 24px;
+  width: min(400px, calc(100vw - 32px));
+  max-height: calc(100dvh - 96px);
+  overflow-y: auto;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+.feedback-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--feedback-border);
+  border-radius: 10px;
+  color: var(--feedback-text);
+  background: var(--feedback-bg);
+  box-shadow: 0 6px 24px #1f232914;
+  pointer-events: auto;
+  font-size: 13px;
+  line-height: 20px;
+}
+.feedback-toast > svg {
+  flex: none;
+  margin-top: 1px;
+}
+.feedback-toast > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.feedback-toast > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  flex: none;
+  padding: 2px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+}
+.feedback-info {
+  --feedback-text: #245bca;
+  --feedback-bg: #edf3ff;
+  --feedback-border: #c7d8ff;
+}
+.feedback-success {
+  --feedback-text: #227347;
+  --feedback-bg: #edf9f1;
+  --feedback-border: #bce3ca;
+}
+.feedback-warning {
+  --feedback-text: #8c6000;
+  --feedback-bg: #fff8e6;
+  --feedback-border: #f0d48a;
+}
+.feedback-error {
+  --feedback-text: #b82d35;
+  --feedback-bg: #fff0f0;
+  --feedback-border: #f3c3c6;
+}
+/* Persistent guidance/recovery errors keep their context, with shared severity colours. */
+.warning,
+.error,
+p[role="alert"],
+.auth-feedback {
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.warning {
+  color: #8c6000;
+  background: #fff8e6;
+  border: 1px solid #f0d48a;
+}
+.error,
+p[role="alert"] {
+  color: #b82d35;
+  background: #fff0f0;
+  border: 1px solid #f3c3c6;
+}
+.auth-feedback {
+  color: #245bca;
+  background: #edf3ff;
+  border: 1px solid #c7d8ff;
+}
+.auth-feedback:empty {
+  display: none;
+}
+.inline-feedback {
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--feedback-text);
+  background: var(--feedback-bg);
+  border: 1px solid var(--feedback-border);
+  font-size: 13px;
+  line-height: 1.6;
+}
