@@ -9,6 +9,12 @@
       ],
       "@doca/i18n": [
         "../../packages/i18n/src/index.ts"
+      ],
+      "react": [
+        "./node_modules/@types/react"
+      ],
+      "react/*": [
+        "./node_modules/@types/react/*"
       ]
     }
   },

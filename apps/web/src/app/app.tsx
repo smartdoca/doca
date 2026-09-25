@@ -92,10 +92,14 @@ import { Avatar, Profile, PersonalSettings } from "@web/features/account/profile
 import { CoverDialog, ResourceActionDialog } from "@web/features/documents/uploads.js";
 import "@web/styles/globals.css";
 import { FileIcon } from "@web/features/documents/document-controls.js";
-import { FilesExplorer, SharedFoldersPage, type FileLocation } from "@web/features/files/files.js";
-import { MailApp } from "@web/features/mail/mail.js";
+import type { FileLocation } from "@web/features/files/files.js";
 import { MobileTicketRedeem, postMobileEditor } from "@web/features/mobile/ticket-redeem.js";
 import { SubscribeLibraryHost } from "@web/features/knowledge/subscribe-library.js";
+import {
+  pluginMessage,
+  webPluginFlags,
+  webPluginRegistry,
+} from "@web/plugins/registry.js";
 import "@web/features/files/files.css";
 import "@web/features/workspace/workspace.css";
 import "@web/styles/theme.css";
@@ -126,20 +130,19 @@ const QuickNotesFloat = lazy(() => import("@web/features/quick-notes/quick-notes
 const titleKeys: Record<string, MessageKey> = {
   todos: "nav.tickets",
   tickets: "nav.tickets",
-  home: "nav.documents",
   ai: "nav.assistant",
   notes: "nav.notes",
   backups: "nav.backups",
   preferences: "account.settings",
-  libraries: "nav.libraries",
-  files: "nav.files",
-  "shared-files": "nav.sharedFiles",
-  mail: "nav.mail",
   shared: "nav.shared",
   favorites: "nav.favorites",
   all: "nav.recent",
   trash: "nav.trash",
 };
+const pluginNavigation = webPluginRegistry.navigation.list();
+const pluginNavigationByScope = new Map(
+  pluginNavigation.map((item) => [item.scope, item]),
+);
 const errorText = (e: unknown, fallback: string) => {
   if (!(e instanceof Error)) return fallback;
   const code =
@@ -166,7 +169,7 @@ type ShareInvitation = {
   role: string;
 };
 export function App() {
-  const { t, reloadLocale } = useI18n();
+  const { locale, t, reloadLocale } = useI18n();
   const [navigationCollapsed, setNavigationCollapsed] = useNavigationCollapse("doca.navigation.collapsed");
   const [adminNavigationCollapsed, setAdminNavigationCollapsed] = useNavigationCollapse("doca.admin-navigation.collapsed");
   const desktopNavigation = useDesktopNavigation();
@@ -184,8 +187,15 @@ export function App() {
     [scope, setScope] = useState(() => {
       const route = location.hash.slice(2).split(/[/?]/)[0]!;
       if (route === "knowledge") return "libraries";
-      if (import.meta.env.DEV && route === "mail-preview") return "mail";
-      return titleKeys[route] ? route : "home";
+      if (
+        webPluginFlags.mailEnabled &&
+        import.meta.env.DEV &&
+        route === "mail-preview"
+      )
+        return "mail";
+      return titleKeys[route] || pluginNavigationByScope.has(route)
+        ? route
+        : "home";
     }),
     [q, setQ] = useState(""),
     [format, setFormat] = useState(""),
@@ -250,9 +260,15 @@ export function App() {
     mobileShell = !!mobileResourceId,
     resourceId = mobileResourceId ?? /^#\/r\/([a-f0-9-]{36})(?:\?|$)/.exec(hash)?.[1],
     sharedFolderId = /^#\/shared-files\/([a-f0-9-]{36})(?:\?|$)/.exec(hash)?.[1],
-    mailId = /^#\/mail\/([a-f0-9-]{36})(?:\?|$)/.exec(hash)?.[1],
-    mailPreview = import.meta.env.DEV && hash.split("?")[0] === "#/mail-preview",
-    mailPage = hash.split("?")[0] === "#/mail" || hash.startsWith("#/mail/") || mailPreview,
+    mailPreview =
+      webPluginFlags.mailEnabled &&
+      import.meta.env.DEV &&
+      hash.split("?")[0] === "#/mail-preview",
+    mailPage =
+      webPluginFlags.mailEnabled &&
+      (hash.split("?")[0] === "#/mail" ||
+        hash.startsWith("#/mail/") ||
+        mailPreview),
     adminPage = hash.split("?")[0] === "#/admin",
     accountPage = hash === "#/account",
     preferencesPage = hash === "#/preferences",
@@ -334,7 +350,16 @@ export function App() {
           detail.resource.id === currentLibraryId
         ? detail.resource.title
         : t("nav.loadingLibrary");
+  const activePluginIds = new Set(
+    bootstrap?.plugins.map((plugin) => plugin.id) ?? [],
+  );
   const scopeTitle = titleKeys[scope];
+  const scopedPluginNavigation = pluginNavigationByScope.get(scope);
+  const pluginScopeTitle =
+    scopedPluginNavigation &&
+    activePluginIds.has(scopedPluginNavigation.pluginId)
+      ? scopedPluginNavigation.labelKey
+      : undefined;
   const headerTitle = resourceId
     ? currentDetail
       ? librarySettingsPage && currentDetail.resource.kind === "library"
@@ -347,6 +372,8 @@ export function App() {
       ? t("nav.tickets")
       : scopeTitle
         ? t(scopeTitle)
+        : pluginScopeTitle
+          ? pluginMessage(locale, pluginScopeTitle)
         : "";
   function openFileTrail(index: number) {
     const nextTrail = fileTrail.slice(0, index + 1).map(({ type, id, name }) => ({ type, id, name }));
@@ -511,8 +538,18 @@ export function App() {
       if (route === "knowledge") {
         location.hash = "/libraries";
         setScope("libraries");
-      } else if (import.meta.env.DEV && route === "mail-preview") setScope("mail");
+      } else if (
+        webPluginFlags.mailEnabled &&
+        import.meta.env.DEV &&
+        route === "mail-preview"
+      )
+        setScope("mail");
       else if (titleKeys[route]) setScope(route);
+      else if (pluginNavigationByScope.has(route)) setScope(route);
+      else if (route === "mail" && !webPluginFlags.mailEnabled) {
+        location.hash = "/home";
+        setScope("home");
+      }
       setError("");
     };
     load();
@@ -630,8 +667,8 @@ export function App() {
       setBusy(false);
     }
   }
-  function navigate(next: string) {
-    location.hash = "/" + next;
+  function navigate(next: string, path = `/${next}`) {
+    location.hash = path;
     setScope(next);
     setQ("");
     setFormat("");
@@ -672,6 +709,25 @@ export function App() {
       setModal("move");
     });
   }
+  const pluginRoutePath = mailPreview
+    ? "/mail"
+    : hash.replace(/^#/, "").split("?")[0] || "/home";
+  const matchedPluginRoute = webPluginRegistry.resolveRoute(pluginRoutePath);
+  const pluginRoute =
+    matchedPluginRoute &&
+    activePluginIds.has(matchedPluginRoute.contribution.pluginId)
+      ? matchedPluginRoute
+      : undefined;
+  const unavailablePluginRoute =
+    !!matchedPluginRoute && !pluginRoute;
+  const renderedPluginRoute = pluginRoute?.contribution.render(
+      {
+        sharedFolderName,
+        mailPreview,
+        onFileNavigationChange: setFileTrail,
+      },
+      pluginRoute.match,
+    );
   if (fatal)
     return (
       <main className="auth">
@@ -718,7 +774,7 @@ export function App() {
         </section>
       </main>
     );
-  if (import.meta.env.DEV && hash.split("?")[0] === "#/mail-preview" && !bootstrap.user)
+  if (mailPreview && !bootstrap.user)
     return (
       <div className="mail-preview-shell">
         <header className="topbar workspace-topbar">
@@ -737,7 +793,11 @@ export function App() {
             </div>
           </div>
         </header>
-        <MailApp preview />
+        {unavailablePluginRoute ? (
+          <section className="empty">{t("shell.pluginUnavailable")}</section>
+        ) : (
+          renderedPluginRoute
+        )}
       </div>
     );
   if (!bootstrap.user && !resourceId)
@@ -850,7 +910,7 @@ export function App() {
         {error && <Feedback message={error} tone="error" />}
         {adminPage ? (
           user.admin ? (
-            <Admin />
+            <Admin activePluginIds={activePluginIds} />
           ) : (
             <section className="empty">
               {t("shell.adminOnly")}<a href="#/home">{t("shell.homeLink")}</a>
@@ -994,32 +1054,40 @@ export function App() {
               </button>
               <PinnedDocuments refresh={refresh} />
               {([
-                ["home", "nav.documents", Home],
-                ["ai", "nav.assistant", Sparkles],
-                ["notes", "nav.notes", Feather],
-                ["libraries", "nav.libraries", BookOpen],
-                ["files", "nav.files", FolderOpen],
-                ["shared-files", "nav.sharedFiles", Users],
-                ["mail", "nav.mail", Mail],
-                ["trash", "nav.trash", Trash2],
-                ["backups", "nav.backups", Cloud],
-              ] as const)
+                ...pluginNavigation
+                  .filter((item) => activePluginIds.has(item.pluginId))
+                  .map((item) => ({
+                  key: item.scope,
+                  label: item.labelKey,
+                  plugin: true as const,
+                  Icon: item.icon ?? Home,
+                  order: item.order ?? 0,
+                  path: item.path,
+                })),
+                { key: "ai", label: "nav.assistant", plugin: false as const, Icon: Sparkles, order: 20, path: "/ai" },
+                { key: "notes", label: "nav.notes", plugin: false as const, Icon: Feather, order: 30, path: "/notes" },
+                { key: "trash", label: "nav.trash", plugin: false as const, Icon: Trash2, order: 80, path: "/trash" },
+                { key: "backups", label: "nav.backups", plugin: false as const, Icon: Cloud, order: 90, path: "/backups" },
+              ])
+                .sort((left, right) => left.order - right.order || left.key.localeCompare(right.key))
                 .filter(
-                  ([key]) => key !== "backups" || allowed("backup.upload"),
+                  ({ key }) => key !== "backups" || allowed("backup.upload"),
                 )
-                .map(([key, title, Icon]) => {
+                .map(({ key, label, plugin, Icon, path }) => {
                   const I = Icon as typeof Home;
                   return (
                     <button
-                      key={key as string}
+                      key={key}
                       className={`${key === "ai" ? "ai-navigation-entry" : ""} ${key === "trash" ? "sidebar-trash-navigation-entry" : ""} ${!resourceId && (scope === key || (key === "mail" && mailPage)) ? "active" : ""}`}
                       onClick={() => {
-                        navigate(key as string);
+                        navigate(key, path);
                         if (key === "notes") window.dispatchEvent(new CustomEvent("doca-notes-float-attention"));
                       }}
                     >
                       <I size={16} />
-                      {t(title)}
+                      {plugin
+                        ? pluginMessage(locale, label)
+                        : t(label as MessageKey)}
                     </button>
                   );
                 })}
@@ -1263,14 +1331,16 @@ export function App() {
           }
         >
           {user && <SubscribeLibraryHost />}
-          {!resourceId && scope === "files" && user ? (
-            <FilesExplorer onNavigationChange={setFileTrail} />
-          ) : !resourceId && scope === "shared-files" && sharedFolderId && user ? (
-            <FilesExplorer key={sharedFolderId} initialRoot={{ type: "folder", id: sharedFolderId, name: sharedFolderName }} routeBase={`/shared-files/${sharedFolderId}`} sharedRoot onNavigationChange={setFileTrail} />
-          ) : !resourceId && scope === "shared-files" && user ? (
-            <SharedFoldersPage />
-          ) : !resourceId && (scope === "mail" || mailPage) && user ? (
-            <MailApp mailboxId={mailId} preview={mailPreview} />
+          {!resourceId && user && unavailablePluginRoute ? (
+            <section className="empty">
+              <p>{t("shell.pluginUnavailable")}</p>
+              <a href="#/home">{t("shell.homeLink")}</a>
+            </section>
+          ) : !resourceId &&
+            user &&
+            pluginRoute &&
+            renderedPluginRoute !== undefined ? (
+            renderedPluginRoute
           ) : !resourceId && scope === "ai" ? (
             <AIChat full />
           ) : !resourceId && scope === "notes" && user ? (

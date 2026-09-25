@@ -37,7 +37,7 @@ it("parses A1 and common spreadsheet payloads into cells", () => {
       ],
     },
   ]);
-  expect(values.cells).toEqual({
+  expect(values!.cells).toEqual({
     "0": { "0": { v: "A", f: null }, "1": { v: null, f: "=1" } },
     "1": { "0": { v: "B", f: null }, "1": { v: 2, f: null } },
   });
@@ -71,7 +71,7 @@ it("hydrates JSON-string cells and top-level sheetId/cells onto the operation", 
       cells: JSON.stringify({ A1: "销量", B1: 10 }),
     },
   ]);
-  expect(fromString.cells).toEqual({
+  expect(fromString!.cells).toEqual({
     "0": { "0": { v: "销量", f: null }, "1": { v: 10, f: null } },
   });
   const collected = collectEditOperations({
@@ -123,11 +123,11 @@ it("normalizes canvas tags and rich-text code blocks", () => {
   const [canvas] = normalizeEditOperations("canvas", [
     { type: "add", element: { id: "n1", tag: "rect", x: 0, y: 0 } },
   ]);
-  expect(canvas.element).toMatchObject({ tag: "Rect" });
+  expect(canvas!.element).toMatchObject({ tag: "Rect" });
   const [code] = normalizeEditOperations("rich_text", [
     { type: "insertBlock", block: { id: "c1", type: "codeBlock", code: "x" } },
   ]);
-  expect(code.block).toMatchObject({ type: "code-block" });
+  expect(code!.block).toMatchObject({ type: "code-block" });
 });
 
 it("accepts image cells written with assetId or wrapped in a paragraph", () => {
@@ -154,7 +154,7 @@ it("accepts image cells written with assetId or wrapped in a paragraph", () => {
       ],
     },
   ]);
-  expect(direct.children).toEqual([
+  expect(direct!.children).toEqual([
     {
       id: "img-border-collie",
       type: "image",
@@ -162,7 +162,7 @@ it("accepts image cells written with assetId or wrapped in a paragraph", () => {
       children: [{ text: "" }],
     },
   ]);
-  expect(wrapped.children).toEqual([
+  expect(wrapped!.children).toEqual([
     {
       id: "img-husky",
       type: "image",
@@ -171,6 +171,6 @@ it("accepts image cells written with assetId or wrapped in a paragraph", () => {
     },
   ]);
   expect(() =>
-    validateEditOperations("rich_text", [direct, wrapped]),
+    validateEditOperations("rich_text", [direct!, wrapped!]),
   ).not.toThrow();
 });

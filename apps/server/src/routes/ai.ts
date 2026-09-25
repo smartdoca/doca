@@ -15,7 +15,7 @@ import { usageOf } from "../services/ai/model.js";
 import { testAIEmbeddingModel } from "../services/ai/embeddings.js";
 import { testAIImageModel } from "../services/ai/images.js";
 import { fetchWebPage } from "../services/ai/web-fetch.js";
-import type { DB } from "@db/index.js";
+import { createAISessionEventStore, type DB } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import { AppError, fail } from "@core/shared/errors.js";
 import {
@@ -106,6 +106,7 @@ export async function registerAI(
   options: Parameters<typeof createAIRunner>[1] = {},
 ) {
   const runner = createAIRunner(db, { ...options, logger: api.log });
+  const sessionEvents = createAISessionEventStore(db);
   api.get<{ Params: { id: string } }>(
     "/api/v1/ai/images/:id/status",
     async (req) =>
@@ -114,7 +115,10 @@ export async function registerAI(
   api.post("/api/v1/ai/images/insert", async (req) => {
     const actor = auth(req);
     const { requestId, sessionId, ...input } = parse(
-      imageInsertSchema.extend({ requestId: id, sessionId: id.optional() }),
+      z.intersection(
+        imageInsertSchema,
+        z.object({ requestId: id, sessionId: id.optional() }),
+      ),
       req.body,
     );
     if (sessionId) {
@@ -175,6 +179,39 @@ export async function registerAI(
     if (checkSources) await sessionSources(db, user.id, row);
     return row;
   };
+  api.get<{
+    Params: { id: string };
+    Querystring: { after?: string; limit?: string };
+  }>("/api/v1/ai/sessions/:id/events", async (req) => {
+    const actor = auth(req);
+    await session(actor, req.params.id, false);
+    const afterSequence =
+      req.query.after === undefined
+        ? undefined
+        : parse(z.coerce.number().int().min(-1), req.query.after);
+    const limit = parse(
+      z.coerce.number().int().min(1).max(500),
+      req.query.limit ?? 200,
+    );
+    return {
+      events: await sessionEvents.read(req.params.id, {
+        ...(afterSequence === undefined ? {} : { afterSequence }),
+        limit,
+      }),
+    };
+  });
+  api.get("/api/v1/ai/contributions", async (req) => {
+    auth(req);
+    return (
+      options.contributions?.catalog() ?? {
+        intents: [],
+        tools: [],
+        workflows: [],
+        acceptance: [],
+        skills: [],
+      }
+    );
+  });
   api.get("/api/v1/ai/options", async (req) => {
     const user = auth(req),
       { config, models, rights } = await availableModels(db, user.id),
@@ -1123,7 +1160,7 @@ export async function registerAI(
   api.addHook("preClose", async () => {
     for (const close of streams) close();
   });
-  api.get<{ Params: { id: string } }>(
+  api.get<{ Params: { id: string }; Querystring: { after?: string } }>(
     "/api/v1/ai/sessions/:id/stream",
     async (req, reply) => {
       const actor = auth(req);
@@ -1136,6 +1173,16 @@ export async function registerAI(
         string,
         { status: string; result: string; progress?: AIProgress }
       >();
+      const resumeSequence = req.query.after ?? req.headers["last-event-id"];
+      let lastCommittedSequence =
+        resumeSequence === undefined
+          ? -1
+          : parse(
+              z.coerce.number().int().min(-1),
+              Array.isArray(resumeSequence)
+                ? resumeSequence[0]
+                : resumeSequence,
+            );
       const output = new Readable({ read() {} });
       const close = () => {
         if (closed) return;
@@ -1145,14 +1192,25 @@ export async function registerAI(
         streams.delete(close);
         output.push(null);
       };
-      const send = (event: string, data: unknown) =>
-        output.push(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      const send = (event: string, data: unknown, id?: number) =>
+        output.push(
+          `${id === undefined ? "" : `id: ${id}\n`}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
+        );
       const tick = async () => {
         if (closed || busy || output.readableLength > 256000) return;
         busy = true;
         try {
           await session(actor, req.params.id);
           await requireCapability(db, actor.id, "ai.create");
+          const committed = await sessionEvents.read(req.params.id, {
+            afterSequence: lastCommittedSequence,
+            limit: 500,
+          });
+          for (const event of committed) {
+            if (closed) break;
+            send("session-event", event, event.sequence);
+            lastCommittedSequence = event.sequence;
+          }
           const jobs = await db
             .selectFrom("ai_jobs")
             .select(["id", "status", "result", "error", "created_at"])
@@ -1730,6 +1788,12 @@ export async function registerAI(
       return { ok: true };
     },
   );
-  await registerAIMcp(api, db, options.notify, options.search);
+  await registerAIMcp(
+    api,
+    db,
+    options.notify,
+    options.search,
+    options.contributions,
+  );
   return runner;
 }

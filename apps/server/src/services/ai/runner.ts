@@ -62,16 +62,29 @@ import {
 } from "./delivery.js";
 import { createTool } from "@mastra/core/tools";
 import { createSkill } from "@mastra/core/skills";
+import {
+  createToolCall,
+  type AIContributionHost,
+  type JsonObject,
+  type JsonValue,
+  type ToolOutcome,
+} from "@doca/ai-host";
+import type { FilesServiceV1 } from "@doca/files-capability";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sql } from "kysely";
-import type { DB, Schema } from "@db/index.js";
+import {
+  createAISessionEventStore,
+  type DB,
+  type Schema,
+} from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import { AppError, fail } from "@core/shared/errors.js";
 import { mailDraftKey, mailScratchEmpty, normalizeMailScratch } from "@core/modules/page-state.js";
 import { clearPageState, readPageState, writePageState } from "../page-state.js";
 import { enqueueProjection } from "@core/modules/automation/jobs.js";
 import { authorize } from "@core/modules/access/queries.js";
+import type { Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import { requireCapability } from "@core/modules/entitlements/service.js";
 import {
@@ -133,7 +146,7 @@ import {
   type AIMemory,
 } from "./memory.js";
 import { persistMailAttachments } from "../mail-attachments.js";
-import { indexMailMessage } from "../mail-index.js";
+import { indexMailMessage, unindexMailMessage } from "../mail-index.js";
 import { cachedFolders, storedMessage } from "../mail-store.js";
 import {
   isExternalMailbox,
@@ -162,6 +175,17 @@ export type AIInput = {
   skipApprovals?: SkipApprovals;
   retryOf?: string;
 };
+
+export interface AIContributionExecutionContext {
+  readonly db: DB;
+  readonly actor: Actor;
+  readonly jobId: string;
+  readonly sessionId: string;
+  readonly executePluginTool?: (
+    toolId: string,
+    input: JsonObject,
+  ) => Promise<JsonValue>;
+}
 const operationId = (jobId: string, input: unknown) => {
   const h = digest({ jobId, input });
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
@@ -204,6 +228,7 @@ export async function sessionSources(
         live.push(id);
       } catch (error) {
         if (!(error instanceof AppError) || error.status !== 404) throw error;
+        if (!gone) fail(403, "会话资料已不可用");
         if (!gone?.includes(id)) gone?.push(id);
       }
     }
@@ -228,6 +253,7 @@ export function createAIRunner(
   db: DB,
   options: {
     storage?: StorageRuntime;
+    files?: FilesServiceV1;
     memory?: { driver: "sqlite" | "postgres"; url: string };
     fetch?: typeof fetch;
     notify?: (id: string) => Promise<void>;
@@ -237,11 +263,13 @@ export function createAIRunner(
     webFetch?: typeof fetch;
     imageFetch?: typeof fetch;
     maxConcurrentJobs?: number;
+    contributions?: AIContributionHost<AIContributionExecutionContext>;
     logger?: {
       error: (obj: unknown, message?: string) => void;
     };
   } = {},
 ) {
+  const sessionEvents = createAISessionEventStore(db);
   const concurrency = Math.max(
     1,
     Math.min(256, options.maxConcurrentJobs ?? 32),
@@ -296,6 +324,112 @@ export function createAIRunner(
     const goneIds: string[] = [];
     const actor = await sessionSources(db, job.user_id, session, goneIds),
       input = JSON.parse(job.input) as AIInput;
+    await sessionEvents.append({
+      sessionId: session.id,
+      id: `${job.id}:turn:start`,
+      type: "turn/start",
+      data: { jobId: job.id, modelId: job.model_id },
+    });
+    await sessionEvents.append({
+      sessionId: session.id,
+      id: `${job.id}:user:message`,
+      type: "user/message",
+      data: {
+        jobId: job.id,
+        text: input.text,
+        scope: input.scope,
+      },
+    });
+    let executePluginTool:
+      | ((toolId: string, input: JsonObject) => Promise<JsonValue>)
+      | undefined;
+    const contributionContext: AIContributionExecutionContext = {
+      db,
+      actor,
+      jobId: job.id,
+      sessionId: session.id,
+      executePluginTool: async (toolId, toolInput) => {
+        if (!executePluginTool)
+          throw new Error("Plugin tool adapter is not ready");
+        return executePluginTool(toolId, toolInput);
+      },
+    };
+    const intentRoute = options.contributions
+      ? await options.contributions.routeIntent(
+          { text: input.text, sessionId: session.id, turnId: job.id },
+          contributionContext,
+        )
+      : { candidates: [] as const };
+    const selectedIntent = intentRoute.selected ?? {
+      intentId: "doca.core.general",
+      confidence: 1,
+      priority: 0,
+      eligible: true,
+    };
+    const selectedIntentDefinition = options.contributions?.intents.get(
+      selectedIntent.intentId,
+    );
+    await sessionEvents.append({
+      sessionId: session.id,
+      id: `${job.id}:intent:selected`,
+      type: "intent/selected",
+      data: {
+        jobId: job.id,
+        intentId: selectedIntent.intentId,
+        confidence: selectedIntent.confidence,
+        priority: selectedIntent.priority,
+      },
+    });
+    let workflowState: JsonValue = {
+      text: input.text,
+      scope: input.scope,
+      ...(input.currentResourceId
+        ? { currentResourceId: input.currentResourceId }
+        : {}),
+    };
+    for (const workflowId of selectedIntentDefinition?.workflowIds ?? []) {
+      const workflow = options.contributions?.workflows.get(workflowId);
+      if (!workflow)
+        throw new Error(
+          `AI intent "${selectedIntent.intentId}" requires missing workflow "${workflowId}"`,
+        );
+      await sessionEvents.append({
+        sessionId: session.id,
+        id: `${job.id}:workflow:${workflowId}:start`,
+        type: "workflow/start",
+        data: { jobId: job.id, workflowId, input: workflowState },
+      });
+      try {
+        workflowState = await workflow.run(workflowState, {
+          host: contributionContext,
+          signal,
+        });
+        await sessionEvents.append({
+          sessionId: session.id,
+          id: `${job.id}:workflow:${workflowId}:end`,
+          type: "workflow/end",
+          data: {
+            jobId: job.id,
+            workflowId,
+            status: "completed",
+            output: workflowState,
+          },
+        });
+      } catch (error) {
+        await sessionEvents.append({
+          sessionId: session.id,
+          id: `${job.id}:workflow:${workflowId}:end`,
+          type: "workflow/end",
+          data: {
+            jobId: job.id,
+            workflowId,
+            status: "failed",
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
+        throw error;
+      }
+    }
     const { config, model } = await requireModel(db, actor.id, job.model_id),
       mediaModel = config.mediaModel
         ? config.models.find((item) => item.id === config.mediaModel)
@@ -410,7 +544,7 @@ export function createAIRunner(
       lease: job.lease!,
       writable: true,
       notify: options.notify,
-      ...(input.scope === "document" && liveResourceIds.length
+      ...(input.scope === "document"
         ? { exactResources: true, allowedResources: liveResourceIds }
         : {}),
     };
@@ -751,7 +885,7 @@ export function createAIRunner(
     }
     async function aiFolderAccess(id: string, minimumRole = 1) {
       const folder = await db.selectFrom("file_folders").selectAll().where("id", "=", id).where("deleted_at", "is", null).executeTakeFirst();
-      if (!folder) await explainMissingFolder(id);
+      if (!folder) return explainMissingFolder(id);
       if (folder.owner_id === actor.id) return { folder, role: "owner" as const };
       let cursor = folder;
       while (cursor.parent_id && cursor.parent_id !== "shared") {
@@ -1177,7 +1311,7 @@ export function createAIRunner(
       error:
         "文档不存在。不要再使用这个 ID，也不要申请权限或让用户打开文档授权。先用 document_exists 核对当前用户仍可阅读的文档，或 knowledge_search 查找；没有就 document_create。",
     });
-    const tools = {
+    const builtInTools = {
       load_skill: createTool({
         id: "load_skill",
         ...withCallExamples(
@@ -2163,9 +2297,10 @@ export function createAIRunner(
           const stalwart = await mailboxClient(mailbox);
           const message = await stalwart.getMessage(mailbox.address, remoteId, mailbox.secret);
           await indexMailMessage(db, mailbox, message);
-          if (options.storage)
-            await persistMailAttachments(db, mailbox, message, {
-              storage: options.storage,
+          if (options.files)
+            await persistMailAttachments(mailbox, message, {
+              files: options.files,
+              principalId: mailbox.owner_id,
               loadData: async (attachment) =>
                 attachment.data ?? (await stalwart.getAttachment(mailbox.address, attachment.id, mailbox.secret)).data,
             }).catch(() => undefined);
@@ -2537,6 +2672,106 @@ export function createAIRunner(
         },
       }),
     };
+    const {
+      mail_browse,
+      mail_search,
+      mail_read,
+      mail_compose,
+      mail_send,
+      mail_manage,
+      ...coreTools
+    } = builtInTools;
+    const mailTools = {
+      mail_browse,
+      mail_search,
+      mail_read,
+      mail_compose,
+      mail_send,
+      mail_manage,
+    };
+    executePluginTool = async (toolId, toolInput) => {
+      const selected = mailTools[toolId as keyof typeof mailTools];
+      if (!selected?.execute) throw new Error(`Unknown plugin tool: ${toolId}`);
+      const parsed = (
+        selected as unknown as {
+          inputSchema?: { parse(input: unknown): Record<string, unknown> };
+        }
+      ).inputSchema?.parse(toolInput) ?? toolInput;
+      return (await (
+        selected.execute as (
+          input: Record<string, unknown>,
+          context: unknown,
+        ) => Promise<unknown>
+      )(parsed, {})) as JsonValue;
+    };
+    let contributedToolOrdinal = 0;
+    const contributedToolPipeline = options.contributions?.createToolPipeline(
+      contributionContext,
+      {
+        onResult: async (result) => {
+          await sessionEvents.append({
+            sessionId: session.id,
+            id: result.id,
+            type: "tool/result",
+            data: {
+              jobId: job.id,
+              callId: result.callId,
+              outcome: result.outcome,
+            },
+          });
+        },
+      },
+    );
+    const unwrapToolOutcome = (outcome: ToolOutcome) => {
+      if (outcome.status === "success") return outcome.value;
+      if (outcome.status === "denied") throw new Error(outcome.reason);
+      if (outcome.status === "cancelled")
+        throw new DOMException(outcome.reason, "AbortError");
+      throw new Error(outcome.error.message);
+    };
+    const contributedTools = Object.fromEntries(
+      (options.contributions?.snapshot().tools ?? [])
+        .filter((tool) => !tool.exposure || tool.exposure.includes("chat"))
+        .map((tool) => [
+        tool.id,
+        createTool({
+          id: tool.id,
+          description: tool.description ?? tool.id,
+          inputSchema: z.record(z.string(), z.unknown()),
+          execute: async (toolInput) => {
+            const call = createToolCall({
+              sessionId: session.id,
+              turnId: job.id,
+              toolId: tool.id,
+              ordinal: contributedToolOrdinal++,
+              input: toolInput,
+            });
+            await sessionEvents.append({
+              sessionId: session.id,
+              id: call.id,
+              type: "tool/call",
+              data: {
+                jobId: job.id,
+                callId: call.id,
+                toolId: call.toolId,
+                input: call.input,
+              },
+            });
+            const result = await contributedToolPipeline!.execute({
+              sessionId: session.id,
+              turnId: job.id,
+              call,
+              signal,
+            });
+            return unwrapToolOutcome(result.outcome);
+          },
+        }),
+        ]),
+    );
+    for (const id of Object.keys(contributedTools))
+      if (Object.hasOwn(coreTools, id))
+        throw new Error(`AI tool contribution collides with built-in tool: ${id}`);
+    const tools = { ...coreTools, ...contributedTools };
     const privateSkills = await db
       .selectFrom("ai_skills")
       .selectAll()
@@ -2713,6 +2948,21 @@ export function createAIRunner(
       ? await readPageState(db, actor.id, mailDraftKey(input.currentMailboxId))
       : null;
     const promptContext = [
+      ...(intentRoute.selected
+        ? [
+            `插件意图路由：${intentRoute.selected.intentId}（置信度 ${intentRoute.selected.confidence.toFixed(3)}）。`,
+          ]
+        : []),
+      ...(selectedIntentDefinition?.workflowIds?.length
+        ? [`插件任务流程输出：${JSON.stringify(workflowState)}。`]
+        : []),
+      ...((selectedIntentDefinition?.skillIds ?? [])
+        .map((skillId) => options.contributions?.skills.get(skillId))
+        .filter((skill) => skill !== undefined)
+        .map(
+          (skill) =>
+            `插件技能 ${skill.id}：${skill.description ?? "遵循该插件技能约束"}。`,
+        )),
       ...(wantsEditing
         ? [
             `本轮可能涉及文档编辑，相关格式：${JSON.stringify([...neededFormats])}。先 document_read 默认 outline，需要命令细节再 load_skill。`,
@@ -2946,6 +3196,8 @@ export function createAIRunner(
       );
       const decisions =
         progress.approvals?.filter((a) => a.state === "approved") ?? [];
+      let stepOrdinal = 0;
+      let activeStepId: string | undefined;
       const stream = await agent.stream(
         fitPromptToModelInput(
           [
@@ -2993,6 +3245,20 @@ export function createAIRunner(
               .where("id", "=", job.id)
               .where("lease", "=", job.lease)
               .execute();
+            if (activeStepId) {
+              await sessionEvents.append({
+                sessionId: session.id,
+                id: `${activeStepId}:end`,
+                type: "step/end",
+                data: {
+                  jobId: job.id,
+                  stepId: activeStepId,
+                  round: currentRound,
+                  status: "completed",
+                },
+              });
+              activeStepId = undefined;
+            }
           },
         },
       );
@@ -3000,6 +3266,17 @@ export function createAIRunner(
         for await (const chunk of stream.fullStream) {
           signal.throwIfAborted();
           if (chunk.type === "step-start") {
+            activeStepId = `${job.id}:step:${currentRound}:${stepOrdinal++}`;
+            await sessionEvents.append({
+              sessionId: session.id,
+              id: `${activeStepId}:start`,
+              type: "step/start",
+              data: {
+                jobId: job.id,
+                stepId: activeStepId,
+                round: currentRound,
+              },
+            });
             progress.text = "";
             progress.phase = "正在思考";
             addEvent("reasoning", "");
@@ -3127,6 +3404,18 @@ export function createAIRunner(
           await publish();
         }
       } catch (error) {
+        if (activeStepId)
+          await sessionEvents.append({
+            sessionId: session.id,
+            id: `${activeStepId}:end`,
+            type: "step/end",
+            data: {
+              jobId: job.id,
+              stepId: activeStepId,
+              round: currentRound,
+              status: signal.aborted ? "cancelled" : "failed",
+            },
+          });
         if (!signal.aborted) await publish(true);
         throw error;
       }
@@ -3634,6 +3923,41 @@ export function createAIRunner(
           : "已完成";
     await publish(true);
     signal.throwIfAborted();
+    const finalAnswer = jobAssistantAnswer({
+      text: progress.text || "",
+      eventTexts: [...(progress.events ?? [])]
+        .reverse()
+        .filter((event) => event.kind === "text" && event.text.trim())
+        .map((event) => event.text),
+      folderName: progress.events?.find((event) => event.folder)?.folder?.name,
+      folderMutationPending:
+        folderMutationRequested(input.text, recentUserTexts) &&
+        !progress.events?.some((event) => event.folder),
+      imageInsertPending:
+        spreadsheetImageInsertRequested(input.text, recentUserTexts) &&
+        insertedImages.size === 0,
+    });
+    const acceptanceResults = [];
+    for (const acceptanceId of selectedIntentDefinition?.acceptanceIds ?? []) {
+      const evaluator = options.contributions?.acceptance.get(acceptanceId);
+      if (!evaluator)
+        throw new Error(
+          `AI intent "${selectedIntent.intentId}" requires missing acceptance "${acceptanceId}"`,
+        );
+      const decision = await evaluator.evaluate(
+        {
+          answer: finalAnswer,
+          artifactIds: [...written].sort(),
+        },
+        { host: contributionContext, signal },
+      );
+      acceptanceResults.push({ acceptanceId, ...decision });
+      if (decision.verdict !== "accepted")
+        fail(
+          decision.verdict === "needs-user" ? 409 : 422,
+          `任务验收未通过：${acceptanceId}`,
+        );
+    }
     await transact(db, async (tx) => {
       await lockAIUser(tx, actor.id);
       const current = await tx
@@ -3649,7 +3973,7 @@ export function createAIRunner(
         throw new DOMException("Aborted", "AbortError");
       // Later collaborator edits do not invalidate this completed review snapshot.
       // Access revocation still takes effect before publishing the final delivery.
-      for (const id of written)
+      for (const id of new Set([...written, ...liveResourceIds]))
         await checkScope(tx, { ...ctx, writable: false }, id);
       await saveChatMessage(
         m.memory,
@@ -3657,20 +3981,7 @@ export function createAIRunner(
         session.id,
         job.id + "-answer",
         "assistant",
-        jobAssistantAnswer({
-          text: progress.text || "",
-          eventTexts: [...(progress.events ?? [])]
-            .reverse()
-            .filter((e) => e.kind === "text" && e.text.trim())
-            .map((e) => e.text),
-          folderName: progress.events?.find((e) => e.folder)?.folder?.name,
-          folderMutationPending:
-            folderMutationRequested(input.text, recentUserTexts) &&
-            !progress.events?.some((e) => e.folder),
-          imageInsertPending:
-            spreadsheetImageInsertRequested(input.text, recentUserTexts) &&
-            insertedImages.size === 0,
-        }),
+        finalAnswer,
         [],
         [],
         progress.reasoning,
@@ -3688,6 +3999,60 @@ export function createAIRunner(
         .where("id", "=", job.id)
         .where("lease", "=", job.lease)
         .execute();
+    });
+    for (const event of progress.events ?? []) {
+      if (event.kind !== "tool") continue;
+      await sessionEvents.append({
+        sessionId: session.id,
+        id: `${job.id}:tool:${event.id}:call`,
+        type: "tool/call",
+        data: { jobId: job.id, callId: event.id, description: event.text },
+      });
+      await sessionEvents.append({
+        sessionId: session.id,
+        id: `${job.id}:tool:${event.id}:result`,
+        type: "tool/result",
+        data: {
+          jobId: job.id,
+          callId: event.id,
+          status: event.status,
+          description: event.text,
+        },
+      });
+    }
+    await sessionEvents.append({
+      sessionId: session.id,
+      id: `${job.id}:assistant:message`,
+      type: "assistant/message",
+      data: { jobId: job.id, messageId: `${job.id}-answer`, text: finalAnswer },
+    });
+    if (acceptanceResults.length) {
+      for (const result of acceptanceResults)
+        await sessionEvents.append({
+          sessionId: session.id,
+          id: `${job.id}:acceptance:${result.acceptanceId}`,
+          type: "acceptance/result",
+          data: {
+            jobId: job.id,
+            acceptanceId: result.acceptanceId,
+            verdict: result.verdict,
+            ...(result.evidence === undefined
+              ? {}
+              : { evidence: result.evidence }),
+          },
+        });
+    } else
+      await sessionEvents.append({
+        sessionId: session.id,
+        id: `${job.id}:acceptance:result`,
+        type: "acceptance/result",
+        data: { jobId: job.id, accepted: true },
+      });
+    await sessionEvents.append({
+      sessionId: session.id,
+      id: `${job.id}:turn:end`,
+      type: "turn/end",
+      data: { jobId: job.id, status: "completed" },
     });
   }
   async function pump() {
@@ -3830,14 +4195,15 @@ export function createAIRunner(
               stopping &&
               !current?.cancelled &&
               !!(current?.result && JSON.parse(current.result).checkpoint);
+            const terminalStatus = recoverable
+              ? "queued"
+              : current?.cancelled || controller.signal.aborted
+                ? "cancelled"
+                : "failed";
             await db
               .updateTable("ai_jobs")
               .set({
-                status: recoverable
-                  ? "queued"
-                  : current?.cancelled || controller.signal.aborted
-                    ? "cancelled"
-                    : "failed",
+                status: terminalStatus,
                 error: recoverable
                   ? ""
                   : current?.cancelled
@@ -3858,6 +4224,25 @@ export function createAIRunner(
               .where("id", "=", job.id)
               .where("lease", "=", lease)
               .execute();
+            await sessionEvents.append({
+              sessionId: job.session_id,
+              id: `${job.id}:assistant:attempt:${job.attempts}:${terminalStatus}`,
+              type: "assistant/attempt",
+              data: {
+                jobId: job.id,
+                attempt: job.attempts,
+                status: terminalStatus,
+                error: errorMessage,
+              },
+            });
+            if (!recoverable) {
+              await sessionEvents.append({
+                sessionId: job.session_id,
+                id: `${job.id}:turn:end`,
+                type: "turn/end",
+                data: { jobId: job.id, status: terminalStatus },
+              });
+            }
           })
           .finally(() => {
             clearInterval(heartbeat);

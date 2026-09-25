@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
-import { prismjsLanguageEsm } from "./prismjs-language-esm.ts";
+import { prismjsLanguageEsm } from "./prismjs-language-esm";
 
 const cadFiles = [
   ["@mlightcad/libredwg-converter", "libredwg-parser-worker.js"],

@@ -1,5 +1,5 @@
 import { Image, Spin, Checkbox } from "antd";
-import { memo } from "react";
+import { Fragment, memo } from "react";
 import { CodeHighlighter, Mermaid, XProvider } from "@ant-design/x";
 import { antDesignXLocale } from "@web/shared/antd-locale.js";
 import { useI18n } from "@web/shared/i18n.js";
@@ -7,9 +7,7 @@ import XMarkdown, { type ComponentProps } from "@ant-design/x-markdown";
 import "@ant-design/x-markdown/themes/light.css";
 import Latex from "@ant-design/x-markdown/plugins/Latex";
 import type { FileDelivery, FolderDelivery, MailDelivery } from "@core/modules/ai/progress.js";
-import { FolderDeliveryCard } from "@web/features/ai/ai-folder-card.js";
-import { FileDeliveryCard } from "@web/features/ai/ai-file-card.js";
-import { MailDeliveryCard } from "@web/features/ai/ai-mail-card.js";
+import { webPluginRegistry } from "@web/plugins/registry.js";
 import {
   answerSegments,
   folderExplorerHash,
@@ -187,6 +185,7 @@ function AIAnswer({
     files,
     mails,
   });
+  const mailBlock = webPluginRegistry.aiBlocks.getByConflictKey("mail");
   return (
     <XProvider locale={antDesignXLocale(locale)}>
       <div
@@ -201,53 +200,68 @@ function AIAnswer({
             onDocument(match[1]!);
             return;
           }
-          if (onFolder && (isFolderExplorerHref(href) || isMailHref(href))) {
+          if (
+            onFolder &&
+            (isFolderExplorerHref(href) || (!!mailBlock && isMailHref(href)))
+          ) {
             event.preventDefault();
             event.stopPropagation();
             const next = isMailHref(href)
               ? href
               : navigationHref(href)
                 ? href
-                : resolveExplorerClick(href, files ?? [], link.textContent ?? "");
+                : resolveExplorerClick(
+                    href,
+                    files ?? [],
+                    link?.textContent ?? "",
+                  );
             if (!next) return;
             onFolder(folderExplorerHash(next).slice(1));
           }
         }}
       >
-        {segments.map((segment, index) =>
-          segment.type === "folder" ? (
-            onFolder ? (
-              <FolderDeliveryCard
-                key={`${segment.folder.id}-${index}`}
-                folder={segment.folder}
-                onOpen={onFolder}
-              />
-            ) : (
+        {segments.map((segment, index) => {
+          if (segment.type === "text")
+            return segment.text.trim() ? (
               <MarkdownBody
-                key={`${segment.folder.id}-${index}`}
-                text={`[${segment.folder.path ?? segment.folder.name}](${folderExplorerHash(segment.folder.href)})`}
+                key={`text-${index}`}
+                text={segment.text}
+                streaming={streaming && index === segments.length - 1}
               />
-            )
-          ) : segment.type === "mail" ? (
-            <MailDeliveryCard
-              key={`${segment.mail.mailboxId}-${segment.mail.id}-${index}`}
-              mail={segment.mail}
-              onOpen={onFolder}
-            />
-          ) : segment.type === "file" ? (
-            <FileDeliveryCard
-              key={`${segment.file.id}-${index}`}
-              file={segment.file}
-              onOpen={onFolder}
-            />
-          ) : segment.text.trim() ? (
-            <MarkdownBody
-              key={`text-${index}`}
-              text={segment.text}
-              streaming={streaming && index === segments.length - 1}
-            />
-          ) : null,
-        )}
+            ) : null;
+          const block = webPluginRegistry.aiBlocks.getByConflictKey(
+            segment.type,
+          );
+          const payload =
+            segment.type === "folder"
+              ? segment.folder
+              : segment.type === "file"
+                ? segment.file
+                : segment.mail;
+          const key =
+            segment.type === "mail"
+              ? `${segment.mail.mailboxId}-${segment.mail.id}-${index}`
+              : `${payload.id}-${index}`;
+          if (!block)
+            return (
+              <MarkdownBody
+                key={key}
+                text={`> ${segment.type}: ${"name" in payload ? payload.name : payload.subject}`}
+              />
+            );
+          return (
+            <Fragment key={key}>
+              {block.render(payload, {
+                onOpen: onFolder,
+                renderLink: (label, href) => (
+                  <MarkdownBody
+                    text={`[${label}](${folderExplorerHash(href)})`}
+                  />
+                ),
+              })}
+            </Fragment>
+          );
+        })}
       </div>
     </XProvider>
   );

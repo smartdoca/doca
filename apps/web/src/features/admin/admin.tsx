@@ -34,7 +34,6 @@ import {
   LockKeyhole,
   Settings as SettingsIcon,
   ScanText,
-  Mail,
   LayoutTemplate,
 } from "lucide-react";
 import { api } from "@web/shared/api.js";
@@ -46,10 +45,13 @@ import { DirectorySettings } from "@web/features/settings/directory-settings.js"
 import { UserCardSettings } from "@web/features/settings/user-card-settings.js";
 import { DistributionSettings } from "@web/features/settings/distribution-settings.js";
 import { FileRecognitionSettings } from "@web/features/admin/file-recognition-settings.js";
-import { MailSettings } from "@web/features/admin/mail-settings.js";
 import { TemplateSettings } from "@web/features/admin/template-settings.js";
 import { useI18n } from "@web/shared/i18n.js";
 import type { MessageKey } from "@doca/i18n";
+import {
+  pluginMessage,
+  webPluginRegistry,
+} from "@web/plugins/registry.js";
 
 type Member = {
   id: string;
@@ -66,16 +68,26 @@ type Member = {
   loginMethods: string[];
 };
 type Settings = { site_name: string; registration: number; revision: number };
+const pluginAdminPanels = webPluginRegistry.adminPanels.list();
 const sectionGroups: {
+  id: string;
   group: MessageKey;
-  items: { id: string; label: MessageKey; Icon: typeof LayoutDashboard }[];
+  items: {
+    id: string;
+    label: string;
+    plugin?: boolean;
+    order?: number;
+    Icon: typeof LayoutDashboard;
+  }[];
 }[] = [
   {
-    group: "admin.group.overview",
+    id: "overview",
+    group: "admin.group.overview" as MessageKey,
     items: [{ id: "overview", label: "admin.overview", Icon: LayoutDashboard }],
   },
   {
-    group: "admin.group.accounts",
+    id: "accounts",
+    group: "admin.group.accounts" as MessageKey,
     items: [
       { id: "login", label: "admin.login", Icon: KeyRound },
       { id: "users", label: "admin.users", Icon: Users },
@@ -84,7 +96,8 @@ const sectionGroups: {
     ],
   },
   {
-    group: "admin.group.content",
+    id: "content",
+    group: "admin.group.content" as MessageKey,
     items: [
       { id: "access", label: "admin.access", Icon: LockKeyhole },
       { id: "moderation", label: "admin.moderation", Icon: ShieldCheck },
@@ -92,21 +105,43 @@ const sectionGroups: {
     ],
   },
   {
-    group: "admin.group.intelligence",
+    id: "intelligence",
+    group: "admin.group.intelligence" as MessageKey,
     items: [
       { id: "ai", label: "admin.ai", Icon: SettingsIcon },
       { id: "file-recognition", label: "admin.recognition", Icon: ScanText },
     ],
   },
   {
-    group: "admin.group.system",
+    id: "system",
+    group: "admin.group.system" as MessageKey,
     items: [
-      { id: "platform", label: "admin.platform", Icon: SettingsIcon },
-      { id: "mail", label: "admin.mail", Icon: Mail },
-      { id: "hooks", label: "admin.hooks", Icon: Webhook },
+      { id: "platform", label: "admin.platform", order: 10, Icon: SettingsIcon },
+      { id: "hooks", label: "admin.hooks", order: 30, Icon: Webhook },
     ],
   },
-];
+].map((group) => ({
+  ...group,
+  items: [
+    ...group.items.map((item, index) => ({
+      ...item,
+      order: ("order" in item ? item.order : undefined) ?? (index + 1) * 10,
+    })),
+    ...pluginAdminPanels
+      .filter((panel) => panel.group === group.id)
+      .map((panel) => ({
+        id: panel.tab,
+        label: panel.labelKey,
+        plugin: true,
+        order: panel.order ?? 0,
+        Icon: panel.icon ?? SettingsIcon,
+      })),
+  ].sort(
+    (left, right) =>
+      (left.order ?? 0) - (right.order ?? 0) ||
+      left.id.localeCompare(right.id),
+  ),
+}));
 const sections = sectionGroups.flatMap((g) => g.items);
 const platformSections: [string, MessageKey][] = [
   ["general", "admin.siteInfo"],
@@ -136,8 +171,12 @@ function readAdminRoute(): AdminRoute {
     : "permissions";
   return { tab, platformTab, accessTab };
 }
-export function Admin() {
-  const { t } = useI18n();
+export function Admin({
+  activePluginIds,
+}: {
+  readonly activePluginIds: ReadonlySet<string>;
+}) {
+  const { locale, t } = useI18n();
   const [accountTarget, setAccountTarget] = useState<string | null>(null),
     [membershipTarget, setMembershipTarget] = useState<string | null>(null),
     [selected, setSelected] = useState<string[]>([]),
@@ -165,6 +204,17 @@ export function Admin() {
     [target, setTarget] = useState<Member | null>(null),
     [passwordTarget, setPasswordTarget] = useState<Member | null>(null),
     [refresh, setRefresh] = useState(0);
+  const matchedPluginAdminPanel =
+    webPluginRegistry.adminPanels.getByConflictKey(tab);
+  const pluginAdminPanel =
+    matchedPluginAdminPanel &&
+    activePluginIds.has(matchedPluginAdminPanel.pluginId)
+      ? matchedPluginAdminPanel
+      : undefined;
+  useEffect(() => {
+    if (matchedPluginAdminPanel && !pluginAdminPanel)
+      navigateAdmin({ tab: "overview" });
+  }, [activePluginIds, matchedPluginAdminPanel, pluginAdminPanel]);
   useEffect(() => {
     if (creating)
       void api<AccountOptions>("/admin/accounts/policy")
@@ -283,7 +333,14 @@ export function Admin() {
           {sectionGroups.map(({ group, items }) => (
             <div className="admin-nav-group" key={group}>
               <h2>{t(group)}</h2>
-              {items.map(({ id, label, Icon }) => (
+              {items
+                .filter(({ id, plugin }) => {
+                  if (!plugin) return true;
+                  const panel =
+                    webPluginRegistry.adminPanels.getByConflictKey(id);
+                  return !!panel && activePluginIds.has(panel.pluginId);
+                })
+                .map(({ id, label, plugin, Icon }) => (
                 <button
                   key={id}
                   aria-current={tab === id ? "page" : undefined}
@@ -295,9 +352,11 @@ export function Admin() {
                   }}
                 >
                   <Icon size={18} />
-                  {t(label)}
+                  {plugin
+                    ? pluginMessage(locale, label)
+                    : t(label as MessageKey)}
                 </button>
-              ))}
+                ))}
             </div>
           ))}
           <div className="admin-nav-note">
@@ -310,6 +369,7 @@ export function Admin() {
             <Feedback message={error} tone="error" />
           )}
           {message && <Feedback message={message} tone="success" />}
+          {pluginAdminPanel?.render({})}
           {tab === "overview" && (
             <>
               <div className="admin-section-heading">
@@ -743,7 +803,6 @@ export function Admin() {
               {platformTab === "search" && <SearchSettings />}
             </>
           )}
-          {tab === "mail" && <MailSettings />}
           {tab === "access" && (
             <>
               <div className="admin-section-heading">

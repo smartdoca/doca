@@ -163,7 +163,10 @@ function isWildduckAuthError(status: number, code: string, message: string) {
 
 function htmlOf(item: any) {
   if (typeof item.html === "string") return item.html;
-  if (Array.isArray(item.html)) return item.html.filter((part) => typeof part === "string").join("\n");
+  if (Array.isArray(item.html))
+    return item.html
+      .filter((part: unknown): part is string => typeof part === "string")
+      .join("\n");
   return "";
 }
 

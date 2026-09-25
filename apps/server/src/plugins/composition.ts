@@ -1,0 +1,293 @@
+import { createDocumentsPlugin } from "@doca/plugin-documents";
+import { createFilesPlugin } from "@doca/plugin-files";
+import { AIContributionHost } from "@doca/ai-host";
+import { PluginHost } from "@doca/plugin-host";
+import { createMailPlugin } from "@doca/plugin-mail";
+import { definePlugin, type DocaPlugin } from "@doca/plugin-sdk";
+import type { FilesServiceV1 } from "@doca/files-capability";
+import { createPluginMigrationStore } from "@db/index.js";
+import { createFileProcessingWorker } from "../jobs/file-processing-worker.js";
+import { waitForFileExtracts } from "../services/ai/file-extract.js";
+import { registerAI } from "../routes/ai.js";
+import type { AIContributionExecutionContext } from "../services/ai/runner.js";
+import { registerFiles } from "../routes/files.js";
+import { registerKnowledge } from "../routes/knowledge.js";
+import { registerMail } from "../routes/mail.js";
+import { registerSearch } from "../routes/search.js";
+import {
+  aiContributionToken,
+  searchRegistrationToken,
+  searchSourceRegistryToken,
+  serverRuntimeToken,
+  type SearchRegistration,
+  type SearchRegistrationService,
+  type ServerRuntimeService,
+} from "./contracts.js";
+import { mountFastifyAdapter } from "./fastify-adapter.js";
+import { createServerFilesCapability } from "./files-capability-adapter.js";
+import { createServerDocumentsCapability } from "./documents-capability-adapter.js";
+import { createMailKnowledgeReader } from "./mail-knowledge-reader.js";
+import {
+  createDocumentSource,
+  createFileSource,
+  createKnowledgeSource,
+  createMailSource,
+} from "../services/search/sources.js";
+
+export interface ServerPluginDescriptor {
+  readonly id: string;
+  readonly version: string;
+}
+
+export interface ServerPluginComposition {
+  readonly host: PluginHost;
+  readonly search: SearchRegistration;
+  readonly plugins: readonly ServerPluginDescriptor[];
+}
+
+const runtimeManifest = {
+  schemaVersion: 1,
+  id: "doca.server-runtime",
+  version: "0.1.0",
+  displayName: "Doca Server Runtime",
+} as const;
+
+const searchManifest = {
+  schemaVersion: 1,
+  id: "doca.search",
+  version: "0.1.0",
+  displayName: "Doca Search",
+  dependencies: [{ id: "doca.server-runtime", range: "^0.1.0" }],
+} as const;
+
+const aiManifest = {
+  schemaVersion: 1,
+  id: "doca.ai",
+  version: "0.1.0",
+  displayName: "Doca AI",
+  dependencies: [
+    { id: "doca.server-runtime", range: "^0.1.0" },
+    { id: "doca.search", range: "^0.1.0" },
+    { id: "doca.documents", range: "^0.1.0" },
+  ],
+} as const;
+
+function runtimePlugin(runtime: ServerRuntimeService) {
+  return definePlugin({
+    manifest: runtimeManifest,
+    discover(context) {
+      context.provide(serverRuntimeToken, runtime);
+    },
+  });
+}
+
+function searchPlugin() {
+  let registration: SearchRegistration | undefined;
+  const service: SearchRegistrationService = {
+    require() {
+      if (!registration)
+        throw new Error("Search registration is not mounted");
+      return registration;
+    },
+  };
+  return definePlugin({
+    manifest: searchManifest,
+    injections: { required: [serverRuntimeToken] },
+    discover(context) {
+      context.provide(searchRegistrationToken, service);
+      context.provide(searchSourceRegistryToken, {
+        register(source) {
+          return service.require().registerSource(source);
+        },
+      });
+    },
+    async mount(context) {
+      const runtime = context.inject(serverRuntimeToken);
+      await context.effectAsync(async () => {
+        const mounted = await mountFastifyAdapter(runtime.api, (api) =>
+          registerSearch(
+            api,
+            runtime.db,
+            runtime.admin,
+            {
+              ...runtime.runtime.search,
+              sources: {
+                documents: false,
+                files: false,
+                knowledge: false,
+                mail: false,
+              },
+            },
+          ),
+        );
+        registration = mounted.value;
+        return async () => {
+          registration = undefined;
+          await mounted.dispose();
+        };
+      });
+    },
+  });
+}
+
+function documentsPlugin(
+  runtimeService: ServerRuntimeService,
+  files: FilesServiceV1,
+) {
+  return createDocumentsPlugin({
+    runtimeToken: serverRuntimeToken,
+    searchToken: searchRegistrationToken,
+    unload: "app-close",
+    service: createServerDocumentsCapability(runtimeService.db, files),
+    searchSources: [
+      createDocumentSource(runtimeService.db),
+      createKnowledgeSource(runtimeService.db),
+    ],
+    async mount({ runtime, search }) {
+      const registration = search.require();
+      const mounted = await mountFastifyAdapter(runtime.api, (api) =>
+        registerKnowledge(api, runtime.db, runtime.auth, {
+          indexer: registration.knowledgeIndex,
+          storage: runtime.runtime.storage,
+        }),
+      );
+      return mounted.dispose;
+    },
+  });
+}
+
+function aiPlugin(files: FilesServiceV1) {
+  const contributions =
+    new AIContributionHost<AIContributionExecutionContext>();
+  return definePlugin({
+    manifest: aiManifest,
+    injections: {
+      required: [serverRuntimeToken, searchRegistrationToken],
+    },
+    discover(context) {
+      context.provide(aiContributionToken, contributions);
+    },
+    async mount(context) {
+      const runtime = context.inject(serverRuntimeToken);
+      const search = context.inject(searchRegistrationToken).require();
+      await context.effectAsync(async () => {
+        const mounted = await mountFastifyAdapter(runtime.api, (api) =>
+          registerAI(api, runtime.db, runtime.auth, runtime.admin, {
+            ...runtime.options.ai,
+            storage: runtime.runtime.storage,
+            files,
+            notify: runtime.realtime.documentChanged,
+            search: search.search,
+            fileSearch: search.searchFiles,
+            mail: runtime.options.mail,
+            contributions,
+          }),
+        );
+        return mounted.dispose;
+      });
+    },
+  });
+}
+
+function filesPlugin(
+  runtimeService: ServerRuntimeService,
+  service: FilesServiceV1,
+) {
+  return createFilesPlugin({
+    runtimeToken: serverRuntimeToken,
+    searchToken: searchRegistrationToken,
+    unload: "app-close",
+    service,
+    searchSources: [createFileSource(runtimeService.db)],
+    async mount({ runtime, search }) {
+      const registration = search.require();
+      const routes = await mountFastifyAdapter(runtime.api, (api) =>
+        registerFiles(
+          api,
+          runtime.db,
+          runtime.auth,
+          runtime.runtime.storage,
+          runtime.admin,
+          registration.searchFiles,
+        ),
+      );
+      const worker = createFileProcessingWorker(
+        runtime.db,
+        runtime.runtime.storage,
+      );
+      let processing: Promise<unknown> | undefined;
+      const timer = setInterval(() => {
+        if (processing) return;
+        processing = worker
+          .pump()
+          .catch((error) =>
+            runtime.api.log.error(error, "File processing failed"),
+          )
+          .finally(() => {
+            processing = undefined;
+          });
+      }, 1000);
+      timer.unref();
+      return async () => {
+        clearInterval(timer);
+        await processing;
+        await waitForFileExtracts(runtime.db);
+        await routes.dispose();
+      };
+    },
+  });
+}
+
+function mailPlugin(runtimeService: ServerRuntimeService, files: FilesServiceV1) {
+  return createMailPlugin({
+    runtimeToken: serverRuntimeToken,
+    unload: "app-close",
+    knowledgeReader: createMailKnowledgeReader(runtimeService.db),
+    searchSource: createMailSource(runtimeService.db),
+    async mount({ runtime }) {
+      const mail = runtime.options.mail;
+      const mounted = await mountFastifyAdapter(runtime.api, (api) =>
+        registerMail(api, runtime.db, runtime.auth, runtime.admin, {
+          ...mail,
+          origin: mail?.origin ?? runtime.origin.origin,
+          files,
+          mock: mail?.mock ?? process.argv.includes("--dev"),
+        }),
+      );
+      return mounted.dispose;
+    },
+  });
+}
+
+export async function composeServerPlugins(
+  runtime: ServerRuntimeService,
+): Promise<ServerPluginComposition> {
+  const host = new PluginHost({
+    migrations: createPluginMigrationStore(runtime.db),
+  });
+  const mailEnabled = runtime.options.plugins?.mail !== false;
+  const files = createServerFilesCapability(
+    runtime.db,
+    runtime.runtime.storage,
+  );
+  const plugins: DocaPlugin[] = [
+    runtimePlugin(runtime),
+    searchPlugin(),
+    documentsPlugin(runtime, files),
+    aiPlugin(files),
+    filesPlugin(runtime, files),
+    ...(mailEnabled ? [mailPlugin(runtime, files)] : []),
+  ];
+  for (const plugin of plugins) host.register(plugin);
+  const descriptors = host.order.map((id) => {
+    const manifest = plugins.find((plugin) => plugin.manifest.id === id)!
+      .manifest;
+    return { id: manifest.id, version: manifest.version };
+  });
+  await host.start();
+  const search = host
+    .context(searchManifest.id)!
+    .inject(searchRegistrationToken)
+    .require();
+  return { host, search, plugins: descriptors };
+}

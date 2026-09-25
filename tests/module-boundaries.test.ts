@@ -520,21 +520,23 @@ it("application source stays grouped by runtime and responsibility", async () =>
   const { resolve, join } = await import("node:path");
   const webRoot = resolve("apps/web/src");
   const serverRoot = resolve("apps/server/src");
-  const webGroups = new Set(["app", "features", "shared", "styles"]);
+  const webGroups = new Set(["app", "features", "plugins", "shared", "styles"]);
   const serverGroups = new Set([
     "adapters",
     "app",
     "bootstrap",
     "jobs",
+    "plugins",
     "routes",
     "services",
   ]);
   for (const entry of await readdir(webRoot, { withFileTypes: true })) {
+    if (entry.name.endsWith(".d.ts")) continue;
     expect(entry.isDirectory(), entry.name).toBe(true);
     expect(webGroups.has(entry.name), entry.name).toBe(true);
   }
   for (const entry of await readdir(serverRoot, { withFileTypes: true })) {
-    if (entry.name === "main.ts") continue;
+    if (entry.name === "main.ts" || entry.name.endsWith(".d.ts")) continue;
     expect(entry.isDirectory(), entry.name).toBe(true);
     expect(serverGroups.has(entry.name), entry.name).toBe(true);
   }

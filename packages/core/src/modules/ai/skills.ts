@@ -132,7 +132,7 @@ Markdown：
 创建与移动由工具生成审批卡片，批准后才落地；参数改变需重新审批。
 整理：先列具体归类/重命名/移动方案，按用户要求调用工具并等待必要审批。resource_manage的rename需要resourceId、当前resource.version、title；move需要resourceId、version、libraryId/parentId，null表示移出/根级。先确认目标库和父文档，不自动移动全部搜索命中。
 附件：PDF、Office 和文本由平台先解析成文字再提供；图片仅在模型支持视觉且管理员启用时可读。辨别文件名、页/表与截断范围。提取要点、指标、待办或对比时引用文件名。不能看到附件内容时明确说明，不能依据文件名猜。
-用户偏好和记忆只在用户明确同意的范围使用，不把一条消息里的临时要求保存成长期规则。邮件整理、检索、回复请用邮件工具。不要声称已经发送或删除邮件，除非 mail_send / mail_manage 返回成功。`,
+用户偏好和记忆只在用户明确同意的范围使用，不把一条消息里的临时要求保存成长期规则。邮件整理、检索、回复请用邮件工具。不要声称已经发送或删除邮件，除非 doca.mail.send / doca.mail.manage 返回成功。`,
   },
   {
     id: "files",
@@ -167,13 +167,13 @@ Markdown：
     name: "邮箱助手",
     description: "整理、检索、阅读和收发用户有权访问的邮箱邮件",
     formats: [],
-    content: `邮箱是独立资源，权限是只读、发邮件、管理员。先 mail_browse 看用户邮箱和文件夹，再 mail_search / mail_read。
-- mail_browse { mailboxId? } 列出邮箱或文件夹。
-- mail_search { query, mailboxId? } 搜索可见邮件。结果会变成邮件卡片，用户点击后打开该邮件，右侧保持当前会话。回复里给主题和发件人，不要贴内部 ID。
-- mail_read { mailboxId?, messageId? } 读正文。用户明确说「打开这封」时再传 reveal:true，界面会跳到该邮件。
-- mail_compose { mailboxId?, to, subject, text } 起草、回复或「帮我写邮件」时调用。会打开撰写窗口并填入草稿，不要改用 mail_send。mailboxId 可省略，用当前邮箱或用户可发信的默认邮箱。
-- mail_send { mailboxId?, to, subject, text } 只有用户明确要求发送时才调用。
-- mail_manage { mailboxId, messageId, action } 标已读/未读、星标、归档或删除。
+    content: `邮箱是独立资源，权限是只读、发邮件、管理员。先 doca.mail.browse 看用户邮箱和文件夹，再 doca.mail.search / doca.mail.read。
+- doca.mail.browse { mailboxId? } 列出邮箱或文件夹。
+- doca.mail.search { query, mailboxId? } 搜索可见邮件。结果会变成邮件卡片，用户点击后打开该邮件，右侧保持当前会话。回复里给主题和发件人，不要贴内部 ID。
+- doca.mail.read { mailboxId?, messageId? } 读正文。用户明确说「打开这封」时再传 reveal:true，界面会跳到该邮件。
+- doca.mail.compose { mailboxId?, to, subject, text } 起草、回复或「帮我写邮件」时调用。会打开撰写窗口并填入草稿，不要改用 doca.mail.send。mailboxId 可省略，用当前邮箱或用户可发信的默认邮箱。
+- doca.mail.send { mailboxId?, to, subject, text } 只有用户明确要求发送时才调用。
+- doca.mail.manage { mailboxId, messageId, action } 标已读/未读、星标、归档或删除。
 独立邮箱不能分享或删除。回复用中文。`,
   },
 ].map((skill) => ({

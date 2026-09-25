@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@doca/web-plugin-registry": "workspace:*",
     "@expo/vector-icons": "^14.1.0",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@hookform/resolvers": "^5.2.1",

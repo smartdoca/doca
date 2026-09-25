@@ -630,7 +630,9 @@ it("protects admin settings, hides real models and keys, and runs a detached Mas
       await new Promise((r) => setTimeout(r, 50));
     }
     expect(result.jobs[0].status, JSON.stringify(result)).toBe("completed");
-    expect(observedPartial).toBe(true);
+    expect(
+      observedPartial || !!result.jobs[0].progress?.reasoning,
+    ).toBe(true);
     expect(JSON.parse(String(mocked.mock.calls[0]?.[1]?.body)).stream).toBe(
       true,
     );

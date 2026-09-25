@@ -82,7 +82,7 @@ function folderLabel(folder: Folder) {
 }
 
 function onMailRoute(id?: string) {
-  const path = location.hash.split("?")[0];
+  const path = location.hash.split("?")[0] ?? "";
   if (id) return path === `#/mail/${id}` || path === "#/mail";
   return path === "#/mail" || path.startsWith("#/mail/");
 }
@@ -209,7 +209,12 @@ function formatPeople(list?: Address[]) {
 function parseAddresses(value: string): Address[] {
   return value.split(/[,;，；]/).map((item) => item.trim()).filter(Boolean).map((item) => {
     const match = item.match(/^(.*)<([^>]+)>$/);
-    return match ? { name: match[1].trim() || undefined, email: match[2].trim() } : { email: item };
+    return match
+      ? {
+          name: (match[1] ?? "").trim() || undefined,
+          email: (match[2] ?? "").trim(),
+        }
+      : { email: item };
   });
 }
 
@@ -465,7 +470,8 @@ export function MailApp({ mailboxId, preview = false }: { mailboxId?: string; pr
     return () => document.removeEventListener("pointerdown", close, true);
   }, [switchOpen, overview?.mailboxes.length]);
 
-  const canSend = mailbox && ["owner", "admin", "sender"].includes(mailbox.role);
+  const canSend =
+    !!mailbox && ["owner", "admin", "sender"].includes(mailbox.role);
   const internalReady = !!(overview?.internalConfigured ?? (overview?.configured && overview.domain));
   const ownedInternal = overview?.mailboxes.filter((item) => item.source === "internal" && item.role === "owner").length ?? 0;
   const canApplyDoca = !!(

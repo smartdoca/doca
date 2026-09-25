@@ -227,6 +227,7 @@ export const zh = {
   "trash.filesEmpty": "文件回收站为空",
   "trash.purgeFile": "永久删除「{name}」？此操作无法恢复。",
   "shell.offline": "暂时无法连接服务",
+  "shell.pluginUnavailable": "该模块未安装或已被停用。",
   "shell.retry": "重试",
   "shell.connecting": "正在连接 Doca…",
   "shell.authFailed": "未完成身份验证",

@@ -1,10 +1,9 @@
 import { Type } from "@sinclair/typebox";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { createSearchHost } from "@doca/search-host";
 import { publishIntegrationEvents } from "@core/modules/automation/events.js";
 import { processProjections } from "@core/modules/automation/jobs.js";
-import { mailKnowledgeIncluded } from "@core/modules/mail/scope.js";
-import { mailAttachmentIncluded } from "@core/modules/mail/search-scope.js";
 import type { Actor } from "@core/modules/identity/passwords.js";
 import { fail } from "@core/shared/errors.js";
 import { createContent } from "@core/workflows/resources.js";
@@ -19,7 +18,6 @@ import { searchSummaries } from "../services/search/search-summary.js";
 import {
   createSearchReconciler,
   resetSearchReconciliation,
-  searchDocument,
 } from "@core/modules/discovery/search-reconciliation.js";
 import {
   constrainedDocumentIds,
@@ -27,69 +25,35 @@ import {
 } from "@core/modules/discovery/search-intent.js";
 import { topicMatchTerms } from "@core/modules/discovery/search-excerpts.js";
 import { releaseDocumentFileIfUnused } from "@core/modules/documents/live-media.js";
-type FilePolicyGroup = "image" | "pdf" | "office" | "text" | "other";
-const defaultFileSearchGroups: FilePolicyGroup[] = [
-  "image",
-  "pdf",
-  "office",
-  "text",
-  "other",
-];
-const filePolicyGroup = (mime: string): FilePolicyGroup =>
-  mime.startsWith("image/")
-    ? "image"
-    : mime === "application/pdf"
-      ? "pdf"
-      : /officedocument|msword|ms-excel|ms-powerpoint/.test(mime)
-        ? "office"
-        : mime.startsWith("text/") || /json|xml|yaml/.test(mime)
-          ? "text"
-          : "other";
-const fileObjectDocumentId = (storageObjectId: string) =>
-  `file_object_${storageObjectId.replaceAll("-", "_")}`;
-const fileItemDocumentId = (fileItemId: string) =>
-  `file_item_${fileItemId.replaceAll("-", "_")}`;
-function fileObjectSearchDocument(row: {
-  storageObjectId: string;
-  description?: string | null;
-}) {
-  // A physical object is indexed once. Names and per-location overrides belong
-  // to aliases so inaccessible locations can never leak search terms.
-  return searchDocument({
-    id: fileObjectDocumentId(row.storageObjectId),
-    title: "",
-    text: row.description?.trim() || null,
-  });
-}
-function fileItemSearchDocument(row: {
-  id: string;
-  name: string;
-  description?: string | null;
-  ai_description_override?: string | null;
-}) {
-  return searchDocument({
-    id: fileItemDocumentId(row.id),
-    title: row.name,
-    text: (row.description ?? row.ai_description_override)?.trim() || null,
-  });
-}
+import {
+  createBuiltinSearchSources,
+  documentProjectionForId,
+  documentSearchSource,
+  fileItemDocumentId,
+  fileObjectDocumentId,
+  fileProjectionsForObject,
+  fileSearchSource,
+  knowledgeSearchSource,
+  mailMessageDocumentId,
+  mailProjectionForId,
+  mailSearchSource,
+  type SearchQueryContext,
+} from "../services/search/sources.js";
+import {
+  MeilisearchSearchProvider,
+  SearchRequestError,
+} from "../services/search/meilisearch-provider.js";
 type Config = { enabled: number; endpoint: string; index_name: string };
-class SearchRequestError extends Error {
-  constructor(
-    readonly status: number,
-    readonly detail = "",
-  ) {
-    super(
-      detail
-        ? `Meilisearch 请求失败（${status}）：${detail}`
-        : `Meilisearch 请求失败（${status}）`,
-    );
-  }
-}
 export interface SearchRuntime {
   allowedOrigins: string[];
   apiKey?: string;
   fetch?: typeof fetch;
+  sources?: {
+    documents?: boolean;
+    files?: boolean;
+    knowledge?: boolean;
+    mail?: boolean;
+  };
 }
 export async function registerSearch(
   api: FastifyInstance,
@@ -168,56 +132,6 @@ export async function registerSearch(
     }
     return res.json();
   }
-  async function ensureIndex(c: Config) {
-    const base = `/indexes/${c.index_name}`;
-    try {
-      await request(c, base);
-    } catch (error) {
-      if (!(error instanceof SearchRequestError) || error.status !== 404)
-        throw error;
-      await waitTask(
-        c,
-        await request(c, "/indexes", "POST", {
-          uid: c.index_name,
-          primaryKey: "id",
-        }),
-      );
-    }
-    await waitTask(
-      c,
-      await request(c, base + "/settings", "PATCH", {
-        filterableAttributes: ["id", "reader_ids"],
-        searchableAttributes: ["title", "text"],
-        displayedAttributes: ["id"],
-        pagination: { maxTotalHits: 10000 },
-      }),
-    );
-  }
-  const reconciler = createSearchReconciler(db, {
-    async list(c, offset, limit) {
-      try {
-        return await request(
-          c,
-          `/indexes/${c.index_name}/documents?offset=${offset}&limit=${limit}&fields=id,content_hash`,
-        );
-      } catch (error) {
-        if (!(error instanceof SearchRequestError) || error.status !== 404)
-          throw error;
-        // A lost index is recoverable. Resetting the inventory avoids trusting its old offset.
-        await ensureIndex(c);
-        await transact(db, async (tx) => {
-          const current = await tx
-            .selectFrom("search_settings")
-            .select("generation")
-            .where("id", "=", "system")
-            .executeTakeFirstOrThrow();
-          if (current.generation === c.generation)
-            await resetSearchReconciliation(tx, c.generation);
-        });
-        throw new Error("索引已重新创建，下一轮对账将补齐文档");
-      }
-    },
-  });
   async function waitTask(c: Config, task: any) {
     // Embedding batches can spend more than 30s in Meilisearch. A short
     // timeout causes the same document job to submit another task while the
@@ -274,99 +188,34 @@ export async function registerSearch(
     }
   }
   let job: Promise<void> | null = null;
-  function reindex(c: Config) {
+  function reindex(_c: Config) {
     if (indexing) return job!;
     indexing = true;
     lastError = "";
     job = (async () => {
-      const base = `/indexes/${c.index_name}`;
-      await ensureIndex(c);
-      let cursor = "";
-      while (!stopping) {
-        const docs = await db
-          .selectFrom("resources")
-          .leftJoin(
-            "document_states",
-            "document_states.resource_id",
-            "resources.id",
-          )
-          .select(["resources.id", "resources.title", "document_states.text"])
-          .where("resources.kind", "=", "document")
-          .where("resources.deleted_at", "is", null)
-          .orderBy("resources.id")
-          .limit(100)
-          .where("resources.id", ">", cursor)
-          .execute();
-        if (!docs.length) break;
-        await waitTask(
-          c,
-          await request(
-            c,
-            base + "/documents?primaryKey=id",
-            "POST",
-            docs.map(searchDocument),
-          ),
-        );
-        cursor = docs.at(-1)!.id;
-      }
-      const fileSetting = await db
-        .selectFrom("file_recognition_settings")
-        .select("config")
-        .where("id", "=", "default")
-        .executeTakeFirst();
-      const searchGroups = new Set<FilePolicyGroup>(
-        (fileSetting ? JSON.parse(fileSetting.config).searchGroups : null) ??
-          defaultFileSearchGroups,
-      );
-      let fileCursor = "";
-      while (!stopping) {
-        const objects = await db
-          .selectFrom("file_storage_objects")
-          .select(["id", "ai_description"])
-          .where("id", ">", fileCursor)
-          .orderBy("id")
-          .limit(100)
-          .execute();
-        if (!objects.length) break;
-        const documents = [];
-        for (const object of objects) {
-          const items = await db
-            .selectFrom("file_items")
-            .select(["id", "name", "mime", "ai_description_override"])
-            .where("storage_object_id", "=", object.id)
-            .where("deleted_at", "is", null)
-            .execute();
-          if (
-            !items.length ||
-            !items.some((item) => searchGroups.has(filePolicyGroup(item.mime)))
-          )
-            continue;
-          documents.push(
-            fileObjectSearchDocument({
-              storageObjectId: object.id,
-              description: object.ai_description,
-            }),
-          );
-          documents.push(
-            ...items
-              .filter((item) => searchGroups.has(filePolicyGroup(item.mime)))
-              .map(fileItemSearchDocument),
-          );
+      const failures: unknown[] = [];
+      let rebuilt = 0;
+      for (const source of searchHost.registry.list()) {
+        if (stopping) break;
+        try {
+          await searchHost.rebuild({
+            source: source.descriptor,
+            context: { kind: "system" },
+          });
+          rebuilt++;
+        } catch (error) {
+          failures.push(error);
         }
-        if (documents.length)
-          await waitTask(
-            c,
-            await request(
-              c,
-              base + "/documents?primaryKey=id",
-              "POST",
-              documents,
-            ),
-          );
-        fileCursor = objects.at(-1)!.id;
       }
-      lastIndexedAt = new Date().toISOString();
-      await reconciler.schedule();
+      if (rebuilt) {
+        lastIndexedAt = new Date().toISOString();
+        await reconciler.schedule();
+      }
+      if (failures.length)
+        throw new AggregateError(
+          failures,
+          `${failures.length} 个搜索来源重建失败`,
+        );
     })()
       .catch((e) => {
         lastError = (e as Error).message;
@@ -380,6 +229,39 @@ export async function registerSearch(
   const embeddings = await registerSearchEmbeddings(api, db, admin, {
     request,
     indexing: () => indexing,
+  });
+  const provider = new MeilisearchSearchProvider({
+    config,
+    request,
+    waitTask,
+    queryEmbedder: embeddings.queryEmbedder,
+  });
+  const searchHost = createSearchHost<SearchQueryContext>(provider);
+  const registerSource = (
+    source: Parameters<typeof searchHost.registry.register>[0],
+  ) => {
+    const registration = searchHost.registry.register(source);
+    provider.bindAlias(
+      searchHost.indexNames(source.descriptor).alias,
+      source.descriptor,
+      {
+        useConfiguredIndex:
+          source.descriptor.pluginId === documentSearchSource.pluginId &&
+          source.descriptor.sourceId === documentSearchSource.sourceId,
+      },
+    );
+    return registration;
+  };
+  for (const source of createBuiltinSearchSources(db, runtime.sources)) {
+    registerSource(source);
+  }
+  const reconciler = createSearchReconciler(db, {
+    list: (_config, offset, limit) =>
+      provider.listDocuments(
+        searchHost.indexNames(documentSearchSource).alias,
+        offset,
+        limit,
+      ),
   });
   api.put<{ Body: { minScore: number } }>(
     "/api/v1/admin/search/relevance",
@@ -591,41 +473,17 @@ export async function registerSearch(
       await processProjections(db, "search", async (payload) => {
         const id = String(payload.resourceId);
         const repair = await reconciler.repairToken(id);
-        const row = await db
-          .selectFrom("resources as r")
-          .leftJoin("document_states as s", "s.resource_id", "r.id")
-          .select(["r.id", "r.title", "r.kind", "r.deleted_at", "s.text"])
-          .where("r.id", "=", id)
-          .executeTakeFirst();
-        const base = `/indexes/${c.index_name}/documents`;
-        if (!row || row.deleted_at || row.kind !== "document") {
-          try {
-            await waitTask(
-              c,
-              await request(c, base + "/" + encodeURIComponent(id), "DELETE"),
-            );
-          } catch (error) {
-            if (!(error instanceof SearchRequestError) || error.status !== 404)
-              throw error;
-          }
-        } else {
-          const document = searchDocument(row);
-          let indexed: any;
-          try {
-            indexed = await request(
-              c,
-              base + "/" + encodeURIComponent(id) + "?fields=id,content_hash",
-            );
-          } catch (error) {
-            if (!(error instanceof SearchRequestError) || error.status !== 404)
-              throw error;
-          }
-          if (indexed?.content_hash !== document.content_hash)
-            await waitTask(
-              c,
-              await request(c, base + "?primaryKey=id", "POST", [document]),
-            );
-        }
+        const projection = await documentProjectionForId(db, id);
+        if (projection)
+          await searchHost.upsertProjections({
+            source: documentSearchSource,
+            projections: [projection],
+          });
+        else
+          await searchHost.deleteProjections({
+            source: documentSearchSource,
+            documentIds: [id],
+          });
         await reconciler.completeRepair(c, id, repair);
         lastIndexedAt = new Date().toISOString();
       });
@@ -637,127 +495,48 @@ export async function registerSearch(
           .select(["f.id", "f.storage_object_id", "o.ai_description"])
           .where("f.id", "=", id)
           .executeTakeFirst();
-        const setting = await db
-          .selectFrom("file_recognition_settings")
-          .select("config")
-          .where("id", "=", "default")
-          .executeTakeFirst();
-        const groups = new Set<FilePolicyGroup>(
-          (setting ? JSON.parse(setting.config).searchGroups : null) ??
-            defaultFileSearchGroups,
-        );
-        const base = `/indexes/${c.index_name}/documents`;
-        try {
-          await waitTask(
-            c,
-            await request(
-              c,
-              base + "/" + encodeURIComponent(fileItemDocumentId(id)),
-              "DELETE",
-            ),
-          );
-        } catch (error) {
-          if (!(error instanceof SearchRequestError) || error.status !== 404)
-            throw error;
-        }
+        const deleted = [fileItemDocumentId(id)];
         if (row) {
-          const storedItems = await db
-            .selectFrom("file_items")
-            .select(["id", "name", "mime", "ai_description_override", "parent_id", "metadata"])
-            .where("storage_object_id", "=", row.storage_object_id)
-            .where("deleted_at", "is", null)
-            .execute();
-          const items = [];
-          for (const item of storedItems)
-            if (await mailAttachmentIncluded(db, item.parent_id, item.metadata)) items.push(item);
-          const documentId = fileObjectDocumentId(row.storage_object_id);
-          if (
-            !items.length ||
-            !items.some((item) => groups.has(filePolicyGroup(item.mime)))
-          ) {
-            try {
-              await waitTask(
-                c,
-                await request(
-                  c,
-                  base + "/" + encodeURIComponent(documentId),
-                  "DELETE",
-                ),
-              );
-            } catch (error) {
-              if (
-                !(error instanceof SearchRequestError) ||
-                error.status !== 404
-              )
-                throw error;
-            }
-          } else {
-            const documents = [
-              fileObjectSearchDocument({
-                storageObjectId: row.storage_object_id,
-                description: row.ai_description,
-              }),
-              ...items
-                .filter((item) => groups.has(filePolicyGroup(item.mime)))
-                .map(fileItemSearchDocument),
-            ];
-            await waitTask(
-              c,
-              await request(c, base + "?primaryKey=id", "POST", documents),
-            );
-          }
+          deleted.push(fileObjectDocumentId(row.storage_object_id));
+          const projections = await fileProjectionsForObject(
+            db,
+            row.storage_object_id,
+          );
+          await searchHost.deleteProjections({
+            source: fileSearchSource,
+            documentIds: deleted,
+          });
+          if (projections.length)
+            await searchHost.upsertProjections({
+              source: fileSearchSource,
+              projections,
+            });
+        } else {
+          await searchHost.deleteProjections({
+            source: fileSearchSource,
+            documentIds: deleted,
+          });
         }
         lastIndexedAt = new Date().toISOString();
       });
       await processProjections(db, "search-mail", async (payload) => {
         const id = String(payload.messageId ?? "");
-        if (!id) return;
-        const row = await db
-          .selectFrom("mail_messages")
-          .leftJoin("mailboxes", "mailboxes.id", "mail_messages.mailbox_id")
-          .selectAll("mail_messages")
-          .select("mailboxes.address as mailbox_address")
-          .select("mailboxes.knowledge_scope as mailbox_knowledge_scope")
-          .select("mailboxes.deleted_at as mailbox_deleted_at")
-          .where("mail_messages.id", "=", id)
-          .executeTakeFirst();
-        const documentId = `mail_message_${id.replaceAll("-", "_")}`;
-        const base = `/indexes/${c.index_name}/documents`;
-        const indexed = !!row
-          && !row.mailbox_deleted_at
-          && row.mailbox_knowledge_scope != null
-          && mailKnowledgeIncluded(row.mailbox_knowledge_scope, row.starred);
-        if (!indexed || !row) {
-          try {
-            await waitTask(
-              c,
-              await request(c, `${base}/${encodeURIComponent(documentId)}`, "DELETE"),
-            );
-          } catch (error) {
-            if (!(error instanceof SearchRequestError) || error.status !== 404)
-              throw error;
-          }
+        if (
+          !id ||
+          !searchHost.registry.get(mailSearchSource)
+        )
           return;
-        }
-        await waitTask(
-          c,
-          await request(c, `${base}?primaryKey=id`, "POST", [
-            searchDocument({
-              id: documentId,
-              title: row.subject || "（无主题）",
-              text: [
-                row.mailbox_address ? `邮箱 ${row.mailbox_address}` : "",
-                row.from_addr ? `发件人 ${row.from_addr}` : "",
-                row.to_addrs ? `收件人 ${row.to_addrs}` : "",
-                row.ai_tags ? `标签 ${row.ai_tags}` : "",
-                row.snippet,
-                row.body_text,
-              ]
-                .filter(Boolean)
-                .join("\n"),
-            }),
-          ]),
-        );
+        const projection = await mailProjectionForId(db, id);
+        if (projection)
+          await searchHost.upsertProjections({
+            source: mailSearchSource,
+            projections: [projection],
+          });
+        else
+          await searchHost.deleteProjections({
+            source: mailSearchSource,
+            documentIds: [mailMessageDocumentId(id)],
+          });
         lastIndexedAt = new Date().toISOString();
       });
     })()
@@ -776,6 +555,7 @@ export async function registerSearch(
     clearInterval(timer);
     if (job) await job;
     if (processing) await processing;
+    await searchHost.dispose();
   });
   async function documentIdsForFileTopic(
     actor: Actor,
@@ -821,7 +601,6 @@ export async function registerSearch(
     });
     return page.items.map((item) => item.id);
   }
-  let chunkFilterReady = false;
   const knowledgeIndex = {
     async replace(
       removed: string[],
@@ -830,63 +609,47 @@ export async function registerSearch(
       const c = await config();
       if (!c.enabled) return;
       try {
-        if (!chunkFilterReady) {
-          const settings = await request(c, `/indexes/${c.index_name}/settings`);
-          const filterable = Array.isArray(settings.filterableAttributes) ? settings.filterableAttributes : [];
-          if (!filterable.includes("reader_ids")) {
-            await request(c, `/indexes/${c.index_name}/settings`, "PATCH", {
-              filterableAttributes: [...filterable, "reader_ids"],
-            });
-          }
-          chunkFilterReady = true;
-        }
-        const base = `/indexes/${c.index_name}/documents`;
-        for (const id of removed) {
-          try {
-            await request(c, `${base}/${encodeURIComponent(id)}`, "DELETE");
-          } catch (error) {
-            if (!(error instanceof SearchRequestError) || error.status !== 404) throw error;
-          }
-        }
-        if (docs.length) {
-          await request(c, `${base}?primaryKey=id`, "POST", docs.map((doc) => ({
-            id: doc.id,
-            title: doc.title,
-            text: doc.text,
-            reader_ids: doc.readerIds,
-          })));
-        }
-      } catch {
-        chunkFilterReady = false;
-      }
+        if (removed.length)
+          await searchHost.deleteProjections({
+            source: knowledgeSearchSource,
+            documentIds: removed,
+          });
+        if (docs.length)
+          await searchHost.upsertProjections({
+            source: knowledgeSearchSource,
+            projections: docs.map((doc) => ({
+              id: doc.id,
+              text: doc.text,
+              metadata: {
+                title: doc.title,
+                reader_ids: doc.readerIds,
+              },
+            })),
+          });
+      } catch {}
     },
     async search(tokens: string[], query: string) {
       const c = await config();
       if (!c.enabled || !query.trim() || !tokens.length) return null;
       try {
-        const embedder = await embeddings.queryEmbedder();
-        const data = await request(c, `/indexes/${c.index_name}/search`, "POST", {
-          q: query,
+        const result = await searchHost.query<string>({
+          query,
+          context: { kind: "knowledge", tokens },
+          sources: [knowledgeSearchSource],
           limit: 20,
-          filter: tokens.map((token) => `reader_ids = ${JSON.stringify(token)}`).join(" OR "),
-          attributesToRetrieve: ["id"],
-          ...(embedder
-            ? { hybrid: { embedder, semanticRatio: 0.8 }, showRankingScore: true }
-            : {}),
         });
-        if (!Array.isArray(data.hits)) return null;
-        return data.hits
-          .filter((hit: any) => typeof hit.id === "string" && hit.id.startsWith("kc_"))
-          .map((hit: any) => ({
-            id: String(hit.id),
-            score: typeof hit._rankingScore === "number" ? hit._rankingScore : 0.5,
-          }));
+        if (result.failures.length) return null;
+        return result.items
+          .filter((item) => item.id.startsWith("kc_"))
+          .map((item) => ({ id: item.id, score: item.score }));
       } catch {
         return null;
       }
     },
   };
   return {
+    searchHost,
+    registerSource,
     knowledgeIndex,
     async searchFiles(
       query: string,
@@ -910,66 +673,33 @@ export async function registerSearch(
           .selectFrom("file_items")
           .select(["id", "storage_object_id"])
           .where("id", "in", fileIds)
+          .where("deleted_at", "is", null)
           .execute();
-        const objectIds = [
-          ...new Set(mappings.map((row) => row.storage_object_id)),
-        ];
-        const candidates = [
-          ...objectIds.map(fileObjectDocumentId),
-          ...mappings.map((row) => fileItemDocumentId(row.id)),
-        ];
+        if (!mappings.length) return null;
         const fileThreshold = Math.min(c.ai_min_score, 0.45);
-        const data = await request(
-          c,
-          `/indexes/${c.index_name}/search`,
-          "POST",
-          {
-            q: retrievalQuery,
-            limit: candidates.length,
-            filter: `id IN [${candidates.map((id) => JSON.stringify(id)).join(",")}]`,
-            attributesToRetrieve: ["id"],
-            ...(embedder
-              ? {
-                  hybrid: { embedder, semanticRatio: 0.8 },
-                  showRankingScore: true,
-                  rankingScoreThreshold: fileThreshold,
-                }
-              : {}),
+        const result = await searchHost.query<{
+          fileIds: string[];
+          objectId: string;
+        }>({
+          query: retrievalQuery,
+          context: {
+            kind: "files",
+            allowedFileIds: fileIds,
+            mappings,
+            retrievalQuery,
+            semantic: !!embedder,
+            minScore: fileThreshold,
           },
-        );
-        if (!Array.isArray(data.hits)) return null;
-        const objectByIndexed = new Map(
-          objectIds.map((id) => [fileObjectDocumentId(id), id]),
-        );
-        const itemByIndexed = new Map<string, string>();
-        for (const row of mappings) {
-          const indexedId = fileItemDocumentId(row.id);
-          objectByIndexed.set(indexedId, row.storage_object_id);
-          itemByIndexed.set(indexedId, row.id);
-        }
+          sources: [fileSearchSource],
+          limit: mappings.length * 2,
+        });
+        if (result.failures.length) return null;
         const orderedItems: string[] = [];
         const seenObjects = new Set<string>();
-        for (const hit of data.hits) {
-          if (
-            embedder &&
-            (typeof hit._rankingScore !== "number" ||
-              hit._rankingScore < fileThreshold)
-          )
-            continue;
-          const indexedId = String(hit.id);
-          const objectId = objectByIndexed.get(indexedId);
-          if (!objectId || seenObjects.has(objectId)) continue;
-          seenObjects.add(objectId);
-          const matchedItem = itemByIndexed.get(indexedId);
-          if (matchedItem) orderedItems.push(matchedItem);
-          orderedItems.push(
-            ...mappings
-              .filter(
-                (row) =>
-                  row.storage_object_id === objectId && row.id !== matchedItem,
-              )
-              .map((row) => row.id),
-          );
+        for (const item of result.items) {
+          if (seenObjects.has(item.value.objectId)) continue;
+          seenObjects.add(item.value.objectId);
+          orderedItems.push(...item.value.fileIds);
         }
         return orderedItems.length ? orderedItems : null;
       } catch {
@@ -984,9 +714,15 @@ export async function registerSearch(
     ) {
       const c = await config();
       const intent = searchIntent(query.q ?? "");
+      const inferredFormat =
+        intent.format && !/插入(?:一?个)?表格/u.test(query.q ?? "")
+          ? intent.format
+          : undefined;
       const scoped = {
         ...query,
-        ...(intent.format && !query.format ? { format: intent.format } : {}),
+        ...(inferredFormat && !query.format
+          ? { format: inferredFormat }
+          : {}),
       };
       const highlight = intent.topic || query.q;
       const empty = (mode: string) => ({
@@ -1100,55 +836,42 @@ export async function registerSearch(
             mode: embedder ? "ai" : "keyword",
           };
         const retrievalQuery = intent.topic || query.q;
-        const data = await request(
-          c,
-          `/indexes/${c.index_name}/search`,
-          "POST",
-          {
-            q: retrievalQuery,
-            limit: candidates.length,
-            filter: `id IN [${candidates.map((id) => JSON.stringify(id)).join(",")}]`,
-            attributesToRetrieve: ["id"],
-            ...(embedder
-              ? {
-                  hybrid: { embedder, semanticRatio: 0.8 },
-                  showRankingScore: true,
-                  rankingScoreThreshold: c.ai_min_score,
-                }
-              : {}),
+        type Summary = Awaited<ReturnType<typeof searchSummaries>>[number];
+        const result = await searchHost.query<Summary>({
+          query: retrievalQuery,
+          context: {
+            kind: "documents",
+            actor,
+            scoped,
+            candidateIds: candidates,
+            retrievalQuery,
+            highlight: highlight ?? "",
+            semantic: !!embedder,
+            minScore: c.ai_min_score,
           },
-        );
-        if (!Array.isArray(data.hits)) throw new Error("无效搜索结果");
-        const ranked = [
-          ...new Set<string>(
-            data.hits
-              .filter(
-                (h: any) =>
-                  !embedder ||
-                  (typeof h._rankingScore === "number" &&
-                    Number.isFinite(h._rankingScore) &&
-                    h._rankingScore >= c.ai_min_score),
-              )
-              .map((h: any) => h.id)
-              .filter(
-                (id: unknown) =>
-                  typeof id === "string" && candidates.includes(id),
-              ),
-          ),
-        ];
+          sources: [documentSearchSource],
+          limit: candidates.length,
+        });
+        if (result.failures.length)
+          throw new AggregateError(
+            result.failures.map((failure) => failure.error),
+            "文档搜索来源失败",
+          );
+        const ranked = result.items.map((item) => item.id);
         const evidenced = fromFiles.filter((id) => candidates.includes(id));
-        const titleRows = ranked.length
-          ? await db
-              .selectFrom("resources")
-              .select(["id", "title"])
-              .where("id", "in", ranked)
-              .execute()
-          : [];
+        const values = new Map(
+          result.items.map((item) => [item.id, item.value]),
+        );
         const ids: string[] = constrainedDocumentIds(
           ranked,
           evidenced,
           intent,
-          new Map(titleRows.map((row) => [row.id, row.title])),
+          new Map(
+            result.items.map((item) => [
+              item.id,
+              `${item.value.title ?? ""}\n${item.value.summary ?? ""}`,
+            ]),
+          ),
         );
         if (!ids.length)
           return {
@@ -1158,34 +881,14 @@ export async function registerSearch(
             engine: "meilisearch",
             mode: embedder ? "ai" : "keyword",
           };
-        // Re-check ACLs and filters, then retain Meilisearch's relevance order.
-        const visible = [];
-        let offset = 0;
-        do {
-          const page = await content.list(actor, {
-            ...scoped,
-            q: undefined,
-            cursor: undefined,
-            offset,
-            kind: "document",
-            matchedIds: ids,
-          });
-          visible.push(...page.items);
-          if (page.nextOffset === null) break;
-          offset = page.nextOffset;
-        } while (visible.length < ids.length);
-        const rank = new Map(ids.map((id, i) => [id, i]));
-        visible.sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
         const start = query.offset ?? 0;
-        const summarized = await searchSummaries(
-          db,
-          actor,
-          embedder ? visible : visible.slice(start, start + 100),
-          highlight,
-        );
+        const summarized = ids.flatMap((id) => {
+          const value = values.get(id);
+          return value ? [value] : [];
+        });
         if (embedder) {
           const scores = new Map<string, number>(
-            data.hits.map((h: any) => [h.id, h._rankingScore]),
+            result.items.map((item) => [item.id, item.providerScore]),
           );
           // Break close semantic matches using concrete terms in the current source.
           // The bounded boost never rescues a hit below the semantic threshold.
@@ -1199,7 +902,12 @@ export async function registerSearch(
             summarized.map((item) => item.id),
             evidenced,
             intent,
-            new Map(summarized.map((item) => [item.id, item.title])),
+            new Map(
+              summarized.map((item) => [
+                item.id,
+                `${item.title ?? ""}\n${item.summary ?? ""}`,
+              ]),
+            ),
           );
           const evidenceRank = new Map(reranked.map((id, i) => [id, i]));
           summarized.sort(
@@ -1209,15 +917,12 @@ export async function registerSearch(
           );
         }
         return {
-          items: (embedder
-            ? summarized.slice(start, start + 100)
-            : summarized
-          ).map(({ searchCoverage, ...r }) => r),
-          total: embedder ? summarized.length : visible.length,
+          items: summarized
+            .slice(start, start + 100)
+            .map(({ searchCoverage, ...r }) => r),
+          total: summarized.length,
           nextOffset:
-            start + 100 < (embedder ? summarized.length : visible.length)
-              ? start + 100
-              : null,
+            start + 100 < summarized.length ? start + 100 : null,
           engine: "meilisearch",
           mode: embedder ? "ai" : "keyword",
           ...(query.mode === "auto" && !embedder

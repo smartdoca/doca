@@ -27,15 +27,15 @@ export function sanitizeMailHtml(html: string) {
   let changed = true;
   while (changed) {
     changed = false;
-    for (const node of [...doc.body.querySelectorAll("*")]) {
+    for (const node of Array.from(doc.body.querySelectorAll("*"))) {
       if (!ALLOWED.has(node.tagName)) {
-        node.replaceWith(...node.childNodes);
+        node.replaceWith(...Array.from(node.childNodes));
         changed = true;
       }
     }
   }
-  for (const node of [...doc.body.querySelectorAll("*")]) {
-    for (const attr of [...node.attributes]) {
+  for (const node of Array.from(doc.body.querySelectorAll("*"))) {
+    for (const attr of Array.from(node.attributes)) {
       const name = attr.name.toLowerCase();
       const value = attr.value.trim();
       if (name.startsWith("on") || name === "srcdoc" || name === "formaction" || name === "xlink:href") {

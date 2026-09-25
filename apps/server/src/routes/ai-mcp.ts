@@ -1,4 +1,5 @@
 import { searchKnowledge } from "../services/ai/knowledge-search.js";
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -7,6 +8,12 @@ import type { DB } from "@db/index.js";
 import { fail } from "@core/shared/errors.js";
 import { tokenHash } from "@core/modules/identity/passwords.js";
 import { requireCapability } from "@core/modules/entitlements/service.js";
+import {
+  createToolCall,
+  type AIContributionHost,
+  type ToolOutcome,
+} from "@doca/ai-host";
+import type { AIContributionExecutionContext } from "../services/ai/runner.js";
 import {
   checkScope,
   createAIDocument,
@@ -20,6 +27,7 @@ export async function registerAIMcp(
   db: DB,
   notify?: (id: string) => Promise<void>,
   search?: (actor: any, query: any) => Promise<any>,
+  contributions?: AIContributionHost<AIContributionExecutionContext>,
 ) {
   api.post("/api/v1/mcp", { bodyLimit: 300000 }, async (req, reply) => {
     const token = /^Bearer (doca_mcp_[a-f0-9]{64})$/.exec(
@@ -67,6 +75,53 @@ export async function registerAIMcp(
           };
         }
       };
+    const contributedSessionId = `mcp:${key.id}`;
+    const contributedTurnId = randomUUID();
+    const contributedController = new AbortController();
+    const contributedContext: AIContributionExecutionContext = {
+      db,
+      actor,
+      jobId: contributedTurnId,
+      sessionId: contributedSessionId,
+    };
+    const contributedPipeline =
+      contributions?.createToolPipeline(contributedContext);
+    let contributedOrdinal = 0;
+    const unwrapOutcome = (outcome: ToolOutcome) => {
+      if (outcome.status === "success") return outcome.value;
+      if (outcome.status === "denied") throw new Error(outcome.reason);
+      if (outcome.status === "cancelled")
+        throw new DOMException(outcome.reason, "AbortError");
+      throw new Error(outcome.error.message);
+    };
+    for (const tool of contributions?.snapshot().tools ?? []) {
+      if (tool.exposure && !tool.exposure.includes("mcp")) continue;
+      server.registerTool(
+        tool.id,
+        {
+          description: tool.description ?? tool.id,
+          inputSchema: {
+            input: z.record(z.string(), z.unknown()).default({}),
+          },
+        },
+        wrap(async ({ input }) => {
+          const call = createToolCall({
+            sessionId: contributedSessionId,
+            turnId: contributedTurnId,
+            toolId: tool.id,
+            ordinal: contributedOrdinal++,
+            input,
+          });
+          const result = await contributedPipeline!.execute({
+            sessionId: contributedSessionId,
+            turnId: contributedTurnId,
+            call,
+            signal: contributedController.signal,
+          });
+          return unwrapOutcome(result.outcome);
+        }),
+      );
+    }
     server.registerTool(
       "knowledge_search",
       {

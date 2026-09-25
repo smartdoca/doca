@@ -55,6 +55,11 @@ export interface Resource {
   updated_at: string;
 }
 export interface Schema {
+  plugin_migrations: {
+    plugin_id: string;
+    version: string;
+    applied_at: string;
+  };
   quick_notes: { id: string; owner_id: string; content: string; plain_text: string; asset_ids: string; version: number; created_at: string; updated_at: string; deleted_at: string | null };
   quick_note_compilations: { id: string; owner_id: string; sources: string; request_hash: string; instruction: string; model_id: string; status: string; markdown: string; error: string; document_id: string | null; created_at: string; updated_at: string };
   moderation_settings: { id: string; config: string; revision: number };
@@ -71,6 +76,15 @@ export interface Schema {
   ai_grants: { id: string; user_id: string; amount: number; remaining: number; expires_at: string | null; reason: string; actor_id: string; created_at: string };
   ai_skills: { id: string; user_id: string; name: string; description: string; content: string; formats: string; enabled: number; revision: number; updated_at: string };
   ai_mcp_keys: { id: string; user_id: string; name: string; token_hash: string; resource_ids: string; writable: number; expires_at: string; created_at: string };
+  ai_session_events: {
+    session_id: string;
+    seq: number;
+    event_id: string;
+    digest: string;
+    type: string;
+    payload: string;
+    created_at: string;
+  };
   tickets: {
     operation_json?: string;
     id: string;
@@ -131,6 +145,9 @@ export interface Schema {
   projection_jobs: {
     lease_token?: string | null;
     lease_until?: string | null;
+    status?: string;
+    plugin_id?: string | null;
+    max_attempts?: number;
     id: string;
     kind: string;
     payload: string;
@@ -488,6 +505,15 @@ export interface Schema {
     updated_at: string;
     deleted_at: string | null;
     delete_batch: string | null;
+  };
+  file_bindings: {
+    id: string;
+    file_id: string;
+    owner_plugin: string;
+    owner_type: string;
+    owner_id: string;
+    role: string;
+    created_at: string;
   };
   file_recognition_settings: {
     id: string;

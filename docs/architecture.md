@@ -10,7 +10,7 @@
 
 个人信息支持昵称、预设或上传头像、修改密码。知识库支持上传封面；正文与管理页共用附件上传下载。管理员采用独立模块导航，包含概览、用户列表、登录与注册、文件存储、文档搜索、Hook。云备份和Hook入口明确显示未启用。后台统计只返回聚合数量，不给予管理员私有文档阅读权。
 
-采用 TypeScript 模块化单体，不拆微服务。前后端同一仓库、独立目录与构建边界，开发时两个监听端口，浏览器始终访问一个同源地址；发布时后端可以直接提供前端构建产物。
+采用 TypeScript 插件化单体，不拆微服务。前后端同一仓库、独立目录与构建边界，开发时两个监听端口，浏览器始终访问一个同源地址；发布时后端可以直接提供前端构建产物。管理员在 `doca.config.ts` 安装可信 npm 插件；Cordis 负责进程内 Context、Service、effect 与生命周期，Doca SDK 负责稳定契约。
 
 ```text
 浏览器（React / Vite）
@@ -18,7 +18,13 @@
     ▼
 apps/server — Host/Origin 校验、登录、请求校验、HTTP 路由、静态文件
     ▼
-packages/core — 账号、资源树、权限、版本条件、评论、事件
+PluginHost — discover、migration、mount、ready、逆序 dispose
+    ├── AIHost / SearchHost（贯穿服务）
+    ├── plugin-files（files.v1 基础能力）
+    ├── plugin-documents（documents.v1 / KnowledgeSource 聚合）
+    └── plugin-mail（可安装、可禁用的领域插件）
+    ▼
+packages/core — 账号、权限、成熟领域算法与事务边界
     ▼
 packages/db — Kysely 类型、当前建表定义、SQLite / PostgreSQL 驱动
 ```
@@ -96,12 +102,12 @@ Web、core、db 的源码导入使用 `@web/*`、`@core/*`、`@db/*` 别名，�
 
 已接入真实数据：本地账号、登录退出、密码修改、注册开关、用户启停；个人文档列表、知识库树、标题搜索与类型过滤；权限、转移、移动、独立复制、回收站；全文评论/单层回复/处理状态、点赞收藏；通知列表与已读；系统配置。
 
-尚未实现：
+仍需部署或外部联调的能力：
 
 - 幻灯片编辑器与完整桌面离线运行时；富文本、Markdown、表格、画板及对应协同协议已接入。
 - 作为 OIDC 源、SAML、账号找回；外部 OIDC 与社交登录适配已实现，真实平台凭据与部署联调待完成。
 - Hook 配置/可靠投递；通知已使用WebSocket失效推送和HTTP补取。
-- AI、MCP；已有格式的导入导出、正文附件及可选 Meilisearch/数据库降级检索继续由现有适配处理。
+- 生产 AI provider、MCP 外部客户端和 Meilisearch 集群联调；AI、MCP、SessionEvent、格式导入导出、正文附件及数据库降级检索已有实现。
 - 桌面、DSH、设备绑定、版本化云备份与冲突解决。
 
 评论详情当前最多返回最早 200 条；通知 API 有分页，UI 当前展示最新 50 条。目录树分页拉取当前有权访问的资源。以上是当前容量边界，不是最终产品限制。

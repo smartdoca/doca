@@ -876,12 +876,8 @@ export function registerFiles(
           "file_extracts.status as extract_status",
         ])
         .where("file_items.deleted_at", "is", null)
-        .where("file_items.parent_type", "=", type)
-        .where("file_items.parent_id", "=", id)
         .orderBy("file_items.name");
-      if (type === "folder" && currentFolder)
-        files = files.where("file_items.owner_id", "=", currentFolder.owner_id);
-      else if (type === "system" && id.startsWith("mail:")) {
+      if (type === "system" && id.startsWith("mail:")) {
         const mailboxId = id.slice(5);
         const mailbox = await db
           .selectFrom("mailboxes")
@@ -899,8 +895,33 @@ export function registerFiles(
             .executeTakeFirst();
           if (!share) fail(404, "邮箱不存在");
         }
-      } else if (type !== "document")
-        files = files.where("file_items.owner_id", "=", actor.id);
+        const bindings = await db
+          .selectFrom("file_bindings")
+          .select("file_id")
+          .where("owner_plugin", "=", "doca.mail")
+          .where("owner_type", "=", "message")
+          .where("owner_id", "like", `${mailboxId}:%`)
+          .execute();
+        files = files.where(
+          "file_items.id",
+          "in",
+          bindings.length
+            ? bindings.map((binding) => binding.file_id)
+            : ["__no_mail_files__"],
+        );
+      } else {
+        files = files
+          .where("file_items.parent_type", "=", type)
+          .where("file_items.parent_id", "=", id);
+        if (type === "folder" && currentFolder)
+          files = files.where(
+            "file_items.owner_id",
+            "=",
+            currentFolder.owner_id,
+          );
+        else if (type !== "document")
+          files = files.where("file_items.owner_id", "=", actor.id);
+      }
       if (req.query.sessionId && type === "system" && id === "ai") {
         files = files.where(
           "file_items.metadata",

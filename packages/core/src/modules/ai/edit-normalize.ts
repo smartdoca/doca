@@ -156,7 +156,9 @@ export function collectEditOperations(args: Record<string, unknown>) {
   });
 }
 
-function spreadsheetOperation(op: Record<string, unknown>) {
+function spreadsheetOperation(
+  op: Record<string, unknown>,
+): Record<string, unknown> & { type: string } {
   const type = String(op.type ?? "");
   const aliased = cellAliases.includes(type) ? "cells" : type;
   if (aliased !== "cells") return { ...op, type: aliased };
@@ -266,18 +268,21 @@ export function resolveSpreadsheetSheetId(
 
 export function normalizeEditOperations(
   format: string,
-  operations: Array<Record<string, unknown>>,
+  operations: Array<{ type: string; [key: string]: any }>,
   snapshot?: { sheetOrder?: string[]; sheets?: Record<string, { name?: string }> },
-) {
+): Array<{ type: string; [key: string]: any }> {
   return operations.map((op) => {
     if (format === "spreadsheet") {
-      const next = spreadsheetOperation(op);
+      const next: Record<string, unknown> & { type: string } =
+        spreadsheetOperation(op);
       if (snapshot && next.type === "cells")
         next.sheetId = resolveSpreadsheetSheetId(next.sheetId, snapshot);
       return next;
     }
-    if (format === "canvas") return canvasOperation(op);
-    if (format === "rich_text") return richTextOperation(op);
+    if (format === "canvas")
+      return canvasOperation(op) as { type: string; [key: string]: any };
+    if (format === "rich_text")
+      return richTextOperation(op) as { type: string; [key: string]: any };
     return op;
   });
 }

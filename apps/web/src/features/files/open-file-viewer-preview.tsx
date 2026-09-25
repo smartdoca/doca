@@ -68,13 +68,11 @@ function GenericFilePreview({ file }: { file: PreviewSource }) {
       try {
         // Language files expect a global Prism object. Production ESM chunks
         // still need the Vite rewrite; this assignment covers runtime checks.
-        // @ts-expect-error Prism is a transitive dependency of the viewer core.
         const prismModule = await import("prismjs");
         (globalThis as { Prism?: unknown }).Prism = prismModule.default ?? prismModule;
         const [{ FileViewer }, core, worker] = await Promise.all([
           import("@open-file-viewer/react"),
           import("@open-file-viewer/core"),
-          // @ts-expect-error Vite query import
           import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
         ]);
         if (cancelled) return;
