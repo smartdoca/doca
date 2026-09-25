@@ -407,16 +407,11 @@ it("supports history preview and same-epoch rollback, independent copies and tra
   x.b.destroy();
 });
 it("rejects an oversized collaboration update atomically, preserves receipt identity for retry and permits shrinking after downgrade", async () => {
-  const { entitlementConfig } =
-    await import("@core/modules/entitlements/service.js");
+  const { pluginServices } = await import("@core/shared/plugin-services.js");
+  const { fail } = await import("@core/shared/errors.js");
   const x = await setup();
-  const c = await entitlementConfig(db);
-  c.levels[0]!.limits["document.bytes"] = 5;
-  await db
-    .updateTable("account_settings")
-    .set({ config: JSON.stringify(c) })
-    .where("id", "=", "entitlements")
-    .execute();
+  let limit = 5;
+  pluginServices(db).policies.set("test.document-size", { id: "test.document-size", async check(input) { if (input.action === "documents.resize" && Number(input.facts.next) > Number(input.facts.previous) && Number(input.facts.next) > limit) fail(413, "Document limit"); } });
   const update = x.edit(x.a, (t) => t.insert(0, "123456789")),
     messageId = randomUUID();
   await expect(x.submit(update, messageId)).rejects.toMatchObject({
@@ -439,20 +434,10 @@ it("rejects an oversized collaboration update atomically, preserves receipt iden
   expect(
     (await x.docs.exchange(owner, x.resource.id, MARKDOWN_CODEC)).seq,
   ).toBe(0);
-  c.levels[0]!.limits["document.bytes"] = 20;
-  await db
-    .updateTable("account_settings")
-    .set({ config: JSON.stringify(c) })
-    .where("id", "=", "entitlements")
-    .execute();
+  limit = 20;
   expect((await x.submit(update, messageId)).changed).toBe(true);
   expect((await x.submit(update, messageId)).changed).toBe(false);
-  c.levels[0]!.limits["document.bytes"] = 2;
-  await db
-    .updateTable("account_settings")
-    .set({ config: JSON.stringify(c) })
-    .where("id", "=", "entitlements")
-    .execute();
+  limit = 2;
   expect((await x.submit(x.edit(x.a, (t) => t.delete(0, 5)))).changed).toBe(
     true,
   );

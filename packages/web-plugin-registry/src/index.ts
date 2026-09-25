@@ -276,8 +276,6 @@ export type KnowledgeSourceSelection =
   | "document"
   | "file"
   | "folder"
-  | "mailbox"
-  | "message"
   | "url"
   | "config";
 

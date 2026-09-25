@@ -28,7 +28,7 @@ const isMarkdown = (file: PreviewSource) =>
   file.mime === "text/markdown" || /\.md(?:own)?$/i.test(file.name);
 
 function MarkdownFilePreview({ file }: { file: PreviewSource }) {
-  const { locale } = useI18n();
+  const { t, locale } = useI18n();
   const [source, setSource] = useState("");
   const [mode, setMode] = useState<"source" | "rendered">("source");
   const [error, setError] = useState("");
@@ -50,7 +50,7 @@ function MarkdownFilePreview({ file }: { file: PreviewSource }) {
     <div className="file-markdown-preview">
       <div className="file-markdown-toolbar" role="toolbar" aria-label="Markdown 展示方式">
         <button className={mode === "source" ? "active" : ""} onClick={() => setMode("source")}>源码</button>
-        <button className={mode === "rendered" ? "active" : ""} onClick={() => setMode("rendered")}>阅读</button>
+        <button className={mode === "rendered" ? "active" : ""} onClick={() => setMode("rendered")}>{t("doc.mode.read")}</button>
       </div>
       <div className={`file-markdown-body ${mode === "source" ? "source" : "rendered"}`}>
         {error ? <div className="file-preview-empty"><strong>预览加载失败</strong><span>{error}</span></div> : !source ? <div className="file-preview-empty"><span>正在加载文件…</span></div> : mode === "source" ? <pre>{source}</pre> : <div className="doca-markdown markdown-preview-only"><MarkdownPreview locale={locale} value={source} resolveImageUrl={() => ""} /></div>}
@@ -60,6 +60,8 @@ function MarkdownFilePreview({ file }: { file: PreviewSource }) {
 }
 
 function GenericFilePreview({ file }: { file: PreviewSource }) {
+const { t } = useI18n();
+
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -93,7 +95,7 @@ function GenericFilePreview({ file }: { file: PreviewSource }) {
     return <img className="file-preview-image file-preview-image-direct" src={file.url} alt={file.name} />;
   }
   if (error) return <div className="file-preview-empty"><strong>预览加载失败</strong><span>{error}</span><a className="primary file-preview-download" href={file.url.includes("?") ? `${file.url}&download=1` : `${file.url}?download=1`}>下载文件</a></div>;
-  if (!viewer) return <div className="file-preview-empty"><span>正在加载预览…</span></div>;
+  if (!viewer) return <div className="file-preview-empty"><span>{t("trash.loadingPreview")}</span></div>;
   const Component = viewer.FileViewer;
   return <Component file={file.url} fileName={file.name} mimeType={file.mime} width="100%" height="100%" fit="contain" toolbar={false} plugins={viewer.plugins} fallback="download" />;
 }

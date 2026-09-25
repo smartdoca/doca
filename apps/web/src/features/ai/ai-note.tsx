@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useRef, useState } from "react";
 import { Button, Input } from "antd";
 import { KeyRound } from "lucide-react";
@@ -8,6 +9,8 @@ type SecretItem = { key: string; value: string };
 const emptySecret = { key: "", value: "" };
 
 export function AINoteSettings() {
+const { t } = useI18n();
+
   const area = useRef<HTMLTextAreaElement>(null);
   const [content, setContent] = useState("");
   const [draft, setDraft] = useState("");
@@ -118,9 +121,7 @@ export function AINoteSettings() {
                           );
                         });
                       }}
-                    >
-                      删除
-                    </button>
+                    >{t("common.delete")}</button>
                   </span>
                 </li>
               ))}
@@ -212,14 +213,10 @@ export function AINoteSettings() {
                 setDraft(content);
                 setEditing(!content);
               }}
-            >
-              取消
-            </Button>
+            >{t("common.cancel")}</Button>
           </>
         ) : (
-          <Button size="small" onClick={() => setEditing(true)}>
-            编辑
-          </Button>
+          <Button size="small" onClick={() => setEditing(true)}>{t("time.edited")}</Button>
         )}
       </div>
     </div>

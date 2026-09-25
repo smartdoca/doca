@@ -1,3 +1,5 @@
+import { fileLocationLabel } from "@web/shared/utils/system-labels.js";
+import type { Locale } from "@doca/i18n";
 import {
   ArrowLeft,
   ArrowRight,
@@ -18,7 +20,6 @@ import {
   LayoutGrid,
   List,
   Loader2,
-  Mail,
   Maximize2,
   Minimize2,
   Pencil,
@@ -179,7 +180,7 @@ function readFileNavigation(baseRoot: Location = root): Location[] {
   try {
     const raw = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("path");
     const value = raw ? JSON.parse(raw) as Array<Pick<Location, "type" | "id" | "name">> : [];
-    const standaloneSystemRoot = baseRoot.id === "root" && value[0]?.type === "system" && ["ai", "documents", "mail"].includes(value[0]?.id ?? "");
+    const standaloneSystemRoot = baseRoot.id === "root" && value[0]?.type === "system" && ["ai", "documents"].includes(value[0]?.id ?? "");
     if (!Array.isArray(value) || !value.length || (value[0]?.id !== baseRoot.id && !standaloneSystemRoot)) return [baseRoot];
     return value.map((item) => ({ type: item.type, id: item.id, name: item.name }));
   } catch { return [baseRoot]; }
@@ -195,8 +196,8 @@ const formatSize = (size: number) => {
   if (size < 1024 * 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
   return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`;
 };
-const fileDate = (value: string) =>
-  new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+const fileDate = (value: string, locale: Locale) =>
+  new Intl.DateTimeFormat(htmlLang(locale), { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 const extension = (name: string) => name.split(".").pop()?.toLowerCase() ?? "";
 const canConvertToDocument = (file: Pick<FileItem, "name" | "mime">) => file.mime.startsWith("text/") || file.mime === "application/pdf" || extension(file.name) === "docx" || ["json", "yaml", "yml", "csv"].includes(extension(file.name));
 
@@ -212,11 +213,13 @@ function FolderGlyph({ icon }: { icon?: FileFolder["icon"] }) {
 }
 
 export function FileGlyph({ file, large = false }: { file: FileItem; large?: boolean }) {
+const { t, locale } = useI18n();
+
   const ext = extension(file.name);
   const kind = file.mime.startsWith("image/") ? "image" : file.mime === "application/pdf" ? "pdf" : ["xlsx", "xls", "csv"].includes(ext) ? "sheet" : file.mime.startsWith("video/") || file.mime.startsWith("audio/") ? "media" : "document";
   const hasDescription = !!file.ai_description?.trim();
   const parsing = file.extract_status === "pending" || file.ai_status === "pending" || file.ai_status === "processing";
-  return <span className={`file-document-glyph file-document-${kind} ${large ? "large" : ""}`}><span className="file-type-label">{ext || kind}</span>{kind === "image" && <img className="file-image-thumbnail" src={fileUrl(file.id)} alt="" loading="lazy" draggable={false} />}{parsing ? <span className="file-ai-badge parsing" title="解析中"><Loader2 size={11} /></span> : hasDescription && <span className="file-ai-badge" title="已有 AI 描述"><Sparkles size={11} /></span>}</span>;
+  return <span className={`file-document-glyph file-document-${kind} ${large ? "large" : ""}`}><span className="file-type-label">{ext || kind}</span>{kind === "image" && <img className="file-image-thumbnail" src={fileUrl(file.id)} alt="" loading="lazy" draggable={false} />}{parsing ? <span className="file-ai-badge parsing" title={t("fileManager.parsing")}><Loader2 size={11} /></span> : hasDescription && <span className="file-ai-badge" title={t("fileManager.hasDescription")}><Sparkles size={11} /></span>}</span>;
 }
 
 function Preview({ file }: { file: FileItem }) {
@@ -224,44 +227,50 @@ function Preview({ file }: { file: FileItem }) {
 }
 
 function PreviewPanel({ file, close, openLarge }: { file: FileItem | null; close: () => void; openLarge: () => void }) {
-  if (!file) return <aside className="file-preview-panel empty"><File className="file-preview-placeholder" /><p>选择一个文件查看预览</p></aside>;
+const { t, locale } = useI18n();
+
+  if (!file) return <aside className="file-preview-panel empty"><File className="file-preview-placeholder" /><p>{t("fileManager.previewEmpty")}</p></aside>;
   return (
-    <aside className="file-preview-panel" aria-label="文件预览">
-      <div className="file-preview-content" onDoubleClick={openLarge} title="双击查看大图或打开预览"><Preview file={file} /></div>
+    <aside className="file-preview-panel" aria-label={t("fileManager.preview")}>
+      <div className="file-preview-content" onDoubleClick={openLarge} title={t("fileManager.previewHelp")}><Preview file={file} /></div>
     </aside>
   );
 }
 
 function FileInfoPanel({ file, close, convert }: { file: FileInfo | null; close: () => void; convert?: (file: FileInfo) => void }) {
+const { t, locale } = useI18n();
+
   if (!file) return null;
   const rows: Array<[string, string]> = [
-    ["文件名", file.name],
-    ["类型", file.mime],
-    ["大小", formatSize(file.size)],
-    ["创建时间", fileDate(file.created_at)],
-    ["修改时间", fileDate(file.updated_at)],
-    ["存储对象", file.storage_object_id],
-    ["对象地址", file.storage.object_key],
+    [t("fileManager.filename"), file.name],
+    [t("ticket.col.type"), file.mime],
+    [t("fileManager.size"), formatSize(file.size)],
+    [t("ticket.col.created"), fileDate(file.created_at, locale)],
+    [t("home.modified"), fileDate(file.updated_at, locale)],
+    [t("fileManager.storageObject"), file.storage_object_id],
+    [t("fileManager.objectKey"), file.storage.object_key],
     ["SHA-256", file.storage.sha256],
-    ["解析状态", file.extract_status === "pending" ? "解析中" : file.extract_status === "failed" ? "解析失败" : file.extract_status === "ready" ? "已解析" : "未解析"],
-    ["AI 状态", file.storage.ai_status === "pending" || file.storage.ai_status === "processing" ? "识别中" : file.storage.ai_status === "skipped" ? "未配置，未识别" : file.storage.ai_status ?? "未识别"],
-    ...(file.storage.ai_model ? [["识别模型", file.storage.ai_model] as [string, string]] : []),
+    [t("fileManager.parseStatus"), file.extract_status === "pending" ? t("fileManager.parsing") : file.extract_status === "failed" ? t("fileManager.parseFailed") : file.extract_status === "ready" ? t("fileManager.parsed") : t("fileManager.notParsed")],
+    [t("fileManager.aiStatus"), file.storage.ai_status === "pending" || file.storage.ai_status === "processing" ? t("fileManager.recognizing") : file.storage.ai_status === "skipped" ? t("fileManager.notConfigured") : file.storage.ai_status ?? t("fileManager.notRecognized")],
+    ...(file.storage.ai_model ? [[t("recognition.model"), file.storage.ai_model] as [string, string]] : []),
   ];
-  return <div className="file-info-backdrop" role="presentation" onClick={close}><section className="file-info-dialog" role="dialog" aria-modal="true" aria-label="文件信息" onClick={(event) => event.stopPropagation()}><header><div><strong>文件信息</strong><span title={file.name}>{file.name}</span></div><button className="icon" onClick={close} aria-label="关闭"><X size={18} /></button></header><div className="file-info-icon"><FileGlyph file={file} large /></div><dl>{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd title={value}>{value}</dd></div>)}</dl><section className="file-info-description"><h3>AI 描述</h3><p>{file.ai_description_override || file.storage.ai_description || "暂无 AI 描述"}</p></section><footer className="file-info-actions"><a className="secondary" href={fileUrl(file.id, true)}>下载</a>{convert && <button className="primary" onClick={() => convert(file)}>转为在线文档</button>}</footer></section></div>;
+  return <div className="file-info-backdrop" role="presentation" onClick={close}><section className="file-info-dialog" role="dialog" aria-modal="true" aria-label={t("fileManager.info")} onClick={(event) => event.stopPropagation()}><header><div><strong>{t("fileManager.info")}</strong><span title={file.name}>{file.name}</span></div><button className="icon" onClick={close} aria-label={t("dialog.close")}><X size={18} /></button></header><div className="file-info-icon"><FileGlyph file={file} large /></div><dl>{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd title={value}>{value}</dd></div>)}</dl><section className="file-info-description"><h3>{t("fileManager.description")}</h3><p>{file.ai_description_override || file.storage.ai_description || t("fileManager.noDescription")}</p></section><footer className="file-info-actions"><a className="secondary" href={fileUrl(file.id, true)}>{t("doc.download")}</a>{convert && <button className="primary" onClick={() => convert(file)}>{t("fileManager.convert")}</button>}</footer></section></div>;
 }
 
 function FolderInfoPanel({ folder, contents, close }: { folder: FileFolder | null; contents: { folders: number; files: number } | null; close: () => void }) {
+const { t, locale } = useI18n();
+
   if (!folder) return null;
-  const kind = folder.virtual ? "系统目录" : folder.parent_id === "shared" ? "共享文件夹" : "文件夹";
+  const kind = folder.virtual ? t("fileManager.systemFolder") : folder.parent_id === "shared" ? t("nav.sharedFiles") : t("trash.folder");
   const rows: Array<[string, string]> = [
-    ["名称", folder.name],
-    ["类型", kind],
-    ["创建时间", folder.created_at ? fileDate(folder.created_at) : "—"],
-    ["修改时间", folder.updated_at ? fileDate(folder.updated_at) : "—"],
-    ["文件夹 ID", folder.id],
-    ...(contents ? [["包含", `${contents.folders} 个文件夹，${contents.files} 个文件`] as [string, string]] : []),
+    [t("shell.name"), folder.name],
+    [t("ticket.col.type"), kind],
+    [t("ticket.col.created"), folder.created_at ? fileDate(folder.created_at, locale) : "—"],
+    [t("home.modified"), folder.updated_at ? fileDate(folder.updated_at, locale) : "—"],
+    [t("fileManager.folderId"), folder.id],
+    ...(contents ? [[t("fileManager.contents"), t("fileManager.contentsSummary", { folders: contents.folders, files: contents.files })] as [string, string]] : []),
   ];
-  return <div className="file-info-backdrop" role="presentation" onClick={close}><section className="file-info-dialog" role="dialog" aria-modal="true" aria-label="文件夹信息" onClick={(event) => event.stopPropagation()}><header><div><strong>文件夹信息</strong><span title={folder.name}>{folder.name}</span></div><button className="icon" onClick={close} aria-label="关闭"><X size={18} /></button></header><div className="file-info-icon"><FolderGlyph icon={folder.virtual ? folder.icon : undefined} /></div><dl>{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd title={value}>{value}</dd></div>)}</dl></section></div>;
+  return <div className="file-info-backdrop" role="presentation" onClick={close}><section className="file-info-dialog" role="dialog" aria-modal="true" aria-label={t("fileManager.folderInfo")} onClick={(event) => event.stopPropagation()}><header><div><strong>{t("fileManager.folderInfo")}</strong><span title={folder.name}>{folder.name}</span></div><button className="icon" onClick={close} aria-label={t("dialog.close")}><X size={18} /></button></header><div className="file-info-icon"><FolderGlyph icon={folder.virtual ? folder.icon : undefined} /></div><dl>{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd title={value}>{value}</dd></div>)}</dl></section></div>;
 }
 
 export function FilesExplorer({
@@ -276,7 +285,7 @@ export function FilesExplorer({
   sharedRoot?: boolean;
 }) {
   const ai = useAI();
-  const { locale } = useI18n();
+  const { t, locale } = useI18n();
   const textLocale = htmlLang(locale);
   const initialTrail = useMemo(() => readFileNavigation(initialRoot), [initialRoot.id]);
   const [location, setLocation] = useState<Location>(() => initialTrail[initialTrail.length - 1] ?? initialRoot);
@@ -352,12 +361,12 @@ export function FilesExplorer({
   columnPagesRef.current = columnPages;
   const navigationKey = trailKey(trail);
   useEffect(() => {
-    onNavigationChange?.(trail);
-  }, [onNavigationChange, trail]);
+    onNavigationChange?.(trail.map((item) => ({ ...item, name: fileLocationLabel(item, t) })));
+  }, [onNavigationChange, trail, t]);
   const visibleFolders = useMemo(() => {
     const q = search.trim().toLocaleLowerCase();
     return (data?.folders ?? [])
-      .filter((folder) => !(location.type === "system" && location.id === "root" && folder.virtual && ["ai", "documents", "mail"].includes(folder.id)))
+      .filter((folder) => !(location.type === "system" && location.id === "root" && folder.virtual && ["ai", "documents"].includes(folder.id)))
       .filter((folder) => !q || folder.name.toLocaleLowerCase().includes(q))
       .sort((a, b) => {
         const special = { ai: 0, documents: 1, shared: 2 } as Record<string, number>;
@@ -397,7 +406,7 @@ export function FilesExplorer({
     }
     return [...fromCurrent, ...extra];
   }, [allValues, columnPages, selectedIds]);
-  const uploadExtensions = useMemo(() => [...new Set((pendingUpload ?? []).filter((entry) => entry.file).map((entry) => extension(entry.file!.name) || "无扩展名"))], [pendingUpload]);
+  const uploadExtensions = useMemo(() => [...new Set((pendingUpload ?? []).filter((entry) => entry.file).map((entry) => extension(entry.file!.name) || t("fileManager.noExtension")))], [pendingUpload]);
   const sharedRootFolder = useMemo<FileFolder | null>(() => sharedRoot ? ({
     id: initialRoot.id,
     parent_id: "shared",
@@ -407,7 +416,7 @@ export function FilesExplorer({
     locked: false,
     version: 1,
   }) : null, [initialRoot.id, initialRoot.name, sharedRoot]);
-  const systemReadonly = trail[0]?.type === "system" && ["ai", "documents", "mail"].includes(trail[0].id);
+  const systemReadonly = trail[0]?.type === "system" && ["ai", "documents"].includes(trail[0].id);
   const atSystemRoot = trail.length <= 1 && systemReadonly;
 
   async function load(next = location, options?: { refreshColumns?: boolean }) {
@@ -424,8 +433,13 @@ export function FilesExplorer({
         setColumnsRev((value) => value + 1);
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : "文件夹加载失败";
-      if (message.includes("不存在")) {
+      const message = e instanceof Error ? e.message : t("fileManager.loadFailed");
+      if (
+        typeof e === "object" &&
+        e !== null &&
+        "status" in e &&
+        e.status === 404
+      ) {
         const nextTrail = trailAfterRemovedFolders(trail, [next.id]);
         if (nextTrail.kind === "parent") {
           setFuture([]);
@@ -573,7 +587,7 @@ export function FilesExplorer({
     navigateTrail(nextTrail);
     clearSelection();
   }
-  function openSystemFolder(id: "ai" | "documents" | "mail", name: string) {
+  function openSystemFolder(id: "ai" | "documents", name: string) {
     setSystemMenu(false);
     setFuture([]);
     navigateTrail([{ type: "system", id, name, locked: true }]);
@@ -629,15 +643,15 @@ export function FilesExplorer({
       setError("");
       const parentId = location.type === "folder" ? location.id : location.id === "shared" ? "shared" : null;
       const names = new Set((data?.folders ?? []).map((folder) => folder.name));
-      let name = "新建文件夹";
-      for (let index = 2; names.has(name); index += 1) name = `新建文件夹 ${index}`;
+      let name = t("fileManager.newFolder");
+      for (let index = 2; names.has(name); index += 1) name = t("fileManager.numberedFolder", { index });
       const created = await api<FileFolder>("/files/folders", "POST", { name, parentId });
       setSelection({ kind: "folder", value: created });
       setSelectedIds(new Set([created.id]));
       setAnchorId(created.id);
       setRenaming({ kind: "folder", id: created.id, draft: created.name });
       await load();
-    } catch (e) { setError(e instanceof Error ? e.message : "创建失败"); }
+    } catch (e) { setError(e instanceof Error ? e.message : t("fileManager.createFailed")); }
   }
   async function recognize(target?: Selectable | null, confirmed = false) {
     const hasExistingDescription = target?.kind === "file"
@@ -657,9 +671,9 @@ export function FilesExplorer({
           : { parentType: "folder" as const, parentId: target.value.id, recursive: true }
         : { parentType: location.type, parentId: location.id, recursive: true };
       const result = await api<{ count: number }>("/files/recognize", "POST", body);
-      setNotice(result.count ? "已提交 " + result.count + " 个文件的 AI 描述生成" : "当前位置没有可识别的文件");
+      setNotice(result.count ? t("fileManager.recognitionQueued", { count: result.count }) : t("fileManager.noRecognizable"));
       await load();
-    } catch (e) { setError(e instanceof Error ? e.message : "提交识别任务失败"); }
+    } catch (e) { setError(e instanceof Error ? e.message : t("fileManager.recognizeFailed")); }
   }
   function selectUpload(files: FileList | null, destination: Location = location) {
     if (!files?.length || (destination.type !== "system" && destination.type !== "folder")) return;
@@ -687,9 +701,9 @@ export function FilesExplorer({
         setUploadProgress((old) => old ? { ...old, current: path, completed, total: total || old.total } : old);
       });
       await load();
-      setUploadProgress((old) => old ? { ...old, current: "上传完成", completed: old.total, status: "done" } : old);
+      setUploadProgress((old) => old ? { ...old, current: t("fileManager.uploadComplete"), completed: old.total, status: "done" } : old);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "上传失败");
+      setError(e instanceof Error ? e.message : t("fileManager.uploadFailed"));
       setUploadProgress((old) => old ? { ...old, status: "error" } : old);
     }
     if (input.current) input.current.value = "";
@@ -709,7 +723,7 @@ export function FilesExplorer({
       setInfoFolder({ folder: target.value, contents: { folders: page.folders.length, files: page.files.length } });
     } catch (e) {
       if (target.kind === "folder") setInfoFolder({ folder: target.value, contents: null });
-      else setError(e instanceof Error ? e.message : "无法读取文件信息");
+      else setError(e instanceof Error ? e.message : t("fileManager.infoFailed"));
     }
   }
   async function copyToMyFiles(target: Selectable) {
@@ -717,7 +731,7 @@ export function FilesExplorer({
     try {
       if (target.kind === "file") {
         await api(`/files/items/${target.value.id}/copy`, "POST", { parentType: "system", parentId: "root" });
-        setNotice(`已将“${target.value.name}”复制到我的文件夹`);
+        setNotice(t("fileManager.copiedPersonal", { name: target.value.name }));
       } else {
         async function copyFolder(source: FileFolder, parentId: string | null, preferredName = source.name): Promise<FileFolder> {
           let created: FileFolder | null = null;
@@ -726,36 +740,36 @@ export function FilesExplorer({
             try { created = await api<FileFolder>("/files/folders", "POST", { name, parentId }); }
             catch (e) { if ((e as { status?: number }).status !== 409) throw e; }
           }
-          if (!created) throw new Error("无法创建目标文件夹");
+          if (!created) throw new Error(t("fileManager.destinationFailed"));
           const page = await api<FilePage>(`/files?parentType=${source.type}&parentId=${encodeURIComponent(source.id)}`);
           for (const file of page.files) await api(`/files/items/${file.id}/copy`, "POST", { parentType: "folder", parentId: created.id });
           for (const child of page.folders) await copyFolder(child, created.id);
           return created;
         }
-        await copyFolder(target.value, null, `${target.value.name} 副本`);
-        setNotice(`已将“${target.value.name}”复制到我的文件夹`);
+        await copyFolder(target.value, null, t("fileManager.copyName", { name: target.value.name }));
+        setNotice(t("fileManager.copiedPersonal", { name: target.value.name }));
       }
-    } catch (e) { setError(e instanceof Error ? e.message : "复制失败"); }
+    } catch (e) { setError(e instanceof Error ? e.message : t("fileManager.copyFailed")); }
   }
   async function chooseDocument(file: FileItem) {
     setContextMenu(null);
     try {
       const page = await api<FilePage>("/files?parentType=system&parentId=documents-personal");
       setDocumentPicker({ file, documents: page.folders.filter((folder) => folder.type === "document") });
-    } catch (e) { setError(e instanceof Error ? e.message : "无法读取文档列表"); }
+    } catch (e) { setError(e instanceof Error ? e.message : t("fileManager.documentsFailed")); }
   }
   async function addToDocument(document: FileFolder) {
     if (!documentPicker) return;
     try {
       await api(`/files/items/${documentPicker.file.id}/copy`, "POST", { parentType: "document", parentId: document.id });
       setDocumentPicker(null);
-      setNotice(`已将“${documentPicker.file.name}”加入文档“${document.name}”`);
-    } catch (e) { setError(e instanceof Error ? e.message : "加入文档失败"); }
+      setNotice(t("fileManager.addedDocument", { file: documentPicker.file.name, document: document.name }));
+    } catch (e) { setError(e instanceof Error ? e.message : t("fileManager.addFailed")); }
   }
   async function convertToDocument(file: FileItem | FileInfo) {
     try {
       const response = await fetch(fileUrl(file.id));
-      if (!response.ok) throw new Error("文件读取失败");
+      if (!response.ok) throw new Error(t("create.readFailed"));
       const blob = await response.blob();
       const ext = extension(file.name);
       if (file.mime.startsWith("text/") || ["md", "markdown", "json", "yaml", "yml", "csv"].includes(ext)) {
@@ -764,8 +778,8 @@ export function FilesExplorer({
         const { createImportedDocument } = await import("@web/features/documents/file-transfer.js");
         await createImportedDocument({ title: file.name.replace(/\.[^.]+$/, ""), kind: "document", format: ext === "docx" ? "rich_text" : "markdown" }, new window.File([blob], file.name, { type: file.mime }));
       }
-      setInfoFile(null); setNotice("已创建在线文档，可在文档系统中查看");
-    } catch (e) { setError(e instanceof Error ? e.message : "转换在线文档失败"); }
+      setInfoFile(null); setNotice(t("fileManager.converted"));
+    } catch (e) { setError(e instanceof Error ? e.message : t("fileManager.convertFailed")); }
   }
   function openShare(folder: FileFolder) {
     setContextMenu(null);
@@ -785,7 +799,7 @@ export function FilesExplorer({
       setRenaming(null);
       clearSelection();
       await load();
-    } catch (e) { setError(e instanceof Error ? e.message : "重命名失败"); }
+    } catch (e) { setError(e instanceof Error ? e.message : t("fileManager.renameFailed")); }
   }
   function renameSelected() {
     if (!selection || selection.value.locked) return;
@@ -811,7 +825,7 @@ export function FilesExplorer({
       const removedFolders = removable.filter((target) => target.kind === "folder").map((target) => target.value.id);
       const nextTrail = trailAfterRemovedFolders(trail, removedFolders);
       clearSelection();
-      setNotice(removable.length > 1 ? `已将 ${removable.length} 个项目移到回收站` : `已将“${removable[0]!.value.name}”移到回收站`);
+      setNotice(removable.length > 1 ? t("fileManager.trashedMany", { count: removable.length }) : t("fileManager.trashedOne", { name: removable[0]!.value.name }));
       if (nextTrail.kind === "leave-root") {
         if (sharedRoot) window.location.hash = "/shared-files";
         else {
@@ -824,7 +838,7 @@ export function FilesExplorer({
       } else {
         await load();
       }
-    } catch (e) { setError(e instanceof Error ? e.message : "删除失败"); }
+    } catch (e) { setError(e instanceof Error ? e.message : t("embeddings.deleteFailed")); }
   }
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -928,10 +942,10 @@ export function FilesExplorer({
       const { documents, files } = await collectFolderItemsForAI(source);
       for (const folder of documents.slice(0, 20)) ai.addDocument(documentFromFolder(folder));
       if (files.length > 8)
-        ai.setError("每条消息最多 8 个附件，已添加前 8 个");
+        ai.setError(t("fileManager.attachmentLimit"));
       if (files.length) ai.queueStoredFiles(files);
       if (!documents.length && !files.length && selectedValues.length)
-        ai.setError("所选项目中没有可添加到 AI 的文档或文件");
+        ai.setError(t("fileManager.noAiItems"));
     } catch (e) {
       ai.setError((e as Error).message);
     }
@@ -968,7 +982,7 @@ export function FilesExplorer({
         const conflict = conflicts.find((entry) => entry.item.id === item.id);
         if (conflict && conflictMode === "overwrite") {
           if (conflict.existing.id === item.id) continue;
-          if (conflict.existing.locked) throw new Error(`“${conflict.existing.name}”无法覆盖`);
+          if (conflict.existing.locked) throw new Error(t("fileManager.cannotReplace", { name: conflict.existing.name }));
           const path = conflict.existing.kind === "folder" ? `/files/folders/${conflict.existing.id}` : `/files/items/${conflict.existing.id}`;
           await api(path, "DELETE", { version: conflict.existing.version });
           taken.delete(conflict.existing.name);
@@ -993,20 +1007,20 @@ export function FilesExplorer({
         count += 1;
       }
       if (count) {
-        setNotice(`已${copy ? "复制" : "移动"} ${count} 个项目`);
+        setNotice(t(copy ? "fileManager.copiedMany" : "fileManager.movedMany", { count }));
         if (!copy) setItemClipboard((old) => old?.mode === "cut" ? null : old);
         clearSelection();
         await load();
         return true;
       }
       return false;
-    } catch (e) { setError(e instanceof Error ? e.message : copy ? "复制失败" : "移动失败"); return false; }
+    } catch (e) { setError(e instanceof Error ? e.message : copy ? t("fileManager.copyFailed") : t("fileManager.moveFailed")); return false; }
   }
   function copySelected(mode: "copy" | "cut") {
     const targets = (selectedValues.length ? selectedValues : selection ? [selection] : []).filter((item) => !item.value.locked && !(item.kind === "folder" && item.value.virtual));
     if (!targets.length || (mode === "cut" && systemReadonly)) return;
     setItemClipboard({ mode, items: toDragItems(targets) });
-    setNotice(mode === "cut" ? `已剪切 ${targets.length} 个项目` : `已拷贝 ${targets.length} 个项目`);
+    setNotice(mode === "cut" ? t("fileManager.cutMany", { count: targets.length }) : t("fileManager.clipboardMany", { count: targets.length }));
     setContextMenu(null);
   }
   async function pasteClipboard(destination: Location) {
@@ -1123,7 +1137,7 @@ export function FilesExplorer({
         path: entry.path,
         selected: true,
       })));
-    }).catch((e) => setError(e instanceof Error ? e.message : "无法读取拖入的文件夹"));
+    }).catch((e) => setError(e instanceof Error ? e.message : t("fileManager.dropReadFailed")));
   }
   async function transferTo(destination: Location) {
     if (!transfer) return;
@@ -1204,14 +1218,14 @@ export function FilesExplorer({
           {value.kind === "folder" ? <FolderGlyph icon={value.value.virtual ? value.value.icon : undefined} /> : <FileGlyph file={value.value} />}
         </span>
         <span className="file-entry-copy">
-          {editing ? <input className="file-entry-rename" autoFocus value={renaming.draft} onChange={(event) => setRenaming((old) => old ? { ...old, draft: event.target.value } : old)} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()} onKeyDown={(event) => { event.stopPropagation(); if (event.key === "Enter") void commitRename(); if (event.key === "Escape") setRenaming(null); }} onBlur={() => void commitRename()} /> : <span className="file-entry-name" title={value.value.name}>{visibleName(value.value.name)}</span>}
-          <span className="file-entry-type">{value.kind === "folder" ? (value.value.virtual ? "系统目录" : "文件夹") : extension(value.value.name).toUpperCase() || "文件"}</span>
+          {editing ? <input className="file-entry-rename" autoFocus value={renaming.draft} onChange={(event) => setRenaming((old) => old ? { ...old, draft: event.target.value } : old)} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()} onKeyDown={(event) => { event.stopPropagation(); if (event.key === "Enter") void commitRename(); if (event.key === "Escape") setRenaming(null); }} onBlur={() => void commitRename()} /> : <span className="file-entry-name" title={value.kind === "folder" ? fileLocationLabel(value.value, t) : value.value.name}>{visibleName(value.kind === "folder" ? fileLocationLabel(value.value, t) : value.value.name)}</span>}
+          <span className="file-entry-type">{value.kind === "folder" ? (value.value.virtual ? t("fileManager.systemFolder") : t("trash.folder")) : extension(value.value.name).toUpperCase() || t("search.files")}</span>
         </span>
         {value.kind === "file" && <span className="file-entry-detail">{formatSize(value.value.size)}</span>}
         {view === "list" && <>
-          <span className="file-entry-date">{value.value.updated_at ? fileDate(value.value.updated_at) : "—"}</span>
+          <span className="file-entry-date">{value.value.updated_at ? fileDate(value.value.updated_at, locale) : "—"}</span>
           <span className="file-entry-size">{value.kind === "file" ? formatSize(value.value.size) : "—"}</span>
-          <span className="file-entry-kind">{value.kind === "folder" ? "文件夹" : extension(value.value.name).toUpperCase() || "文件"}</span>
+          <span className="file-entry-kind">{value.kind === "folder" ? t("trash.folder") : extension(value.value.name).toUpperCase() || t("search.files")}</span>
         </>}
       </button>
     );
@@ -1219,7 +1233,7 @@ export function FilesExplorer({
   const columnValues = (page: FilePage, isCurrent: boolean): Selectable[] => {
     const query = isCurrent ? search.trim().toLocaleLowerCase() : "";
     const folders = page.folders
-      .filter((folder) => !(page.parent.type === "system" && page.parent.id === "root" && folder.virtual && ["ai", "documents", "mail"].includes(folder.id)))
+      .filter((folder) => !(page.parent.type === "system" && page.parent.id === "root" && folder.virtual && ["ai", "documents"].includes(folder.id)))
       .filter((folder) => !query || folder.name.toLocaleLowerCase().includes(query))
       .sort((a, b) => {
         const special = { ai: 0, documents: 1, shared: 2 } as Record<string, number>;
@@ -1240,42 +1254,42 @@ export function FilesExplorer({
     }}>
       <header className="files-toolbar">
         <div className="files-toolbar-actions">
-          <button className="icon" onClick={back} disabled={trail.length <= 1} aria-label="后退"><ArrowLeft size={18} /></button>
-          <button className="icon" onClick={forward} disabled={!future.length} aria-label="前进"><ArrowRight size={18} /></button>
-          <button className="icon" onClick={parentFolder} disabled={trail.length <= 1 && !sharedRoot && !atSystemRoot} aria-label="返回上一层" title={trail.length <= 1 && sharedRoot ? "返回共享文件夹列表" : atSystemRoot ? "返回我的文件夹" : "返回上一层"}><ArrowUp size={18} /></button>
+          <button className="icon" onClick={back} disabled={trail.length <= 1} aria-label={t("fileManager.back")}><ArrowLeft size={18} /></button>
+          <button className="icon" onClick={forward} disabled={!future.length} aria-label={t("fileManager.forward")}><ArrowRight size={18} /></button>
+          <button className="icon" onClick={parentFolder} disabled={trail.length <= 1 && !sharedRoot && !atSystemRoot} aria-label={t("fileManager.parent")} title={trail.length <= 1 && sharedRoot ? t("fileManager.backShared") : atSystemRoot ? t("fileManager.backPersonal") : t("fileManager.parent")}><ArrowUp size={18} /></button>
           <span className="files-divider" />
-          <button onClick={createFolder} disabled={location.type === "document" || (location.type === "system" && !["root", "shared"].includes(location.id))}><FolderPlus size={16} />新建文件夹</button>
+          <button onClick={createFolder} disabled={location.type === "document" || (location.type === "system" && !["root", "shared"].includes(location.id))}><FolderPlus size={16} />{t("fileManager.newFolder")}</button>
           <div className="files-upload-control">
-            <button onClick={(event) => { event.stopPropagation(); setUploadMenu((old) => !old); setSortMenu(false); }} disabled={location.type === "document" || location.id === "documents" || location.id === "ai" || location.id === "mail" || String(location.id).startsWith("mail:")}><Upload size={16} />上传</button>
-            {uploadMenu && <div className="files-upload-menu"><button onClick={() => { setUploadMenu(false); input.current?.click(); }}><File size={14} />选择文件</button><button onClick={() => { setUploadMenu(false); folderInput.current?.click(); }}><Folder size={14} />选择文件夹</button></div>}
+            <button onClick={(event) => { event.stopPropagation(); setUploadMenu((old) => !old); setSortMenu(false); }} disabled={location.type === "document" || location.id === "documents" || location.id === "ai"}><Upload size={16} />{t("fileManager.upload")}</button>
+            {uploadMenu && <div className="files-upload-menu"><button onClick={() => { setUploadMenu(false); input.current?.click(); }}><File size={14} />{t("create.chooseFile")}</button><button onClick={() => { setUploadMenu(false); folderInput.current?.click(); }}><Folder size={14} />{t("fileManager.selectFolder")}</button></div>}
           </div>
           <input ref={input} hidden multiple type="file" onChange={(e) => selectUpload(e.target.files)} />
           <input ref={folderInput} hidden multiple type="file" onChange={(e) => selectUpload(e.target.files)} {...({ webkitdirectory: "", directory: "" } as Record<string, string>)} />
           {!sharedRoot && <div className="files-system-control">
-            <button onClick={(event) => { event.stopPropagation(); setSystemMenu((old) => !old); setUploadMenu(false); setSortMenu(false); }}><Folder size={16} />系统文件<ChevronDown size={13} /></button>
-            {systemMenu && <div className="files-system-menu"><button onClick={() => openSystemFolder("ai", "AI 助手")}><Sparkles size={15} /><span><strong>AI 助手</strong><small>按会话浏览生成与上传的文件</small></span></button><button onClick={() => openSystemFolder("documents", "文档系统")}><Files size={15} /><span><strong>文档系统</strong><small>浏览有权限的文档附件</small></span></button><button onClick={() => openSystemFolder("mail", "邮箱系统")}><Mail size={15} /><span><strong>邮箱系统</strong><small>浏览邮箱附件</small></span></button></div>}
+            <button onClick={(event) => { event.stopPropagation(); setSystemMenu((old) => !old); setUploadMenu(false); setSortMenu(false); }}><Folder size={16} />{t("fileManager.systemFiles")}<ChevronDown size={13} /></button>
+            {systemMenu && <div className="files-system-menu"><button onClick={() => openSystemFolder("ai", t("nav.assistant"))}><Sparkles size={15} /><span><strong>{t("nav.assistant")}</strong><small>{t("fileManager.aiFolderHelp")}</small></span></button><button onClick={() => openSystemFolder("documents", t("recognition.documents"))}><Files size={15} /><span><strong>{t("recognition.documents")}</strong><small>{t("fileManager.documentsHelp")}</small></span></button></div>}
           </div>}
           <span className="files-divider" />
-          <div className="files-view-switch" role="group" aria-label="显示方式">
-            <button className={view === "grid" ? "active" : ""} onClick={() => chooseView("grid")} aria-label="图标视图"><LayoutGrid size={17} /></button>
-            <button className={view === "list" ? "active" : ""} onClick={() => chooseView("list")} aria-label="列表视图"><List size={18} /></button>
-            <button className={view === "columns" ? "active" : ""} onClick={() => chooseView("columns")} aria-label="分栏视图"><Columns3 size={18} /></button>
+          <div className="files-view-switch" role="group" aria-label={t("fileManager.viewMode")}>
+            <button className={view === "grid" ? "active" : ""} onClick={() => chooseView("grid")} aria-label={t("fileManager.icons")}><LayoutGrid size={17} /></button>
+            <button className={view === "list" ? "active" : ""} onClick={() => chooseView("list")} aria-label={t("fileManager.list")}><List size={18} /></button>
+            <button className={view === "columns" ? "active" : ""} onClick={() => chooseView("columns")} aria-label={t("fileManager.columns")}><Columns3 size={18} /></button>
           </div>
-          <label className="files-extension-toggle"><input type="checkbox" checked={showExtensions} onChange={(event) => setShowExtensions(event.target.checked)} /><span>扩展名</span></label>
+          <label className="files-extension-toggle"><input type="checkbox" checked={showExtensions} onChange={(event) => setShowExtensions(event.target.checked)} /><span>{t("fileManager.extension")}</span></label>
           <div className="files-sort-control">
-            <button className="files-sort" onClick={(event) => { event.stopPropagation(); setSortMenu((old) => !old); setUploadMenu(false); }}><span>排序</span><strong>{sortMode === "name" ? "名称" : sortMode === "updated" ? "修改时间" : "大小"}</strong><ChevronDown size={14} /></button>
-            {sortMenu && <div className="files-sort-menu">{([ ["name", "名称"], ["updated", "修改时间"], ["size", "大小"] ] as const).map(([value, label]) => <button key={value} className={sortMode === value ? "is-active" : ""} onClick={() => { setSortMode(value); setSortMenu(false); }}><span className="files-sort-check">{sortMode === value ? <Check size={14} /> : null}</span>{label}</button>)}</div>}
+            <button className="files-sort" onClick={(event) => { event.stopPropagation(); setSortMenu((old) => !old); setUploadMenu(false); }}><span>{t("fileManager.sort")}</span><strong>{sortMode === "name" ? t("shell.name") : sortMode === "updated" ? t("home.modified") : t("fileManager.size")}</strong><ChevronDown size={14} /></button>
+            {sortMenu && <div className="files-sort-menu">{([ ["name", t("shell.name")], ["updated", t("home.modified")], ["size", t("fileManager.size")] ] as const).map(([value, label]) => <button key={value} className={sortMode === value ? "is-active" : ""} onClick={() => { setSortMode(value); setSortMenu(false); }}><span className="files-sort-check">{sortMode === value ? <Check size={14} /> : null}</span>{label}</button>)}</div>}
           </div>
-          <span className="files-item-count">{items.length} 个项目</span>
-          <label className="files-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索此文件夹" aria-label="搜索此文件夹" /></label>
-          <button className="icon files-refresh" onClick={() => void load(location, { refreshColumns: true })} aria-label="刷新" title="刷新"><RefreshCw size={16} /></button>
+          <span className="files-item-count">{t("fileManager.itemCount", { count: items.length })}</span>
+          <label className="files-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("fileManager.searchFolder")} aria-label={t("fileManager.searchFolder")} /></label>
+          <button className="icon files-refresh" onClick={() => void load(location, { refreshColumns: true })} aria-label={t("admin.refresh")} title={t("admin.refresh")}><RefreshCw size={16} /></button>
         </div>
       </header>
-      {sharedRootFolder && typeof document !== "undefined" && document.getElementById("files-header-actions") && createPortal(<button className="primary share-button files-header-share-button" data-permissions-trigger onClick={() => openShare(sharedRootFolder)}><ShieldCheck size={16} />分享与权限</button>, document.getElementById("files-header-actions")!)}
+      {sharedRootFolder && typeof document !== "undefined" && document.getElementById("files-header-actions") && createPortal(<button className="primary share-button files-header-share-button" data-permissions-trigger onClick={() => openShare(sharedRootFolder)}><ShieldCheck size={16} />{t("share.title")}</button>, document.getElementById("files-header-actions")!)}
       <div className={`files-body files-view-${view}`}>
         {(error || notice) && <div className="files-toasts">
-          {error && <div className="files-error" role="alert"><span>{error}</span><button className="icon" onClick={() => setError("")} aria-label="关闭错误提示"><X size={16} /></button></div>}
-          {notice && <div className="files-notice" role="status"><span>{notice}</span><button className="icon" onClick={() => setNotice("")} aria-label="关闭提示"><X size={16} /></button></div>}
+          {error && <div className="files-error" role="alert"><span>{error}</span><button className="icon" onClick={() => setError("")} aria-label={t("fileManager.closeError")}><X size={16} /></button></div>}
+          {notice && <div className="files-notice" role="status"><span>{notice}</span><button className="icon" onClick={() => setNotice("")} aria-label={t("fileManager.closeNotice")}><X size={16} /></button></div>}
         </div>}
         <div
           ref={contentRef}
@@ -1298,16 +1312,16 @@ export function FilesExplorer({
           }}
           onDrop={(event) => handleCanvasDrop(event, location)}
         >
-          {dragActive && !draggingIds.size && <div className="files-drop-overlay"><Upload size={22} /><strong>拖到这里上传文件或文件夹</strong><span>文件夹会按原来的目录放进来，也可以拖到某个文件夹上</span></div>}
+          {dragActive && !draggingIds.size && <div className="files-drop-overlay"><Upload size={22} /><strong>{t("fileManager.drop")}</strong><span>{t("fileManager.dropHelp")}</span></div>}
           {marquee && <div className="files-marquee" style={{
             left: Math.min(marquee.origin.x, marquee.current.x),
             top: Math.min(marquee.origin.y, marquee.current.y),
             width: Math.abs(marquee.current.x - marquee.origin.x),
             height: Math.abs(marquee.current.y - marquee.origin.y),
           }} />}
-          {loading && !(view === "columns" && renderedColumns.length) ? <p className="empty">正在加载文件夹…</p> : !items.length && !(view === "columns" && renderedColumns.length) ? <div className="files-empty"><Folder size={38} /><strong>{search ? "没有找到匹配内容" : "这里还没有内容"}</strong><span>{search ? "换个关键词试试。" : "上传文件或新建文件夹开始整理。"}</span></div> : <>
+          {loading && !(view === "columns" && renderedColumns.length) ? <p className="empty">{t("fileManager.loading")}</p> : !items.length && !(view === "columns" && renderedColumns.length) ? <div className="files-empty"><Folder size={38} /><strong>{search ? t("fileManager.noMatches") : t("shell.emptyList")}</strong><span>{search ? t("notes.emptySearchHint") : t("fileManager.emptyHelp")}</span></div> : <>
             {view === "list" ? (
-            <><div className="files-list-header"><span>名称</span><span>修改日期</span><span>大小</span><span>种类</span></div><div className="files-list">{visibleFolders.map((folder) => row({ kind: "folder", value: folder }, folder.id))}{visibleFiles.map((file) => row({ kind: "file", value: file }, file.id))}</div></>
+            <><div className="files-list-header"><span>{t("shell.name")}</span><span>{t("fileManager.modifiedDate")}</span><span>{t("fileManager.size")}</span><span>{t("fileManager.kind")}</span></div><div className="files-list">{visibleFolders.map((folder) => row({ kind: "folder", value: folder }, folder.id))}{visibleFiles.map((file) => row({ kind: "file", value: file }, file.id))}</div></>
           ) : view === "grid" ? (
             <div className="files-grid">{visibleFolders.map((folder) => row({ kind: "folder", value: folder }, folder.id))}{visibleFiles.map((file) => row({ kind: "file", value: file }, file.id))}</div>
           ) : (
@@ -1320,10 +1334,10 @@ export function FilesExplorer({
                 onDragOver={(event) => { event.stopPropagation(); handleCanvasDragOver(event, column.location.id); }}
                 onDrop={(event) => handleCanvasDrop(event, column.location)}
               >
-                <div className="files-column-title">{column.location.name}</div>
+                <div className="files-column-title">{fileLocationLabel(column.location, t)}</div>
                 <div className="files-column-list">
                   {values.map((value) => row(value, `${column.location.id}:${value.value.id}`, { openFolder: (folder) => openInColumn(folder, index), openFolderOnClick: true, pathSelected: trail[index + 1]?.id === value.value.id, ordered: values, columnIndex: index, lastColumn: index === renderedColumns.length - 1 }))}
-                  {!values.length && <span className="files-column-empty">此文件夹为空</span>}
+                  {!values.length && <span className="files-column-empty">{t("fileManager.emptyFolder")}</span>}
                 </div>
               </div>
               );
@@ -1335,72 +1349,72 @@ export function FilesExplorer({
       </div>
       {contextMenu && <div className="files-context-menu" style={{ left: Math.min(contextMenu.x, window.innerWidth - 190), top: Math.min(contextMenu.y, window.innerHeight - 280) }} onClick={(event) => event.stopPropagation()}>
         {contextMenu.target ? <>
-          <button onClick={() => void showInfo(contextMenu.target!)}>{contextMenu.target.kind === "folder" ? <Folder size={14} /> : <File size={14} />}显示简介</button>
-          {contextMenu.target.kind === "file" && <><a href={fileUrl(contextMenu.target.value.id, true)}><Download size={14} />下载</a><button onClick={() => void chooseDocument(contextMenu.target!.value as FileItem)}><Files size={14} />加入到文档</button>{canConvertToDocument(contextMenu.target.value) && <button onClick={() => { const file = contextMenu.target!.value as FileItem; setContextMenu(null); void convertToDocument(file); }}><FileText size={14} />转为在线文档</button>}</>}
-          <button disabled={!selectedValues.length && !contextMenu.target} onClick={() => copySelected("copy")}><Copy size={14} />拷贝</button>
-          {!systemReadonly && <button disabled={!!contextMenu.target.value.locked} onClick={() => copySelected("cut")}><Scissors size={14} />剪切</button>}
-          <button disabled={!itemClipboard?.items.length || systemReadonly} onClick={() => void pasteClipboard(contextMenu.target?.kind === "folder" && !contextMenu.target.value.virtual ? { type: "folder", id: contextMenu.target.value.id, name: contextMenu.target.value.name } : location)}><ClipboardPaste size={14} />{contextMenu.target.kind === "folder" && !contextMenu.target.value.virtual ? "粘贴到此文件夹" : "粘贴"}</button>
-          {!systemReadonly && <><button onClick={() => { setTransfer({ mode: "move", items: selectedValues.length ? selectedValues : [contextMenu.target!] }); setContextMenu(null); }}><ArrowRight size={14} />移动到…</button><button onClick={() => { setTransfer({ mode: "copy", items: selectedValues.length ? selectedValues : [contextMenu.target!] }); setContextMenu(null); }}><Copy size={14} />复制到…</button></>}
-          {systemReadonly && <button onClick={() => void copyToMyFiles(contextMenu.target!)}><Copy size={14} />复制到我的文件夹</button>}
-          {contextMenu.target.kind === "folder" && contextMenu.target.value.parent_id === "shared" && <button onClick={() => void openShare(contextMenu.target!.value as FileFolder)}><Share2 size={14} />分享与权限</button>}
-          {contextMenu.target.kind === "folder" && <button onClick={() => { const folder = contextMenu.target!.value; setContextMenu(null); window.dispatchEvent(new CustomEvent("doca-subscribe-library", { detail: { kind: "folder", id: folder.id, title: folder.name } })); }}><Sparkles size={14} />收入知识库</button>}
-          {contextMenu.target.kind === "file" && <button onClick={() => { const file = contextMenu.target!.value as FileItem; setContextMenu(null); window.dispatchEvent(new CustomEvent("doca-subscribe-library", { detail: { kind: "file", id: file.id, title: file.name } })); }}><Sparkles size={14} />收入知识库</button>}
-          {!systemReadonly && <><button onClick={() => void recognize(contextMenu.target)}><Sparkles size={14} />生成 AI 描述</button>
-          <button disabled={!!contextMenu.target.value.locked} onClick={renameSelected}><Pencil size={14} />重命名</button>
-          <button className="danger" disabled={!!contextMenu.target.value.locked} onClick={() => void requestTrash()}><Trash2 size={14} />移到回收站</button></>}
+          <button onClick={() => void showInfo(contextMenu.target!)}>{contextMenu.target.kind === "folder" ? <Folder size={14} /> : <File size={14} />}{t("fileManager.showInfo")}</button>
+          {contextMenu.target.kind === "file" && <><a href={fileUrl(contextMenu.target.value.id, true)}><Download size={14} />{t("doc.download")}</a><button onClick={() => void chooseDocument(contextMenu.target!.value as FileItem)}><Files size={14} />{t("fileManager.addToDocument")}</button>{canConvertToDocument(contextMenu.target.value) && <button onClick={() => { const file = contextMenu.target!.value as FileItem; setContextMenu(null); void convertToDocument(file); }}><FileText size={14} />{t("fileManager.convert")}</button>}</>}
+          <button disabled={!selectedValues.length && !contextMenu.target} onClick={() => copySelected("copy")}><Copy size={14} />{t("fileManager.copy")}</button>
+          {!systemReadonly && <button disabled={!!contextMenu.target.value.locked} onClick={() => copySelected("cut")}><Scissors size={14} />{t("fileManager.cut")}</button>}
+          <button disabled={!itemClipboard?.items.length || systemReadonly} onClick={() => void pasteClipboard(contextMenu.target?.kind === "folder" && !contextMenu.target.value.virtual ? { type: "folder", id: contextMenu.target.value.id, name: contextMenu.target.value.name } : location)}><ClipboardPaste size={14} />{contextMenu.target.kind === "folder" && !contextMenu.target.value.virtual ? t("fileManager.pasteFolder") : t("fileManager.paste")}</button>
+          {!systemReadonly && <><button onClick={() => { setTransfer({ mode: "move", items: selectedValues.length ? selectedValues : [contextMenu.target!] }); setContextMenu(null); }}><ArrowRight size={14} />{t("fileManager.moveToDialog")}</button><button onClick={() => { setTransfer({ mode: "copy", items: selectedValues.length ? selectedValues : [contextMenu.target!] }); setContextMenu(null); }}><Copy size={14} />{t("fileManager.copyToDialog")}</button></>}
+          {systemReadonly && <button onClick={() => void copyToMyFiles(contextMenu.target!)}><Copy size={14} />{t("fileManager.copyPersonal")}</button>}
+          {contextMenu.target.kind === "folder" && contextMenu.target.value.parent_id === "shared" && <button onClick={() => void openShare(contextMenu.target!.value as FileFolder)}><Share2 size={14} />{t("share.title")}</button>}
+          {contextMenu.target.kind === "folder" && <button onClick={() => { const folder = contextMenu.target!.value; setContextMenu(null); window.dispatchEvent(new CustomEvent("doca-subscribe-library", { detail: { kind: "folder", id: folder.id, title: folder.name } })); }}><Sparkles size={14} />{t("doc.collect")}</button>}
+          {contextMenu.target.kind === "file" && <button onClick={() => { const file = contextMenu.target!.value as FileItem; setContextMenu(null); window.dispatchEvent(new CustomEvent("doca-subscribe-library", { detail: { kind: "file", id: file.id, title: file.name } })); }}><Sparkles size={14} />{t("doc.collect")}</button>}
+          {!systemReadonly && <><button onClick={() => void recognize(contextMenu.target)}><Sparkles size={14} />{t("fileManager.generateDescription")}</button>
+          <button disabled={!!contextMenu.target.value.locked} onClick={renameSelected}><Pencil size={14} />{t("shell.rename")}</button>
+          <button className="danger" disabled={!!contextMenu.target.value.locked} onClick={() => void requestTrash()}><Trash2 size={14} />{t("fileManager.trash")}</button></>}
         </> : <>
-          <button disabled={!itemClipboard?.items.length || systemReadonly} onClick={() => void pasteClipboard(location)}><ClipboardPaste size={14} />粘贴</button>
-          <button onClick={() => void recognize(null)}><Sparkles size={14} />生成此处全部 AI 描述</button>
-          <button onClick={() => { setContextMenu(null); void createFolder(); }} disabled={location.type === "document" || (location.type === "system" && !["root", "shared"].includes(location.id))}><FolderPlus size={14} />新建文件夹</button>
+          <button disabled={!itemClipboard?.items.length || systemReadonly} onClick={() => void pasteClipboard(location)}><ClipboardPaste size={14} />{t("fileManager.paste")}</button>
+          <button onClick={() => void recognize(null)}><Sparkles size={14} />{t("fileManager.generateAll")}</button>
+          <button onClick={() => { setContextMenu(null); void createFolder(); }} disabled={location.type === "document" || (location.type === "system" && !["root", "shared"].includes(location.id))}><FolderPlus size={14} />{t("fileManager.newFolder")}</button>
         </>}
       </div>}
-      {largePreview && <div className="file-large-preview-backdrop" role="presentation" onClick={() => setLargePreview(null)}><section ref={largePreviewRef} className={`file-large-preview ${largePreview.mime.startsWith("image/") ? "image-only" : ""} ${previewFullscreen ? "is-fullscreen" : ""}`} role="dialog" aria-modal="true" aria-label="文件预览" onClick={(event) => event.stopPropagation()}><header><strong title={largePreview.name}>{largePreview.name}</strong><div className="file-large-preview-actions"><button className="icon" onClick={() => void togglePreviewFullscreen()} aria-label={previewFullscreen ? "退出全屏" : "全屏"}>{previewFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}</button><button className="icon" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); setLargePreview(null); }} aria-label="关闭"><X size={18} /></button></div></header><div className="file-large-preview-content" onDoubleClick={() => { if (largePreview.mime.startsWith("image/")) void togglePreviewFullscreen(); }}><Preview file={largePreview} /></div></section></div>}
-      {documentPicker && <div className="file-info-backdrop" role="presentation" onClick={() => setDocumentPicker(null)}><section className="file-document-picker" role="dialog" aria-modal="true" aria-label="加入到文档" onClick={(event) => event.stopPropagation()}><header><div><strong>加入到文档</strong><span>{documentPicker.file.name}</span></div><button className="icon" onClick={() => setDocumentPicker(null)} aria-label="关闭"><X size={18} /></button></header><div className="file-document-picker-list">{documentPicker.documents.length ? documentPicker.documents.map((document) => <button key={document.id} onClick={() => void addToDocument(document)}><FileText size={17} /><span>{document.name}</span><ChevronDown size={14} /></button>) : <p>暂无可加入的文档</p>}</div></section></div>}
+      {largePreview && <div className="file-large-preview-backdrop" role="presentation" onClick={() => setLargePreview(null)}><section ref={largePreviewRef} className={`file-large-preview ${largePreview.mime.startsWith("image/") ? "image-only" : ""} ${previewFullscreen ? "is-fullscreen" : ""}`} role="dialog" aria-modal="true" aria-label={t("fileManager.preview")} onClick={(event) => event.stopPropagation()}><header><strong title={largePreview.name}>{largePreview.name}</strong><div className="file-large-preview-actions"><button className="icon" onClick={() => void togglePreviewFullscreen()} aria-label={previewFullscreen ? t("fileManager.exitFullscreen") : t("fileManager.fullscreen")}>{previewFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}</button><button className="icon" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); setLargePreview(null); }} aria-label={t("dialog.close")}><X size={18} /></button></div></header><div className="file-large-preview-content" onDoubleClick={() => { if (largePreview.mime.startsWith("image/")) void togglePreviewFullscreen(); }}><Preview file={largePreview} /></div></section></div>}
+      {documentPicker && <div className="file-info-backdrop" role="presentation" onClick={() => setDocumentPicker(null)}><section className="file-document-picker" role="dialog" aria-modal="true" aria-label={t("fileManager.addToDocument")} onClick={(event) => event.stopPropagation()}><header><div><strong>{t("fileManager.addToDocument")}</strong><span>{documentPicker.file.name}</span></div><button className="icon" onClick={() => setDocumentPicker(null)} aria-label={t("dialog.close")}><X size={18} /></button></header><div className="file-document-picker-list">{documentPicker.documents.length ? documentPicker.documents.map((document) => <button key={document.id} onClick={() => void addToDocument(document)}><FileText size={17} /><span>{document.name}</span><ChevronDown size={14} /></button>) : <p>{t("fileManager.noDocuments")}</p>}</div></section></div>}
       {shareFolder && <FolderPermissionPanel folder={shareFolder} close={() => setShareFolder(null)} />}
       {transfer && <FolderDestinationPicker mode={transfer.mode} allowSharedRoot={transfer.items.every((item) => item.kind === "folder")} close={() => setTransfer(null)} select={transferTo} />}
-      {recognitionConfirm && <div className="file-info-backdrop" role="presentation" onClick={() => setRecognitionConfirm(null)}><section className="file-confirm-dialog" role="dialog" aria-modal="true" aria-label="重新生成 AI 描述" onClick={(event) => event.stopPropagation()}><header><div><strong>重新生成 AI 描述</strong><span>当前文件已有 AI 描述</span></div><button className="icon" onClick={() => setRecognitionConfirm(null)} aria-label="关闭"><X size={18} /></button></header><p>继续生成会覆盖现有描述，并消耗 AI 积分。是否继续？</p><footer><button className="secondary" onClick={() => setRecognitionConfirm(null)}>取消</button><button className="primary" onClick={() => { const target = recognitionConfirm.target; setRecognitionConfirm(null); void recognize(target, true); }}>继续生成</button></footer></section></div>}
-      {trashConfirm && <div className="file-info-backdrop" role="presentation" onClick={() => setTrashConfirm(null)}><section className="file-confirm-dialog" role="dialog" aria-modal="true" aria-label="移到回收站" onClick={(event) => event.stopPropagation()}>
-        <header><div><strong>移到回收站</strong><span>可稍后在回收站中恢复</span></div><button className="icon" onClick={() => setTrashConfirm(null)} aria-label="关闭"><X size={18} /></button></header>
-        <p>确定将{trashConfirm.length > 1 ? `${trashConfirm.length} 个项目` : `“${trashConfirm[0]!.value.name}”`}移到回收站吗？</p>
-        <footer><button className="secondary" onClick={() => setTrashConfirm(null)}>取消</button><button className="primary" onClick={() => void executeTrash()}>确定</button></footer>
+      {recognitionConfirm && <div className="file-info-backdrop" role="presentation" onClick={() => setRecognitionConfirm(null)}><section className="file-confirm-dialog" role="dialog" aria-modal="true" aria-label={t("fileManager.regenerate")} onClick={(event) => event.stopPropagation()}><header><div><strong>{t("fileManager.regenerate")}</strong><span>{t("fileManager.descriptionExists")}</span></div><button className="icon" onClick={() => setRecognitionConfirm(null)} aria-label={t("dialog.close")}><X size={18} /></button></header><p>{t("fileManager.regenerateHelp")}</p><footer><button className="secondary" onClick={() => setRecognitionConfirm(null)}>{t("common.cancel")}</button><button className="primary" onClick={() => { const target = recognitionConfirm.target; setRecognitionConfirm(null); void recognize(target, true); }}>{t("fileManager.continueGeneration")}</button></footer></section></div>}
+      {trashConfirm && <div className="file-info-backdrop" role="presentation" onClick={() => setTrashConfirm(null)}><section className="file-confirm-dialog" role="dialog" aria-modal="true" aria-label={t("fileManager.trash")} onClick={(event) => event.stopPropagation()}>
+        <header><div><strong>{t("fileManager.trash")}</strong><span>{t("fileManager.restoreHelp")}</span></div><button className="icon" onClick={() => setTrashConfirm(null)} aria-label={t("dialog.close")}><X size={18} /></button></header>
+        <p>{trashConfirm.length > 1 ? t("fileManager.trashQuestionMany", { count: trashConfirm.length }) : t("fileManager.trashQuestionOne", { name: trashConfirm[0]!.value.name })}</p>
+        <footer><button className="secondary" onClick={() => setTrashConfirm(null)}>{t("common.cancel")}</button><button className="primary" onClick={() => void executeTrash()}>{t("common.confirm")}</button></footer>
       </section></div>}
-      {nameConflict && <div className="file-info-backdrop" role="presentation" onClick={() => setNameConflict(null)}><section className="file-confirm-dialog file-conflict-dialog" role="dialog" aria-modal="true" aria-label="名称冲突" onClick={(event) => event.stopPropagation()}>
-        <header><div><strong>名称冲突</strong><span>{nameConflict.conflicts.length === 1 ? `“${nameConflict.conflicts[0]!.item.name}”已存在` : `有 ${nameConflict.conflicts.length} 个项目名称冲突`}</span></div><button className="icon" onClick={() => setNameConflict(null)} aria-label="关闭"><X size={18} /></button></header>
-        <p>覆盖会把已有项目移到回收站；保留两者会给新项目加上序号，例如「{nextAvailableName(nameConflict.conflicts[0]!.item.name || "未命名", nameConflict.conflicts.map((item) => item.existing.name).concat(nameConflict.conflicts[0]!.item.name || ""), nameConflict.conflicts[0]!.item.kind)}」。</p>
+      {nameConflict && <div className="file-info-backdrop" role="presentation" onClick={() => setNameConflict(null)}><section className="file-confirm-dialog file-conflict-dialog" role="dialog" aria-modal="true" aria-label={t("fileManager.nameConflict")} onClick={(event) => event.stopPropagation()}>
+        <header><div><strong>{t("fileManager.nameConflict")}</strong><span>{nameConflict.conflicts.length === 1 ? t("fileManager.nameExists", { name: nameConflict.conflicts[0]!.item.name ?? t("shell.unnamed") }) : t("fileManager.conflictCount", { count: nameConflict.conflicts.length })}</span></div><button className="icon" onClick={() => setNameConflict(null)} aria-label={t("dialog.close")}><X size={18} /></button></header>
+        <p>{t("fileManager.conflictHelp", { name: nextAvailableName(nameConflict.conflicts[0]!.item.name || t("shell.unnamed"), nameConflict.conflicts.map((item) => item.existing.name).concat(nameConflict.conflicts[0]!.item.name || ""), nameConflict.conflicts[0]!.item.kind) })}</p>
         {nameConflict.conflicts.length > 1 && <ul>{nameConflict.conflicts.slice(0, 8).map((item) => <li key={item.item.id}>{item.item.name}</li>)}</ul>}
         <footer className="file-conflict-actions">
-          <button className="danger" disabled={nameConflict.conflicts.every((item) => item.existing.id === item.item.id) || nameConflict.conflicts.some((item) => item.existing.id !== item.item.id && !!item.existing.locked)} onClick={() => { const prompt = nameConflict; setNameConflict(null); void transferItems(prompt.items, prompt.destination, prompt.copy, "overwrite"); }}>覆盖已有项目</button>
-          <button className="primary" onClick={() => { const prompt = nameConflict; setNameConflict(null); void transferItems(prompt.items, prompt.destination, prompt.copy, "keep"); }}>保留两者</button>
-          <button className="secondary" onClick={() => setNameConflict(null)}>取消</button>
+          <button className="danger" disabled={nameConflict.conflicts.every((item) => item.existing.id === item.item.id) || nameConflict.conflicts.some((item) => item.existing.id !== item.item.id && !!item.existing.locked)} onClick={() => { const prompt = nameConflict; setNameConflict(null); void transferItems(prompt.items, prompt.destination, prompt.copy, "overwrite"); }}>{t("fileManager.overwrite")}</button>
+          <button className="primary" onClick={() => { const prompt = nameConflict; setNameConflict(null); void transferItems(prompt.items, prompt.destination, prompt.copy, "keep"); }}>{t("fileManager.keepBoth")}</button>
+          <button className="secondary" onClick={() => setNameConflict(null)}>{t("common.cancel")}</button>
         </footer>
       </section></div>}
       {pendingUpload && <div className="file-upload-backdrop" role="presentation">
-        <section className="file-upload-dialog" role="dialog" aria-modal="true" aria-label="确认上传">
-          <header><div><strong>确认上传内容</strong><span>可以先按扩展名过滤，再上传到当前文件夹。</span></div><button className="icon" onClick={() => setPendingUpload(null)} aria-label="取消"><X size={18} /></button></header>
+        <section className="file-upload-dialog" role="dialog" aria-modal="true" aria-label={t("fileManager.confirmUpload")}>
+          <header><div><strong>{t("fileManager.reviewUpload")}</strong><span>{t("fileManager.uploadFilterHelp")}</span></div><button className="icon" onClick={() => setPendingUpload(null)} aria-label={t("common.cancel")}><X size={18} /></button></header>
           <div className="file-upload-filters">
-            <span>文件类型</span>
+            <span>{t("fileManager.fileTypes")}</span>
             {uploadExtensions.map((ext) => {
-              const enabled = pendingUpload.some((entry) => entry.file && entry.selected && (extension(entry.file.name) || "无扩展名") === ext);
-              return <button key={ext} className={enabled ? "active" : ""} onClick={() => setPendingUpload((old) => old ? old.map((entry) => entry.file && (extension(entry.file.name) || "无扩展名") === ext ? { ...entry, selected: !enabled } : entry) : null)}>{enabled && <Check size={13} />}{ext.toUpperCase()}</button>;
+              const enabled = pendingUpload.some((entry) => entry.file && entry.selected && (extension(entry.file.name) || t("fileManager.noExtension")) === ext);
+              return <button key={ext} className={enabled ? "active" : ""} onClick={() => setPendingUpload((old) => old ? old.map((entry) => entry.file && (extension(entry.file.name) || t("fileManager.noExtension")) === ext ? { ...entry, selected: !enabled } : entry) : null)}>{enabled && <Check size={13} />}{ext.toUpperCase()}</button>;
             })}
           </div>
-          <div className="file-upload-summary"><strong>{pendingUpload.filter((entry) => entry.selected).length} / {pendingUpload.length} 项</strong><span>{pendingUpload.filter((entry) => entry.selected && entry.file).reduce((size, entry) => size + (entry.file?.size ?? 0), 0) ? "已选择待上传内容" : "请选择要上传的内容"}</span></div>
-          <div className="file-upload-list">{pendingUpload.slice(0, 120).map((entry, index) => <label key={entry.path + index}><input type="checkbox" checked={entry.selected} onChange={() => setPendingUpload((old) => old ? old.map((item, i) => i === index ? { ...item, selected: !item.selected } : item) : null)} /><span title={entry.path}>{entry.path}</span><small>{entry.file ? formatSize(entry.file.size) : "文件夹"}</small></label>)}</div>
-          <footer><button className="secondary" onClick={() => setPendingUpload(null)}>取消</button><button className="primary" disabled={!pendingUpload.some((entry) => entry.selected)} onClick={() => void upload(pendingUpload.filter((entry) => entry.selected))}><Upload size={15} />上传选中内容</button></footer>
+          <div className="file-upload-summary"><strong>{t("fileManager.uploadSelection", { selected: pendingUpload.filter((entry) => entry.selected).length, total: pendingUpload.length })}</strong><span>{pendingUpload.filter((entry) => entry.selected && entry.file).reduce((size, entry) => size + (entry.file?.size ?? 0), 0) ? t("fileManager.selectedUploads") : t("fileManager.chooseUploads")}</span></div>
+          <div className="file-upload-list">{pendingUpload.slice(0, 120).map((entry, index) => <label key={entry.path + index}><input type="checkbox" checked={entry.selected} onChange={() => setPendingUpload((old) => old ? old.map((item, i) => i === index ? { ...item, selected: !item.selected } : item) : null)} /><span title={entry.path}>{entry.path}</span><small>{entry.file ? formatSize(entry.file.size) : t("trash.folder")}</small></label>)}</div>
+          <footer><button className="secondary" onClick={() => setPendingUpload(null)}>{t("common.cancel")}</button><button className="primary" disabled={!pendingUpload.some((entry) => entry.selected)} onClick={() => void upload(pendingUpload.filter((entry) => entry.selected))}><Upload size={15} />{t("fileManager.uploadSelected")}</button></footer>
         </section>
       </div>}
-      {uploadProgress && <button className={`file-upload-progress status-${uploadProgress.status}`} onClick={() => navigateTrail(uploadProgress.trail)} title="打开上传目标文件夹">
+      {uploadProgress && <button className={`file-upload-progress status-${uploadProgress.status}`} onClick={() => navigateTrail(uploadProgress.trail)} title={t("fileManager.openDestination")}>
         <span className="file-upload-progress-icon">{uploadProgress.status === "done" ? <Check size={17} /> : uploadProgress.status === "error" ? <X size={17} /> : <Upload size={17} />}</span>
-        <span className="file-upload-progress-copy"><strong>{uploadProgress.status === "done" ? "上传完成" : uploadProgress.status === "error" ? "上传中断" : `正在上传 ${uploadProgress.completed + 1}/${uploadProgress.total}`}</strong><small title={uploadProgress.current}>{uploadProgress.current}</small><i><b style={{ width: `${uploadProgress.total ? uploadProgress.completed / uploadProgress.total * 100 : 0}%` }} /></i></span>
-        <span className="file-upload-progress-close" role="button" aria-label="关闭上传状态" onClick={(event) => { event.stopPropagation(); setUploadProgress(null); }}><X size={14} /></span>
+        <span className="file-upload-progress-copy"><strong>{uploadProgress.status === "done" ? t("fileManager.uploadComplete") : uploadProgress.status === "error" ? t("fileManager.uploadInterrupted") : t("fileManager.uploadProgress", { current: uploadProgress.completed + 1, total: uploadProgress.total })}</strong><small title={uploadProgress.current}>{uploadProgress.current}</small><i><b style={{ width: `${uploadProgress.total ? uploadProgress.completed / uploadProgress.total * 100 : 0}%` }} /></i></span>
+        <span className="file-upload-progress-close" role="button" aria-label={t("fileManager.closeUpload")} onClick={(event) => { event.stopPropagation(); setUploadProgress(null); }}><X size={14} /></span>
       </button>}
       <FileInfoPanel file={infoFile} close={() => setInfoFile(null)} convert={infoFile && canConvertToDocument(infoFile) ? (file) => void convertToDocument(file) : undefined} />
       <FolderInfoPanel folder={infoFolder?.folder ?? null} contents={infoFolder?.contents ?? null} close={() => setInfoFolder(null)} />
       {ai?.userId && !ai.open && (
         <button
           className="ai-document-trigger files-ai-trigger"
-          title="把当前文件夹中的文档和文件添加到 AI"
-          aria-label="把当前文件夹中的文档和文件添加到 AI"
+          title={t("fileManager.addFolderToAi")}
+          aria-label={t("fileManager.addFolderToAi")}
           aria-expanded={ai.open}
           onClick={() => void addCurrentToAI()}
         >
@@ -1412,11 +1426,13 @@ export function FilesExplorer({
 }
 
 export function SharedFoldersPage() {
+const { t, locale } = useI18n();
+
   const [items, setItems] = useState<SharedFolderSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
-  const [draftName, setDraftName] = useState("新建共享文件夹");
+  const [draftName, setDraftName] = useState(t("fileManager.newSharedFolder"));
   const [saving, setSaving] = useState(false);
 
   async function loadSharedFolders() {
@@ -1425,7 +1441,7 @@ export function SharedFoldersPage() {
     try {
       const result = await api<{ items: SharedFolderSummary[] }>("/files/shared-folders");
       setItems(result.items);
-    } catch (e) { setError(e instanceof Error ? e.message : "共享文件夹加载失败"); }
+    } catch (e) { setError(e instanceof Error ? e.message : t("fileManager.sharedLoadFailed")); }
     finally { setLoading(false); }
   }
 
@@ -1435,7 +1451,7 @@ export function SharedFoldersPage() {
     setLoading(true);
     void api<{ id: string; name: string }>("/files/share/redeem", "POST", { token })
       .then((folder) => { window.location.hash = `/shared-files/${folder.id}?name=${encodeURIComponent(folder.name)}`; })
-      .catch((e) => { setError(e instanceof Error ? e.message : "加入共享文件夹失败"); setLoading(false); });
+      .catch((e) => { setError(e instanceof Error ? e.message : t("fileManager.sharedJoinFailed")); setLoading(false); });
   }, []);
 
   async function createSharedFolder() {
@@ -1446,7 +1462,7 @@ export function SharedFoldersPage() {
       const folder = await api<FileFolder>("/files/folders", "POST", { name, parentId: "shared" });
       setCreating(false);
       window.location.hash = `/shared-files/${folder.id}?name=${encodeURIComponent(folder.name)}`;
-    } catch (e) { setError(e instanceof Error ? e.message : "创建共享文件夹失败"); }
+    } catch (e) { setError(e instanceof Error ? e.message : t("fileManager.sharedCreateFailed")); }
     finally { setSaving(false); }
   }
 
@@ -1455,20 +1471,20 @@ export function SharedFoldersPage() {
   }
 
   return <section className="shared-folders-page">
-    <header className="shared-folders-header"><div><h2>共享文件夹</h2><p>集中管理对外共享的一级文件夹及其权限。</p></div><button className="primary" onClick={() => { setDraftName("新建共享文件夹"); setCreating(true); }}><FolderPlus size={16} />新建共享文件夹</button></header>
-    {error && <div className="files-error" role="alert"><span>{error}</span><button className="icon" onClick={() => setError("")} aria-label="关闭错误提示"><X size={16} /></button></div>}
-    <div className="shared-folders-table" role="table" aria-label="共享文件夹列表">
-      <div className="shared-folder-row shared-folder-table-head" role="row"><span>文件夹名称</span><span>文件夹 ID</span><span>所有人</span><span>我的权限</span><span>修改时间</span></div>
-      {loading ? <p className="empty">正在加载共享文件夹…</p> : items.map((folder) => <button className="shared-folder-row" role="row" key={folder.id} onDoubleClick={() => openSharedFolder(folder)} onClick={() => openSharedFolder(folder)}>
+    <header className="shared-folders-header"><div><h2>{t("nav.sharedFiles")}</h2><p>{t("fileManager.sharedIntro")}</p></div><button className="primary" onClick={() => { setDraftName(t("fileManager.newSharedFolder")); setCreating(true); }}><FolderPlus size={16} />{t("fileManager.newSharedFolder")}</button></header>
+    {error && <div className="files-error" role="alert"><span>{error}</span><button className="icon" onClick={() => setError("")} aria-label={t("fileManager.closeError")}><X size={16} /></button></div>}
+    <div className="shared-folders-table" role="table" aria-label={t("fileManager.sharedList")}>
+      <div className="shared-folder-row shared-folder-table-head" role="row"><span>{t("fileManager.folderName")}</span><span>{t("fileManager.folderId")}</span><span>{t("fileManager.owner")}</span><span>{t("fileManager.myPermission")}</span><span>{t("home.modified")}</span></div>
+      {loading ? <p className="empty">{t("fileManager.sharedLoading")}</p> : items.map((folder) => <button className="shared-folder-row" role="row" key={folder.id} onDoubleClick={() => openSharedFolder(folder)} onClick={() => openSharedFolder(folder)}>
         <span className="shared-folder-name"><FolderGlyph /><strong>{folder.name}</strong></span>
         <code title={folder.id}>{folder.id}</code>
         <span className="shared-folder-owner">{folder.owner ? <UserBadge passive id={folder.owner.id} name={folder.owner.display_name} /> : "—"}</span>
-        <span className={`shared-folder-role role-${folder.role}`}>{folder.role === "owner" ? "所有者" : folder.role === "admin" ? "管理员" : "只读用户"}</span>
-        <span>{folder.updated_at ? fileDate(folder.updated_at) : "—"}</span>
+        <span className={`shared-folder-role role-${folder.role}`}>{folder.role === "owner" ? t("search.owner") : folder.role === "admin" ? t("admin.badge") : t("fileManager.reader")}</span>
+        <span>{folder.updated_at ? fileDate(folder.updated_at, locale) : "—"}</span>
       </button>)}
-      {!loading && !items.length && <div className="shared-folders-empty"><Share2 size={28} /><strong>还没有共享文件夹</strong><span>新建后，可以通过成员授权或分享链接邀请其他人。</span></div>}
+      {!loading && !items.length && <div className="shared-folders-empty"><Share2 size={28} /><strong>{t("fileManager.noShared")}</strong><span>{t("fileManager.sharedHelp")}</span></div>}
     </div>
-    {creating && <div className="file-info-backdrop" role="presentation" onClick={() => !saving && setCreating(false)}><form className="shared-folder-create-dialog" onSubmit={(event) => { event.preventDefault(); void createSharedFolder(); }} onClick={(event) => event.stopPropagation()}><header><div><strong>新建共享文件夹</strong><span>创建后可邀请成员或开启链接分享</span></div><button type="button" className="icon" onClick={() => setCreating(false)} aria-label="关闭"><X size={18} /></button></header><label><span>文件夹名称</span><input autoFocus value={draftName} maxLength={255} onChange={(event) => setDraftName(event.target.value)} onFocus={(event) => event.currentTarget.select()} /></label><footer><button type="button" className="secondary" onClick={() => setCreating(false)}>取消</button><button type="submit" className="primary" disabled={saving || !draftName.trim()}><FolderPlus size={15} />{saving ? "正在创建…" : "创建"}</button></footer></form></div>}
+    {creating && <div className="file-info-backdrop" role="presentation" onClick={() => !saving && setCreating(false)}><form className="shared-folder-create-dialog" onSubmit={(event) => { event.preventDefault(); void createSharedFolder(); }} onClick={(event) => event.stopPropagation()}><header><div><strong>{t("fileManager.newSharedFolder")}</strong><span>{t("fileManager.createSharedHelp")}</span></div><button type="button" className="icon" onClick={() => setCreating(false)} aria-label={t("dialog.close")}><X size={18} /></button></header><label><span>{t("fileManager.folderName")}</span><input autoFocus value={draftName} maxLength={255} onChange={(event) => setDraftName(event.target.value)} onFocus={(event) => event.currentTarget.select()} /></label><footer><button type="button" className="secondary" onClick={() => setCreating(false)}>{t("common.cancel")}</button><button type="submit" className="primary" disabled={saving || !draftName.trim()}><FolderPlus size={15} />{saving ? t("fileManager.creating") : t("fileManager.create")}</button></footer></form></div>}
   </section>;
 }
 
@@ -1483,7 +1499,9 @@ export function FolderFilePicker({
   selectFolder?: (folder: { id: string; name: string }) => Promise<void> | void;
   accept?: (file: FileItem) => boolean;
 }) {
-  const roots: Location[] = [root, { type: "system", id: "shared", name: "共享文件夹" }, { type: "system", id: "ai", name: "AI 助手", locked: true }, { type: "system", id: "documents", name: "文档系统", locked: true }, { type: "system", id: "mail", name: "邮箱系统", locked: true }];
+const { t, locale } = useI18n();
+
+  const roots: Location[] = [root, { type: "system", id: "shared", name: t("nav.sharedFiles") }, { type: "system", id: "ai", name: t("nav.assistant"), locked: true }, { type: "system", id: "documents", name: t("recognition.documents"), locked: true }];
   const [trail, setTrail] = useState<Location[]>([root]);
   const [columns, setColumns] = useState<Array<{ location: Location; page: FilePage }>>([]);
   const [query, setQuery] = useState("");
@@ -1504,25 +1522,27 @@ export function FolderFilePicker({
     void Promise.all(trail.map(async (location) => ({ location, page: await api<FilePage>(`/files?parentType=${location.type}&parentId=${encodeURIComponent(location.id)}`, "GET", undefined, controller.signal) }))).then(setColumns).catch((e) => { if (e.name !== "AbortError") setError(e.message); });
     return () => controller.abort();
   }, [query, trail]);
-  async function confirm(file = chosen) { if (!file || !select) return; setBusy(true); try { await select(file); close(); } catch (e) { setError(e instanceof Error ? e.message : "选择失败"); setBusy(false); } }
+  async function confirm(file = chosen) { if (!file || !select) return; setBusy(true); try { await select(file); close(); } catch (e) { setError(e instanceof Error ? e.message : t("fileManager.selectionFailed")); setBusy(false); } }
   const current = trail[trail.length - 1] ?? root;
   async function confirmFolder() {
     if (!selectFolder) return;
     setBusy(true);
     try { await selectFolder({ id: current.id, name: current.name }); close(); }
-    catch (e) { setError(e instanceof Error ? e.message : "选择失败"); setBusy(false); }
+    catch (e) { setError(e instanceof Error ? e.message : t("fileManager.selectionFailed")); setBusy(false); }
   }
-  return createPortal(<div className="file-info-backdrop folder-file-picker-backdrop" role="presentation" onClick={close}><section className="folder-file-picker finder-picker" role="dialog" aria-modal="true" aria-label={selectFolder ? "选择文件夹" : "从 Doca 文件夹选择"} onClick={(event) => event.stopPropagation()}>
-    <header><div><strong>{selectFolder ? "选择文件夹" : "从 Doca 文件夹选择"}</strong><span>{selectFolder ? "选中后，AI 会按这个文件夹处理，不会把里面每个文件都变成附件" : "选择后复制文件信息，原文件和存储内容不变"}</span></div><button className="icon" onClick={close} aria-label="关闭"><X size={18} /></button></header>
-    <div className="folder-file-picker-toolbar"><button className="icon" disabled={trail.length <= 1} onClick={() => setTrail((old) => old.slice(0, -1))}><ArrowLeft size={17} /></button><nav>{trail.map((item, index) => <button key={`${item.type}:${item.id}`} onClick={() => setTrail((old) => old.slice(0, index + 1))}>{index ? "/ " : ""}{item.name}</button>)}</nav><label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索文件" /></label></div>
-    {error && <div className="files-error"><span>{error}</span><button className="icon" onClick={() => setError("")} aria-label="关闭错误提示"><X size={16} /></button></div>}
-    <div className="finder-picker-main"><aside>{roots.map((item) => <button key={item.id} className={trail[0]?.id === item.id ? "active" : ""} onClick={() => { setChosen(null); setTrail([item]); }}><HardDrive size={15} /><span>{item.name}</span></button>)}</aside><div className="finder-picker-columns">{query.trim() ? <div className="finder-picker-column">{(results ?? []).filter((file) => !accept || accept(file)).map((file) => <button key={file.id} className={chosen?.id === file.id ? "selected" : ""} onClick={() => setChosen(file)} onDoubleClick={() => void confirm(file)}><FileGlyph file={file} /><span><strong>{file.name}</strong><small>{formatSize(file.size)}</small></span></button>)}</div> : columns.map((column, index) => <div className="finder-picker-column" key={`${column.location.type}:${column.location.id}`}>{column.page.folders.map((folder) => <button key={folder.id} className={trail[index + 1]?.id === folder.id ? "selected" : ""} onClick={() => { setChosen(null); setTrail((old) => [...old.slice(0, index + 1), { type: folder.type, id: folder.id, name: folder.name, locked: folder.locked }]); }}><FolderGlyph icon={folder.icon} /><span><strong>{folder.name}</strong><small>{folder.virtual ? "系统目录" : "文件夹"}</small></span><ChevronRight size={14} /></button>)}{column.page.files.filter((file) => !accept || accept(file)).map((file) => <button key={file.id} className={chosen?.id === file.id ? "selected" : ""} onClick={() => setChosen(file)} onDoubleClick={() => void confirm(file)}><FileGlyph file={file} /><span><strong>{file.name}</strong><small>{formatSize(file.size)}</small></span></button>)}{!column.page.folders.length && !column.page.files.filter((file) => !accept || accept(file)).length && <p>此文件夹是空的</p>}</div>)}</div></div>
-    <footer><span>{selectFolder ? `当前：${trail.map((item) => item.name).join(" / ")}` : chosen ? chosen.name : "请选择文件"}</span><div><button className="secondary" onClick={close}>取消</button>{selectFolder ? <button className="primary" disabled={busy} onClick={() => void confirmFolder()}>{busy ? "正在加入…" : `选择「${current.name}」`}</button> : <button className="primary" disabled={!chosen || busy} onClick={() => void confirm()}>{busy ? "正在复制…" : "选择"}</button>}</div></footer>
+  return createPortal(<div className="file-info-backdrop folder-file-picker-backdrop" role="presentation" onClick={close}><section className="folder-file-picker finder-picker" role="dialog" aria-modal="true" aria-label={selectFolder ? t("fileManager.selectFolder") : t("fileManager.chooseDoca")} onClick={(event) => event.stopPropagation()}>
+    <header><div><strong>{selectFolder ? t("fileManager.selectFolder") : t("fileManager.chooseDoca")}</strong><span>{selectFolder ? t("fileManager.folderAiHelp") : t("fileManager.selectHelp")}</span></div><button className="icon" onClick={close} aria-label={t("dialog.close")}><X size={18} /></button></header>
+    <div className="folder-file-picker-toolbar"><button className="icon" disabled={trail.length <= 1} onClick={() => setTrail((old) => old.slice(0, -1))}><ArrowLeft size={17} /></button><nav>{trail.map((item, index) => <button key={`${item.type}:${item.id}`} onClick={() => setTrail((old) => old.slice(0, index + 1))}>{index ? "/ " : ""}{fileLocationLabel(item, t)}</button>)}</nav><label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("fileManager.searchFiles")} /></label></div>
+    {error && <div className="files-error"><span>{error}</span><button className="icon" onClick={() => setError("")} aria-label={t("fileManager.closeError")}><X size={16} /></button></div>}
+    <div className="finder-picker-main"><aside>{roots.map((item) => <button key={item.id} className={trail[0]?.id === item.id ? "active" : ""} onClick={() => { setChosen(null); setTrail([item]); }}><HardDrive size={15} /><span>{fileLocationLabel(item, t)}</span></button>)}</aside><div className="finder-picker-columns">{query.trim() ? <div className="finder-picker-column">{(results ?? []).filter((file) => !accept || accept(file)).map((file) => <button key={file.id} className={chosen?.id === file.id ? "selected" : ""} onClick={() => setChosen(file)} onDoubleClick={() => void confirm(file)}><FileGlyph file={file} /><span><strong>{file.name}</strong><small>{formatSize(file.size)}</small></span></button>)}</div> : columns.map((column, index) => <div className="finder-picker-column" key={`${column.location.type}:${column.location.id}`}>{column.page.folders.map((folder) => <button key={folder.id} className={trail[index + 1]?.id === folder.id ? "selected" : ""} onClick={() => { setChosen(null); setTrail((old) => [...old.slice(0, index + 1), { type: folder.type, id: folder.id, name: folder.name, locked: folder.locked }]); }}><FolderGlyph icon={folder.icon} /><span><strong>{folder.name}</strong><small>{folder.virtual ? t("fileManager.systemFolder") : t("trash.folder")}</small></span><ChevronRight size={14} /></button>)}{column.page.files.filter((file) => !accept || accept(file)).map((file) => <button key={file.id} className={chosen?.id === file.id ? "selected" : ""} onClick={() => setChosen(file)} onDoubleClick={() => void confirm(file)}><FileGlyph file={file} /><span><strong>{file.name}</strong><small>{formatSize(file.size)}</small></span></button>)}{!column.page.folders.length && !column.page.files.filter((file) => !accept || accept(file)).length && <p>{t("fileManager.emptyPicker")}</p>}</div>)}</div></div>
+    <footer><span>{selectFolder ? t("fileManager.currentPath", { path: trail.map((item) => fileLocationLabel(item, t)).join(" / ") }) : chosen ? chosen.name : t("fileManager.chooseFile")}</span><div><button className="secondary" onClick={close}>{t("common.cancel")}</button>{selectFolder ? <button className="primary" disabled={busy} onClick={() => void confirmFolder()}>{busy ? t("fileManager.adding") : t("fileManager.chooseCurrent", { name: fileLocationLabel(current, t) })}</button> : <button className="primary" disabled={!chosen || busy} onClick={() => void confirm()}>{busy ? t("fileManager.copying") : t("fileManager.select")}</button>}</div></footer>
   </section></div>, document.body);
 }
 
 function FolderDestinationPicker({ mode, allowSharedRoot, close, select }: { mode: "move" | "copy"; allowSharedRoot: boolean; close: () => void; select: (location: Location) => Promise<void> | void }) {
-  const roots: Location[] = [root, { type: "system", id: "shared", name: "共享文件夹" }];
+const { t, locale } = useI18n();
+
+  const roots: Location[] = [root, { type: "system", id: "shared", name: t("nav.sharedFiles") }];
   const [trail, setTrail] = useState<Location[]>([root]);
   const [columns, setColumns] = useState<Array<{ location: Location; page: FilePage }>>([]);
   const [busy, setBusy] = useState(false);
@@ -1530,9 +1550,11 @@ function FolderDestinationPicker({ mode, allowSharedRoot, close, select }: { mod
   const current = trail[trail.length - 1] ?? root;
   useEffect(() => { let active = true; void Promise.all(trail.map(async (location) => ({ location, page: await api<FilePage>(`/files?parentType=${location.type}&parentId=${encodeURIComponent(location.id)}`) }))).then((pages) => active && setColumns(pages)).catch((e) => active && setError(e.message)); return () => { active = false; }; }, [trail]);
   const invalidSharedRoot = current.type === "system" && current.id === "shared" && !allowSharedRoot;
-  return createPortal(<div className="file-info-backdrop folder-file-picker-backdrop" role="presentation" onClick={close}><section className="folder-file-picker finder-picker destination-picker" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><header><div><strong>{mode === "copy" ? "复制到" : "移动到"}</strong><span>可选择我的文件夹或有管理权限的共享文件夹</span></div><button className="icon" onClick={close}><X size={18} /></button></header>{error && <div className="files-error"><span>{error}</span></div>}<div className="finder-picker-main"><aside>{roots.map((item) => <button key={item.id} className={trail[0]?.id === item.id ? "active" : ""} onClick={() => setTrail([item])}><HardDrive size={15} /><span>{item.name}</span></button>)}</aside><div className="finder-picker-columns">{columns.map((column, index) => <div className="finder-picker-column" key={column.location.id}>{column.page.folders.map((folder) => <button key={folder.id} className={trail[index + 1]?.id === folder.id ? "selected" : ""} onClick={() => setTrail((old) => [...old.slice(0, index + 1), { type: folder.type, id: folder.id, name: folder.name }])}><FolderGlyph icon={folder.icon} /><span><strong>{folder.name}</strong><small>文件夹</small></span><ChevronRight size={14} /></button>)}{!column.page.folders.length && <p>此文件夹是空的</p>}</div>)}</div></div><footer><span>{invalidSharedRoot ? "文件需要选择一个具体共享文件夹" : `目标：${trail.map((item) => item.name).join(" / ")}`}</span><div><button className="secondary" onClick={close}>取消</button><button className="primary" disabled={busy || invalidSharedRoot} onClick={async () => { setBusy(true); try { await select(current); } catch (e) { setError(e instanceof Error ? e.message : "操作失败"); setBusy(false); } }}>{busy ? "处理中…" : mode === "copy" ? "复制到这里" : "移动到这里"}</button></div></footer></section></div>, document.body);
+  return createPortal(<div className="file-info-backdrop folder-file-picker-backdrop" role="presentation" onClick={close}><section className="folder-file-picker finder-picker destination-picker" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><header><div><strong>{mode === "copy" ? t("fileManager.copyTo") : t("fileManager.moveTo")}</strong><span>{t("fileManager.destinationHelp")}</span></div><button className="icon" onClick={close}><X size={18} /></button></header>{error && <div className="files-error"><span>{error}</span></div>}<div className="finder-picker-main"><aside>{roots.map((item) => <button key={item.id} className={trail[0]?.id === item.id ? "active" : ""} onClick={() => setTrail([item])}><HardDrive size={15} /><span>{fileLocationLabel(item, t)}</span></button>)}</aside><div className="finder-picker-columns">{columns.map((column, index) => <div className="finder-picker-column" key={column.location.id}>{column.page.folders.map((folder) => <button key={folder.id} className={trail[index + 1]?.id === folder.id ? "selected" : ""} onClick={() => setTrail((old) => [...old.slice(0, index + 1), { type: folder.type, id: folder.id, name: folder.name }])}><FolderGlyph icon={folder.icon} /><span><strong>{folder.name}</strong><small>{t("trash.folder")}</small></span><ChevronRight size={14} /></button>)}{!column.page.folders.length && <p>{t("fileManager.emptyPicker")}</p>}</div>)}</div></div><footer><span>{invalidSharedRoot ? t("fileManager.sharedDestinationHelp") : t("fileManager.destinationPath", { path: trail.map((item) => fileLocationLabel(item, t)).join(" / ") })}</span><div><button className="secondary" onClick={close}>{t("common.cancel")}</button><button className="primary" disabled={busy || invalidSharedRoot} onClick={async () => { setBusy(true); try { await select(current); } catch (e) { setError(e instanceof Error ? e.message : t("dialog.failed")); setBusy(false); } }}>{busy ? t("fileManager.processing") : mode === "copy" ? t("fileManager.copyHere") : t("fileManager.moveHere")}</button></div></footer></section></div>, document.body);
 }
 
-export function FileSourceDialog({ title = "添加文件", close, chooseLocal, chooseDoca, chooseFolder, chooseLocalFolder }: { title?: string; close: () => void; chooseLocal: () => void; chooseDoca: () => void; chooseFolder?: () => void; chooseLocalFolder?: () => void }) {
-  return createPortal(<div className="file-info-backdrop file-source-backdrop" role="presentation" onClick={close}><section className="file-source-dialog" role="dialog" aria-modal="true" aria-label={title} onClick={(event) => event.stopPropagation()}><header><strong>{title}</strong><button className="icon" onClick={close}><X size={18} /></button></header><div><button onClick={() => { close(); chooseDoca(); }}><span className="source-icon doca"><Folder size={24} /></span><span><strong>从 Doca 文件夹选择文件</strong><small>浏览我的文件夹、共享文件夹和系统文件</small></span><ChevronDown size={16} /></button>{chooseFolder && <button onClick={() => { close(); chooseFolder(); }}><span className="source-icon doca"><Folder size={24} /></span><span><strong>选择一个文件夹交给 AI</strong><small>把整个文件夹作为本次操作对象</small></span><ChevronDown size={16} /></button>}<button onClick={() => { close(); chooseLocal(); }}><span className="source-icon local"><Upload size={24} /></span><span><strong>从本地上传文件</strong><small>从这台设备选择文件或图片</small></span><ChevronDown size={16} /></button>{chooseLocalFolder && <button onClick={() => { close(); chooseLocalFolder(); }}><span className="source-icon local"><Upload size={24} /></span><span><strong>从本地上传文件夹</strong><small>保留目录，导入到我的文件后再交给 AI</small></span><ChevronDown size={16} /></button>}</div></section></div>, document.body);
+export function FileSourceDialog({ title, close, chooseLocal, chooseDoca, chooseFolder, chooseLocalFolder }: { title?: string; close: () => void; chooseLocal: () => void; chooseDoca: () => void; chooseFolder?: () => void; chooseLocalFolder?: () => void }) {
+const { t, locale } = useI18n();
+
+  return createPortal(<div className="file-info-backdrop file-source-backdrop" role="presentation" onClick={close}><section className="file-source-dialog" role="dialog" aria-modal="true" aria-label={title ?? t("fileManager.addFile")} onClick={(event) => event.stopPropagation()}><header><strong>{title ?? t("fileManager.addFile")}</strong><button className="icon" onClick={close}><X size={18} /></button></header><div><button onClick={() => { close(); chooseDoca(); }}><span className="source-icon doca"><Folder size={24} /></span><span><strong>{t("fileManager.chooseDocaFiles")}</strong><small>{t("fileManager.browseHelp")}</small></span><ChevronDown size={16} /></button>{chooseFolder && <button onClick={() => { close(); chooseFolder(); }}><span className="source-icon doca"><Folder size={24} /></span><span><strong>{t("fileManager.chooseAiFolder")}</strong><small>{t("fileManager.aiFolderScope")}</small></span><ChevronDown size={16} /></button>}<button onClick={() => { close(); chooseLocal(); }}><span className="source-icon local"><Upload size={24} /></span><span><strong>{t("fileManager.uploadLocal")}</strong><small>{t("fileManager.uploadLocalHelp")}</small></span><ChevronDown size={16} /></button>{chooseLocalFolder && <button onClick={() => { close(); chooseLocalFolder(); }}><span className="source-icon local"><Upload size={24} /></span><span><strong>{t("fileManager.uploadFolder")}</strong><small>{t("fileManager.uploadFolderHelp")}</small></span><ChevronDown size={16} /></button>}</div></section></div>, document.body);
 }

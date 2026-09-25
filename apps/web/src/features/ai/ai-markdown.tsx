@@ -6,13 +6,12 @@ import { useI18n } from "@web/shared/i18n.js";
 import XMarkdown, { type ComponentProps } from "@ant-design/x-markdown";
 import "@ant-design/x-markdown/themes/light.css";
 import Latex from "@ant-design/x-markdown/plugins/Latex";
-import type { FileDelivery, FolderDelivery, MailDelivery } from "@core/modules/ai/progress.js";
+import type { FileDelivery, FolderDelivery } from "@core/modules/ai/progress.js";
 import { webPluginRegistry } from "@web/plugins/registry.js";
 import {
   answerSegments,
   folderExplorerHash,
   isFolderExplorerHref,
-  isMailHref,
   navigationHref,
   resolveExplorerClick,
 } from "@web/features/ai/ai-folder-mentions.js";
@@ -149,24 +148,12 @@ function filesUnchanged(
   );
 }
 
-function mailsUnchanged(left?: MailDelivery[], right?: MailDelivery[]) {
-  if (left === right) return true;
-  if ((left?.length ?? 0) !== (right?.length ?? 0)) return false;
-  return (left ?? []).every(
-    (mail, index) =>
-      mail.id === right![index]!.id &&
-      mail.mailboxId === right![index]!.mailboxId &&
-      mail.href === right![index]!.href,
-  );
-}
-
 function AIAnswer({
   text,
   onDocument,
   onFolder,
   folders,
   files,
-  mails,
   ensureFolderCards,
   streaming,
 }: {
@@ -175,7 +162,6 @@ function AIAnswer({
   onFolder?: (href: string) => void;
   folders?: FolderDelivery[];
   files?: FileDelivery[];
-  mails?: MailDelivery[];
   ensureFolderCards?: boolean;
   streaming?: boolean;
 }) {
@@ -183,9 +169,7 @@ function AIAnswer({
   const segments = answerSegments(text, folders, {
     ensureCards: ensureFolderCards,
     files,
-    mails,
-  });
-  const mailBlock = webPluginRegistry.aiBlocks.getByConflictKey("mail");
+    });
   return (
     <XProvider locale={antDesignXLocale(locale)}>
       <div
@@ -202,13 +186,11 @@ function AIAnswer({
           }
           if (
             onFolder &&
-            (isFolderExplorerHref(href) || (!!mailBlock && isMailHref(href)))
+            isFolderExplorerHref(href)
           ) {
             event.preventDefault();
             event.stopPropagation();
-            const next = isMailHref(href)
-              ? href
-              : navigationHref(href)
+            const next = navigationHref(href)
                 ? href
                 : resolveExplorerClick(
                     href,
@@ -235,18 +217,14 @@ function AIAnswer({
           const payload =
             segment.type === "folder"
               ? segment.folder
-              : segment.type === "file"
-                ? segment.file
-                : segment.mail;
+              : segment.file;
           const key =
-            segment.type === "mail"
-              ? `${segment.mail.mailboxId}-${segment.mail.id}-${index}`
-              : `${payload.id}-${index}`;
+            `${payload.id}-${index}`;
           if (!block)
             return (
               <MarkdownBody
                 key={key}
-                text={`> ${segment.type}: ${"name" in payload ? payload.name : payload.subject}`}
+                text={`> ${segment.type}: ${payload.name}`}
               />
             );
           return (
@@ -274,6 +252,5 @@ export default memo(AIAnswer, (prev, next) =>
   prev.onDocument === next.onDocument &&
   prev.onFolder === next.onFolder &&
   foldersUnchanged(prev.folders, next.folders) &&
-  filesUnchanged(prev.files, next.files) &&
-  mailsUnchanged(prev.mails, next.mails),
+  filesUnchanged(prev.files, next.files),
 );

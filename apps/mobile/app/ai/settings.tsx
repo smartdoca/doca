@@ -17,12 +17,20 @@ type Options = {
   preferences?: { default_model?: string | null; memory_enabled?: number };
 };
 type Usage = {
-  used: Record<string, number>;
-  limits: Record<string, number | null>;
   periods: Record<string, string>;
-  tokens?: Record<string, { input?: number; output?: number; cached?: number }>;
-  bonus: number;
-  calls: { id: string; model: string; input: number; output: number; cached?: number; points: number; state: string }[];
+  tokens?: Record<
+    string,
+    { input?: number; output?: number; image?: number; total?: number }
+  >;
+  calls: {
+    id: string;
+    model: string;
+    input: number | null;
+    output: number | null;
+    image?: number | null;
+    total?: number | null;
+    state: string;
+  }[];
 };
 type Skill = {
   id: string;
@@ -101,9 +109,10 @@ export default function AISettings() {
     queryKey: ["ai-archived", session?.origin],
     enabled: !!session && tab === "archived",
     queryFn: async () => {
-      const data = await api<{ id: string; title: string; updated_at?: string }[] | { items: { id: string; title: string; updated_at?: string }[] }>(
-        "/ai/sessions?archived=true",
-      );
+      const data = await api<
+        | { id: string; title: string; updated_at?: string }[]
+        | { items: { id: string; title: string; updated_at?: string }[] }
+      >("/ai/sessions?archived=true");
       return Array.isArray(data) ? data : data.items;
     },
   });
@@ -137,8 +146,19 @@ export default function AISettings() {
     <ScrollView style={styles.page} contentContainerStyle={styles.body}>
       <View style={styles.tabs}>
         {tabs.map((item) => (
-          <Pressable key={item.key} onPress={() => setTab(item.key)} style={[styles.chip, tab === item.key && styles.chipActive]}>
-            <Text style={[styles.chipText, tab === item.key && styles.chipTextActive]}>{item.label}</Text>
+          <Pressable
+            key={item.key}
+            onPress={() => setTab(item.key)}
+            style={[styles.chip, tab === item.key && styles.chipActive]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                tab === item.key && styles.chipTextActive,
+              ]}
+            >
+              {item.label}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -153,25 +173,23 @@ export default function AISettings() {
             ] as const
           ).map(([key, label]) => (
             <View key={key} style={styles.card}>
-              <Text style={styles.muted}>{label}基础积分</Text>
+              <Text style={styles.muted}>{label}折算 Token</Text>
               <Text style={styles.strong}>
-                {Math.round(usage.data.used[key] ?? 0).toLocaleString()} / {usage.data.limits[key] ?? "不限"}
+                {(usage.data.tokens?.[key]?.total ?? 0).toLocaleString()}
               </Text>
               <Text style={styles.muted}>
-                Token {(usage.data.tokens?.[key]?.input ?? 0) + (usage.data.tokens?.[key]?.output ?? 0)} · 缓存命中{" "}
-                {usage.data.tokens?.[key]?.cached ?? 0}
+                输入 {usage.data.tokens?.[key]?.input ?? 0} · 输出{" "}
+                {usage.data.tokens?.[key]?.output ?? 0} · 图片{" "}
+                {usage.data.tokens?.[key]?.image ?? 0}
               </Text>
             </View>
           ))}
-          <View style={styles.card}>
-            <Text style={styles.muted}>额外积分</Text>
-            <Text style={styles.strong}>{Math.round(usage.data.bonus).toLocaleString()}</Text>
-          </View>
           {usage.data.calls.slice(0, 20).map((call) => (
             <View key={call.id} style={styles.card}>
               <Text style={styles.rowTitle}>{call.model}</Text>
               <Text style={styles.muted}>
-                {call.input + call.output} Token · {call.points} 积分 · {states[call.state] ?? call.state}
+                {call.total ?? "—"} 折算 Token ·{" "}
+                {states[call.state] ?? call.state}
               </Text>
             </View>
           ))}
@@ -179,7 +197,9 @@ export default function AISettings() {
       ) : null}
       {tab === "memory" ? (
         <>
-          <Text style={styles.muted}>记录常用语言、写作风格和个人偏好。知识库内容仍以原文为准。</Text>
+          <Text style={styles.muted}>
+            记录常用语言、写作风格和个人偏好。知识库内容仍以原文为准。
+          </Text>
           <Text style={styles.rowTitle}>默认模型</Text>
           <View style={styles.tabs}>
             <Pressable
@@ -187,9 +207,15 @@ export default function AISettings() {
                 void run(async () => {
                   await api("/ai/preferences", {
                     method: "PUT",
-                    body: { defaultModel: null, memoryEnabled: !!options.data?.preferences?.memory_enabled },
+                    body: {
+                      defaultModel: null,
+                      memoryEnabled:
+                        !!options.data?.preferences?.memory_enabled,
+                    },
                   });
-                  await client.invalidateQueries({ queryKey: ["ai-options", session?.origin] });
+                  await client.invalidateQueries({
+                    queryKey: ["ai-options", session?.origin],
+                  });
                 })
               }
               style={[styles.chip, !modelId && styles.chipActive]}
@@ -203,9 +229,15 @@ export default function AISettings() {
                   void run(async () => {
                     await api("/ai/preferences", {
                       method: "PUT",
-                      body: { defaultModel: model.id, memoryEnabled: !!options.data?.preferences?.memory_enabled },
+                      body: {
+                        defaultModel: model.id,
+                        memoryEnabled:
+                          !!options.data?.preferences?.memory_enabled,
+                      },
                     });
-                    await client.invalidateQueries({ queryKey: ["ai-options", session?.origin] });
+                    await client.invalidateQueries({
+                      queryKey: ["ai-options", session?.origin],
+                    });
                   })
                 }
                 style={[styles.chip, modelId === model.id && styles.chipActive]}
@@ -223,28 +255,50 @@ export default function AISettings() {
                 void run(async () => {
                   await api("/ai/preferences", {
                     method: "PUT",
-                    body: { defaultModel: options.data?.preferences?.default_model ?? null, memoryEnabled: enabled },
+                    body: {
+                      defaultModel:
+                        options.data?.preferences?.default_model ?? null,
+                      memoryEnabled: enabled,
+                    },
                   });
-                  await client.invalidateQueries({ queryKey: ["ai-options", session?.origin] });
+                  await client.invalidateQueries({
+                    queryKey: ["ai-options", session?.origin],
+                  });
                 })
               }
             />
           </View>
-          {!options.data?.memoryAvailable ? <Text style={styles.muted}>管理员尚未启用长期记忆。</Text> : null}
-          <TextInput mode="outlined" multiline value={memoryText} onChangeText={setMemory} placeholder="例如：用中文回答，先说明结论。" />
+          {!options.data?.memoryAvailable ? (
+            <Text style={styles.muted}>管理员尚未启用长期记忆。</Text>
+          ) : null}
+          <TextInput
+            mode="outlined"
+            multiline
+            value={memoryText}
+            onChangeText={setMemory}
+            placeholder="例如：用中文回答，先说明结论。"
+          />
           <Button
             mode="contained"
             buttonColor={colors.accent}
             loading={busy}
-            disabled={!options.data?.memoryAvailable || memoryQuery.data == null}
+            disabled={
+              !options.data?.memoryAvailable || memoryQuery.data == null
+            }
             onPress={() =>
               void run(async () => {
                 const saved = await api<{ revision: number }>("/ai/memory", {
                   method: "PUT",
-                  body: { text: memoryText, revision: memoryQuery.data?.revision ?? 0 },
+                  body: {
+                    text: memoryText,
+                    revision: memoryQuery.data?.revision ?? 0,
+                  },
                 });
                 setMemory(null);
-                client.setQueryData(["ai-memory", session?.origin], { text: memoryText, revision: saved.revision });
+                client.setQueryData(["ai-memory", session?.origin], {
+                  text: memoryText,
+                  revision: saved.revision,
+                });
                 setNotice("已保存偏好");
               })
             }
@@ -265,7 +319,17 @@ export default function AISettings() {
           <Text style={styles.heading}>个人 Skill</Text>
           <Button
             mode="contained-tonal"
-            onPress={() => setDraft({ id: uuid(), name: "", description: "", content: "", formats: [], enabled: true, revision: 0 })}
+            onPress={() =>
+              setDraft({
+                id: uuid(),
+                name: "",
+                description: "",
+                content: "",
+                formats: [],
+                enabled: true,
+                revision: 0,
+              })
+            }
           >
             新建 Skill
           </Button>
@@ -274,7 +338,9 @@ export default function AISettings() {
               <Text style={styles.rowTitle}>{skill.name}</Text>
               <Text style={styles.muted}>{skill.description}</Text>
               <View style={styles.switchRow}>
-                <Text style={styles.muted}>{skill.enabled ? "已启用" : "已停用"}</Text>
+                <Text style={styles.muted}>
+                  {skill.enabled ? "已启用" : "已停用"}
+                </Text>
                 <Button
                   onPress={() =>
                     void run(async () => {
@@ -290,9 +356,27 @@ export default function AISettings() {
           ))}
           {draft ? (
             <>
-              <TextInput mode="outlined" label="名称" value={draft.name} onChangeText={(name) => setDraft({ ...draft, name })} />
-              <TextInput mode="outlined" label="适用场景" value={draft.description} onChangeText={(description) => setDraft({ ...draft, description })} />
-              <TextInput mode="outlined" label="内容" multiline value={draft.content} onChangeText={(content) => setDraft({ ...draft, content })} />
+              <TextInput
+                mode="outlined"
+                label="名称"
+                value={draft.name}
+                onChangeText={(name) => setDraft({ ...draft, name })}
+              />
+              <TextInput
+                mode="outlined"
+                label="适用场景"
+                value={draft.description}
+                onChangeText={(description) =>
+                  setDraft({ ...draft, description })
+                }
+              />
+              <TextInput
+                mode="outlined"
+                label="内容"
+                multiline
+                value={draft.content}
+                onChangeText={(content) => setDraft({ ...draft, content })}
+              />
               <Button
                 mode="contained"
                 buttonColor={colors.accent}
@@ -302,7 +386,11 @@ export default function AISettings() {
                     const { id, ...body } = draft;
                     await api(`/ai/skills/${id}`, {
                       method: "PUT",
-                      body: { ...body, formats: formatsOf(body.formats), enabled: !!body.enabled },
+                      body: {
+                        ...body,
+                        formats: formatsOf(body.formats),
+                        enabled: !!body.enabled,
+                      },
                     });
                     setDraft(null);
                     await skills.refetch();
@@ -317,18 +405,34 @@ export default function AISettings() {
       ) : null}
       {tab === "archived" && archived.data ? (
         <>
-          <Text style={styles.muted}>已归档的会话不会出现在列表里。恢复后可以继续对话。</Text>
-          {archived.data.length === 0 ? <Text style={styles.muted}>暂无归档会话</Text> : null}
+          <Text style={styles.muted}>
+            已归档的会话不会出现在列表里。恢复后可以继续对话。
+          </Text>
+          {archived.data.length === 0 ? (
+            <Text style={styles.muted}>暂无归档会话</Text>
+          ) : null}
           {archived.data.map((item) => (
             <View key={item.id} style={styles.card}>
               <Text style={styles.rowTitle}>{item.title || "对话"}</Text>
-              {item.updated_at ? <Text style={styles.muted}>{relativeTime(item.updated_at)}</Text> : null}
+              {item.updated_at ? (
+                <Text style={styles.muted}>
+                  {relativeTime(item.updated_at)}
+                </Text>
+              ) : null}
               <Button
                 onPress={() =>
                   void run(async () => {
-                    await api(`/ai/sessions/${item.id}`, { method: "PATCH", body: { archived: false } });
-                    await client.invalidateQueries({ queryKey: ["ai-sessions", session?.origin] });
-                    router.replace({ pathname: "/ai/[id]", params: { id: item.id, title: item.title || "对话" } });
+                    await api(`/ai/sessions/${item.id}`, {
+                      method: "PATCH",
+                      body: { archived: false },
+                    });
+                    await client.invalidateQueries({
+                      queryKey: ["ai-sessions", session?.origin],
+                    });
+                    router.replace({
+                      pathname: "/ai/[id]",
+                      params: { id: item.id, title: item.title || "对话" },
+                    });
                   })
                 }
               >
@@ -340,7 +444,13 @@ export default function AISettings() {
       ) : null}
       {tab === "note" ? (
         <>
-          <TextInput mode="outlined" label="备忘" multiline value={noteText} onChangeText={setNote} />
+          <TextInput
+            mode="outlined"
+            label="备忘"
+            multiline
+            value={noteText}
+            onChangeText={setNote}
+          />
           <Button
             mode="contained"
             buttonColor={colors.accent}
@@ -348,9 +458,14 @@ export default function AISettings() {
             disabled={noteQuery.data == null}
             onPress={() =>
               void run(async () => {
-                await api("/ai/note", { method: "PUT", body: { content: noteText } });
+                await api("/ai/note", {
+                  method: "PUT",
+                  body: { content: noteText },
+                });
                 setNote(null);
-                client.setQueryData(["ai-note", session?.origin], { content: noteText });
+                client.setQueryData(["ai-note", session?.origin], {
+                  content: noteText,
+                });
                 setNotice("已保存备忘");
               })
             }
@@ -358,14 +473,18 @@ export default function AISettings() {
             保存备忘
           </Button>
           <Text style={styles.heading}>密码本</Text>
-          <Text style={styles.muted}>key 以字母开头，只含字母、数字和下划线。已保存的值不会再次显示。</Text>
+          <Text style={styles.muted}>
+            key 以字母开头，只含字母、数字和下划线。已保存的值不会再次显示。
+          </Text>
           {secrets.data?.items.map((item) => (
             <View key={item.key} style={styles.switchRow}>
               <Text style={styles.rowTitle}>{item.key}</Text>
               <Button
                 onPress={() =>
                   void run(async () => {
-                    await api(`/ai/secrets/${encodeURIComponent(item.key)}`, { method: "DELETE" });
+                    await api(`/ai/secrets/${encodeURIComponent(item.key)}`, {
+                      method: "DELETE",
+                    });
                     await secrets.refetch();
                   })
                 }
@@ -374,14 +493,29 @@ export default function AISettings() {
               </Button>
             </View>
           ))}
-          <TextInput mode="outlined" label="Key" value={secretKey} onChangeText={setSecretKey} autoCapitalize="none" />
-          <TextInput mode="outlined" label="值" value={secretValue} onChangeText={setSecretValue} secureTextEntry />
+          <TextInput
+            mode="outlined"
+            label="Key"
+            value={secretKey}
+            onChangeText={setSecretKey}
+            autoCapitalize="none"
+          />
+          <TextInput
+            mode="outlined"
+            label="值"
+            value={secretValue}
+            onChangeText={setSecretValue}
+            secureTextEntry
+          />
           <Button
             mode="contained-tonal"
             loading={busy}
             onPress={() =>
               void run(async () => {
-                await api("/ai/secrets", { method: "PUT", body: { key: secretKey.trim(), value: secretValue } });
+                await api("/ai/secrets", {
+                  method: "PUT",
+                  body: { key: secretKey.trim(), value: secretValue },
+                });
                 setSecretKey("");
                 setSecretValue("");
                 await secrets.refetch();
@@ -409,7 +543,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  chipActive: { backgroundColor: colors.selected, borderColor: colors.selected },
+  chipActive: {
+    backgroundColor: colors.selected,
+    borderColor: colors.selected,
+  },
   chipText: { color: colors.secondary, fontSize: 13 },
   chipTextActive: { color: colors.accent, fontWeight: "600" },
   card: {
@@ -425,5 +562,10 @@ const styles = StyleSheet.create({
   rowTitle: { color: colors.ink, fontSize: 15, fontWeight: "600" },
   heading: { color: colors.ink, fontSize: 16, fontWeight: "600" },
   notice: { color: colors.danger, fontSize: 13 },
-  switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
 });

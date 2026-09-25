@@ -1,12 +1,32 @@
+import { htmlLang } from "@doca/i18n";
 import { AIChoiceCard } from "@web/features/ai/ai-choice-card.js";
-import { aiTimeline, taskDuration } from "@web/features/ai/ai-timeline.js";
+import {
+  aiTimeline,
+  completionPresentation,
+  taskDuration,
+} from "@web/features/ai/ai-timeline.js";
+import {
+  aiApprovalDetail,
+  aiApprovalTitle,
+  aiEventDetail,
+  aiEventLabel,
+  aiPhaseLabel,
+} from "@web/features/ai/ai-progress-label.js";
 import { AIGeneratedImage } from "@web/features/ai/ai-generated-image.js";
 import { FolderDeliveryCard } from "@web/features/ai/ai-folder-card.js";
 import { FileDeliveryCard } from "@web/features/ai/ai-file-card.js";
 import { renderPluginAIBlock } from "@web/plugins/registry.js";
-import { readPageState, writePageState } from "@web/features/page-state/client.js";
+import {
+  readPageState,
+  writePageState,
+} from "@web/features/page-state/client.js";
 import { createPortal } from "react-dom";
-import { applyProgressPatch, type AIProgress, type FileDelivery, type FolderDelivery, type MailComposeDraft, type MailDelivery, type MailOpenTarget } from "@core/modules/ai/progress.js";
+import {
+  applyProgressPatch,
+  type AIProgress,
+  type FileDelivery,
+  type FolderDelivery,
+} from "@core/modules/ai/progress.js";
 import { withSessionHash } from "@web/features/ai/ai-folder-mentions.js";
 import {
   lazy,
@@ -47,8 +67,18 @@ import {
   ArrowUpRight,
   SquareCheck,
 } from "lucide-react";
-import { api, uploadFile, assetUrl, fileUrl, type FileItem, type Resource } from "@web/shared/api.js";
-import { FileSourceDialog, FolderFilePicker } from "@web/features/files/files.js";
+import {
+  api,
+  uploadFile,
+  assetUrl,
+  fileUrl,
+  type FileItem,
+  type Resource,
+} from "@web/shared/api.js";
+import {
+  FileSourceDialog,
+  FolderFilePicker,
+} from "@web/features/files/files.js";
 import {
   captureExternalDrop,
   isExternalFileDrag,
@@ -105,7 +135,10 @@ import {
   writePanelWidth,
 } from "@web/features/ai/ai-side-open.js";
 import { AIUserSettings } from "@web/features/ai/ai-user-settings.js";
-import { AIReferenceTag, referenceLabel } from "@web/features/ai/ai-reference-tag.js";
+import {
+  AIReferenceTag,
+  referenceLabel,
+} from "@web/features/ai/ai-reference-tag.js";
 import { QuickNoteTag } from "@web/features/ai/ai-note-tag.js";
 import { referenceTextParts } from "@web/features/ai/ai-reference-text.js";
 import { SearchPanel } from "@web/features/search/search.js";
@@ -137,13 +170,7 @@ import {
 import "@web/features/ai/ai.css";
 import { DocumentScrollButtons } from "@web/features/documents/document-scroll-buttons.js";
 const AIAnswer = lazy(() => import("@web/features/ai/ai-markdown.js"));
-const documentFormats: Record<string, string> = {
-  rich_text: "文档",
-  markdown: "Markdown",
-  spreadsheet: "表格",
-  canvas: "画板",
-  presentation: "演示文稿",
-};
+
 function jobFolderDeliveries(job: {
   progress?: AIProgress | null;
 }): FolderDelivery[] {
@@ -152,15 +179,6 @@ function jobFolderDeliveries(job: {
     if (event.folder?.href) folders.set(event.folder.id, event.folder);
   }
   return [...folders.values()];
-}
-function jobMailDeliveries(job: {
-  progress?: AIProgress | null;
-}): MailDelivery[] {
-  const mails = new Map<string, MailDelivery>();
-  for (const event of job.progress?.events ?? []) {
-    if (event.mail?.href) mails.set(`${event.mail.mailboxId}:${event.mail.id}`, event.mail);
-  }
-  return [...mails.values()];
 }
 function jobFileDeliveries(job: {
   progress?: AIProgress | null;
@@ -176,10 +194,11 @@ function WebSources({
 }: {
   sources: { title: string; url: string }[];
 }) {
+  const { t } = useI18n();
   if (!sources.length) return null;
   return (
     <Sources
-      title={`联网资料 · ${sources.length} 个来源`}
+      title={t("chat.webSources", { count: sources.length })}
       defaultExpanded={false}
       items={sources.map((s) => ({
         key: s.url,
@@ -248,7 +267,7 @@ type Options = {
     name: string;
     inputRate: number;
     outputRate: number;
-    cacheRate: number;
+    imageRate: number;
     maxInput?: number;
     vision: boolean;
     pdf: boolean;
@@ -275,9 +294,11 @@ function asChatFile(
         description?: string;
       },
 ): ChatFile {
-  const extractStatus = typeof extra === "object" ? extra?.extractStatus : extra;
+  const extractStatus =
+    typeof extra === "object" ? extra?.extractStatus : extra;
   const preview = typeof extra === "object" ? extra?.preview : file.preview;
-  const description = typeof extra === "object" ? extra?.description : file.description;
+  const description =
+    typeof extra === "object" ? extra?.description : file.description;
   return {
     id: file.id,
     filename: file.filename,
@@ -293,14 +314,14 @@ function asChatFile(
       (file.mime.startsWith("image/") ? "ready" : "pending"),
   };
 }
-function sourceFileNote(file: ChatFile) {
-  if (!file.sourceFileId) return undefined;
-  return file.mime.startsWith("image/")
-    ? "已发送图片，也可操作原文件"
-    : "已发送文件内容，也可操作原文件";
-}
+
 function isComposerEditable(target: EventTarget | null) {
-  const el = target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
+  const el =
+    target instanceof Element
+      ? target
+      : target instanceof Node
+        ? target.parentElement
+        : null;
   return !!el?.closest("[contenteditable='true'], .ant-sender-input");
 }
 function insertComposerPlainText(sender: SenderRef | null, text: string) {
@@ -320,35 +341,17 @@ function insertComposerPlainText(sender: SenderRef | null, text: string) {
     selection?.removeAllRanges();
     selection?.addRange(range);
     editable.dispatchEvent(
-      new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }),
+      new InputEvent("input", {
+        bubbles: true,
+        inputType: "insertText",
+        data: value,
+      }),
     );
     return;
   }
   sender?.insert([{ type: "text", value }], "cursor");
 }
-function composerFile(
-  file: ChatFile,
-  uid = file.id,
-): Attachment<ChatFile> {
-  const pending = file.extractStatus === "pending";
-  return {
-    uid,
-    name: file.filename,
-    size: file.size,
-    status: pending ? "uploading" : "done",
-    percent: pending ? 100 : undefined,
-    description: pending
-      ? "解析中，完成后即可发送"
-      : file.description ||
-        file.preview ||
-        (file.extractStatus === "failed"
-          ? "解析未完全成功，仍可发送"
-          : sourceFileNote(file)),
-    response: file,
-    url: assetUrl(file.id),
-    thumbUrl: file.mime.startsWith("image/") ? assetUrl(file.id) : undefined,
-  };
-}
+
 type Conversation = {
   session: Session;
   resources?: { id: string; title: string; format: string; kind: string }[];
@@ -381,16 +384,21 @@ type Conversation = {
   contextTokens?: number | null;
 };
 function SessionStatusBadges({ session }: { session: Session }) {
+  const { t, locale } = useI18n();
+
   return (
     <>
       {session.awaitingApproval && (
-        <span className="ai-session-status pending" title="会话有待审批操作">
-          待审批
+        <span
+          className="ai-session-status pending"
+          title={t("chat.approvalTip")}
+        >
+          {t("chat.approvalPending")}
         </span>
       )}
       {session.executionFailed && (
-        <span className="ai-session-status failed" title="上一次执行因系统问题失败">
-          执行失败
+        <span className="ai-session-status failed" title={t("chat.failedTip")}>
+          {t("chat.failed")}
         </span>
       )}
     </>
@@ -475,17 +483,18 @@ export function AIDocumentLayout({
 }: {
   children: ReactNode;
   format?: string;
-  surface?: "document" | "files" | "mail";
+  surface?: "document" | "files";
 }) {
+  const { t, locale } = useI18n();
+
   const ai = useAI();
   const panel = usePanelWidth();
   const filesSurface = surface === "files";
-  const mailSurface = surface === "mail" || !!ai?.mailFocus;
   const enabled =
     !!ai?.userId &&
     (filesSurface ||
-      mailSurface ||
-      (!!ai.resource && ai.resource.kind === "document"));
+      (!!ai.resource &&
+        (ai.resource.kind === "document" || ai.resource.kind === "library")));
   return (
     <div
       className={`ai-document-layout ${enabled && ai?.open ? "ai-document-open" : ""}`}
@@ -502,7 +511,7 @@ export function AIDocumentLayout({
             className="ai-panel-resizer"
             role="separator"
             aria-orientation="vertical"
-            aria-label="调整 AI 对话框宽度"
+            aria-label={t("chat.resize")}
             aria-valuemin={PANEL_WIDTH_MIN}
             aria-valuenow={panel.width}
             aria-valuemax={panelWidthMax(
@@ -518,8 +527,8 @@ export function AIDocumentLayout({
       {enabled && !ai?.open && !filesSurface && (
         <button
           className="ai-document-trigger"
-          title={ai.mailFocus ? "AI 助手" : "AI 辅助创作"}
-          aria-label={ai.mailFocus ? "AI 助手" : "AI 辅助创作"}
+          title={t("chat.writing")}
+          aria-label={t("chat.writing")}
           aria-expanded={ai?.open}
           onClick={() => ai?.setOpen(!ai.open)}
         >
@@ -530,7 +539,41 @@ export function AIDocumentLayout({
   );
 }
 export function AIChat({ full = false }: { full?: boolean }) {
-  const { locale } = useI18n();
+  const { t, locale } = useI18n();
+  const documentFormats: Record<string, string> = {
+    rich_text: t("shell.type.rich"),
+    markdown: "Markdown",
+    spreadsheet: t("shell.type.sheet"),
+    canvas: t("search.type.canvas"),
+    presentation: t("shell.type.slides"),
+  };
+  function sourceFileNote(file: ChatFile) {
+    if (!file.sourceFileId) return undefined;
+    return file.mime.startsWith("image/")
+      ? t("chat.imageSent")
+      : t("chat.fileSent");
+  }
+  function composerFile(file: ChatFile, uid = file.id): Attachment<ChatFile> {
+    const pending = file.extractStatus === "pending";
+    return {
+      uid,
+      name: file.filename,
+      size: file.size,
+      status: pending ? "uploading" : "done",
+      percent: pending ? 100 : undefined,
+      description: pending
+        ? t("chat.parsing")
+        : file.description ||
+          file.preview ||
+          (file.extractStatus === "failed"
+            ? t("chat.parsePartial")
+            : sourceFileNote(file)),
+      response: file,
+      url: assetUrl(file.id),
+      thumbUrl: file.mime.startsWith("image/") ? assetUrl(file.id) : undefined,
+    };
+  }
+
   const ai = useAI()!;
   const currentAI = useRef(ai);
   currentAI.current = ai;
@@ -557,7 +600,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
     ).length;
   const insertReference = (r: AIReference) => {
     if (tagCount() >= 20) {
-      ai.setError("每条消息最多引用 20 项资料");
+      ai.setError(t("chat.referenceLimit"));
       return;
     }
     const key = `ref-${crypto.randomUUID()}`;
@@ -586,7 +629,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
   };
   const insertNoteReference = (n: QuickNoteReference) => {
     if (tagCount() >= 20) {
-      ai.setError("每条消息最多引用 20 项资料");
+      ai.setError(t("chat.referenceLimit"));
       return;
     }
     const key = `note-${crypto.randomUUID()}`;
@@ -673,7 +716,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       filesRef.current.reduce((n, f) => n + (f.size ?? 0), 0) + file.size >
         25 * 1024 * 1024
     ) {
-      ai.setError("每条消息最多 8 个附件，总大小不超过 25MB");
+      ai.setError(t("chat.attachmentLimit"));
       return;
     }
     const uid = crypto.randomUUID();
@@ -685,16 +728,14 @@ export function AIChat({ full = false }: { full?: boolean }) {
       const uploaded = await uploadFile(file, "ai_attachment");
       replaceFiles(
         filesRef.current.map((f) =>
-          f.uid === uid
-            ? composerFile(asChatFile(uploaded), uid)
-            : f,
+          f.uid === uid ? composerFile(asChatFile(uploaded), uid) : f,
         ),
       );
     } catch (e) {
       replaceFiles(
         filesRef.current.map((f) =>
           f.uid === uid
-            ? { ...f, status: "error", description: "上传失败，请移除后重试" }
+            ? { ...f, status: "error", description: t("chat.uploadFailed") }
             : f,
         ),
       );
@@ -710,10 +751,18 @@ export function AIChat({ full = false }: { full?: boolean }) {
       filesRef.current.some((item) => item.response?.sourceFileId === file.id)
     )
       return;
-    if (filesRef.current.length >= 8 || filesRef.current.reduce((n, f) => n + (f.size ?? 0), 0) + file.size > 25 * 1024 * 1024) {
-      throw new Error("每条消息最多 8 个附件，总大小不超过 25MB");
+    if (
+      filesRef.current.length >= 8 ||
+      filesRef.current.reduce((n, f) => n + (f.size ?? 0), 0) + file.size >
+        25 * 1024 * 1024
+    ) {
+      throw new Error(t("chat.attachmentLimit"));
     }
-    const uploaded = await api<ChatFile>(`/files/items/${file.id}/attach`, "POST", { purpose: "ai_attachment" });
+    const uploaded = await api<ChatFile>(
+      `/files/items/${file.id}/attach`,
+      "POST",
+      { purpose: "ai_attachment" },
+    );
     replaceFiles([
       ...filesRef.current,
       composerFile(
@@ -733,27 +782,34 @@ export function AIChat({ full = false }: { full?: boolean }) {
     setFolderTargets((prev) =>
       prev.some((item) => item.id === folder.id)
         ? prev
-        : [...prev, { kind: "folder" as const, id: folder.id, name: folder.name }].slice(0, 8),
+        : [
+            ...prev,
+            { kind: "folder" as const, id: folder.id, name: folder.name },
+          ].slice(0, 8),
     );
   };
   const importDroppedFolders = async (entries: DroppedUpload[]) => {
-    const tree = entries.filter((entry) => entry.directory || entry.path.includes("/"));
-    const loose = entries.filter((entry) => entry.file && !entry.directory && !entry.path.includes("/"));
+    const tree = entries.filter(
+      (entry) => entry.directory || entry.path.includes("/"),
+    );
+    const loose = entries.filter(
+      (entry) => entry.file && !entry.directory && !entry.path.includes("/"),
+    );
     for (const entry of loose) if (entry.file) void upload(entry.file);
     if (!tree.length) return;
     const bytes = tree.reduce((sum, entry) => sum + (entry.file?.size ?? 0), 0);
     const files = tree.filter((entry) => entry.file);
     if (files.length > 200 || bytes > 100 * 1024 * 1024) {
-      ai.setError("拖入的文件夹过大，请先放到 Doca 文件夹后再选择");
+      ai.setError(t("chat.folderTooLarge"));
       return;
     }
-    setFolderImport(tree[0]?.path.split("/")[0] || "文件夹");
+    setFolderImport(tree[0]?.path.split("/")[0] || t("trash.folder"));
     try {
       const created = await uploadDroppedTree(tree, null, (path) => {
         setFolderImport(path);
       });
       if (!created.folders.length && files.length)
-        ai.setError("文件夹已上传，但没有得到可选择的文件夹");
+        ai.setError(t("chat.folderUnavailable"));
       for (const folder of created.folders) addFolderTarget(folder);
     } catch (e) {
       ai.setError((e as Error).message);
@@ -783,13 +839,23 @@ export function AIChat({ full = false }: { full?: boolean }) {
       if (item.kind === "folder") {
         if (item.folderType === "document") {
           try {
-            const detail = await api<{ resource: Resource }>(`/resources/${item.id}`);
-            if (detail.resource.kind === "document") ai.addDocument(detail.resource);
+            const detail = await api<{ resource: Resource }>(
+              `/resources/${item.id}`,
+            );
+            if (detail.resource.kind === "document")
+              ai.addDocument(detail.resource);
             else
               setFolderTargets((prev) =>
                 prev.some((folder) => folder.id === item.id)
                   ? prev
-                  : [...prev, { kind: "folder" as const, id: item.id, name: item.name || detail.resource.title }].slice(0, 8),
+                  : [
+                      ...prev,
+                      {
+                        kind: "folder" as const,
+                        id: item.id,
+                        name: item.name || detail.resource.title,
+                      },
+                    ].slice(0, 8),
               );
           } catch (e) {
             ai.setError((e as Error).message);
@@ -799,14 +865,21 @@ export function AIChat({ full = false }: { full?: boolean }) {
         setFolderTargets((prev) =>
           prev.some((folder) => folder.id === item.id)
             ? prev
-            : [...prev, { kind: "folder" as const, id: item.id, name: item.name || "文件夹" }].slice(0, 8),
+            : [
+                ...prev,
+                {
+                  kind: "folder" as const,
+                  id: item.id,
+                  name: item.name || t("trash.folder"),
+                },
+              ].slice(0, 8),
         );
         continue;
       }
       try {
         await chooseStoredFile({
           id: item.id,
-          name: item.name || "文件",
+          name: item.name || t("search.files"),
           size: item.size ?? 0,
         });
       } catch (e) {
@@ -826,16 +899,23 @@ export function AIChat({ full = false }: { full?: boolean }) {
     return [...files, ...folderTargets].slice(0, 20);
   };
   const onExplorerDragOver = (event: ReactDragEvent) => {
-    if (!isInternalFileDrag(event.dataTransfer) && !isExternalFileDrag(event.dataTransfer)) return;
+    if (
+      !isInternalFileDrag(event.dataTransfer) &&
+      !isExternalFileDrag(event.dataTransfer)
+    )
+      return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     if (!composerDrop) setComposerDrop(true);
   };
   const onExplorerDrop = (event: ReactDragEvent) => {
-    const internal = isInternalFileDrag(event.dataTransfer) || !!readFileDrag(event.dataTransfer);
+    const internal =
+      isInternalFileDrag(event.dataTransfer) ||
+      !!readFileDrag(event.dataTransfer);
     const external = isExternalFileDrag(event.dataTransfer);
     if (!internal && !external) return;
-    const captured = external && !internal ? captureExternalDrop(event.dataTransfer) : null;
+    const captured =
+      external && !internal ? captureExternalDrop(event.dataTransfer) : null;
     event.preventDefault();
     setComposerDrop(false);
     if (internal) {
@@ -870,7 +950,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       delete: false,
       modify: false,
     }),
-    [allScope, setAllScope] = useState(full),
+    [allScope, setAllScope] = useState(full || ai.resource?.kind === "library"),
     [list, setList] = useState(full),
     [batch, setBatch] = useState(false),
     [selected, setSelected] = useState<string[]>([]),
@@ -940,8 +1020,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
         box.contains(selection.anchorNode)
       )
         return;
-      const reversed =
-        getComputedStyle(box).flexDirection === "column-reverse";
+      const reversed = getComputedStyle(box).flexDirection === "column-reverse";
       setAwayFromLatest(
         reversed
           ? Math.abs(box.scrollTop) > 80
@@ -1034,8 +1113,12 @@ export function AIChat({ full = false }: { full?: boolean }) {
   const [older, setOlder] = useState<Conversation["messages"]>([]),
     [page, setPage] = useState(0),
     [more, setMore] = useState(true);
-  const [renderQuestions, setRenderQuestions] = useState(INITIAL_RENDER_QUESTIONS);
-  const [focusedQuestionId, setFocusedQuestionId] = useState<string | null>(null);
+  const [renderQuestions, setRenderQuestions] = useState(
+    INITIAL_RENDER_QUESTIONS,
+  );
+  const [focusedQuestionId, setFocusedQuestionId] = useState<string | null>(
+    null,
+  );
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
   const [atHistoryHead, setAtHistoryHead] = useState(false);
   const [pending, setPending] = useState<PendingSendItem[]>([]);
@@ -1049,6 +1132,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
     optimistic: typeof optimistic;
     renderQuestions: number;
     focusedQuestionId: string | null;
+    locale: typeof locale;
     items: BubbleItemType[];
   } | null>(null);
   const historyControl = useRef({
@@ -1096,10 +1180,14 @@ export function AIChat({ full = false }: { full?: boolean }) {
   useEffect(() => {
     if (!ai.userId) return;
     let active = true;
-    void readPageState<string>("ai.model").then((item) => {
-      if (active && item?.value) setModel(item.value);
-    }).catch(() => undefined);
-    return () => { active = false; };
+    void readPageState<string>("ai.model")
+      .then((item) => {
+        if (active && item?.value) setModel(item.value);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
   }, [ai.userId]);
   useEffect(() => {
     composerReady.current = true;
@@ -1203,7 +1291,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
           for (const job of data.jobs) {
             applyLivePageState(job.progress);
             if (!freshJob(job)) continue;
-            if (job.progress?.mailOpen) jumpMail(job.id, job.progress.mailOpen);
           }
           setOptimistic((old) =>
             old && data.messages.some((m) => m.id === old.id) ? null : old,
@@ -1244,7 +1331,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
             }
           : current,
       );
-      if (job.progress?.mailOpen) jumpMail(job.id, job.progress.mailOpen);
       if (!previous || previous.status !== job.status) void load();
     });
     events.addEventListener("revoked", () => {
@@ -1254,7 +1340,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       setOlder([]);
       setOlderJobs([]);
       setOlderOperations([]);
-      ai.setError("会话或引用资料的访问权限已变化，请重新打开会话");
+      ai.setError(t("chat.accessChanged"));
     });
     // Reconcile durable history and saved-operation receipts; token delivery uses SSE.
     const timer = setInterval(() => void load(), 10000);
@@ -1316,7 +1402,10 @@ export function AIChat({ full = false }: { full?: boolean }) {
     if (inflight) haltJobId.current = inflight;
     persistPending([]);
     const ids = [
-      ...new Set([...jobs.map((job) => job.id), ...(inflight ? [inflight] : [])]),
+      ...new Set([
+        ...jobs.map((job) => job.id),
+        ...(inflight ? [inflight] : []),
+      ]),
     ];
     if (!ids.length) return;
     void action(() =>
@@ -1337,7 +1426,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
     if (seenPageState.current === stamp) return;
     seenPageState.current = stamp;
     window.dispatchEvent(new CustomEvent("doca-page-state", { detail: item }));
-    if (item.key === "ai.model" && typeof item.value === "string") setModel(item.value);
+    if (item.key === "ai.model" && typeof item.value === "string")
+      setModel(item.value);
   };
   const openFolderDelivery = useCallback((href: string) => {
     const current = currentAI.current;
@@ -1346,21 +1436,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
   }, []);
   const freshJob = (job: { status: string }) =>
     ["running", "queued"].includes(job.status);
-  const openComposeCard = (draft: MailComposeDraft) => {
-    const current = currentAI.current;
-    current.setOpen(true);
-    const next = withSessionHash(`/mail/${draft.mailboxId}?compose=1`, current.sessionId);
-    if (location.hash === `#${next}`) window.dispatchEvent(new CustomEvent("doca-mail-compose"));
-    else location.hash = next;
-  };
-  const jumpMail = (jobId: string, target: MailOpenTarget) => {
-    const key = `mail:${jobId}:${target.href}`;
-    if (seenJumps.current.has(key)) return;
-    seenJumps.current.add(key);
-    const current = currentAI.current;
-    location.hash = withSessionHash(target.href, current.sessionId);
-    current.setOpen(true);
-  };
   const newSession = () => {
     ai.setSessionId(null);
     if (!full) setList(false);
@@ -1403,14 +1478,18 @@ export function AIChat({ full = false }: { full?: boolean }) {
     if (files.some((f) => f.status !== "done")) {
       ai.setError(
         files.some((f) => f.status === "uploading" && f.response)
-          ? "请等待文件解析完成后再发送"
-          : "请等待附件上传完成，或移除上传失败的文件",
+          ? t("chat.waitParsing")
+          : t("chat.waitUpload"),
       );
       return null;
     }
     return {
       id: crypto.randomUUID(),
-      text: text || (attachments.length ? "请分析这些附件" : "请处理拖入的文件夹"),
+      text:
+        text ||
+        (attachments.length
+          ? t("chat.analyzeAttachments")
+          : t("chat.processFolders")),
       attachments,
       files: targets,
       references: ai.references,
@@ -1419,8 +1498,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
       modelId: model,
       scope: allScope ? "all" : "document",
       currentResourceId: ai.resource?.id,
-      currentMailboxId: ai.mailFocus?.mailboxId || undefined,
-      currentMessageId: ai.mailFocus?.message?.id,
       skillIds,
       webSearch,
       skipApprovals,
@@ -1430,7 +1507,9 @@ export function AIChat({ full = false }: { full?: boolean }) {
     skipReferenceInsert.current = true;
     replaceComposerText(item.text);
     replaceFiles(item.attachments.map((f) => composerFile(asChatFile(f))));
-    setFolderTargets((item.files ?? []).filter((file) => file.kind === "folder"));
+    setFolderTargets(
+      (item.files ?? []).filter((file) => file.kind === "folder"),
+    );
     setHasDraft(!!item.text.trim());
     ai.setReferences(item.references);
     ai.setNoteReferences(item.notes);
@@ -1471,8 +1550,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
     const targets = explorerFiles();
     const prompt =
       (choice ?? composerValue()).trim() ||
-      (attachments.length ? "请分析这些附件" : "") ||
-      (folderTargets.length ? "请处理拖入的文件夹" : "");
+      (attachments.length ? t("chat.analyzeAttachments") : "") ||
+      (folderTargets.length ? t("chat.processFolders") : "");
     if (
       !prompt ||
       !model ||
@@ -1481,12 +1560,12 @@ export function AIChat({ full = false }: { full?: boolean }) {
       submitting.current ||
       files.some((f) => f.status !== "done")
     ) {
-      if (folderImport) ai.setError("请等待文件夹导入完成后再发送");
+      if (folderImport) ai.setError(t("chat.waitFolder"));
       else if (files.some((f) => f.status !== "done"))
         ai.setError(
           files.some((f) => f.status === "uploading" && f.response)
-            ? "请等待文件解析完成后再发送"
-            : "请等待附件上传完成，或移除上传失败的文件",
+            ? t("chat.waitParsing")
+            : t("chat.waitUpload"),
         );
       return;
     }
@@ -1526,8 +1605,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
         modelId: model,
         scope: allScope ? "all" : "document",
         currentResourceId: ai.resource?.id,
-        currentMailboxId: ai.mailFocus?.mailboxId || undefined,
-        currentMessageId: ai.mailFocus?.message?.id,
         references: refs,
         ...(notes.length ? { quickNoteIds: notes.map((n) => n.id) } : {}),
         skillIds,
@@ -1553,7 +1630,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       setBusy(false);
     }
   };
-  if (!ai.userId) return <div className="empty">登录后使用 AI 助手</div>;
+  if (!ai.userId) return <div className="empty">{t("chat.signIn")}</div>;
   const visibleMessages: Conversation["messages"] = [
     ...new Map(
       [
@@ -1642,10 +1719,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       );
       setOlder((current) => [...previous.messages, ...current]);
       setOlderJobs((current) => [...previous.jobs, ...current]);
-      setOlderOperations((current) => [
-        ...previous.operations,
-        ...current,
-      ]);
+      setOlderOperations((current) => [...previous.operations, ...current]);
       setPage(page + 1);
       setMore(previous.hasMore);
       setRenderQuestions((current) => current + RENDER_EXPAND_QUESTIONS);
@@ -1659,53 +1733,67 @@ export function AIChat({ full = false }: { full?: boolean }) {
       setRenderQuestions((current) => current + RENDER_EXPAND_QUESTIONS),
     loadOlder: revealOlderHistory,
   };
-  const suggestions = full
-    ? [
-        {
-          key: "search",
-          icon: <Search size={18} />,
-          label: "查找资料",
-          description: "帮我查找相关文档，并总结重点",
-        },
-        {
-          key: "write",
-          icon: <FileText size={18} />,
-          label: "起草文档",
-          description: "帮我创建一份项目计划",
-        },
-        {
-          key: "outline",
-          icon: <WandSparkles size={18} />,
-          label: "梳理想法",
-          description: "帮我将想法整理成清晰的提纲",
-        },
-        {
-          key: "organize",
-          icon: <FolderOpen size={18} />,
-          label: "整理知识库",
-          description: "分析我的知识库，提出整理建议",
-        },
-      ]
-    : [
-        {
-          key: "summary",
-          icon: <FileText size={18} />,
-          label: "提炼重点",
-          description: "总结这份文档的核心内容",
-        },
-        {
-          key: "polish",
-          icon: <WandSparkles size={18} />,
-          label: "润色内容",
-          description: "帮我完善选中内容",
-        },
-      ];
+  const suggestions =
+    !full && ai.resource?.kind === "library"
+      ? [
+          {
+            key: "knowledge-build",
+            icon: <FolderOpen size={18} />,
+            label: t("knowledge.assistantBuild"),
+            description: t("knowledge.assistantBuildPrompt"),
+          },
+          {
+            key: "knowledge-review",
+            icon: <Search size={18} />,
+            label: t("knowledge.assistantReview"),
+            description: t("knowledge.assistantReviewPrompt"),
+          },
+        ]
+      : full
+        ? [
+            {
+              key: "search",
+              icon: <Search size={18} />,
+              label: t("chat.research"),
+              description: t("chat.researchPrompt"),
+            },
+            {
+              key: "write",
+              icon: <FileText size={18} />,
+              label: t("chat.draft"),
+              description: t("chat.draftPrompt"),
+            },
+            {
+              key: "outline",
+              icon: <WandSparkles size={18} />,
+              label: t("chat.outline"),
+              description: t("chat.outlinePrompt"),
+            },
+            {
+              key: "organize",
+              icon: <FolderOpen size={18} />,
+              label: t("chat.organize"),
+              description: t("chat.organizePrompt"),
+            },
+          ]
+        : [
+            {
+              key: "summary",
+              icon: <FileText size={18} />,
+              label: t("chat.summarize"),
+              description: t("chat.summarizePrompt"),
+            },
+            {
+              key: "polish",
+              icon: <WandSparkles size={18} />,
+              label: t("chat.polish"),
+              description: t("chat.polishPrompt"),
+            },
+          ];
   const messageBubble = (
     m: Conversation["messages"][number] & {
       folders?: FolderDelivery[];
       files?: FileDelivery[];
-      mails?: MailDelivery[];
-      mailCompose?: MailComposeDraft;
       sources?: { title: string; url: string }[];
     },
   ): BubbleItemType => {
@@ -1713,147 +1801,160 @@ export function AIChat({ full = false }: { full?: boolean }) {
     // 数据还在 ai.noteReferences 里时直接预览，否则按 id 拉取笔记内容。
     const noteMarkers = [
       ...new Map(
-        [...m.text.matchAll(/@【(随手记 [^】#]+?)(?:#([0-9a-f-]{36}))?】/g)].map(
-          (x) => [`${x[1]}#${x[2] ?? ""}`, { label: x[1]!, id: x[2] }],
-        ),
+        [
+          ...m.text.matchAll(/@【(随手记 [^】#]+?)(?:#([0-9a-f-]{36}))?】/g),
+        ].map((x) => [`${x[1]}#${x[2] ?? ""}`, { label: x[1]!, id: x[2] }]),
       ).values(),
     ];
     return {
-    key: m.id,
-    role: m.role === "user" ? "user" : "ai",
-    placement: m.role === "user" ? "end" : "start",
-    className: m.role === "assistant" ? "ai-response-bubble" : "ai-user-bubble",
-    variant: m.role === "user" ? "filled" : "borderless",
-    styles: m.role === "user" ? { root: { paddingInlineStart: 0 } } : undefined,
-    header:
-      m.role === "user" ? (
-        m.createdAt ? (
-          <time className="ai-message-time" dateTime={m.createdAt}>
-            {new Date(m.createdAt).toLocaleString([], {
-              month: "2-digit",
-              day: "2-digit",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </time>
-        ) : undefined
-      ) : (
-        "AI 助手"
-      ),
-    streaming: !!m.streaming,
-    content: (
-      <>
-        {!!m.explorer?.length && (
-          <div className="ai-sent-targets">
-            {m.explorer.map((item) => (
-              <span className={`ai-sent-target ai-sent-target-${item.kind}`} key={`${item.kind}:${item.id}`}>
-                {item.kind === "folder" ? <Folder size={14} /> : <FileIcon size={14} />}
-                <span>{item.name || (item.kind === "folder" ? "文件夹" : "文件")}</span>
-              </span>
-            ))}
-          </div>
-        )}
-        {!!m.attachments?.length && (
-          <FileCard.List
-            className="ai-message-attachments"
-            removable={false}
-            overflow="wrap"
-            size="small"
-            items={m.attachments.map((f) => ({
-              key: f.id,
-              name: f.filename,
-              byte: f.size,
-              type: f.mime.startsWith("image/") ? "image" : "file",
-              src: f.mime.startsWith("image/") ? assetUrl(f.id) : undefined,
-              description: (
-                <a href={assetUrl(f.id)} target="_blank" rel="noreferrer">
-                  查看附件
-                </a>
-              ),
-            }))}
-          />
-        )}
-        {m.reasoning && (
-          <Think
-            title={m.streaming ? "思考过程 · 正在生成" : "思考过程"}
-            loading={!!m.streaming}
-            blink={!!m.streaming}
-            defaultExpanded={false}
-          >
-            <Suspense fallback={<span>{m.reasoning}</span>}>
-              <AIAnswer text={m.reasoning} onDocument={openDocument} />
-            </Suspense>
-          </Think>
-        )}
-        {m.role === "assistant" ? (
-          <Suspense fallback={<span>{m.text}</span>}>
-            <>
-              <AIAnswer
-                text={m.text}
-                streaming={m.streaming}
-                folders={m.folders}
-                files={m.files}
-                mails={m.mails}
-                ensureFolderCards
-                onDocument={openDocument}
-                onFolder={openFolderDelivery}
-              />
-              {m.mailCompose &&
-                renderPluginAIBlock("mail-compose", m.mailCompose, () =>
-                  openComposeCard(m.mailCompose!),
-                )}
-            </>
-          </Suspense>
+      key: m.id,
+      role: m.role === "user" ? "user" : "ai",
+      placement: m.role === "user" ? "end" : "start",
+      className:
+        m.role === "assistant" ? "ai-response-bubble" : "ai-user-bubble",
+      variant: m.role === "user" ? "filled" : "borderless",
+      styles:
+        m.role === "user" ? { root: { paddingInlineStart: 0 } } : undefined,
+      header:
+        m.role === "user" ? (
+          m.createdAt ? (
+            <time className="ai-message-time" dateTime={m.createdAt}>
+              {new Date(m.createdAt).toLocaleString(htmlLang(locale), {
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </time>
+          ) : undefined
         ) : (
-          <span
-            className="ai-user-message-text"
-            data-question={m.id}
-            style={{ whiteSpace: "pre-wrap" }}
-          >
-            {referenceTextParts(
-              m.text,
-              (m.references ?? []).map(referenceLabel),
-              noteMarkers,
-            ).map((part, i) =>
-              "text" in part ? (
-                part.text
-              ) : "noteIndex" in part ? (
-                <QuickNoteTag
-                  key={i}
-                  label={noteMarkers[part.noteIndex]!.label}
-                  note={ai.noteReferences.find(
-                    (n) =>
-                      n.id === noteMarkers[part.noteIndex]!.id ||
-                      (!noteMarkers[part.noteIndex]!.id &&
-                        n.label === noteMarkers[part.noteIndex]!.label),
+          t("nav.assistant")
+        ),
+      streaming: !!m.streaming,
+      content: (
+        <>
+          {!!m.explorer?.length && (
+            <div className="ai-sent-targets">
+              {m.explorer.map((item) => (
+                <span
+                  className={`ai-sent-target ai-sent-target-${item.kind}`}
+                  key={`${item.kind}:${item.id}`}
+                >
+                  {item.kind === "folder" ? (
+                    <Folder size={14} />
+                  ) : (
+                    <FileIcon size={14} />
                   )}
-                  noteId={noteMarkers[part.noteIndex]!.id}
+                  <span>
+                    {item.name ||
+                      (item.kind === "folder"
+                        ? t("trash.folder")
+                        : t("search.files"))}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+          {!!m.attachments?.length && (
+            <FileCard.List
+              className="ai-message-attachments"
+              removable={false}
+              overflow="wrap"
+              size="small"
+              items={m.attachments.map((f) => ({
+                key: f.id,
+                name: f.filename,
+                byte: f.size,
+                type: f.mime.startsWith("image/") ? "image" : "file",
+                src: f.mime.startsWith("image/") ? assetUrl(f.id) : undefined,
+                description: (
+                  <a href={assetUrl(f.id)} target="_blank" rel="noreferrer">
+                    {t("chat.attachments")}
+                  </a>
+                ),
+              }))}
+            />
+          )}
+          {m.reasoning && (
+            <Think
+              title={
+                m.streaming ? t("chat.reasoningLive") : t("chat.reasoning")
+              }
+              loading={!!m.streaming}
+              blink={!!m.streaming}
+              defaultExpanded={false}
+            >
+              <Suspense fallback={<span>{m.reasoning}</span>}>
+                <AIAnswer text={m.reasoning} onDocument={openDocument} />
+              </Suspense>
+            </Think>
+          )}
+          {m.role === "assistant" ? (
+            <Suspense fallback={<span>{m.text}</span>}>
+              <>
+                <AIAnswer
+                  text={m.text}
+                  streaming={m.streaming}
+                  folders={m.folders}
+                  files={m.files}
+                  ensureFolderCards
+                  onDocument={openDocument}
+                  onFolder={openFolderDelivery}
                 />
-              ) : (
-                <AIReferenceTag
-                  key={i}
-                  reference={m.references![part.referenceIndex]!}
-                  reveal={() => ai.reveal(m.references![part.referenceIndex]!)}
-                />
-              ),
-            )}
-          </span>
-        )}
-        <WebSources sources={m.sources ?? []} />
-      </>
-    ),
-    footer:
-      m.role === "assistant" && !!m.text && !m.streaming ? (
-        <Actions
-          items={[
-            {
-              key: "copy",
-              label: "复制回答",
-              actionRender: <Actions.Copy text={m.text} />,
-            },
-          ]}
-        />
-      ) : undefined,
+              </>
+            </Suspense>
+          ) : (
+            <span
+              className="ai-user-message-text"
+              data-question={m.id}
+              style={{ whiteSpace: "pre-wrap" }}
+            >
+              {referenceTextParts(
+                m.text,
+                (m.references ?? []).map(referenceLabel),
+                noteMarkers,
+              ).map((part, i) =>
+                "text" in part ? (
+                  part.text
+                ) : "noteIndex" in part ? (
+                  <QuickNoteTag
+                    key={i}
+                    label={noteMarkers[part.noteIndex]!.label}
+                    note={ai.noteReferences.find(
+                      (n) =>
+                        n.id === noteMarkers[part.noteIndex]!.id ||
+                        (!noteMarkers[part.noteIndex]!.id &&
+                          n.label === noteMarkers[part.noteIndex]!.label),
+                    )}
+                    noteId={noteMarkers[part.noteIndex]!.id}
+                  />
+                ) : (
+                  <AIReferenceTag
+                    key={i}
+                    reference={m.references![part.referenceIndex]!}
+                    reveal={() =>
+                      ai.reveal(m.references![part.referenceIndex]!)
+                    }
+                  />
+                ),
+              )}
+            </span>
+          )}
+          <WebSources sources={m.sources ?? []} />
+        </>
+      ),
+      footer:
+        m.role === "assistant" && !!m.text && !m.streaming ? (
+          <Actions
+            items={[
+              {
+                key: "copy",
+                label: t("chat.copyAnswer"),
+                actionRender: <Actions.Copy text={m.text} />,
+              },
+            ]}
+          />
+        ) : undefined,
     };
   };
   const jobBubble = (j: Conversation["jobs"][number]): BubbleItemType => ({
@@ -1877,7 +1978,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                           <li key={i}>{step}</li>
                         ))}
                       </ol>
-                      <strong>验收标准</strong>
+                      <strong>{t("chat.criteria")}</strong>
                       <ul>
                         {j.progress.plan.criteria.map((criterion, i) => (
                           <li key={i}>{criterion}</li>
@@ -1894,10 +1995,10 @@ export function AIChat({ full = false }: { full?: boolean }) {
                   key: "delivery-review",
                   title:
                     j.progress.review.verdict === "pass"
-                      ? "内容验收通过"
+                      ? t("chat.accepted")
                       : j.progress.review.verdict === "needs_user"
-                        ? "需要补充要求"
-                        : "验收待修正",
+                        ? t("chat.requirementsNeeded")
+                        : t("chat.correctionsNeeded"),
                   description: j.progress.review.summary,
                   status:
                     j.progress.review.verdict === "pass"
@@ -1906,17 +2007,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
                 },
               ]
             : []),
-          ...(j.progress?.events?.length ? [] : (j.progress?.steps ?? [])).map(
-            (s, index) => ({
-              key: `step-${index}`,
-              title: s.title,
-              status:
-                s.status === "loading" &&
-                !["queued", "running"].includes(j.status)
-                  ? ("abort" as const)
-                  : s.status,
-            }),
-          ),
           ...visibleOperations
             .filter((o) => o.job_id === j.id && !j.progress?.events?.length)
             .map((o) => ({
@@ -1924,11 +2014,11 @@ export function AIChat({ full = false }: { full?: boolean }) {
               title:
                 o.result.kind === "image_generation"
                   ? o.result.state === "saved"
-                    ? "生成图片已保存为素材"
+                    ? t("chat.imageSaved")
                     : o.result.state === "save_failed"
-                      ? "图片已生成但保存失败"
-                      : "图片生成结果待核对"
-                  : "文档操作已保存",
+                      ? t("chat.imageSaveFailed")
+                      : t("chat.imageReview")
+                  : t("chat.documentSaved"),
               status:
                 o.result.kind === "image_generation" &&
                 o.result.state !== "saved"
@@ -1942,7 +2032,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
                     openDocument(o.result.resourceId ?? o.result.id)
                   }
                 >
-                  查看 {o.result.title ?? "文档修改"}
+                  {t("record.view")}
+                  {o.result.title ?? t("chat.documentChanges")}
                 </Button>
               ),
             })),
@@ -1951,15 +2042,20 @@ export function AIChat({ full = false }: { full?: boolean }) {
             title:
               (
                 {
-                  queued: "任务排队中",
-                  running: j.progress?.phase ?? "正在处理",
-                  completed: j.progress?.phase?.startsWith("等待")
-                    ? j.progress.phase
-                    : "任务已完成",
-                  failed: "任务失败",
-                  cancelled: "任务已停止",
-                  interrupted: "任务已中断",
-                  awaiting_approval: "等待操作审批",
+                  queued: t("chat.queued"),
+                  running: aiPhaseLabel(j.progress, t),
+                  completed:
+                    completionPresentation(j.progress) === "waiting-choice"
+                      ? t("chat.waitingChoice")
+                      : completionPresentation(j.progress) === "waiting-access"
+                        ? t("chat.waitingAccess")
+                        : completionPresentation(j.progress) === "waiting-input"
+                          ? t("chat.waitingInput")
+                          : t("chat.completed"),
+                  failed: t("chat.taskFailed"),
+                  cancelled: t("chat.stopped"),
+                  interrupted: t("chat.interrupted"),
+                  awaiting_approval: t("chat.waitApproval"),
                 } as Record<string, string>
               )[j.status] ?? j.status,
             status: (["queued", "running"].includes(j.status)
@@ -1973,7 +2069,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                   : "success") as "loading" | "error" | "abort" | "success",
             description:
               j.error ||
-              (j.status === "running" ? "关闭页面后仍会继续" : undefined),
+              (j.status === "running" ? t("chat.background") : undefined),
             extra: ["failed", "interrupted", "cancelled"].includes(j.status) ? (
               <Button
                 size="small"
@@ -1984,14 +2080,14 @@ export function AIChat({ full = false }: { full?: boolean }) {
                       id: crypto.randomUUID(),
                       retryOf: j.id,
                       modelId: model,
-                      text: "重试原任务",
+                      text: t("chat.retryOriginal"),
                       scope: "all",
                     });
                     await refresh();
                   })
                 }
               >
-                重试任务
+                {t("chat.retry")}
               </Button>
             ) : undefined,
             footer: ["queued", "running", "awaiting_approval"].includes(
@@ -2003,7 +2099,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                   void action(() => api(`/ai/jobs/${j.id}/cancel`, "POST"))
                 }
               >
-                停止任务
+                {t("chat.stop")}
               </Button>
             ) : undefined,
           })),
@@ -2019,537 +2115,576 @@ export function AIChat({ full = false }: { full?: boolean }) {
     threadCache.current.olderOperations === olderOperations &&
     threadCache.current.optimistic === optimistic &&
     threadCache.current.renderQuestions === renderQuestions &&
-    threadCache.current.focusedQuestionId === focusedQuestionId
+    threadCache.current.focusedQuestionId === focusedQuestionId &&
+    threadCache.current.locale === locale
   );
   const bubbleItems: BubbleItemType[] = reuseThread
     ? threadCache.current!.items
-    : aiTimeline(
-    threadMessages,
-    threadJobs,
-  ).flatMap((item): BubbleItemType[] => {
-    if (item.kind === "message") {
-      if (
-        item.message.role === "assistant" &&
-        visibleJobs.some(
-          (j) =>
-            `${j.id}-answer` === item.message.id &&
-            (j.progress?.events?.length || j.progress?.questions?.length),
-        )
-      )
-        return [];
-      const answerJob = visibleJobs.find(
-        (job) => `${job.id}-answer` === item.message.id,
-      );
-      return [
-        messageBubble({
-          ...item.message,
-          folders: answerJob ? jobFolderDeliveries(answerJob) : undefined,
-          files: answerJob ? jobFileDeliveries(answerJob) : undefined,
-          mails: answerJob ? jobMailDeliveries(answerJob) : undefined,
-          sources: answerJob?.progress?.sources,
-        }),
-      ];
-    }
-    const j = item.job;
-    const active = ["running", "queued"].includes(j.status);
-    const eventItems = (j.progress?.events ?? [])
-      .filter((event) => {
-        if (
-          event.kind === "text" &&
-          event.text.trim() === "本轮工具操作已结束，请查看任务结果。"
-        )
-          return false;
-        return event.text || (active && event.status === "loading");
-      })
-      .map((event): BubbleItemType => ({
-        key: `${j.id}-${event.id}`,
-        className:
-          event.kind === "text" ? "ai-response-bubble" : "ai-step-bubble",
-        role: "ai",
-        variant: "borderless",
-        placement: "start",
-        streaming: active && event.status === "loading",
-        styles: { content: { padding: 0 }, body: { padding: 0 } },
-        content:
-          event.kind === "reasoning" ? (
-            <Think
-              title={
-                active && event.status === "loading" ? "正在思考" : "思考过程"
-              }
-              loading={active && event.status === "loading"}
-              blink={active && event.status === "loading"}
-              defaultExpanded={false}
-            >
-              <Suspense fallback={event.text}>
-                <AIAnswer
-                  text={event.text}
-                  onDocument={openDocument}
-                  streaming={active && event.status === "loading"}
-                />
-              </Suspense>
-            </Think>
-          ) : event.kind === "text" ? (
-            <Suspense fallback={event.text}>
-              <AIAnswer
-                text={event.text}
-                folders={jobFolderDeliveries(j)}
-                files={jobFileDeliveries(j)}
-                mails={jobMailDeliveries(j)}
-                onDocument={openDocument}
-                onFolder={openFolderDelivery}
-                streaming={active && event.status === "loading"}
-              />
-            </Suspense>
-          ) : event.image && !event.detail && !event.resourceId ? (
-            <AIGeneratedImage
-              sessionId={ai.sessionId}
-              image={event.image}
-              currentDocument={
-                ai.resource?.kind === "document" ? ai.resource : undefined
-              }
-            />
-          ) : (
-            <>
-              <ThoughtChain
-                items={[
-                  {
-                    key: event.id,
-                    title: event.text,
-                    collapsible:
-                      !!event.detail ||
-                      !!event.resourceId ||
-                      (event.text === "制定交付计划" && !!j.progress?.plan),
-                    content: (
-                      <>
-                        {event.detail && <p>{event.detail}</p>}
-                        {event.resourceId && (
-                          <Button
-                            type="link"
-                            size="small"
-                            onClick={() => openDocument(event.resourceId!)}
-                          >
-                            查看已保存文档
-                          </Button>
-                        )}
-                        {event.text === "制定交付计划" && j.progress?.plan && (
-                          <>
-                            <strong>{j.progress.plan.goal}</strong>
-                            <ol>
-                              {j.progress.plan.steps.map((step, i) => (
-                                <li key={i}>{step}</li>
-                              ))}
-                            </ol>
-                            <strong>验收标准</strong>
-                            <ul>
-                              {j.progress.plan.criteria.map((c, i) => (
-                                <li key={i}>{c}</li>
-                              ))}
-                            </ul>
-                          </>
-                        )}
-                      </>
-                    ),
-                    description: new Date(event.at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }),
-                    status:
-                      !active && event.status === "loading"
-                        ? "abort"
-                        : event.status,
-                  },
-                ]}
-              />
-              {event.image && (
+    : aiTimeline(threadMessages, threadJobs).flatMap(
+        (item): BubbleItemType[] => {
+          if (item.kind === "message") {
+            if (
+              item.message.role === "assistant" &&
+              visibleJobs.some(
+                (j) =>
+                  `${j.id}-answer` === item.message.id &&
+                  (j.progress?.events?.length || j.progress?.questions?.length),
+              )
+            )
+              return [];
+            const answerJob = visibleJobs.find(
+              (job) => `${job.id}-answer` === item.message.id,
+            );
+            return [
+              messageBubble({
+                ...item.message,
+                folders: answerJob ? jobFolderDeliveries(answerJob) : undefined,
+                files: answerJob ? jobFileDeliveries(answerJob) : undefined,
+                sources: answerJob?.progress?.sources,
+              }),
+            ];
+          }
+          const j = item.job;
+          const active = ["running", "queued"].includes(j.status);
+          const eventItems = (j.progress?.events ?? [])
+            .filter(
+              (event) =>
+                (event.kind === "text" || event.kind === "reasoning"
+                  ? event.text
+                  : event.code) ||
+                (active && event.status === "loading"),
+            )
+            .map((event): BubbleItemType => ({
+              key: `${j.id}-${event.id}`,
+              className:
+                event.kind === "text" ? "ai-response-bubble" : "ai-step-bubble",
+              role: "ai",
+              variant: "borderless",
+              placement: "start",
+              streaming: active && event.status === "loading",
+              styles: { content: { padding: 0 }, body: { padding: 0 } },
+              content:
+                event.kind === "reasoning" ? (
+                  <Think
+                    title={
+                      active && event.status === "loading"
+                        ? t("chat.thinking")
+                        : t("chat.reasoning")
+                    }
+                    loading={active && event.status === "loading"}
+                    blink={active && event.status === "loading"}
+                    defaultExpanded={false}
+                  >
+                    <Suspense fallback={event.text}>
+                      <AIAnswer
+                        text={event.text}
+                        onDocument={openDocument}
+                        streaming={active && event.status === "loading"}
+                      />
+                    </Suspense>
+                  </Think>
+                ) : event.kind === "text" ? (
+                  <Suspense fallback={event.text}>
+                    <AIAnswer
+                      text={event.text}
+                      folders={jobFolderDeliveries(j)}
+                      files={jobFileDeliveries(j)}
+                      onDocument={openDocument}
+                      onFolder={openFolderDelivery}
+                      streaming={active && event.status === "loading"}
+                    />
+                  </Suspense>
+                ) : event.image && !event.detailCode && !event.resourceId ? (
+                  <AIGeneratedImage
+                    sessionId={ai.sessionId}
+                    image={event.image}
+                    currentDocument={
+                      ai.resource?.kind === "document" ? ai.resource : undefined
+                    }
+                  />
+                ) : (
+                  <>
+                    <ThoughtChain
+                      items={[
+                        {
+                          key: event.id,
+                          title: aiEventLabel(event, t),
+                          collapsible:
+                            !!event.detailCode ||
+                            !!event.resourceId ||
+                            (event.kind === "tool" &&
+                              event.data?.toolName === "task_plan" &&
+                              !!j.progress?.plan),
+                          content: (
+                            <>
+                              {aiEventDetail(event, t) && (
+                                <p>{aiEventDetail(event, t)}</p>
+                              )}
+                              {event.resourceId && (
+                                <Button
+                                  type="link"
+                                  size="small"
+                                  onClick={() =>
+                                    openDocument(event.resourceId!)
+                                  }
+                                >
+                                  {t("chat.viewSaved")}
+                                </Button>
+                              )}
+                              {event.kind === "tool" &&
+                                event.data?.toolName === "task_plan" &&
+                                j.progress?.plan && (
+                                  <>
+                                    <strong>{j.progress.plan.goal}</strong>
+                                    <ol>
+                                      {j.progress.plan.steps.map((step, i) => (
+                                        <li key={i}>{step}</li>
+                                      ))}
+                                    </ol>
+                                    <strong>{t("chat.criteria")}</strong>
+                                    <ul>
+                                      {j.progress.plan.criteria.map((c, i) => (
+                                        <li key={i}>{c}</li>
+                                      ))}
+                                    </ul>
+                                  </>
+                                )}
+                            </>
+                          ),
+                          description: new Date(event.at).toLocaleTimeString(
+                            htmlLang(locale),
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            },
+                          ),
+                          status:
+                            !active && event.status === "loading"
+                              ? "abort"
+                              : event.status,
+                        },
+                      ]}
+                    />
+                    {event.image && (
+                      <AIGeneratedImage
+                        sessionId={ai.sessionId}
+                        image={event.image}
+                        currentDocument={
+                          ai.resource?.kind === "document"
+                            ? ai.resource
+                            : undefined
+                        }
+                      />
+                    )}
+                    {event.folder && (
+                      <FolderDeliveryCard
+                        folder={event.folder}
+                        onOpen={openFolderDelivery}
+                      />
+                    )}
+
+                    {event.file && (
+                      <FileDeliveryCard
+                        file={event.file}
+                        onOpen={openFolderDelivery}
+                      />
+                    )}
+                  </>
+                ),
+              footer:
+                event.kind === "text" &&
+                (!active || event.status !== "loading") ? (
+                  <Actions
+                    items={[
+                      {
+                        key: "copy",
+                        label: t("common.copy"),
+                        actionRender: <Actions.Copy text={event.text} />,
+                      },
+                    ]}
+                  />
+                ) : undefined,
+            }));
+          const showSummary =
+            !eventItems.length ||
+            !!j.progress?.approvals?.length ||
+            !["queued", "running", "completed"].includes(j.status) ||
+            (!active && !!j.progress?.sources.length);
+          const oldImages: BubbleItemType[] = visibleOperations
+            .filter(
+              (o) =>
+                o.job_id === j.id &&
+                o.result.kind === "image_generation" &&
+                o.result.assetId &&
+                !j.progress?.events?.some(
+                  (e) => e.image?.assetId === o.result.assetId,
+                ),
+            )
+            .map((o) => ({
+              key: `${o.id}-image`,
+              role: "ai",
+              variant: "borderless",
+              className: "ai-step-bubble",
+              content: (
                 <AIGeneratedImage
                   sessionId={ai.sessionId}
-                  image={event.image}
+                  image={o.result}
                   currentDocument={
                     ai.resource?.kind === "document" ? ai.resource : undefined
                   }
                 />
-              )}
-              {event.folder && (
-                <FolderDeliveryCard
-                  folder={event.folder}
-                  onOpen={openFolderDelivery}
-                />
-              )}
-              {event.mail &&
-                renderPluginAIBlock("mail", event.mail, openFolderDelivery)}
-              {event.file && (
-                <FileDeliveryCard
-                  file={event.file}
-                  onOpen={openFolderDelivery}
-                />
-              )}
-            </>
-          ),
-        footer:
-          event.kind === "text" && (!active || event.status !== "loading") ? (
-            <Actions
-              items={[
-                {
-                  key: "copy",
-                  label: "复制",
-                  actionRender: <Actions.Copy text={event.text} />,
-                },
-              ]}
-            />
-          ) : undefined,
-      }));
-    const showSummary =
-      !eventItems.length ||
-      !!j.progress?.approvals?.length ||
-      !["queued", "running", "completed"].includes(j.status) ||
-      (!active && !!j.progress?.sources.length);
-    const oldImages: BubbleItemType[] = visibleOperations
-      .filter(
-        (o) =>
-          o.job_id === j.id &&
-          o.result.kind === "image_generation" &&
-          o.result.assetId &&
-          !j.progress?.events?.some(
-            (e) => e.image?.assetId === o.result.assetId,
-          ),
-      )
-      .map((o) => ({
-        key: `${o.id}-image`,
-        role: "ai",
-        variant: "borderless",
-        className: "ai-step-bubble",
-        content: (
-          <AIGeneratedImage
-            sessionId={ai.sessionId}
-            image={o.result}
-            currentDocument={
-              ai.resource?.kind === "document" ? ai.resource : undefined
-            }
-          />
-        ),
-      }));
-    const eventTime = new Map(
-      (j.progress?.events ?? []).map((e) => [`${j.id}-${e.id}`, e.at]),
-    );
-    const decisionItems: { at: string; bubble: BubbleItemType }[] = (
-      j.progress?.approvals ?? []
-    )
-      .filter((a) => a.state !== "pending" || j.status !== "awaiting_approval")
-      .map((a) => ({
-        at: a.resolvedAt ?? j.updated_at ?? "",
-        bubble: {
-          key: `${j.id}-${a.id}-approval`,
-          role: "ai",
-          variant: "borderless",
-          className: "ai-step-bubble",
-          content: (
-            <div className="ai-approval-result">
-              <span className={`ai-approval-state ${a.state}`}>
-                {a.state === "approved"
-                  ? "已批准"
-                  : a.state === "rejected"
-                    ? "已拒绝"
-                    : "任务已停止"}
-              </span>
-              {a.title}
-            </div>
-          ),
-        },
-      }));
-    const documentItems: { at: string; bubble: BubbleItemType }[] =
-      visibleOperations
-        .filter((o) => o.job_id === j.id && o.result.title && o.result.format)
-        .map((o) => ({
-          at: o.created_at ?? "",
-          bubble: {
-            key: `${o.id}-document`,
-            role: "ai",
-            variant: "borderless",
-            className: "ai-step-bubble",
-            content: (
-              <button
-                type="button"
-                className="ai-document-card"
-                aria-label={`打开${o.result.kind === "library" ? "知识库" : "文档"}：${o.result.title}`}
-                onClick={() =>
-                  openDocument(o.result.id ?? o.result.resourceId)
-                }
-              >
-                <span className="ai-document-card-icon">
-                  <FileText size={18} />
-                </span>
-                <span className="ai-document-card-copy">
-                  <small>
-                    {o.result.kind === "library" ? "已创建知识库" : "已创建文档"}
-                  </small>
-                  <span className="ai-document-card-title">{o.result.title}</span>
-                </span>
-                <span className="ai-document-card-format">
-                  {o.result.kind === "library"
-                    ? "知识库"
-                    : (documentFormats[o.result.format] ?? "文档")}
-                </span>
-                <ArrowUpRight className="ai-document-card-arrow" size={16} />
-              </button>
-            ),
-          },
-        }));
-    const folderItems: { at: string; bubble: BubbleItemType }[] =
-      visibleOperations
-        .filter(
-          (o) =>
-            o.job_id === j.id &&
-            o.result.kind === "file_folder" &&
-            o.result.href &&
-            o.result.name &&
-            !j.progress?.events?.some(
-              (e) => e.folder?.id === o.result.id,
-            ),
-        )
-        .map((o) => ({
-          at: o.created_at ?? "",
-          bubble: {
-            key: `${o.id}-folder`,
-            role: "ai",
-            variant: "borderless",
-            className: "ai-step-bubble",
-            content: (
-              <FolderDeliveryCard
-                folder={{
-                  id: o.result.id,
-                  name: o.result.name,
-                  path: o.result.path,
-                  href: o.result.href,
-                  shared: o.result.shared,
-                }}
-                onOpen={openFolderDelivery}
-              />
-            ),
-          },
-        }));
-    const fileItems: { at: string; bubble: BubbleItemType }[] =
-      visibleOperations
-        .filter(
-          (o) =>
-            o.job_id === j.id &&
-            o.result.kind === "file_item" &&
-            o.result.id &&
-            o.result.name &&
-            !j.progress?.events?.some((e) => e.file?.id === o.result.id),
-        )
-        .map((o) => ({
-          at: o.created_at ?? "",
-          bubble: {
-            key: `${o.id}-file`,
-            role: "ai",
-            variant: "borderless",
-            className: "ai-step-bubble",
-            content: (
-              <FileDeliveryCard
-                file={{
-                  id: o.result.id,
-                  name: o.result.name,
-                  path: o.result.path,
-                  href: o.result.href,
-                  downloadUrl: o.result.downloadUrl,
-                  mime: o.result.mime,
-                  local: o.result.local,
-                }}
-                onOpen={openFolderDelivery}
-              />
-            ),
-          },
-        }));
-    const timedItems = [
-      ...eventItems.map((bubble) => ({
-        at: eventTime.get(String(bubble.key)) ?? "",
-        bubble,
-      })),
-      ...decisionItems,
-      ...documentItems,
-      ...folderItems,
-      ...fileItems,
-    ]
-      .sort((a, b) => a.at.localeCompare(b.at))
-      .map((t) => t.bubble);
-    if (
-      j.status === "completed" &&
-      j.progress?.phase === "已完成" &&
-      eventItems.length
-    ) {
-      const final = j.progress.text;
-      const lastText = [...(j.progress.events ?? [])]
-        .reverse()
-        .find((e) => e.kind === "text");
-      // Keep approval decisions in the same chronological process stream as
-      // tool/reasoning events. Rendering them after the collapsed process made
-      // a later approval look as if it belonged to the end of the task.
-      const processItems = [
-        ...eventItems.map((bubble) => ({
-          at: eventTime.get(String(bubble.key)) ?? "",
-          bubble,
-        })),
-        ...decisionItems,
-      ]
-        .sort((a, b) => a.at.localeCompare(b.at))
-        .map((item) => item.bubble);
-      const details = processItems.filter(
-        (i) =>
-          !lastText ||
-          lastText.text.trim() !== final.trim() ||
-          i.key !== `${j.id}-${lastText.id}`,
-      );
-      // Images are deliverables, not hidden execution logs. Keep every verified image visible.
-      const imageItems: BubbleItemType[] = [
-        ...new Map(
-          (j.progress.events ?? [])
-            .filter((e) => e.image)
-            .map((e) => [e.image!.assetId, e.image!]),
-        ).values(),
-      ].map((image) => ({
-        key: `${j.id}-${image.assetId}-deliverable`,
-        role: "ai",
-        variant: "borderless",
-        content: (
-          <AIGeneratedImage
-            sessionId={ai.sessionId}
-            image={image}
-            currentDocument={
-              ai.resource?.kind === "document" ? ai.resource : undefined
-            }
-          />
-        ),
-      }));
-      return [
-        ...(details.length
-          ? [
-              {
-                key: `${j.id}-details`,
+              ),
+            }));
+          const eventTime = new Map(
+            (j.progress?.events ?? []).map((e) => [`${j.id}-${e.id}`, e.at]),
+          );
+          const decisionItems: { at: string; bubble: BubbleItemType }[] = (
+            j.progress?.approvals ?? []
+          )
+            .filter(
+              (a) => a.state !== "pending" || j.status !== "awaiting_approval",
+            )
+            .map((a) => ({
+              at: a.resolvedAt ?? j.updated_at ?? "",
+              bubble: {
+                key: `${j.id}-${a.id}-approval`,
                 role: "ai",
-                className: "ai-process-bubble",
-                variant: "borderless" as const,
+                variant: "borderless",
+                className: "ai-step-bubble",
                 content: (
-                  <Collapse
-                    ghost
-                    expandIconPlacement="end"
-                    styles={{
-                      header: { width: "fit-content", gap: 6 },
-                      title: { flex: "none" },
-                      body: { padding: "4px 0" },
-                    }}
-                    className="ai-completed-process"
-                    items={[
-                      {
-                        key: "process",
-                        label: taskDuration(j.created_at, j.updated_at),
-                        children: (
-                          <div className="ai-process-events">
-                            {details.map(({ key, role: _role, ...props }) => (
-                              <Bubble key={key} {...props} />
-                            ))}
-                          </div>
-                        ),
-                      },
-                    ]}
-                  />
+                  <div className="ai-approval-result">
+                    <span className={`ai-approval-state ${a.state}`}>
+                      {a.state === "approved"
+                        ? t("chat.approved")
+                        : a.state === "rejected"
+                          ? t("ticket.rejected")
+                          : t("chat.stopped")}
+                    </span>
+                    {aiApprovalTitle(a, t)}
+                  </div>
                 ),
               },
-            ]
-          : []),
-        ...imageItems,
-        ...oldImages,
-        ...documentItems.map((t) => t.bubble),
-        ...folderItems.map((t) => t.bubble),
-        ...fileItems.map((t) => t.bubble),
-        ...(final
-          ? [
-              messageBubble({
-                id: `${j.id}-final`,
-                role: "assistant",
-                text: final,
-                folders: jobFolderDeliveries(j),
-                files: jobFileDeliveries(j),
-                mails: jobMailDeliveries(j),
-                mailCompose: j.progress?.mailCompose,
-                sources: j.progress?.sources,
-              }),
-            ]
-          : j.progress?.mailCompose
-            ? [
-                messageBubble({
-                  id: `${j.id}-final`,
-                  role: "assistant",
-                  text: "",
-                  mailCompose: j.progress.mailCompose,
-                }),
-              ]
-            : []),
-      ];
-    }
-    return [
-      ...timedItems,
-      ...oldImages,
-      ...(showSummary ? [jobBubble(j)] : []),
-      ...(j.progress?.sources.length &&
-      (eventItems.length || j.progress?.questions?.length)
-        ? [
-            {
-              key: `${j.id}-sources`,
-              role: "ai" as const,
-              variant: "borderless" as const,
-              className: "ai-sources-bubble",
-              content: <WebSources sources={j.progress.sources} />,
-            },
+            }));
+          const documentItems: { at: string; bubble: BubbleItemType }[] =
+            visibleOperations
+              .filter(
+                (o) => o.job_id === j.id && o.result.title && o.result.format,
+              )
+              .map((o) => ({
+                at: o.created_at ?? "",
+                bubble: {
+                  key: `${o.id}-document`,
+                  role: "ai",
+                  variant: "borderless",
+                  className: "ai-step-bubble",
+                  content: (
+                    <button
+                      type="button"
+                      className="ai-document-card"
+                      aria-label={t("chat.openResult", {
+                        kind:
+                          o.result.kind === "library"
+                            ? t("search.library")
+                            : t("shell.type.rich"),
+                        title: o.result.title,
+                      })}
+                      onClick={() =>
+                        openDocument(o.result.id ?? o.result.resourceId)
+                      }
+                    >
+                      <span className="ai-document-card-icon">
+                        <FileText size={18} />
+                      </span>
+                      <span className="ai-document-card-copy">
+                        <small>
+                          {o.result.kind === "library"
+                            ? t("chat.libraryCreated")
+                            : t("chat.documentCreated")}
+                        </small>
+                        <span className="ai-document-card-title">
+                          {o.result.title}
+                        </span>
+                      </span>
+                      <span className="ai-document-card-format">
+                        {o.result.kind === "library"
+                          ? t("search.library")
+                          : (documentFormats[o.result.format] ??
+                            t("shell.type.rich"))}
+                      </span>
+                      <ArrowUpRight
+                        className="ai-document-card-arrow"
+                        size={16}
+                      />
+                    </button>
+                  ),
+                },
+              }));
+          const folderItems: { at: string; bubble: BubbleItemType }[] =
+            visibleOperations
+              .filter(
+                (o) =>
+                  o.job_id === j.id &&
+                  o.result.kind === "file_folder" &&
+                  o.result.href &&
+                  o.result.name &&
+                  !j.progress?.events?.some(
+                    (e) => e.folder?.id === o.result.id,
+                  ),
+              )
+              .map((o) => ({
+                at: o.created_at ?? "",
+                bubble: {
+                  key: `${o.id}-folder`,
+                  role: "ai",
+                  variant: "borderless",
+                  className: "ai-step-bubble",
+                  content: (
+                    <FolderDeliveryCard
+                      folder={{
+                        id: o.result.id,
+                        name: o.result.name,
+                        path: o.result.path,
+                        href: o.result.href,
+                        shared: o.result.shared,
+                      }}
+                      onOpen={openFolderDelivery}
+                    />
+                  ),
+                },
+              }));
+          const fileItems: { at: string; bubble: BubbleItemType }[] =
+            visibleOperations
+              .filter(
+                (o) =>
+                  o.job_id === j.id &&
+                  o.result.kind === "file_item" &&
+                  o.result.id &&
+                  o.result.name &&
+                  !j.progress?.events?.some((e) => e.file?.id === o.result.id),
+              )
+              .map((o) => ({
+                at: o.created_at ?? "",
+                bubble: {
+                  key: `${o.id}-file`,
+                  role: "ai",
+                  variant: "borderless",
+                  className: "ai-step-bubble",
+                  content: (
+                    <FileDeliveryCard
+                      file={{
+                        id: o.result.id,
+                        name: o.result.name,
+                        path: o.result.path,
+                        href: o.result.href,
+                        downloadUrl: o.result.downloadUrl,
+                        mime: o.result.mime,
+                        local: o.result.local,
+                      }}
+                      onOpen={openFolderDelivery}
+                    />
+                  ),
+                },
+              }));
+          const timedItems = [
+            ...eventItems.map((bubble) => ({
+              at: eventTime.get(String(bubble.key)) ?? "",
+              bubble,
+            })),
+            ...decisionItems,
+            ...documentItems,
+            ...folderItems,
+            ...fileItems,
           ]
-        : []),
-    ];
-    });
+            .sort((a, b) => a.at.localeCompare(b.at))
+            .map((t) => t.bubble);
+          if (
+            j.status === "completed" &&
+            j.progress &&
+            completionPresentation(j.progress) === "done" &&
+            eventItems.length
+          ) {
+            const final = j.progress.text;
+            const lastText = [...(j.progress.events ?? [])]
+              .reverse()
+              .find((e) => e.kind === "text");
+            // Keep approval decisions in the same chronological process stream as
+            // tool/reasoning events. Rendering them after the collapsed process made
+            // a later approval look as if it belonged to the end of the task.
+            const processItems = [
+              ...eventItems.map((bubble) => ({
+                at: eventTime.get(String(bubble.key)) ?? "",
+                bubble,
+              })),
+              ...decisionItems,
+            ]
+              .sort((a, b) => a.at.localeCompare(b.at))
+              .map((item) => item.bubble);
+            const details = processItems.filter(
+              (i) =>
+                !lastText ||
+                lastText.kind !== "text" ||
+                lastText.text.trim() !== final.trim() ||
+                i.key !== `${j.id}-${lastText.id}`,
+            );
+            // Images are deliverables, not hidden execution logs. Keep every verified image visible.
+            const imageItems: BubbleItemType[] = [
+              ...new Map(
+                (j.progress.events ?? [])
+                  .filter((e) => e.image)
+                  .map((e) => [e.image!.assetId, e.image!]),
+              ).values(),
+            ].map((image) => ({
+              key: `${j.id}-${image.assetId}-deliverable`,
+              role: "ai",
+              variant: "borderless",
+              content: (
+                <AIGeneratedImage
+                  sessionId={ai.sessionId}
+                  image={image}
+                  currentDocument={
+                    ai.resource?.kind === "document" ? ai.resource : undefined
+                  }
+                />
+              ),
+            }));
+            return [
+              ...(details.length
+                ? [
+                    {
+                      key: `${j.id}-details`,
+                      role: "ai",
+                      className: "ai-process-bubble",
+                      variant: "borderless" as const,
+                      content: (
+                        <Collapse
+                          ghost
+                          expandIconPlacement="end"
+                          styles={{
+                            header: { width: "fit-content", gap: 6 },
+                            title: { flex: "none" },
+                            body: { padding: "4px 0" },
+                          }}
+                          className="ai-completed-process"
+                          items={[
+                            {
+                              key: "process",
+                              label: (() => {
+                                const duration = taskDuration(
+                                  j.created_at,
+                                  j.updated_at,
+                                );
+                                return duration
+                                  ? t("chat.duration", duration)
+                                  : t("chat.executionDetails");
+                              })(),
+                              children: (
+                                <div className="ai-process-events">
+                                  {details.map(
+                                    ({ key, role: _role, ...props }) => (
+                                      <Bubble key={key} {...props} />
+                                    ),
+                                  )}
+                                </div>
+                              ),
+                            },
+                          ]}
+                        />
+                      ),
+                    },
+                  ]
+                : []),
+              ...imageItems,
+              ...oldImages,
+              ...documentItems.map((t) => t.bubble),
+              ...folderItems.map((t) => t.bubble),
+              ...fileItems.map((t) => t.bubble),
+              ...(final
+                ? [
+                    messageBubble({
+                      id: `${j.id}-final`,
+                      role: "assistant",
+                      text: final,
+                      folders: jobFolderDeliveries(j),
+                      files: jobFileDeliveries(j),
+                      sources: j.progress?.sources,
+                    }),
+                  ]
+                : []),
+            ];
+          }
+          return [
+            ...timedItems,
+            ...oldImages,
+            ...(showSummary ? [jobBubble(j)] : []),
+            ...(j.progress?.sources.length &&
+            (eventItems.length || j.progress?.questions?.length)
+              ? [
+                  {
+                    key: `${j.id}-sources`,
+                    role: "ai" as const,
+                    variant: "borderless" as const,
+                    className: "ai-sources-bubble",
+                    content: <WebSources sources={j.progress.sources} />,
+                  },
+                ]
+              : []),
+          ];
+        },
+      );
   if (!reuseThread) {
     if (!visibleMessages.length && !optimistic)
       bubbleItems.push({
-      key: "welcome",
-      role: "welcome",
-      variant: "borderless",
-      styles: {
-        content: { padding: 0, width: "100%" },
-        body: { width: "100%" },
-      },
-      content: (
-        <div className="ai-welcome">
-          <Welcome
-            variant="borderless"
-            icon={<Sparkles size={32} />}
-            title={full ? "今天有什么想法？" : "一起完善这份文档"}
-            description={
-              full
-                ? "从查找资料到完成创作，交给 Doca 助手。"
-                : "写作、总结、画图，从一个想法开始。"
-            }
-            styles={{
-              root: {
-                flexDirection: "column",
-                textAlign: "center",
-                alignItems: "center",
-                padding: 0,
-              },
-              title: { fontSize: full ? 28 : 21 },
-              icon: { color: "#8064b1" },
-            }}
-          />
-          <Prompts
-            className="ai-official-prompts"
-            items={suggestions}
-            vertical={!full}
-            wrap={full}
-            styles={{ item: { flex: full ? "1 1 40%" : undefined } }}
-            onItemClick={({ data }) => {
-              replaceComposerText(String(data.description));
-              senderRef.current?.focus();
-            }}
-          />
-        </div>
-      ),
-    });
+        key: "welcome",
+        role: "welcome",
+        variant: "borderless",
+        styles: {
+          content: { padding: 0, width: "100%" },
+          body: { width: "100%" },
+        },
+        content: (
+          <div className="ai-welcome">
+            <Welcome
+              variant="borderless"
+              icon={<Sparkles size={32} />}
+              title={
+                full
+                  ? t("chat.welcome")
+                  : ai.resource?.kind === "library"
+                    ? t("knowledge.assistantWelcome")
+                    : t("chat.documentWelcome")
+              }
+              description={
+                full
+                  ? t("chat.welcomeHelp")
+                  : ai.resource?.kind === "library"
+                    ? t("knowledge.assistantHelp")
+                    : t("chat.documentWelcomeHelp")
+              }
+              styles={{
+                root: {
+                  flexDirection: "column",
+                  textAlign: "center",
+                  alignItems: "center",
+                  padding: 0,
+                },
+                title: { fontSize: full ? 28 : 21 },
+                icon: { color: "#8064b1" },
+              }}
+            />
+            <Prompts
+              className="ai-official-prompts"
+              items={suggestions}
+              vertical={!full}
+              wrap={full}
+              styles={{ item: { flex: full ? "1 1 40%" : undefined } }}
+              onItemClick={({ data }) => {
+                replaceComposerText(String(data.description));
+                senderRef.current?.focus();
+              }}
+            />
+          </div>
+        ),
+      });
     threadCache.current = {
       conversation,
       older,
@@ -2558,6 +2693,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       optimistic,
       renderQuestions,
       focusedQuestionId,
+      locale,
       items: bubbleItems,
     };
   }
@@ -2575,7 +2711,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       {modalContext}
       <section
         className={`ai-chat ${full ? "ai-chat-full" : ""} ${list ? "ai-history-open" : ""} ${composerDrop ? "is-file-drop" : ""}`}
-        aria-label="AI 助手"
+        aria-label={t("nav.assistant")}
         // Embedded editors listen on window. Let Sender handle input first,
         // then keep typing, deletion and history shortcuts inside this chat.
         onKeyDown={(event) => event.stopPropagation()}
@@ -2591,7 +2727,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
           {!full && (
             <>
               <Sparkles size={19} />
-              <strong>AI 助手</strong>
+              <strong>{t("nav.assistant")}</strong>
             </>
           )}
           {!full && <span className="ai-flex" />}
@@ -2601,7 +2737,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
               <Button
                 type="text"
                 size="small"
-                aria-label="关联文档"
+                aria-label={t("chat.relatedDocuments")}
                 title={conversation.resources[0]!.title}
                 onClick={() => openDocument(conversation.resources![0]!.id)}
                 style={{
@@ -2657,7 +2793,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                 <Button
                   type="text"
                   size="small"
-                  aria-label="关联文档"
+                  aria-label={t("chat.relatedDocuments")}
                   style={{
                     width: "auto",
                     minWidth: 0,
@@ -2675,21 +2811,23 @@ export function AIChat({ full = false }: { full?: boolean }) {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {`关联文档 ${conversation.resources.length}`}
+                    {t("chat.relatedCount", {
+                      count: conversation.resources.length,
+                    })}
                   </span>
                 </Button>
               </Popover>
             ))}
           <button
-            title="会话列表"
-            aria-label="会话列表"
+            title={t("chat.sessionList")}
+            aria-label={t("chat.sessionList")}
             aria-expanded={list}
             className={list ? "active" : ""}
             onClick={() => setList(!list)}
           >
             <MessageSquare size={17} />
           </button>
-          <button title="新建会话" onClick={newSession}>
+          <button title={t("chat.newSession")} onClick={newSession}>
             <Plus size={18} />
           </button>
           {!full && (
@@ -2700,27 +2838,36 @@ export function AIChat({ full = false }: { full?: boolean }) {
               onJump={jumpToQuestion}
             />
           )}
-          <button title="偏好、用量与工具" onClick={() => setSettings(true)}>
+          <button
+            title={t("chat.preferences")}
+            onClick={() => setSettings(true)}
+          >
             <Settings size={17} />
           </button>
           {!full && (
             <>
               <button
-                title="打开完整助手"
+                title={t("chat.openFull")}
                 onClick={() => {
                   location.hash = `/ai${ai.sessionId ? `?session=${ai.sessionId}` : ""}`;
                 }}
               >
                 <Maximize2 size={17} />
               </button>
-              <button title="收起 AI" onClick={() => ai.setOpen(false)}>
+              <button
+                title={t("chat.collapse")}
+                onClick={() => ai.setOpen(false)}
+              >
                 <PanelRightClose size={17} />
               </button>
             </>
           )}
         </AIChatHeader>
         {!full && !!conversation?.resources?.length && (
-          <div className="ai-associated-documents" aria-label="关联文档">
+          <div
+            className="ai-associated-documents"
+            aria-label={t("chat.relatedDocuments")}
+          >
             {conversation.resources.map((r) => (
               <Button
                 key={r.id}
@@ -2740,7 +2887,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
             <nav
               ref={sessionListRef}
               className="ai-session-list"
-              aria-label="历史会话"
+              aria-label={t("chat.history")}
             >
               <div className="ai-session-tools">
                 <div className="ai-session-batch-row">
@@ -2754,27 +2901,27 @@ export function AIChat({ full = false }: { full?: boolean }) {
                     }}
                   >
                     <SquareCheck size={13} />
-                    {batch ? "退出批量管理" : "批量管理"}
+                    {batch ? t("chat.exitBulk") : t("chat.bulk")}
                   </button>
                 </div>
                 {batch && (
                   <div className="ai-selection-bar">
                     <span>
                       {selected.length
-                        ? `已选择 ${selected.length} 个`
-                        : "请选择会话"}
+                        ? t("chat.selectedCount", { count: selected.length })
+                        : t("chat.chooseSessions")}
                     </span>
                     <button
                       disabled={!sessions.length}
                       onClick={() => setSelected(sessions.map((s) => s.id))}
                     >
-                      全选
+                      {t("notes.selectAll")}
                     </button>
                     <button
                       disabled={!selected.length}
                       onClick={() => setSelected([])}
                     >
-                      清空
+                      {t("notes.clear")}
                     </button>
                     <button
                       className="primary"
@@ -2782,26 +2929,28 @@ export function AIChat({ full = false }: { full?: boolean }) {
                       onClick={() => void archiveSelected()}
                     >
                       <Archive size={13} />
-                      归档所选
+                      {t("chat.archiveSelected")}
                     </button>
                   </div>
                 )}
               </div>
               <Conversations
-                creation={{ label: "新对话", onClick: newSession }}
+                creation={{ label: t("chat.newChat"), onClick: newSession }}
                 activeKey={ai.sessionId ?? undefined}
                 items={sessions.map((s) => ({
                   key: s.id,
                   label: batch ? (
                     <span className="ai-session-check">
                       <Checkbox
-                        aria-label={`选择会话 ${s.title}`}
+                        aria-label={t("chat.selectSession", { name: s.title })}
                         checked={selected.includes(s.id)}
                         onClick={(e) => e.stopPropagation()}
                         onChange={() => toggleSelected(s.id)}
                       />
                       <span className="ai-session-label" title={s.title}>
-                        <span className="ai-session-check-title">{s.title}</span>
+                        <span className="ai-session-check-title">
+                          {s.title}
+                        </span>
                         <SessionStatusBadges session={s} />
                       </span>
                     </span>
@@ -2823,14 +2972,14 @@ export function AIChat({ full = false }: { full?: boolean }) {
                         )
                       : s.running
                   ) ? (
-                    <Spin size="small" aria-label="任务执行中" />
+                    <Spin size="small" aria-label={t("chat.running")} />
                   ) : undefined,
                   group: s.updated_at
                     ? new Date(s.updated_at).toDateString() ===
                       new Date().toDateString()
-                      ? "今天"
-                      : "更早"
-                    : "会话",
+                      ? t("common.today")
+                      : t("chat.earlier")
+                    : t("chat.session"),
                 }))}
                 groupable
                 onActiveChange={(id) => {
@@ -2856,15 +3005,15 @@ export function AIChat({ full = false }: { full?: boolean }) {
                     ? undefined
                     : {
                         items: [
-                          { key: "rename", label: "重命名" },
+                          { key: "rename", label: t("shell.rename") },
                           {
                             key: "archive",
-                            label: "归档会话",
+                            label: t("chat.archive"),
                             icon: <Archive size={14} />,
                           },
                           {
                             key: "delete",
-                            label: "删除会话",
+                            label: t("chat.delete"),
                             danger: true,
                             icon: <Trash2 size={14} />,
                           },
@@ -2875,10 +3024,10 @@ export function AIChat({ full = false }: { full?: boolean }) {
                               sessions.find((s) => s.id === item.key)?.title ??
                               "";
                             modal.confirm({
-                              title: "重命名会话",
+                              title: t("chat.rename"),
                               content: (
                                 <Input
-                                  aria-label="会话名称"
+                                  aria-label={t("chat.sessionName")}
                                   defaultValue={title}
                                   maxLength={120}
                                   onChange={(e) => {
@@ -2888,12 +3037,10 @@ export function AIChat({ full = false }: { full?: boolean }) {
                               ),
                               onOk: async () => {
                                 if (!title.trim())
-                                  throw Error("请填写会话名称");
-                                await api(
-                                  `/ai/sessions/${item.key}`,
-                                  "PATCH",
-                                  { title },
-                                );
+                                  throw Error(t("chat.nameRequired"));
+                                await api(`/ai/sessions/${item.key}`, "PATCH", {
+                                  title,
+                                });
                                 await refresh();
                               },
                             });
@@ -2906,8 +3053,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
                             );
                           if (key === "delete")
                             modal.confirm({
-                              title: "删除此会话？",
-                              content: "删除历史消息，个人偏好保留。",
+                              title: t("chat.deleteConfirm"),
+                              content: t("chat.deleteHelp"),
                               okButtonProps: { danger: true },
                               onOk: async () => {
                                 await api(`/ai/sessions/${item.key}`, "DELETE");
@@ -2923,9 +3070,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
               {!sessions.length && (
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={
-                    "你的对话会保存在这里"
-                  }
+                  description={t("chat.historyEmpty")}
                 />
               )}
             </nav>
@@ -2953,8 +3098,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
                     onClick={revealOlderHistory}
                   >
                     {windowed.startIndex > 0
-                      ? "显示更早的对话"
-                      : "加载更早的消息"}
+                      ? t("chat.earlierChats")
+                      : t("chat.earlierMessages")}
                   </Button>
                 )}
               {awayFromLatest && (
@@ -2965,7 +3110,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                   icon={<ArrowDown size={14} />}
                   onClick={pinToLatest}
                 >
-                  回到最新
+                  {t("chat.latest")}
                 </Button>
               )}
             </div>
@@ -2996,11 +3141,11 @@ export function AIChat({ full = false }: { full?: boolean }) {
                 <div className="ai-composer-requests">
                   {pendingApprovals.map(({ job: j, approval }) => (
                     <div className="ai-approval-card" key={approval.id}>
-                      <strong>{approval.title}</strong>
-                      <p>{approval.detail}</p>
+                      <strong>{aiApprovalTitle(approval, t)}</strong>
+                      <p>{aiApprovalDetail(approval, t)}</p>
                       {approval.preview && (
                         <details>
-                          <summary>查看待保存内容</summary>
+                          <summary>{t("chat.pendingContent")}</summary>
                           <Suspense fallback={approval.preview}>
                             <AIAnswer
                               text={approval.preview}
@@ -3024,7 +3169,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                             })
                           }
                         >
-                          批准并继续
+                          {t("chat.approveContinue")}
                         </Button>
                         <Button
                           size="small"
@@ -3039,7 +3184,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                             })
                           }
                         >
-                          拒绝
+                          {t("ticket.reject")}
                         </Button>
                       </div>
                     </div>
@@ -3089,7 +3234,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                 <div className="ai-composer-meta">
                   <span
                     className="ai-context-count"
-                    title="上一轮实际送入模型的输入 Token"
+                    title={t("chat.inputTokens")}
                   >
                     {contextLabel}
                   </span>
@@ -3099,10 +3244,13 @@ export function AIChat({ full = false }: { full?: boolean }) {
                 <div className="ai-drop-targets">
                   {folderTargets.map((folder) => (
                     <span className="ai-drop-target" key={folder.id}>
-                      文件夹 · {folder.name || "未命名"}
+                      {t("chat.folderLabel")}
+                      {folder.name || t("shell.unnamed")}
                       <button
                         type="button"
-                        aria-label={`移除文件夹 ${folder.name || ""}`}
+                        aria-label={t("chat.removeFolder", {
+                          name: folder.name || "",
+                        })}
                         onClick={() =>
                           setFolderTargets((prev) =>
                             prev.filter((item) => item.id !== folder.id),
@@ -3116,12 +3264,13 @@ export function AIChat({ full = false }: { full?: boolean }) {
                 </div>
               )}
               {!!folderImport && (
-                <div className="ai-drop-targets">正在导入文件夹 {folderImport}</div>
+                <div className="ai-drop-targets">
+                  {t("chat.importingFolder")}
+                  {folderImport}
+                </div>
               )}
               {composerDrop && (
-                <div className="ai-file-drop-hint">
-                  松开后加入文件；文件夹会导入到我的文件，并作为本次操作对象
-                </div>
+                <div className="ai-file-drop-hint">{t("chat.dropHelp")}</div>
               )}
               <Sender
                 ref={senderRef}
@@ -3147,7 +3296,9 @@ export function AIChat({ full = false }: { full?: boolean }) {
                           String(slot.value ?? "").trim()),
                     );
                   setHasDraft((current) => (current === next ? current : next));
-                  const tags = (slots ?? []).filter((slot) => slot.type === "tag");
+                  const tags = (slots ?? []).filter(
+                    (slot) => slot.type === "tag",
+                  );
                   const active = tags
                     .map((slot) => referenceSlots.current.get(slot.key!))
                     .filter((r): r is AIReference => !!r);
@@ -3211,8 +3362,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
                       onClick={() => setFileSourceOpen(true)}
                       className="ai-upload-trigger"
                       disabled={busy}
-                      title="上传文件或图片"
-                      aria-label="上传文件或图片"
+                      title={t("chat.upload")}
+                      aria-label={t("chat.upload")}
                     >
                       <Plus size={20} />
                     </Button>
@@ -3260,8 +3411,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
                     >
                       <Button
                         type="text"
-                        title="引用知识库或文档"
-                        aria-label="引用知识库或文档"
+                        title={t("chat.reference")}
+                        aria-label={t("chat.reference")}
                       >
                         <AtSign size={17} />
                       </Button>
@@ -3270,29 +3421,29 @@ export function AIChat({ full = false }: { full?: boolean }) {
                       type={webSearch ? "primary" : "text"}
                       size="small"
                       disabled={!options?.webSearchAvailable}
-                      aria-label="联网搜索"
+                      aria-label={t("chat.webSearch")}
                       aria-pressed={webSearch}
                       title={
                         options?.webSearchAvailable
-                          ? "允许本轮检索互联网公开资料"
-                          : "管理员尚未配置联网搜索"
+                          ? t("chat.webHelp")
+                          : t("chat.webUnavailable")
                       }
                       onClick={() => setWebSearch((value) => !value)}
                     >
                       <Globe size={16} />
-                      {full && "联网"}
+                      {full && t("chat.web")}
                     </Button>
                     <Popover
                       trigger="click"
                       placement="topLeft"
                       content={
                         <div className="ai-skip-approvals">
-                          <small>可跳过的审批，默认都要审批</small>
+                          <small>{t("chat.approvalHelp")}</small>
                           {(
                             [
-                              ["create", "创建（增）"],
-                              ["delete", "删除（删）"],
-                              ["modify", "修改（改）"],
+                              ["create", t("chat.createActions")],
+                              ["delete", t("chat.deleteActions")],
+                              ["modify", t("chat.updateActions")],
                             ] as const
                           ).map(([key, label]) => (
                             <Checkbox
@@ -3320,11 +3471,11 @@ export function AIChat({ full = false }: { full?: boolean }) {
                             : "text"
                         }
                         size="small"
-                        title="跳过创建、删除或修改审批"
-                        aria-label="跳过审批"
+                        title={t("chat.skipApprovalHelp")}
+                        aria-label={t("chat.skipApproval")}
                       >
                         <ShieldCheck size={16} />
-                        {full && "审批"}
+                        {full && t("chat.approvals")}
                       </Button>
                     </Popover>
                     {
@@ -3336,7 +3487,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                             checked={allScope}
                             onChange={(e) => setAllScope(e.target.checked)}
                           >
-                            允许跨文档任务
+                            {t("chat.crossDocument")}
                           </Checkbox>
                         }
                       >
@@ -3344,10 +3495,10 @@ export function AIChat({ full = false }: { full?: boolean }) {
                           type="text"
                           title={
                             allScope
-                              ? "任务范围：跨文档"
-                              : "任务范围：当前文档与引用文档"
+                              ? t("chat.crossDocumentScope")
+                              : t("chat.currentDocumentScope")
                           }
-                          aria-label="任务范围"
+                          aria-label={t("chat.scope")}
                         >
                           <FolderOpen size={16} />
                         </Button>
@@ -3355,7 +3506,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                     }
                     <span className="ai-flex" />
                     <Select
-                      aria-label="选择 AI 模型"
+                      aria-label={t("chat.selectModel")}
                       className="ai-model-select"
                       variant="borderless"
                       popupMatchSelectWidth={false}
@@ -3364,10 +3515,12 @@ export function AIChat({ full = false }: { full?: boolean }) {
                           ? model
                           : undefined
                       }
-                      placeholder="暂无可用模型"
+                      placeholder={t("chat.noModel")}
                       onChange={(value) => {
                         setModel(value);
-                        void writePageState("ai.model", value).catch(() => undefined);
+                        void writePageState("ai.model", value).catch(
+                          () => undefined,
+                        );
                         if (ai.sessionId)
                           void action(() =>
                             api(`/ai/sessions/${ai.sessionId}`, "PATCH", {
@@ -3378,7 +3531,10 @@ export function AIChat({ full = false }: { full?: boolean }) {
                       options={options?.models.map((m) => ({
                         value: m.id,
                         label: m.name,
-                        title: `输入 ${m.inputRate}/百万 · 输出 ${m.outputRate}/百万 · 缓存 ${m.cacheRate}/百万`,
+                        title: t("chat.modelRates", {
+                          input: m.inputRate,
+                          output: m.outputRate,
+                        }),
                       }))}
                     />
                     <span className="ai-send-control">
@@ -3386,13 +3542,13 @@ export function AIChat({ full = false }: { full?: boolean }) {
                         className={replying ? "ai-send-standby" : undefined}
                         aria-hidden={replying || undefined}
                         tabIndex={replying ? -1 : undefined}
-                        aria-label="发送"
+                        aria-label={t("common.send")}
                         title={
                           files.some((f) => f.status !== "done")
-                            ? "请等待文件解析完成后再发送"
+                            ? t("chat.waitParsing")
                             : replying
-                              ? "回车加入待发送"
-                              : "发送"
+                              ? t("chat.queueEnter")
+                              : t("common.send")
                         }
                         disabled={
                           !!folderImport ||
@@ -3406,8 +3562,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
                           type="primary"
                           shape="circle"
                           className="ai-stop-button"
-                          aria-label="停止当前任务和待发送"
-                          title="停止当前任务和待发送"
+                          aria-label={t("chat.stopAll")}
+                          title={t("chat.stopAll")}
                           icon={<span className="ai-stop-icon" />}
                           onClick={(event) => {
                             event.preventDefault();
@@ -3425,14 +3581,12 @@ export function AIChat({ full = false }: { full?: boolean }) {
                 autoSize={{ minRows: 2, maxRows: 6 }}
                 disabled={ai.restoring}
                 placeholder={
-                  full
-                    ? "发消息，或把文件拖到这里…"
-                    : "描述想法，或把文件拖到这里…"
+                  full ? t("chat.placeholder") : t("chat.documentPlaceholder")
                 }
               />
               {!!personalSkills.length && (
                 <details>
-                  <summary>本次使用的个人 Skill</summary>
+                  <summary>{t("chat.personalSkills")}</summary>
                   {personalSkills.map((s) => (
                     <label key={s.id}>
                       <input
@@ -3452,10 +3606,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                 </details>
               )}
               {options && !options.models.length && (
-                <p className="ai-muted">
-                  暂无可用模型。管理员需配置模型、开启对应等级的 AI
-                  能力并设置积分。
-                </p>
+                <p className="ai-muted">{t("chat.noModelHelp")}</p>
               )}
             </div>
           </div>
@@ -3475,7 +3626,12 @@ export function AIChat({ full = false }: { full?: boolean }) {
             }}
           />
         )}
-        {filePickerOpen && <FolderFilePicker close={() => setFilePickerOpen(false)} select={chooseStoredFile} />}
+        {filePickerOpen && (
+          <FolderFilePicker
+            close={() => setFilePickerOpen(false)}
+            select={chooseStoredFile}
+          />
+        )}
         {folderPickerOpen && (
           <FolderFilePicker
             close={() => setFolderPickerOpen(false)}
@@ -3484,11 +3640,13 @@ export function AIChat({ full = false }: { full?: boolean }) {
         )}
         {fileSourceOpen && (
           <FileSourceDialog
-            title="添加文件或文件夹"
+            title={t("chat.addFiles")}
             close={() => setFileSourceOpen(false)}
             chooseDoca={() => setFilePickerOpen(true)}
             chooseFolder={() => setFolderPickerOpen(true)}
-            chooseLocal={() => attachmentRef.current?.select({ multiple: true })}
+            chooseLocal={() =>
+              attachmentRef.current?.select({ multiple: true })
+            }
             chooseLocalFolder={() => folderInputRef.current?.click()}
           />
         )}
@@ -3505,12 +3663,15 @@ export function AIChat({ full = false }: { full?: boolean }) {
               picked.map((file) => ({
                 file,
                 path:
-                  (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
-                  file.name,
+                  (file as File & { webkitRelativePath?: string })
+                    .webkitRelativePath || file.name,
               })),
             );
           }}
-          {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+          {...({ webkitdirectory: "", directory: "" } as Record<
+            string,
+            string
+          >)}
         />
       </section>
     </ConfigProvider>

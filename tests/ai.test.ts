@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { openTestDatabase } from "./database.js";
-import {
-  createUser,
-  type Actor,
-} from "@core/modules/identity/passwords.js";
+import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import type { DB } from "@db/index.js";
 import { createContent } from "@core/workflows/resources.js";
 import {
@@ -15,10 +12,10 @@ import {
 } from "@core/modules/ai/config.js";
 import {
   aiPeriods,
-  reserveCall,
+  beginCall,
   settleCall,
-  quotaSummary,
-} from "@core/modules/ai/quota.js";
+  usageSummary,
+} from "@core/modules/ai/usage.js";
 import {
   createAIDocument,
   editAIDocument,
@@ -68,7 +65,6 @@ async function configured() {
     ...aiDefaults,
     defaultModel: "test",
     memoryEnabled: true,
-    limits: { standard: { day: 1000, week: 3000, month: 10000 } },
     vendors: [
       {
         id: "test-vendor",
@@ -86,10 +82,6 @@ async function configured() {
         model: "private-real-model",
         alias: "创作助手",
         enabled: true,
-        levels: [],
-        inputRate: 1,
-        outputRate: 2,
-        cacheRate: 0.5,
         maxInput: 32000,
         maxOutput: 1000,
         tools: true,
@@ -106,13 +98,90 @@ it("uses natural calendar weeks across months and years", () => {
     month: "2026-01",
   });
 });
+it("rates input and output separately, snapshots rates, and emits rated token usage", async () => {
+  await configured();
+  const configuredAI = await aiConfig(db);
+  expect(configuredAI.models[0]).toMatchObject({
+    inputRate: 1,
+    outputRate: 1,
+    imageRate: 1,
+  });
+  const { revision: configuredRevision, ...configuredValue } = configuredAI;
+  await saveAIConfig(
+    db,
+    {
+      ...configuredValue,
+      models: configuredAI.models.map((model) => ({
+        ...model,
+        inputRate: 0.5,
+        outputRate: 3,
+      })),
+    },
+    configuredRevision,
+  );
+  const call = await beginCall(db, owner.id, "test", null, 1000, 100);
+  const latest = await aiConfig(db);
+  const { revision: latestRevision, ...latestValue } = latest;
+  await saveAIConfig(
+    db,
+    {
+      ...latestValue,
+      models: latest.models.map((model) => ({
+        ...model,
+        inputRate: 9,
+        outputRate: 9,
+      })),
+    },
+    latestRevision,
+  );
+  await settleCall(db, call.id, {
+    input: 100,
+    output: 20,
+    cached: 10,
+  });
+  const summary = await usageSummary(db, owner.id);
+  expect(summary.tokens.day).toEqual({
+    input: 50,
+    output: 60,
+    cached: 5,
+    image: 0,
+    total: 110,
+  });
+  expect(summary.calls[0]).toMatchObject({
+    input: 50,
+    output: 60,
+    cached: 5,
+    image: 0,
+    total: 110,
+  });
+  const ledger = await db
+    .selectFrom("ai_calls")
+    .selectAll()
+    .where("id", "=", call.id)
+    .executeTakeFirstOrThrow();
+  expect(ledger).toMatchObject({
+    input_tokens: 100,
+    output_tokens: 20,
+    cached_tokens: 10,
+  });
+  const event = await db
+    .selectFrom("pending_integration_events")
+    .selectAll()
+    .where("type", "=", "ai.usage.recorded")
+    .executeTakeFirstOrThrow();
+  expect(JSON.parse(event.payload)).toMatchObject({
+    units: "rated_tokens",
+    metrics: { input: 50, output: 60, cached: 5, total: 110 },
+    provider: { metrics: { input: 100, output: 20, cached: 10 } },
+  });
+  expect((await usageSummary(db, owner.id)).tokens.day?.total).toBe(110);
+});
 it("retries failed tasks with original inputs, rejects foreign retries, and exposes associated documents", async () => {
   const c = await configured();
   await saveAIConfig(
     db,
     {
       ...c,
-      limits: { standard: { day: null, week: null, month: null } },
       webSearch: { provider: "tavily", apiKey: "private-search-key" },
     },
     1,
@@ -228,72 +297,6 @@ it("retries failed tasks with original inputs, rejects foreign retries, and expo
     await app.close();
   }
 }, 30000);
-it("reserves across base and bonus, settles once and preserves historical rates", async () => {
-  await configured();
-  await db
-    .insertInto("ai_grants")
-    .values({
-      id: randomUUID(),
-      user_id: owner.id,
-      amount: 500000,
-      remaining: 500000,
-      expires_at: null,
-      reason: "test",
-      actor_id: owner.id,
-      created_at: new Date().toISOString(),
-    })
-    .execute();
-  const a = await reserveCall(db, owner.id, "test", null, 900_000_000, 200_000_000);
-  expect((await quotaSummary(db, owner.id)).bonus).toBe(200);
-  await expect(
-    reserveCall(db, owner.id, "test", null, 300_000_000, 1_000_000),
-  ).rejects.toThrow("积分不足");
-  const c = await aiConfig(db);
-  const { revision, ...body } = c;
-  body.models[0]!.inputRate = 3;
-  await saveAIConfig(db, body, revision);
-  const usage = { input: 800_000_000, output: 150_000_000, cached: 200_000_000 };
-  await settleCall(db, a.id, usage);
-  await settleCall(db, a.id, usage);
-  const summary = await quotaSummary(db, owner.id);
-  expect(summary.used).toEqual({ day: 1000, week: 1000, month: 1000 });
-  expect(summary.bonus).toBe(500);
-  expect(summary.calls[0]!.points).toBe(1000);
-  expect(summary.calls[0]!.input).toBe(800_000_000);
-});
-it("keeps unknown usage reserved until reconciliation, without treating failures as free", async () => {
-  await configured();
-  const c = await reserveCall(db, owner.id, "test", null, 800_000_000, 50_000_000);
-  await settleCall(db, c.id, null);
-  const q = await quotaSummary(db, owner.id);
-  expect(q.used.day).toBe(900);
-  expect(q.calls[0]?.state).toBe("pending");
-});
-it("serializes concurrent reservations and excludes expired credit grants", async () => {
-  await configured();
-  await db
-    .insertInto("ai_grants")
-    .values({
-      id: randomUUID(),
-      user_id: owner.id,
-      amount: 1000000,
-      remaining: 1000000,
-      expires_at: new Date(Date.now() - 1000).toISOString(),
-      reason: "expired",
-      actor_id: owner.id,
-      created_at: new Date().toISOString(),
-    })
-    .execute();
-  const results = await Promise.allSettled(
-    Array.from({ length: 3 }, () =>
-      reserveCall(db, owner.id, "test", null, 600_000_000, 0),
-    ),
-  );
-  expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-  const q = await quotaSummary(db, owner.id);
-  expect(q.used.day).toBe(600);
-  expect(q.bonus).toBe(0);
-});
 it("rejects canvas arrow values that would crash the renderer atomically", async () => {
   const resource = await createContent(db).create(owner, {
     kind: "document",
@@ -519,7 +522,6 @@ it("stores Mastra threads and per-user working memory without cross-user reads",
 });
 it("protects admin settings, hides real models and keys, and runs a detached Mastra task", async () => {
   const config = await configured();
-  config.limits.standard = { day: 1000000, week: 1000000, month: 1000000 };
   config.models[0]!.maxOutput = 1_000_000;
   await saveAIConfig(db, config, 1);
   const mocked = vi.fn(async (_url: unknown, init?: RequestInit) =>
@@ -630,9 +632,7 @@ it("protects admin settings, hides real models and keys, and runs a detached Mas
       await new Promise((r) => setTimeout(r, 50));
     }
     expect(result.jobs[0].status, JSON.stringify(result)).toBe("completed");
-    expect(
-      observedPartial || !!result.jobs[0].progress?.reasoning,
-    ).toBe(true);
+    expect(observedPartial || !!result.jobs[0].progress?.reasoning).toBe(true);
     expect(JSON.parse(String(mocked.mock.calls[0]?.[1]?.body)).stream).toBe(
       true,
     );
@@ -655,14 +655,13 @@ it("protects admin settings, hides real models and keys, and runs a detached Mas
       .execute();
     expect(calls).toHaveLength(1);
     expect(calls[0]?.input_tokens).toBe(300_000);
-    expect(calls[0]?.points).toBe(700);
+    expect(calls[0]?.output_tokens).toBeGreaterThan(0);
   } finally {
     await app.close();
   }
 }, 30000);
 it("displays reasoning from the OpenAI Responses API without any interface setting", async () => {
   const config = await configured();
-  config.limits.standard = { day: 1000000, week: 1000000, month: 1000000 };
   config.vendors[0]!.provider = "openai";
   config.models[0] = {
     ...config.models[0]!,
@@ -713,7 +712,10 @@ it("displays reasoning from the OpenAI Responses API without any interface setti
     let observedThinking = false;
     for (let i = 0; i < 100; i++) {
       result = (await request("GET", `/ai/sessions/${sid}`, login)).json();
-      if (result.jobs[0]?.status === "running" && result.jobs[0].progress?.reasoning)
+      if (
+        result.jobs[0]?.status === "running" &&
+        result.jobs[0].progress?.reasoning
+      )
         observedThinking = true;
       if (
         result.jobs[0] &&
@@ -736,7 +738,6 @@ it("displays reasoning from the OpenAI Responses API without any interface setti
 }, 30000);
 it("runs model tool loops for all five native formats and blocks revoked conversation sources", async () => {
   const c = await configured();
-  c.limits.standard = { day: 1000000, week: 1000000, month: 1000000 };
   c.models[0]!.maxOutput = 100_000;
   await saveAIConfig(db, c, 1);
   const calls: any[] = [],
@@ -879,19 +880,22 @@ it("runs model tool loops for all five native formats and blocks revoked convers
     expect(
       audits.every((c) =>
         c.tools.every((t: any) =>
-          ["document_read", "submit_review", "web_fetch", "web_search"].includes(
-            t.function.name,
-          ),
+          [
+            "document_read",
+            "submit_review",
+            "web_fetch",
+            "web_search",
+          ].includes(t.function.name),
         ),
       ),
     ).toBe(true);
     const ledgers = await db.selectFrom("ai_calls").selectAll().execute();
     expect(
-      ledgers.every(
-        (c) => c.cached_tokens === 20_000 && c.points > 0 && c.points <= 170,
-      ),
+      ledgers.every((c) => c.cached_tokens === 20_000 && c.input_tokens > 0),
     ).toBe(true);
-    expect(ledgers.filter((c) => c.points === 170)).toHaveLength(15);
+    expect(
+      ledgers.filter((c) => c.state === "confirmed").length,
+    ).toBeGreaterThanOrEqual(15);
   } finally {
     for (const socket of sockets) socket.close();
     await app.close();
@@ -1133,7 +1137,7 @@ it("isolates personal skills and memory, validates model tools, and reconciles c
       b = await login("other");
     const test = await request("POST", "/admin/ai/models/test/test", a);
     expect(test.statusCode, test.body).toBe(200);
-    expect((await quotaSummary(db, owner.id)).used.day).toBe(0);
+    expect((await usageSummary(db, owner.id)).tokens.day?.input).toBe(0);
     expect(
       (
         await request("PUT", "/ai/memory", a, {
@@ -1181,24 +1185,14 @@ it("isolates personal skills and memory, validates model tools, and reconciles c
     expect(
       (await request("GET", "/ai/skills", a)).json().personal,
     ).toHaveLength(0);
-    const grant = {
-      id: randomUUID(),
-      userId: owner.id,
-      amount: 500,
-      reason: "验收发放",
-      expiresAt: null,
-    };
-    expect(
-      (await request("POST", "/admin/ai/grants", b, grant)).statusCode,
-    ).toBe(403);
-    expect(
-      (await request("POST", "/admin/ai/grants", a, grant)).statusCode,
-    ).toBe(200);
-    expect(
-      (await request("POST", "/admin/ai/grants", a, grant)).statusCode,
-    ).toBe(200);
-    expect((await quotaSummary(db, owner.id)).bonus).toBe(500);
-    const call = await reserveCall(db, owner.id, "test", null, 800_000_000, 50_000_000);
+    const call = await beginCall(
+      db,
+      owner.id,
+      "test",
+      null,
+      800_000_000,
+      50_000_000,
+    );
     await settleCall(db, call.id, null);
     expect(
       (
@@ -1219,7 +1213,9 @@ it("isolates personal skills and memory, validates model tools, and reconciles c
       ),
     );
     expect(results.map((r) => r.statusCode).sort()).toEqual([200, 409]);
-    expect((await quotaSummary(db, owner.id)).used.day).toBe(130);
+    expect((await usageSummary(db, owner.id)).tokens.day?.input).toBe(
+      100_000_000,
+    );
     const conversation = (
       await request("POST", "/ai/sessions", a, {
         modelId: "test",
@@ -1262,7 +1258,9 @@ it("isolates personal skills and memory, validates model tools, and reconciles c
     expect(
       (await request("GET", `/ai/sessions/${conversation.id}`, a)).statusCode,
     ).toBe(404);
-    expect((await quotaSummary(db, owner.id)).used.day).toBe(130);
+    expect((await usageSummary(db, owner.id)).tokens.day?.input).toBe(
+      100_000_000,
+    );
   } finally {
     await app.close();
   }
@@ -1367,14 +1365,15 @@ it("batch archives and restores only the current user's sessions", async () => {
     expect(archived.statusCode).toBe(200);
     expect(archived.json()).toEqual({ updated: 2 });
     const active = (await request("GET", "/ai/sessions", a)).json();
-    const hidden = (await request("GET", "/ai/sessions?archived=true", a))
-      .json();
+    const hidden = (
+      await request("GET", "/ai/sessions?archived=true", a)
+    ).json();
     expect(active.some((s: any) => mine.includes(s.id))).toBe(false);
     expect(mine.every((id) => hidden.some((s: any) => s.id === id))).toBe(true);
     expect(
-      (await request("GET", "/ai/sessions", b)).json().some(
-        (s: any) => s.id === foreign,
-      ),
+      (await request("GET", "/ai/sessions", b))
+        .json()
+        .some((s: any) => s.id === foreign),
     ).toBe(true);
     const restored = await request("POST", "/ai/sessions/batch", a, {
       ids: mine,
@@ -1398,7 +1397,6 @@ it("batch archives and restores only the current user's sessions", async () => {
 }, 30000);
 it("stops a queued or running job and prevents model follow-ups after source revocation", async () => {
   const c = await configured();
-  c.limits.standard = { day: 1000000, week: 1000000, month: 1000000 };
   await saveAIConfig(db, c, 1);
   const origin = "http://localhost:39135";
   let revoke: string | undefined;
@@ -1528,96 +1526,6 @@ it("stops a queued or running job and prevents model follow-ups after source rev
   }
 }, 30000);
 
-it("separates admin credit settings from model management, masks keys and rejects stale or unauthorized writes", async () => {
-  await configured();
-  const origin = "http://localhost:39138";
-  const app = await createApp(db, {
-    origin,
-    ai: { memory: { driver: "sqlite", url: ":memory:" }, fetch: mockAI() },
-  });
-  const request = (method: any, path: string, cookie: string, payload?: any) =>
-    app.inject({
-      method,
-      url: "/api/v1" + path,
-      headers: { host: "localhost:39138", origin, cookie },
-      payload,
-    });
-  try {
-    const login = async (name: string) =>
-      String(
-        (await request("POST", "/auth/login", "", { login: name, password }))
-          .headers["set-cookie"],
-      ).split(";")[0]!;
-    const a = await login("owner"),
-      b = await login("other");
-    expect((await request("GET", "/admin/ai/credits", b)).statusCode).toBe(403);
-    expect((await request("PUT", "/admin/ai/credits", b, {})).statusCode).toBe(
-      403,
-    );
-    expect(
-      (await request("PUT", "/admin/ai/management", b, {})).statusCode,
-    ).toBe(403);
-    const get = await request("GET", "/admin/ai", a);
-    expect(get.body).not.toContain("private-key-test");
-    const { revision, limits, taskBudget, ...management } = get.json().config;
-    expect(management.models[0]).not.toHaveProperty("apiKey");
-    expect(management.vendors[0]).toMatchObject({ apiKey: null, hasKey: true });
-    management.vendors = management.vendors.map(({ hasKey, ...v }: any) => v);
-    const vendorId = management.vendors[0].id;
-    expect(
-      (await request("GET", `/admin/ai/vendors/${vendorId}/catalog`, b))
-        .statusCode,
-    ).toBe(403);
-    expect(
-      (await request("GET", `/admin/ai/vendors/${vendorId}/catalog`, a))
-        .statusCode,
-    ).toBe(200);
-    management.models[0].alias = "新展示名";
-    management.models[0].inputRate = 999; // This page cannot change billing.
-    const updated = await request("PUT", "/admin/ai/management", a, {
-      revision,
-      config: management,
-    });
-    expect(updated.statusCode, updated.body).toBe(200);
-    expect((await aiConfig(db)).models[0]!.apiKey).toBe("private-key-test");
-    expect((await aiConfig(db)).models[0]!.inputRate).toBe(1);
-    const credits = (await request("GET", "/admin/ai/credits", a)).json();
-    expect(JSON.stringify(credits)).not.toContain("apiKey");
-    expect(JSON.stringify(credits)).not.toContain("example.test");
-    const body = {
-      revision: credits.revision,
-      limits: { standard: { day: 2500, week: 5000, month: 25000 } },
-      taskBudget: 80000,
-      models: [{ id: "test", inputRate: 1.125, outputRate: 3, cacheRate: 0.5 }],
-    };
-    expect(
-      (await request("PUT", "/admin/ai/credits", a, { ...body, vendors: [] }))
-        .statusCode,
-    ).toBe(400);
-    const changed = await request("PUT", "/admin/ai/credits", a, body);
-    expect(changed.statusCode, changed.body).toBe(200);
-    expect(
-      (
-        await request("PUT", "/admin/ai/management", a, {
-          revision: credits.revision,
-          config: management,
-        })
-      ).statusCode,
-    ).toBe(409);
-    const final = await aiConfig(db);
-    expect(final.models[0]).toMatchObject({
-      alias: "新展示名",
-      inputRate: 1.125,
-      outputRate: 3,
-      apiKey: "private-key-test",
-    });
-    expect(final.limits.standard?.day).toBe(2500);
-    expect(final.taskBudget).toBe(80000);
-  } finally {
-    await app.close();
-  }
-});
-
 it.each(["markdown", "rich_text"] as const)(
   "rejects malformed %s text batches before writing",
   async (format) => {
@@ -1676,86 +1584,9 @@ it.each([
   },
 );
 
-it("honors unlimited membership credits and optional task budget without hidden caps", async () => {
-  const initial = await configured();
-  const unlimited = {
-    ...initial,
-    taskBudget: null,
-    limits: { standard: { day: null, week: null, month: null } },
-  };
-  await saveAIConfig(db, unlimited, 1);
-  const now = new Date().toISOString(),
-    sessionId = randomUUID(),
-    jobId = randomUUID();
-  await db
-    .insertInto("ai_sessions")
-    .values({
-      id: sessionId,
-      user_id: owner.id,
-      title: "Unlimited credits",
-      model_id: "test",
-      resource_ids: "[]",
-      archived: 0,
-      revision: 1,
-      created_at: now,
-      updated_at: now,
-    })
-    .execute();
-  await db
-    .insertInto("ai_jobs")
-    .values({
-      id: jobId,
-      session_id: sessionId,
-      user_id: owner.id,
-      model_id: "test",
-      status: "running",
-      input: "{}",
-      digest: "test",
-      result: "",
-      error: "",
-      lease: "test",
-      lease_until: null,
-      attempts: 1,
-      cancelled: 0,
-      created_at: now,
-      updated_at: now,
-    })
-    .execute();
-  const call = await reserveCall(db, owner.id, "test", jobId, 250_000_000, 32_000_000);
-  await settleCall(db, call.id, {
-    input: 200_000_000,
-    output: 1_000_000,
-    cached: 0,
-  });
-  const summary = await quotaSummary(db, owner.id);
-  expect(summary.limits).toEqual({ day: null, week: null, month: null });
-  expect(summary.used.day).toBe(202);
-  await saveAIConfig(db, { ...unlimited, taskBudget: 100 }, 2);
-  console.log("DEBUG_TASKBUDGET", (await aiConfig(db)).taskBudget,
-    await db.selectFrom("ai_calls").select(["job_id", "points", "state"]).execute());
-  await expect(
-    reserveCall(db, owner.id, "test", jobId, 10, 10),
-  ).rejects.toMatchObject({ status: 402 });
-  await saveAIConfig(
-    db,
-    {
-      ...unlimited,
-      limits: { standard: { day: 100, week: null, month: null } },
-    },
-    3,
-  );
-  await expect(
-    reserveCall(db, owner.id, "test", jobId, 10, 10),
-  ).rejects.toMatchObject({ status: 402 });
-});
-
 it("preserves the system and previous user prefix across turns with changed references", async () => {
   const config = await configured();
-  await saveAIConfig(
-    db,
-    { ...config, limits: { standard: { day: null, week: null, month: null } } },
-    1,
-  );
+  await saveAIConfig(db, { ...config }, 1);
   const requests: any[] = [];
   const origin = "http://localhost:39135";
   const app = await createApp(db, {
@@ -1841,11 +1672,7 @@ it("preserves the system and previous user prefix across turns with changed refe
 
 it("requires exact creation approval, rejects other users, and resumes without creating twice", async () => {
   const c = await configured();
-  await saveAIConfig(
-    db,
-    { ...c, limits: { standard: { day: null, week: null, month: null } } },
-    1,
-  );
+  await saveAIConfig(db, { ...c }, 1);
   const origin = "http://localhost:39135";
   const app = await createApp(db, {
     origin,
@@ -1934,11 +1761,7 @@ it("requires exact creation approval, rejects other users, and resumes without c
 
 it("limits document-scope edits to the current document and historical user mentions", async () => {
   const c = await configured();
-  await saveAIConfig(
-    db,
-    { ...c, limits: { standard: { day: null, week: null, month: null } } },
-    1,
-  );
+  await saveAIConfig(db, { ...c }, 1);
   const docs = await Promise.all(
     ["当前文档", "引用文档", "仅被检索过"].map((title) =>
       createContent(db).create(owner, {
@@ -2146,11 +1969,7 @@ it("writes editable rich-text flowcharts and mind maps through supported native 
 
 it("requests session document scope, waits for approval, and preserves the grant across turns", async () => {
   const c = await configured();
-  await saveAIConfig(
-    db,
-    { ...c, limits: { standard: { day: null, week: null, month: null } } },
-    1,
-  );
+  await saveAIConfig(db, { ...c }, 1);
   const doc = await createContent(db).create(owner, {
     title: "需要会话授权",
     kind: "document",
@@ -2295,11 +2114,7 @@ it("requests session document scope, waits for approval, and preserves the grant
 
 it("submits platform permission requests only after confirmation and never self-grants document access", async () => {
   const c = await configured();
-  await saveAIConfig(
-    db,
-    { ...c, limits: { standard: { day: null, week: null, month: null } } },
-    1,
-  );
+  await saveAIConfig(db, { ...c }, 1);
   const content = createContent(db);
   const doc = await content.create(owner, {
     title: "管理员审批文档",
@@ -2445,11 +2260,7 @@ it("submits platform permission requests only after confirmation and never self-
 
 it("keeps review pages on one snapshot while collaborators keep editing", async () => {
   const c = await configured();
-  await saveAIConfig(
-    db,
-    { ...c, limits: { standard: { day: null, week: null, month: null } } },
-    1,
-  );
+  await saveAIConfig(db, { ...c }, 1);
   const doc = await createContent(db).create(owner, {
     kind: "document",
     format: "markdown",
@@ -2540,11 +2351,7 @@ it("keeps review pages on one snapshot while collaborators keep editing", async 
 
 it("persists structured choices, stops after asking and accepts the next free-text turn", async () => {
   const c = await configured();
-  await saveAIConfig(
-    db,
-    { ...c, limits: { standard: { day: null, week: null, month: null } } },
-    1,
-  );
+  await saveAIConfig(db, { ...c }, 1);
   let calls = 0;
   const app = await createApp(db, {
     origin: "http://localhost:39135",
@@ -2620,7 +2427,7 @@ it("persists structured choices, stops after asking and accepts the next free-te
       async () => {
         const job = (await req("GET", `/ai/sessions/${sid}`)).json().jobs[0];
         expect(job?.status).toBe("completed");
-        expect(job.progress.phase).toBe("等待用户选择");
+        expect(job.progress.phase).toBe("waiting_choice");
         expect(job.progress.questions[0].options).toEqual([
           "管理层",
           "开发团队",
@@ -2654,11 +2461,7 @@ it("persists structured choices, stops after asking and accepts the next free-te
 
 it("starts three different sessions concurrently instead of a global two-task queue", async () => {
   const c = await configured();
-  await saveAIConfig(
-    db,
-    { ...c, limits: { standard: { day: null, week: null, month: null } } },
-    1,
-  );
+  await saveAIConfig(db, { ...c }, 1);
   let inFlight = 0,
     peak = 0;
   let release!: () => void;
@@ -2715,11 +2518,7 @@ it("starts three different sessions concurrently instead of a global two-task qu
 
 it("never completes a fabricated image delivery even when the model skips all tools and planning", async () => {
   const c = await configured();
-  await saveAIConfig(
-    db,
-    { ...c, limits: { standard: { day: null, week: null, month: null } } },
-    1,
-  );
+  await saveAIConfig(db, { ...c }, 1);
   let calls = 0;
   const app = await createApp(db, {
     origin: "http://localhost:39135",
@@ -2991,11 +2790,7 @@ it.each(["no-tool", "read-only", "truncated"])(
   async (mode) => {
     const readFirst = mode === "read-only";
     const c = await configured();
-    await saveAIConfig(
-      db,
-      { ...c, limits: { standard: { day: null, week: null, month: null } } },
-      1,
-    );
+    await saveAIConfig(db, { ...c }, 1);
     const doc = await createContent(db).create(owner, {
       kind: "document",
       format: "markdown",
@@ -3116,6 +2911,114 @@ it.each(["no-tool", "read-only", "truncated"])(
       expect(
         await db.selectFrom("ai_operations").selectAll().execute(),
       ).toHaveLength(0);
+    } finally {
+      await app.close();
+    }
+  },
+  15000,
+);
+
+it.each([false, true])(
+  "passes web search results and upstream failures through the model tool loop (failure=%s)",
+  async (failure) => {
+    const config = await configured();
+    await saveAIConfig(
+      db,
+      {
+        ...config,
+        webSearch: {
+          provider: "searxng",
+          baseUrl: "http://search.test/",
+          apiKey: "",
+        },
+      },
+      1,
+    );
+    const calls: any[] = [];
+    const webFetch = vi.fn(async () =>
+      Response.json(
+        failure
+          ? { results: [], unresponsive_engines: [["brave", "timeout"]] }
+          : {
+              results: [
+                {
+                  url: "https://example.com/avatar",
+                  title: "Avatar source",
+                  content: "Public movie information",
+                },
+              ],
+            },
+      ),
+    );
+    const origin = "http://localhost:39138";
+    const app = await createApp(db, {
+      origin,
+      ai: {
+        memory: { driver: "sqlite", url: ":memory:" },
+        fetch: mockAI({ record: (body) => calls.push(body) }),
+        webFetch,
+      },
+    });
+    try {
+      const login = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        headers: { origin, host: "localhost:39138" },
+        payload: { login: "owner", password },
+      });
+      const headers = {
+        origin,
+        host: "localhost:39138",
+        cookie: String(login.headers["set-cookie"]).split(";")[0]!,
+      };
+      const session = (
+        await app.inject({
+          method: "POST",
+          url: "/api/v1/ai/sessions",
+          headers,
+          payload: { modelId: "test", resourceIds: [] },
+        })
+      ).json();
+      const sent = await app.inject({
+        method: "POST",
+        url: `/api/v1/ai/sessions/${session.id}/messages`,
+        headers,
+        payload: {
+          id: randomUUID(),
+          text: "联网查询阿凡达电影",
+          modelId: "test",
+          scope: "all",
+          webSearch: true,
+        },
+      });
+      expect(sent.statusCode, sent.body).toBe(200);
+      let result: any;
+      for (let i = 0; i < 160; i++) {
+        result = (
+          await app.inject({
+            url: `/api/v1/ai/sessions/${session.id}`,
+            headers,
+          })
+        ).json();
+        if (
+          result.jobs[0] &&
+          !["queued", "running"].includes(result.jobs[0].status)
+        )
+          break;
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      expect(webFetch).toHaveBeenCalledTimes(1);
+      const toolMessages = calls
+        .flatMap((body) => body.messages ?? [])
+        .filter((message) => message.role === "tool");
+      expect(JSON.stringify(toolMessages)).toContain(
+        failure ? "上游引擎超时或不可用" : "https://example.com/avatar",
+      );
+      const event = result.jobs[0].progress.events.find(
+        (item: any) =>
+          item.code === "tool_call" && item.data?.toolName === "web_search",
+      );
+      expect(event?.status).toBe(failure ? "error" : "success");
     } finally {
       await app.close();
     }

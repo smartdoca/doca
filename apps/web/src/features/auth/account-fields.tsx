@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import type { UserFields } from "@core/modules/identity/field-policy.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
@@ -22,14 +23,17 @@ export type AccountOptions = {
   emailReady?: boolean;
   revision: number;
 };
-export const fieldLabels: Record<string, string> = {
-  username: "用户名（账号）",
-  password: "密码",
-  displayName: "昵称",
-  email: "邮箱",
-  phone: "手机号",
-  avatar: "头像地址",
-};
+export function useFieldLabels() {
+ const { t } = useI18n();
+ return {
+  username: t("login.username"),
+  password: t("login.password"),
+  displayName: t("login.nickname"),
+  email: t("fields.email"),
+  phone: t("login.phone"),
+  avatar: t("fields.avatar"),
+ } as Record<string, string>;
+}
 export function VerificationField({
   kind,
   purpose = "profile",
@@ -51,6 +55,10 @@ export function VerificationField({
   verified?: boolean;
   readOnly?: boolean;
 }) {
+const { t, locale } = useI18n();
+
+const fieldLabels = useFieldLabels();
+
   const [challenge, setChallenge] = useState(""),
     [code, setCode] = useState(""),
     [message, setMessage] = useState(""),
@@ -91,7 +99,7 @@ export function VerificationField({
         />
       </label>
       {verified || (confirmed === value && !!value) ? (
-        <small>已验证</small>
+        <small>{t("fields.verified")}</small>
       ) : (
         !disabled && (
           <>
@@ -107,21 +115,21 @@ export function VerificationField({
                   );
                   setChallenge(r.challengeId);
                   setCode("");
-                  setMessage("验证码已发送，5 分钟内有效");
+                  setMessage(t("fields.codeSent"));
                 })
               }
             >
-              {challenge ? "重新发送" : "发送验证码"}
+              {challenge ? t("fields.resend") : t("fields.sendCode")}
             </button>
             {challenge && (
               <div className="verification-code">
                 <input
-                  aria-label={`${fieldLabels[kind]}验证码`}
+                  aria-label={t("fields.verificationCode", { name: fieldLabels[kind]! })}
                   value={code}
                   maxLength={6}
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  placeholder="6 位验证码"
+                  placeholder={t("fields.codeHint")}
                   onChange={(e) => setCode(e.target.value)}
                 />
                 <button
@@ -139,9 +147,7 @@ export function VerificationField({
                       setMessage("");
                     })
                   }
-                >
-                  验证
-                </button>
+                >{t("fields.verify")}</button>
               </div>
             )}
           </>
@@ -172,11 +178,13 @@ export function RegistrationFields({
   proofs: Proofs;
   setProofs: (v: Proofs) => void;
 }) {
+const { t, locale } = useI18n();
+
+const fieldLabels = useFieldLabels();
+
   return (
     <>
-      <p className="subtle">
-        用户名用于唯一识别账号，注册后只能由系统管理员纠错。昵称可以重复。
-      </p>
+      <p className="subtle">{t("fields.usernameHelp")}</p>
       {fields
         .filter((f) => !f.derivedFrom)
         .map((f) =>
@@ -213,7 +221,7 @@ export function RegistrationFields({
                   setValues({ ...values, [f.key]: e.target.value })
                 }
               />
-              {!f.editable && <small>由身份源提供，不可自行修改</small>}
+              {!f.editable && <small>{t("fields.providerLocked")}</small>}
             </label>
           ),
         )}
@@ -265,6 +273,8 @@ export function ContactRequirements({
   );
 }
 export function AccountOnboarding({ done }: { done: () => Promise<void> }) {
+const { t, locale } = useI18n();
+
   const [data, setData] = useState<{
       policy: AccountOptions;
       editable: Record<string, boolean>;
@@ -302,19 +312,16 @@ export function AccountOnboarding({ done }: { done: () => Promise<void> }) {
           }
         }}
       >
-        <h2>补全账号资料</h2>
+        <h2>{t("fields.complete")}</h2>
         <p>
           {data?.policy.forcedLoginMethod
-            ? "管理员要求补充一种登录方式。完成后才能继续使用本站。"
-            : "本站已设置必填联系方式，完成验证后继续使用。"}来源锁定的资料需重新通过该身份源登录或由管理员纠错。
-        </p>
+            ? t("fields.methodRequired")
+            : t("fields.contactsRequired")}{t("fields.lockedHelp")}</p>
         {data && (
           data.policy.forcedLoginMethod === "password" ? (
             <>
               <SecurityVerification />
-              <label>
-                设置本站密码 *
-                <input
+              <label>{t("fields.sitePassword")}<input
                   type="password"
                   minLength={12}
                   maxLength={128}
@@ -363,23 +370,21 @@ export function AccountOnboarding({ done }: { done: () => Promise<void> }) {
           className="primary"
           hidden={!!data?.policy.forcedLoginMethod?.startsWith("provider:")}
           disabled={busy || !data}
-        >
-          保存并继续
-        </button>
+        >{t("fields.saveContinue")}</button>
         <button
           type="button"
           onClick={async () => {
             await api("/auth/logout", "POST");
             await done();
           }}
-        >
-          退出登录
-        </button>
+        >{t("account.signOut")}</button>
       </form>
     </main>
   );
 }
 function ForcedProviderLogin({ method }: { method: string }) {
+const { t } = useI18n();
+
   const [providers, setProviders] = useState<{ id: string; name: string }[]>([]),
     [message, setMessage] = useState("");
   useEffect(() => {
@@ -390,7 +395,7 @@ function ForcedProviderLogin({ method }: { method: string }) {
   const provider = providers.find((p) => `provider:${p.id}` === method);
   return (
     <>
-      <p>请绑定「{provider?.name ?? "指定身份源"}」作为新的登录方式。</p>
+      <p>{t("fields.linkRequired", { name: provider?.name ?? t("fields.specifiedProvider") })}</p>
       <button
         type="button"
         disabled={!provider}
@@ -403,9 +408,7 @@ function ForcedProviderLogin({ method }: { method: string }) {
             .then((r) => location.assign(r.url))
             .catch((e) => setMessage(e.message));
         }}
-      >
-        绑定并继续
-      </button>
+      >{t("fields.linkContinue")}</button>
       {message && <p role="status">{message}</p>}
     </>
   );

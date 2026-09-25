@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { createPortal } from "react-dom";
 import { Download, X } from "lucide-react";
 import {
@@ -56,6 +57,8 @@ export function DocumentFilePreview({
   file: PreviewSource;
   close: () => void;
 }) {
+const { t } = useI18n();
+
   return createPortal(
     <div
       className="document-file-preview-backdrop"
@@ -79,12 +82,12 @@ export function DocumentFilePreview({
               className="icon"
               href={downloadUrl(file.url)}
               download={file.name}
-              aria-label="下载"
-              title="下载"
+              aria-label={t("doc.download")}
+              title={t("doc.download")}
             >
               <Download size={17} />
             </a>
-            <button className="icon" onClick={close} aria-label="关闭">
+            <button className="icon" onClick={close} aria-label={t("dialog.close")}>
               <X size={18} />
             </button>
           </div>

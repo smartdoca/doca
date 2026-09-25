@@ -407,9 +407,9 @@ export function mockAI(
       if (!results.length) {
         // 未明确格式时不传 format，交由工具默认 rich_text；审批恢复时从
         // 审批详情（类型：表格等）推导同一格式，保证重放参数一致。
-        const format = /表格/.test(prompt)
+        const format = /表格|spreadsheet/.test(prompt)
           ? "spreadsheet"
-          : /演示|PPT|幻灯片/.test(prompt)
+          : /演示|PPT|幻灯片|presentation/.test(prompt)
             ? "presentation"
             : /markdown/i.test(prompt)
               ? "markdown"

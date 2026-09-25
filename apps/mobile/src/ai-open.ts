@@ -29,20 +29,6 @@ export function openAiHref(router: Nav, href: string) {
     router.push({ pathname: "/document/[id]", params: { id: document[1] } });
     return true;
   }
-  const mail = /^\/mail\/([^/]+)$/.exec(path);
-  if (mail?.[1]) {
-    const mailboxId = decodeURIComponent(mail[1]);
-    const messageId = query.get("message");
-    if (messageId) {
-      router.push({
-        pathname: "/message/[mailboxId]/[messageId]",
-        params: { mailboxId, messageId },
-      });
-    } else {
-      router.push({ pathname: "/mailbox/[id]", params: { id: mailboxId } });
-    }
-    return true;
-  }
   const shared = /^\/shared-files\/([^/]+)$/.exec(path);
   if (shared?.[1] && shared[1] !== "join") {
     router.push({

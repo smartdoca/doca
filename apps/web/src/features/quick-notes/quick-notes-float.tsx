@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { Feather, Minus, X } from "lucide-react";
@@ -14,6 +15,8 @@ const QuickNotes = lazy(() =>
 type DragMode = "move" | "resize" | "resize-x" | "resize-y";
 
 export function QuickNotesFloat({ userId }: { userId: string }) {
+const { t } = useI18n();
+
   const { state, patch } = useNotesFloat(userId);
   const [live, setLive] = useState<NotesFloatState | null>(null);
   const [attention, setAttention] = useState(false);
@@ -102,10 +105,10 @@ export function QuickNotesFloat({ userId }: { userId: string }) {
         }}
       >
         <Feather size={15} />
-        <span>随手记</span>
+        <span>{t("mobile.screen.note")}</span>
         <button
           type="button"
-          aria-label="关闭悬浮"
+          aria-label={t("notes.closeFloat")}
           onPointerDown={(event) => event.stopPropagation()}
           onPointerUp={(event) => event.stopPropagation()}
           onClick={(event) => {
@@ -133,14 +136,14 @@ export function QuickNotesFloat({ userId }: { userId: string }) {
         onPointerUp={finish}
       >
         <Feather size={15} />
-        <strong>随手记</strong>
+        <strong>{t("mobile.screen.note")}</strong>
         <button type="button" aria-label="折叠悬浮窗口" title="折叠" onClick={() => patch({ collapsed: true })}>
           <Minus size={15} />
         </button>
         <button
           type="button"
-          aria-label="关闭悬浮"
-          title="关闭"
+          aria-label={t("notes.closeFloat")}
+          title={t("dialog.close")}
           onClick={() => patch({ open: false, collapsed: false })}
         >
           <X size={15} />

@@ -1,6 +1,4 @@
-import { moderationConfig, moderationAction } from "@core/modules/moderation/service.js";
 import { enqueueProjection } from "@core/modules/automation/jobs.js";
-import type { createModerationWorker } from "../jobs/moderation-worker.js";
 import { objectKey, detectBufferMime, uploadLimits } from "../services/storage-policy.js";
 import { readUploadBuffer } from "../services/upload-stream.js";
 import { registerStoredObject, thumbnailFor } from "../services/stored-objects.js";
@@ -14,7 +12,7 @@ import {
 import {
   requireCapability,
   checkStorage,
-} from "@core/modules/entitlements/service.js";
+} from "@core/modules/access/operation-policy.js";
 import { profileEditable } from "@core/modules/identity/accounts.js";
 import { Type } from "@sinclair/typebox";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -61,7 +59,6 @@ export function registerAssets(
   actor: (r: FastifyRequest) => Actor | null,
   admin: (r: FastifyRequest) => Actor,
   runtime: StorageRuntime,
-  moderation?: ReturnType<typeof createModerationWorker>,
 ) {
   const storage = createStorage(runtime);
   const decode = (p: Schema["storage_profiles"]) =>
@@ -324,9 +321,7 @@ export function registerAssets(
         key = objectKey(id, mime);
         await storage.put(c, key, body, mime, filename);
         stored = true;
-        const reviewImage = mime.startsWith("image/") && (await moderationConfig(db)).enabled;
         const row: Schema["assets"] = {
-          moderation_status: reviewImage ? "pending" : "none",
           uploaded_by: a.id,
           id,
           owner_id: a.id,
@@ -349,12 +344,7 @@ export function registerAssets(
               q.resourceId,
               q.purpose === "cover" ? 4 : q.purpose === "comment_image" ? 2 : 3,
             );
-          const e = await requireCapability(tx, a.id, "assets.upload");
-          if (
-            e.level.limits["asset.bytes"] !== null &&
-            body.length > e.level.limits["asset.bytes"]!
-          )
-            fail(413, "附件超过当前等级的大小上限");
+          await requireCapability(tx, a.id, "assets.upload");
           if (q.purpose === "avatar") {
             const u = await tx
               .selectFrom("users")
@@ -426,7 +416,6 @@ export function registerAssets(
                 .onConflict((oc) => oc.column("storage_object_id").doNothing())
                 .execute();
           }
-          if (reviewImage) await enqueueProjection(tx, "moderation-image", id, { assetId: id });
           await tx
             .insertInto("audit_events")
             .values({
@@ -439,12 +428,6 @@ export function registerAssets(
             .execute();
         });
         committed = true;
-        if (reviewImage && moderation) {
-          try { await moderation.review("image", id, body); }
-          catch { fail(503, "图片已保存，审核暂不可用，系统将重试"); }
-          const reviewed = await db.selectFrom("assets").select("moderation_status").where("id", "=", id).executeTakeFirstOrThrow();
-          if (reviewed.moderation_status !== "pass") fail(422, "图片未通过审核或需要人工复核，暂不可使用");
-        }
         const extractStatus = mime.startsWith("image/") ? "ready" : "pending";
         if (extractStatus === "pending") beginFileExtract(db, id, runtime);
         return reply.code(201).send({
@@ -539,11 +522,7 @@ export function registerAssets(
       // Private notes never inherit the document/admin audit access path.
       if (asset.purpose === "note_attachment" && (asset.owner_id !== a?.id || req.query.audit === "1")) fail(404, "文件不存在");
       const audit = req.query.audit === "1";
-      if (audit) {
-        const reviewer = admin(req);
-        await moderationAction(db, { actor_id: reviewer.id, resource_id: asset.resource_id, action: "asset.inspected", reason: `审计查看附件 ${asset.id}` });
-      }
-      if (!audit && !["none", "pass"].includes(asset.moderation_status ?? "none")) fail(403, "图片审核中或已被封禁");
+      if (audit) fail(404, "文件不存在");
       if (req.query.trashPreview || audit)
         reply.header("Cache-Control", "private, no-store");
       if (!audit && asset.resource_id) {
@@ -582,7 +561,7 @@ export function registerAssets(
         c = decode(p);
       const cdn = storage.cdnUrl(c, selected.object_key);
       if(asset.purpose === "ai_attachment" || asset.purpose === "note_attachment") reply.header("Cache-Control","private, no-store");
-      if (cdn && !asset.resource_id && !audit && !(await moderationConfig(db)).enabled && asset.purpose !== "ai_attachment" && asset.purpose !== "note_attachment" && req.query.download !== "1") return reply.redirect(cdn);
+      if (cdn && !asset.resource_id && !audit && asset.purpose !== "ai_attachment" && asset.purpose !== "note_attachment" && req.query.download !== "1") return reply.redirect(cdn);
       reply
         .header(
           "Content-Disposition",

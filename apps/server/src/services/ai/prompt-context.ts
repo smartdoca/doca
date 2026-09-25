@@ -15,3 +15,8 @@ export function contextParts(context: unknown, historical = false) {
     },
   ];
 }
+
+/** Use code-point order, independent of installation order and host locale. */
+export function stablePromptCatalog<T extends { id: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}

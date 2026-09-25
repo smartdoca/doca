@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Editor, Element, Node, Point, Range, Transforms } from "slate";
@@ -50,6 +51,8 @@ export function DocumentMentions({
   revision: number;
   enabled: boolean;
 }) {
+const { t } = useI18n();
+
   const [target, setTarget] = useState<{
     range: Range;
     q: string;
@@ -193,7 +196,7 @@ export function DocumentMentions({
         <div
           className="document-mention-menu"
           role="listbox"
-          aria-label="提及用户"
+          aria-label={t("comment.mention")}
           style={{ left: target.left, top: target.top }}
           onMouseDown={(e) => e.preventDefault()}
         >

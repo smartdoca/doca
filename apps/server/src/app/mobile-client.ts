@@ -3,7 +3,7 @@ import { Type } from "@sinclair/typebox";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { toString as renderQr } from "qrcode";
 import { identityPolicy } from "@core/modules/identity/accounts.js";
-import { tokenHash } from "@core/modules/identity/passwords.js";
+import { recordLogin, tokenHash } from "@core/modules/identity/passwords.js";
 import {
   setMobilePushHandler,
   type MobilePush,
@@ -20,7 +20,9 @@ export const mobileSessionMs = 180 * 24 * 60 * 60 * 1000;
 
 export function sessionExpiresAt(req: { headers: FastifyRequest["headers"] }) {
   const mobile = req.headers["x-doca-client"] === "mobile";
-  return new Date(Date.now() + (mobile ? mobileSessionMs : browserSessionMs)).toISOString();
+  return new Date(
+    Date.now() + (mobile ? mobileSessionMs : browserSessionMs),
+  ).toISOString();
 }
 
 export async function renewMobileSession(db: DB, token: string) {
@@ -31,7 +33,9 @@ export async function renewMobileSession(db: DB, token: string) {
     .where(
       "expires_at",
       "<",
-      new Date(Date.now() + mobileSessionMs - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      new Date(
+        Date.now() + mobileSessionMs - 30 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
     )
     .execute();
 }
@@ -95,7 +99,11 @@ export function registerMobileClient(
       .execute();
     await db
       .insertInto("webview_tickets")
-      .values({ id: tokenHash(ticket), user_id: actor.id, expires_at: expiresAt })
+      .values({
+        id: tokenHash(ticket),
+        user_id: actor.id,
+        expires_at: expiresAt,
+      })
       .execute();
     return { ticket, expiresAt };
   });
@@ -105,7 +113,11 @@ export function registerMobileClient(
     {
       schema: {
         body: Type.Object({
-          ticket: Type.String({ minLength: 64, maxLength: 64, pattern: "^[a-f0-9]{64}$" }),
+          ticket: Type.String({
+            minLength: 64,
+            maxLength: 64,
+            pattern: "^[a-f0-9]{64}$",
+          }),
         }),
       },
     },
@@ -118,14 +130,18 @@ export function registerMobileClient(
         .executeTakeFirst();
       if (!row || row.expires_at <= new Date().toISOString()) {
         if (row)
-          await db.deleteFrom("webview_tickets").where("id", "=", row.id).execute();
+          await db
+            .deleteFrom("webview_tickets")
+            .where("id", "=", row.id)
+            .execute();
         fail(401, "文档打开链接已失效，请从手机重新进入");
       }
       const removed = await db
         .deleteFrom("webview_tickets")
         .where("id", "=", row.id)
         .executeTakeFirst();
-      if (!removed.numDeletedRows) fail(401, "文档打开链接已失效，请从手机重新进入");
+      if (!removed.numDeletedRows)
+        fail(401, "文档打开链接已失效，请从手机重新进入");
       const user = await db
         .selectFrom("users")
         .select("id")
@@ -142,6 +158,7 @@ export function registerMobileClient(
           expires_at: new Date(Date.now() + 28800000).toISOString(),
         })
         .execute();
+      await recordLogin(db, user.id);
       reply.header("Set-Cookie", cookie(token));
       return { ok: true };
     },
@@ -198,7 +215,9 @@ export function registerMobileClient(
     "/api/v1/me/push-devices",
     {
       schema: {
-        body: Type.Object({ token: Type.String({ minLength: 20, maxLength: 200 }) }),
+        body: Type.Object({
+          token: Type.String({ minLength: 20, maxLength: 200 }),
+        }),
       },
     },
     async (req) => {
@@ -216,12 +235,18 @@ export function registerMobileClient(
     await requireQrLogin(db);
     limit(`qr:${req.ip}`, 10);
     const pageOrigin = req.headers.origin;
-    if (typeof pageOrigin !== "string" || !/^https?:\/\/[^/\s]+$/.test(pageOrigin))
+    if (
+      typeof pageOrigin !== "string" ||
+      !/^https?:\/\/[^/\s]+$/.test(pageOrigin)
+    )
       fail(400, "缺少来源");
     const code = randomBytes(32).toString("hex");
     const secret = randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 120_000).toISOString();
-    await db.deleteFrom("qr_logins").where("expires_at", "<=", new Date().toISOString()).execute();
+    await db
+      .deleteFrom("qr_logins")
+      .where("expires_at", "<=", new Date().toISOString())
+      .execute();
     await db
       .insertInto("qr_logins")
       .values({
@@ -241,25 +266,38 @@ export function registerMobileClient(
     return { code, secret, expiresAt, payload, svg };
   });
 
-  api.get<{ Params: { code: string } }>("/api/v1/auth/qr/:code", async (req, reply) => {
-    await requireQrLogin(db);
-    limit(`qr-poll:${req.ip}`, 90);
-    return claimQrLogin(db, req.params.code, headerSecret(req), reply, cookie);
-  });
+  api.get<{ Params: { code: string } }>(
+    "/api/v1/auth/qr/:code",
+    async (req, reply) => {
+      await requireQrLogin(db);
+      limit(`qr-poll:${req.ip}`, 90);
+      return claimQrLogin(
+        db,
+        req.params.code,
+        headerSecret(req),
+        reply,
+        cookie,
+      );
+    },
+  );
 
-  api.post<{ Params: { code: string } }>("/api/v1/auth/qr/:code/confirm", async (req) => {
-    await requireQrLogin(db);
-    const actor = authenticated(req);
-    limit(`qr-confirm:${actor.id}`, 20);
-    const row = await loadQrLogin(db, req.params.code);
-    if (row.user_id && row.user_id !== actor.id) fail(409, "这个二维码已由其他账号确认");
-    await db
-      .updateTable("qr_logins")
-      .set({ user_id: actor.id })
-      .where("id", "=", row.id)
-      .execute();
-    return { ok: true };
-  });
+  api.post<{ Params: { code: string } }>(
+    "/api/v1/auth/qr/:code/confirm",
+    async (req) => {
+      await requireQrLogin(db);
+      const actor = authenticated(req);
+      limit(`qr-confirm:${actor.id}`, 20);
+      const row = await loadQrLogin(db, req.params.code);
+      if (row.user_id && row.user_id !== actor.id)
+        fail(409, "这个二维码已由其他账号确认");
+      await db
+        .updateTable("qr_logins")
+        .set({ user_id: actor.id })
+        .where("id", "=", row.id)
+        .execute();
+      return { ok: true };
+    },
+  );
 }
 
 async function requireQrLogin(db: DB) {
@@ -279,7 +317,8 @@ async function loadQrLogin(db: DB, code: string) {
     .where("id", "=", tokenHash(code))
     .executeTakeFirst();
   if (!row || row.expires_at <= new Date().toISOString()) {
-    if (row) await db.deleteFrom("qr_logins").where("id", "=", row.id).execute();
+    if (row)
+      await db.deleteFrom("qr_logins").where("id", "=", row.id).execute();
     fail(410, "二维码已失效，请刷新网页");
   }
   return row;
@@ -295,7 +334,8 @@ async function claimQrLogin(
   const row = await loadQrLogin(db, code);
   if (!qrCodePattern.test(secret) || row.secret_hash !== tokenHash(secret))
     fail(401, "登录凭证无效");
-  if (!row.user_id) return { status: "pending" as const, expiresAt: row.expires_at };
+  if (!row.user_id)
+    return { status: "pending" as const, expiresAt: row.expires_at };
   const removed = await db
     .deleteFrom("qr_logins")
     .where("id", "=", row.id)
@@ -311,6 +351,7 @@ async function claimQrLogin(
       expires_at: new Date(Date.now() + browserSessionMs).toISOString(),
     })
     .execute();
+  await recordLogin(db, row.user_id);
   reply.header("Set-Cookie", cookie(token));
   return { status: "active" as const };
 }

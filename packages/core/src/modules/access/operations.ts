@@ -5,8 +5,8 @@ import { accessContext } from "./queries.js";
 import { isResourceOwnerLike, label, permission, ranks } from "./policy.js";
 import { canChangeMemberRole } from "./roles.js";
 import { requestedRoles } from "./presentation.js";
-import { requireCapability } from "../entitlements/service.js";
-import { checkMemberAdmission } from "../entitlements/admission.js";
+import { requireCapability } from "../access/operation-policy.js";
+import { checkMemberAdmission } from "../access/operation-policy.js";
 import { touchAccess } from "./invitations.js";
 import { setEntry } from "../discovery/entries.js";
 export type GrantOperation = {

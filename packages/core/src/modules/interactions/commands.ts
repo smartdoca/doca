@@ -15,11 +15,14 @@ import {
   encodeMarkdownAnchor,
 } from "../documents/codecs/markdown-anchor.js";
 import { restoreMarkdown } from "../documents/codecs/markdown.js";
-import { canonicalRichAnchor, richAnchorParts, resolveRichAnchor } from "../documents/codecs/rich-anchor.js";
+import {
+  canonicalRichAnchor,
+  richAnchorParts,
+  resolveRichAnchor,
+} from "../documents/codecs/rich-anchor.js";
 import { surfaceAnchor } from "../documents/codecs/surfaces.js";
 import type { Actor } from "../identity/passwords.js";
 import { createResourceRunner, event, get } from "../resources/context.js";
-import { activityDay, recordActivity } from "./activity.js";
 import { normalizeComment, notify } from "./community.js";
 export function createInteractions(
   db: DB,
@@ -29,17 +32,28 @@ export function createInteractions(
     visit(actor: Actor, id: string, stamp = new Date()) {
       return run(actor, [id], async (ctx) => {
         const resource = get(ctx, id, "read_content");
-        if ((await distributionPolicy(ctx.tx,resource.kind)).autoCollectOpened)
+        if ((await distributionPolicy(ctx.tx, resource.kind)).autoCollectOpened)
           await setEntry(ctx.tx, actor, id, "joined", "opened");
-        const day = activityDay(stamp);
-        const visited = await ctx.tx
-          .selectFrom("user_activity")
-          .select("read_at")
+        const lastVisit = await ctx.tx
+          .selectFrom("visit_events")
+          .select("created_at")
           .where("user_id", "=", actor.id)
           .where("resource_id", "=", id)
-          .where("day", "=", day)
+          .orderBy("created_at", "desc")
           .executeTakeFirst();
-        if (!visited?.read_at)
+        const settings = await ctx.tx
+          .selectFrom("settings")
+          .select("default_timezone")
+          .where("id", "=", "system")
+          .executeTakeFirst();
+        const day = (value: Date) =>
+          new Intl.DateTimeFormat("sv-SE", {
+            timeZone: settings?.default_timezone ?? "Asia/Shanghai",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).format(value);
+        if (!lastVisit || day(new Date(lastVisit.created_at)) !== day(stamp))
           await ctx.tx
             .insertInto("visit_events")
             .values({
@@ -49,8 +63,6 @@ export function createInteractions(
               created_at: stamp.toISOString(),
             })
             .execute();
-        if (get(ctx, id, "read_content").kind === "document")
-          await recordActivity(ctx.tx, actor.id, id, "read", stamp);
         await ctx.tx
           .insertInto("resource_visits")
           .values({
@@ -59,11 +71,9 @@ export function createInteractions(
             visited_at: stamp.toISOString(),
           })
           .onConflict((oc) =>
-            oc
-              .columns(["user_id", "resource_id"])
-              .doUpdateSet({
-                visited_at: sql<string>`case when resource_visits.visited_at < ${stamp.toISOString()} then ${stamp.toISOString()} else resource_visits.visited_at end`,
-              }),
+            oc.columns(["user_id", "resource_id"]).doUpdateSet({
+              visited_at: sql<string>`case when resource_visits.visited_at < ${stamp.toISOString()} then ${stamp.toISOString()} else resource_visits.visited_at end`,
+            }),
           )
           .execute();
         return { ok: true };
@@ -169,9 +179,13 @@ export function createInteractions(
         if (anchor) {
           if (
             parentId ||
-            !["rich_text", "spreadsheet", "canvas", "markdown", "presentation"].includes(
-              r.format,
-            ) ||
+            ![
+              "rich_text",
+              "spreadsheet",
+              "canvas",
+              "markdown",
+              "presentation",
+            ].includes(r.format) ||
             r.kind !== "document"
           )
             fail(400, "当前文档不支持选区评论");
@@ -209,7 +223,9 @@ export function createInteractions(
             } finally {
               loaded.destroy();
             }
-          } else if (["spreadsheet", "canvas", "presentation"].includes(r.format)) {
+          } else if (
+            ["spreadsheet", "canvas", "presentation"].includes(r.format)
+          ) {
             let a;
             try {
               a = JSON.parse(anchor);
@@ -232,10 +248,18 @@ export function createInteractions(
               try {
                 parts = richAnchorParts(a);
                 resolved = resolveRichAnchor(loaded.runtime, a);
-              } catch { fail(400, "评论位置无效"); }
-              if (resolved.length !== parts.length) fail(409, "选区已变化，请重新选择");
-              try { storedAnchor = JSON.stringify(canonicalRichAnchor(loaded.runtime, a)); }
-              catch { fail(400, "评论选区过大或无效"); }
+              } catch {
+                fail(400, "评论位置无效");
+              }
+              if (resolved.length !== parts.length)
+                fail(409, "选区已变化，请重新选择");
+              try {
+                storedAnchor = JSON.stringify(
+                  canonicalRichAnchor(loaded.runtime, a),
+                );
+              } catch {
+                fail(400, "评论选区过大或无效");
+              }
             } finally {
               loaded.destroy();
             }

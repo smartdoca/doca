@@ -868,8 +868,8 @@ function RichDocument({
       {!commentsOpen && (
         <button
           className="icon editor-panel-toggle"
-          aria-label="展开内容评论"
-          title="内容评论"
+          aria-label={t("comment.openRegion")}
+          title={t("comment.region")}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => setCommentsOpen(true)}
         >
@@ -1106,8 +1106,7 @@ function RichDocument({
         {commentsOpen && (
           <aside className={`content-comments ${compact ? "document-comments-drawer" : ""}`} aria-label={compact ? "内容评论抽屉" : "内容评论"}>
             <header>
-              <h3>
-                内容评论 <small>{roots.length}</small>
+              <h3>{t("comment.region")}<small>{roots.length}</small>
               </h3>
               <CommentNavigation
                 ids={roots.map((c) => c.id)}
@@ -1125,7 +1124,7 @@ function RichDocument({
               />
               <button
                 className="icon"
-                aria-label="收起内容评论"
+                aria-label={t("comment.closeRegion")}
                 onClick={() => setCommentsOpen(false)}
               >
                 <PanelRightClose size={18} />
@@ -1213,9 +1212,7 @@ function RichDocument({
                             [c.id]: (v[c.id] ?? 3) + 10,
                           }))
                         }
-                      >
-                        加载更多回复
-                      </button>
+                      >{t("comment.moreReplies")}</button>
                     )}
                     {(reply === c.id ||
                       (editingComment &&
@@ -1253,9 +1250,7 @@ function RichDocument({
                   className="comments-load-more"
                   disabled={busy}
                   onClick={() => void loadMoreComments?.()}
-                >
-                  加载后续评论
-                </button>
+                >{t("comment.moreLater")}</button>
               )}
           </aside>
         )}

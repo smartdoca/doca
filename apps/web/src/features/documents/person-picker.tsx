@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "@web/shared/api.js";
 import { Feedback } from "@web/shared/components/feedback.js";
@@ -15,6 +16,8 @@ export function PersonPicker({
   actions?: ReactNode;
   autoFocus?: boolean;
 }) {
+const { t } = useI18n();
+
   const [q, setQ] = useState(""),
     [items, setItems] = useState<
       { id: string; display_name: string; public_id?: string }[]
@@ -103,7 +106,7 @@ export function PersonPicker({
             >
               <UserBadge passive id={u.id} name={u.display_name} />
               <small>@{u.public_id ?? u.id}</small>
-              <span className="person-select-hint">选择</span>
+              <span className="person-select-hint">{t("fileManager.select")}</span>
             </button>
           ))}
         </div>

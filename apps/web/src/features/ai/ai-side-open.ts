@@ -1,19 +1,17 @@
-/** Mail and file side panels remember whether the assistant was open, and which chat. */
+/** File side panels remember whether the assistant was open, and which chat. */
 const KEY = "doca.ai.side-open";
 const WIDTH_KEY = "doca.ai.panel-width";
 export const PANEL_WIDTH_DEFAULT = 460;
 export const PANEL_WIDTH_MIN = 300;
 const SESSION = /^[a-f0-9-]{36}$/i;
 
-export type SideSurface = "files" | "mail";
+export type SideSurface = "files";
 export type SidePanelMemory = { open: boolean; sessionId: string | null };
 
 export function sidePanelSurface(hash: string): SideSurface | null {
   const route = hash.replace(/^#/, "").split("?")[0] ?? "";
   if (route === "/files" || /^\/shared-files\/[a-f0-9-]{36}$/.test(route))
     return "files";
-  if (route === "/mail" || route.startsWith("/mail/") || route === "/mail-preview")
-    return "mail";
   return null;
 }
 

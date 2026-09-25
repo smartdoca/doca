@@ -1,4 +1,4 @@
-import type { FileId } from "../../files-capability/src/index.js";
+import type { FileId } from "@doca/files-capability";
 
 export const KNOWLEDGE_SOURCE_EFFECT_VERSION = 1 as const;
 export const KNOWLEDGE_SOURCE_REGISTRY_SERVICE_ID =

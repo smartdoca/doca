@@ -12,10 +12,6 @@ import {
   passwordAllowed,
   securityAudit,
 } from "@core/modules/identity/accounts.js";
-import {
-  entitlementConfig,
-  resolveMembership,
-} from "@core/modules/entitlements/service.js";
 import { fail } from "@core/shared/errors.js";
 import {
   normalizeUsername,
@@ -29,8 +25,7 @@ export async function adminUserDetails<T extends { id: string }>(
 ) {
   if (!users.length) return [];
   const ids = users.map((u) => u.id);
-  const [config, rows, identities, contacts] = await Promise.all([
-    entitlementConfig(db),
+  const [rows, identities, contacts] = await Promise.all([
     db.selectFrom("users").selectAll().where("id", "in", ids).execute(),
     db
       .selectFrom("auth_identities as i")
@@ -46,7 +41,6 @@ export async function adminUserDetails<T extends { id: string }>(
   ]);
   return users.map((user) => {
     const row = rows.find((u) => u.id === user.id)!;
-    const e = resolveMembership(config, row);
     const supplied = user as T & {
       display_name?: string | null;
       public_id?: string | null;
@@ -54,6 +48,7 @@ export async function adminUserDetails<T extends { id: string }>(
     };
     return {
       ...user,
+      last_login_at: row.last_login_at ?? null,
       display_name:
         supplied.display_name ||
         supplied.public_id ||
@@ -61,13 +56,15 @@ export async function adminUserDetails<T extends { id: string }>(
         row.display_name ||
         row.public_id ||
         row.login,
-      baseLevel: e.base,
-      effectiveLevel: e.level,
-      levelExpiresAt: e.expiresAt,
-      timedLevel: config.levels.find((l) => l.id === row.timed_level) ?? null,
-      timedLevelExpiresAt: row.timed_level_expires_at
-        ? Number(row.timed_level_expires_at)
-        : null,
+      loginMethodDetails: [
+        ...(row.password_hash ? [{ kind: "password" }] : []),
+        ...contacts
+          .filter((c) => c.user_id === user.id)
+          .map((c) => ({ kind: c.kind })),
+        ...identities
+          .filter((i) => i.user_id === user.id)
+          .map((i) => ({ kind: "provider", name: i.name })),
+      ],
       loginMethods: [
         ...(row.password_hash ? ["账号密码"] : []),
         ...contacts

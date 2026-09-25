@@ -18,15 +18,9 @@ import { fetchWebPage } from "../services/ai/web-fetch.js";
 import { createAISessionEventStore, type DB } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import { AppError, fail } from "@core/shared/errors.js";
-import {
-  tokenHash,
-  type Actor,
-} from "@core/modules/identity/passwords.js";
+import { tokenHash, type Actor } from "@core/modules/identity/passwords.js";
 import { authorize } from "@core/modules/access/queries.js";
-import {
-  entitlementConfig,
-  requireCapability,
-} from "@core/modules/entitlements/service.js";
+import { requireCapability } from "@core/modules/access/operation-policy.js";
 import {
   aiConfig,
   aiConfigSchema,
@@ -38,19 +32,19 @@ import {
   requireModel,
   saveAIConfig,
 } from "@core/modules/ai/config.js";
-import {
-  aiPeriods,
-  pointUnits,
-  quotaSummary,
-  settleCall,
-} from "@core/modules/ai/quota.js";
+import { aiPeriods, usageSummary, settleCall } from "@core/modules/ai/usage.js";
 import {
   digest,
   readAIDocument,
   previewAIDocument,
 } from "@core/workflows/ai-documents.js";
 import { createAIRunner, sessionSources } from "../services/ai/runner.js";
-import { explorerTargets, memoryOwner, messageText, messageReasoning } from "../services/ai/memory.js";
+import {
+  explorerTargets,
+  memoryOwner,
+  messageText,
+  messageReasoning,
+} from "../services/ai/memory.js";
 import { noteLimit, readNote, writeNote } from "../services/ai/notes.js";
 import {
   deleteSecret,
@@ -64,10 +58,7 @@ import {
   insertGeneratedImage,
   generatedImageStatus,
 } from "../services/ai/image-insert.js";
-import {
-  progressPatch,
-  type AIProgress,
-} from "@core/modules/ai/progress.js";
+import { progressPatch, type AIProgress } from "@core/modules/ai/progress.js";
 
 function stripMaskedAIConfig(value: any) {
   const strip = (item: any) => {
@@ -214,10 +205,10 @@ export async function registerAI(
   });
   api.get("/api/v1/ai/options", async (req) => {
     const user = auth(req),
-      { config, models, rights } = await availableModels(db, user.id),
+      { config, models } = await availableModels(db, user.id),
       prefs = await aiUser(db, user.id);
     return {
-      enabled: rights.can["ai.create"],
+      enabled: true,
       memoryAvailable: config.memoryEnabled,
       webSearchAvailable:
         config.webSearch?.provider === "searxng"
@@ -228,13 +219,13 @@ export async function registerAI(
       models: models.map((m) => ({
         id: m.id,
         name: displayModel(config, m),
-        inputRate: m.inputRate,
-        outputRate: m.outputRate,
-        cacheRate: m.cacheRate,
         maxInput: m.maxInput,
         maxOutput: m.maxOutput,
         vision: !!m.vision,
         pdf: !!m.pdf,
+        inputRate: m.inputRate ?? 1,
+        outputRate: m.outputRate ?? 1,
+        imageRate: m.imageRate ?? 1,
       })),
     };
   });
@@ -265,10 +256,6 @@ export async function registerAI(
           hasKey: !!v.apiKey,
         })),
       },
-      levels: (await entitlementConfig(db)).levels.map((l) => ({
-        id: l.id,
-        name: l.name,
-      })),
     };
   });
   api.post("/api/v1/admin/ai/web-search/test", async (req) => {
@@ -311,102 +298,18 @@ export async function registerAI(
           .strict(),
         req.body,
       );
-      const config = parse(
-        aiConfigSchema.omit({ limits: true, taskBudget: true }),
-        stripMaskedAIConfig(rawConfig),
-      );
+      const config = parse(aiConfigSchema, stripMaskedAIConfig(rawConfig));
       const old = await aiConfig(db);
       const models = config.models.map((m) => {
         const previous = old.models.find((x) => x.id === m.id);
         return {
           ...m,
-          inputRate: previous?.inputRate ?? 1,
-          outputRate: previous?.outputRate ?? 1,
-          cacheRate: previous?.cacheRate ?? 1,
-          imageRate: previous?.imageRate,
-          imageSizeRates: previous?.imageSizeRates,
         };
       });
-      const result = await saveAIConfig(
-        db,
-        { ...config, models, limits: old.limits, taskBudget: old.taskBudget },
-        revision,
-      );
+      const result = await saveAIConfig(db, { ...config, models }, revision);
       return { revision: result.revision };
     },
   );
-  api.get("/api/v1/admin/ai/credits", async (req) => {
-    admin(req);
-    const c = await aiConfig(db);
-    return {
-      revision: c.revision,
-      limits: c.limits,
-      taskBudget: c.taskBudget,
-      models: c.models.map((m) => ({
-        id: m.id,
-        name: m.alias || m.model,
-        vendor: c.vendors.find((v) => v.id === m.vendorId)?.name,
-        embedding: !!m.embedding,
-        inputRate: m.inputRate,
-        outputRate: m.outputRate,
-        cacheRate: m.cacheRate,
-        imageGeneration: !!m.imageGeneration,
-        imageRate: m.imageRate,
-        imageSizeRates: m.imageSizeRates,
-      })),
-      levels: (await entitlementConfig(db)).levels.map((l) => ({
-        id: l.id,
-        name: l.name,
-      })),
-    };
-  });
-  api.put("/api/v1/admin/ai/credits", async (req) => {
-    admin(req);
-    const { revision, limits, taskBudget, models } = parse(
-      aiConfigSchema
-        .pick({ limits: true, taskBudget: true })
-        .extend({
-          revision: z.number().int().min(0),
-          models: z
-            .array(
-              z
-                .object({
-                  id: z.string(),
-                  inputRate: z.number(),
-                  outputRate: z.number(),
-                  cacheRate: z.number(),
-                  imageRate: z.number().optional(),
-                  imageSizeRates: z.record(z.string(), z.number()).optional(),
-                })
-                .strict(),
-            )
-            .max(50),
-        })
-        .strict(),
-      req.body,
-    );
-    const { revision: oldRevision, ...old } = await aiConfig(db);
-    if (oldRevision !== revision) fail(409, "配置已变化，请刷新");
-    if (
-      new Set(models.map((m) => m.id)).size !== models.length ||
-      models.some((m) => !old.models.some((x) => x.id === m.id))
-    )
-      fail(400, "模型不存在或重复");
-    const result = await saveAIConfig(
-      db,
-      {
-        ...old,
-        limits,
-        taskBudget,
-        models: old.models.map((m) => ({
-          ...m,
-          ...models.find((x) => x.id === m.id),
-        })),
-      },
-      revision,
-    );
-    return { revision: result.revision };
-  });
   api.get<{ Params: { id: string } }>(
     "/api/v1/admin/ai/vendors/:id/catalog",
     async (req) => {
@@ -450,10 +353,6 @@ export async function registerAI(
         alias: "向量检测",
         embedding: true,
         tools: false,
-        levels: [],
-        inputRate: 1,
-        outputRate: 1,
-        cacheRate: 1,
         maxInput: 8000,
         maxOutput: 32,
       },
@@ -500,9 +399,9 @@ export async function registerAI(
           ? await testAIEmbeddingModel(model, options.fetch)
           : model.imageGeneration && !model.tools
             ? ((imageTest = true), await testAIImageModel(model, options.fetch))
-          : await testAIModel(model, options.fetch, (mode) => {
-              detectedApiMode = mode;
-            });
+            : await testAIModel(model, options.fetch, (mode) => {
+                detectedApiMode = mode;
+              });
 
         // Model list metadata is optional. Some providers expose context and
         // output limits there, while others only expose the inference API.
@@ -524,7 +423,9 @@ export async function registerAI(
           detectedLimits.maxOutput
         ) {
           const latest = await aiConfig(db);
-          const latestModel = latest.models.find((item) => item.id === model.id);
+          const latestModel = latest.models.find(
+            (item) => item.id === model.id,
+          );
           if (latestModel) {
             const nextModel = {
               ...latestModel,
@@ -545,13 +446,17 @@ export async function registerAI(
             if (changed) {
               const saved = await saveAIConfig(
                 db,
-                { ...latest, models: latest.models.map((item) =>
-                  item.id === model.id ? nextModel : item,
-                ) },
+                {
+                  ...latest,
+                  models: latest.models.map((item) =>
+                    item.id === model.id ? nextModel : item,
+                  ),
+                },
                 latest.revision,
               );
               detectedRevision = saved.revision;
-              testedModel = saved.models.find((item) => item.id === model.id) ?? model;
+              testedModel =
+                saved.models.find((item) => item.id === model.id) ?? model;
             }
           }
         }
@@ -566,16 +471,11 @@ export async function registerAI(
             job_id: null,
             model_id: model.id,
             model_snapshot: JSON.stringify(safe),
-            periods: JSON.stringify(
-              aiPeriods((await entitlementConfig(db)).timezone),
-            ),
+            periods: JSON.stringify(aiPeriods("UTC")),
             state: "site_test",
             input_tokens: u.inputTokens?.total ?? 0,
             output_tokens: u.outputTokens?.total ?? 0,
             cached_tokens: usage?.cached ?? 0,
-            points: 0,
-            base_points: 0,
-            allocations: "[]",
             usage: JSON.stringify(u),
             created_at: stamp,
             updated_at: new Date().toISOString(),
@@ -591,25 +491,32 @@ export async function registerAI(
             ? "生图接口测试通过；已实际生成一张测试图片，测试用量已记录，不扣用户积分"
             : model.embedding
               ? "向量模型连接与维度校验通过；测试用量已记录，不扣用户积分"
-            : `模型连接测试通过；${[
-                  detectedApiMode
-                    ? `接口协议已识别为${detectedApiMode === "chat" ? " Chat Completions" : " Responses API"}`
-                    : "",
-                  detectedLimits.maxInput
-                    ? `输入上下文 ${detectedLimits.maxInput.toLocaleString()} Token`
-                    : "",
-                  detectedLimits.maxOutput
-                    ? `单次输出 ${detectedLimits.maxOutput.toLocaleString()} Token`
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join("，") || "连接参数有效"}。测试用量已记录，不扣用户积分`,
+              : `模型连接测试通过；${
+                  [
+                    detectedApiMode
+                      ? `接口协议已识别为${detectedApiMode === "chat" ? " Chat Completions" : " Responses API"}`
+                      : "",
+                    detectedLimits.maxInput
+                      ? `输入上下文 ${detectedLimits.maxInput.toLocaleString()} Token`
+                      : "",
+                    detectedLimits.maxOutput
+                      ? `单次输出 ${detectedLimits.maxOutput.toLocaleString()} Token`
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join("，") || "连接参数有效"
+                }。测试用量已记录，不扣用户积分`,
         };
       } catch (error) {
         if (error instanceof AppError) throw error;
         const generic = modelConnectionError(error);
         const detail = modelConnectionDetail(error, model);
-        fail(502, detail && !generic.includes(detail) ? `${generic}：${detail}` : generic);
+        fail(
+          502,
+          detail && !generic.includes(detail)
+            ? `${generic}：${detail}`
+            : generic,
+        );
       }
     },
   );
@@ -617,12 +524,12 @@ export async function registerAI(
     "/api/v1/ai/resources/:id/preview",
     async (req) => previewAIDocument(db, auth(req), req.params.id),
   );
-  api.get("/api/v1/ai/usage", async (req) => quotaSummary(db, auth(req).id));
+  api.get("/api/v1/ai/usage", async (req) => usageSummary(db, auth(req).id));
   api.get<{ Querystring: { userId?: string } }>(
     "/api/v1/admin/ai/usage",
     async (req) => {
       admin(req);
-      if (req.query.userId) return quotaSummary(db, req.query.userId);
+      if (req.query.userId) return usageSummary(db, req.query.userId);
       const calls = await db
         .selectFrom("ai_calls")
         .leftJoin("users", "users.id", "ai_calls.user_id")
@@ -632,64 +539,67 @@ export async function registerAI(
         .limit(200)
         .execute();
       return {
-        calls: calls.map((c) => ({
-          ...c,
-          points: c.points / 1000,
-          base_points: c.base_points / 1000,
-          model_snapshot: JSON.parse(c.model_snapshot),
-          callKind: JSON.parse(c.model_snapshot).callKind ?? "chat",
-          images: c.usage ? (JSON.parse(c.usage).provider?.images ?? 0) : 0,
-        })),
+        calls: calls.map((c) => {
+          const {
+            input_tokens: providerInput,
+            output_tokens: providerOutput,
+            cached_tokens: providerCached,
+            usage: storedUsage,
+            ...call
+          } = c;
+          const snapshot = JSON.parse(c.model_snapshot);
+          const detail = storedUsage ? JSON.parse(storedUsage) : {};
+          const known = detail.known === true;
+          const providerMetrics = detail.providerMetrics ?? {
+            input: providerInput,
+            output: providerOutput,
+            cached: providerCached,
+            images: detail.provider?.images ?? detail.metrics?.images ?? 0,
+          };
+          const rates = detail.rates ??
+            snapshot.usageRates ?? {
+              input: snapshot.inputRate ?? 1,
+              output: snapshot.outputRate ?? 1,
+              image: snapshot.imageRate ?? 1,
+            };
+          const metrics = !known
+            ? null
+            : typeof detail.metrics?.total === "number"
+              ? detail.metrics
+              : snapshot.callKind === "image"
+                ? {
+                    input: 0,
+                    output: 0,
+                    cached: 0,
+                    image: providerMetrics.images * rates.image,
+                    total: providerMetrics.images * rates.image,
+                  }
+                : {
+                    input: providerInput * rates.input,
+                    output: providerOutput * rates.output,
+                    cached: providerCached * rates.input,
+                    image: 0,
+                    total:
+                      providerInput * rates.input +
+                      providerOutput * rates.output,
+                  };
+          return {
+            ...call,
+            model_snapshot: snapshot,
+            callKind: snapshot.callKind ?? "chat",
+            input_tokens: metrics?.input ?? null,
+            output_tokens: metrics?.output ?? null,
+            cached_tokens: metrics?.cached ?? null,
+            image_tokens: metrics?.image ?? null,
+            total_tokens: metrics?.total ?? null,
+            images: providerMetrics.images ?? 0,
+            units: "rated_tokens",
+            provider_usage: providerMetrics,
+          };
+        }),
       };
     },
   );
-  api.post("/api/v1/admin/ai/grants", async (req) => {
-    const actor = admin(req),
-      body = parse(
-        z.object({
-          id,
-          userId: id,
-          amount: z.number().positive().max(1000000000),
-          reason: z.string().min(1).max(500),
-          expiresAt: z.string().datetime().nullable(),
-        }),
-        req.body,
-      );
-    if (body.expiresAt && body.expiresAt <= new Date().toISOString())
-      fail(400, "到期时间必须在未来");
-    await transact(db, async (tx) => {
-      await lockAIUser(tx, body.userId);
-      const existing = await tx
-        .selectFrom("ai_grants")
-        .selectAll()
-        .where("id", "=", body.id)
-        .executeTakeFirst();
-      if (existing) {
-        if (
-          existing.user_id !== body.userId ||
-          existing.amount !== pointUnits(body.amount) ||
-          existing.expires_at !== body.expiresAt ||
-          existing.reason !== body.reason
-        )
-          fail(409, "相同发放ID的内容不同");
-        return;
-      }
-      await tx
-        .insertInto("ai_grants")
-        .values({
-          id: body.id,
-          user_id: body.userId,
-          amount: pointUnits(body.amount),
-          remaining: pointUnits(body.amount),
-          reason: body.reason,
-          actor_id: actor.id,
-          expires_at: body.expiresAt,
-          created_at: new Date().toISOString(),
-        })
-        .execute();
-    });
-    return { ok: true };
-  });
   api.post<{ Params: { id: string } }>(
     "/api/v1/admin/ai/calls/:id/reconcile",
     async (req) => {
@@ -838,10 +748,7 @@ export async function registerAI(
   });
   api.put("/api/v1/ai/note", async (req) => {
     const actor = auth(req),
-      body = parse(
-        z.object({ content: z.string().max(noteLimit) }),
-        req.body,
-      );
+      body = parse(z.object({ content: z.string().max(noteLimit) }), req.body);
     return writeNote(db, actor.id, body.content);
   });
   api.get("/api/v1/ai/secrets", async (req) => {
@@ -960,10 +867,12 @@ export async function registerAI(
               const job = latestJobBySession.get(row.id);
               // A newer user message updates the session before its queued job
               // runs. That message supersedes any previous failure badge.
-              return !!job &&
+              return (
+                !!job &&
                 job.updated_at >= row.updated_at &&
                 (["failed", "interrupted"].includes(job.status) ||
-                  (job.status === "cancelled" && job.cancelled === 0));
+                  (job.status === "cancelled" && job.cancelled === 0))
+              );
             })(),
           });
         } catch {
@@ -1122,14 +1031,14 @@ export async function registerAI(
             attachments: x.content.metadata?.attachments ?? [],
             explorer: (() => {
               const saved = explorerTargets(x.content.metadata?.explorer);
-              return saved.length ? saved : explorerByMessage.get(x.id) ?? [];
+              return saved.length ? saved : (explorerByMessage.get(x.id) ?? []);
             })(),
             quickNotes: x.content.metadata?.quickNotes ?? [],
             createdAt: x.createdAt,
           })),
         hasMore: history.hasMore,
         contextTokens: jobs.length
-          ? (
+          ? ((
               await db
                 .selectFrom("ai_calls")
                 .select("input_tokens")
@@ -1141,7 +1050,7 @@ export async function registerAI(
                 .where("input_tokens", ">", 0)
                 .orderBy("created_at", "desc")
                 .executeTakeFirst()
-            )?.input_tokens ?? null
+            )?.input_tokens ?? null)
           : null,
         jobs: jobs.map(({ result, ...job }) => ({
           ...job,
@@ -1342,8 +1251,6 @@ export async function registerAI(
             modelId: z.string(),
             scope: z.enum(["document", "all"]),
             currentResourceId: id.optional(),
-            currentMailboxId: id.optional(),
-            currentMessageId: z.string().min(1).max(160).optional(),
             references: z
               .array(
                 z.object({
@@ -1401,8 +1308,6 @@ export async function registerAI(
           text: original.text,
           scope: original.scope,
           currentResourceId: original.currentResourceId,
-          currentMailboxId: original.currentMailboxId,
-          currentMessageId: original.currentMessageId,
           references: original.references ?? [],
           attachments: original.attachments ?? [],
           files: original.files ?? [],
@@ -1502,7 +1407,7 @@ export async function registerAI(
           session_id: s.id,
           user_id: actor.id,
           model_id: modelId,
-          status: "queued",
+          status: "queued" as const,
           input: JSON.stringify(input),
           digest: hash,
           result: "",
@@ -1564,10 +1469,12 @@ export async function registerAI(
           .where("user_id", "=", actor.id)
           .executeTakeFirst();
         if (!current) fail(404, "任务不存在");
-        const result = JSON.parse(current.result || "{}");
-        const approval = result.progress?.approvals?.find(
-          (a: any) => a.id === body.approvalId,
-        );
+        const result = JSON.parse(current.result || "{}") as {
+          progress?: AIProgress;
+        };
+        if (!result.progress) fail(409, "任务没有可审批的执行状态");
+        const approvals = result.progress.approvals ?? [];
+        const approval = approvals.find((a) => a.id === body.approvalId);
         if (!approval) fail(404, "审批项不存在");
         const decision = body.approved ? "approved" : "rejected";
         if (approval.state === decision) return current;
@@ -1578,6 +1485,7 @@ export async function registerAI(
         )
           fail(409, "审批已处理或任务已停止");
         if (body.approved && approval.action === "access") {
+          if (!approval.resourceId) fail(409, "审批项缺少文档标识");
           await authorize(tx, actor, approval.resourceId, 1);
           const session = await tx
             .selectFrom("ai_sessions")
@@ -1606,19 +1514,18 @@ export async function registerAI(
         }
         approval.state = decision;
         approval.resolvedAt = new Date().toISOString();
-        const waiting = result.progress.approvals.some(
-          (a: any) => a.state === "pending",
-        );
+        const waiting = approvals.some((a) => a.state === "pending");
         const status = !body.approved
           ? "cancelled"
           : waiting
             ? "awaiting_approval"
             : "queued";
         result.progress.phase = !body.approved
-          ? "用户已拒绝操作"
+          ? "approval_rejected"
           : waiting
-            ? "等待其余操作审批"
-            : "审批通过，继续执行";
+            ? "waiting_approval"
+            : "resuming";
+        result.progress.phaseData = undefined;
         await tx
           .updateTable("ai_jobs")
           .set({

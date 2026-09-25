@@ -3,11 +3,10 @@ const { getDefaultConfig } = require("expo/metro-config");
 
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, "../..");
-const mailRoot = path.resolve(workspaceRoot, "../doca-mail");
 const config = getDefaultConfig(projectRoot);
 
 // pnpm keeps real packages in the workspace store, outside this app folder.
-config.watchFolders = [workspaceRoot, mailRoot];
+config.watchFolders = [workspaceRoot];
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
   path.resolve(workspaceRoot, "node_modules"),
@@ -16,12 +15,6 @@ config.resolver.nodeModulesPaths = [
 const mobileModules = path.resolve(projectRoot, "node_modules");
 const singletonReact = new Set(["react", "react/jsx-runtime", "react/jsx-dev-runtime"]);
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (moduleName === "@doca/plugin-mail/mobile") {
-    return {
-      type: "sourceFile",
-      filePath: path.resolve(mailRoot, "src/mobile/mail-home.tsx"),
-    };
-  }
   if (moduleName.startsWith("@doca/mobile/")) {
     const name = moduleName.slice("@doca/mobile/".length);
     const base = path.resolve(projectRoot, "src", name);

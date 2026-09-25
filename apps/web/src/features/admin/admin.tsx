@@ -1,14 +1,12 @@
-import { ModerationAdmin } from "@web/features/admin/moderation.js";
+import {
+  loginMethodLabel,
+  type LoginMethodLabel,
+} from "@web/shared/utils/system-labels.js";
+import { htmlLang } from "@doca/i18n";
 import { AIAdmin } from "@web/features/ai/ai-admin.js";
 import { RegistrationReviews } from "@web/features/admin/registration-reviews.js";
-import { MembershipIcon } from "@web/features/settings/membership-icon.js";
 import type { AccountOptions } from "@web/features/auth/account-fields.js";
 import { AdminAccountEditor } from "@web/features/account/account-settings.js";
-import {
-  MembershipSettings,
-  AssignLevels,
-  UserMembership,
-} from "@web/features/settings/membership-settings.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { HookEvents } from "@web/shared/hooks/hook-events.js";
 import { useEffect, useState } from "react";
@@ -48,10 +46,7 @@ import { FileRecognitionSettings } from "@web/features/admin/file-recognition-se
 import { TemplateSettings } from "@web/features/admin/template-settings.js";
 import { useI18n } from "@web/shared/i18n.js";
 import type { MessageKey } from "@doca/i18n";
-import {
-  pluginMessage,
-  webPluginRegistry,
-} from "@web/plugins/registry.js";
+import { pluginMessage, webPluginRegistry } from "@web/plugins/registry.js";
 
 type Member = {
   id: string;
@@ -63,11 +58,28 @@ type Member = {
   baseLevel: { id: string; name: string; color?: string; icon?: string };
   effectiveLevel: { id: string; name: string; color?: string; icon?: string };
   levelExpiresAt: string | null;
-  timedLevel: { id: string; name: string; color?: string; icon?: string } | null;
+  timedLevel: {
+    id: string;
+    name: string;
+    color?: string;
+    icon?: string;
+  } | null;
   timedLevelExpiresAt: number | null;
   loginMethods: string[];
+  loginMethodDetails?: LoginMethodLabel[];
+  last_login_at?: string | null;
 };
-type Settings = { site_name: string; registration: number; revision: number };
+type OnlineMember = Pick<
+  Member,
+  "id" | "display_name" | "public_id" | "login" | "last_login_at"
+>;
+type Settings = {
+  default_locale: string;
+  default_timezone: string;
+  site_name: string;
+  registration: number;
+  revision: number;
+};
 const pluginAdminPanels = webPluginRegistry.adminPanels.list();
 const sectionGroups: {
   id: string;
@@ -92,7 +104,6 @@ const sectionGroups: {
       { id: "login", label: "admin.login", Icon: KeyRound },
       { id: "users", label: "admin.users", Icon: Users },
       { id: "registration", label: "admin.registration", Icon: UserRound },
-      { id: "levels", label: "admin.levels", Icon: ShieldCheck },
     ],
   },
   {
@@ -100,7 +111,6 @@ const sectionGroups: {
     group: "admin.group.content" as MessageKey,
     items: [
       { id: "access", label: "admin.access", Icon: LockKeyhole },
-      { id: "moderation", label: "admin.moderation", Icon: ShieldCheck },
       { id: "templates", label: "admin.templates", Icon: LayoutTemplate },
     ],
   },
@@ -116,7 +126,12 @@ const sectionGroups: {
     id: "system",
     group: "admin.group.system" as MessageKey,
     items: [
-      { id: "platform", label: "admin.platform", order: 10, Icon: SettingsIcon },
+      {
+        id: "platform",
+        label: "admin.platform",
+        order: 10,
+        Icon: SettingsIcon,
+      },
       { id: "hooks", label: "admin.hooks", order: 30, Icon: Webhook },
     ],
   },
@@ -138,8 +153,7 @@ const sectionGroups: {
       })),
   ].sort(
     (left, right) =>
-      (left.order ?? 0) - (right.order ?? 0) ||
-      left.id.localeCompare(right.id),
+      (left.order ?? 0) - (right.order ?? 0) || left.id.localeCompare(right.id),
   ),
 }));
 const sections = sectionGroups.flatMap((g) => g.items);
@@ -163,7 +177,9 @@ function readAdminRoute(): AdminRoute {
   const tab = sections.some((section) => section.id === params.get("tab"))
     ? params.get("tab")!
     : "overview";
-  const platformTab = platformSections.some(([id]) => id === params.get("platform"))
+  const platformTab = platformSections.some(
+    ([id]) => id === params.get("platform"),
+  )
     ? params.get("platform")!
     : "general";
   const accessTab = accessSections.some(([id]) => id === params.get("access"))
@@ -178,12 +194,11 @@ export function Admin({
 }) {
   const { locale, t } = useI18n();
   const [accountTarget, setAccountTarget] = useState<string | null>(null),
-    [membershipTarget, setMembershipTarget] = useState<string | null>(null),
-    [selected, setSelected] = useState<string[]>([]),
-    [accountPolicy, setAccountPolicy] = useState<AccountOptions | null>(null),
-    [assigning, setAssigning] = useState(false);
+    [accountPolicy, setAccountPolicy] = useState<AccountOptions | null>(null);
   const [tab, setTab] = useState(() => readAdminRoute().tab),
-    [platformTab, setPlatformTab] = useState(() => readAdminRoute().platformTab),
+    [platformTab, setPlatformTab] = useState(
+      () => readAdminRoute().platformTab,
+    ),
     [accessTab, setAccessTab] = useState(() => readAdminRoute().accessTab),
     [stats, setStats] = useState<{
       documents: number;
@@ -194,6 +209,10 @@ export function Admin({
     [settings, setSettings] = useState<Settings | null>(null),
     [users, setUsers] = useState<Member[]>([]),
     [next, setNext] = useState<number | null>(null),
+    [onlineUsers, setOnlineUsers] = useState<OnlineMember[]>([]),
+    [onlineNext, setOnlineNext] = useState<number | null>(null),
+    [onlineLoading, setOnlineLoading] = useState(false),
+    [onlineRevision, setOnlineRevision] = useState(0),
     [q, setQ] = useState(""),
     [statusFilter, setStatusFilter] = useState(""),
     [loading, setLoading] = useState(false),
@@ -238,11 +257,35 @@ export function Admin({
   useEffect(
     () =>
       realtime.subscribe((m) => {
-        if (m.type === "stats")
+        if (m.type === "stats") {
           setStats((s) => (s ? { ...s, online: m.online } : s));
+          setOnlineRevision((value) => value + 1);
+        }
       }),
     [],
   );
+  useEffect(() => {
+    if (tab !== "overview" || stats?.online === undefined) return;
+    const controller = new AbortController();
+    setOnlineLoading(true);
+    void api<{ items: OnlineMember[]; nextOffset: number | null }>(
+      "/admin/online-users",
+      "GET",
+      undefined,
+      controller.signal,
+    )
+      .then((data) => {
+        setOnlineUsers(data.items);
+        setOnlineNext(data.nextOffset);
+      })
+      .catch((e) => {
+        if (e.name !== "AbortError") setError(e.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setOnlineLoading(false);
+      });
+    return () => controller.abort();
+  }, [tab, stats?.online, onlineRevision, refresh]);
   useEffect(() => {
     const syncRoute = () => {
       const next = readAdminRoute();
@@ -316,6 +359,13 @@ export function Admin({
     const nextHash = "/admin" + (params.size ? `?${params.toString()}` : "");
     if (location.hash !== `#${nextHash}`) location.hash = nextHash;
   }
+  const loginTime = (value?: string | null) =>
+    value
+      ? new Intl.DateTimeFormat(htmlLang(locale), {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(new Date(value))
+      : t("users.noLoginRecord");
   return (
     <section className="admin-console">
       <div className="admin-heading">
@@ -341,21 +391,21 @@ export function Admin({
                   return !!panel && activePluginIds.has(panel.pluginId);
                 })
                 .map(({ id, label, plugin, Icon }) => (
-                <button
-                  key={id}
-                  aria-current={tab === id ? "page" : undefined}
-                  className={tab === id ? "active" : ""}
-                  onClick={() => {
-                    navigateAdmin({ tab: id });
-                    setError("");
-                    setMessage("");
-                  }}
-                >
-                  <Icon size={18} />
-                  {plugin
-                    ? pluginMessage(locale, label)
-                    : t(label as MessageKey)}
-                </button>
+                  <button
+                    key={id}
+                    aria-current={tab === id ? "page" : undefined}
+                    className={tab === id ? "active" : ""}
+                    onClick={() => {
+                      navigateAdmin({ tab: id });
+                      setError("");
+                      setMessage("");
+                    }}
+                  >
+                    <Icon size={18} />
+                    {plugin
+                      ? pluginMessage(locale, label)
+                      : t(label as MessageKey)}
+                  </button>
                 ))}
             </div>
           ))}
@@ -431,6 +481,68 @@ export function Admin({
                   </article>
                 ))}
               </div>
+              <section className="admin-card admin-online-card">
+                <div className="card-heading">
+                  <div>
+                    <h3>{t("admin.onlineUsers")}</h3>
+                    <small>{t("admin.onlineUsersHint")}</small>
+                  </div>
+                  <span className="status-badge success">
+                    {stats?.online ?? 0}
+                  </span>
+                </div>
+                <div className="admin-online-list">
+                  {onlineLoading && !onlineUsers.length ? (
+                    <div className="empty">{t("common.loading")}</div>
+                  ) : !onlineUsers.length ? (
+                    <div className="empty">{t("admin.onlineEmpty")}</div>
+                  ) : (
+                    onlineUsers.map((user) => (
+                      <div className="admin-online-user" key={user.id}>
+                        <UserBadge id={user.id} name={user.display_name}>
+                          <span>
+                            <strong>{user.display_name}</strong>
+                            <small>@{user.public_id ?? user.login}</small>
+                          </span>
+                        </UserBadge>
+                        <span className="subtle">
+                          {t("users.lastLoginValue", {
+                            time: loginTime(user.last_login_at),
+                          })}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {onlineNext !== null && (
+                  <button
+                    className="load-more"
+                    disabled={onlineLoading}
+                    onClick={async () => {
+                      setOnlineLoading(true);
+                      try {
+                        const data = await api<{
+                          items: OnlineMember[];
+                          nextOffset: number | null;
+                        }>(`/admin/online-users?offset=${onlineNext}`);
+                        setOnlineUsers((current) => [
+                          ...current,
+                          ...data.items.filter(
+                            (item) => !current.some(({ id }) => id === item.id),
+                          ),
+                        ]);
+                        setOnlineNext(data.nextOffset);
+                      } catch (e) {
+                        setError((e as Error).message);
+                      } finally {
+                        setOnlineLoading(false);
+                      }
+                    }}
+                  >
+                    {t("admin.loadMoreOnline")}
+                  </button>
+                )}
+              </section>
               <section className="admin-card">
                 <div className="card-heading">
                   <h3>{t("admin.services")}</h3>
@@ -438,7 +550,10 @@ export function Admin({
                     {settings?.site_name ?? "Doca"}
                   </span>
                 </div>
-                <button className="service-row" onClick={() => navigateAdmin({ tab: "login" })}>
+                <button
+                  className="service-row"
+                  onClick={() => navigateAdmin({ tab: "login" })}
+                >
                   <span className="setting-icon">
                     <KeyRound size={20} />
                   </span>
@@ -450,7 +565,9 @@ export function Admin({
                         : t("admin.accountsClosed")}
                     </small>
                   </span>
-                  <span className="status-badge success">{t("admin.enabled")}</span>
+                  <span className="status-badge success">
+                    {t("admin.enabled")}
+                  </span>
                   <ArrowUpRight size={17} />
                 </button>
                 <button
@@ -469,7 +586,10 @@ export function Admin({
                   <span className="subtle">{t("admin.viewConfig")}</span>
                   <ArrowUpRight size={17} />
                 </button>
-                <button className="service-row" onClick={() => navigateAdmin({ tab: "hooks" })}>
+                <button
+                  className="service-row"
+                  onClick={() => navigateAdmin({ tab: "hooks" })}
+                >
                   <span className="setting-icon">
                     <Webhook size={20} />
                   </span>
@@ -487,7 +607,6 @@ export function Admin({
               </div>
             </>
           )}
-          {tab === "moderation" && <ModerationAdmin />}
           {tab === "templates" && <TemplateSettings />}
           {tab === "registration" && <RegistrationReviews />}
           {tab === "users" && (
@@ -495,7 +614,7 @@ export function Admin({
               <div className="admin-section-heading">
                 <div>
                   <h2>{t("admin.users")}</h2>
-                  <p>创建账号，管理访问状态，并在密码丢失时重置密码。</p>
+                  <p>{t("users.intro")}</p>
                 </div>
                 <button
                   className="primary"
@@ -505,73 +624,53 @@ export function Admin({
                   }}
                 >
                   <Plus size={16} />
-                  创建用户
+                  {t("users.create")}
                 </button>
               </div>
               <section className="admin-card users-card">
                 <div className="admin-users-toolbar">
                   <strong>
-                    用户列表{" "}
+                    {t("users.list")}{" "}
                     <span className="subtle">{stats?.users ?? "—"}</span>
                   </strong>
-                  <button
-                    className="quiet-button"
-                    disabled={!selected.length}
-                    onClick={() => setAssigning(true)}
-                  >
-                    设置永久等级
-                    {selected.length ? `（${selected.length}）` : ""}
-                  </button>
+
                   <label className="search-field">
                     <Search size={16} />
                     <input
-                      aria-label="搜索用户"
-                      placeholder="搜索账号或昵称"
+                      aria-label={t("users.search")}
+                      placeholder={t("users.searchPlaceholder")}
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
                     />
                   </label>
                   <Select
-                    aria-label="用户状态筛选"
+                    aria-label={t("users.statusFilter")}
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                   >
-                    <option value="">全部状态</option>
-                    <option value="pending">待审核</option>
-                    <option value="active">正常</option>
-                    <option value="disabled">已停用</option>
+                    <option value="">{t("ticket.statusAll")}</option>
+                    <option value="pending">{t("users.pending")}</option>
+                    <option value="active">{t("users.active")}</option>
+                    <option value="disabled">{t("users.disabled")}</option>
                   </Select>
                 </div>
                 <div className="admin-users-table">
                   <div className="admin-user-row table-head">
-                    <span>用户</span>
-                    <span>登录方式</span>
-                    <span>永久等级</span>
-                    <span>当前等级 / 到期时间</span>
-                    <span>角色</span>
-                    <span>账号状态</span>
-                    <span>操作</span>
+                    <span>{t("users.user")}</span>
+                    <span>{t("authAdmin.login")}</span>
+                    <span>{t("users.role")}</span>
+                    <span>{t("users.status")}</span>
+                    <span>{t("users.lastLogin")}</span>
+                    <span>{t("users.actions")}</span>
                   </div>
                   {loading ? (
-                    <div className="empty">正在加载…</div>
+                    <div className="empty">{t("common.loading")}</div>
                   ) : !users.length ? (
-                    <div className="empty">没有匹配的用户</div>
+                    <div className="empty">{t("users.noMatches")}</div>
                   ) : (
                     users.map((u) => (
                       <div className="admin-user-row" key={u.id}>
                         <div className="member-identity">
-                          <input
-                            type="checkbox"
-                            aria-label={`选择 ${u.display_name}`}
-                            checked={selected.includes(u.id)}
-                            onChange={(e) =>
-                              setSelected(
-                                e.target.checked
-                                  ? [...selected, u.id]
-                                  : selected.filter((id) => id !== u.id),
-                              )
-                            }
-                          />
                           <UserBadge id={u.id} name={u.display_name}>
                             <span>
                               <strong>{u.display_name}</strong>
@@ -581,18 +680,18 @@ export function Admin({
                         </div>
                         <span
                           className="member-login"
-                          title={u.loginMethods.join("、")}
+                          title={(
+                            u.loginMethodDetails?.map((method) =>
+                              loginMethodLabel(method, t),
+                            ) ?? u.loginMethods
+                          ).join(locale === "zh" ? "、" : ", ")}
                         >
-                          {u.loginMethods.join("、") || "尚未绑定"}
-                        </span>
-                        <span className="membership-label" style={{color: u.baseLevel.color}}><MembershipIcon icon={u.baseLevel.icon}/>{u.baseLevel.name}</span>
-                        <span className="member-level">
-                          <strong className="membership-label" style={{color: u.effectiveLevel.color}}><MembershipIcon icon={u.effectiveLevel.icon}/>{u.effectiveLevel.name}</strong>
-                          <small>
-                            {u.timedLevelExpiresAt
-                              ? `${u.timedLevel?.name ?? "会员"}${u.timedLevelExpiresAt <= Date.now() ? "已过期" : "至"} · ${new Date(u.timedLevelExpiresAt).toLocaleDateString("zh-CN")}`
-                              : "无定时会员"}
-                          </small>
+                          {(
+                            u.loginMethodDetails?.map((method) =>
+                              loginMethodLabel(method, t),
+                            ) ?? u.loginMethods
+                          ).join(locale === "zh" ? "、" : ", ") ||
+                            t("users.noMethods")}
                         </span>
                         <span className="member-role">
                           {u.admin ? (
@@ -600,7 +699,7 @@ export function Admin({
                           ) : (
                             <UserRound size={14} />
                           )}{" "}
-                          {u.admin ? "管理员" : "普通用户"}
+                          {u.admin ? t("admin.badge") : t("users.regular")}
                         </span>
                         <span>
                           <span
@@ -611,20 +710,24 @@ export function Admin({
                           >
                             <i />
                             {u.status === "active"
-                              ? "正常"
+                              ? t("users.active")
                               : u.status === "pending"
-                                ? "待审核"
-                                : "已停用"}
+                                ? t("users.pending")
+                                : t("users.disabled")}
                           </span>
+                        </span>
+                        <span className="member-last-login">
+                          {loginTime(u.last_login_at)}
                         </span>
                         <span className="admin-member-actions">
                           <button
                             className="text-action"
                             onClick={() => setAccountTarget(u.id)}
                           >
-                            编辑
+                            {t("time.edited")}
                           </button>
-                          {(!accountPolicy || accountPolicy.passwordEnabled) && (
+                          {(!accountPolicy ||
+                            accountPolicy.passwordEnabled) && (
                             <button
                               className="text-action"
                               onClick={() => {
@@ -632,16 +735,20 @@ export function Admin({
                                 setPasswordTarget(u);
                               }}
                             >
-                              重置密码
+                              {t("login.reset")}
                             </button>
                           )}
-                          <button
-                            className="text-action"
-                            onClick={() => setMembershipTarget(u.id)}
-                          >
-                            等级
-                          </button>
-                          {u.status === "pending" ? <button className="text-action" onClick={()=>navigateAdmin({tab: "registration"})}>前往审核</button> : !u.admin ? (
+
+                          {u.status === "pending" ? (
+                            <button
+                              className="text-action"
+                              onClick={() =>
+                                navigateAdmin({ tab: "registration" })
+                              }
+                            >
+                              {t("users.review")}
+                            </button>
+                          ) : !u.admin ? (
                             <button
                               className={
                                 "text-action " +
@@ -654,10 +761,10 @@ export function Admin({
                               }}
                             >
                               {u.status === "active"
-                                ? "停用"
+                                ? t("users.disable")
                                 : u.status === "pending"
-                                  ? "审核通过"
-                                  : "启用"}
+                                  ? t("users.approve")
+                                  : t("users.enable")}
                             </button>
                           ) : (
                             <span className="subtle">—</span>
@@ -694,13 +801,12 @@ export function Admin({
                       }
                     }}
                   >
-                    加载更多用户
+                    {t("users.loadMore")}
                   </button>
                 )}
               </section>
             </>
           )}
-          {tab === "levels" && <MembershipSettings />}
           {tab === "ai" && <AIAdmin />}
           {tab === "file-recognition" && <FileRecognitionSettings />}
           {accountTarget && (
@@ -710,26 +816,13 @@ export function Admin({
               saved={() => setRefresh((n) => n + 1)}
             />
           )}
-          {membershipTarget && (
-            <UserMembership
-              userId={membershipTarget}
-              close={() => setMembershipTarget(null)}
-              saved={() => setRefresh((n) => n + 1)}
-            />
-          )}
-          {assigning && (
-            <AssignLevels
-              users={users.filter((u) => selected.includes(u.id))}
-              close={() => setAssigning(false)}
-              saved={() => setRefresh((n) => n + 1)}
-            />
-          )}
+
           {tab === "login" && (
             <>
               <div className="admin-section-heading">
                 <div>
                   <h2>{t("admin.login")}</h2>
-                  <p>设置登录方式与新用户的加入规则。</p>
+                  <p>{t("users.authIntro")}</p>
                 </div>
               </div>
               <AuthenticationSettings saved={load} />
@@ -771,10 +864,12 @@ export function Admin({
                       () =>
                         api("/admin/settings", "PUT", {
                           siteName: f.get("siteName"),
+                          defaultLocale: f.get("defaultLocale"),
+                          defaultTimezone: f.get("defaultTimezone"),
                           registrationEnabled: !!settings.registration,
                           revision: settings.revision,
                         }),
-                      "站点设置已保存",
+                      t("users.siteSaved"),
                     );
                   }}
                 >
@@ -782,7 +877,7 @@ export function Admin({
                     <h3>{t("admin.general")}</h3>
                   </div>
                   <label className="site-name-field">
-                    站点名称
+                    {t("users.siteName")}
                     <input
                       name="siteName"
                       defaultValue={settings.site_name}
@@ -790,10 +885,45 @@ export function Admin({
                       maxLength={160}
                     />
                   </label>
+                  <label>
+                    {t("admin.defaultLocale")}
+                    <Select
+                      name="defaultLocale"
+                      defaultValue={settings.default_locale ?? "zh"}
+                    >
+                      <option value="zh">中文</option>
+                      <option value="en">English</option>
+                    </Select>
+                    <small>{t("admin.defaultLocaleHint")}</small>
+                  </label>
+                  <label>
+                    {t("admin.defaultTimezone")}
+                    <input
+                      name="defaultTimezone"
+                      list="site-timezones"
+                      defaultValue={
+                        settings.default_timezone ?? "Asia/Shanghai"
+                      }
+                      required
+                      maxLength={100}
+                    />
+                    <datalist id="site-timezones">
+                      {Array.from(
+                        new Set([
+                          "UTC",
+                          "Asia/Shanghai",
+                          ...Intl.supportedValuesOf("timeZone"),
+                        ]),
+                      ).map((zone) => (
+                        <option key={zone} value={zone} />
+                      ))}
+                    </datalist>
+                    <small>{t("admin.defaultTimezoneHint")}</small>
+                  </label>
                   <div className="admin-form-footer">
                     <span />
                     <button className="primary" disabled={busy}>
-                      保存设置
+                      {t("services.saveSettings")}
                     </button>
                   </div>
                 </form>
@@ -837,7 +967,7 @@ export function Admin({
       </div>
       {creating && (
         <Dialog
-          title="创建用户"
+          title={t("users.create")}
           close={() => {
             if (!busy) setCreating(false);
           }}
@@ -860,47 +990,42 @@ export function Admin({
                         ? { password: f.get("password") }
                         : {}),
                     }),
-                  "用户已创建",
+                  t("users.created"),
                 )
               )
                 setCreating(false);
             }}
           >
-            <p className="subtle">
-              创建普通用户账号，文档和知识库默认保持私有。
-            </p>
+            <p className="subtle">{t("users.createHelp")}</p>
             <label>
-              用户名（账号） *
+              {t("users.usernameRequired")}
               <input
                 name="login"
                 required
                 minLength={3}
                 maxLength={160}
                 autoComplete="off"
-                placeholder="至少 3 个字符"
+                placeholder={t("users.usernameHint")}
               />
             </label>
             <label>
-              昵称{accountPolicy?.fields?.displayName.required ? " *" : ""}
+              {t("login.nickname")}
+              {accountPolicy?.fields?.displayName.required ? " *" : ""}
               <input
                 name="name"
                 required={accountPolicy?.fields?.displayName.required}
                 maxLength={160}
-                placeholder="协作者看到的昵称"
+                placeholder={t("users.displayNameHint")}
               />
             </label>
             {(["email", "phone"] as const).map((key) => (
               <label key={key}>
-                {key === "email" ? "邮箱" : "手机号"}
-                {accountPolicy?.fields?.[key].required
-                  ? " *"
-                  : ""}
+                {key === "email" ? t("fields.email") : t("login.phone")}
+                {accountPolicy?.fields?.[key].required ? " *" : ""}
                 <input
                   name={key}
                   type={key === "email" ? "email" : "tel"}
-                  required={
-                    !!accountPolicy?.fields?.[key].required
-                  }
+                  required={!!accountPolicy?.fields?.[key].required}
                   placeholder={
                     key === "email" ? "name@example.com" : "+86 13800138000"
                   }
@@ -908,7 +1033,8 @@ export function Admin({
               </label>
             ))}
             <label>
-              头像地址{accountPolicy?.fields?.avatar.required ? " *" : ""}
+              {t("fields.avatar")}
+              {accountPolicy?.fields?.avatar.required ? " *" : ""}
               <input
                 required={accountPolicy?.fields?.avatar.required}
                 name="avatar"
@@ -917,18 +1043,20 @@ export function Admin({
                 maxLength={2048}
               />
             </label>
-            {accountPolicy?.passwordEnabled && <label>
-              初始密码 *
-              <input
-                name="password"
-                type="password"
-                required={!!accountPolicy?.passwordEnabled}
-                minLength={12}
-                maxLength={128}
-                autoComplete="new-password"
-                placeholder="至少 12 个字符"
-              />
-            </label>}
+            {accountPolicy?.passwordEnabled && (
+              <label>
+                {t("users.initialPassword")}
+                <input
+                  name="password"
+                  type="password"
+                  required={!!accountPolicy?.passwordEnabled}
+                  minLength={12}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  placeholder={t("users.passwordHint")}
+                />
+              </label>
+            )}
             {error && <Feedback message={error} tone="error" />}
             <footer>
               <button
@@ -936,10 +1064,10 @@ export function Admin({
                 disabled={busy}
                 onClick={() => setCreating(false)}
               >
-                取消
+                {t("common.cancel")}
               </button>
               <button className="primary" disabled={busy}>
-                创建账号
+                {t("login.createAccount")}
               </button>
             </footer>
           </form>
@@ -947,7 +1075,7 @@ export function Admin({
       )}
       {passwordTarget && (
         <Dialog
-          title="重置密码"
+          title={t("login.reset")}
           close={() => {
             if (!busy) {
               setError("");
@@ -964,26 +1092,30 @@ export function Admin({
               const next = String(form.get("password") ?? "");
               const again = String(form.get("confirm") ?? "");
               if (next !== again) {
-                setError("两次输入的密码不一致");
+                setError(t("users.passwordMismatch"));
                 return;
               }
               if (
                 await act(
                   () =>
-                    api("/admin/users/" + passwordTarget.id + "/password", "POST", {
-                      password: next,
-                    }),
-                  "密码已重置，该用户需要用新密码重新登录",
+                    api(
+                      "/admin/users/" + passwordTarget.id + "/password",
+                      "POST",
+                      {
+                        password: next,
+                      },
+                    ),
+                  t("users.passwordReset"),
                 )
               )
                 setPasswordTarget(null);
             }}
           >
             <p>
-              为「{passwordTarget.display_name}」设置新密码。对方当前的登录会全部退出。请把新密码告知对方，这里不会再次显示。
+              {t("users.resetWarning", { name: passwordTarget.display_name })}
             </p>
             <label>
-              新密码 *
+              {t("users.newPassword")}
               <input
                 name="password"
                 type="password"
@@ -991,11 +1123,11 @@ export function Admin({
                 minLength={12}
                 maxLength={128}
                 autoComplete="new-password"
-                placeholder="至少 12 个字符"
+                placeholder={t("users.passwordHint")}
               />
             </label>
             <label>
-              再次输入 *
+              {t("users.repeatPassword")}
               <input
                 name="confirm"
                 type="password"
@@ -1015,10 +1147,10 @@ export function Admin({
                   setPasswordTarget(null);
                 }}
               >
-                取消
+                {t("common.cancel")}
               </button>
               <button className="primary" disabled={busy}>
-                确认重置
+                {t("users.confirmReset")}
               </button>
             </footer>
           </form>
@@ -1028,10 +1160,10 @@ export function Admin({
         <Dialog
           title={
             target.status === "active"
-              ? "停用用户"
+              ? t("users.disableTitle")
               : target.status === "pending"
-                ? "审核新用户"
-                : "启用用户"
+                ? t("users.reviewTitle")
+                : t("users.enableTitle")
           }
           close={() => {
             if (!busy) setTarget(null);
@@ -1039,16 +1171,20 @@ export function Admin({
           className="modal-compact"
         >
           <p>
-            确认{target.status === "active" ? "停用" : "启用"}「
-            {target.display_name}」？
+            {t(
+              target.status === "active"
+                ? "users.disableQuestion"
+                : "users.enableQuestion",
+              { name: target.display_name },
+            )}{" "}
             {target.status === "active"
-              ? "停用后，该用户将无法登录，已有会话也会失效。用户的文档不会被删除。"
-              : "该用户将可以重新登录本站。"}
+              ? t("users.disableHelp")
+              : t("users.enableHelp")}
           </p>
           {error && <Feedback message={error} tone="error" />}
           <footer>
             <button disabled={busy} onClick={() => setTarget(null)}>
-              取消
+              {t("common.cancel")}
             </button>
             {target.status === "pending" && (
               <button
@@ -1061,13 +1197,13 @@ export function Admin({
                         api("/admin/users/" + target.id, "PATCH", {
                           status: "disabled",
                         }),
-                      "申请已拒绝，账号已停用",
+                      t("users.rejected"),
                     )
                   )
                     setTarget(null);
                 }}
               >
-                拒绝申请
+                {t("users.reject")}
               </button>
             )}
             <button
@@ -1081,15 +1217,19 @@ export function Admin({
                         status:
                           target.status === "active" ? "disabled" : "active",
                       }),
-                    "用户状态已更新",
+                    t("users.statusSaved"),
                   )
                 )
                   setTarget(null);
               }}
             >
               {target.status === "pending"
-                ? "审核通过"
-                : `确认${target.status === "active" ? "停用" : "启用"}`}
+                ? t("users.approve")
+                : t(
+                    target.status === "active"
+                      ? "users.confirmDisable"
+                      : "users.confirmEnable",
+                  )}
             </button>
           </footer>
         </Dialog>

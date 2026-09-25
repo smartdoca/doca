@@ -15,7 +15,6 @@ export type Identity = {
     Record<"username" | "displayName" | "email" | "phone" | "avatar", string>
   >;
   verified?: Partial<Record<"email" | "phone", boolean>>;
-  levelValue?: string;
 };
 export interface IdentityRuntime {
   credentials: Record<string, string>;
@@ -228,7 +227,6 @@ export function createIdentityAdapter(runtime: IdentityRuntime) {
             r.source,
             r.verifiedField,
           ]),
-          mapping.levelMapping.field,
         ].filter(Boolean);
         const info =
           config.serverMetadata().userinfo_endpoint &&
@@ -407,14 +405,10 @@ export function createIdentityAdapter(runtime: IdentityRuntime) {
         )
       )
         verified.email = false;
-      const levelValue = mapping.levelMapping.field
-        ? claimField(profile, mapping.levelMapping.field)
-        : undefined;
       return {
         subject,
         fields,
         verified,
-        ...(typeof levelValue === "string" ? { levelValue } : {}),
         name:
           typeof name === "string" && name.trim()
             ? name.trim().slice(0, 160)

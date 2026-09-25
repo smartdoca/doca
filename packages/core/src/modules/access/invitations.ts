@@ -1,5 +1,5 @@
-import { requireCapability } from "../entitlements/service.js";
-import { checkMemberAdmission } from "../entitlements/admission.js";
+import { requireCapability } from "../access/operation-policy.js";
+import { checkMemberAdmission } from "../access/operation-policy.js";
 import type { Transaction } from "kysely";
 import type { DB, Schema } from "../../../../db/src/index.js";
 import { transact } from "../../../../db/src/transactions.js";

@@ -3,7 +3,7 @@ import type {
   SearchSource,
   SearchSourceDescriptor,
 } from "@doca/search-host";
-import { mailAttachmentIncluded } from "@core/modules/plugins/policies.js";
+
 import type { Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import type { DB } from "@db/index.js";
@@ -36,6 +36,7 @@ type ResourceSearchQuery = Parameters<
 >[1];
 
 export type SearchQueryContext =
+  | { readonly kind: "plugin"; readonly principalId: string; readonly signal?: AbortSignal }
   | {
       readonly kind: "documents";
       readonly actor: Actor;
@@ -60,10 +61,6 @@ export type SearchQueryContext =
   | {
       readonly kind: "knowledge";
       readonly tokens: readonly string[];
-    }
-  | {
-      readonly kind: "mail";
-      readonly actor: Actor;
     }
   | { readonly kind: "system" };
 
@@ -192,7 +189,7 @@ export async function fileProjectionsForObject(
   for (const item of stored)
     if (
       groups.has(filePolicyGroup(item.mime)) &&
-      (await mailAttachmentIncluded(db, item.parent_id, item.metadata))
+      true
     )
       items.push(item);
   if (!items.length) return [];
@@ -478,7 +475,6 @@ export function createBuiltinSearchSources(
     documents?: boolean;
     files?: boolean;
     knowledge?: boolean;
-    mail?: boolean;
   } = {},
 ): readonly SearchSource<SearchQueryContext>[] {
   return [

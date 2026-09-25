@@ -5,7 +5,6 @@ import {
   navigationHref,
   resolveExplorerClick,
   isFolderExplorerHref,
-  isMailHref,
   keepsAssistantSession,
   withSessionHash,
 } from "../apps/web/src/features/ai/ai-folder-mentions.js";
@@ -167,29 +166,3 @@ it("recognizes personal and shared folder explorer hrefs", () => {
 });
 
 const session = "20117e32-13ad-4c3f-87ec-0541eb39fc97";
-const mail = {
-  id: "msg-1",
-  mailboxId: "11111111-1111-4111-8111-111111111111",
-  subject: "会议纪要",
-  from: "Ada <ada@example.com>",
-  href: "/mail/11111111-1111-4111-8111-111111111111?message=msg-1",
-};
-
-it("turns a mail search hit into a card and keeps the chat session on the link", () => {
-  const segments = answerSegments("找到这封邮件。", [], {
-    ensureCards: true,
-    mails: [mail],
-  });
-  expect(segments).toEqual([
-    { type: "text", text: "找到这封邮件。" },
-    { type: "mail", mail },
-  ]);
-  expect(isMailHref(mail.href)).toBe(true);
-  expect(withSessionHash(mail.href, session)).toBe(
-    `/mail/${mail.mailboxId}?message=msg-1&session=${session}`,
-  );
-  expect(withSessionHash("/files?path=%5B%5D", session)).toContain(`session=${session}`);
-  expect(keepsAssistantSession("/mail/box")).toBe(true);
-  expect(keepsAssistantSession("/files")).toBe(true);
-  expect(keepsAssistantSession("/home")).toBe(false);
-});

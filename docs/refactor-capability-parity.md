@@ -1,6 +1,10 @@
 # Refactor capability parity inventory
 
-This inventory records the behavior the plugin-host integration must preserve.
+This inventory records core behavior to verify during plugin-host integration.
+Membership, commercial quotas and content moderation are intentionally removed;
+old parity requirements for those features no longer apply. Mail server code,
+UI, database tables, global bridges and sibling-package imports are removed;
+future mail verification belongs to its independent plugin.
 The new composition is active; each section remains a release gate until its
 focused tests pass in the final verification run.
 
@@ -13,30 +17,29 @@ checks, cookie/bearer sessions, profile-completion gates, error normalization,
 and close hooks. Domain routes are composed by
 `apps/server/src/plugins/composition.ts` through PluginHost. Existing route
 implementations are retained behind adapters while capability ownership moves
-to files, documents, mail, AI, and Search providers.
+to files, documents, AI, and Search providers.
 
 Registered route/service modules include:
 
-- runtime settings, accounts, identity, registration review, entitlements, and
+- runtime settings, accounts, identity, registration review, and
   profiles;
 - tickets/access requests, workspace/discovery, page state, experience, and
   templates;
 - realtime collaboration, search/embeddings, knowledge, AI/MCP, and quick
   notes;
-- moderation, assets, files, mail, static delivery, and the file-processing
+- assets, files, static delivery, and the file-processing
   worker.
 
 The browser shell policy remains in `apps/web/src/app/app.tsx`, while typed
-build-time plugin registries now contribute domain routes, navigation, admin
+runtime plugin registries now contribute domain routes, navigation, admin
 panels and renderers. Its
 hash-route surface includes authentication completion, desktop/mobile document
 shells, tickets, admin/account/preferences, home and document collections,
 libraries and library settings/system pages, AI, quick notes, files/shared
-files, mail, trash, backups, sharing, and resource/editor views.
+files, trash, sharing, and resource/editor views.
 
-Mobile uses the same client manifest IDs and target checks. Disabling mail
-removes its Server routes and client contributions without disabling files,
-documents, AI, or search.
+Mobile retains only core built-in client manifests. No host mail routes or
+source-package imports remain.
 
 ## Cross-cutting invariants
 
@@ -64,17 +67,17 @@ same host-owned guards as first-party code.
 
 Baseline: password and external identity flows, contact verification,
 registration review, profile completion, account security, admin user
-management, mobile sessions, entitlements, and membership linking.
+management and mobile sessions.
 
 Primary routes: `accounts.ts`, `identity.ts`, `registration-reviews.ts`,
-`profiles.ts`, `entitlements.ts`, plus account/bootstrap routes in
+`profiles.ts`, plus account/bootstrap routes in
 `create-app.ts`.
 
 Parity evidence includes `accounts-memberships.test.ts`, `identity.test.ts`,
 `mobile-session.test.ts`, `service-credentials.test.ts`, and
 `access-roles.test.ts`.
 
-Potential seams: identity-provider, verification-delivery, entitlement-source,
+Potential seams: identity-provider, verification-delivery,
 and admin-settings-section contributions. Session parsing, admission gates, and
 account merging remain host policy.
 
@@ -174,25 +177,23 @@ Parity evidence includes `ai.test.ts`, `ai-providers.test.ts`,
 `ai-web-request.test.ts`, and `ai-context-budget.test.ts`.
 
 Potential seams: AI providers, tools, skills, and MCP tool contributions.
-Credential lookup, quota charging, tool authorization, and redaction remain
+Credential lookup, raw usage accounting, tool authorization, and redaction remain
 host-owned.
 
-### Mail, quick notes, tickets, moderation, and community
+### Quick notes, tickets, and community
 
-Baseline: mailboxes/sync/search/attachments/sharing, quick-note CRUD and
-compilation, public and authenticated tickets, moderation settings/actions,
+Baseline: quick-note CRUD and
+compilation, public and authenticated tickets,
 comments, and community notifications.
 
-Primary routes: `mail.ts`, `quick-notes.ts`, `tickets.ts`,
-`moderation.ts`, and community routes in `create-app.ts`.
+Primary routes: `quick-notes.ts`, `tickets.ts`,
+and community routes in `create-app.ts`.
 
-Parity evidence includes `mail.test.ts`, `mail-external.test.ts`,
-`mail-search-scope.test.ts`, `quick-notes.test.ts`,
-`quick-note-content.test.ts`, `tickets.test.ts`, `moderation.test.ts`,
+Parity evidence includes `quick-notes.test.ts`,
+`quick-note-content.test.ts`, `tickets.test.ts`,
 `community.test.ts`, and `online-users.test.ts`.
 
-Potential seams: mailbox transports, note processors, ticket handlers,
-moderation scanners, and notification presentation. Access, retention, and
+Potential seams: note processors, ticket handlers, and notification presentation. Access, retention, and
 delivery guarantees remain host-owned.
 
 ### Web shell and settings

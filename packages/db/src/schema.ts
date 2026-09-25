@@ -2,13 +2,6 @@ import type { Kysely } from "kysely";
 export interface User {
   profile_metadata?: string;
   profile_revision?: number;
-  base_level?: string;
-  timed_level?: string | null;
-  timed_level_expires_at?: number | string | null;
-  identity_class?: string;
-  level_source?: string;
-  level_override?: number;
-  level_revision?: number;
   public_id?: string;
   directory_mode?: string | null;
   id: string;
@@ -18,11 +11,9 @@ export interface User {
   admin: number;
   status: string;
   created_at: string;
+  last_login_at?: string | null;
 }
 export interface Resource {
-  moderation_status?: string;
-  moderation_hold?: number;
-  moderation_revision?: number;
   permission_overrides?: number;
   content_bytes?: number;
   authz_revision?: number;
@@ -62,22 +53,127 @@ export interface Schema {
     version: string;
     applied_at: string;
   };
-  quick_notes: { id: string; owner_id: string; content: string; plain_text: string; asset_ids: string; version: number; created_at: string; updated_at: string; deleted_at: string | null };
-  quick_note_compilations: { id: string; owner_id: string; sources: string; request_hash: string; instruction: string; model_id: string; status: string; markdown: string; error: string; document_id: string | null; created_at: string; updated_at: string };
-  moderation_settings: { id: string; config: string; revision: number };
-  moderation_cases: { id: string; resource_id: string | null; asset_id: string | null; reporter_id: string | null; subject_user_id: string; kind: string; status: string; reason: string; title: string; evidence: string; result: string; fingerprint: string; created_at: string; updated_at: string };
-  moderation_actions: { id: string; case_id: string | null; actor_id: string | null; resource_id: string | null; user_id: string | null; action: string; reason: string; created_at: string };
+  quick_notes: {
+    id: string;
+    owner_id: string;
+    content: string;
+    plain_text: string;
+    asset_ids: string;
+    version: number;
+    created_at: string;
+    updated_at: string;
+    deleted_at: string | null;
+  };
+  quick_note_compilations: {
+    id: string;
+    owner_id: string;
+    sources: string;
+    request_hash: string;
+    instruction: string;
+    model_id: string;
+    status: string;
+    markdown: string;
+    error: string;
+    document_id: string | null;
+    created_at: string;
+    updated_at: string;
+  };
 
-  ai_sessions: { approved_resource_ids?: string; mentioned_resource_ids?: string; id: string; user_id: string; title: string; model_id: string | null; resource_ids: string; archived: number; revision: number; created_at: string; updated_at: string };
-  ai_users: { user_id: string; default_model: string | null; memory_enabled: number; memory_revision: number; lock_version: number };
+  ai_sessions: {
+    approved_resource_ids?: string;
+    mentioned_resource_ids?: string;
+    id: string;
+    user_id: string;
+    title: string;
+    model_id: string | null;
+    resource_ids: string;
+    archived: number;
+    revision: number;
+    created_at: string;
+    updated_at: string;
+  };
+  ai_users: {
+    user_id: string;
+    default_model: string | null;
+    memory_enabled: number;
+    memory_revision: number;
+    lock_version: number;
+  };
   ai_notes: { user_id: string; content: string; updated_at: string };
-  ai_secrets: { user_id: string; key: string; value: string; updated_at: string };
-  ai_jobs: { id: string; session_id: string; user_id: string; model_id: string; status: string; input: string; digest: string; result: string; error: string; lease: string | null; lease_until: string | null; attempts: number; cancelled: number; created_at: string; updated_at: string };
-  ai_operations: { id: string; user_id: string; job_id: string | null; digest: string; result: string; created_at: string };
-  ai_calls: { id: string; user_id: string; job_id: string | null; model_id: string; model_snapshot: string; periods: string; state: string; input_tokens: number; output_tokens: number; cached_tokens: number; points: number; base_points: number; allocations: string; usage: string; created_at: string; updated_at: string };
-  ai_grants: { id: string; user_id: string; amount: number; remaining: number; expires_at: string | null; reason: string; actor_id: string; created_at: string };
-  ai_skills: { id: string; user_id: string; name: string; description: string; content: string; formats: string; enabled: number; revision: number; updated_at: string };
-  ai_mcp_keys: { id: string; user_id: string; name: string; token_hash: string; resource_ids: string; writable: number; expires_at: string; created_at: string };
+  ai_secrets: {
+    user_id: string;
+    key: string;
+    value: string;
+    updated_at: string;
+  };
+  ai_jobs: {
+    id: string;
+    session_id: string;
+    user_id: string;
+    model_id: string;
+    status:
+      | "queued"
+      | "running"
+      | "awaiting_approval"
+      | "completed"
+      | "failed"
+      | "cancelled"
+      | "interrupted";
+    input: string;
+    digest: string;
+    result: string;
+    error: string;
+    lease: string | null;
+    lease_until: string | null;
+    attempts: number;
+    cancelled: number;
+    created_at: string;
+    updated_at: string;
+  };
+  ai_operations: {
+    id: string;
+    user_id: string;
+    job_id: string | null;
+    digest: string;
+    result: string;
+    created_at: string;
+  };
+  ai_calls: {
+    id: string;
+    user_id: string;
+    job_id: string | null;
+    model_id: string;
+    model_snapshot: string;
+    periods: string;
+    state: string;
+    input_tokens: number;
+    output_tokens: number;
+    cached_tokens: number;
+    usage: string;
+    created_at: string;
+    updated_at: string;
+  };
+  ai_skills: {
+    id: string;
+    user_id: string;
+    name: string;
+    description: string;
+    content: string;
+    formats: string;
+    enabled: number;
+    revision: number;
+    updated_at: string;
+  };
+  ai_mcp_keys: {
+    id: string;
+    user_id: string;
+    name: string;
+    token_hash: string;
+    resource_ids: string;
+    writable: number;
+    expires_at: string;
+    created_at: string;
+  };
   ai_session_events: {
     session_id: string;
     seq: number;
@@ -114,7 +210,14 @@ export interface Schema {
     message: string;
     created_at: string;
   };
-  registration_reviews: { user_id: string; status: string; reviewer_id: string | null; message: string; created_at: string; updated_at: string };
+  registration_reviews: {
+    user_id: string;
+    status: string;
+    reviewer_id: string | null;
+    message: string;
+    created_at: string;
+    updated_at: string;
+  };
   access_invitations: {
     include_descendants?: number;
     resource_id: string;
@@ -202,13 +305,6 @@ export interface Schema {
   document_references: { source_id: string; target_id: string };
   document_reference_index: { resource_id: string; seq: number };
   user_card_settings: { id: string; config: string; revision: number };
-  user_activity: {
-    user_id: string;
-    resource_id: string;
-    day: string;
-    read_at: string | null;
-    edited_at: string | null;
-  };
   share_links: {
     include_descendants?: number;
     max_members?: number | null;
@@ -288,23 +384,6 @@ export interface Schema {
     action: string;
     details: string;
     created_at: string;
-  };
-  membership_grants: {
-    id: string;
-    user_id: string;
-    source: string;
-    level_id: string;
-    starts_at: string;
-    expires_at: string | null;
-    status: string;
-    version: number;
-  };
-  membership_events: { id: string; digest: string; created_at: string };
-  quota_usage: {
-    user_id: string;
-    metric: string;
-    period: string;
-    used: number;
   };
   auth_providers: {
     profile_config?: string;
@@ -522,80 +601,9 @@ export interface Schema {
     config: string;
     revision: number;
   };
-  mail_settings: {
-    id: string;
-    config: string;
-    revision: number;
-  };
-  mailboxes: {
-    id: string;
-    owner_id: string;
-    address: string;
-    local_part: string;
-    display_name: string;
-    kind: "personal" | "shared";
-    locked: number;
-    secret: string;
-    backend_user_id: string;
-    source: "internal" | "external";
-    provider: string;
-    knowledge_scope: "off" | "starred" | "all";
-    version: number;
-    created_at: string;
-    updated_at: string;
-    deleted_at: string | null;
-  };
-  mailbox_shares: {
-    mailbox_id: string;
-    user_id: string;
-    role: "admin" | "sender" | "reader";
-    version: number;
-    created_at: string;
-    updated_at: string;
-  };
-  mailbox_share_links: {
-    mailbox_id: string;
-    token: string;
-    token_hash: string;
-    role: "admin" | "sender" | "reader";
-    enabled: number;
-    created_by: string;
-    created_at: string;
-    updated_at: string;
-  };
-  mail_messages: {
-    id: string;
-    mailbox_id: string;
-    remote_id: string;
-    folder: string;
-    folder_id: string;
-    subject: string;
-    from_addr: string;
-    to_addrs: string;
-    cc_addrs: string;
-    snippet: string;
-    body_text: string;
-    body_html: string;
-    body_ready: number;
-    bcc_addrs: string;
-    unread: number;
-    starred: number;
-    has_attachments: number;
-    sent_at: string | null;
-    received_at: string;
-    ai_tags: string;
-    updated_at: string;
-  };
-  mail_mailbox_sync: {
-    mailbox_id: string;
-    folders_json: string;
-    synced_at: string | null;
-    updated_at: string;
-  };
   assets: {
     note_id?: string | null;
     uploaded_by?: string | null;
-    moderation_status?: string;
     id: string;
     owner_id: string;
     resource_id: string | null;
@@ -632,6 +640,8 @@ export interface Schema {
     registration: number;
     revision: number;
     site_name: string;
+    default_locale?: string;
+    default_timezone?: string;
     registration_review?: number;
     sso_registration?: string;
     social_registration?: string;
@@ -744,6 +754,7 @@ export interface Schema {
   };
   knowledge_subscriptions: {
     id: string;
+    creator_id?: string;
     library_id: string;
     source_kind: string;
     source_id: string;
@@ -753,6 +764,54 @@ export interface Schema {
     status: string;
     created_at: string;
     preset?: string;
+  };
+  knowledge_instructions: {
+    library_id: string;
+    path: string;
+    revision: number;
+    markdown: string;
+    author_id: string;
+    created_at: string;
+  };
+  knowledge_settings: {
+    library_id: string;
+    revision: number;
+    config: string;
+    updated_at: string;
+  };
+  knowledge_entries: {
+    id: string;
+    library_id: string;
+    title: string;
+    markdown: string;
+    origin: string;
+    status: string;
+    revision: number;
+    source_refs: string;
+    instruction_hash: string;
+    review_state: string;
+    author_id: string;
+    created_at: string;
+    updated_at: string;
+  };
+  knowledge_entry_versions: {
+    entry_id: string;
+    revision: number;
+    snapshot: string;
+    author_id: string;
+    created_at: string;
+  };
+  knowledge_assistant_users: { assistant_id: string; user_id: string; accepted: number; visited_at: string | null; integration: string; revision: number; };
+  knowledge_assistants: {
+    visibility?: string;
+    id: string;
+    owner_id: string;
+    title: string;
+    revision: number;
+    library_ids: string;
+    member_ids: string;
+    enabled: number;
+    updated_at: string;
   };
   knowledge_runs: {
     id: string;

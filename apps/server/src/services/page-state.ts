@@ -1,10 +1,8 @@
 import type { DB } from "@db/index.js";
 import { fail } from "@core/shared/errors.js";
 import {
-  mailScratchEmpty,
   normalizePageStateValue,
   parsePageStateKey,
-  type MailScratch,
 } from "@core/modules/page-state.js";
 
 export type PageStateItem = {
@@ -36,7 +34,7 @@ export async function readPageState(db: DB, userId: string, key: string) {
 }
 
 export async function listPageState(db: DB, userId: string, prefix: string) {
-  if (prefix !== "mail.draft." && prefix !== "ui." && prefix !== "ai.")
+  if (prefix !== "ui." && prefix !== "ai.")
     fail(400, "不支持的页面状态");
   const rows = await db
     .selectFrom("user_page_state")
@@ -63,10 +61,6 @@ export async function writePageState(
     normalized = normalizePageStateValue(parsed, value);
   } catch (error) {
     fail(400, error instanceof Error ? error.message : "页面状态无效");
-  }
-  if (parsed.startsWith("mail.draft.") && mailScratchEmpty(normalized as MailScratch)) {
-    await clearPageState(db, userId, parsed);
-    return { item: null, conflict: false };
   }
   const now = new Date().toISOString();
   const existing = await db

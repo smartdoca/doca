@@ -1,4 +1,4 @@
-import { checkDocumentSize } from "../entitlements/service.js";
+import { checkDocumentSize } from "../access/operation-policy.js";
 import { validateDocument } from "@eppt/editor/core";
 import { randomUUID } from "node:crypto";
 import type { Transaction } from "kysely";

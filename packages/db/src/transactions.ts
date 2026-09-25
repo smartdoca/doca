@@ -1,4 +1,5 @@
 import type { Transaction } from "kysely";
+import { inheritDatabaseRuntimeScope } from "./runtime-scope.js";
 import type { DB, Schema } from "./schema.js";
 
 const drivers = new WeakMap<object, "sqlite" | "postgres">();
@@ -19,7 +20,10 @@ export async function transact<T>(
         drivers.get(db) === "postgres"
           ? builder.setIsolationLevel("serializable")
           : builder
-      ).execute(fn);
+      ).execute(tx => {
+        inheritDatabaseRuntimeScope(db, tx);
+        return fn(tx);
+      });
     } catch (error) {
       const code = (error as { code?: string }).code;
       if (
@@ -39,7 +43,11 @@ export async function readSnapshot<T>(
   db: DB,
   fn: (tx: Transaction<Schema>) => Promise<T>,
 ): Promise<T> {
+  const run = (tx: Transaction<Schema>) => {
+    inheritDatabaseRuntimeScope(db, tx);
+    return fn(tx);
+  };
   return drivers.get(db) === "postgres"
-    ? db.transaction().setIsolationLevel("repeatable read").execute(fn)
-    : db.transaction().execute(fn);
+    ? db.transaction().setIsolationLevel("repeatable read").execute(run)
+    : db.transaction().execute(run);
 }

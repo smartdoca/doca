@@ -1,10 +1,12 @@
+import { searchServiceToken } from "@doca/plugin-sdk/search";
+import { activeActor } from "@core/modules/access/queries.js";
+import { provideAI } from "./ai-capability.js";
 import { createDocumentsPlugin } from "@doca/plugin-documents";
 import { createFilesPlugin } from "@doca/plugin-files";
 import { AIContributionHost } from "@doca/ai-host";
 import { PluginHost } from "@doca/plugin-host";
 import { definePlugin, type DocaPlugin } from "@doca/plugin-sdk";
 import type { FilesServiceV1 } from "@doca/files-capability";
-import { fileURLToPath } from "node:url";
 import { createPluginMigrationStore } from "@db/index.js";
 import { createFileProcessingWorker } from "../jobs/file-processing-worker.js";
 import { waitForFileExtracts } from "../services/ai/file-extract.js";
@@ -30,7 +32,9 @@ import {
   createFileSource,
   createKnowledgeSource,
 } from "../services/search/sources.js";
-import { loadInstalledPlugins } from "./directory.js";
+import { discoverInstalledPlugins, importInstalledPlugins, pluginDirectory } from "./installation.js";
+import { registerPluginAssets, pluginWebUrl } from "./web-assets.js";
+import { providePlatform } from "./platform.js";
 
 export interface ServerPluginDescriptor {
   readonly id: string;
@@ -73,8 +77,9 @@ const aiManifest = {
 function runtimePlugin(runtime: ServerRuntimeService) {
   return definePlugin({
     manifest: runtimeManifest,
-    discover(context) {
+    async discover(context) {
       context.provide(serverRuntimeToken, runtime);
+      await providePlatform(context, runtime);
     },
   });
 }
@@ -93,6 +98,27 @@ function searchPlugin() {
     injections: { required: [serverRuntimeToken] },
     discover(context) {
       context.provide(searchRegistrationToken, service);
+      context.provide(searchServiceToken, {
+        register(source) {
+          const contextFor = (ctx: any) => ({ principalId: ctx.kind === "plugin" ? ctx.principalId : null, signal: ctx.signal });
+          const handle = service.require().registerSource({
+            descriptor: source.descriptor,
+            prepareQuery: request => request.context.kind !== "plugin" ? null : source.prepareQuery ? source.prepareQuery({ ...request, context: contextFor(request.context) }) : { query: request.query },
+            authorize: request => request.context.kind !== "plugin" ? [] : source.authorize({ ...request, context: contextFor(request.context) }),
+            hydrate: request => request.context.kind !== "plugin" ? [] : source.hydrate({ ...request, context: contextFor(request.context) }),
+            ...(source.projections ? { projections: request => source.projections!({ ...request, context: contextFor(request.context) }) } : {}),
+          });
+          return () => handle.dispose();
+        },
+        upsert(source, projections) { return service.require().searchHost.upsertProjections({ source, projections }); },
+        delete(source, documentIds) { return service.require().searchHost.deleteProjections({ source, documentIds }); },
+        rebuild(source, signal) { return service.require().searchHost.rebuild({ source, signal, context: { kind: "system" } }); },
+        async query(request, input) {
+          const runtime = context.inject(serverRuntimeToken);
+          await activeActor(runtime.db, { id: request.principal.id, display_name: request.principal.displayName, public_id: request.principal.publicId, admin: Number(request.principal.admin) });
+          return service.require().searchHost.query({ query: input.query, sources: [input.source], offset: input.offset, limit: input.limit, context: { kind: "plugin", principalId: request.principal.id, signal: request.signal } });
+        },
+      });
       context.provide(searchSourceRegistryToken, {
         register(source) {
           return service.require().registerSource(source);
@@ -113,7 +139,6 @@ function searchPlugin() {
                 documents: false,
                 files: false,
                 knowledge: false,
-                mail: false,
               },
             },
           ),
@@ -164,6 +189,7 @@ function aiPlugin(files: FilesServiceV1) {
     },
     discover(context) {
       context.provide(aiContributionToken, contributions);
+      provideAI(context, context.inject(serverRuntimeToken).db, contributions);
     },
     async mount(context) {
       const runtime = context.inject(serverRuntimeToken);
@@ -177,7 +203,6 @@ function aiPlugin(files: FilesServiceV1) {
             notify: runtime.realtime.documentChanged,
             search: search.search,
             fileSearch: search.searchFiles,
-            mail: runtime.options.mail,
             contributions,
           }),
         );
@@ -252,18 +277,18 @@ export async function composeServerPlugins(
     documentsPlugin(runtime, files),
     aiPlugin(files),
     filesPlugin(runtime, files),
-    ...(await loadInstalledPlugins(
-      fileURLToPath(new URL("../../../../plugins/", import.meta.url)),
-      { disabled: runtime.options.plugins },
-    )),
   ];
+  const installed = await discoverInstalledPlugins(runtime.options.pluginDirectory ?? pluginDirectory(), { disabled: runtime.options.plugins });
+  plugins.push(...await importInstalledPlugins(installed, plugins.map(p => p.manifest)));
   for (const plugin of plugins) host.register(plugin);
   const descriptors = host.order.map((id) => {
     const manifest = plugins.find((plugin) => plugin.manifest.id === id)!
       .manifest;
-    return { id: manifest.id, version: manifest.version };
+    const installedPlugin = installed.find(p => p.manifest.id === id);
+    return { id: manifest.id, version: manifest.version, ...(installedPlugin?.web ? { web: pluginWebUrl(installedPlugin) } : {}) };
   });
   await host.start();
+  registerPluginAssets(runtime.api, installed);
   const search = host
     .context(searchManifest.id)!
     .inject(searchRegistrationToken)

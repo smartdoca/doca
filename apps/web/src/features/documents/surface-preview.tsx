@@ -34,7 +34,7 @@ export default function SurfacePreview({
   trash?: boolean;
   audit?: boolean;
 }) {
-  const { locale } = useI18n();
+  const { t, locale } = useI18n();
   const [model, setModel] = useState<
       CanvasModel | ExlsxCollaborationSession | Y.Doc | null
     >(null),
@@ -134,7 +134,7 @@ export default function SurfacePreview({
           style={{ height: "100%", minHeight: 0 }}
         />
       ) : (
-        <p>正在加载预览…</p>
+        <p>{t("trash.loadingPreview")}</p>
       )}
     </div>
   );

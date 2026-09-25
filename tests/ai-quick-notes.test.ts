@@ -30,7 +30,6 @@ beforeEach(async () => {
     ...aiDefaults,
     defaultModel: "test",
     memoryEnabled: true,
-    limits: { standard: { day: null, week: null, month: null } },
     vendors: [
       {
         id: "test-vendor",
@@ -48,10 +47,6 @@ beforeEach(async () => {
         model: "private-real-model",
         alias: "创作助手",
         enabled: true,
-        levels: [],
-        inputRate: 1,
-        outputRate: 2,
-        cacheRate: 0.5,
         maxInput: 32000,
         maxOutput: 1000,
         tools: true,
@@ -130,7 +125,7 @@ async function harness(modelFetch: typeof fetch) {
 }
 function expectTextOnly(job: any, operations: any[]) {
   expect(job?.status, job?.error).toBe("completed");
-  expect(job.progress.phase).toBe("已完成");
+  expect(job.progress.phase).toBe("completed");
   expect(job.progress.review).toBeUndefined();
   expect(job.progress.approvals).toBeUndefined();
   expect(
@@ -290,7 +285,10 @@ it("creates markdown only when the user explicitly asks for it", async () => {
       },
       { timeout: 10000 },
     );
-    expect(approval.detail).toContain("Markdown");
+    expect(approval.code).toBe("create_documents");
+    expect(approval.data?.formats).toBe("markdown");
+    expect(approval).not.toHaveProperty("title");
+    expect(approval).not.toHaveProperty("detail");
     expect(
       (
         await req("POST", `/ai/jobs/${jobId}/approval`, {
@@ -330,7 +328,7 @@ it("asks which document format to create when the type is unclear", async () => 
         const result = await session();
         const job = result.jobs[0];
         expect(job?.status, job?.error).toBe("completed");
-        expect(job.progress.phase).toBe("等待用户选择");
+        expect(job.progress.phase).toBe("waiting_choice");
         expect(job.progress.questions[0].options).toEqual([
           "富文本文档",
           "Markdown 文档",
@@ -361,7 +359,8 @@ it("asks which document format to create when the type is unclear", async () => 
       },
       { timeout: 10000 },
     );
-    expect(approval.detail).toContain("表格");
+    expect(approval.code).toBe("create_documents");
+    expect(approval.data?.formats).toBe("spreadsheet");
     expect(
       (
         await req("POST", `/ai/jobs/${jobId}/approval`, {
@@ -451,7 +450,7 @@ it("asks with a choice card instead of assuming document creation when unsure", 
         const result = await session();
         const job = result.jobs[0];
         expect(job?.status, job?.error).toBe("completed");
-        expect(job.progress.phase).toBe("等待用户选择");
+        expect(job.progress.phase).toBe("waiting_choice");
         expect(job.progress.questions[0].options).toEqual([
           "直接在对话输出文字",
           "保存为文档",

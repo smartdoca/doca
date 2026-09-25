@@ -28,7 +28,6 @@ import {
 
 export interface AppPluginRouteContext {
   readonly sharedFolderName: string;
-  readonly mailPreview: boolean;
   readonly onFileNavigationChange: (trail: FileLocation[]) => void;
 }
 
@@ -94,11 +93,6 @@ export const BUILTIN_CLIENT_MANIFESTS = {
     conversationKinds: ["file", "folder"],
   },
 } as const satisfies Record<string, ClientPluginManifest>;
-
-const installedWebPlugins = import.meta.glob(
-  "../../../../plugins/*/src/web/install.tsx",
-  { eager: true },
-) as Record<string, { bundle: WebPluginBundle<AppWebPluginTypes> }>;
 
 const documentsBundle: WebPluginBundle<AppWebPluginTypes> = {
   manifest: BUILTIN_CLIENT_MANIFESTS.documents,
@@ -342,8 +336,6 @@ export function createBuiltinWebPluginRegistry() {
   const registry = new WebPluginRegistry<AppWebPluginTypes>();
   registry.register(documentsBundle);
   registry.register(filesBundle);
-  for (const plugin of Object.values(installedWebPlugins))
-    registry.register(plugin.bundle);
   return registry;
 }
 

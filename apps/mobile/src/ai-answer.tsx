@@ -8,28 +8,19 @@ import {
   type TraceEvent,
   type TraceOperation,
 } from "./ai-trace";
+import {
+  aiApprovalDetail,
+  aiApprovalTitle,
+  type MobileAIApproval,
+} from "./ai-progress-label";
 import { colors } from "./chrome";
+import { useI18n } from "./locale";
 
 type Nav = {
   push: (path: string | { pathname: string; params?: Record<string, string> }) => void;
 };
 
-export type MailDraft = {
-  mailboxId: string;
-  to: string;
-  cc?: string;
-  bcc?: string;
-  subject: string;
-  text: string;
-};
-
-export type ApprovalItem = {
-  id: string;
-  title: string;
-  detail: string;
-  preview?: string;
-  state: "pending" | "approved" | "rejected";
-};
+export type ApprovalItem = MobileAIApproval;
 
 type Piece =
   | { type: "text"; text: string }
@@ -113,17 +104,21 @@ export function AnswerBody({
   text,
   events,
   operations,
-  drafts,
   router,
 }: {
   text: string;
   events: TraceEvent[];
   operations: TraceOperation[];
-  drafts: MailDraft[];
   router: Nav;
 }) {
-  const pieces = splitAnswer(text, deliveryCards(events, operations));
-  if (!pieces.length && !drafts.length) return null;
+  const { t } = useI18n();
+  const pieces = splitAnswer(
+    text,
+    deliveryCards(events, operations, t),
+    t("mobile.ai.delivery.document"),
+    t("mobile.ai.delivery.viewDocument"),
+  );
+  if (!pieces.length) return null;
   return (
     <View>
       {pieces.map((piece, index) =>
@@ -144,16 +139,7 @@ export function AnswerBody({
           <DeliveryCardView key={piece.card.key} card={piece.card} onPress={() => openDeliveryCard(router, piece.card)} />
         ),
       )}
-      {drafts.map((draft) => (
-        <DeliveryCardView
-          key={`draft:${draft.mailboxId}:${draft.subject}`}
-          card={{ eyebrow: draft.to.trim() || "待填写收件人", title: draft.subject.trim() || "未发送的邮件" }}
-          onPress={() => {
-            setMailDraft(draft);
-            router.push({ pathname: "/compose", params: { mailboxId: draft.mailboxId } });
-          }}
-        />
-      ))}
+
     </View>
   );
 }
@@ -167,13 +153,18 @@ export function ApprovalCards({
   busy: boolean;
   onDecide: (jobId: string, approvalId: string, approved: boolean) => void;
 }) {
+  const { t } = useI18n();
   if (!items.length) return null;
   return (
     <View style={styles.approvals}>
       {items.map(({ jobId, approval }) => (
         <View key={approval.id} style={styles.approval}>
-          <Text style={styles.approvalTitle}>{approval.title}</Text>
-          {approval.detail ? <Text style={styles.approvalDetail}>{approval.detail}</Text> : null}
+          <Text style={styles.approvalTitle}>
+            {aiApprovalTitle(approval, t)}
+          </Text>
+          <Text style={styles.approvalDetail}>
+            {aiApprovalDetail(approval, t)}
+          </Text>
           {approval.preview ? (
             <Text style={styles.approvalPreview} numberOfLines={8}>
               {approval.preview}
@@ -181,10 +172,10 @@ export function ApprovalCards({
           ) : null}
           <View style={styles.approvalActions}>
             <Pressable disabled={busy} style={styles.reject} onPress={() => onDecide(jobId, approval.id, false)}>
-              <Text style={styles.rejectText}>拒绝</Text>
+              <Text style={styles.rejectText}>{t("ticket.reject")}</Text>
             </Pressable>
             <Pressable disabled={busy} style={styles.approve} onPress={() => onDecide(jobId, approval.id, true)}>
-              <Text style={styles.approveText}>批准并继续</Text>
+              <Text style={styles.approveText}>{t("chat.approveContinue")}</Text>
             </Pressable>
           </View>
         </View>
@@ -194,6 +185,7 @@ export function ApprovalCards({
 }
 
 function DeliveryCardView({ card, onPress }: { card: Pick<DeliveryCard, "eyebrow" | "title">; onPress: () => void }) {
+  const { t } = useI18n();
   return (
     <Pressable collapsable={false} style={styles.card} onPress={onPress}>
       <View style={styles.cardCopy}>
@@ -202,12 +194,17 @@ function DeliveryCardView({ card, onPress }: { card: Pick<DeliveryCard, "eyebrow
           {card.title}
         </Text>
       </View>
-      <Text style={styles.arrow}>打开</Text>
+      <Text style={styles.arrow}>{t("common.open")}</Text>
     </Pressable>
   );
 }
 
-function splitAnswer(text: string, cards: DeliveryCard[]): Piece[] {
+function splitAnswer(
+  text: string,
+  cards: DeliveryCard[],
+  documentLabel: string,
+  viewDocumentLabel: string,
+): Piece[] {
   if (!text && !cards.length) return [];
   const used = new Set<string>();
   const pieces: Piece[] = [];
@@ -216,7 +213,7 @@ function splitAnswer(text: string, cards: DeliveryCard[]): Piece[] {
   for (const match of text.matchAll(pattern)) {
     const title = match[1] ?? "";
     const href = match[2] ?? "";
-    const card = cardForLink(title, href, cards);
+    const card = cardForLink(title, href, cards, documentLabel, viewDocumentLabel);
     if (!card) continue;
     const start = match.index ?? 0;
     if (start > cursor) pieces.push({ type: "text", text: text.slice(cursor, start) });
@@ -234,29 +231,29 @@ function splitAnswer(text: string, cards: DeliveryCard[]): Piece[] {
   return pieces;
 }
 
-function cardForLink(title: string, href: string, cards: DeliveryCard[]): DeliveryCard | null {
+function cardForLink(
+  title: string,
+  href: string,
+  cards: DeliveryCard[],
+  documentLabel: string,
+  viewDocumentLabel: string,
+): DeliveryCard | null {
   const found = cards.find((card) => card.href && sameHref(card.href, href));
   if (found) return { ...found, title: found.title || title };
   const document = /^(?:#|\/m)?\/r\/([a-f0-9-]{36})$/i.exec(href.trim()) ?? /\/r\/([a-f0-9-]{36})/i.exec(href);
   if (!document?.[1]) return null;
-  return { key: `link:${document[1]}`, eyebrow: "文档", title: title || "查看文档", documentId: document[1], href };
+  return {
+    key: `link:${document[1]}`,
+    kind: "document",
+    eyebrow: documentLabel,
+    title: title || viewDocumentLabel,
+    documentId: document[1],
+    href,
+  };
 }
 
 function sameHref(left: string, right: string) {
   return left.replace(/^#/, "") === right.replace(/^#/, "");
-}
-
-let pendingDraft: MailDraft | null = null;
-
-export function setMailDraft(draft: MailDraft) {
-  pendingDraft = draft;
-}
-
-export function takeMailDraft(mailboxId: string) {
-  if (!pendingDraft || pendingDraft.mailboxId !== mailboxId) return null;
-  const draft = pendingDraft;
-  pendingDraft = null;
-  return draft;
 }
 
 const styles = StyleSheet.create({

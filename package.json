@@ -16,7 +16,8 @@
     "build": "vite build --config apps/web/vite.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "build:plugin-sdk": "node scripts/build-plugin-sdk.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.53",
@@ -83,7 +84,7 @@
     "slate-dom": "0.118.1",
     "slate-history": "0.113.1",
     "slate-react": "0.118.2",
-    "slatetsx-kit-editor": "file:vendor/slatetsx-kit-editor-0.4.9-4c5ca89c3361.tgz",
+    "slatetsx-kit-editor": "file:vendor/slatetsx-kit-editor-0.4.9-86c014f2fc80.tgz",
     "three": "0.172.0",
     "ws": "^8.21.3",
     "yjs": "13.6.32",

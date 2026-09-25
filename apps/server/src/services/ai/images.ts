@@ -13,7 +13,7 @@ import {
   type AIModel,
 } from "@core/modules/ai/config.js";
 import { providerPreset } from "@core/modules/ai/providers.js";
-import { reserveCall, settleCall } from "@core/modules/ai/quota.js";
+import { beginCall, settleCall } from "@core/modules/ai/usage.js";
 import {
   checkScope,
   checkJob,
@@ -23,8 +23,7 @@ import {
 import {
   checkStorage,
   requireCapability,
-} from "@core/modules/entitlements/service.js";
-import { moderationConfig } from "@core/modules/moderation/service.js";
+} from "@core/modules/access/operation-policy.js";
 import { enqueueProjection } from "@core/modules/automation/jobs.js";
 import {
   createStorage,
@@ -328,12 +327,12 @@ export async function generateImageAsset(
     if (!asset) fail(404, "生成的图片已不可用");
     return {
       ...existing,
-      ready: ["none", "pass"].includes(asset.moderation_status ?? "none"),
+      ready: true,
     };
   }
-  let call: Awaited<ReturnType<typeof reserveCall>>;
+  let call: Awaited<ReturnType<typeof beginCall>>;
   try {
-    call = await reserveCall(
+    call = await beginCall(
       db,
       ctx.actor.id,
       model.id,
@@ -491,14 +490,8 @@ export async function generateImageAsset(
       await checkJob(tx, ctx);
       await requireCapability(tx, ctx.actor.id, "ai.create");
       if (input.resourceId) await checkScope(tx, ctx, input.resourceId, true);
-      const rights = await requireCapability(tx, ctx.actor.id, "assets.upload");
-      if (
-        rights.level.limits["asset.bytes"] !== null &&
-        rendered.data.length > rights.level.limits["asset.bytes"]!
-      )
-        fail(413, "图片超过当前等级的附件大小限制");
+      await requireCapability(tx, ctx.actor.id, "assets.upload");
       await checkStorage(tx, ctx.actor.id, rendered.data.length);
-      const moderation = (await moderationConfig(tx)).enabled;
       const asset: Schema["assets"] = {
         id: assetId,
         owner_id: ctx.actor.id,
@@ -512,7 +505,6 @@ export async function generateImageAsset(
         size: rendered.data.length,
         created_at: new Date().toISOString(),
         deleted_at: null,
-        moderation_status: moderation ? "pending" : "none",
       };
       await tx.insertInto("assets").values(asset).execute();
       const recognitionSetting = await tx
@@ -573,8 +565,6 @@ export async function generateImageAsset(
       await enqueueProjection(tx, "search-file", sourceItem.id, {
         fileId: sourceItem.id,
       });
-      if (moderation)
-        await enqueueProjection(tx, "moderation-image", assetId, { assetId });
       const result = {
         kind: "image_generation",
         state: "saved",
@@ -585,11 +575,9 @@ export async function generateImageAsset(
         height: rendered.info.height,
         mime: "image/webp",
         size: rendered.data.length,
-        ready: !moderation,
+        ready: true,
         url: `/api/v1/assets/${assetId}/content`,
-        instruction: moderation
-          ? "图片正在审核，不能使用或重复生成；审核通过后继续插入。"
-          : input.resourceId
+        instruction: input.resourceId
             ? "图片已存入 AI 助手文件夹并展示在对话中。仅在用户要求插入时调用 image_insert；加入文档只会创建位置引用，不会复制图片内容。"
             : "图片已存入 AI 助手文件夹并展示在对话中。用户可预览、下载或点击加入文档；加入文档只会创建位置引用。",
       };

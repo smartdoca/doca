@@ -1,3 +1,4 @@
+import { htmlLang } from "@doca/i18n";
 import "@web/features/documents/permissions.css";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
@@ -25,18 +26,6 @@ export function accessText(
   const message = accessLabelKeys[key];
   return message ? t(message) : key;
 }
-export const accessLabels: Record<string, string> = {
-  reader: "可阅读",
-  commenter: "可评论",
-  editor: "可编辑",
-  manager: "可管理",
-  owner: "所有者",
-  pending: "待接受",
-  accepted: "已接受",
-  rejected: "已拒绝",
-  cancelled: "已撤销",
-  expired: "已过期",
-};
 export type Manager = {
   id: string;
   display_name: string;
@@ -44,13 +33,15 @@ export type Manager = {
   role?: string;
 };
 export function Administrators({ items = [] }: { items?: Manager[] }) {
+const { t, locale } = useI18n();
+
   return items.length > 0 ? (
     <div className="access-administrators">
-      <span>可联系的管理人员：</span>
+      <span>{t("accessUi.managers")}</span>
       {items.map((u) => (
         <span key={u.id}>
           <UserBadge id={u.id} name={u.display_name} />
-          {u.role === "owner" ? "（所有者）" : ""}
+          {u.role === "owner" ? t("accessUi.ownerSuffix") : ""}
         </span>
       ))}
     </div>
@@ -85,7 +76,7 @@ export function InvitationRows({
   refresh: () => Promise<void>;
   isOwner?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [editing, setEditing] = useState<Invitation | null>(null),
@@ -127,27 +118,21 @@ export function InvitationRows({
             · {accessText(t, i.role)} · {accessText(t, i.state)}
           </p>
           {i.inviter && (
-            <p>
-              发起人：
-              <UserBadge id={i.inviter.id} name={i.inviter.display_name} />
+            <p>{t("accessUi.sender")}<UserBadge id={i.inviter.id} name={i.inviter.display_name} />
             </p>
           )}
           <p>
-            发起于 {new Date(i.created_at).toLocaleString()} ·{" "}
+            {t("sharingUi.createdAt", { date: new Date(i.created_at).toLocaleString(htmlLang(locale)) })} ·{" "}
             {i.expires_at
-              ? `有效至 ${new Date(i.expires_at).toLocaleString()}`
-              : "不过期"}
+              ? t("sharingUi.expiresAt", { date: new Date(i.expires_at).toLocaleString(htmlLang(locale)) })
+              : t("sharingUi.noExpiry")}
           </p>
           {i.decider && (
-            <p>
-              处理人：
-              <UserBadge id={i.decider.id} name={i.decider.display_name} />
+            <p>{t("accessUi.handler")}<UserBadge id={i.decider.id} name={i.decider.display_name} />
             </p>
           )}
           {i.canCancel && (
-            <button disabled={busy} onClick={() => void act(i, "cancel")}>
-              撤销邀请
-            </button>
+            <button disabled={busy} onClick={() => void act(i, "cancel")}>{t("accessUi.revokeInvite")}</button>
           )}
           {i.canResend && (
             <button
@@ -157,14 +142,12 @@ export function InvitationRows({
                 setRole(i.role);
                 setExpires("");
               }}
-            >
-              调整并重发
-            </button>
+            >{t("accessUi.resend")}</button>
           )}
           {editing?.key === i.key && (
             <div>
               <Select
-                aria-label="邀请角色"
+                aria-label={t("accessUi.invitationRole")}
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
               >
@@ -179,18 +162,14 @@ export function InvitationRows({
                   </option>
                 ))}
               </Select>
-              <label>
-                邀请有效期（留空不过期）
-                <input
+              <label>{t("accessUi.invitationExpiry")}<input
                   type="datetime-local"
                   value={expires}
                   onChange={(e) => setExpires(e.target.value)}
                 />
               </label>
-              <button disabled={busy} onClick={() => void act(i, "resend")}>
-                确认重发
-              </button>
-              <button onClick={() => setEditing(null)}>取消</button>
+              <button disabled={busy} onClick={() => void act(i, "resend")}>{t("accessUi.confirmResend")}</button>
+              <button onClick={() => setEditing(null)}>{t("common.cancel")}</button>
             </div>
           )}
         </article>
@@ -208,6 +187,8 @@ export function DocumentInvitations({
   isOwner: boolean;
   changed: () => Promise<void>;
 }) {
+const { t, locale } = useI18n();
+
   const [items, setItems] = useState<Invitation[]>([]),
     [error, setError] = useState(""),
     [all, setAll] = useState(false);
@@ -222,17 +203,13 @@ export function DocumentInvitations({
   }, [id]);
   return (
     <section>
-      <p className="subtle">
-        管理员可以查看全部邀请，并撤销自己发出的邀请；所有者可以撤销任意邀请。
-      </p>
+      <p className="subtle">{t("accessUi.manageHelp")}</p>
       <label className="permissions-filter">
         <input
           type="checkbox"
           checked={all}
           onChange={(e) => setAll(e.target.checked)}
-        />
-        包含已结束邀请
-      </label>
+        />{t("accessUi.includeEnded")}</label>
       <InvitationRows
         items={items.filter((i) => all || i.state === "pending")}
         isOwner={isOwner}
@@ -243,7 +220,7 @@ export function DocumentInvitations({
       />
       {!items.some((i) => all || i.state === "pending") && (
         <p className="permissions-empty">
-          {all ? "暂无邀请记录" : "暂无待接受的邀请"}
+          {all ? t("accessUi.noInvitations") : t("accessUi.noPending")}
         </p>
       )}
       {error && <Feedback tone="error" message={error} />}

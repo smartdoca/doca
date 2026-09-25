@@ -2,10 +2,7 @@ import { openTestDatabase as openDatabase } from "./database.js";
 import { beforeEach, afterEach, it, expect } from "vitest";
 import { randomUUID } from "node:crypto";
 import { type DB } from "@db/index.js";
-import {
-  createUser,
-  type Actor,
-} from "@core/modules/identity/passwords.js";
+import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import { createExperience } from "@core/workflows/experience.js";
 import {
@@ -22,11 +19,6 @@ import {
   encodeStateVector,
 } from "slatetsx-kit-editor/yjs";
 import { createApp } from "../apps/server/src/app/create-app.js";
-import {
-  activityCalendar,
-  activityDay,
-  recordActivity,
-} from "@core/modules/interactions/activity.js";
 import { internalDocumentId } from "../apps/web/src/features/documents/internal-document-id.js";
 let db: DB,
   owner: Actor,
@@ -70,13 +62,21 @@ it("persists spreadsheet registers and rejects a different epoch", async () => {
       baseline = (initial as any).baseline;
     doc
       .getMap("exlsx:identity-cells")
-      .set(JSON.stringify([baseline.snapshot.sheetOrder[0], "b:0", "b:0", "content"]), {
-        v: "Hello",
-        f: null,
-        p: null,
-        t: null,
-        si: null,
-      });
+      .set(
+        JSON.stringify([
+          baseline.snapshot.sheetOrder[0],
+          "b:0",
+          "b:0",
+          "content",
+        ]),
+        {
+          v: "Hello",
+          f: null,
+          p: null,
+          t: null,
+          si: null,
+        },
+      );
     const update = b64(encodeStateAsUpdate(doc, vector));
     await expect(
       docs.exchange(owner, r.id, { update, epochId: randomUUID() }),
@@ -100,31 +100,23 @@ it("persists spreadsheet registers and rejects a different epoch", async () => {
     doc.destroy();
   }
 });
-it("counts activity per document and day and hides revoked documents", async () => {
+it("counts at most one document visit per site-local day", async () => {
   const r = await create();
-  await content.visit(owner, r.id);
-  await content.visit(owner, r.id);
-  const calendar = await activityCalendar(
-    db,
-    owner,
-    activityDay(),
-    activityDay(),
-    activityDay(),
-  );
-  expect(calendar.days).toEqual([{ day: activityDay(), read: 1, edited: 1 }]);
-  expect(calendar.documents).toHaveLength(1);
+  await db
+    .updateTable("settings")
+    .set({ default_timezone: "America/Los_Angeles" })
+    .where("id", "=", "system")
+    .execute();
+  await content.visit(owner, r.id, new Date("2026-09-11T06:00:00Z"));
+  await content.visit(owner, r.id, new Date("2026-09-11T06:30:00Z"));
+  await content.visit(owner, r.id, new Date("2026-09-11T07:01:00Z"));
   expect(
     await db
       .selectFrom("visit_events")
       .selectAll()
       .where("resource_id", "=", r.id)
       .execute(),
-  ).toHaveLength(1);
-  await recordActivity(db, guest.id, r.id, "read");
-  expect(
-    (await activityCalendar(db, guest, activityDay(), activityDay())).days,
-  ).toEqual([]);
-  expect(activityDay(new Date("2026-09-10T16:01:00Z"))).toBe("2026-09-11");
+  ).toHaveLength(2);
 });
 it("stores rich-text page width on the document record", async () => {
   const r = await create();

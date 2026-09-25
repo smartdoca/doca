@@ -5,17 +5,9 @@ import ipaddr from "ipaddr.js";
 import type { DB } from "../../../../db/src/index.js";
 import { transact } from "../../../../db/src/transactions.js";
 import { fail } from "../../shared/errors.js";
-import { entitlements } from "../entitlements/service.js";
+import { requireCapability } from "../access/operation-policy.js";
 import { aiProviders, embeddingSource } from "./providers.js";
 
-const multiplier = z
-  .number()
-  .min(0)
-  .max(1000)
-  .refine(
-    (v) => Math.abs(v * 1000 - Math.round(v * 1000)) < 0.000001,
-    "倍率最多三位小数",
-  );
 function emptyToUndefined(value: unknown) {
   return typeof value === "string" && !value.trim() ? undefined : value;
 }
@@ -34,6 +26,15 @@ const requiredServiceUrl = z
   .string()
   .max(2000)
   .refine(isServiceUrl, "服务地址无效");
+const usageRate = z
+  .number()
+  .min(0)
+  .max(1000)
+  .refine(
+    (value) =>
+      Math.abs(value * 1_000_000 - Math.round(value * 1_000_000)) < 0.000001,
+    "Token 速率最多六位小数",
+  );
 const webFetchSchema = z
   .object({
     provider: z.enum(["builtin", "firecrawl", "jina", "tavily"]),
@@ -57,10 +58,6 @@ export const modelSchema = z
     embedding: z.boolean().optional(),
     embeddingApi: z.enum(["openai", "doubao-multimodal"]).optional(),
     embeddingDimensions: z.number().int().min(1).max(65536).optional(),
-    imageRate: multiplier.optional(),
-    imageSizeRates: z
-      .record(z.string().regex(/^\d{2,4}x\d{2,4}$/), multiplier)
-      .optional(),
     imageSize: z
       .string()
       .regex(/^\d{2,4}x\d{2,4}$/)
@@ -70,10 +67,9 @@ export const modelSchema = z
     baseUrl: requiredServiceUrl,
     apiKey: z.string().max(8000).nullable(),
     enabled: z.boolean(),
-    levels: z.array(z.string().max(64)).max(30),
-    inputRate: multiplier,
-    outputRate: multiplier,
-    cacheRate: multiplier,
+    inputRate: usageRate.optional(),
+    outputRate: usageRate.optional(),
+    imageRate: z.number().int().min(0).max(1000000000).optional(),
     maxInput: z.number().int().min(1000).max(10000000),
     maxOutput: z.number().int().min(32).max(1000000),
     tools: z.boolean(),
@@ -92,7 +88,12 @@ export const vendorSchema = z
   .strict();
 const linkedModelSchema = modelSchema
   .omit({ provider: true, baseUrl: true, apiKey: true, apiVersion: true })
-  .extend({ vendorId: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/) });
+  .extend({
+    vendorId: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
+    inputRate: usageRate.default(1),
+    outputRate: usageRate.default(1),
+    imageRate: z.number().int().min(0).max(1000000000).default(1),
+  });
 export const aiConfigSchema = z
   .object({
     display: z.enum(["real", "alias"]),
@@ -111,7 +112,6 @@ export const aiConfigSchema = z
       .strict()
       .optional(),
     webFetch: webFetchSchema.optional(),
-    taskBudget: z.number().int().min(100).max(10000000).nullable(),
     vendors: z.array(vendorSchema).max(50).optional(),
     models: z.array(linkedModelSchema).max(50),
     officialSkills: z
@@ -139,16 +139,6 @@ export const aiConfigSchema = z
       )
       .max(30)
       .optional(),
-    limits: z.record(
-      z.string(),
-      z
-        .object({
-          day: z.number().int().min(0).max(1000000000).nullable(),
-          week: z.number().int().min(0).max(1000000000).nullable(),
-          month: z.number().int().min(0).max(1000000000).nullable(),
-        })
-        .strict(),
-    ),
   })
   .strict();
 export type AIVendor = z.infer<typeof vendorSchema>;
@@ -157,18 +147,25 @@ export type AIConfig = Omit<
   "models" | "vendors"
 > & { models: AIModel[]; vendors: AIVendor[] };
 export type AIModel = z.infer<typeof modelSchema>;
+export function modelUsageRates(
+  model: Pick<AIModel, "inputRate" | "outputRate" | "imageRate">,
+) {
+  return {
+    input: model.inputRate ?? 1,
+    output: model.outputRate ?? 1,
+    image: model.imageRate ?? 1,
+  };
+}
 export const aiDefaults: AIConfig = {
   display: "alias",
   defaultModel: "",
   memoryEnabled: false,
   historyRounds: 6,
   maxSteps: 12,
-  taskBudget: null,
   models: [],
   vendors: [],
   officialSkills: defaultOfficialSkills,
   webFetch: { provider: "builtin", apiKey: null },
-  limits: {},
 };
 export async function aiConfig(db: DB) {
   const row = await db
@@ -177,10 +174,12 @@ export async function aiConfig(db: DB) {
     .where("id", "=", "ai")
     .executeTakeFirst();
   return {
-    ...resolveConfig({
-      ...aiDefaults,
-      ...(row ? JSON.parse(row.config) : {}),
-    }),
+    ...resolveConfig(
+      aiConfigSchema.parse({
+        ...aiDefaults,
+        ...(row ? JSON.parse(row.config) : {}),
+      }),
+    ),
     revision: row?.revision ?? 0,
   };
 }
@@ -189,8 +188,7 @@ function resolveConfig(input: z.infer<typeof aiConfigSchema>): AIConfig {
   const vendors = (input.vendors ?? []).map((v) => ({ ...v }));
   const models = input.models.map((m) => {
     const vendor = vendors.find((v) => v.id === m.vendorId);
-    if (!vendor)
-      fail(400, "模型所属厂商不存在，请先移除或转移旗下模型");
+    if (!vendor) fail(400, "模型所属厂商不存在，请先移除或转移旗下模型");
     return {
       ...m,
       vendorId: vendor.id,
@@ -200,13 +198,18 @@ function resolveConfig(input: z.infer<typeof aiConfigSchema>): AIConfig {
       apiVersion: vendor.apiVersion,
     } as AIModel;
   });
-  return { ...input, vendors, models, officialSkills: refreshOfficialSkills(input.officialSkills) };
+  return {
+    ...input,
+    vendors,
+    models,
+    officialSkills: refreshOfficialSkills(input.officialSkills),
+  };
 }
-function refreshOfficialSkills(
-  stored: AIConfig["officialSkills"] | undefined,
-) {
+function refreshOfficialSkills(stored: AIConfig["officialSkills"] | undefined) {
   if (!stored?.length) return defaultOfficialSkills;
-  const defaults = new Map(defaultOfficialSkills.map((skill) => [skill.id, skill]));
+  const defaults = new Map(
+    defaultOfficialSkills.map((skill) => [skill.id, skill]),
+  );
   return stored.map((skill) => {
     const next = defaults.get(skill.id);
     return next ? { ...next, enabled: skill.enabled } : skill;
@@ -353,8 +356,7 @@ export async function saveAIConfig(db: DB, input: unknown, revision: number) {
     const media = config.models.find((m) => m.id === config.mediaModel);
     if (!media || media.embedding)
       fail(400, "附件识别模型必须是已配置的非向量模型");
-    if (!media.vision)
-      fail(400, "附件识别模型需要启用图片理解");
+    if (!media.vision) fail(400, "附件识别模型需要启用图片理解");
   }
   return transact(db, async (tx) => {
     const old = await aiConfig(tx);
@@ -390,7 +392,10 @@ export async function saveAIConfig(db: DB, input: unknown, revision: number) {
         .executeTakeFirst();
       if (!r.numUpdatedRows) fail(409, "配置已变化，请刷新");
     }
-    return { ...resolveConfig(stored), revision: revision + 1 };
+    return {
+      ...resolveConfig(aiConfigSchema.parse(stored)),
+      revision: revision + 1,
+    };
   });
 }
 export async function aiUser(db: DB, userId: string) {
@@ -420,42 +425,35 @@ export async function lockAIUser(db: DB, userId: string) {
     .execute();
 }
 export async function availableModels(db: DB, userId: string) {
-  const [config, rights] = await Promise.all([
-    aiConfig(db),
-    entitlements(db, userId),
-  ]);
-  const models = rights.can["ai.create"]
-    ? config.models.filter(
-        (m) =>
-          m.enabled &&
-          !m.embedding &&
-          config.vendors.some((v) => v.id === m.vendorId && v.enabled) &&
-          (!!m.apiKey || m.provider === "ollama") &&
-          m.tools &&
-          (!m.levels.length || m.levels.includes(rights.level.id)),
-      )
-    : [];
-  return { config, rights, models };
+  await requireCapability(db, userId, "ai.create");
+  const config = await aiConfig(db);
+  const models = config.models.filter(
+    (m) =>
+      m.enabled &&
+      !m.embedding &&
+      m.tools &&
+      config.vendors.some((v) => v.id === m.vendorId && v.enabled) &&
+      (!!m.apiKey || m.provider === "ollama"),
+  );
+  return { config, models };
 }
 export async function requireModel(db: DB, userId: string, id: string) {
-  const { config, rights, models } = await availableModels(db, userId);
+  const { config, models } = await availableModels(db, userId);
   const model = models.find((m) => m.id === id);
-  if (!model) fail(403, "所选模型未启用、尚未配置或当前等级不可用");
-  return { config, rights, model };
+  if (!model) fail(403, "所选模型未启用或尚未配置");
+  return { config, model };
 }
 export async function requireImageModel(db: DB, userId: string, id: string) {
-  const config = await aiConfig(db),
-    rights = await entitlements(db, userId);
+  await requireCapability(db, userId, "ai.create");
+  const config = await aiConfig(db);
   const model = config.models.find((m) => m.id === id);
   if (
-    !rights.can["ai.create"] ||
     !model?.enabled ||
     model.embedding ||
     !model.imageGeneration ||
     !model.apiKey ||
-    !config.vendors.some((v) => v.id === model.vendorId && v.enabled) ||
-    (model.levels.length && !model.levels.includes(rights.level.id))
+    !config.vendors.some((v) => v.id === model.vendorId && v.enabled)
   )
-    fail(403, "图片生成模型未配置、未启用或当前等级不可用");
-  return { config, rights, model };
+    fail(403, "图片生成模型未配置或未启用");
+  return { config, model };
 }

@@ -1,5 +1,28 @@
 type Message = { id: string; role: string; createdAt?: string };
 type Job = { id: string; status: string; created_at?: string };
+type CompletionProgress = {
+  questions?: unknown[];
+  pendingAccess?: unknown;
+  plan?: { mode?: string };
+  review?: { verdict?: string };
+};
+
+export type CompletionPresentation =
+  "done" | "waiting-choice" | "waiting-access" | "waiting-input";
+
+/** Derive presentation from structured state, never from localized phase text. */
+export function completionPresentation(
+  progress?: CompletionProgress | null,
+): CompletionPresentation {
+  if (progress?.questions?.length) return "waiting-choice";
+  if (progress?.pendingAccess) return "waiting-access";
+  if (
+    progress?.plan?.mode === "clarify" ||
+    progress?.review?.verdict === "needs_user"
+  )
+    return "waiting-input";
+  return "done";
+}
 
 // Pair turns by persistent job IDs, never by prompt text or completion order.
 export function aiTimeline<M extends Message, J extends Job>(
@@ -41,6 +64,10 @@ export function taskDuration(start?: string, end?: string) {
     0,
     Math.floor((Date.parse(end ?? "") - Date.parse(start ?? "")) / 1000),
   );
-  if (!Number.isFinite(seconds)) return "执行详情";
-  return `用时 ${Math.floor(seconds / 3600)}小时${Math.floor((seconds % 3600) / 60)}分钟${seconds % 60}秒`;
+  if (!Number.isFinite(seconds)) return null;
+  return {
+    hours: Math.floor(seconds / 3600),
+    minutes: Math.floor((seconds % 3600) / 60),
+    seconds: seconds % 60,
+  };
 }

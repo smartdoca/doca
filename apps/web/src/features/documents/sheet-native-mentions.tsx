@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type {
@@ -18,6 +19,8 @@ export function SheetNativeMentions({
   enabled: boolean;
   onError(message: string): void;
 }) {
+const { t } = useI18n();
+
   const [query, setQuery] = useState<string | null>(null);
   const [users, setUsers] = useState<MentionUser[]>([]);
   const [index, setIndex] = useState(0);
@@ -257,9 +260,7 @@ export function SheetNativeMentions({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={close}
-          >
-            取消
-          </button>
+          >{t("common.cancel")}</button>
         </div>
       ) : null}
     </aside>,

@@ -1,16 +1,25 @@
-import { bearerSession, mobileSession, registerMobileClient, renewMobileSession, sessionExpiresAt, startMobilePush } from "./mobile-client.js";
-import { registerModeration } from "../routes/moderation.js";
-import type { ModerationRuntime } from "../adapters/moderation.js";
+import { emitIntegrationEvent } from "@core/modules/automation/events.js";
+import {
+  bearerSession,
+  mobileSession,
+  registerMobileClient,
+  renewMobileSession,
+  sessionExpiresAt,
+  startMobilePush,
+} from "./mobile-client.js";
 import { registerRuntimeSettings } from "../routes/runtime-settings.js";
 import type { registerAI } from "../routes/ai.js";
 import { registerQuickNotes } from "../routes/quick-notes.js";
 import { passwordIdentity } from "@core/modules/identity/accounts.js";
-import {registrationProfile} from "@core/modules/identity/accounts.js";
-import {profilePolicy} from "@core/modules/identity/naming.js";
-import {requireSecurity} from "@core/modules/identity/security.js";
-import { adminUserDetails, createAdminUser, resetUserPassword } from "../routes/admin-users.js";
+import { registrationProfile } from "@core/modules/identity/accounts.js";
+import { profilePolicy } from "@core/modules/identity/naming.js";
+import { requireSecurity } from "@core/modules/identity/security.js";
+import {
+  adminUserDetails,
+  createAdminUser,
+  resetUserPassword,
+} from "../routes/admin-users.js";
 import { registerAccounts } from "../routes/accounts.js";
-import { registerEntitlements } from "../routes/entitlements.js";
 import { type MessagingRuntime } from "../adapters/messaging.js";
 import {
   passwordAllowed,
@@ -29,6 +38,7 @@ import {
   createUser,
   hashPassword,
   publicUser,
+  recordLogin,
   tokenHash,
   verifyPassword,
   type Actor,
@@ -45,7 +55,6 @@ import { transact } from "@db/transactions.js";
 import type { IdentityRuntime } from "../adapters/identity-providers.js";
 import { type StorageRuntime } from "../adapters/storage.js";
 import { registerAssets } from "../routes/assets.js";
-import { runUserProvisioners } from "../plugins/lifecycle.js";
 import { registerPageState } from "../routes/page-state.js";
 import { registerExperience } from "../routes/experience.js";
 import { registerTemplates } from "../routes/templates.js";
@@ -67,20 +76,9 @@ export interface CreateAppOptions {
   search?: SearchRuntime;
   identity?: IdentityRuntime;
   messaging?: MessagingRuntime;
-  moderation?: ModerationRuntime;
-  membershipSecret?: string;
   ai?: Parameters<typeof registerAI>[4];
-  mail?: {
-    client?: unknown;
-    fetch?: typeof fetch;
-    origin?: string;
-    mock?: boolean;
-    externalClient?: unknown;
-  };
-  plugins?: {
-    /** Mail routes and workers are enabled unless explicitly disabled. */
-    mail?: boolean;
-  };
+  pluginDirectory?: string;
+  plugins?: Readonly<Record<string, boolean | undefined>>;
 }
 
 export async function createApp(db: DB, options: CreateAppOptions) {
@@ -199,8 +197,11 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       fail(421, "访问地址与服务配置不符");
     const presentedCookie = cookieToken(req);
     const presentedBearer = bearerSession(req.headers.authorization);
-    const bearerUser = presentedBearer ? await sessionUser(presentedBearer) : null;
-    if (bearerUser && presentedBearer) await renewMobileSession(db, presentedBearer);
+    const bearerUser = presentedBearer
+      ? await sessionUser(presentedBearer)
+      : null;
+    if (bearerUser && presentedBearer)
+      await renewMobileSession(db, presentedBearer);
     const path = req.url.split("?")[0]!;
     const mobileCredential =
       req.headers["x-doca-client"] === "mobile" &&
@@ -214,8 +215,11 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       ].includes(path);
     if (
       !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
-      !req.url.startsWith("/api/v1/integrations/membership/") &&
-      !(req.url === "/api/v1/mcp" && /^Bearer doca_mcp_[a-f0-9]{64}$/.test(req.headers.authorization ?? "")) &&
+      !(
+        req.url === "/api/v1/mcp" &&
+        /^Bearer doca_mcp_[a-f0-9]{64}$/.test(req.headers.authorization ?? "")
+      ) &&
+      !(req.routeOptions.config as { docaPluginExternal?: boolean }).docaPluginExternal &&
       !bearerUser &&
       !mobileCredential &&
       req.headers.origin !== origin.origin
@@ -252,9 +256,11 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         "/api/v1/bootstrap",
       ].includes(accountPath) &&
       !accountPath.startsWith("/api/v1/me/identities/") &&
-      !(user.admin &&
+      !(
+        user.admin &&
         accountPath.startsWith("/api/v1/admin/") &&
-        !forcedLoginMethod)
+        !forcedLoginMethod
+      )
     ) {
       reply.header("X-Doca-Profile-Required", "1");
       fail(
@@ -339,12 +345,6 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     },
     runtime.messaging,
   );
-  registerEntitlements(
-    api,
-    db,
-    { origin, actor, authenticated, admin, sessionToken, cookie, limit },
-    options.membershipSecret,
-  );
   const stopMobilePush = startMobilePush(db);
   api.addHook("preClose", async () => {
     stopMobilePush();
@@ -399,7 +399,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       );
     },
   );
-  registerWorkspace(api, db, authenticated, admin, realtime.online);
+  registerWorkspace(api, db, authenticated, admin, realtime.onlineUsers);
   registerPageState(api, db, authenticated);
   const pluginComposition = await composeServerPlugins({
     api,
@@ -417,16 +417,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   const search = pluginComposition.search;
   registerQuickNotes(api, db, authenticated, options.ai?.fetch);
   registerProfiles(api, db, authenticated);
-  const moderation = registerModeration(api, db, { admin, auth: authenticated, limit }, runtime.storage, realtime.enforceAccess, options.moderation);
-  registerAssets(
-    api,
-    db,
-    authenticated,
-    actor,
-    admin,
-    runtime.storage,
-    moderation,
-  );
+  registerAssets(api, db, authenticated, actor, admin, runtime.storage);
   const id = Type.String({ format: "uuid" }),
     nullableId = Type.Union([id, Type.Null()]),
     version = Type.Integer({ minimum: 1 }),
@@ -506,10 +497,15 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         : null;
       return {
         siteName: settings.site_name,
+        defaultLocale: settings.default_locale ?? "zh",
+        defaultTimezone: settings.default_timezone ?? "Asia/Shanghai",
         registrationEnabled: !!settings.registration,
         authOptions: await identityPolicy(db),
         needsProfile: actor(req)
-          ? !!((await profileRequirements(db, actor(req)!.id)) || missingLoginMethod)
+          ? !!(
+              (await profileRequirements(db, actor(req)!.id)) ||
+              missingLoginMethod
+            )
           : false,
         forcedLoginMethod: missingLoginMethod,
         initialized,
@@ -519,7 +515,6 @@ export async function createApp(db: DB, options: CreateAppOptions) {
           realtime: true,
           oidcClient: true,
           oidcProvider: false,
-          cloudBackup: false,
           hooks: false,
           integrationEventStream: true,
         },
@@ -556,13 +551,13 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       )
         fail(401, "账号或密码错误");
       await passwordAllowed(db);
-      if (user.status === "pending")
-        return { status: "pending" };
+      if (user.status === "pending") return { status: "pending" };
       if (user.status !== "active") fail(401, "账号或密码错误");
       const token = randomBytes(32).toString("hex");
       await transact(db, async (tx) => {
         await passwordAllowed(tx);
-        if ((await passwordIdentity(tx, req.body.login))?.user_id !== user.id) fail(401, "账号或密码错误");
+        if ((await passwordIdentity(tx, req.body.login))?.user_id !== user.id)
+          fail(401, "账号或密码错误");
         const current = await tx
           .selectFrom("users")
           .select(["status", "password_hash"])
@@ -585,6 +580,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
             expires_at: sessionExpiresAt(req),
           })
           .execute();
+        await recordLogin(tx, user.id);
       });
       reply.header("Set-Cookie", cookie(token));
       return mobileSession(req, token, { user: publicUser(user) });
@@ -596,8 +592,8 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       password: string;
       displayName?: string;
       avatar?: string;
-      email?:string;
-      phone?:string;
+      email?: string;
+      phone?: string;
       publicId?: string;
       proofs?: Partial<Record<"email" | "phone", string>>;
     };
@@ -610,10 +606,10 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         body: object({
           login: name,
           password,
-          displayName: optional(Type.String({maxLength:160})),
-          avatar:optional(Type.String({maxLength:2048})),
-          email:optional(Type.String({maxLength:254})),
-          phone:optional(Type.String({maxLength:32})),
+          displayName: optional(Type.String({ maxLength: 160 })),
+          avatar: optional(Type.String({ maxLength: 2048 })),
+          email: optional(Type.String({ maxLength: 254 })),
+          phone: optional(Type.String({ maxLength: 32 })),
           publicId: optional(name),
           proofs: optional(
             object({ email: optional(name), phone: optional(name) }),
@@ -623,26 +619,64 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     },
     async (req, reply) => {
       limit(`register:${req.ip}`, 5);
-      const result = await transact(db, async tx=>{
-        const proofs=await contactProofs(tx,req.body.proofs,accountBinding(req),'profile');
-        const fields=await registrationProfile(tx,profilePolicy(),{}, {},{...req.body,username:req.body.publicId??req.body.login,email:proofs.email??req.body.email,phone:proofs.phone??req.body.phone},proofs);
-        const u=await createUser(tx,{...req.body,login:fields.values.username!,publicId:fields.values.username!,displayName:fields.values.displayName??''},{registration:true,verifiedContacts:proofs});
-        if(fields.values.avatar)await tx.updateTable('users').set({profile_metadata:JSON.stringify({avatarUrl:fields.values.avatar})}).where('id','=',u.id).execute();
-        if(u.status==='active') {
-          const session=randomBytes(32).toString('hex');
-          await tx.insertInto('sessions').values({id:tokenHash(session),user_id:u.id,expires_at:sessionExpiresAt(req)}).execute();
-          return {...u,session};
+      const result = await transact(db, async (tx) => {
+        const proofs = await contactProofs(
+          tx,
+          req.body.proofs,
+          accountBinding(req),
+          "profile",
+        );
+        const fields = await registrationProfile(
+          tx,
+          profilePolicy(),
+          {},
+          {},
+          {
+            ...req.body,
+            username: req.body.publicId ?? req.body.login,
+            email: proofs.email ?? req.body.email,
+            phone: proofs.phone ?? req.body.phone,
+          },
+          proofs,
+        );
+        const u = await createUser(
+          tx,
+          {
+            ...req.body,
+            login: fields.values.username!,
+            publicId: fields.values.username!,
+            displayName: fields.values.displayName ?? "",
+          },
+          { registration: true, verifiedContacts: proofs },
+        );
+        if (fields.values.avatar)
+          await tx
+            .updateTable("users")
+            .set({
+              profile_metadata: JSON.stringify({
+                avatarUrl: fields.values.avatar,
+              }),
+            })
+            .where("id", "=", u.id)
+            .execute();
+        if (u.status === "active") {
+          const session = randomBytes(32).toString("hex");
+          await tx
+            .insertInto("sessions")
+            .values({
+              id: tokenHash(session),
+              user_id: u.id,
+              expires_at: sessionExpiresAt(req),
+            })
+            .execute();
+          await recordLogin(tx, u.id);
+          return { ...u, session };
         }
-        return {...u,session:undefined};
+        return { ...u, session: undefined };
       });
-      if (result.session) reply.header('Set-Cookie',cookie(result.session));
-      await runUserProvisioners(
-        db,
-        { id: result.id, displayName: result.display_name },
-        options.mail?.client,
-      );
+      if (result.session) reply.header("Set-Cookie", cookie(result.session));
       if (result.status === "pending") return { status: "pending" };
-      const {session,...publicResult}=result;
+      const { session, ...publicResult } = result;
       return mobileSession(req, session, publicResult);
     },
   );
@@ -670,11 +704,11 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         .selectAll()
         .where("id", "=", a.id)
         .executeTakeFirstOrThrow();
-      await requireSecurity(db,a.id,tokenHash(sessionToken(req)!));
+      await requireSecurity(db, a.id, tokenHash(sessionToken(req)!));
       const hash = await hashPassword(req.body.newPassword);
       await transact(db, async (tx) => {
         await passwordAllowed(tx);
-        await requireSecurity(tx,a.id,tokenHash(sessionToken(req)!),true);
+        await requireSecurity(tx, a.id, tokenHash(sessionToken(req)!), true);
         const changed = await tx
           .updateTable("users")
           .set({ password_hash: hash })
@@ -734,6 +768,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
           "admin",
           "status",
           "created_at",
+          "last_login_at",
           "public_id",
           "directory_mode",
         ]);
@@ -759,18 +794,29 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       };
     },
   );
-  route<{ login: string; password?: string; displayName: string; email?: string; phone?: string; avatar?: string }>(
-    "POST", "/admin/users", "管理员创建用户",
-    object({ login: name, password: optional(password), displayName: Type.String({maxLength:160}), email: optional(Type.String({maxLength:254})), phone: optional(Type.String({maxLength:32})), avatar: optional(Type.String({maxLength:2048})) }),
-    async req => {
+  route<{
+    login: string;
+    password?: string;
+    displayName: string;
+    email?: string;
+    phone?: string;
+    avatar?: string;
+  }>(
+    "POST",
+    "/admin/users",
+    "管理员创建用户",
+    object({
+      login: name,
+      password: optional(password),
+      displayName: Type.String({ maxLength: 160 }),
+      email: optional(Type.String({ maxLength: 254 })),
+      phone: optional(Type.String({ maxLength: 32 })),
+      avatar: optional(Type.String({ maxLength: 2048 })),
+    }),
+    async (req) => {
       const a = admin(req);
-      limit(`create:${a.id}`,20);
-      const user = await createAdminUser(db,a,req.body);
-      await runUserProvisioners(
-        db,
-        { id: user.id, displayName: user.display_name },
-        options.mail?.client,
-      );
+      limit(`create:${a.id}`, 20);
+      const user = await createAdminUser(db, a, req.body);
       return user;
     },
   );
@@ -798,6 +844,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
           .set({ status: req.body.status })
           .where("id", "=", user.id)
           .execute();
+        if (user.status !== req.body.status) await emitIntegrationEvent(tx, "user.status.changed", { userId: user.id, status: req.body.status, previousStatus: user.status });
         if (req.body.status === "disabled")
           await tx
             .deleteFrom("sessions")
@@ -841,21 +888,46 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         .executeTakeFirstOrThrow();
     },
   );
-  route<{ revision: number; siteName: string; registrationEnabled: boolean }>(
+  route<{
+    revision: number;
+    siteName: string;
+    registrationEnabled: boolean;
+    defaultLocale?: string;
+    defaultTimezone?: string;
+  }>(
     "PUT",
     "/admin/settings",
-    "修改站点名称和公开注册开关",
+    "修改站点信息和通用默认配置",
     object({
       revision: version,
       siteName: name,
+      defaultLocale: Type.Optional(
+        Type.Union([Type.Literal("zh"), Type.Literal("en")]),
+      ),
+      defaultTimezone: Type.Optional(
+        Type.String({ minLength: 1, maxLength: 100 }),
+      ),
       registrationEnabled: Type.Boolean(),
     }),
     async (req) => {
       admin(req);
+      if (req.body.defaultTimezone) {
+        try {
+          new Intl.DateTimeFormat("en", { timeZone: req.body.defaultTimezone });
+        } catch {
+          fail(400, "时区无效，请选择有效的 IANA 时区");
+        }
+      }
       const changed = await db
         .updateTable("settings")
         .set({
           site_name: req.body.siteName.trim(),
+          ...(req.body.defaultLocale
+            ? { default_locale: req.body.defaultLocale }
+            : {}),
+          ...(req.body.defaultTimezone
+            ? { default_timezone: req.body.defaultTimezone }
+            : {}),
           registration: Number(req.body.registrationEnabled),
           revision: req.body.revision + 1,
         })
@@ -891,7 +963,9 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         security: [{ session: [] }],
         querystring: object({
           q: optional(Type.String({ maxLength: 500 })),
-          mode: optional(Type.Union([Type.Literal("keyword"), Type.Literal("ai")])),
+          mode: optional(
+            Type.Union([Type.Literal("keyword"), Type.Literal("ai")]),
+          ),
           scope: optional(
             Type.Union(
               ["all", "owned", "shared", "favorites", "recent", "discover"].map(
@@ -905,8 +979,12 @@ export async function createApp(db: DB, options: CreateAppOptions) {
           libraryIds: optional(
             Type.Array(id, { minItems: 1, maxItems: 50, uniqueItems: true }),
           ),
-          ownerIds: optional(Type.Array(id, { minItems: 1, maxItems: 10, uniqueItems: true })),
-          visitedWithinDays: optional(Type.Integer({ minimum: 1, maximum: 3650 })),
+          ownerIds: optional(
+            Type.Array(id, { minItems: 1, maxItems: 10, uniqueItems: true }),
+          ),
+          visitedWithinDays: optional(
+            Type.Integer({ minimum: 1, maximum: 3650 }),
+          ),
           likedOnly: optional(Type.Boolean()),
           favoritesOnly: optional(Type.Boolean()),
           format: optional(
@@ -1076,9 +1154,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     "/resources/:id/page-width",
     "保存富文本内容宽度",
     object({
-      pageWidth: Type.Union(
-        ["a4", "a3", "fluid"].map((x) => Type.Literal(x)),
-      ),
+      pageWidth: Type.Union(["a4", "a3", "fluid"].map((x) => Type.Literal(x))),
       version,
     }),
     (req, a) =>
@@ -1095,15 +1171,39 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     "设置权限和协作者",
     object({
       version,
-      accessMode: optional(Type.Union([Type.Literal("inherit"), Type.Literal("custom")])),
-      visibility: optional(Type.Union(
-        ["invited", "requestable", "authenticated", "public"].map((x) =>
-          Type.Literal(x),
+      accessMode: optional(
+        Type.Union([Type.Literal("inherit"), Type.Literal("custom")]),
+      ),
+      visibility: optional(
+        Type.Union(
+          ["invited", "requestable", "authenticated", "public"].map((x) =>
+            Type.Literal(x),
+          ),
         ),
-      )),
-      resetFields: optional(Type.Array(Type.Union(["visibility", "public_role", "requests_enabled", "discoverable", "history_readers", "share_links_enabled"].map(x => Type.Literal(x))))),
+      ),
+      resetFields: optional(
+        Type.Array(
+          Type.Union(
+            [
+              "visibility",
+              "public_role",
+              "requests_enabled",
+              "discoverable",
+              "history_readers",
+              "share_links_enabled",
+            ].map((x) => Type.Literal(x)),
+          ),
+        ),
+      ),
       grants: optional(
-        Type.Array(object({ userId: id, role, includeDescendants: optional(Type.Boolean()) }), { maxItems: 100 }),
+        Type.Array(
+          object({
+            userId: id,
+            role,
+            includeDescendants: optional(Type.Boolean()),
+          }),
+          { maxItems: 100 },
+        ),
       ),
       publicRole: optional(
         Type.Union(

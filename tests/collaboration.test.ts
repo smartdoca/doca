@@ -483,6 +483,15 @@ it("serves authenticated WebSocket collaboration, pushes notifications, counts u
     }
     const stats = await app.inject({ url: "/api/v1/admin/stats", headers });
     expect(stats.json().online).toBe(1);
+    const onlineUsers = await app.inject({
+      url: "/api/v1/admin/online-users",
+      headers,
+    });
+    expect(onlineUsers.statusCode, onlineUsers.body).toBe(200);
+    expect(onlineUsers.json()).toMatchObject({
+      items: [{ id: owner.id, display_name: owner.display_name }],
+      nextOffset: null,
+    });
     const notice = next(a, "notifications.changed");
     await app.inject({
       method: "POST",

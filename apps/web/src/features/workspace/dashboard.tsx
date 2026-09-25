@@ -1,4 +1,3 @@
-import { useEntitlements } from "@web/shared/hooks/entitlement-access.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { htmlLang } from "@doca/i18n";
 import { Feedback } from "@web/shared/components/feedback.js";
@@ -12,7 +11,6 @@ import {
   Presentation,
   Plus,
   Search,
-  Cloud,
   FolderOpen,
   Trash2,
   MoreHorizontal,
@@ -38,7 +36,7 @@ import { CoverDialog, ResourceActionDialog } from "@web/features/documents/uploa
 import { Dialog } from "@web/features/documents/dialogs.js";
 import { assetUrl } from "@web/shared/api.js";
 import { librarySettingsUrl } from "@web/features/documents/library.js";
-import { listTime as date } from "@web/shared/utils/list-time.js";
+import { listTime } from "@web/shared/utils/list-time.js";
 import { EmptyTrash, FileTrash, TrashPreview } from "@web/features/trash/trash.js";
 
 const empty: Page = { items: [], total: 0, nextOffset: null };
@@ -58,7 +56,7 @@ export function Dashboard({
   currentUserId?: string;
 }) {
   const { locale, t } = useI18n();
-  const allowed = useEntitlements();
+  const date = (value?: string | null) => listTime(value, Date.now(), locale);
   const [tab, setTab] = useState("recent"),
     [format, setFormat] = useState(""),
     [searchOpen, setSearchOpen] = useState(false),
@@ -296,9 +294,6 @@ export function Dashboard({
       {!trash && (
         <div className="quick-actions">
           <button
-            hidden={
-              !allowed(libraries ? "libraries.create" : "documents.create")
-            }
             onClick={() => create(libraries ? "library" : "document")}
           >
             <span className="quick-icon">
@@ -313,7 +308,6 @@ export function Dashboard({
             <ArrowUpRight size={17} />
           </button>
           <button
-            hidden={!libraries && !allowed("libraries.create")}
             onClick={() =>
               libraries ? (location.hash = "/home") : create("library")
             }
@@ -611,39 +605,6 @@ export function Dashboard({
             {t("common.more")}
           </button>
         )}
-      </div>
-    </section>
-  );
-}
-export function CloudBackup() {
-  const { t } = useI18n();
-  return (
-    <section className="dashboard">
-      <div className="dashboard-heading">
-        <h1>{t("backup.title")}</h1>
-        <span className="tag">{t("backup.off")}</span>
-      </div>
-      <div className="backup-layout">
-        <aside>
-          <h3>{t("backup.folders")}</h3>
-          <div>
-            <FileText size={17} />
-            {t("home.mine")}
-          </div>
-          <div>
-            <BookOpen size={17} />
-            {t("home.libraries")}
-          </div>
-        </aside>
-        <div className="backup-empty">
-          <Cloud size={58} />
-          <h2>{t("backup.headline")}</h2>
-          <p>{t("backup.body")}</p>
-          <p className="subtle">
-            {t("backup.note")}
-          </p>
-          <span className="tag">{t("backup.later")}</span>
-        </div>
       </div>
     </section>
   );

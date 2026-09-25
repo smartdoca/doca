@@ -69,7 +69,6 @@ it("describes the system folders and file tools", () => {
     "ai",
     "shared",
     "documents",
-    "mail",
   ]);
   expect(systemFolders.find((folder) => folder.id === "ai")).toMatchObject({
     parentId: "root",

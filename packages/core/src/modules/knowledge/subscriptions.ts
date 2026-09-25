@@ -1,11 +1,13 @@
+import { authorizeFileFolder, authorizeFileItem } from "../access/file-access.js";
+import { mainInstruction, knowledgeRunHistory, knowledgeSourceLinkVisible, sourceAvailable, maintainKnowledgeSource } from "./system.js";
 import { randomUUID } from "node:crypto";
 import type { DB } from "@db/index.js";
 import type { Actor } from "../identity/passwords.js";
 import { authorize } from "../access/queries.js";
 import { fail } from "../../shared/errors.js";
-import { mailKnowledgeIncluded } from "../plugins/policies.js";
 
-export type SubscriptionKind = "document" | "file" | "folder" | "mail" | "mailbox" | "url";
+
+export type SubscriptionKind = "document" | "file" | "folder" | "url";
 export type KnowledgeDocumentCreator = (
   actor: Actor,
   input: {
@@ -18,22 +20,24 @@ export type KnowledgeDocumentCreator = (
   },
 ) => Promise<{ id: string }>;
 
-const kinds = new Set<SubscriptionKind>(["document", "file", "folder", "mail", "mailbox", "url"]);
+const kinds = new Set<SubscriptionKind>(["document", "file", "folder", "url"]);
 
 export function subscriptionKind(value: string): SubscriptionKind {
   if (kinds.has(value as SubscriptionKind)) return value as SubscriptionKind;
   fail(400, "来源类型不正确");
 }
 
-export async function listKnowledgeSubscriptions(db: DB, actor: Actor, libraryId: string) {
-  await authorize(db, actor, libraryId, 1);
-  const library = await db.selectFrom("resources").select(["id", "kind", "ai_curated", "guide_text", "knowledge_schedule", "knowledge_preset"]).where("id", "=", libraryId).executeTakeFirst();
+export async function listKnowledgeSubscriptions(db: DB, actor: Actor, libraryId: string, options: { refreshStatus?: boolean } = {}) {
+  await authorize(db, actor, libraryId, 4);
+  const library = await db.selectFrom("resources").select(["id", "kind", "owner_id", "ai_curated", "guide_text", "knowledge_schedule", "knowledge_preset"]).where("id", "=", libraryId).executeTakeFirst();
   if (!library || library.kind !== "library") fail(404, "知识库不存在");
   const rows = await db.selectFrom("knowledge_subscriptions").selectAll().where("library_id", "=", libraryId).orderBy("created_at", "desc").execute();
   const items = [];
   for (const row of rows) {
-    const status = row.status === "pending" ? await pendingStatus(db, row) : await subscriptionStatus(db, row);
-    if (status !== row.status) {
+    const available = await sourceAvailable(db, actor, row);
+    const visible = await knowledgeSourceLinkVisible(db, actor, row, true);
+    const status = row.status === "detached" ? "detached" : !available ? "missing" : row.status === "pending" ? await pendingStatus(db, row) : await subscriptionStatus(db, row);
+    if (options.refreshStatus !== false && status !== row.status && row.creator_id === actor.id) {
       await db.updateTable("knowledge_subscriptions").set({ status }).where("id", "=", row.id).execute();
     }
     const node = row.node_id
@@ -41,20 +45,22 @@ export async function listKnowledgeSubscriptions(db: DB, actor: Actor, libraryId
       : undefined;
     items.push({
       id: row.id,
+      canEdit: row.creator_id === actor.id,
+      canDelete: row.creator_id === actor.id || library.owner_id === actor.id,
       sourceKind: row.source_kind,
-      sourceId: row.source_id,
-      url: row.url,
+      sourceId: visible ? row.source_id : "",
+      url: visible ? row.url : "",
       nodeId: row.node_id,
       nodeTitle: node?.title ?? "",
       status,
-      sourceTitle: await sourceTitle(db, row),
+      sourceTitle: visible ? await sourceTitle(db, row) : "",
       sourceVersion: row.source_version,
       createdAt: row.created_at,
-      preset: parseSourcePreset(row.preset),
+      preset: visible ? parseSourcePreset(row.preset) : parseSourcePreset("{}"),
     });
   }
   const guideText = await libraryGuideText(db, libraryId);
-  const runs = await db.selectFrom("knowledge_runs").selectAll().where("library_id", "=", libraryId).orderBy("created_at", "desc").limit(8).execute();
+  const runs = await knowledgeRunHistory(db, actor, libraryId);
   return {
     aiCurated: Number(library.ai_curated ?? 0) === 1,
     guideText,
@@ -88,12 +94,20 @@ export async function subscribeKnowledgeSource(
     .where("source_id", "=", source.sourceId)
     .where("url", "=", source.url)
     .executeTakeFirst();
-  if (existing) return { ...(await publicSubscription(db, existing)), included: 0 };
+  if (existing) {
+    if (existing.status === "detached") {
+      await maintainKnowledgeSource(db, actor, libraryId, existing.id);
+      await db.updateTable("knowledge_subscriptions").set({ status: "active" }).where("id", "=", existing.id).execute();
+      existing.status = "active";
+    }
+    return { ...(await publicSubscription(db, existing)), included: 0 };
+  }
   const now = new Date().toISOString();
   const id = randomUUID();
   await db.insertInto("knowledge_subscriptions").values({
     id,
     library_id: libraryId,
+    creator_id: actor.id,
     source_kind: input.sourceKind,
     source_id: source.sourceId,
     url: source.url,
@@ -114,156 +128,29 @@ export async function subscribeKnowledgeSource(
   })), included: 0 };
 }
 
-export async function confirmKnowledgeSubscription(db: DB, actor: Actor, libraryId: string, subscriptionId: string, createDocument: KnowledgeDocumentCreator) {
+export async function confirmKnowledgeSubscription(db: DB, actor: Actor, libraryId: string, subscriptionId: string, _createDocument: KnowledgeDocumentCreator) {
   await authorize(db, actor, libraryId, 4);
-  const library = await db.selectFrom("resources").select(["id", "kind", "ai_curated", "knowledge_schedule", "knowledge_preset"]).where("id", "=", libraryId).where("deleted_at", "is", null).executeTakeFirst();
-  if (!library || library.kind !== "library") fail(404, "知识库不存在");
-  if (Number(library.ai_curated ?? 0) !== 1) fail(400, "先启用知识体系");
-  const pending = await db.selectFrom("knowledge_subscriptions").selectAll().where("id", "=", subscriptionId).where("library_id", "=", libraryId).executeTakeFirst();
-  if (!pending) fail(404, "连线不存在");
-  if (pending.status !== "pending") return { ...(await publicSubscription(db, pending)), included: 0 };
-  const source = await readSource(db, actor, libraryId, { sourceKind: pending.source_kind as SubscriptionKind, sourceId: pending.source_id, url: pending.url });
-  const libraryPreset = parseLibraryPreset(library.knowledge_preset, knowledgeSchedule(library.knowledge_schedule || "off"));
-  const copyText = presetCopiesText(libraryPreset, parseSourcePreset(pending.preset));
-  const node = await createDocument(actor, {
-    title: source.title,
-    kind: "document",
-    format: "markdown",
-    libraryId,
-    markdown: markdownForPreset(source.markdown, copyText),
-  });
-  await db.updateTable("knowledge_subscriptions").set({ node_id: node.id, status: "active", source_version: source.version }).where("id", "=", pending.id).execute();
-  const mode = await librarySplitMode(db, libraryId);
-  const kind = pending.source_kind as SubscriptionKind;
-  let included = 0;
-  if (kind === "folder" && mode === "source") {
-    const files = await filesUnderFolder(db, source.sourceId);
-    for (const file of files) {
-      const snapshot = await readSource(db, actor, libraryId, { sourceKind: "file", sourceId: file });
-      snapshot.markdown = markdownForPreset(snapshot.markdown, libraryPreset.copyText);
-      await ensureSubscription(db, actor, libraryId, "file", snapshot, node.id, createDocument);
-      included += 1;
-    }
-  }
-  if (kind === "mailbox" && mode === "source") {
-    const messages = await messagesInMailbox(db, source.sourceId);
-    for (const messageId of messages) {
-      const snapshot = await readSource(db, actor, libraryId, { sourceKind: "mail", sourceId: messageId });
-      snapshot.markdown = markdownForPreset(snapshot.markdown, libraryPreset.copyText);
-      await ensureSubscription(db, actor, libraryId, "mail", snapshot, node.id, createDocument);
-      included += 1;
-    }
-  }
-  if ((kind === "folder" || kind === "mailbox") && mode !== "source") {
-    const children = kind === "folder" ? await filesUnderFolder(db, source.sourceId) : await messagesInMailbox(db, source.sourceId);
-    for (const child of children) {
-      const childKind = kind === "folder" ? "file" as const : "mail" as const;
-      const snapshot = await readSource(db, actor, libraryId, { sourceKind: childKind, sourceId: child });
-      await ensureLinkedSubscription(db, libraryId, childKind, snapshot, node.id);
-      included += 1;
-    }
-  }
-  const saved = await db.selectFrom("knowledge_subscriptions").selectAll().where("id", "=", pending.id).executeTakeFirstOrThrow();
-  return { ...(await publicSubscription(db, saved)), included };
+  const row = await db.selectFrom("knowledge_subscriptions").selectAll().where("id", "=", subscriptionId).where("library_id", "=", libraryId).executeTakeFirst();
+  if (!row || !await sourceAvailable(db, actor, row)) fail(404, "来源不可用");
+  await maintainKnowledgeSource(db, actor, libraryId, subscriptionId);
+  // Confirmation enables a source; only reviewed AI summaries become knowledge.
+  await db.updateTable("knowledge_subscriptions").set({ status: "active" }).where("id", "=", row.id).execute();
+  return { ...(await publicSubscription(db, { ...row, status: "active" })), included: 0 };
 }
 
 export async function dismissKnowledgeSubscription(db: DB, actor: Actor, libraryId: string, subscriptionId: string) {
   await authorize(db, actor, libraryId, 4);
   const row = await db.selectFrom("knowledge_subscriptions").select(["id", "status"]).where("id", "=", subscriptionId).where("library_id", "=", libraryId).executeTakeFirst();
   if (!row) fail(404, "连线不存在");
+  const source = await db.selectFrom("knowledge_subscriptions").select("creator_id").where("id", "=", row.id).executeTakeFirstOrThrow();
+  const library = await db.selectFrom("resources").select("owner_id").where("id", "=", libraryId).executeTakeFirstOrThrow();
+  if (source.creator_id !== actor.id && library.owner_id !== actor.id) fail(403, "只有来源创建者或知识库所有者可以删除来源");
   if (row.status !== "pending") fail(400, "只有等待确认的连线可以不加入");
   await db.deleteFrom("knowledge_subscriptions").where("id", "=", row.id).execute();
   return { ok: true };
 }
 
-async function ensureSubscription(
-  db: DB,
-  actor: Actor,
-  libraryId: string,
-  sourceKind: SubscriptionKind,
-  source: { sourceId: string; url: string; version: string; title: string; markdown: string },
-  parentId: string | null,
-  createDocument: KnowledgeDocumentCreator,
-) {
-  const existing = await db.selectFrom("knowledge_subscriptions").selectAll()
-    .where("library_id", "=", libraryId)
-    .where("source_kind", "=", sourceKind)
-    .where("source_id", "=", source.sourceId)
-    .where("url", "=", source.url)
-    .executeTakeFirst();
-  if (existing) return { id: existing.id, nodeId: existing.node_id, createdAt: existing.created_at };
-  const node = await createDocument(actor, {
-    title: source.title,
-    kind: "document",
-    format: "markdown",
-    libraryId,
-    parentId,
-    markdown: source.markdown,
-  });
-  const now = new Date().toISOString();
-  const id = randomUUID();
-  await db.insertInto("knowledge_subscriptions").values({
-    id,
-    library_id: libraryId,
-    source_kind: sourceKind,
-    source_id: source.sourceId,
-    url: source.url,
-    node_id: node.id,
-    source_version: source.version,
-    status: "active",
-    created_at: now,
-  }).execute();
-  return { id, nodeId: node.id, createdAt: now };
-}
-
-async function ensureLinkedSubscription(db: DB, libraryId: string, sourceKind: SubscriptionKind, source: { sourceId: string; url: string; version: string }, nodeId: string) {
-  const existing = await db.selectFrom("knowledge_subscriptions").select("id")
-    .where("library_id", "=", libraryId)
-    .where("source_kind", "=", sourceKind)
-    .where("source_id", "=", source.sourceId)
-    .where("url", "=", source.url)
-    .executeTakeFirst();
-  if (existing) return;
-  await db.insertInto("knowledge_subscriptions").values({
-    id: randomUUID(),
-    library_id: libraryId,
-    source_kind: sourceKind,
-    source_id: source.sourceId,
-    url: source.url,
-    node_id: nodeId,
-    source_version: source.version,
-    status: "active",
-    created_at: new Date().toISOString(),
-  }).execute();
-}
-
-const guideTemplate = `# 结构说明
-
-拆分：按来源
-
-这份说明决定知识库的文档树怎么长。助手整理时按这里的层级和拆分方式放节点，不另起一套目录。
-
-可选的拆分写在「拆分：」后面：
-
-- 按来源：一个文件、一封邮件或一条链接各成一个节点。文件夹或邮箱作为上一层。
-- 按知识内容：按下面的标题归类。多份来源可以写入同一个节点。
-- 按目录：下面的标题就是目录。来源只填进点名的那一节。
-
-## 交易凭证
-
-来源：文件夹
-拆分：按来源
-
-这一节收凭证文件夹。按来源时，每个文件是这一节下的一个节点。
-
-## 客户沟通
-
-来源：邮箱
-范围：全部邮件
-拆分：按知识内容
-
-这一节收某个邮箱里的往来。按知识内容时，按客户或事项写入节点，不给每一封邮件单独开篇。指定的单封邮件仍可以单独成篇。
-`;
+const guideTemplate = mainInstruction;
 
 export async function setLibraryCuration(db: DB, actor: Actor, libraryId: string, enabled: boolean) {
   await authorize(db, actor, libraryId, 4);
@@ -358,7 +245,7 @@ export function draftLibraryPreset(guideText: string, frequency: KnowledgeSchedu
 }
 
 export function draftSourcePreset(input: { title: string; sourceKind: string }, library: LibraryPreset): SourcePreset {
-  const broad = input.sourceKind === "folder" || input.sourceKind === "mailbox";
+  const broad = input.sourceKind === "folder";
   const copyText = input.sourceKind === "url" ? "no" : "inherit";
   const weight = broad ? Math.min(10, library.weight + 2) : null;
   return {
@@ -373,20 +260,6 @@ export function draftSourcePreset(input: { title: string; sourceKind: string }, 
       "生成后可以直接改。保存之后，确认加入才按这份预设写入节点。",
     ].join("\n"),
   };
-}
-
-function presetCopiesText(library: LibraryPreset, source: SourcePreset) {
-  if (source.copyText === "yes") return true;
-  if (source.copyText === "no") return false;
-  return library.copyText;
-}
-
-function markdownForPreset(markdown: string, copyText: boolean) {
-  if (copyText) return markdown;
-  const lines = markdown.split("\n");
-  const title = lines[0] ?? "";
-  const sourceLine = [...lines].reverse().find((line) => line.startsWith("来源")) ?? "";
-  return [title, "", "正文留在来源，这里只记下位置。", "", sourceLine].filter((line) => line !== undefined).join("\n");
 }
 
 export async function setKnowledgeSchedule(db: DB, actor: Actor, libraryId: string, mode: KnowledgeSchedule) {
@@ -426,6 +299,7 @@ export async function draftLibraryPresetForActor(db: DB, actor: Actor, libraryId
 
 export async function saveSourcePreset(db: DB, actor: Actor, libraryId: string, subscriptionId: string, input: SourcePreset) {
   await requireCuratedLibrary(db, actor, libraryId);
+  await maintainKnowledgeSource(db, actor, libraryId, subscriptionId);
   const row = await db.selectFrom("knowledge_subscriptions").select("id").where("id", "=", subscriptionId).where("library_id", "=", libraryId).executeTakeFirst();
   if (!row) fail(404, "连线不存在");
   const preset = parseSourcePreset(JSON.stringify(input));
@@ -435,6 +309,7 @@ export async function saveSourcePreset(db: DB, actor: Actor, libraryId: string, 
 
 export async function draftSourcePresetForActor(db: DB, actor: Actor, libraryId: string, subscriptionId: string) {
   const library = await requireCuratedLibrary(db, actor, libraryId);
+  await maintainKnowledgeSource(db, actor, libraryId, subscriptionId);
   const row = await db.selectFrom("knowledge_subscriptions").selectAll().where("id", "=", subscriptionId).where("library_id", "=", libraryId).executeTakeFirst();
   if (!row) fail(404, "连线不存在");
   const libraryPreset = parseLibraryPreset(library.knowledge_preset, knowledgeSchedule(library.knowledge_schedule || "off"));
@@ -466,7 +341,7 @@ export async function runKnowledgeLibrary(db: DB, actor: Actor, libraryId: strin
   return { id, trigger, status: "done", createdAt: now, ...counts };
 }
 
-export async function sweepKnowledgeSchedules(db: DB) {
+export async function sweepKnowledgeSchedules(db: DB, curate?: (actor: Actor, id: string) => Promise<unknown>) {
   const libraries = await db.selectFrom("resources")
     .select(["id", "owner_id", "knowledge_schedule"])
     .where("kind", "=", "library")
@@ -477,11 +352,13 @@ export async function sweepKnowledgeSchedules(db: DB) {
   for (const library of libraries) {
     try {
       const last = await db.selectFrom("knowledge_runs").select("created_at").where("library_id", "=", library.id).orderBy("created_at", "desc").executeTakeFirst();
-      const wait = library.knowledge_schedule === "weekly" ? 6 * 24 * 60 * 60 * 1000 : 20 * 60 * 60 * 1000;
+      const wait = library.knowledge_schedule === "weekly" ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
       if (last && Date.now() - Date.parse(last.created_at) < wait) continue;
       const owner = await db.selectFrom("users").select(["id", "display_name", "admin"]).where("id", "=", library.owner_id).executeTakeFirst();
       if (!owner) continue;
-      await runKnowledgeLibrary(db, owner, library.id, "schedule");
+      const configured = await db.selectFrom("knowledge_instructions").select("path").where("library_id", "=", library.id).executeTakeFirst();
+      if (curate && configured) await curate(owner, library.id);
+      else await runKnowledgeLibrary(db, owner, library.id, "schedule");
     } catch {
       continue;
     }
@@ -521,10 +398,14 @@ export async function askKnowledgeLibrary(db: DB, actor: Actor, libraryId: strin
   const terms = [...new Set([phrase, ...phrase.split(/\s+/)].filter((term) => term.length >= 2))].slice(0, 8);
   const libraryRow = await db.selectFrom("resources").select(["knowledge_preset", "knowledge_schedule"]).where("id", "=", libraryId).executeTakeFirst();
   const libraryPreset = parseLibraryPreset(libraryRow?.knowledge_preset, knowledgeSchedule(libraryRow?.knowledge_schedule || "off"));
-  const rows = await db.selectFrom("knowledge_subscriptions").select(["node_id", "preset"]).where("library_id", "=", libraryId).where("status", "=", "active").where("node_id", "is not", null).execute();
+  const rows = (await db.selectFrom("resources").select("id").where("library_id", "=", libraryId).where("kind", "=", "document").where("deleted_at", "is", null).execute()).map(row => ({ node_id: row.id, preset: "" }));
   const items = [];
   for (const row of rows) {
     if (!row.node_id) continue;
+    try { await authorize(db, actor, row.node_id, 1); } catch (error) {
+      if ([403, 404].includes((error as { status?: number }).status ?? 0)) continue;
+      throw error;
+    }
     const node = await db.selectFrom("resources").select(["id", "title"]).where("id", "=", row.node_id).where("deleted_at", "is", null).executeTakeFirst();
     if (!node) continue;
     const state = await db.selectFrom("document_states").select("text").where("resource_id", "=", node.id).executeTakeFirst();
@@ -622,12 +503,7 @@ async function sourceTitle(db: DB, row: { source_kind: string; source_id: string
     const folder = await db.selectFrom("file_folders").select("name").where("id", "=", row.source_id).executeTakeFirst();
     return folder?.name ?? "";
   }
-  if (row.source_kind === "mail") {
-    const message = await db.selectFrom("mail_messages").select("subject").where("id", "=", row.source_id).executeTakeFirst();
-    return message?.subject || "（无主题）";
-  }
-  const mailbox = await db.selectFrom("mailboxes").select("address").where("id", "=", row.source_id).executeTakeFirst();
-  return mailbox?.address ?? "";
+  return "";
 }
 
 async function subscriptionStatus(db: DB, row: { source_kind: string; source_id: string; url: string; source_version: string; status: string }) {
@@ -647,14 +523,7 @@ async function subscriptionStatus(db: DB, row: { source_kind: string; source_id:
     if (!folder || folder.deleted_at) return "missing";
     return folder.updated_at === row.source_version ? "active" : "stale";
   }
-  if (row.source_kind === "mail") {
-    const message = await db.selectFrom("mail_messages").select("updated_at").where("id", "=", row.source_id).executeTakeFirst();
-    if (!message) return "missing";
-    return message.updated_at === row.source_version ? "active" : "stale";
-  }
-  const mailbox = await db.selectFrom("mailboxes").select(["updated_at", "deleted_at"]).where("id", "=", row.source_id).executeTakeFirst();
-  if (!mailbox || mailbox.deleted_at) return "missing";
-  return mailbox.updated_at === row.source_version ? "active" : "stale";
+  return "missing";
 }
 
 async function readSource(db: DB, actor: Actor, libraryId: string, input: { sourceKind: SubscriptionKind; sourceId?: string; url?: string }) {
@@ -680,36 +549,19 @@ async function readSource(db: DB, actor: Actor, libraryId: string, input: { sour
   }
   if (input.sourceKind === "file") {
     const file = await db.selectFrom("file_items").select(["id", "owner_id", "name", "ai_description_override", "updated_at", "deleted_at"]).where("id", "=", sourceId).executeTakeFirst();
-    if (!file || file.deleted_at || file.owner_id !== actor.id) fail(404, "文件不存在");
+    if (!file || file.deleted_at) fail(404, "文件不存在");
+    await authorizeFileItem(db, actor, sourceId);
     const chunks = await db.selectFrom("knowledge_chunks").select("text").where("source_kind", "=", "file").where("source_id", "=", sourceId).orderBy("ordinal").limit(8).execute();
     const text = [file.ai_description_override, ...chunks.map((chunk) => chunk.text)].filter(Boolean).join("\n\n");
     return { sourceId, url: "", version: file.updated_at, title: file.name, markdown: nodeMarkdown(file.name, text || file.name, `来源文件：${file.name}`) };
   }
   if (input.sourceKind === "folder") {
     const folder = await db.selectFrom("file_folders").select(["id", "owner_id", "name", "updated_at", "deleted_at"]).where("id", "=", sourceId).executeTakeFirst();
-    if (!folder || folder.deleted_at || folder.owner_id !== actor.id) fail(404, "文件夹不存在");
+    if (!folder || folder.deleted_at) fail(404, "文件夹不存在");
+    await authorizeFileFolder(db, actor, sourceId);
     return { sourceId, url: "", version: folder.updated_at, title: folder.name, markdown: nodeMarkdown(folder.name, `文件夹「${folder.name}」里的文件会写进这个知识库的对应节点。`, `来源文件夹：${folder.name}`) };
   }
-  if (input.sourceKind === "mail") {
-    const message = await db.selectFrom("mail_messages").select(["id", "mailbox_id", "subject", "from_addr", "snippet", "body_text", "updated_at"]).where("id", "=", sourceId).executeTakeFirst();
-    const mailbox = message
-      ? await db.selectFrom("mailboxes").select(["owner_id", "address", "deleted_at"]).where("id", "=", message.mailbox_id).executeTakeFirst()
-      : undefined;
-    if (!message || !mailbox || mailbox.deleted_at || mailbox.owner_id !== actor.id) fail(404, "邮件不存在");
-    const title = message.subject || "（无主题）";
-    const text = [message.from_addr, message.snippet, message.body_text].filter(Boolean).join("\n\n");
-    return { sourceId, url: "", version: message.updated_at, title, markdown: nodeMarkdown(title, text || title, `来源邮件：${mailbox.address}`) };
-  }
-  const mailbox = await db.selectFrom("mailboxes").select(["id", "owner_id", "address", "display_name", "knowledge_scope", "updated_at", "deleted_at"]).where("id", "=", sourceId).executeTakeFirst();
-  if (!mailbox || mailbox.deleted_at || mailbox.owner_id !== actor.id) fail(404, "邮箱不存在");
-  const title = mailbox.display_name || mailbox.address;
-  return {
-    sourceId,
-    url: "",
-    version: mailbox.updated_at,
-    title,
-    markdown: nodeMarkdown(title, `邮箱 ${mailbox.address} 按「${mailbox.knowledge_scope}」进入这个知识库。`, `来源邮箱：${mailbox.address}`),
-  };
+  fail(400, "不支持的来源类型");
 }
 
 async function filesUnderFolder(db: DB, folderId: string) {
@@ -726,12 +578,6 @@ async function filesUnderFolder(db: DB, folderId: string) {
     .limit(40)
     .execute();
   return files.map((file) => file.id);
-}
-
-async function messagesInMailbox(db: DB, mailboxId: string) {
-  const mailbox = await db.selectFrom("mailboxes").select("knowledge_scope").where("id", "=", mailboxId).executeTakeFirst();
-  const rows = await db.selectFrom("mail_messages").select(["id", "starred"]).where("mailbox_id", "=", mailboxId).orderBy("received_at", "desc").limit(80).execute();
-  return rows.filter((row) => mailKnowledgeIncluded(mailbox?.knowledge_scope, row.starred)).slice(0, 40).map((row) => row.id);
 }
 
 function nodeMarkdown(title: string, body: string, sourceLine: string) {

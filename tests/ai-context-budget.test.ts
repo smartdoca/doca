@@ -7,7 +7,7 @@ import {
   trimToolCalls,
   trimToolResults,
 } from "../apps/server/src/services/ai/context-budget.js";
-import { contextParts } from "../apps/server/src/services/ai/prompt-context.js";
+import { contextParts, stablePromptCatalog } from "../apps/server/src/services/ai/prompt-context.js";
 import { needsLlmReview } from "../apps/server/src/services/ai/delivery.js";
 import { documentCapabilities, documentReadCapabilities } from "../packages/core/src/modules/ai/capabilities.js";
 import { skillPrefixInstructions } from "../packages/core/src/modules/ai/skills.js";
@@ -205,4 +205,39 @@ it("gives document reads a compact first page and keeps the full manual off the 
   expect(skillPrefixInstructions({ id: "writing", name: "文档创作" })).not.toContain(
     "insertBlock",
   );
+});
+
+it("preserves plugin approval and pagination facts while bounding old errors", () => {
+  const receipt = {
+    error: "provider failure ".repeat(2000),
+    requiresApproval: true,
+    approvalId: "approval-1",
+    nextCursor: "page-2",
+    hasMore: true,
+    fileId: "file-1",
+  };
+  const source = [{ role: "tool", content: [{ type: "tool-result", toolCallId: "plugin-1", output: { type: "json", value: receipt } }] }];
+  const result = trimToolResults(source, 0);
+  expect(result[0].content[0].output.value).toMatchObject({
+    requiresApproval: true, approvalId: "approval-1", nextCursor: "page-2", hasMore: true, fileId: "file-1", truncated: true,
+  });
+  expect(JSON.stringify(result).length).toBeLessThan(1000);
+  expect(source[0]!.content[0]!.output.value).toBe(receipt);
+  expect(receipt.error.length).toBeGreaterThan(1000);
+});
+
+it("compacts nested history parts without mutating persisted messages", () => {
+  const source = exchange("nested", 1, true).map(message => ({ ...message, content: { parts: message.content } }));
+  const before = JSON.stringify(source);
+  const result = trimToolResults(trimToolCalls(source, 0), 0);
+  expect(JSON.stringify(result).length).toBeLessThan(1500);
+  expect(taskStateFromMessages(result)).toMatchObject({ resourceId: "doc-1", seq: 2 });
+  expect(JSON.stringify(source)).toBe(before);
+});
+
+
+it("keeps the skill prefix identical across plugin installation orders", () => {
+  const skills = [{ id: "z.plugin", name: "Z" }, { id: "a.plugin", name: "A" }];
+  expect(stablePromptCatalog(skills)).toEqual(stablePromptCatalog([...skills].reverse()));
+  expect(skills[0]!.id).toBe("z.plugin");
 });

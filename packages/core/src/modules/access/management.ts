@@ -3,7 +3,7 @@ import {
   policyFields,
   type PolicyField,
 } from "./inheritance.js";
-import { checkPublication } from "../entitlements/admission.js";
+import { checkPublication } from "../access/operation-policy.js";
 import type { DB, Resource } from "../../../../db/src/index.js";
 import { fail } from "../../shared/errors.js";
 import { distributionPolicy } from "../deployment/policies.js";

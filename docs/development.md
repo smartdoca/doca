@@ -103,7 +103,7 @@ kubectl logs -f deploy/doca --tail=200
 - 静态目录仅apps/web/dist，不公开.archive、data、.env。
 - 启动自动创建当前 schema，建表失败不监听；正式部署前先备份并验证恢复。
 - SQLite离线备份应停止全部写入进程后复制完整目录。在线需backup API，不能只复制运行中的主db而漏掉WAL。
-- PostgreSQL用原生备份/恢复流程。未来用户云备份不是部署数据库灾备的替代。
+- PostgreSQL用原生备份/恢复流程。数据库灾备由部署运维负责。
 - SIGINT/SIGTERM关闭HTTP、Vite和数据库。生产使用进程管理器重启。
 
 ## 验证

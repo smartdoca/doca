@@ -26,10 +26,6 @@ const model: AIModel = {
   embedding: true,
   embeddingDimensions: 3,
   tools: false,
-  levels: [],
-  inputRate: 1,
-  outputRate: 1,
-  cacheRate: 1,
   maxInput: 8000,
   maxOutput: 32,
 };

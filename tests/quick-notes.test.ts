@@ -145,7 +145,6 @@ async function configureAI() {
     {
       ...aiDefaults,
       defaultModel: "test",
-      limits: { standard: { day: 10000, week: 30000, month: 100000 } },
       vendors: [
         {
           id: "test-vendor",
@@ -163,11 +162,7 @@ async function configureAI() {
           model: "notes-test",
           alias: "测试模型",
           enabled: true,
-          levels: [],
           tools: true,
-          inputRate: 1,
-          outputRate: 1,
-          cacheRate: 0,
           maxInput: 32000,
           maxOutput: 6000,
         },

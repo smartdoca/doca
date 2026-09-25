@@ -13,7 +13,7 @@ import { IconButton } from "react-native-paper";
 import EventSource from "react-native-sse";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, uuid } from "../../src/api";
-import { AnswerBody, ApprovalCards, type ApprovalItem, type MailDraft } from "../../src/ai-answer";
+import { AnswerBody, ApprovalCards, type ApprovalItem } from "../../src/ai-answer";
 import { AiTrace, type TraceEvent, type TraceOperation } from "../../src/ai-trace";
 import { useAuth } from "../../src/auth";
 import { colors } from "../../src/chrome";
@@ -52,7 +52,6 @@ type Job = {
     reasoning?: string;
     events?: TraceEvent[];
     approvals?: ApprovalItem[];
-    mailCompose?: MailDraft;
   };
 };
 type Detail = {
@@ -79,7 +78,6 @@ type JobEvent = {
     events?: TraceEvent[];
     eventOffset?: number;
     approvals?: ApprovalItem[];
-    mailCompose?: MailDraft;
   };
 };
 
@@ -280,7 +278,7 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
           ),
         );
         setTyping(!buffers.current.get(data.id));
-      } else if (patch?.events || patch?.mailCompose || patch?.approvals) {
+      } else if (patch?.events || patch?.approvals) {
         setMessages((current) =>
           merge(
             current.filter((item) => !String(item._id).startsWith("live:")),
@@ -298,7 +296,6 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
           progress: {
             ...previous?.progress,
             approvals: patch && "approvals" in patch ? patch.approvals : previous?.progress?.approvals,
-            mailCompose: patch?.mailCompose ?? previous?.progress?.mailCompose,
           },
         };
         return [next, ...current.filter((job) => job.id !== data.id)];
@@ -646,9 +643,6 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
           const operations = jobId
             ? (detail.data?.operations ?? []).filter((item) => item.job_id === jobId)
             : [];
-          const drafts = jobs.flatMap((job) =>
-            job.id === jobId && job.progress?.mailCompose ? [job.progress.mailCompose] : [],
-          );
           if (props.position === "left") {
             return (
               <View style={styles.assistant} collapsable={false}>
@@ -659,7 +653,7 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
                   reasoning={jobId ? reasoning[jobId] : undefined}
                   answer={text}
                 />
-                <AnswerBody text={text} events={events} operations={operations} drafts={drafts} router={router} />
+                <AnswerBody text={text} events={events} operations={operations} router={router} />
               </View>
             );
           }

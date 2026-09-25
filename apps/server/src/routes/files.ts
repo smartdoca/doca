@@ -1,8 +1,9 @@
+import { authorizeFileFolder as folderAccess, authorizeFileItem } from "@core/modules/access/file-access.js";
 import { Readable } from "node:stream";
 import {
   requireCapability,
   checkStorage,
-} from "@core/modules/entitlements/service.js";
+} from "@core/modules/access/operation-policy.js";
 import {
   objectKey,
   uploadLimits,
@@ -484,53 +485,6 @@ export function registerFiles(
     return access.resource.owner_id;
   }
 
-  async function folderAccess(
-    tx: DB,
-    actor: Actor,
-    id: string,
-    minimumRole = 1,
-  ) {
-    const folder = await tx
-      .selectFrom("file_folders")
-      .selectAll()
-      .where("id", "=", id)
-      .where("deleted_at", "is", null)
-      .executeTakeFirst();
-    if (!folder) fail(404, "文件夹不存在");
-    if (folder.owner_id === actor.id)
-      return {
-        folder,
-        role: "owner" as const,
-        shareRootId: folder.parent_id === "shared" ? folder.id : null,
-      };
-    let cursor = folder;
-    while (cursor.parent_id && cursor.parent_id !== "shared") {
-      const parent = await tx
-        .selectFrom("file_folders")
-        .selectAll()
-        .where("id", "=", cursor.parent_id)
-        .where("deleted_at", "is", null)
-        .executeTakeFirst();
-      if (!parent) break;
-      cursor = parent;
-    }
-    if (cursor.parent_id !== "shared") fail(404, "文件夹不存在");
-    const share = await tx
-      .selectFrom("file_folder_shares")
-      .selectAll()
-      .where("folder_id", "=", cursor.id)
-      .where("user_id", "=", actor.id)
-      .executeTakeFirst();
-    const level =
-      share?.role === "admin" ? 3 : share?.role === "reader" ? 1 : 0;
-    if (level < minimumRole)
-      fail(
-        minimumRole > 1 ? 403 : 404,
-        minimumRole > 1 ? "没有管理这个共享文件夹的权限" : "文件夹不存在",
-      );
-    return { folder, role: share!.role, shareRootId: cursor.id };
-  }
-
   async function readableItem(tx: DB, actor: Actor, id: string) {
     const row = await tx
       .selectFrom("file_items")
@@ -565,31 +519,7 @@ export function registerFiles(
       .where("file_items.deleted_at", "is", null)
       .executeTakeFirst();
     if (!row) fail(404, "文件不存在");
-    if (row.parent_type === "document") {
-      await authorize(tx, actor, row.parent_id, 1);
-    } else if (row.parent_type === "folder") {
-      await folderAccess(tx, actor, row.parent_id, 1);
-    } else if (row.parent_type === "system" && row.parent_id.startsWith("mail:")) {
-      const mailboxId = row.parent_id.slice(5);
-      const mailbox = await tx
-        .selectFrom("mailboxes")
-        .select(["owner_id"])
-        .where("id", "=", mailboxId)
-        .where("deleted_at", "is", null)
-        .executeTakeFirst();
-      if (!mailbox) fail(404, "文件不存在");
-      if (mailbox.owner_id !== actor.id) {
-        const share = await tx
-          .selectFrom("mailbox_shares")
-          .select("role")
-          .where("mailbox_id", "=", mailboxId)
-          .where("user_id", "=", actor.id)
-          .executeTakeFirst();
-        if (!share) fail(404, "文件不存在");
-      }
-    } else if (row.owner_id !== actor.id) {
-      fail(404, "文件不存在");
-    }
+    await authorizeFileItem(tx, actor, row.id);
     return row;
   }
 
@@ -795,36 +725,6 @@ export function registerFiles(
             version: doc.version,
           })),
         );
-      } else if (type === "system" && id === "mail") {
-        const owned = await db
-          .selectFrom("mailboxes")
-          .selectAll()
-          .where("owner_id", "=", actor.id)
-          .where("deleted_at", "is", null)
-          .orderBy("address")
-          .execute();
-        const shared = await db
-          .selectFrom("mailboxes")
-          .innerJoin("mailbox_shares", "mailbox_shares.mailbox_id", "mailboxes.id")
-          .selectAll("mailboxes")
-          .where("mailbox_shares.user_id", "=", actor.id)
-          .where("mailboxes.deleted_at", "is", null)
-          .orderBy("mailboxes.address")
-          .execute();
-        const seen = new Set<string>();
-        for (const mailbox of [...owned, ...shared]) {
-          if (seen.has(mailbox.id)) continue;
-          seen.add(mailbox.id);
-          virtualFolders.push({
-            id: "mail:" + mailbox.id,
-            parent_id: id,
-            name: mailbox.address,
-            type: "system",
-            virtual: true,
-            locked: true,
-            version: mailbox.version,
-          });
-        }
       } else if (type === "document") {
         const children = await db
           .selectFrom("resources")
@@ -876,40 +776,7 @@ export function registerFiles(
           "file_extracts.status as extract_status",
         ])
         .where("file_items.deleted_at", "is", null)
-        .orderBy("file_items.name");
-      if (type === "system" && id.startsWith("mail:")) {
-        const mailboxId = id.slice(5);
-        const mailbox = await db
-          .selectFrom("mailboxes")
-          .select(["owner_id"])
-          .where("id", "=", mailboxId)
-          .where("deleted_at", "is", null)
-          .executeTakeFirst();
-        if (!mailbox) fail(404, "邮箱不存在");
-        if (mailbox.owner_id !== actor.id) {
-          const share = await db
-            .selectFrom("mailbox_shares")
-            .select("role")
-            .where("mailbox_id", "=", mailboxId)
-            .where("user_id", "=", actor.id)
-            .executeTakeFirst();
-          if (!share) fail(404, "邮箱不存在");
-        }
-        const bindings = await db
-          .selectFrom("file_bindings")
-          .select("file_id")
-          .where("owner_plugin", "=", "doca.mail")
-          .where("owner_type", "=", "message")
-          .where("owner_id", "like", `${mailboxId}:%`)
-          .execute();
-        files = files.where(
-          "file_items.id",
-          "in",
-          bindings.length
-            ? bindings.map((binding) => binding.file_id)
-            : ["__no_mail_files__"],
-        );
-      } else {
+        .orderBy("file_items.name"); {
         files = files
           .where("file_items.parent_type", "=", type)
           .where("file_items.parent_id", "=", id);
@@ -1362,11 +1229,8 @@ export function registerFiles(
       };
       const filename = cleanName(req.query.filename);
       const ownerId = await parentOwner(db, actor, parent);
-      const rights = await requireCapability(db, actor.id, "assets.upload");
-      const maxBytes = Math.min(
-        uploadLimits.file,
-        rights.level.limits["asset.bytes"] ?? Infinity,
-      );
+      await requireCapability(db, actor.id, "assets.upload");
+      const maxBytes = uploadLimits.file;
       if (Number(req.headers["content-length"]) > maxBytes)
         fail(413, "文件超过上传大小限制");
       const staged = await stageUpload(
@@ -1440,13 +1304,11 @@ export function registerFiles(
         const result = await transact(db, async (tx) => {
           if ((await parentOwner(tx, actor, parent)) !== ownerId)
             fail(409, "目标文件夹已变化，请重新上传");
-          const currentRights = await requireCapability(
+          await requireCapability(
             tx,
             actor.id,
             "assets.upload",
           );
-          if (size > (currentRights.level.limits["asset.bytes"] ?? Infinity))
-            fail(413, "附件超过当前等级的大小上限");
           await checkStorage(tx, ownerId, size);
           let object = await findExisting(tx);
           if (!object) {
@@ -2039,7 +1901,6 @@ export function registerFiles(
             mime: source.mime,
             size: source.size,
             uploaded_by: actor.id,
-            moderation_status: "none",
             created_at: now,
             deleted_at: null,
           })

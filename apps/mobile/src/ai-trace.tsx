@@ -1,23 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { MessageKey, MessageValues } from "@doca/i18n";
 import { openAiHref, openDocument } from "./ai-open";
+import {
+  aiEventDetail,
+  aiEventLabel,
+  type MobileAIProgressEvent,
+} from "./ai-progress-label";
 import { colors } from "./chrome";
+import { useI18n } from "./locale";
 
 type Nav = {
-  push: (path: string | { pathname: string; params?: Record<string, string> }) => void;
+  push: (
+    path: string | { pathname: string; params?: Record<string, string> },
+  ) => void;
 };
 
-export type TraceEvent = {
-  id: string;
-  kind: "reasoning" | "text" | "tool" | "status";
-  text: string;
-  detail?: string;
-  resourceId?: string;
-  status: "loading" | "success" | "error";
-  folder?: { id: string; name: string; href: string; shared?: boolean; path?: string };
-  file?: { id: string; name: string; href?: string; mime?: string };
-  mail?: { id: string; mailboxId: string; subject: string; from: string; href: string };
-};
+export type TraceEvent = MobileAIProgressEvent;
 
 export type TraceOperation = {
   id: string;
@@ -38,13 +37,20 @@ export type TraceOperation = {
 
 export type DeliveryCard = {
   key: string;
+  kind: "library" | "document" | "file" | "image" | "folder" | "shared_folder";
   eyebrow: string;
   title: string;
   href?: string;
   documentId?: string;
 };
 
-export function deliveryCards(events: TraceEvent[], operations: TraceOperation[]): DeliveryCard[] {
+type Translator = (key: MessageKey, values?: MessageValues) => string;
+
+export function deliveryCards(
+  events: TraceEvent[],
+  operations: TraceOperation[],
+  t: Translator,
+): DeliveryCard[] {
   const cards: DeliveryCard[] = [];
   const seen = new Set<string>();
   const add = (card: DeliveryCard) => {
@@ -56,7 +62,10 @@ export function deliveryCards(events: TraceEvent[], operations: TraceOperation[]
     if (event.folder) {
       add({
         key: `folder:${event.folder.id}`,
-        eyebrow: event.folder.shared ? "共享文件夹" : "文件夹",
+        kind: event.folder.shared ? "shared_folder" : "folder",
+        eyebrow: event.folder.shared
+          ? t("mobile.ai.delivery.sharedFolder")
+          : t("mobile.ai.delivery.folder"),
         title: event.folder.name,
         href: event.folder.href,
       });
@@ -64,24 +73,24 @@ export function deliveryCards(events: TraceEvent[], operations: TraceOperation[]
     if (event.file) {
       add({
         key: `file:${event.file.id}`,
-        eyebrow: event.file.mime?.startsWith("image/") ? "图片" : "文件",
+        kind: event.file.mime?.startsWith("image/") ? "image" : "file",
+        eyebrow: event.file.mime?.startsWith("image/")
+          ? t("mobile.ai.delivery.image")
+          : t("mobile.ai.delivery.file"),
         title: event.file.name,
         href: event.file.href,
-      });
-    }
-    if (event.mail) {
-      add({
-        key: `mail:${event.mail.mailboxId}:${event.mail.id}`,
-        eyebrow: event.mail.from || "邮件",
-        title: event.mail.subject || "（无主题）",
-        href: event.mail.href,
       });
     }
     if (event.resourceId) {
       add({
         key: `doc:${event.resourceId}`,
-        eyebrow: "文档",
-        title: event.text || "查看文档",
+        kind: "document",
+        eyebrow: t("mobile.ai.delivery.document"),
+        title:
+          (event.kind === "text" || event.kind === "reasoning"
+            ? event.text
+            : String(event.data?.name ?? "")) ||
+          t("mobile.ai.delivery.viewDocument"),
         documentId: event.resourceId,
       });
     }
@@ -89,11 +98,18 @@ export function deliveryCards(events: TraceEvent[], operations: TraceOperation[]
   for (const operation of operations) {
     const result = operation.result;
     if (!result) continue;
-    if (result.kind === "file_folder" && result.href && (result.name || result.title)) {
+    if (
+      result.kind === "file_folder" &&
+      result.href &&
+      (result.name || result.title)
+    ) {
       add({
         key: `op-folder:${operation.id}`,
-        eyebrow: result.shared ? "共享文件夹" : "文件夹",
-        title: result.name || result.title || "文件夹",
+        kind: result.shared ? "shared_folder" : "folder",
+        eyebrow: result.shared
+          ? t("mobile.ai.delivery.sharedFolder")
+          : t("mobile.ai.delivery.folder"),
+        title: result.name || result.title || t("mobile.ai.delivery.folder"),
         href: result.href,
       });
       continue;
@@ -101,8 +117,11 @@ export function deliveryCards(events: TraceEvent[], operations: TraceOperation[]
     if (result.kind === "file_item" && (result.name || result.title)) {
       add({
         key: `op-file:${operation.id}`,
-        eyebrow: result.mime?.startsWith("image/") ? "图片" : "文件",
-        title: result.name || result.title || "文件",
+        kind: result.mime?.startsWith("image/") ? "image" : "file",
+        eyebrow: result.mime?.startsWith("image/")
+          ? t("mobile.ai.delivery.image")
+          : t("mobile.ai.delivery.file"),
+        title: result.name || result.title || t("mobile.ai.delivery.file"),
         href: result.href,
       });
       continue;
@@ -111,7 +130,11 @@ export function deliveryCards(events: TraceEvent[], operations: TraceOperation[]
     if (!id || !result.title) continue;
     add({
       key: `op:${operation.id}`,
-      eyebrow: result.kind === "library" ? "知识库" : result.format || "文档",
+      kind: result.kind === "library" ? "library" : "document",
+      eyebrow:
+        result.kind === "library"
+          ? t("shell.kind.library")
+          : result.format || t("mobile.ai.delivery.document"),
       title: result.title,
       documentId: id,
     });
@@ -130,12 +153,18 @@ export function AiTrace({
   reasoning?: string;
   answer?: string;
 }) {
-  const steps = events.filter((event) => event.kind === "tool" || event.kind === "status");
+  const { t } = useI18n();
+  const steps = events.filter(
+    (event) => event.kind === "tool" || event.kind === "status",
+  );
   const thought =
     reasoning?.trim() ||
     events
-      .filter((event) => event.kind === "reasoning" && event.text.trim())
-      .map((event) => event.text.trim())
+      .flatMap((event) =>
+        event.kind === "reasoning" && event.text.trim()
+          ? [event.text.trim()]
+          : [],
+      )
       .join("\n");
   const running = steps.some((step) => step.status === "loading");
   const hasAnswer = !!answer?.trim();
@@ -155,16 +184,36 @@ export function AiTrace({
   return (
     <View style={styles.wrap}>
       {thought ? (
-        <Pressable onPress={() => setThoughtOpen((value) => !value)} style={styles.chain}>
-          <Text style={styles.chainTitle}>{running && !steps.length ? "正在思考" : "思考过程"}</Text>
-          <Text style={styles.chainToggle}>{thoughtVisible ? "收起" : "展开"}</Text>
+        <Pressable
+          onPress={() => setThoughtOpen((value) => !value)}
+          style={styles.chain}
+        >
+          <Text style={styles.chainTitle}>
+            {running && !steps.length
+              ? t("chat.thinking")
+              : t("mobile.ai.thinkingProcess")}
+          </Text>
+          <Text style={styles.chainToggle}>
+            {thoughtVisible ? t("mobile.ai.collapse") : t("mobile.ai.expand")}
+          </Text>
         </Pressable>
       ) : null}
-      {thought && thoughtVisible ? <Text style={styles.thought}>{thought}</Text> : null}
+      {thought && thoughtVisible ? (
+        <Text style={styles.thought}>{thought}</Text>
+      ) : null}
       {steps.length ? (
-        <Pressable onPress={() => setStepsOpen((value) => !value)} style={styles.chain}>
-          <Text style={styles.chainTitle}>{running ? "正在执行" : `已执行 ${steps.length} 步`}</Text>
-          <Text style={styles.chainToggle}>{open ? "收起" : "展开"}</Text>
+        <Pressable
+          onPress={() => setStepsOpen((value) => !value)}
+          style={styles.chain}
+        >
+          <Text style={styles.chainTitle}>
+            {running
+              ? t("mobile.ai.executing")
+              : t("mobile.ai.executedSteps", { count: steps.length })}
+          </Text>
+          <Text style={styles.chainToggle}>
+            {open ? t("mobile.ai.collapse") : t("mobile.ai.expand")}
+          </Text>
         </Pressable>
       ) : null}
       {open
@@ -175,12 +224,25 @@ export function AiTrace({
               disabled={!step.resourceId}
               onPress={() => openDocument(router, step.resourceId)}
             >
-              <Text style={[styles.mark, step.status === "error" && styles.markError]}>
-                {step.status === "loading" ? "…" : step.status === "error" ? "!" : "✓"}
+              <Text
+                style={[
+                  styles.mark,
+                  step.status === "error" && styles.markError,
+                ]}
+              >
+                {step.status === "loading"
+                  ? "…"
+                  : step.status === "error"
+                    ? "!"
+                    : "✓"}
               </Text>
               <View style={styles.stepCopy}>
-                <Text style={styles.stepText}>{step.text}</Text>
-                {step.detail ? <Text style={styles.stepDetail}>{step.detail}</Text> : null}
+                <Text style={styles.stepText}>{aiEventLabel(step, t)}</Text>
+                {aiEventDetail(step, t) ? (
+                  <Text style={styles.stepDetail}>
+                    {aiEventDetail(step, t)}
+                  </Text>
+                ) : null}
               </View>
             </Pressable>
           ))
@@ -191,8 +253,11 @@ export function AiTrace({
 
 export function openDeliveryCard(router: Nav, card: DeliveryCard) {
   if (card.href && openAiHref(router, card.href)) return;
-  if (card.eyebrow === "知识库" && card.documentId) {
-    router.push({ pathname: "/library/[id]", params: { id: card.documentId, title: card.title } });
+  if (card.kind === "library" && card.documentId) {
+    router.push({
+      pathname: "/library/[id]",
+      params: { id: card.documentId, title: card.title },
+    });
     return;
   }
   openDocument(router, card.documentId);

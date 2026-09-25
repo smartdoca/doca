@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Image, Modal, Space } from "antd";
 import { Download, FilePlus2 } from "lucide-react";
@@ -19,6 +20,8 @@ export function AIGeneratedImage({
   currentDocument?: { id: string; title: string };
   sessionId?: string | null;
 }) {
+const { t } = useI18n();
+
   const [picking, setPicking] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -137,9 +140,7 @@ export function AIGeneratedImage({
             setError("");
             setPicking(true);
           }}
-        >
-          加入到文档
-        </Button>
+        >{t("fileManager.addToDocument")}</Button>
       </Space>
       {inserted && (
         <p className="subtle">

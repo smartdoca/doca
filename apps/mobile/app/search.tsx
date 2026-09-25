@@ -23,13 +23,6 @@ type FileHit = {
   description?: string | null;
   locations: FileLocation[];
 };
-type MailHit = {
-  id: string;
-  mailboxId: string;
-  subject: string;
-  from: string;
-  snippet: string;
-};
 type SearchPage = { items: SearchDocument[]; notice?: string };
 
 function openFile(router: ReturnType<typeof useRouter>, file: FileHit) {
@@ -75,16 +68,15 @@ export default function SearchScreen() {
           scope: active ? "all" : "recent",
         })}`,
       );
-      if (!active) return { documents: documents.items, files: [] as FileHit[], mail: [] as MailHit[], notice: documents.notice };
-      const [files, mail] = await Promise.all([
+      if (!active) return { documents: documents.items, files: [] as FileHit[], notice: documents.notice };
+      const [files] = await Promise.all([
         api<{ items: FileHit[] }>(`/files/search?${new URLSearchParams({ q: active, limit: "30", mode })}`).catch(() => ({ items: [] as FileHit[] })),
-        api<{ items: MailHit[] }>(`/mail/search?${new URLSearchParams({ q: active, limit: "20" })}`).catch(() => ({ items: [] as MailHit[] })),
       ]);
-      return { documents: documents.items, files: files.items, mail: mail.items, notice: documents.notice };
+      return { documents: documents.items, files: files.items, notice: documents.notice };
     },
   });
   const data = results.data;
-  const empty = !results.isLoading && !results.isError && !!active && !data?.documents.length && !data?.files.length && !data?.mail.length;
+  const empty = !results.isLoading && !results.isError && !!active && !data?.documents.length && !data?.files.length;
 
   function submit() {
     const text = draft.trim();
@@ -164,25 +156,8 @@ export default function SearchScreen() {
             </Text>
           </Pressable>
         ))}
-        {data?.mail.length ? <Text style={styles.section}>邮件</Text> : null}
-        {data?.mail.map((item) => (
-          <Pressable
-            key={`${item.mailboxId}:${item.id}`}
-            style={styles.card}
-            onPress={() =>
-              router.push({
-                pathname: "/message/[mailboxId]/[messageId]",
-                params: { mailboxId: item.mailboxId, messageId: item.id, title: item.subject || "邮件" },
-              })
-            }
-          >
-            <Text style={styles.cardTitle}>{item.subject || "（无主题）"}</Text>
-            <Text style={styles.cardMeta} numberOfLines={2}>
-              {item.from}
-              {item.snippet ? ` · ${item.snippet}` : ""}
-            </Text>
-          </Pressable>
-        ))}
+
+
       </ScrollView>
     </View>
   );

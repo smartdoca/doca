@@ -2,13 +2,13 @@
 
 本文是当前模块结构、查询和一致性说明的入口；数据库与具体模块的实现以源码和当前建表定义为事实来源。
 
-版本：0.1.0。本文描述本轮实际代码；桌面、DSH 和云备份仅保留产品设计，不建立运行适配层。
+版本：0.1.0。本文描述本轮实际代码；桌面和 DSH 仅保留产品设计，不建立运行适配层。
 
 ## 1. 决策
 
-工作台布局：左侧依次为搜索、创作日历、主页、AI助手、随手记、知识库、回收站和可选云备份；进入知识库后左侧切换到该库自己的文档目录。个人文档打开为无侧栏独立页，知识库文档保持目录页形态。主页包含最近访问、归我所有、与我共享、收藏四个Tab，支持文档类型和时间排序。
+工作台布局：左侧依次为搜索、主页、AI助手、随手记、知识库、回收站；进入知识库后左侧切换到该库自己的文档目录。个人文档打开为无侧栏独立页，知识库文档保持目录页形态。主页包含最近访问、归我所有、与我共享、收藏四个Tab，支持文档类型和时间排序。创作日历不属于核心，未来可由插件贡献页面或个人信息面板。
 
-个人信息支持昵称、预设或上传头像、修改密码。知识库支持上传封面；正文与管理页共用附件上传下载。管理员采用独立模块导航，包含概览、用户列表、登录与注册、文件存储、文档搜索、Hook。云备份和Hook入口明确显示未启用。后台统计只返回聚合数量，不给予管理员私有文档阅读权。
+个人信息支持昵称、预设或上传头像、修改密码。知识库支持上传封面；正文与管理页共用附件上传下载。管理员采用独立模块导航，包含概览、用户列表、登录与注册、文件存储、文档搜索、Hook。Hook 入口明确显示未启用。后台统计只返回聚合数量，不给予管理员私有文档阅读权。
 
 采用 TypeScript 插件化单体，不拆微服务。前后端同一仓库、独立目录与构建边界，开发时两个监听端口，浏览器始终访问一个同源地址；发布时后端可以直接提供前端构建产物。管理员在 `doca.config.ts` 安装可信 npm 插件；Cordis 负责进程内 Context、Service、effect 与生命周期，Doca SDK 负责稳定契约。
 
@@ -22,7 +22,6 @@ PluginHost — discover、migration、mount、ready、逆序 dispose
     ├── AIHost / SearchHost（贯穿服务）
     ├── plugin-files（files.v1 基础能力）
     ├── plugin-documents（documents.v1 / KnowledgeSource 聚合）
-    └── doca-mail（同级目录中的可安装、可禁用邮箱插件）
     ▼
 packages/core — 账号、权限、成熟领域算法与事务边界
     ▼
@@ -33,21 +32,21 @@ packages/db — Kysely 类型、当前建表定义、SQLite / PostgreSQL 驱动
 
 ## 2. 目录与职责
 
-| 路径                         | 责任                                              |
-| ---------------------------- | ------------------------------------------------- |
-| apps/server/src/main.ts      | 组装服务、开发代理、停止时释放连接                |
-| apps/server/src/bootstrap/config.ts    | 环境配置校验与数据库连接                            |
-| apps/server/src/app/create-app.ts      | API、会话和安全边界；可通过 inject 无监听端口测试 |
-| apps/server/src/bootstrap/admin.ts | 运维显式初始化第一个管理员                        |
-| apps/web/src/app/main.tsx   | 浏览器入口，只负责挂载根组件                      |
-| apps/web/src/app/app.tsx    | 页面路由、全局状态和跨 feature 装配               |
-| apps/web/src/features/documents/tree.tsx | 权限过滤后的目录树、展开、悬浮创建入口      |
-| apps/web/src/features/documents/dialogs.tsx | 授权、所有权转移、移动确认                |
-| apps/web/src/features/admin/admin.tsx | 用户管理、站点设置与注册开关                  |
-| packages/core/src/modules/identity/passwords.ts    | 密码派生、账号创建和安全用户投影                  |
-| packages/core/src/workflows/resources.ts | 资源规则、ACL、事务和审计                         |
-| packages/db/src/create-schema.ts | 全新数据库的当前基线建表定义                    |
-| tests/cloud.test.ts          | 临时数据库中的接口集成测试                        |
+| 路径                                            | 责任                                              |
+| ----------------------------------------------- | ------------------------------------------------- |
+| apps/server/src/main.ts                         | 组装服务、开发代理、停止时释放连接                |
+| apps/server/src/bootstrap/config.ts             | 环境配置校验与数据库连接                          |
+| apps/server/src/app/create-app.ts               | API、会话和安全边界；可通过 inject 无监听端口测试 |
+| apps/server/src/bootstrap/admin.ts              | 运维显式初始化第一个管理员                        |
+| apps/web/src/app/main.tsx                       | 浏览器入口，只负责挂载根组件                      |
+| apps/web/src/app/app.tsx                        | 页面路由、全局状态和跨 feature 装配               |
+| apps/web/src/features/documents/tree.tsx        | 权限过滤后的目录树、展开、悬浮创建入口            |
+| apps/web/src/features/documents/dialogs.tsx     | 授权、所有权转移、移动确认                        |
+| apps/web/src/features/admin/admin.tsx           | 用户管理、站点设置与注册开关                      |
+| packages/core/src/modules/identity/passwords.ts | 密码派生、账号创建和安全用户投影                  |
+| packages/core/src/workflows/resources.ts        | 资源规则、ACL、事务和审计                         |
+| packages/db/src/create-schema.ts                | 全新数据库的当前基线建表定义                      |
+| tests/cloud.test.ts                             | 临时数据库中的接口集成测试                        |
 
 不允许 web 导入服务端数据库或密码模块；当前 web 使用专门的 HTTP DTO。后续接口规模扩大时，将 DTO/schema 提取为纯类型契约包，不向浏览器打包服务端实现。
 
@@ -108,7 +107,7 @@ Web、core、db 的源码导入使用 `@web/*`、`@core/*`、`@db/*` 别名，�
 - 作为 OIDC 源、SAML、账号找回；外部 OIDC 与社交登录适配已实现，真实平台凭据与部署联调待完成。
 - Hook 配置/可靠投递；通知已使用WebSocket失效推送和HTTP补取。
 - 生产 AI provider、MCP 外部客户端和 Meilisearch 集群联调；AI、MCP、SessionEvent、格式导入导出、正文附件及数据库降级检索已有实现。
-- 桌面、DSH、设备绑定、版本化云备份与冲突解决。
+- 桌面、DSH、设备绑定。
 
 评论详情当前最多返回最早 200 条；通知 API 有分页，UI 当前展示最新 50 条。目录树分页拉取当前有权访问的资源。以上是当前容量边界，不是最终产品限制。
 
@@ -124,6 +123,6 @@ SSO 两个方向分开：当前外部身份关联唯一键为 provider_id+subjec
 
 管理员 `#/admin`、个人信息 `#/account`、个人偏好 `#/preferences` 均采用独立设置外壳，不渲染文档导航树。认证适配器位于 `apps/server/src/adapters/identity-providers.ts`，业务策略和安全流程在 `packages/core/src/modules/identity`，页面在 `apps/web/src/features/auth/authentication.tsx`。
 
-正文协同走 WebSocket，元数据仍走 HTTP。服务端校验更新、鉴权、广播、持久化与生成恢复状态；不同编辑器的解析/锚点由对应包提供。元数据 version 不充当 Yjs state vector 或云备份版本。相关实现位于 `apps/server/src/services/realtime/gateway.ts`、`apps/server/src/routes/search.ts`、`apps/web/src/features/documents/document-editor.tsx`，详见 [协同与搜索实现](collaboration.md)。
+正文协同走 WebSocket，元数据仍走 HTTP。服务端校验更新、鉴权、广播、持久化与生成恢复状态；不同编辑器的解析/锚点由对应包提供。元数据 version 不充当 Yjs state vector 。相关实现位于 `apps/server/src/services/realtime/gateway.ts`、`apps/server/src/routes/search.ts`、`apps/web/src/features/documents/document-editor.tsx`，详见 [协同与搜索实现](collaboration.md)。
 
 未来 Hook 使用与业务事务同提交的 outbox，签名、重试、幂等和投递审计；外呼地址必须防 SSRF。不直接在业务事务内执行网络回调。

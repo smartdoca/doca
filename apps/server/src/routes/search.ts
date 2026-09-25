@@ -40,7 +40,7 @@ import {
   MeilisearchSearchProvider,
   SearchRequestError,
 } from "../services/search/meilisearch-provider.js";
-import { projectionDrains } from "../services/search/drains.js";
+
 type Config = { enabled: number; endpoint: string; index_name: string };
 export interface SearchRuntime {
   allowedOrigins: string[];
@@ -50,7 +50,6 @@ export interface SearchRuntime {
     documents?: boolean;
     files?: boolean;
     knowledge?: boolean;
-    mail?: boolean;
   };
 }
 export async function registerSearch(
@@ -517,10 +516,7 @@ export async function registerSearch(
         }
         lastIndexedAt = new Date().toISOString();
       });
-      for (const drain of projectionDrains()) {
-        await drain(db, searchHost);
-        lastIndexedAt = new Date().toISOString();
-      }
+
     })()
       .catch(() => {})
       .finally(() => {

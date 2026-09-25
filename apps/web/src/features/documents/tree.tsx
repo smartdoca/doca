@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
@@ -14,15 +15,18 @@ export function DocumentTree({
   selected,
   create,
   libraryId,
+  knowledgeEnabled,
   changed,
 }: {
   refresh: number;
   userId: string;
   libraryId?: string;
+  knowledgeEnabled?: boolean;
   selected?: string;
   create: (parent: Resource) => void;
   changed?: () => void;
 }) {
+  const { t } = useI18n();
   const [items, setItems] = useState<Resource[]>([]),
     [menu, setMenu] = useState<{ resource: Resource; trigger: HTMLElement } | null>(null),
     [trash, setTrash] = useState<Resource | null>(null),
@@ -284,8 +288,9 @@ export function DocumentTree({
       {menu && <TreeDocumentMenu key={menu.resource.id} {...menu} close={() => setMenu(null)} changed={() => { setLocalRefresh(n => n + 1); changed?.(); }} remove={() => setTrash(menu.resource)} />}
       {trash && <ResourceActionDialog resource={trash} action="trash" close={() => setTrash(null)} saved={() => { setLocalRefresh(n => n + 1); changed?.(); if (selected === trash.id) location.hash = "/home"; }} />}
       {error && <Feedback message={error} tone="error" />}
+      {knowledgeEnabled && libraryId && <a className="tree-link" href={`#/r/${libraryId}?view=system&section=entries`}>{t("knowledge.openEntries")}</a>}
       {roots.map((r) => node(r))}
-      {!items.length && !error && (
+      {!items.length && !error && !knowledgeEnabled && (
         <p className="subtle">暂无目录，创建第一篇文档吧</p>
       )}
     </div>

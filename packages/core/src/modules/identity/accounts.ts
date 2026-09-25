@@ -1,3 +1,4 @@
+import { emitIntegrationEvent } from "../automation/events.js";
 import { randomUUID } from "node:crypto";
 import type { DB } from "../../../../db/src/index.js";
 import { fail } from "../../shared/errors.js";
@@ -194,6 +195,8 @@ export async function securityAudit(
   action: string,
   details: unknown,
 ) {
+  if (user && ["profile.completed", "profile.corrected", "contact.updated"].includes(action))
+    await emitIntegrationEvent(db, "user.updated", { userId: user });
   await db
     .insertInto("security_audit")
     .values({

@@ -3,17 +3,17 @@ import {
   requireCapability,
   checkDocumentSize,
   checkStorage,
-  entitlements,
-} from "../entitlements/service.js";
-import { checkPublication, checkTransfer } from "../entitlements/admission.js";
+} from "../access/operation-policy.js";
+import { checkPublication, checkTransfer } from "../access/operation-policy.js";
 import { archiveInvitation, invitationState } from "../access/invitations.js";
 import { protectManagers } from "./context.js";
 import { randomUUID } from "node:crypto";
 import { Doc, encodeStateAsUpdate } from "slatetsx-kit-editor/yjs";
-import type { Transaction } from "kysely";
+import { sql, type Transaction } from "kysely";
 import type { DB, Resource, Schema } from "../../../../db/src/index.js";
 import { fail } from "../../shared/errors.js";
 import {
+  canRemoveResource,
   label,
   namedPermission,
   permission,
@@ -39,7 +39,6 @@ import { copySurface } from "../documents/codecs/surfaces.js";
 import { importInitialContent } from "../documents/import.js";
 import { applyTemplateContent } from "../templates/templates.js";
 import type { Actor } from "../identity/passwords.js";
-import { recordActivity } from "../interactions/activity.js";
 import {
   check,
   clean,
@@ -116,7 +115,6 @@ async function erasePurgedResources(ctx: Context, actor: Actor, ids: string[]) {
       "reactions",
       "resource_visits",
       "visit_events",
-      "user_activity",
       "share_links",
       "document_versions",
       "document_updates",
@@ -195,7 +193,7 @@ export function createResourceCommands(
         if (input.initialContent !== undefined || input.markdown !== undefined)
           await requireCapability(ctx.tx, actor.id, "documents.import");
         const now = new Date().toISOString();
-        const defaults = await distributionPolicy(ctx.tx,input.kind);
+        const defaults = await distributionPolicy(ctx.tx, input.kind);
         const row: Resource = {
           id: randomUUID(),
           title:
@@ -218,7 +216,9 @@ export function createResourceCommands(
           requests_enabled: Number(
             !input.private && defaults.defaultVisibility === "requestable",
           ),
-          share_links_enabled: Number(!input.private && input.kind === "document"),
+          share_links_enabled: Number(
+            !input.private && input.kind === "document",
+          ),
           discoverable: 0,
           history_readers: 0,
           version: 1,
@@ -237,7 +237,10 @@ export function createResourceCommands(
           await storeNewMarkdown(ctx.tx, row.id, input.markdown, now);
         if (input.templateId) {
           if (input.kind !== "document") fail(400, "只有文档可以使用模板");
-          if (input.initialContent !== undefined || input.markdown !== undefined)
+          if (
+            input.initialContent !== undefined ||
+            input.markdown !== undefined
+          )
             fail(400, "不能同时使用模板和导入内容");
           const template = await ctx.tx
             .selectFrom("document_templates")
@@ -255,8 +258,6 @@ export function createResourceCommands(
           await applyTemplateContent(ctx.tx, row, content);
         }
         await event(ctx, row, `${row.kind}.created`);
-        if (row.kind === "document")
-          await recordActivity(ctx.tx, actor.id, row.id, "edit");
         return row;
       });
     },
@@ -393,12 +394,7 @@ export function createResourceCommands(
         return { ok: true };
       });
     },
-    setPageWidth(
-      actor: Actor,
-      id: string,
-      pageWidth: string,
-      version: number,
-    ) {
+    setPageWidth(actor: Actor, id: string, pageWidth: string, version: number) {
       return run(actor, [id], async (ctx) => {
         const r = get(ctx, id, "edit_content");
         if (r.kind !== "document" || r.format !== "rich_text")
@@ -619,7 +615,10 @@ export function createResourceCommands(
             )!;
             if (permission(container, actor, ctx.resources, ctx.grants) < 4)
               fail(403, "需要目标知识库或文档的管理权限");
-          } else if (!libraryId && !isResourceOwnerLike(r, actor, ctx.resources)) {
+          } else if (
+            !libraryId &&
+            !isResourceOwnerLike(r, actor, ctx.resources)
+          ) {
             fail(403, "仅文档所有者可以转移文档");
           }
           // Moving preserves explicit grants and links. Inherited management must not
@@ -634,7 +633,8 @@ export function createResourceCommands(
               : doc,
           );
           protectManagers(ctx, affected, simulated);
-          const leavingLibrary = !libraryId && !input.parentId && !!r.library_id;
+          const leavingLibrary =
+            !libraryId && !input.parentId && !!r.library_id;
           if (leavingLibrary) {
             // A personal document has no parent chain. Flatten a moved knowledge
             // base subtree and materialize the named permissions that were
@@ -663,7 +663,8 @@ export function createResourceCommands(
                     .values({
                       resource_id: doc.id,
                       user_id: userId,
-                      role: label(rank) as "reader" | "commenter" | "editor" | "manager",
+                      role: label(rank) as
+                        "reader" | "commenter" | "editor" | "manager",
                       include_descendants: 1,
                     })
                     .execute();
@@ -688,14 +689,23 @@ export function createResourceCommands(
                     parent_id: null,
                     access_mode: "custom" as const,
                     permission_overrides: 63,
-                    visibility: effectiveResource(doc, ctx.resources).visibility,
-                    public_role: effectiveResource(doc, ctx.resources).public_role,
-                    requests_enabled: effectiveResource(doc, ctx.resources).requests_enabled,
-                    discoverable: effectiveResource(doc, ctx.resources).discoverable,
-                    history_readers: effectiveResource(doc, ctx.resources).history_readers,
-                    share_links_enabled: effectiveResource(doc, ctx.resources).share_links_enabled,
+                    visibility: effectiveResource(doc, ctx.resources)
+                      .visibility,
+                    public_role: effectiveResource(doc, ctx.resources)
+                      .public_role,
+                    requests_enabled: effectiveResource(doc, ctx.resources)
+                      .requests_enabled,
+                    discoverable: effectiveResource(doc, ctx.resources)
+                      .discoverable,
+                    history_readers: effectiveResource(doc, ctx.resources)
+                      .history_readers,
+                    share_links_enabled: effectiveResource(doc, ctx.resources)
+                      .share_links_enabled,
                   }
-                : !input.parentId && !libraryId && doc.id === id && doc.access_mode === "inherit"
+                : !input.parentId &&
+                    !libraryId &&
+                    doc.id === id &&
+                    doc.access_mode === "inherit"
                   ? {
                       access_mode: "custom" as const,
                       visibility: "invited" as const,
@@ -732,7 +742,6 @@ export function createResourceCommands(
             )
           )
             fail(409, "包含未选中或无权清空的子文档，请先处理子文档");
-          if (ctx.resources.some(x => ids.includes(x.id) && x.moderation_hold)) fail(403, "审计保留文档不能永久删除");
           // Explicit IDs + versions are frozen in the confirmation dialog. Newly trashed
           // or restored resources cannot accidentally join this permanent deletion.
           return erasePurgedResources(ctx, actor, ids);
@@ -748,8 +757,6 @@ export function createResourceCommands(
         if (tree.some((item) => !item.deleted_at))
           fail(409, "包含仍在使用的子文档，不能永久删除");
         for (const item of tree) get(ctx, item.id, "purge", true);
-        if (tree.some((item) => item.moderation_hold))
-          fail(403, "审计保留文档不能永久删除");
         return erasePurgedResources(
           ctx,
           actor,
@@ -777,9 +784,10 @@ export function createResourceCommands(
         } else {
           if (r.deleted_at) fail(409, "已删除");
           const targets = descendants(ctx, r).filter((x) => !x.deleted_at);
-          if (targets.some(x => x.moderation_hold)) fail(403, "包含审计保留文档，不能删除");
-          if (targets.some((x) => !isResourceOwnerLike(x, actor, ctx.resources)))
-            fail(403, "只能删除自己拥有的文档，请先处理其他所有者的子文档");
+          if (
+            targets.some((x) => !canRemoveResource(x, actor, ctx.resources, ctx.grants))
+          )
+            fail(403, "需要拥有文档或管理其所属知识库，请先处理无权删除的子文档");
           const batch = randomUUID();
           for (const x of targets)
             await update(ctx, x, {
@@ -794,7 +802,11 @@ export function createResourceCommands(
               version: eb("version", "+", 1),
             }))
             .where("parent_type", "=", "document")
-            .where("parent_id", "in", targets.map((x) => x.id))
+            .where(
+              "parent_id",
+              "in",
+              targets.map((x) => x.id),
+            )
             .where("deleted_at", "is", null)
             .execute();
         }
@@ -807,7 +819,11 @@ export function createResourceCommands(
               version: eb("version", "+", 1),
             }))
             .where("parent_type", "=", "document")
-            .where("parent_id", "in", descendants(ctx, r).map((x) => x.id))
+            .where(
+              "parent_id",
+              "in",
+              descendants(ctx, r).map((x) => x.id),
+            )
             .where("delete_batch", "=", r.delete_batch)
             .execute();
         }
@@ -829,215 +845,220 @@ export function createResourceCommands(
         [id, input.parentId, input.libraryId],
         [id],
         async (ctx) => {
-        const currentOnly = input.includeChildren === false,
-          r = get(ctx, id, currentOnly ? "manage_structure" : "read_content");
-        if (currentOnly && r.kind !== "document")
-          fail(400, "仅支持复制当前文档");
-        let destinationParent: string | null = null,
-          destinationLibrary: string | null = null;
-        if (currentOnly) {
-          destinationParent = input.parentId ?? null;
-          destinationLibrary = input.libraryId ?? null;
-          if (destinationParent) {
-            const parent = get(ctx, destinationParent, "manage_structure");
-            if (parent.kind !== "document")
-              fail(400, "目标目录必须是文档");
-            if (parent.library_id === null)
-              fail(400, "个人文档不支持子文档");
-            if (
-              destinationLibrary !== null &&
-              destinationLibrary !== parent.library_id
-            )
-              fail(400, "目标目录与知识库不一致");
-            destinationLibrary = parent.library_id;
-          } else if (destinationLibrary) {
-            if (get(ctx, destinationLibrary, "manage_structure").kind !== "library")
-              fail(400, "目标知识库无效");
+          const currentOnly = input.includeChildren === false,
+            r = get(ctx, id, currentOnly ? "manage_structure" : "read_content");
+          if (currentOnly && r.kind !== "document")
+            fail(400, "仅支持复制当前文档");
+          let destinationParent: string | null = null,
+            destinationLibrary: string | null = null;
+          if (currentOnly) {
+            destinationParent = input.parentId ?? null;
+            destinationLibrary = input.libraryId ?? null;
+            if (destinationParent) {
+              const parent = get(ctx, destinationParent, "manage_structure");
+              if (parent.kind !== "document") fail(400, "目标目录必须是文档");
+              if (parent.library_id === null) fail(400, "个人文档不支持子文档");
+              if (
+                destinationLibrary !== null &&
+                destinationLibrary !== parent.library_id
+              )
+                fail(400, "目标目录与知识库不一致");
+              destinationLibrary = parent.library_id;
+            } else if (destinationLibrary) {
+              if (
+                get(ctx, destinationLibrary, "manage_structure").kind !==
+                "library"
+              )
+                fail(400, "目标知识库无效");
+            }
           }
-        }
-        const targets = (currentOnly ? [r] : descendants(ctx, r)).filter(
-          (x) => !x.deleted_at,
-        );
-        if (
-          targets.some(
-            (x) => permission(x, actor, ctx.resources, ctx.grants) < 1,
-          )
-        )
-          fail(403, "部分子文档无权复制");
-        await requireCapability(ctx.tx, actor.id, "documents.copy");
-        const mapping = new Map(targets.map((x) => [x.id, randomUUID()]));
-        const pending = [...targets];
-        while (pending.length) {
-          const i = pending.findIndex(
-            (x) =>
-              ![x.parent_id, x.library_id].some(
-                (p) => p && pending.some((t) => t.id === p),
-              ),
+          const targets = (currentOnly ? [r] : descendants(ctx, r)).filter(
+            (x) => !x.deleted_at,
           );
-          if (i < 0) fail(409, "目录损坏");
-          const x = pending.splice(i, 1)[0]!;
-          await checkCreation(ctx.tx, actor.id, x.kind, x.format);
-          const now = new Date().toISOString();
-          const copiedParentId = currentOnly
-            ? destinationParent
-            : mapping.get(x.parent_id ?? "") ?? null;
-          const copiedLibraryId = currentOnly
-            ? destinationLibrary
-            : mapping.get(x.library_id ?? "") ?? null;
-          const copiedAccessMode = currentOnly && destinationLibrary
-            ? ("inherit" as const)
-            : ("custom" as const);
-          await ctx.tx
-            .insertInto("resources")
-            .values({
-              ...x,
-              content_bytes: 0,
-              cover_asset_id: null,
-              id: mapping.get(x.id)!,
-              tree_order:
-                currentOnly
+          if (
+            targets.some(
+              (x) => permission(x, actor, ctx.resources, ctx.grants) < 1,
+            )
+          )
+            fail(403, "部分子文档无权复制");
+          await requireCapability(ctx.tx, actor.id, "documents.copy");
+          const mapping = new Map(targets.map((x) => [x.id, randomUUID()]));
+          const pending = [...targets];
+          while (pending.length) {
+            const i = pending.findIndex(
+              (x) =>
+                ![x.parent_id, x.library_id].some(
+                  (p) => p && pending.some((t) => t.id === p),
+                ),
+            );
+            if (i < 0) fail(409, "目录损坏");
+            const x = pending.splice(i, 1)[0]!;
+            await checkCreation(ctx.tx, actor.id, x.kind, x.format);
+            const now = new Date().toISOString();
+            const copiedParentId = currentOnly
+              ? destinationParent
+              : (mapping.get(x.parent_id ?? "") ?? null);
+            const copiedLibraryId = currentOnly
+              ? destinationLibrary
+              : (mapping.get(x.library_id ?? "") ?? null);
+            const copiedAccessMode =
+              currentOnly && destinationLibrary
+                ? ("inherit" as const)
+                : ("custom" as const);
+            await ctx.tx
+              .insertInto("resources")
+              .values({
+                ...x,
+                content_bytes: 0,
+                cover_asset_id: null,
+                id: mapping.get(x.id)!,
+                tree_order: currentOnly
                   ? await nextTreeOrder(
                       ctx,
                       destinationParent,
                       destinationLibrary,
                     )
                   : (await nextTreeOrder(ctx, null, null)) + targets.indexOf(x),
-              owner_id: actor.id,
-              last_editor_id: actor.id,
-              last_edited_at: now,
-              title:
-                x.id === id ? clean(`${x.title.slice(0, 150)} 副本`) : x.title,
-              parent_id: copiedParentId,
-              library_id: copiedLibraryId,
-              access_mode: copiedAccessMode,
-              visibility: "invited",
-              requests_enabled: Number(x.kind === "document"),
-              ...(x.kind === "document" ? {
-                share_links_enabled: 1,
-                discoverable: 0,
-                history_readers: 0,
-              } : {}),
-              version: 1,
-              deleted_at: null,
-              delete_batch: null,
-              created_at: now,
-              updated_at: now,
-            })
-            .execute();
-          // Uploaded objects are immutable. Copies get independent asset IDs and
-          // authorization links while safely reusing the stored bytes.
-          const assets = await ctx.tx
-            .selectFrom("assets")
-            .selectAll()
-            .where("resource_id", "=", x.id)
-            .where("deleted_at", "is", null)
-            .execute();
-          const assetMapping = new Map<string, string>();
-          for (const asset of assets) {
-            if (asset.purpose === "cover" && asset.id !== x.cover_asset_id)
-              continue;
-            const assetId = randomUUID();
-            assetMapping.set(asset.id, assetId);
-            await checkStorage(ctx.tx, actor.id, Number(asset.size));
-            await ctx.tx
-              .insertInto("assets")
-              .values({
-                ...asset,
-                id: assetId,
                 owner_id: actor.id,
-                resource_id: mapping.get(x.id)!,
+                last_editor_id: actor.id,
+                last_edited_at: now,
+                title:
+                  x.id === id
+                    ? clean(`${x.title.slice(0, 150)} 副本`)
+                    : x.title,
+                parent_id: copiedParentId,
+                library_id: copiedLibraryId,
+                access_mode: copiedAccessMode,
+                visibility: "invited",
+                requests_enabled: Number(x.kind === "document"),
+                ...(x.kind === "document"
+                  ? {
+                      share_links_enabled: 1,
+                      discoverable: 0,
+                      history_readers: 0,
+                    }
+                  : {}),
+                version: 1,
+                deleted_at: null,
+                delete_batch: null,
                 created_at: now,
+                updated_at: now,
               })
               .execute();
-            if (asset.id === x.cover_asset_id)
-              await ctx.tx
-                .updateTable("resources")
-                .set({ cover_asset_id: assetId })
-                .where("id", "=", mapping.get(x.id)!)
-                .execute();
-          }
-          if (["spreadsheet", "canvas", "presentation"].includes(x.format)) {
-            const target = await ctx.tx
-              .selectFrom("resources")
+            // Uploaded objects are immutable. Copies get independent asset IDs and
+            // authorization links while safely reusing the stored bytes.
+            const assets = await ctx.tx
+              .selectFrom("assets")
               .selectAll()
-              .where("id", "=", mapping.get(x.id)!)
-              .executeTakeFirstOrThrow();
-            await copySurface(ctx.tx, x, target, assetMapping);
-            continue;
-          }
-          if (x.format === "markdown") {
-            const original = await restoreMarkdown(ctx.tx, x.id);
+              .where("resource_id", "=", x.id)
+              .where("deleted_at", "is", null)
+              .execute();
+            const assetMapping = new Map<string, string>();
+            for (const asset of assets) {
+              if (asset.purpose === "cover" && asset.id !== x.cover_asset_id)
+                continue;
+              const assetId = randomUUID();
+              assetMapping.set(asset.id, assetId);
+              await checkStorage(ctx.tx, actor.id, Number(asset.size));
+              await ctx.tx
+                .insertInto("assets")
+                .values({
+                  ...asset,
+                  id: assetId,
+                  owner_id: actor.id,
+                  resource_id: mapping.get(x.id)!,
+                  created_at: now,
+                })
+                .execute();
+              if (asset.id === x.cover_asset_id)
+                await ctx.tx
+                  .updateTable("resources")
+                  .set({ cover_asset_id: assetId })
+                  .where("id", "=", mapping.get(x.id)!)
+                  .execute();
+            }
+            if (["spreadsheet", "canvas", "presentation"].includes(x.format)) {
+              const target = await ctx.tx
+                .selectFrom("resources")
+                .selectAll()
+                .where("id", "=", mapping.get(x.id)!)
+                .executeTakeFirstOrThrow();
+              await copySurface(ctx.tx, x, target, assetMapping);
+              continue;
+            }
+            if (x.format === "markdown") {
+              const original = await restoreMarkdown(ctx.tx, x.id);
+              try {
+                let text = original.doc.getText("markdown").toString();
+                for (const [before, after] of assetMapping)
+                  text = text.split(`](${before})`).join(`](${after})`);
+                if (x.id === id)
+                  text = `# ${x.title.slice(0, 150)} 副本\n${text.split("\n").slice(1).join("\n")}`;
+                await storeNewMarkdown(ctx.tx, mapping.get(x.id)!, text, now);
+              } finally {
+                original.destroy();
+              }
+              continue;
+            }
+            const original = await restoreDocument(ctx.tx, x.id);
             try {
-              let text = original.doc.getText("markdown").toString();
-              for (const [before, after] of assetMapping)
-                text = text.split(`](${before})`).join(`](${after})`);
-              if (x.id === id)
-                text = `# ${x.title.slice(0, 150)} 副本\n${text.split("\n").slice(1).join("\n")}`;
-              await storeNewMarkdown(ctx.tx, mapping.get(x.id)!, text, now);
+              if (original.state) {
+                // A copy is a new document identity; comments and undo history are not copied.
+                const value = original.runtime.getValue();
+                const rewrite = (node: any): void => {
+                  if (!node || typeof node !== "object") return;
+                  if (
+                    typeof node.path === "string" &&
+                    assetMapping.has(node.path)
+                  )
+                    node.path = assetMapping.get(node.path);
+                  Object.values(node).forEach((v) => {
+                    if (v && typeof v === "object") rewrite(v);
+                  });
+                };
+                rewrite(value);
+                const copyDoc = new Doc();
+                const runtime = new YjsDocument(copyDoc);
+                try {
+                  runtime.initialize(value);
+                  await checkDocumentSize(
+                    ctx.tx,
+                    mapping.get(x.id)!,
+                    Buffer.byteLength(JSON.stringify(value)),
+                  );
+                  if (x.id === id)
+                    setDocumentTitle(
+                      runtime,
+                      clean(`${x.title.slice(0, 150)} 副本`),
+                    );
+                  await ctx.tx
+                    .insertInto("document_states")
+                    .values({
+                      resource_id: mapping.get(x.id)!,
+                      codec: DOCUMENT_CODECS.rich_text,
+                      checkpoint: b64(encodeStateAsUpdate(copyDoc)),
+                      seq: 0,
+                      checkpoint_seq: 0,
+                      text: plainText(runtime.getValue()),
+                      updated_at: now,
+                    })
+                    .execute();
+                } finally {
+                  runtime.destroy();
+                  copyDoc.destroy();
+                }
+              }
             } finally {
               original.destroy();
             }
-            continue;
           }
-          const original = await restoreDocument(ctx.tx, x.id);
-          try {
-            if (original.state) {
-              // A copy is a new document identity; comments and undo history are not copied.
-              const value = original.runtime.getValue();
-              const rewrite = (node: any): void => {
-                if (!node || typeof node !== "object") return;
-                if (
-                  typeof node.path === "string" &&
-                  assetMapping.has(node.path)
-                )
-                  node.path = assetMapping.get(node.path);
-                Object.values(node).forEach((v) => {
-                  if (v && typeof v === "object") rewrite(v);
-                });
-              };
-              rewrite(value);
-              const copyDoc = new Doc();
-              const runtime = new YjsDocument(copyDoc);
-              try {
-                runtime.initialize(value);
-                await checkDocumentSize(
-                  ctx.tx,
-                  mapping.get(x.id)!,
-                  Buffer.byteLength(JSON.stringify(value)),
-                );
-                if (x.id === id)
-                  setDocumentTitle(
-                    runtime,
-                    clean(`${x.title.slice(0, 150)} 副本`),
-                  );
-                await ctx.tx
-                  .insertInto("document_states")
-                  .values({
-                    resource_id: mapping.get(x.id)!,
-                    codec: DOCUMENT_CODECS.rich_text,
-                    checkpoint: b64(encodeStateAsUpdate(copyDoc)),
-                    seq: 0,
-                    checkpoint_seq: 0,
-                    text: plainText(runtime.getValue()),
-                    updated_at: now,
-                  })
-                  .execute();
-              } finally {
-                runtime.destroy();
-                copyDoc.destroy();
-              }
-            }
-          } finally {
-            original.destroy();
-          }
-        }
-        const newId = mapping.get(id)!;
-        await event(
-          ctx,
-          { ...r, id: newId, owner_id: actor.id },
-          "resource.copied",
-        );
-        return { id: newId };
+          const newId = mapping.get(id)!;
+          await event(
+            ctx,
+            { ...r, id: newId, owner_id: actor.id },
+            "resource.copied",
+          );
+          return { id: newId };
         },
       );
     },

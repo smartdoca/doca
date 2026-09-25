@@ -21,10 +21,9 @@ import {
 import { mockAI } from "./ai-mock.js";
 it("replays chronological events by offset without duplicating earlier steps", () => {
   const start: AIProgress = {
-    phase: "思考",
+    phase: "thinking",
     text: "",
     reasoning: "分析",
-    steps: [],
     sources: [],
     events: [
       {
@@ -44,7 +43,8 @@ it("replays chronological events by offset without duplicating earlier steps", (
         id: "2",
         kind: "tool",
         at: "2026-09-15",
-        text: "读取文档",
+        code: "tool_call",
+        data: { toolName: "document_read" },
         status: "loading",
       },
     ],
@@ -129,7 +129,6 @@ it.each(["shutdown", "expired lease", "repeated shutdown"])(
       db,
       {
         ...aiDefaults,
-        limits: { standard: { day: null, week: null, month: null } },
         vendors: [
           {
             id: "test-vendor",
@@ -148,10 +147,6 @@ it.each(["shutdown", "expired lease", "repeated shutdown"])(
             alias: "测试",
             tools: true,
             enabled: true,
-            levels: [],
-            inputRate: 1,
-            outputRate: 1,
-            cacheRate: 1,
             maxInput: 64000,
             maxOutput: 2000,
           },
@@ -296,7 +291,9 @@ it.each(["shutdown", "expired lease", "repeated shutdown"])(
       const events = JSON.parse(final!.result).progress.events;
       expect(
         events.some(
-          (e: any) => e.kind === "status" && e.text.includes("已恢复"),
+          (e: any) =>
+            e.kind === "status" &&
+            ["checkpoint_resumed", "retry_resumed"].includes(e.code),
         ),
       ).toBe(true);
       expect(events.findIndex((e: any) => e.kind === "tool")).toBeLessThan(

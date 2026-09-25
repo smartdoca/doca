@@ -1,12 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { enqueueProjection } from "../automation/jobs.js";
-import {
-  mailAttachmentIncluded,
-  mailKnowledgeIncluded,
-} from "../plugins/policies.js";
+
 import type { DB } from "../../../../db/src/index.js";
 
-export type KnowledgeKind = "document" | "file" | "mail" | "folder" | "library";
+export type KnowledgeKind = "document" | "file" | "folder" | "library";
 const segmenter = new Intl.Segmenter("zh-CN", { granularity: "word" });
 const stopWords = new Set([
   "文件", "文档", "内容", "这个", "我们", "可以", "一个", "以及", "the", "and", "with",
@@ -177,7 +174,7 @@ async function fileRecord(db: DB, id: string) {
     ])
     .where("f.id", "=", id)
     .executeTakeFirst();
-  if (!item || item.deleted_at || !(await mailAttachmentIncluded(db, item.parent_id, item.metadata)))
+  if (!item || item.deleted_at)
     return { alive: false, title: "", text: "", readers: [] as string[] };
   const readers = new Set<string>([item.owner_id]);
   if (item.parent_type === "document") {
@@ -191,26 +188,6 @@ async function fileRecord(db: DB, id: string) {
     alive: true,
     title: item.name,
     text: [item.name, description, extract].filter(Boolean).join("\n"),
-    readers: [...readers],
-  };
-}
-
-async function mailRecord(db: DB, id: string) {
-  const message = await db
-    .selectFrom("mail_messages as m")
-    .innerJoin("mailboxes as b", "b.id", "m.mailbox_id")
-    .select(["m.id", "m.subject", "m.from_addr", "m.snippet", "m.body_text", "m.starred", "m.ai_tags", "b.owner_id", "b.id as mailbox_id", "b.deleted_at", "b.knowledge_scope"])
-    .where("m.id", "=", id)
-    .executeTakeFirst();
-  if (!message || message.deleted_at || !mailKnowledgeIncluded(message.knowledge_scope, message.starred))
-    return { alive: false, title: "", text: "", readers: [] as string[] };
-  const readers = new Set<string>([message.owner_id]);
-  const shares = await db.selectFrom("mailbox_shares").select("user_id").where("mailbox_id", "=", message.mailbox_id).execute();
-  for (const share of shares) readers.add(share.user_id);
-  return {
-    alive: true,
-    title: message.subject || "（无主题）",
-    text: [message.subject, message.from_addr, message.ai_tags, message.snippet, message.body_text].filter(Boolean).join("\n"),
     readers: [...readers],
   };
 }
@@ -275,9 +252,7 @@ export async function rebuildKnowledge(
     ? await documentReaders(db, id)
     : kind === "file"
       ? await fileRecord(db, id)
-      : kind === "mail"
-        ? await mailRecord(db, id)
-        : { alive: false, title: "", text: "", readers: [] as string[] };
+      : { alive: false, title: "", text: "", readers: [] as string[] };
   const existing = await db.selectFrom("knowledge_chunks").select("id").where("source_kind", "=", kind).where("source_id", "=", id).execute();
   const pieces = record.alive ? splitKnowledgeText(record.title, record.text) : [];
   const now = new Date().toISOString();
@@ -419,25 +394,6 @@ async function materializeKnowledgeMatches(db: DB, userId: string, query: string
     await rebuildKnowledge(db, "file", file.id, indexer);
     rebuilt += 1;
   }
-  const messages = await db
-    .selectFrom("mail_messages as m")
-    .innerJoin("mailboxes as b", "b.id", "m.mailbox_id")
-    .select(["m.id", "m.subject", "m.snippet", "m.body_text", "m.starred", "m.ai_tags", "b.knowledge_scope", "b.deleted_at"])
-    .where("b.deleted_at", "is", null)
-    .orderBy("m.received_at", "desc")
-    .limit(40)
-    .execute();
-  for (const message of messages) {
-    if (rebuilt >= 8) break;
-    if (!mailKnowledgeIncluded(message.knowledge_scope, message.starred)) continue;
-    if (!matchKnowledge(query, `${message.subject ?? ""}\n${message.ai_tags ?? ""}\n${message.snippet ?? ""}\n${message.body_text ?? ""}`)) continue;
-    const existing = await db.selectFrom("knowledge_chunks").select(["title", "text"]).where("source_kind", "=", "mail").where("source_id", "=", message.id).execute();
-    if (existing.some((row) => matchKnowledge(query, `${row.title}\n${row.text}`))) continue;
-    const record = await mailRecord(db, message.id);
-    if (!record.alive || !canReadChunk(record.readers, userId)) continue;
-    await rebuildKnowledge(db, "mail", message.id, indexer);
-    rebuilt += 1;
-  }
   return rebuilt > 0;
 }
 
@@ -454,22 +410,10 @@ export async function enqueueMissingKnowledge(db: DB) {
   }
   const files = await db.selectFrom("file_items").select(["id", "parent_id", "metadata"]).where("deleted_at", "is", null).where("parent_type", "!=", "document").execute();
   for (const file of files) {
-    const included = await mailAttachmentIncluded(db, file.parent_id, file.metadata);
+    const included = true;
     const has = present.has(`file:${file.id}`);
     if (included === has) continue;
     await enqueueKnowledge(db, "file", file.id);
-    queued += 1;
-  }
-  const messages = await db
-    .selectFrom("mail_messages as m")
-    .innerJoin("mailboxes as b", "b.id", "m.mailbox_id")
-    .select(["m.id", "m.starred", "b.knowledge_scope", "b.deleted_at"])
-    .execute();
-  for (const message of messages) {
-    const included = !message.deleted_at && mailKnowledgeIncluded(message.knowledge_scope, message.starred);
-    const has = present.has(`mail:${message.id}`);
-    if (included === has) continue;
-    await enqueueKnowledge(db, "mail", message.id);
     queued += 1;
   }
   return queued;
@@ -571,10 +515,6 @@ async function sourceLabel(db: DB, kind: string, id: string) {
   if (kind === "file") {
     const row = await db.selectFrom("file_items").select("name").where("id", "=", id).executeTakeFirst();
     return row?.name ?? "";
-  }
-  if (kind === "mail") {
-    const row = await db.selectFrom("mail_messages").select("subject").where("id", "=", id).executeTakeFirst();
-    return row?.subject || "（无主题）";
   }
   if (kind === "folder") {
     const row = await db.selectFrom("file_folders").select("name").where("id", "=", id).executeTakeFirst();
@@ -687,7 +627,6 @@ async function endpointVisible(db: DB, userId: string, kind: string, id: string)
   if (kind === "folder") return (await folderReaders(db, id)).includes(userId);
   if (kind === "library" || kind === "document") return (await documentReaders(db, id)).readers.some((reader) => readerTokensFor(userId).includes(reader));
   if (kind === "file") return (await fileRecord(db, id)).readers.some((reader) => readerTokensFor(userId).includes(reader));
-  if (kind === "mail") return (await mailRecord(db, id)).readers.some((reader) => readerTokensFor(userId).includes(reader));
   return false;
 }
 

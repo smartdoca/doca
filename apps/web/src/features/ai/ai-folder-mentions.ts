@@ -1,10 +1,9 @@
-import type { FileDelivery, FolderDelivery, MailDelivery } from "@core/modules/ai/progress.js";
+import type { FileDelivery, FolderDelivery } from "@core/modules/ai/progress.js";
 
 export type AnswerSegment =
   | { type: "text"; text: string }
   | { type: "folder"; folder: FolderDelivery }
-  | { type: "file"; file: FileDelivery }
-  | { type: "mail"; mail: MailDelivery };
+  | { type: "file"; file: FileDelivery };
 
 const SESSION = /^[a-f0-9-]{36}$/i;
 
@@ -15,8 +14,7 @@ export function keepsAssistantSession(route: string) {
     path.startsWith("/r/") ||
     path === "/files" ||
     path.startsWith("/shared-files/") ||
-    path === "/mail" ||
-    path.startsWith("/mail/")
+    false
   );
 }
 
@@ -30,11 +28,6 @@ export function withSessionHash(href: string, sessionId?: string | null) {
   const query = params.toString();
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return `${normalized}${query ? `?${query}` : ""}`;
-}
-
-export function isMailHref(href: string) {
-  const hash = folderExplorerHash(href);
-  return hash === "#/mail" || hash.startsWith("#/mail/");
 }
 
 function escapeRegExp(value: string) {
@@ -127,15 +120,13 @@ function hrefPatterns(href: string) {
 
 type HitBody =
   | { type: "folder"; folder: FolderDelivery }
-  | { type: "file"; file: FileDelivery }
-  | { type: "mail"; mail: MailDelivery };
+  | { type: "file"; file: FileDelivery };
 type Hit = HitBody & { start: number; end: number };
 
 function collectHits(
   text: string,
   folders: FolderDelivery[],
   files: FileDelivery[],
-  mails: MailDelivery[] = [],
 ) {
   const hits: Hit[] = [];
   const overlaps = (start: number, end: number) =>
@@ -181,10 +172,6 @@ function collectHits(
       (orderedFiles.length === 1 ? orderedFiles[0] : undefined);
     if (file) hits.push({ type: "file", file, start, end });
   }
-  for (const mail of mails) {
-    if (!mail.href) continue;
-    for (const pattern of hrefPatterns(mail.href)) add(pattern, { type: "mail", mail });
-  }
   hits.sort((a, b) => a.start - b.start);
   return hits;
 }
@@ -192,18 +179,16 @@ function collectHits(
 export function answerSegments(
   text: string,
   folders: FolderDelivery[] = [],
-  options: { ensureCards?: boolean; files?: FileDelivery[]; mails?: MailDelivery[] } = {},
+  options: { ensureCards?: boolean; files?: FileDelivery[] } = {},
 ): AnswerSegment[] {
   const files = options.files ?? [];
-  const mails = options.mails ?? [];
-  if (!text && !folders.length && !files.length && !mails.length) return [];
-  if (!folders.length && !files.length && !mails.length) return text ? [{ type: "text", text }] : [];
-  const hits = collectHits(text, folders, files, mails);
+  if (!text && !folders.length && !files.length) return [];
+  if (!folders.length && !files.length) return text ? [{ type: "text", text }] : [];
+  const hits = collectHits(text, folders, files);
   const segments: AnswerSegment[] = [];
   let cursor = 0;
   const usedFolders = new Set<string>();
   const usedFiles = new Set<string>();
-  const usedMails = new Set<string>();
   for (const hit of hits) {
     if (hit.start > cursor) {
       const chunk = text.slice(cursor, hit.start);
@@ -215,12 +200,6 @@ export function answerSegments(
       if (!(last?.type === "folder" && last.folder.id === hit.folder.id)) {
         segments.push({ type: "folder", folder: hit.folder });
         usedFolders.add(hit.folder.id);
-      }
-    } else if (hit.type === "mail") {
-      const key = `${hit.mail.mailboxId}:${hit.mail.id}`;
-      if (!(last?.type === "mail" && last.mail.mailboxId === hit.mail.mailboxId && last.mail.id === hit.mail.id)) {
-        segments.push({ type: "mail", mail: hit.mail });
-        usedMails.add(key);
       }
     } else if (!(last?.type === "file" && last.file.id === hit.file.id)) {
       segments.push({ type: "file", file: hit.file });
@@ -240,10 +219,6 @@ export function answerSegments(
     }
     for (const file of files) {
       if (!usedFiles.has(file.id)) segments.push({ type: "file", file });
-    }
-    for (const mail of mails) {
-      const key = `${mail.mailboxId}:${mail.id}`;
-      if (mail.href && !usedMails.has(key)) segments.push({ type: "mail", mail });
     }
   }
   return segments;

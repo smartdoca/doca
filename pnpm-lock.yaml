@@ -256,8 +256,8 @@ importers:
         specifier: 0.118.2
         version: 0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1)
       slatetsx-kit-editor:
-        specifier: file:vendor/slatetsx-kit-editor-0.4.9-4c5ca89c3361.tgz
-        version: file:vendor/slatetsx-kit-editor-0.4.9-4c5ca89c3361.tgz(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1)
+        specifier: file:vendor/slatetsx-kit-editor-0.4.9-86c014f2fc80.tgz
+        version: file:vendor/slatetsx-kit-editor-0.4.9-86c014f2fc80.tgz(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1)
       three:
         specifier: 0.172.0
         version: 0.172.0
@@ -562,9 +562,21 @@ importers:
       '@deepseek-ai/cordis':
         specifier: 4.0.4
         version: 4.0.4
+      '@doca/files-capability':
+        specifier: workspace:*
+        version: link:../files-capability
+      '@doca/knowledge-capability':
+        specifier: workspace:*
+        version: link:../knowledge-capability
       '@doca/plugin-contracts':
         specifier: workspace:*
         version: link:../plugin-contracts
+      '@doca/search-host':
+        specifier: workspace:*
+        version: link:../search-host
+      '@doca/web-plugin-registry':
+        specifier: workspace:*
+        version: link:../web-plugin-registry
 
   packages/search-host: {}
 
@@ -8635,8 +8647,8 @@ packages:
   slate@0.118.1:
     resolution: {integrity: sha512-6H1DNgnSwAFhq/pIgf+tLvjNzH912M5XrKKhP9Frmbds2zFXdSJ6L/uFNyVKxQIkPzGWPD0m+wdDfmEuGFH5Tg==}
 
-  slatetsx-kit-editor@file:vendor/slatetsx-kit-editor-0.4.9-4c5ca89c3361.tgz:
-    resolution: {integrity: sha512-BNpmMdGBqvodwoB4xOSPlfjhX7CoEyL0IkoH3c3SIM8VcGp0Armg/qye96tUEyhPsm2sb/2KPswBbNgNK0Whew==, tarball: file:vendor/slatetsx-kit-editor-0.4.9-4c5ca89c3361.tgz}
+  slatetsx-kit-editor@file:vendor/slatetsx-kit-editor-0.4.9-86c014f2fc80.tgz:
+    resolution: {integrity: sha512-4UNahKUyj0ppNKeoRYFW7D43KYdVmdTu8aAFhxVC379FRn3e+nvkSwk4A/em23xLauvU/yZ5IlBz7G5gvNRltg==, tarball: file:vendor/slatetsx-kit-editor-0.4.9-86c014f2fc80.tgz}
     version: 0.4.9
     peerDependencies:
       katex: ^0.18.7
@@ -20266,7 +20278,7 @@ snapshots:
       immer: 10.2.0
       tiny-warning: 1.0.3
 
-  slatetsx-kit-editor@file:vendor/slatetsx-kit-editor-0.4.9-4c5ca89c3361.tgz(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1):
+  slatetsx-kit-editor@file:vendor/slatetsx-kit-editor-0.4.9-86c014f2fc80.tgz(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1):
     dependencies:
       '@antv/x6': 2.19.2
       '@antv/x6-plugin-clipboard': 2.1.6(@antv/x6@2.19.2)

@@ -14,7 +14,7 @@ import {
 } from "@core/modules/quick-notes/service.js";
 import { createContent } from "@core/workflows/resources.js";
 import { digest } from "@core/workflows/ai-documents.js";
-import { checkStorage } from "@core/modules/entitlements/service.js";
+import { checkStorage } from "@core/modules/access/operation-policy.js";
 import {
   lockAIUser,
   requireModel,

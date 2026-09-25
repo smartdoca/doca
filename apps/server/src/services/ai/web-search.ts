@@ -159,10 +159,12 @@ export async function searchWeb(
   } catch {
     fail(502, "搜索服务返回了无效结果");
   }
-  const rows = tavily || selfHosted ? body.results : body.web?.results;
+  const rows = tavily || selfHosted ? body?.results : body?.web?.results;
   if (!Array.isArray(rows)) fail(502, "搜索服务返回了无效结果");
+  if (selfHosted && rows.length === 0 && Array.isArray(body.unresponsive_engines) && body.unresponsive_engines.length > 0)
+    fail(502, "搜索服务的上游引擎超时或不可用，未取得检索结果；这不代表没有相关资料。请检查搜索服务网络，暂勿重复搜索");
   const sources: WebSource[] = [];
-  for (const row of rows.slice(0, limit)) {
+  for (const row of rows) {
     try {
       const u = new URL(row.url);
       if (!["https:", "http:"].includes(u.protocol) || u.username || u.password)
@@ -178,9 +180,12 @@ export async function searchWeb(
         ).slice(0, 6000),
         retrievedAt: new Date().toISOString(),
       });
+      if (sources.length >= limit) break;
     } catch {
       /* Invalid provider result is not a usable source. */
     }
   }
+  if (rows.length > 0 && sources.length === 0)
+    fail(502, "搜索服务未返回有效的网页链接，请检查搜索服务配置");
   return { sources, provider: config.provider, query: outbound };
 }

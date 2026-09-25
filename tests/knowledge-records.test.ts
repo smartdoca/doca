@@ -219,98 +219,7 @@ it("keeps file extract text in a chunk without rewriting the extract record", as
   expect(found.json().items.some((hit: { sourceKind: string }) => hit.sourceKind === "file")).toBe(true);
 });
 
-it("keeps mailbox search on starred mail unless the mailbox opts in fully", async () => {
-  const alice = await db.selectFrom("users").select("id").where("login", "=", "alice").executeTakeFirstOrThrow();
-  const now = new Date().toISOString();
-  const mailboxId = randomUUID();
-  await sql`insert into mailboxes (id, owner_id, address, local_part, display_name, kind, locked, secret, source, provider, version, created_at, updated_at) values (${mailboxId}, ${alice.id}, ${"alice-knowledge@example.com"}, ${"alice-knowledge"}, ${"Alice"}, ${"personal"}, ${0}, ${"secret"}, ${"internal"}, ${""}, ${1}, ${now}, ${now})`.execute(db);
-  const created = await db.selectFrom("mailboxes").select("knowledge_scope").where("id", "=", mailboxId).executeTakeFirstOrThrow();
-  expect(created.knowledge_scope).toBe("starred");
-  const message = (id: string, subject: string, starred: number) => ({
-    id,
-    mailbox_id: mailboxId,
-    remote_id: id,
-    folder: "inbox",
-    folder_id: "inbox",
-    subject,
-    from_addr: "a@b.c",
-    to_addrs: "[]",
-    cc_addrs: "[]",
-    bcc_addrs: "[]",
-    snippet: subject,
-    body_text: subject,
-    body_html: "",
-    body_ready: 1,
-    unread: 0,
-    starred,
-    has_attachments: 0,
-    sent_at: null,
-    received_at: now,
-    ai_tags: "",
-    updated_at: now,
-  });
-  const starred = randomUUID();
-  const plain = randomUUID();
-  await db.insertInto("mail_messages").values([
-    message(starred, "星标园区巡检纪要", 1),
-    message(plain, "普通闲聊不进搜索", 0),
-  ]).execute();
-  const kept = await request("POST", "/knowledge/rebuild", { kind: "mail", id: starred });
-  const dropped = await request("POST", "/knowledge/rebuild", { kind: "mail", id: plain });
-  expect(kept.json().chunks).toBeGreaterThan(0);
-  expect(dropped.json().chunks).toBe(0);
-  const found = await request("POST", "/knowledge/search", { query: "园区巡检" });
-  expect(found.json().items.some((hit: { sourceId: string }) => hit.sourceId === starred)).toBe(true);
-  const hidden = await request("POST", "/knowledge/search", { query: "普通闲聊" });
-  expect(hidden.json().items).toEqual([]);
-
-  const upload = await request(
-    "POST",
-    "/files/items?filename=plain-note.txt",
-    Buffer.from("附件占位"),
-    cookie,
-    "application/octet-stream",
-  );
-  expect(upload.statusCode, upload.body).toBe(200);
-  const attachmentId = upload.json().id as string;
-  await db.updateTable("file_items").set({
-    parent_type: "system",
-    parent_id: `mail:${mailboxId}`,
-    metadata: JSON.stringify({ mailboxId, messageId: plain, attachmentId: "a1" }),
-  }).where("id", "=", attachmentId).execute();
-  const extract = JSON.stringify({ parts: [{ type: "text", text: "普通闲聊附件不应进入搜索" }] });
-  await db.insertInto("file_extracts").values({
-    storage_object_id: upload.json().storage_object_id,
-    status: "ready",
-    result: extract,
-    error: null,
-    updated_at: now,
-  }).onConflict((oc) => oc.column("storage_object_id").doUpdateSet({ status: "ready", result: extract, error: null })).execute();
-  const plainFile = await request("POST", "/knowledge/rebuild", { kind: "file", id: attachmentId });
-  expect(plainFile.json().chunks).toBe(0);
-  const plainFound = await request("POST", "/knowledge/search", { query: "不应进入搜索" });
-  expect(plainFound.json().items).toEqual([]);
-
-  await db.updateTable("file_items").set({
-    metadata: JSON.stringify({ mailboxId, messageId: starred, attachmentId: "a1" }),
-  }).where("id", "=", attachmentId).execute();
-  const starredFile = await request("POST", "/knowledge/rebuild", { kind: "file", id: attachmentId });
-  expect(starredFile.json().chunks).toBeGreaterThan(0);
-
-  await db.updateTable("mailboxes").set({ knowledge_scope: "all" }).where("id", "=", mailboxId).execute();
-  const all = await request("POST", "/knowledge/rebuild", { kind: "mail", id: plain });
-  expect(all.json().chunks).toBeGreaterThan(0);
-
-  await db.updateTable("mailboxes").set({ knowledge_scope: "off" }).where("id", "=", mailboxId).execute();
-  const off = await request("POST", "/knowledge/rebuild", { kind: "mail", id: starred });
-  const offFile = await request("POST", "/knowledge/rebuild", { kind: "file", id: attachmentId });
-  expect(off.json().chunks).toBe(0);
-  expect(offFile.json().chunks).toBe(0);
-  const gone = await request("POST", "/knowledge/search", { query: "园区巡检" });
-  expect(gone.json().items).toEqual([]);
-});
-
-it("keeps the structure guide off the document tree until a link is confirmed", async () => {
+it("keeps instructions and source confirmation off the knowledge document tree", async () => {
   const library = await request("POST", "/resources", { kind: "library", format: "rich_text", title: "凭证库" });
   expect(library.statusCode, library.body).toBe(200);
   const id = library.json().id;
@@ -331,13 +240,14 @@ it("keeps the structure guide off the document tree until a link is confirmed", 
   expect(confirmed.statusCode, confirmed.body).toBe(200);
   expect(confirmed.json().status).toBe("active");
   const after = await request("GET", `/resources?scope=all&kind=document&libraryId=${id}`);
-  expect(after.json().items.map((item: { title: string }) => item.title)).toEqual(["凭证说明"]);
+  expect(after.json().items).toEqual([]);
+  expect(confirmed.json().nodeId).toBeNull();
   const bob = await login("bob");
   const denied = await request("POST", `/knowledge/libraries/${id}/guide`, { markdown: "拆分：按客户" }, bob);
   expect(denied.statusCode).toBe(404);
 });
 
-it("schedules a knowledge pass and answers from a confirmed node", async () => {
+it("keeps legacy scans readable and searches independently authored knowledge", async () => {
   const library = await request("POST", "/resources", { kind: "library", format: "rich_text", title: "问答库" });
   expect(library.statusCode, library.body).toBe(200);
   const id = library.json().id;
@@ -358,6 +268,7 @@ it("schedules a knowledge pass and answers from a confirmed node", async () => {
   const subscribed = await request("POST", `/knowledge/libraries/${id}/subscriptions`, { sourceKind: "document", sourceId: source.json().id });
   const confirmed = await request("POST", `/knowledge/libraries/${id}/subscriptions/${subscribed.json().id}/confirm`, {});
   expect(confirmed.statusCode, confirmed.body).toBe(200);
+  await request("POST", "/resources", { kind: "document", format: "markdown", libraryId: id, title: "入库单说明", markdown: "# 入库单说明\n\n独立编写的入库单知识。" });
   const saved = await request("POST", `/knowledge/libraries/${id}/bot`, { title: "凭证问答", published: true });
   expect(saved.json()).toEqual({ title: "凭证问答", published: true });
   const asked = await request("POST", `/knowledge/libraries/${id}/ask`, { query: "入库单" });
@@ -405,10 +316,32 @@ it("keeps library and source presets until they are saved", async () => {
   expect(afterDraft.json().items[0].preset).toMatchObject({ weight: 9, frequency: "daily", copyText: "no", note: "来源说明" });
   const confirmed = await request("POST", `/knowledge/libraries/${id}/subscriptions/${subscriptionId}/confirm`, {});
   expect(confirmed.statusCode, confirmed.body).toBe(200);
-  const state = await db.selectFrom("document_states").select("text").where("resource_id", "=", confirmed.json().nodeId).executeTakeFirst();
-  expect(state?.text).toContain("正文留在来源");
-  expect(state?.text.includes("一张入库单")).toBe(false);
+  expect(confirmed.json().nodeId).toBeNull();
+  const documents = await request("GET", `/resources?scope=all&kind=document&libraryId=${id}`);
+  expect(documents.json().items).toEqual([]);
   const bob = await login("bob");
   const hidden = await request("POST", `/knowledge/libraries/${id}/preset`, { weight: 1, frequency: "off", copyText: true, note: "" }, bob);
   expect(hidden.statusCode).toBe(404);
+});
+
+it("serves published knowledge to bot members without granting library content or management access", async () => {
+  const library = await request("POST", "/resources", { kind: "library", format: "rich_text", title: "Independent knowledge" });
+  expect(library.statusCode, library.body).toBe(200);
+  const root = `/knowledge/libraries/${library.json().id}`;
+  const draft = await request("POST", `${root}/entries`, { title: "Protocol", markdown: "Protocol is independently maintained.", expectedRevision: 0 });
+  expect(draft.statusCode, draft.body).toBe(200);
+  const published = await request("POST", `${root}/entries/${draft.json().id}/review`, { expectedRevision: 1, action: "publish" });
+  expect(published.statusCode, published.body).toBe(200);
+  const bob = await db.selectFrom("users").select("id").where("login", "=", "bob").executeTakeFirstOrThrow();
+  const bot = await request("POST", "/knowledge/assistants", { title: "Protocol bot", expectedRevision: 0, libraryIds: [library.json().id], memberIds: [bob.id], enabled: true });
+  expect(bot.statusCode, bot.body).toBe(200);
+  const bobCookie = await login("bob");
+  const search = await request("POST", `/knowledge/assistants/${bot.json().id}/search`, {query: "Protocol"}, bobCookie);
+  expect(search.statusCode, search.body).toBe(200);
+  expect(search.json().items).toHaveLength(1);
+  expect(search.json().items[0].documentUrl).toBeUndefined();
+  expect((await request("GET", `${root}/entries/${draft.json().id}`, undefined, bobCookie)).statusCode).toBe(404);
+  expect((await request("GET", `${root}/system`, undefined, bobCookie)).statusCode).toBe(404);
+  expect((await request("POST", `${root}/curate`, undefined, bobCookie)).statusCode).toBe(404);
+  expect((await request("GET", `${root}/entries/${draft.json().id}`)).json().markdown).toContain("independently");
 });

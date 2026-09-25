@@ -5,7 +5,7 @@ import type { DB, Resource, Schema } from "../../../../db/src/index.js";
 import { fail } from "../../shared/errors.js";
 import type { Actor } from "../identity/passwords.js";
 import { effectiveGrants } from "./grants.js";
-import { actionMinimum, label, permission, type Action } from "./policy.js";
+import { canRemoveResource, actionMinimum, label, permission, type Action } from "./policy.js";
 
 /** Correlated SQL predicate: ancestor traversal is bounded by the candidate's tree. */
 export function roleQuery(
@@ -14,7 +14,7 @@ export function roleQuery(
   includePublic = true,
 ): RawBuilder<number> {
   const userId = actor?.id ?? "";
-  return sql<number>`(case when exists(select 1 from resources blocked where blocked.id = ${resourceId} and blocked.moderation_status = 'blocked') then 0 else (with recursive ancestry as (
+  return sql<number>`(with recursive ancestry as (
     select a.*, 0 as depth from resources a where a.id = ${resourceId}
     union all
     select p.*, a.depth + 1 from resources p join ancestry a on p.id = coalesce(a.parent_id, a.library_id)
@@ -47,9 +47,13 @@ export function roleQuery(
   ) select coalesce(max(effective.rank), 0) from (
     select rank from decisions where depth = (select min(depth) from decisions)
     union all
+    select 4 as rank from resources target join grants library_manager on library_manager.resource_id = target.library_id
+      where target.id = ${resourceId} and library_manager.user_id = ${userId}
+      and library_manager.role = 'manager' and library_manager.status = 'active'
+    union all
     select case when ${actor ? 1 : 0} = 0 then 1 when public_role = 'editor' then 3 when public_role = 'commenter' then 2 else 1 end from openness
       where ${includePublic ? 1 : 0} = 1 and (visibility = 'public' or (visibility = 'authenticated' and ${actor ? 1 : 0} = 1))
-  ) effective) end)`;
+  ) effective)`;
 }
 
 /** Field-level inheritance uses the same path and override bits as point authorization. */
@@ -172,6 +176,7 @@ export async function authorize(
   )
     fail(404, "资源不存在或无权访问");
   if (
+    !((minimum === "trash" || minimum === "purge") && canRemoveResource(resource, actor, ctx.resources, ctx.grants)) &&
     rank <
     (typeof minimum === "number"
       ? minimum
@@ -207,5 +212,6 @@ export function projectResource(
     parent_id: visible(resource.parent_id),
     library_id: visible(resource.library_id),
     role: label(permission(resource, actor, resources, grants)),
+    can_remove: canRemoveResource(resource, actor, resources, grants),
   };
 }

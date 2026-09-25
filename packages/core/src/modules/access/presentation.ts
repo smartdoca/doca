@@ -75,7 +75,6 @@ export async function requestContext(db: DB, actor: Actor | null, id: string) {
   if (
     !r ||
     r.deleted_at ||
-    r.moderation_status === "blocked" ||
     ctx.resources.find((x) => x.id === r.library_id)?.deleted_at
   )
     fail(404, "文档不存在");
@@ -113,6 +112,8 @@ export async function permissionOverview(
   }
   const effectiveGrants = grants.filter((g) => chain.has(g.resource_id));
   const candidates = new Set([
+    ...grants.filter((grant) => grant.resource_id === r.library_id && grant.role === "manager" && !grant.blocked).map((grant) => grant.user_id),
+    ...resources.filter((resource) => resource.id === r.library_id).map((resource) => resource.owner_id),
     ...effectiveGrants.map((g) => g.user_id),
     ...resources.filter((x) => chain.has(x.id)).map((x) => x.owner_id),
   ]);

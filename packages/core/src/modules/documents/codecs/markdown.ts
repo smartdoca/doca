@@ -1,4 +1,4 @@
-import { checkDocumentSize } from "../../entitlements/service.js";
+import { checkDocumentSize } from "../../access/operation-policy.js";
 import type { Transaction } from "kysely";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { createHash, randomUUID } from "node:crypto";
@@ -10,7 +10,6 @@ import { enqueueKnowledge } from "../../knowledge/service.js";
 import { b64, unb64 } from "../../collaboration/documents.js";
 import { recordVersion } from "../../history/repository.js";
 import type { Actor } from "../../identity/passwords.js";
-import { recordActivity } from "../../interactions/activity.js";
 import { detachUnreferencedDocumentFiles, textMediaIds } from "../media.js";
 import { indexDocumentReferences } from "../references.js";
 
@@ -368,7 +367,6 @@ export async function exchangeMarkdown(
             })
             .where("id", "=", id)
             .execute();
-          await recordActivity(tx, actor.id, id, "edit");
           // Derive only stable local document links; the read API applies target ACL.
           await indexDocumentReferences(
             tx,

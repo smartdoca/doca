@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Upload, Paperclip, Download, FolderOpen, X } from "lucide-react";
@@ -14,6 +15,8 @@ export function CoverDialog({
   close: () => void;
   saved: () => void;
 }) {
+const { t } = useI18n();
+
   const [assetId, setAssetId] = useState(resource.cover_asset_id ?? null),
     [busy, setBusy] = useState(false),
     [picking, setPicking] = useState(false),
@@ -79,9 +82,7 @@ export function CoverDialog({
       {picking && <FolderFilePicker accept={(file) => file.mime.startsWith("image/")} close={() => setPicking(false)} select={async (file: FileItem) => { const response = await fetch(`/api/v1/files/items/${file.id}/content`); if (!response.ok) throw new Error("图片读取失败"); const selected = new File([await response.blob()], file.name, { type: file.mime }); setAssetId((await uploadFile(selected, "cover", resource.id)).id); }} />}
       {sourceOpen && <FileSourceDialog title="选择封面图片" close={() => setSourceOpen(false)} chooseDoca={() => setPicking(true)} chooseLocal={() => localInput.current?.click()} />}
       <footer>
-        <button disabled={busy} onClick={close}>
-          取消
-        </button>
+        <button disabled={busy} onClick={close}>{t("common.cancel")}</button>
         <button
           className="primary"
           disabled={busy}
@@ -120,6 +121,8 @@ export function ResourceActionDialog({
   close: () => void;
   saved: () => void;
 }) {
+const { t } = useI18n();
+
   const [title, setTitle] = useState(resource.title),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -184,9 +187,7 @@ export function ResourceActionDialog({
           <Feedback message={error} tone="error" />
         )}
         <footer>
-          <button type="button" disabled={busy} onClick={close}>
-            取消
-          </button>
+          <button type="button" disabled={busy} onClick={close}>{t("common.cancel")}</button>
           <button
             disabled={busy || !title.trim()}
             className={action === "trash" ? "danger" : "primary"}
@@ -201,6 +202,8 @@ export function ResourceActionDialog({
 
 type Asset = { id: string; filename: string; mime: string; size: number };
 export function Attachments({ resource }: { resource: Resource }) {
+const { t } = useI18n();
+
   const [items, setItems] = useState<Asset[]>([]),
     [busy, setBusy] = useState(false),
     [picking, setPicking] = useState(false),
@@ -224,7 +227,7 @@ export function Attachments({ resource }: { resource: Resource }) {
         </h3>
         <div className="grow" />
         {roleRank(resource.role) >= 3 && (
-          <button className="upload-control" disabled={busy} onClick={() => setSourceOpen(true)}><Upload size={15} /><span>添加附件</span></button>
+          <button className="upload-control" disabled={busy} onClick={() => setSourceOpen(true)}><Upload size={15} /><span>{t("toolbar.addAttachment")}</span></button>
         )}
         {roleRank(resource.role) >= 3 && (
           <label className="upload-control" hidden>
@@ -286,6 +289,6 @@ export function Attachments({ resource }: { resource: Resource }) {
       )}
     </section>
     {picking && <FolderFilePicker close={() => setPicking(false)} select={async (file: FileItem) => { setBusy(true); try { await api(`/files/items/${file.id}/attach`, "POST", { purpose: "attachment", resourceId: resource.id }); await load(); } finally { setBusy(false); } }} />}
-    {sourceOpen && <FileSourceDialog title="添加附件" close={() => setSourceOpen(false)} chooseDoca={() => setPicking(true)} chooseLocal={() => localInput.current?.click()} />}
+    {sourceOpen && <FileSourceDialog title={t("toolbar.addAttachment")} close={() => setSourceOpen(false)} chooseDoca={() => setPicking(true)} chooseLocal={() => localInput.current?.click()} />}
   </>;
 }

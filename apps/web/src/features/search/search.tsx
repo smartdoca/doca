@@ -1,3 +1,4 @@
+import { htmlLang } from "@doca/i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import { UserBadge } from "@web/shared/components/user-badge.js";
 import { Search, ArrowUpRight, Folder, SlidersHorizontal, Sparkles, X } from "lucide-react";
@@ -28,16 +29,6 @@ type SearchPage = Omit<Page, "items"> & {
   mode?: string;
 };
 type SearchMatch = { start: number; length: number };
-type MailSearchResult = {
-  id: string;
-  remoteId: string;
-  mailboxId: string;
-  address?: string;
-  subject: string;
-  from: string;
-  snippet: string;
-  receivedAt: string;
-};
 type FileSearchResult = {
   storageObjectId: string;
   id: string;
@@ -179,7 +170,7 @@ export function SearchPanel({
   select,
   compact = false,
 }: SearchPanelProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [publicDiscovery, setPublicDiscovery] = useState(false);
   useEffect(() => {
     void api<{ publicDiscovery: boolean }>("/discovery/policy")
@@ -190,7 +181,7 @@ export function SearchPanel({
     [aiSearch, setAiSearch] = useState(false),
     [submitted, setSubmitted] = useState(""),
     [searchAttempt, setSearchAttempt] = useState(0),
-    [contentMode, setContentMode] = useState<"all" | "documents" | "files" | "mail">("all"),
+    [contentMode, setContentMode] = useState<"all" | "documents" | "files">("all"),
     [format, setFormat] = useState(""),
     [scope, setScope] = useState("all"),
     [location, setLocation] = useState(
@@ -208,7 +199,6 @@ export function SearchPanel({
     [libraryRetry, setLibraryRetry] = useState(0),
     [data, setData] = useState<SearchPage>(empty),
     [fileResults, setFileResults] = useState<FileSearchResult[]>([]),
-    [mailResults, setMailResults] = useState<MailSearchResult[]>([]),
     [error, setError] = useState(""),
     [aiUnavailable, setAiUnavailable] = useState(""),
     [loading, setLoading] = useState(false);
@@ -223,7 +213,6 @@ export function SearchPanel({
     { value: "presentation", label: "shell.type.slides" },
     { value: "canvas", label: "search.type.canvas" },
     { value: "files", label: "search.type.files" },
-    { value: "mail", label: "search.type.mail" },
   ];
   const filterCount =
     Number(scope !== "all") +
@@ -250,9 +239,7 @@ export function SearchPanel({
       ? "all"
       : contentMode === "files"
         ? "files"
-        : contentMode === "mail"
-          ? "mail"
-          : layout.format || format;
+        : layout.format || format;
   const retrievalText = intent.topic || searchText;
   const recent =
     !aiSearch &&
@@ -324,7 +311,6 @@ export function SearchPanel({
     setAiUnavailable("");
     setData(empty);
     setFileResults([]);
-    setMailResults([]);
     if (resultList.current) resultList.current.scrollTop = 0;
     if (waitingForAiQuery) return () => c.abort();
     const timer = setTimeout(
@@ -344,16 +330,12 @@ export function SearchPanel({
           searchText.trim()
             ? api<{ items: FileSearchResult[] }>("/files/search?" + fileParams, "GET", undefined, c.signal)
             : Promise.resolve({ items: [] as FileSearchResult[] }),
-          (contentMode === "all" || contentMode === "mail" || intent.focus === "mail") &&
-          searchText.trim()
-            ? api<{ items: MailSearchResult[] }>("/mail/search?" + new URLSearchParams({ q: searchText, limit: "20" }), "GET", undefined, c.signal).catch(() => ({ items: [] as MailSearchResult[] }))
-            : Promise.resolve({ items: [] as MailSearchResult[] }),
+
         ])
-          .then(([page, files, mail]) => {
+          .then(([page, files]) => {
             if (!c.signal.aborted) {
               setData(page);
               setFileResults(files.items);
-              setMailResults(mail.items);
             }
           })
           .catch((e) => {
@@ -412,7 +394,7 @@ export function SearchPanel({
         return !documentIdsOf(file).some((id) => filesByDocument.has(id));
       })
     : [];
-  const resultCount = data.items.length + leftoverFiles.length + mailResults.length;
+  const resultCount = data.items.length + leftoverFiles.length;
   return (
     <div className={`global-search ${compact ? "search-panel-compact" : ""} ${aiSearch ? "search-ai" : "search-keyword"}`}>
       <form
@@ -489,7 +471,6 @@ export function SearchPanel({
               onClick={() => {
                 if (type.value === "all") { setContentMode("all"); setFormat(""); }
                 else if (type.value === "files") { setContentMode("files"); setFormat(""); }
-                else if (type.value === "mail") { setContentMode("mail"); setFormat(""); }
                 else { setContentMode("documents"); setFormat(type.value); }
               }}
               onKeyDown={(e) => {
@@ -508,7 +489,6 @@ export function SearchPanel({
                   const value = types[next]!.value;
                   if (value === "all") { setContentMode("all"); setFormat(""); }
                   else if (value === "files") { setContentMode("files"); setFormat(""); }
-                  else if (value === "mail") { setContentMode("mail"); setFormat(""); }
                   else { setContentMode("documents"); setFormat(value); }
                   typeButtons.current[next]?.focus();
                 }
@@ -539,9 +519,7 @@ export function SearchPanel({
                   : recent
                     ? t("search.recentHeading")
                   : leftoverFiles.length && data.items.length
-                    ? mailResults.length
-                      ? t("search.foundMixedMail", { documents: data.items.length, files: leftoverFiles.length, mail: mailResults.length })
-                      : t("search.foundMixed", { documents: data.items.length, files: leftoverFiles.length })
+                    ? t("search.foundMixed", { documents: data.items.length, files: leftoverFiles.length })
                   : layout.showDocuments && !layout.showFileHits && data.items.length
                     ? t("search.foundDocs", { count: data.items.length })
                   : layout.showFileHits && !layout.showDocuments && leftoverFiles.length
@@ -629,7 +607,7 @@ export function SearchPanel({
                         {r.owner_id && (
                           <UserBadge id={r.owner_id} name={r.ownerName} />
                         )}{" "}
-                        · {t("search.updated", { date: new Date(r.updated_at).toLocaleDateString() })}
+                        · {t("search.updated", { date: new Date(r.updated_at).toLocaleDateString(htmlLang(locale)) })}
                         {evidence.length ? ` · ${t("search.matchedFiles", { count: evidence.length })}` : ""}
                       </small>
                     </span>
@@ -663,24 +641,19 @@ export function SearchPanel({
             {layout.showFileHits && leftoverFiles.length > 0 && <div className="search-file-group"><strong>{t("search.files")}</strong>{leftoverFiles.map((file) => <div className="search-file-card" key={file.storageObjectId}>
               <button className="search-result search-file-result" onClick={() => file.locations[0] && openFileLocation(file.locations[0])}>
                 <FileGlyph file={fileAsGlyph(file)} />
-                <span><strong><CompactResultText text={file.name} query={searchText} /></strong><span className="search-result-summary"><CompactResultText text={file.description || file.mime} query={searchText} /></span><small>{t("search.places", { count: file.locations.length })} · {t("search.updated", { date: new Date(file.updatedAt).toLocaleDateString() })}</small></span>
+                <span><strong><CompactResultText text={file.name} query={searchText} /></strong><span className="search-result-summary"><CompactResultText text={file.description || file.mime} query={searchText} /></span><small>{t("search.places", { count: file.locations.length })} · {t("search.updated", { date: new Date(file.updatedAt).toLocaleDateString(htmlLang(locale)) })}</small></span>
                 <ArrowUpRight size={15} />
               </button>
               <div className="search-file-locations"><span>{t("search.locations")}</span>{file.locations.map((location) => <button key={location.id} onClick={() => openFileLocation(location)} title={location.navigation.map((item) => item.name).join(" / ")}><Folder size={12} />{location.navigation.map((item) => item.name).join(" / ") || location.name}</button>)}</div>
             </div>)}</div>}
-            {mailResults.length > 0 && <div className="search-file-group"><strong>{t("search.mail")}</strong>{mailResults.map((item) => <div className="search-file-card" key={item.id}>
-              <button className="search-result search-file-result" onClick={() => { window.location.hash = `/mail/${item.mailboxId}?message=${encodeURIComponent(item.remoteId)}`; }}>
-                <span><strong><CompactResultText text={item.subject} query={searchText} /></strong><span className="search-result-summary"><CompactResultText text={`${item.from} · ${item.snippet}`} query={searchText} /></span><small>{item.address || t("search.mailbox")} · {new Date(item.receivedAt).toLocaleDateString()}</small></span>
-                <ArrowUpRight size={15} />
-              </button>
-            </div>)}</div>}
+
             {!loading &&
               !error &&
               !waitingForAiQuery &&
               !aiUnavailable &&
               !data.items.length &&
               !leftoverFiles.length &&
-              !mailResults.length && (
+ (
               <p className="empty">
                 {aiSearch
                   ? t("search.emptyAi")

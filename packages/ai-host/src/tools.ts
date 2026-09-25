@@ -19,6 +19,7 @@ export interface ToolExecutionContext<Context = unknown> {
 }
 
 export interface ToolDefinition<Context = unknown> extends RegistryEntry {
+  readonly inputSchema?: JsonObject;
   readonly description?: string;
   /** Adapter surfaces allowed to expose the tool. Defaults to both. */
   readonly exposure?: readonly ("chat" | "mcp")[];

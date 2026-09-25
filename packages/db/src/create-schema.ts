@@ -2,11 +2,12 @@ import type { Kysely } from "kysely";
 import { sql } from "kysely";
 
 const schemaStatements = [
+  `CREATE TABLE IF NOT EXISTS "user_page_state" ("user_id" varchar(36) not null references "users" ("id") on delete cascade, "key" varchar(160) not null, "value" text not null, "version" integer not null, "updated_at" varchar(32) not null, constraint "user_page_state_pk" primary key ("user_id", "key"), constraint "user_page_state_version" check (version > 0));`,
   `CREATE TABLE IF NOT EXISTS "plugin_migrations" ("plugin_id" varchar(160) primary key, "version" varchar(64) not null, "applied_at" varchar(32) not null);`,
-  `CREATE TABLE IF NOT EXISTS "users" ("id" varchar(36) primary key, "login" varchar(160) not null unique, "display_name" varchar(160) not null, "password_hash" text not null, "admin" integer not null, "status" varchar(16) not null, "created_at" varchar(32) not null, "public_id" varchar(160), "directory_mode" varchar(16), "profile_metadata" text default '{}' not null, "profile_revision" integer default 1 not null, "base_level" varchar(64) default 'standard' not null, "identity_class" varchar(64) default '' not null, "level_source" varchar(80) default 'default' not null, "level_override" integer default 0 not null, "level_revision" integer default 1 not null, "timed_level" text, "timed_level_expires_at" bigint);`,
+  `CREATE TABLE IF NOT EXISTS "users" ("id" varchar(36) primary key, "login" varchar(160) not null unique, "display_name" varchar(160) not null, "password_hash" text not null, "admin" integer not null, "status" varchar(16) not null, "created_at" varchar(32) not null, "last_login_at" varchar(32), "public_id" varchar(160), "directory_mode" varchar(16), "profile_metadata" text default '{}' not null, "profile_revision" integer default 1 not null);`,
   `CREATE TABLE IF NOT EXISTS "sessions" ("id" varchar(64) primary key, "user_id" varchar(36) not null references "users" ("id"), "expires_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "settings" ("id" varchar(16) primary key, "registration" integer not null, "revision" integer not null, "site_name" varchar(160) not null, "registration_review" integer default 0 not null, "sso_registration" varchar(16) default 'closed' not null, "social_registration" varchar(16) default 'closed' not null, "directory_mode" varchar(16) default 'all' not null);`,
-  `CREATE TABLE IF NOT EXISTS "resources" ("id" varchar(36) primary key, "kind" varchar(16) not null, "format" varchar(24) not null, "title" varchar(160) not null, "owner_id" varchar(36) not null references "users" ("id"), "library_id" varchar(36) references "resources" ("id"), "parent_id" varchar(36) references "resources" ("id"), "access_mode" varchar(16) not null, "visibility" varchar(16) not null, "version" integer not null, "deleted_at" varchar(32), "delete_batch" varchar(36), "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "last_editor_id" varchar(36) references "users" ("id"), "last_edited_at" varchar(32), "requests_enabled" integer default 0 not null, "tree_order" integer default 0 not null, "authz_revision" integer default 1 not null, "history_readers" integer default 0 not null, "discoverable" integer default 0 not null, "public_role" varchar(16) default 'reader' not null, "content_bytes" bigint default 0 not null, "share_links_enabled" integer default 0 not null, "permission_overrides" integer default 0 not null, "moderation_status" text default 'active' not null, "moderation_hold" integer default 0 not null, "moderation_revision" integer default 0 not null, constraint "resource_kind" check (kind in ('document','library')), constraint "resource_access" check (access_mode in ('inherit','custom')), constraint "resource_visibility" check (visibility in ('invited','requestable','authenticated','public')), constraint "resource_version" check (version > 0));`,
+  `CREATE TABLE IF NOT EXISTS "resources" ("id" varchar(36) primary key, "kind" varchar(16) not null, "format" varchar(24) not null, "title" varchar(160) not null, "owner_id" varchar(36) not null references "users" ("id"), "library_id" varchar(36) references "resources" ("id"), "parent_id" varchar(36) references "resources" ("id"), "access_mode" varchar(16) not null, "visibility" varchar(16) not null, "version" integer not null, "deleted_at" varchar(32), "delete_batch" varchar(36), "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "last_editor_id" varchar(36) references "users" ("id"), "last_edited_at" varchar(32), "requests_enabled" integer default 0 not null, "tree_order" integer default 0 not null, "authz_revision" integer default 1 not null, "history_readers" integer default 0 not null, "discoverable" integer default 0 not null, "public_role" varchar(16) default 'reader' not null, "content_bytes" bigint default 0 not null, "share_links_enabled" integer default 0 not null, "permission_overrides" integer default 0 not null, constraint "resource_kind" check (kind in ('document','library')), constraint "resource_access" check (access_mode in ('inherit','custom')), constraint "resource_visibility" check (visibility in ('invited','requestable','authenticated','public')), constraint "resource_version" check (version > 0));`,
   `CREATE INDEX "resources_owner" on "resources" ("owner_id", "deleted_at");`,
   `CREATE INDEX "resources_parent" on "resources" ("parent_id");`,
   `CREATE INDEX "resources_library" on "resources" ("library_id");`,
@@ -23,7 +24,7 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS "user_preferences" ("user_id" varchar(36) primary key references "users" ("id"), "avatar" varchar(24) not null, "theme" varchar(16) not null, "density" varchar(16) not null, "default_sort" varchar(24) not null, "sort_order" varchar(4) not null, "version" integer not null);`,
   `CREATE TABLE IF NOT EXISTS "user_presence" ("user_id" varchar(36) primary key references "users" ("id"), "last_seen_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "storage_profiles" ("id" varchar(36) primary key, "provider" varchar(16) not null, "config" text not null, "active" integer not null, "created_at" varchar(32) not null);`,
-  `CREATE TABLE IF NOT EXISTS "assets" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) references "resources" ("id"), "purpose" varchar(16) not null, "profile_id" varchar(36) not null references "storage_profiles" ("id"), "object_key" varchar(160) not null, "filename" varchar(255) not null, "mime" varchar(128) not null, "size" integer not null, "created_at" varchar(32) not null, "deleted_at" varchar(32), "moderation_status" text default 'none' not null, "uploaded_by" text);`,
+  `CREATE TABLE IF NOT EXISTS "assets" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) references "resources" ("id"), "purpose" varchar(16) not null, "profile_id" varchar(36) not null references "storage_profiles" ("id"), "object_key" varchar(160) not null, "filename" varchar(255) not null, "mime" varchar(128) not null, "size" integer not null, "created_at" varchar(32) not null, "deleted_at" varchar(32), "uploaded_by" text);`,
   `CREATE INDEX "assets_resource" on "assets" ("resource_id", "deleted_at");`,
   `CREATE TABLE IF NOT EXISTS "document_states" ("resource_id" varchar(36) primary key references "resources" ("id"), "codec" varchar(64) not null, "checkpoint" text not null, "checkpoint_seq" integer not null, "seq" integer not null, "text" text not null, "updated_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "document_updates" ("resource_id" varchar(36) not null references "resources" ("id"), "seq" integer not null, "data" text not null, "author_id" varchar(36) not null references "users" ("id"), "created_at" varchar(32) not null, constraint "document_updates_pk" primary key ("resource_id", "seq"));`,
@@ -38,8 +39,6 @@ const schemaStatements = [
   `CREATE INDEX "visit_events_resource" on "visit_events" ("resource_id", "created_at");`,
   `CREATE UNIQUE INDEX "users_public_id_unique" on "users" ("public_id");`,
   `CREATE UNIQUE INDEX "notification_dedupe" on "notifications" ("dedupe_key");`,
-  `CREATE TABLE IF NOT EXISTS "user_activity" ("user_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) not null references "resources" ("id"), "day" varchar(10) not null, "read_at" varchar(32), "edited_at" varchar(32), constraint "user_activity_pk" primary key ("user_id", "day", "resource_id"));`,
-  `CREATE INDEX "activity_resource_day" on "user_activity" ("resource_id", "day");`,
   `CREATE TABLE IF NOT EXISTS "user_card_settings" ("id" varchar(16) primary key, "config" text not null, "revision" integer not null);`,
   `CREATE TABLE IF NOT EXISTS "distribution_settings" ("id" varchar(16) primary key, "config" text not null, "revision" integer not null);`,
   `CREATE TABLE IF NOT EXISTS "document_references" ("source_id" varchar(36) not null references "resources" ("id") on delete cascade, "target_id" varchar(36) not null, constraint "document_reference_pk" primary key ("source_id", "target_id"));`,
@@ -83,10 +82,6 @@ const schemaStatements = [
   `CREATE INDEX "challenge_destination_time" on "verification_challenges" ("destination", "created_at");`,
   `CREATE TABLE IF NOT EXISTS "security_audit" ("id" varchar(36) primary key, "actor_id" varchar(36), "user_id" varchar(36), "action" varchar(80) not null, "details" text not null, "created_at" varchar(32) not null);`,
   `CREATE INDEX "security_audit_user_time" on "security_audit" ("user_id", "created_at");`,
-  `CREATE TABLE IF NOT EXISTS "membership_grants" ("id" varchar(160) primary key, "user_id" varchar(36) not null references "users" ("id") on delete cascade, "source" varchar(64) not null, "level_id" varchar(64) not null, "starts_at" varchar(32) not null, "expires_at" varchar(32), "status" varchar(16) not null, "version" integer not null);`,
-  `CREATE INDEX "membership_user_active" on "membership_grants" ("user_id", "status", "expires_at");`,
-  `CREATE TABLE IF NOT EXISTS "membership_events" ("id" varchar(160) primary key, "digest" varchar(64) not null, "created_at" varchar(32) not null);`,
-  `CREATE TABLE IF NOT EXISTS "quota_usage" ("user_id" varchar(36) not null references "users" ("id") on delete cascade, "metric" varchar(64) not null, "period" varchar(32) not null, "used" bigint not null, constraint "quota_usage_pk" primary key ("user_id", "metric", "period"));`,
   `CREATE TABLE IF NOT EXISTS "tickets" ("id" text primary key, "kind" text not null, "source_key" text not null, "resource_id" text, "user_id" text not null, "initiator_id" text not null, "status" text not null, "role" text, "hidden_for_user_id" text, "message" text default '' not null, "created_at" text not null, "updated_at" text not null, "expires_at" text, "reminded_at" text, "resource_kind" text default 'document' not null, "operation_json" text default '{}' not null, constraint "ticket_source" unique ("kind", "source_key"));`,
   `CREATE TABLE IF NOT EXISTS "ticket_events" ("id" text primary key, "ticket_id" text not null references "tickets" ("id") on delete cascade, "actor_id" text, "status" text not null, "message" text default '' not null, "created_at" text not null, "operation_json" text default '{}' not null);`,
   `CREATE INDEX "tickets_resource" on "tickets" ("resource_id", "created_at", "id");`,
@@ -103,21 +98,14 @@ const schemaStatements = [
   `CREATE INDEX IF NOT EXISTS "ai_session_events_time" on "ai_session_events" ("session_id", "seq");`,
   `CREATE INDEX "ai_sessions_user" on "ai_sessions" ("user_id", "updated_at");`,
   `CREATE TABLE IF NOT EXISTS "ai_users" ("user_id" text primary key references "users" ("id"), "default_model" text, "memory_enabled" integer default 0 not null, "memory_revision" integer default 0 not null, "lock_version" integer default 0 not null);`,
-  `CREATE TABLE IF NOT EXISTS "ai_jobs" ("id" text primary key, "session_id" text not null references "ai_sessions" ("id"), "user_id" text not null references "users" ("id"), "model_id" text not null, "status" text not null, "input" text not null, "digest" text not null, "result" text default '' not null, "error" text default '' not null, "lease" text, "lease_until" text, "attempts" integer default 0 not null, "cancelled" integer default 0 not null, "created_at" text not null, "updated_at" text not null);`,
+  `CREATE TABLE IF NOT EXISTS "ai_jobs" ("id" text primary key, "session_id" text not null references "ai_sessions" ("id"), "user_id" text not null references "users" ("id"), "model_id" text not null, "status" text not null constraint "ai_job_status" check ("status" in ('queued','running','awaiting_approval','completed','failed','cancelled','interrupted')), "input" text not null, "digest" text not null, "result" text default '' not null, "error" text default '' not null, "lease" text, "lease_until" text, "attempts" integer default 0 not null, "cancelled" integer default 0 not null, "created_at" text not null, "updated_at" text not null);`,
   `CREATE INDEX "ai_jobs_queue" on "ai_jobs" ("status", "created_at");`,
   `CREATE INDEX "ai_jobs_session" on "ai_jobs" ("session_id", "created_at");`,
   `CREATE TABLE IF NOT EXISTS "ai_operations" ("id" text primary key, "user_id" text not null, "job_id" text, "digest" text not null, "result" text not null, "created_at" text not null);`,
-  `CREATE TABLE IF NOT EXISTS "ai_calls" ("id" text primary key, "user_id" text not null, "job_id" text, "model_id" text not null, "model_snapshot" text not null, "periods" text not null, "state" text not null, "input_tokens" integer default 0 not null, "output_tokens" integer default 0 not null, "cached_tokens" integer default 0 not null, "points" double precision not null, "base_points" double precision not null, "allocations" text not null, "usage" text default '{}' not null, "created_at" text not null, "updated_at" text not null);`,
+  `CREATE TABLE IF NOT EXISTS "ai_calls" ("id" text primary key, "user_id" text not null, "job_id" text, "model_id" text not null, "model_snapshot" text not null, "periods" text not null, "state" text not null, "input_tokens" integer default 0 not null, "output_tokens" integer default 0 not null, "cached_tokens" integer default 0 not null, "usage" text default '{}' not null, "created_at" text not null, "updated_at" text not null);`,
   `CREATE INDEX "ai_calls_user" on "ai_calls" ("user_id", "created_at");`,
-  `CREATE TABLE IF NOT EXISTS "ai_grants" ("id" text primary key, "user_id" text not null references "users" ("id"), "amount" double precision not null, "remaining" double precision not null, "expires_at" text, "reason" text not null, "actor_id" text not null, "created_at" text not null);`,
-  `CREATE INDEX "ai_grants_user" on "ai_grants" ("user_id");`,
   `CREATE TABLE IF NOT EXISTS "ai_skills" ("id" text primary key, "user_id" text not null, "name" text not null, "description" text not null, "content" text not null, "formats" text not null, "enabled" integer not null, "revision" integer not null, "updated_at" text not null);`,
   `CREATE TABLE IF NOT EXISTS "ai_mcp_keys" ("id" text primary key, "user_id" text not null references "users" ("id"), "name" text not null, "token_hash" text not null unique, "resource_ids" text not null, "writable" integer not null, "expires_at" text not null, "created_at" text not null);`,
-  `CREATE TABLE IF NOT EXISTS "moderation_settings" ("id" text primary key, "config" text not null, "revision" integer default 1 not null);`,
-  `CREATE TABLE IF NOT EXISTS "moderation_cases" ("id" text primary key, "resource_id" text, "asset_id" text, "reporter_id" text, "subject_user_id" text not null, "kind" text not null, "status" text not null, "reason" text not null, "title" text not null, "evidence" text not null, "result" text not null, "fingerprint" text not null, "created_at" text not null, "updated_at" text not null);`,
-  `CREATE INDEX "moderation_cases_status_date" on "moderation_cases" ("status", "created_at");`,
-  `CREATE INDEX "moderation_cases_resource" on "moderation_cases" ("resource_id", "created_at");`,
-  `CREATE TABLE IF NOT EXISTS "moderation_actions" ("id" text primary key, "case_id" text, "actor_id" text, "resource_id" text, "user_id" text, "action" text not null, "reason" text not null, "created_at" text not null);`,
   `CREATE TABLE IF NOT EXISTS "quick_notes" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id"), "content" text not null, "plain_text" text not null, "asset_ids" text not null, "version" integer not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "deleted_at" varchar(32));`,
   `CREATE INDEX "quick_notes_owner_created" on "quick_notes" ("owner_id", "deleted_at", "created_at", "id");`,
   `CREATE TABLE IF NOT EXISTS "quick_note_compilations" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id"), "sources" text not null, "request_hash" text not null, "instruction" text not null, "model_id" text not null, "status" varchar(16) not null, "markdown" text not null, "error" text not null, "document_id" varchar(36) references "resources" ("id"), "created_at" varchar(32) not null, "updated_at" varchar(32) not null);`,
@@ -152,29 +140,6 @@ const fileSchemaStatements = [
   `CREATE TABLE IF NOT EXISTS "file_recognition_settings" ("id" varchar(16) primary key, "config" text not null, "revision" integer default 0 not null);`,
 ];
 
-const mailSchemaStatements = [
-  `CREATE TABLE IF NOT EXISTS "mail_settings" ("id" varchar(16) primary key, "config" text not null, "revision" integer default 0 not null);`,
-  `CREATE TABLE IF NOT EXISTS "mailboxes" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id") on delete cascade, "address" varchar(254) not null unique, "local_part" varchar(64) not null, "display_name" varchar(160) not null, "kind" varchar(16) not null, "locked" integer default 0 not null, "secret" text not null, "source" varchar(16) default 'internal' not null, "provider" varchar(16) default '' not null, "version" integer default 1 not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "deleted_at" varchar(32), constraint "mailbox_kind" check (kind in ('personal','shared')), constraint "mailbox_source" check (source in ('internal','external')), constraint "mailbox_version" check (version > 0));`,
-  `ALTER TABLE "mailboxes" ADD COLUMN "source" varchar(16) default 'internal' not null`,
-  `ALTER TABLE "mailboxes" ADD COLUMN "provider" varchar(16) default '' not null`,
-  `ALTER TABLE "mailboxes" ADD COLUMN "knowledge_scope" varchar(16) default 'starred' not null`,
-  `ALTER TABLE "mailboxes" ADD COLUMN "backend_user_id" varchar(64) default '' not null`,
-  `CREATE INDEX IF NOT EXISTS "mailboxes_owner" on "mailboxes" ("owner_id", "deleted_at", "address");`,
-  `CREATE TABLE IF NOT EXISTS "mailbox_shares" ("mailbox_id" varchar(36) not null references "mailboxes" ("id") on delete cascade, "user_id" varchar(36) not null references "users" ("id") on delete cascade, "role" varchar(16) not null, "version" integer default 1 not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, constraint "mailbox_shares_pk" primary key ("mailbox_id", "user_id"), constraint "mailbox_share_role" check (role in ('admin','sender','reader')), constraint "mailbox_share_version" check (version > 0));`,
-  `CREATE INDEX IF NOT EXISTS "mailbox_shares_user" on "mailbox_shares" ("user_id", "mailbox_id", "role");`,
-  `CREATE TABLE IF NOT EXISTS "mailbox_share_links" ("mailbox_id" varchar(36) primary key references "mailboxes" ("id") on delete cascade, "token" varchar(64) not null unique, "token_hash" varchar(64) not null unique, "role" varchar(16) default 'reader' not null, "enabled" integer default 1 not null, "created_by" varchar(36) not null references "users" ("id"), "created_at" varchar(32) not null, "updated_at" varchar(32) not null, constraint "mailbox_link_role" check (role in ('admin','sender','reader')));`,
-  `CREATE TABLE IF NOT EXISTS "mail_messages" ("id" varchar(36) primary key, "mailbox_id" varchar(36) not null references "mailboxes" ("id") on delete cascade, "remote_id" varchar(160) not null, "folder" varchar(80) not null, "folder_id" varchar(160) not null, "subject" varchar(500) not null, "from_addr" varchar(320) not null, "to_addrs" text not null, "cc_addrs" text not null, "snippet" varchar(500) not null, "body_text" text not null, "body_html" text default '' not null, "body_ready" integer default 0 not null, "bcc_addrs" text default '[]' not null, "unread" integer default 1 not null, "starred" integer default 0 not null, "has_attachments" integer default 0 not null, "sent_at" varchar(32), "received_at" varchar(32) not null, "updated_at" varchar(32) not null, constraint "mail_message_remote" unique ("mailbox_id", "remote_id"));`,
-  `ALTER TABLE "mail_messages" ADD COLUMN "body_html" text default '' not null`,
-  `ALTER TABLE "mail_messages" ADD COLUMN "body_ready" integer default 0 not null`,
-  `ALTER TABLE "mail_messages" ADD COLUMN "bcc_addrs" text default '[]' not null`,
-  `ALTER TABLE "mail_messages" ADD COLUMN "ai_tags" text default '' not null`,
-  `CREATE INDEX IF NOT EXISTS "mail_messages_mailbox" on "mail_messages" ("mailbox_id", "received_at");`,
-  `CREATE INDEX IF NOT EXISTS "mail_messages_search" on "mail_messages" ("mailbox_id", "subject", "from_addr");`,
-  `CREATE INDEX IF NOT EXISTS "mail_messages_body" on "mail_messages" ("mailbox_id", "body_ready", "received_at");`,
-  `CREATE TABLE IF NOT EXISTS "mail_mailbox_sync" ("mailbox_id" varchar(36) primary key references "mailboxes" ("id") on delete cascade, "folders_json" text default '[]' not null, "synced_at" varchar(32), "updated_at" varchar(32) not null);`,
-  `CREATE TABLE IF NOT EXISTS "user_page_state" ("user_id" varchar(36) not null references "users" ("id") on delete cascade, "key" varchar(160) not null, "value" text not null, "version" integer not null, "updated_at" varchar(32) not null, constraint "user_page_state_pk" primary key ("user_id", "key"), constraint "user_page_state_version" check (version > 0));`,
-];
-
 const searchSchemaStatements = [
   `CREATE TABLE IF NOT EXISTS "search_reconciliation" ("id" varchar(16) primary key, "generation" integer not null, "round_id" varchar(36) not null, "phase" varchar(16) not null, "cursor" text not null, "remote_offset" integer not null, "scanned" integer not null, "differences" integer not null, "started_at" varchar(32), "checked_at" varchar(32), "completed_at" varchar(32), "next_at" varchar(32) not null, "lease_token" varchar(36), "lease_until" varchar(32), "last_error" text);`,
   `CREATE TABLE IF NOT EXISTS "search_reconcile_entries" ("id" varchar(512) primary key, "round_id" varchar(36) not null, "content_hash" varchar(64), "pending" integer default 0 not null);`,
@@ -190,17 +155,6 @@ async function ensureFileSchema(db: Kysely<any>) {
 async function ensureSearchSchema(db: Kysely<any>) {
   for (const statement of searchSchemaStatements)
     await sql.raw(statement).execute(db);
-}
-
-async function ensureMailSchema(db: Kysely<any>) {
-  for (const statement of mailSchemaStatements) {
-    try {
-      await sql.raw(statement).execute(db);
-    } catch (error) {
-      const message = String((error as { message?: string })?.message ?? error);
-      if (!/duplicate column|already exists/i.test(message)) throw error;
-    }
-  }
 }
 
 async function ensureTemplateSchema(db: Kysely<any>) {
@@ -250,7 +204,11 @@ async function ensurePlatformRuntimeSchema(db: Kysely<any>) {
 }
 
 async function ensureReactionSchema(db: Kysely<any>) {
-  const found = await sql<{ sql: string | null }>`select sql as sql from sqlite_master where type = 'table' and name = 'reactions'`.execute(db);
+  const found = await sql<{
+    sql: string | null;
+  }>`select sql as sql from sqlite_master where type = 'table' and name = 'reactions'`.execute(
+    db,
+  );
   const ddl = found.rows[0]?.sql ?? "";
   if (!ddl) return;
   const allowsPin = ddl.includes("'pin'");
@@ -271,7 +229,9 @@ async function ensureReactionSchema(db: Kysely<any>) {
         )
         .execute(db);
       await sql.raw(`DROP TABLE "reactions"`).execute(db);
-      await sql.raw(`ALTER TABLE "reactions_next" RENAME TO "reactions"`).execute(db);
+      await sql
+        .raw(`ALTER TABLE "reactions_next" RENAME TO "reactions"`)
+        .execute(db);
       await sql
         .raw(
           `CREATE INDEX IF NOT EXISTS "favorites_by_user" on "reactions" ("user_id", "kind", "resource_id")`,
@@ -293,6 +253,35 @@ async function ensureReactionSchema(db: Kysely<any>) {
       const message = String((error as { message?: string })?.message ?? error);
       if (!/duplicate column|already exists/i.test(message)) throw error;
     }
+  }
+}
+
+async function ensureSiteSettingsSchema(db: Kysely<any>) {
+  for (const statement of [
+    `ALTER TABLE "settings" ADD COLUMN "default_locale" varchar(16) default 'zh' not null`,
+    `ALTER TABLE "settings" ADD COLUMN "default_timezone" varchar(100) default 'Asia/Shanghai' not null`,
+  ]) {
+    try {
+      await sql.raw(statement).execute(db);
+    } catch (error) {
+      if (
+        !/duplicate column|already exists/i.test(
+          String((error as Error).message),
+        )
+      )
+        throw error;
+    }
+  }
+}
+
+async function ensureUserSchema(db: Kysely<any>) {
+  try {
+    await sql
+      .raw(`ALTER TABLE "users" ADD COLUMN "last_login_at" varchar(32)`)
+      .execute(db);
+  } catch (error) {
+    const message = String((error as { message?: string })?.message ?? error);
+    if (!/duplicate column|already exists/i.test(message)) throw error;
   }
 }
 
@@ -360,10 +349,7 @@ async function seedSystemRows(db: Kysely<any>) {
     .execute();
   await db
     .insertInto("account_settings")
-    .values([
-      { id: "identity", config: "{}", revision: 1 },
-      { id: "entitlements", config: "{}", revision: 1 },
-    ])
+    .values([{ id: "identity", config: "{}", revision: 1 }])
     .onConflict((oc) => oc.column("id").doNothing())
     .execute();
   const settings = await db
@@ -400,41 +386,6 @@ async function seedSystemRows(db: Kysely<any>) {
     })
     .onConflict((oc) => oc.column("id").doNothing())
     .execute();
-  await db
-    .insertInto("moderation_settings")
-    .values({
-      id: "system",
-      config: JSON.stringify({
-        enabled: false,
-        provider: "tencent",
-        region: "ap-guangzhou",
-        secretId: "",
-        secretKey: "",
-        textBizType: "",
-        imageBizType: "",
-        delaySeconds: 120,
-      }),
-      revision: 1,
-    })
-    .onConflict((oc) => oc.column("id").doNothing())
-    .execute();
-  await db
-    .insertInto("mail_settings")
-    .values({
-      id: "system",
-      config: JSON.stringify({
-        enabled: false,
-        endpoint: "",
-        domain: "",
-        mode: "free",
-        maxMailboxes: 3,
-        username: "",
-        token: "",
-      }),
-      revision: 0,
-    })
-    .onConflict((oc) => oc.column("id").doNothing())
-    .execute();
 }
 
 const knowledgeSchemaStatements = [
@@ -449,7 +400,21 @@ const knowledgeSchemaStatements = [
   `CREATE INDEX IF NOT EXISTS "knowledge_gaps_user" on "knowledge_gaps" ("user_id", "created_at")`,
 ];
 
+const knowledgeSystemStatements = [
+  `CREATE TABLE IF NOT EXISTS knowledge_instructions (library_id varchar(36) not null references resources(id), path varchar(160) not null, revision integer not null, markdown text not null, author_id varchar(36) not null, created_at varchar(32) not null, primary key(library_id, path, revision))`,
+  `CREATE TABLE IF NOT EXISTS knowledge_settings (library_id varchar(36) primary key references resources(id), revision integer not null, config text not null, updated_at varchar(32) not null)`,
+  `CREATE TABLE IF NOT EXISTS knowledge_entries (id varchar(36) primary key, library_id varchar(36) not null references resources(id), title varchar(200) not null, markdown text not null, origin varchar(24) not null, status varchar(24) not null, revision integer not null, source_refs text not null, instruction_hash varchar(64) not null, review_state text not null, author_id varchar(36) not null, created_at varchar(32) not null, updated_at varchar(32) not null)`,
+  `CREATE INDEX IF NOT EXISTS knowledge_entries_library ON knowledge_entries(library_id, status)`,
+  `CREATE TABLE IF NOT EXISTS knowledge_entry_versions (entry_id varchar(36) not null references knowledge_entries(id), revision integer not null, snapshot text not null, author_id varchar(36) not null, created_at varchar(32) not null, primary key(entry_id, revision))`,
+  `CREATE TABLE IF NOT EXISTS knowledge_assistants (id varchar(36) primary key, owner_id varchar(36) not null references users(id), title varchar(200) not null, revision integer not null, library_ids text not null, member_ids text not null, enabled integer not null, updated_at varchar(32) not null)`,
+];
+
 async function ensureKnowledgeSchema(db: Kysely<any>) {
+  for (const statement of knowledgeSystemStatements)
+    await sql.raw(statement).execute(db);
+  try { await sql.raw("ALTER TABLE knowledge_assistants ADD COLUMN visibility varchar(24) not null default 'invited'").execute(db); }
+  catch (error) { if (!/duplicate column|already exists/i.test(String(error))) throw error; }
+  await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_assistant_users (assistant_id varchar(36) not null references knowledge_assistants(id) on delete cascade, user_id varchar(36) not null references users(id), accepted integer not null default 0, visited_at varchar(32), integration varchar(16) not null default 'default', revision integer not null default 1, primary key (assistant_id, user_id))").execute(db);
   for (const statement of knowledgeSchemaStatements)
     await sql.raw(statement).execute(db);
   for (const statement of [
@@ -460,6 +425,7 @@ async function ensureKnowledgeSchema(db: Kysely<any>) {
     `CREATE INDEX IF NOT EXISTS "knowledge_subscriptions_library" on "knowledge_subscriptions" ("library_id")`,
     `ALTER TABLE "resources" ADD COLUMN "knowledge_schedule" varchar(16) not null default 'off'`,
     `ALTER TABLE "resources" ADD COLUMN "knowledge_preset" text not null default ''`,
+    `ALTER TABLE "knowledge_subscriptions" ADD COLUMN "creator_id" varchar(36) not null default ''`,
     `ALTER TABLE "knowledge_subscriptions" ADD COLUMN "preset" text not null default ''`,
     `CREATE TABLE IF NOT EXISTS "knowledge_runs" ("id" varchar(36) primary key, "library_id" varchar(36) not null references "resources" ("id") on delete cascade, "trigger" varchar(16) not null, "status" varchar(16) not null, "detail" text not null default '', "created_at" varchar(32) not null)`,
     `CREATE INDEX IF NOT EXISTS "knowledge_runs_library" on "knowledge_runs" ("library_id", "created_at")`,
@@ -478,9 +444,10 @@ export async function createSchema(db: Kysely<any>) {
   if ((await db.introspection.getTables()).length > 0) {
     await ensureFileSchema(db);
     await ensureSearchSchema(db);
-    await ensureMailSchema(db);
     await ensureKnowledgeSchema(db);
     await ensureResourceSchema(db);
+    await ensureSiteSettingsSchema(db);
+    await ensureUserSchema(db);
     await ensureReactionSchema(db);
     await ensureTemplateSchema(db);
     await ensureAINoteSchema(db);
@@ -495,9 +462,10 @@ export async function createSchema(db: Kysely<any>) {
 
   await ensureFileSchema(db);
   await ensureSearchSchema(db);
-  await ensureMailSchema(db);
   await ensureKnowledgeSchema(db);
   await ensureResourceSchema(db);
+  await ensureSiteSettingsSchema(db);
+  await ensureUserSchema(db);
   await ensureReactionSchema(db);
   await ensureTemplateSchema(db);
   await ensureAINoteSchema(db);

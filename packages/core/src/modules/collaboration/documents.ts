@@ -1,4 +1,4 @@
-import { checkDocumentSize } from "../entitlements/service.js";
+import { checkDocumentSize } from "../access/operation-policy.js";
 import type { Transaction } from "kysely";
 import { randomUUID } from "node:crypto";
 import {
@@ -16,11 +16,13 @@ import { enqueueKnowledge } from "../knowledge/service.js";
 import { exchangeMarkdown } from "../documents/codecs/markdown.js";
 import { DocaYjsDocument as YjsDocument } from "../documents/codecs/rich-runtime.js";
 import { exchangeSurface } from "../documents/codecs/surfaces.js";
-import { detachUnreferencedDocumentFiles, documentMediaIds } from "../documents/media.js";
+import {
+  detachUnreferencedDocumentFiles,
+  documentMediaIds,
+} from "../documents/media.js";
 import { indexDocumentReferences } from "../documents/references.js";
 import { recordVersion } from "../history/repository.js";
 import type { Actor } from "../identity/passwords.js";
-import { recordActivity } from "../interactions/activity.js";
 import {
   documentMentions,
   mentionIds,
@@ -316,8 +318,11 @@ export function createDocuments(db: DB) {
               if (!actor || rank < 3) fail(403, "当前文档为只读");
               const value = runtime.getValue();
               await indexDocumentReferences(tx, id, value, seq + 1);
-              await detachUnreferencedDocumentFiles(tx, id, documentMediaIds(value));
-              await recordActivity(tx, actor.id, id, "edit");
+              await detachUnreferencedDocumentFiles(
+                tx,
+                id,
+                documentMediaIds(value),
+              );
               validateRaw(value);
               await checkDocumentSize(
                 tx,

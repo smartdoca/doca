@@ -1,3 +1,4 @@
+import { emitIntegrationEvent } from "@core/modules/automation/events.js";
 import {
   requireSecurity,
   grantSecurity,
@@ -15,6 +16,7 @@ import { mobileSession, sessionExpiresAt } from "../app/mobile-client.js";
 import {
   createUser,
   hashPassword,
+  recordLogin,
   tokenHash,
   publicUser,
 } from "@core/modules/identity/passwords.js";
@@ -40,10 +42,6 @@ import {
   flowToken,
   contactProofs,
 } from "@core/modules/identity/verification.js";
-import {
-  entitlementConfig,
-  publicEntitlements,
-} from "@core/modules/entitlements/service.js";
 import {
   accountBinding,
   accountCookie,
@@ -140,9 +138,9 @@ export function registerAccounts(
         if (
           policy.forcedLoginMethod &&
           ["phone", "email"].includes(policy.forcedLoginMethod) &&
-          !(await availableLoginMethods(tx, a.id, policy, loginRuntime)).includes(
-            policy.forcedLoginMethod,
-          )
+          !(
+            await availableLoginMethods(tx, a.id, policy, loginRuntime)
+          ).includes(policy.forcedLoginMethod)
         )
           fail(400, "请先完成指定登录方式的验证");
         await securityAudit(tx, a.id, a.id, "profile.completed", {});
@@ -176,7 +174,9 @@ export function registerAccounts(
             forcedLoginMethod: Type.Optional(
               Type.Union([
                 Type.Null(),
-                Type.String({ pattern: "^(password|phone|email|provider:[a-f0-9-]{36})$" }),
+                Type.String({
+                  pattern: "^(password|phone|email|provider:[a-f0-9-]{36})$",
+                }),
               ]),
             ),
             emailEnabled: Type.Optional(Type.Boolean()),
@@ -240,7 +240,10 @@ export function registerAccounts(
             .select(["enabled", "credential_ref"])
             .where("id", "=", p.forcedLoginMethod.slice(9))
             .executeTakeFirst();
-          if (!provider?.enabled || !ctx.providerReady?.(provider.credential_ref))
+          if (
+            !provider?.enabled ||
+            !ctx.providerReady?.(provider.credential_ref)
+          )
             fail(400, "强制补充的身份源必须已启用且配置凭据");
         } else if (
           p.forcedLoginMethod === "phone" &&
@@ -271,7 +274,10 @@ export function registerAccounts(
             .execute();
           const missing: string[] = [];
           for (const user of users) {
-            if (!(await availableLoginMethods(tx, user.id, p, loginRuntime)).length)
+            if (
+              !(await availableLoginMethods(tx, user.id, p, loginRuntime))
+                .length
+            )
               missing.push(user.public_id ?? user.id);
           }
           if (missing.length)
@@ -471,7 +477,9 @@ export function registerAccounts(
           }),
       );
       // React Native hides Set-Cookie, so the mobile client echoes this token as a Cookie header.
-      return req.headers["x-doca-client"] === "mobile" ? { ...started, flow: token } : started;
+      return req.headers["x-doca-client"] === "mobile"
+        ? { ...started, flow: token }
+        : started;
     },
   );
   api.post<{ Body: { challengeId: string; code: string } }>(
@@ -553,6 +561,7 @@ export function registerAccounts(
                 expires_at: sessionExpiresAt(req),
               })
               .execute();
+            await recordLogin(tx, u.id);
             return { status: "active", user: publicUser(u) };
           }
           const signup = (await identityPolicy(tx))[
@@ -582,7 +591,9 @@ export function registerAccounts(
         );
         if (result.status === "pending" && "pendingUserId" in result)
           return { status: "pending" };
-        return result.status === "active" ? mobileSession(req, token, result) : result;
+        return result.status === "active"
+          ? mobileSession(req, token, result)
+          : result;
       },
     );
   for (const loginKind of ["phone", "email"] as const)
@@ -659,9 +670,9 @@ export function registerAccounts(
               admin: 0,
               status: signup === "approval" ? "pending" : "active",
               created_at: now,
-              base_level: (await entitlementConfig(tx)).defaultLevel,
             })
             .execute();
+          await emitIntegrationEvent(tx, "user.created", { userId: id });
           await claimIdentifier(tx, id, p.values.username!, "username");
           for (const key of ["phone", "email"] as const)
             if (p.values[key])
@@ -688,6 +699,7 @@ export function registerAccounts(
               expires_at: sessionExpiresAt(req),
             })
             .execute();
+          await recordLogin(tx, id);
           return { status: "active" };
         });
         if (result.status !== "needs_profile")
@@ -697,7 +709,9 @@ export function registerAccounts(
           ]);
         if (result.status === "pending" && "pendingUserId" in result)
           return { status: "pending" };
-        return result.status === "active" ? mobileSession(req, session, result) : result;
+        return result.status === "active"
+          ? mobileSession(req, session, result)
+          : result;
       },
     );
   api.get("/api/v1/me/account", async (req) => {
@@ -729,7 +743,6 @@ export function registerAccounts(
         (c) => accountPolicy.fields[c.kind as "phone" | "email"].enabled,
       ),
       policy: await identityPolicy(db),
-      entitlements: await publicEntitlements(db, a.id),
     };
   });
   api.put<{ Body: { kind: "email" | "phone"; proof: string } }>(

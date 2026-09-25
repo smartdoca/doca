@@ -1,7 +1,7 @@
 import {
   checkDocumentSize,
   requireCapability,
-} from "../entitlements/service.js";
+} from "../access/operation-policy.js";
 import type { Transaction } from "kysely";
 import { readEditorDocument } from "slatetsx-kit-editor/headless";
 import { Doc, encodeStateAsUpdate } from "slatetsx-kit-editor/yjs";

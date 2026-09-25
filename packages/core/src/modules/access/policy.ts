@@ -19,6 +19,14 @@ export function isResourceOwnerLike(
       candidate.owner_id === actor.id,
   );
 }
+/** Library managers can remove contained documents even when child ACLs deny them. */
+export function canRemoveResource(resource: Resource, actor: Actor | null, resources: Resource[], grants: Grant[]) {
+  if (isResourceOwnerLike(resource, actor, resources)) return true;
+  const library = resource.kind === "document" && resource.library_id
+    ? resources.find((item) => item.id === resource.library_id && item.kind === "library")
+    : undefined;
+  return !!library && namedPermission(library, actor, resources, grants) >= ranks.manager;
+}
 /** Direct/link records combine with inheritance; parent_override controls fallback. */
 export function namedPermission(
   resource: Resource,
@@ -31,6 +39,12 @@ export function namedPermission(
   if (!actor || visited.has(resource.id)) return 0;
   visited.add(resource.id);
   if (isResourceOwnerLike(resource, actor, resources)) return 5;
+  // Library management is a permanent floor for contained documents, independent
+  // of child ACLs, inheritance switches, and explicit child-level blocks.
+  if (resource.library_id) {
+    const library = resources.find((r) => r.id === resource.library_id && r.kind === "library");
+    if (library && namedPermission(library, actor, resources, grants, false, new Set(visited)) >= 4) return 4;
+  }
   const local = grants.filter(
     (g) => g.resource_id === resource.id && g.user_id === actor.id,
   );
@@ -69,7 +83,6 @@ export function permission(
   grants: Grant[],
   visited = new Set<string>(),
 ): number {
-  if (resource.moderation_status === "blocked") return 0;
   const named = namedPermission(
     resource,
     actor,

@@ -376,7 +376,7 @@ export interface FileContentResolutionV1 {
    */
   readonly read?: (
     context: FilesRequestContext,
-    input: { fileId: FileId; range?: FileByteRange },
+    input: { fileId: FileId; range?: FileByteRange; bindingId?: FileBindingId },
   ) => Promise<FileContentRead>;
   /**
    * Resolves a permission-checked inline representation at use time.
@@ -384,7 +384,7 @@ export interface FileContentResolutionV1 {
    */
   resolveContent(
     context: FilesRequestContext,
-    input: { fileId: FileId; variant?: string },
+    input: { fileId: FileId; variant?: string; bindingId?: FileBindingId },
   ): Promise<FileAccessResolution & { readonly disposition: "inline" }>;
   /**
    * Resolves a permission-checked download at use time. This is intentionally
@@ -392,14 +392,14 @@ export interface FileContentResolutionV1 {
    */
   resolveDownload(
     context: FilesRequestContext,
-    input: { fileId: FileId; filename?: string },
+    input: { fileId: FileId; filename?: string; bindingId?: FileBindingId },
   ): Promise<FileAccessResolution & { readonly disposition: "attachment" }>;
 }
 
 export interface FileContentOperationsV1 extends FileContentResolutionV1 {
   read(
     context: FilesRequestContext,
-    input: { fileId: FileId; range?: FileByteRange },
+    input: { fileId: FileId; range?: FileByteRange; bindingId?: FileBindingId },
   ): Promise<FileContentRead>;
 }
 
