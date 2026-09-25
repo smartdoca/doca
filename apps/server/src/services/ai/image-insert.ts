@@ -158,27 +158,41 @@ export async function generatedImageStatus(
   };
 }
 
+export interface GeneratedImageInsertInput {
+  readonly assetId: string;
+  readonly resourceId: string;
+  readonly sheetId?: string | null;
+  readonly row?: number | null;
+  readonly column?: number | null;
+}
+
 /** Creates a document-local reference to one physical image, then inserts it via the native Yjs workflow. */
 export async function insertGeneratedImage(
   db: DB,
   ctx: ToolContext,
-  input: z.infer<typeof imageInsertSchema>,
+  input: GeneratedImageInsertInput,
   requestId: string,
   runtime: StorageRuntime = storageRuntime(),
 ) {
+  const normalized = imageInsertSchema.parse(input);
   await requireCapability(db, ctx.actor.id, "ai.create");
   await requireCapability(db, ctx.actor.id, "assets.upload");
-  const { resource } = await checkScope(db, ctx, input.resourceId, true);
+  const { resource } = await checkScope(
+    db,
+    ctx,
+    normalized.resourceId,
+    true,
+  );
   if (
     !["markdown", "rich_text", "canvas", "presentation", "spreadsheet"].includes(
       resource.format,
     )
   )
     fail(400, "当前支持插入文档、Markdown、画板、演示文稿和表格");
-  if (spreadsheetImagePlacement(input) && resource.format !== "spreadsheet")
+  if (spreadsheetImagePlacement(normalized) && resource.format !== "spreadsheet")
     fail(400, "工作表位置仅适用于表格文档");
-  const source = await sourceImage(db, ctx, input.assetId);
-  const identity = digest(input);
+  const source = await sourceImage(db, ctx, normalized.assetId);
+  const identity = digest(normalized);
   const previous = await db
     .selectFrom("ai_operations")
     .selectAll()
@@ -211,10 +225,10 @@ export async function insertGeneratedImage(
     const { resource: target } = await checkScope(
       tx,
       ctx,
-      input.resourceId,
+      normalized.resourceId,
       true,
     );
-    await sourceImage(tx, ctx, input.assetId);
+    await sourceImage(tx, ctx, normalized.assetId);
     const old = await tx
       .selectFrom("ai_operations")
       .selectAll()
@@ -319,7 +333,7 @@ export async function insertGeneratedImage(
         },
       ];
     } else if (target.format === "spreadsheet") {
-      const place = spreadsheetImagePlacement(input);
+      const place = spreadsheetImagePlacement(normalized);
       const sheetId = place?.sheetId ?? value.sheetOrder.find(
         (id: string) => value.sheets[id] && !value.sheets[id].hidden,
       );
@@ -428,7 +442,7 @@ export async function insertGeneratedImage(
       .execute();
     return saved;
   });
-  await ctx.notify?.(input.resourceId).catch(() => {});
+  await ctx.notify?.(normalized.resourceId).catch(() => {});
   return result;
 }
 

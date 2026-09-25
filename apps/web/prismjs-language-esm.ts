@@ -5,7 +5,7 @@ const PRISM_CORE = /\/prism-core(?:\.min)?\.js$/;
 const ALREADY_IMPORTS_PRISM = /(?:^|\n)import\s+Prism\s+from\s+["']prismjs["']/;
 
 function prismModulePath(id: string) {
-  return id.split("?")[0].replaceAll("\\", "/");
+  return (id.split("?")[0] ?? id).replaceAll("\\", "/");
 }
 
 export function rewritePrismLanguageModule(code: string, id: string) {

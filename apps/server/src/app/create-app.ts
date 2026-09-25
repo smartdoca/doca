@@ -2,7 +2,7 @@ import { bearerSession, mobileSession, registerMobileClient, renewMobileSession,
 import { registerModeration } from "../routes/moderation.js";
 import type { ModerationRuntime } from "../adapters/moderation.js";
 import { registerRuntimeSettings } from "../routes/runtime-settings.js";
-import { registerAI } from "../routes/ai.js";
+import type { registerAI } from "../routes/ai.js";
 import { registerQuickNotes } from "../routes/quick-notes.js";
 import { passwordIdentity } from "@core/modules/identity/accounts.js";
 import {registrationProfile} from "@core/modules/identity/accounts.js";
@@ -45,39 +45,40 @@ import { transact } from "@db/transactions.js";
 import type { IdentityRuntime } from "../adapters/identity-providers.js";
 import { type StorageRuntime } from "../adapters/storage.js";
 import { registerAssets } from "../routes/assets.js";
-import { registerFiles } from "../routes/files.js";
-import { registerMail, type MailRuntime } from "../routes/mail.js";
+import type { MailRuntimeOptions } from "../routes/mail.js";
 import { provisionSystemMailbox } from "../services/system-mailbox.js";
 import { registerPageState } from "../routes/page-state.js";
-import { createFileProcessingWorker } from "../jobs/file-processing-worker.js";
 import { registerExperience } from "../routes/experience.js";
 import { registerTemplates } from "../routes/templates.js";
 import { registerIdentity } from "../routes/identity.js";
 import { registerRegistrationReviews } from "../routes/registration-reviews.js";
-import { registerSearch, type SearchRuntime } from "../routes/search.js";
-import { registerKnowledge } from "../routes/knowledge.js";
+import type { SearchRuntime } from "../routes/search.js";
 import { registerWorkspace } from "../routes/workspace.js";
 import { registerProfiles } from "../routes/profiles.js";
 import { registerStaticRoutes } from "../routes/static.js";
 import { registerTickets } from "../routes/tickets.js";
 import { registerRealtime } from "../services/realtime/gateway.js";
+import { composeServerPlugins } from "../plugins/composition.js";
 
-export async function createApp(
-  db: DB,
-  options: {
-    origin: string;
-    staticDirectory?: string;
-    logging?: boolean;
-    storage?: StorageRuntime;
-    search?: SearchRuntime;
-    identity?: IdentityRuntime;
-    messaging?: MessagingRuntime;
-    moderation?: ModerationRuntime;
-    membershipSecret?: string;
-    ai?: Parameters<typeof registerAI>[4];
-    mail?: MailRuntime;
-  },
-) {
+export interface CreateAppOptions {
+  origin: string;
+  staticDirectory?: string;
+  logging?: boolean;
+  storage?: StorageRuntime;
+  search?: SearchRuntime;
+  identity?: IdentityRuntime;
+  messaging?: MessagingRuntime;
+  moderation?: ModerationRuntime;
+  membershipSecret?: string;
+  ai?: Parameters<typeof registerAI>[4];
+  mail?: MailRuntimeOptions;
+  plugins?: {
+    /** Mail routes and workers are enabled unless explicitly disabled. */
+    mail?: boolean;
+  };
+}
+
+export async function createApp(db: DB, options: CreateAppOptions) {
   const origin = new URL(options.origin),
     api = Fastify({
       logger: options.logging
@@ -395,12 +396,20 @@ export async function createApp(
   );
   registerWorkspace(api, db, authenticated, admin, realtime.online);
   registerPageState(api, db, authenticated);
-  const search = await registerSearch(api, db, admin, runtime.search);
-  registerKnowledge(api, db, authenticated, {
-    indexer: search.knowledgeIndex,
-    storage: runtime.storage,
+  const pluginComposition = await composeServerPlugins({
+    api,
+    db,
+    auth: authenticated,
+    admin,
+    origin,
+    runtime,
+    options,
+    realtime,
   });
-  await registerAI(api, db, authenticated, admin, { ...options.ai, storage: runtime.storage, notify: realtime.documentChanged, search: search.search, fileSearch: search.searchFiles, mail: options.mail });
+  // Fastify routes are immutable after mounting, so the host is intentionally
+  // disposed only from application close (or startup rollback below).
+  api.addHook("preClose", async () => pluginComposition.host.dispose());
+  const search = pluginComposition.search;
   registerQuickNotes(api, db, authenticated, options.ai?.fetch);
   registerProfiles(api, db, authenticated);
   const moderation = registerModeration(api, db, { admin, auth: authenticated, limit }, runtime.storage, realtime.enforceAccess, options.moderation);
@@ -413,22 +422,6 @@ export async function createApp(
     runtime.storage,
     moderation,
   );
-  registerFiles(api, db, authenticated, runtime.storage, admin, search.searchFiles);
-  registerMail(api, db, authenticated, admin, {
-    ...options.mail,
-    origin: options.mail?.origin ?? origin.origin,
-    storage: options.mail?.storage ?? runtime.storage,
-    mock: options.mail?.mock ?? process.argv.includes("--dev"),
-  });
-  const fileProcessing = createFileProcessingWorker(db, runtime.storage);
-  let processingFiles: Promise<unknown> | undefined;
-  const fileTimer = setInterval(() => {
-    if (!processingFiles) processingFiles = fileProcessing.pump()
-      .catch(error => api.log.error(error, "File processing failed"))
-      .finally(() => { processingFiles = undefined; });
-  }, 1000);
-  fileTimer.unref();
-  api.addHook("preClose", async () => { clearInterval(fileTimer); await processingFiles; });
   const id = Type.String({ format: "uuid" }),
     nullableId = Type.Union([id, Type.Null()]),
     version = Type.Integer({ minimum: 1 }),
@@ -525,6 +518,7 @@ export async function createApp(
           hooks: false,
           integrationEventStream: true,
         },
+        plugins: pluginComposition.plugins,
       };
     },
   );
@@ -637,7 +631,12 @@ export async function createApp(
         return {...u,session:undefined};
       });
       if (result.session) reply.header('Set-Cookie',cookie(result.session));
-      await provisionSystemMailbox(db, { id: result.id, displayName: result.display_name }, options.mail?.client);
+      if (options.plugins?.mail !== false)
+        await provisionSystemMailbox(
+          db,
+          { id: result.id, displayName: result.display_name },
+          options.mail?.client,
+        );
       if (result.status === "pending") return { status: "pending" };
       const {session,...publicResult}=result;
       return mobileSession(req, session, publicResult);
@@ -763,7 +762,12 @@ export async function createApp(
       const a = admin(req);
       limit(`create:${a.id}`,20);
       const user = await createAdminUser(db,a,req.body);
-      await provisionSystemMailbox(db, { id: user.id, displayName: user.display_name }, options.mail?.client);
+      if (options.plugins?.mail !== false)
+        await provisionSystemMailbox(
+          db,
+          { id: user.id, displayName: user.display_name },
+          options.mail?.client,
+        );
       return user;
     },
   );
@@ -1315,6 +1319,11 @@ export async function createApp(
     },
   );
   await registerStaticRoutes(api, db, options.staticDirectory);
-  await api.ready();
+  try {
+    await api.ready();
+  } catch (error) {
+    await pluginComposition.host.dispose();
+    throw error;
+  }
   return api;
 }

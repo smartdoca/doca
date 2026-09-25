@@ -4,6 +4,10 @@ import { expect, it } from "vitest";
 import { LastEdited } from "../apps/web/src/features/documents/document-experience.js";
 import { DocumentName } from "../apps/web/src/features/documents/document-name.js";
 import type { Detail, Resource } from "../apps/web/src/shared/api.js";
+import { LocaleProvider } from "../apps/web/src/shared/i18n.js";
+
+const localized = (element: ReturnType<typeof createElement>) =>
+  createElement(LocaleProvider, null, element);
 
 it.each([
   ["editor", 0, false],
@@ -13,13 +17,13 @@ it.each([
   "history shortcut follows %s/historyReaders=%s access without a nested user button",
   (role, history_readers, disabled) => {
     const html = renderToStaticMarkup(
-      createElement(LastEdited, {
+      localized(createElement(LastEdited, {
         detail: {
           resource: { role, history_readers },
           lastEditorName: "最近编辑者",
           lastEditedAt: "2026-09-14T00:00:00Z",
         } as Detail,
-      }),
+      })),
     );
     expect(html).toContain('aria-label="查看历史记录"');
     expect(html).toContain("lucide-history");
@@ -30,10 +34,10 @@ it.each([
 );
 it("metadata titles remain ordinary text buttons until explicitly edited", () => {
   const html = renderToStaticMarkup(
-    createElement(DocumentName, {
+    localized(createElement(DocumentName, {
       resource: { title: "画板标题" } as Resource,
       changed() {},
-    }),
+    })),
   );
   expect(html).toContain("document-title-edit");
   expect(html).toContain("画板标题");

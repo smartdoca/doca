@@ -90,6 +90,9 @@ importers:
       '@aws-sdk/cloudfront-signer':
         specifier: ^3.1125.0
         version: 3.1125.0
+      '@doca/plugin-sdk':
+        specifier: workspace:*
+        version: link:packages/plugin-sdk
       '@eppt/editor':
         specifier: file:vendor/eppt-editor-0.3.0-alpha.1-d4d2631fccd4.tgz
         version: file:vendor/eppt-editor-0.3.0-alpha.1-d4d2631fccd4.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -298,6 +301,9 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@doca/web-plugin-registry':
+        specifier: workspace:*
+        version: link:../../packages/web-plugin-registry
       '@expo/vector-icons':
         specifier: ^14.1.0
         version: 14.1.0(expo-font@13.3.2(expo@53.0.27(@babel/core@7.29.7(supports-color@8.1.1))(@expo/metro-runtime@5.0.5(react-native@0.79.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.0.14)(react@19.0.0)(supports-color@8.1.1)))(react-native-webview@13.13.5(react-native@0.79.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.0.14)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0))(react-native@0.79.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.0.14)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)(supports-color@8.1.1))(react@19.0.0))(react-native@0.79.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.0.14)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)
@@ -426,15 +432,152 @@ importers:
         specifier: ~5.8.3
         version: 5.8.3
 
-  apps/server: {}
+  apps/server:
+    dependencies:
+      '@doca/ai-host':
+        specifier: workspace:*
+        version: link:../../packages/ai-host
+      '@doca/documents-capability':
+        specifier: workspace:*
+        version: link:../../packages/documents-capability
+      '@doca/files-capability':
+        specifier: workspace:*
+        version: link:../../packages/files-capability
+      '@doca/knowledge-capability':
+        specifier: workspace:*
+        version: link:../../packages/knowledge-capability
+      '@doca/plugin-documents':
+        specifier: workspace:*
+        version: link:../../packages/plugin-documents
+      '@doca/plugin-files':
+        specifier: workspace:*
+        version: link:../../packages/plugin-files
+      '@doca/plugin-host':
+        specifier: workspace:*
+        version: link:../../packages/plugin-host
+      '@doca/plugin-mail':
+        specifier: workspace:*
+        version: link:../../packages/plugin-mail
+      '@doca/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@doca/search-host':
+        specifier: workspace:*
+        version: link:../../packages/search-host
 
-  apps/web: {}
+  apps/web:
+    dependencies:
+      '@doca/web-plugin-registry':
+        specifier: workspace:*
+        version: link:../../packages/web-plugin-registry
+
+  packages/ai-host: {}
 
   packages/core: {}
 
   packages/db: {}
 
+  packages/documents-capability:
+    dependencies:
+      '@doca/files-capability':
+        specifier: workspace:*
+        version: link:../files-capability
+
+  packages/files-capability: {}
+
   packages/i18n: {}
+
+  packages/job-host: {}
+
+  packages/knowledge-capability:
+    dependencies:
+      '@doca/files-capability':
+        specifier: workspace:*
+        version: link:../files-capability
+
+  packages/plugin-contracts: {}
+
+  packages/plugin-documents:
+    dependencies:
+      '@doca/ai-host':
+        specifier: workspace:*
+        version: link:../ai-host
+      '@doca/documents-capability':
+        specifier: workspace:*
+        version: link:../documents-capability
+      '@doca/files-capability':
+        specifier: workspace:*
+        version: link:../files-capability
+      '@doca/knowledge-capability':
+        specifier: workspace:*
+        version: link:../knowledge-capability
+      '@doca/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+      '@doca/search-host':
+        specifier: workspace:*
+        version: link:../search-host
+
+  packages/plugin-files:
+    dependencies:
+      '@doca/ai-host':
+        specifier: workspace:*
+        version: link:../ai-host
+      '@doca/files-capability':
+        specifier: workspace:*
+        version: link:../files-capability
+      '@doca/knowledge-capability':
+        specifier: workspace:*
+        version: link:../knowledge-capability
+      '@doca/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+      '@doca/search-host':
+        specifier: workspace:*
+        version: link:../search-host
+
+  packages/plugin-host:
+    dependencies:
+      '@doca/plugin-contracts':
+        specifier: workspace:*
+        version: link:../plugin-contracts
+      '@doca/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+
+  packages/plugin-mail:
+    dependencies:
+      '@doca/ai-host':
+        specifier: workspace:*
+        version: link:../ai-host
+      '@doca/documents-capability':
+        specifier: workspace:*
+        version: link:../documents-capability
+      '@doca/files-capability':
+        specifier: workspace:*
+        version: link:../files-capability
+      '@doca/knowledge-capability':
+        specifier: workspace:*
+        version: link:../knowledge-capability
+      '@doca/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+      '@doca/search-host':
+        specifier: workspace:*
+        version: link:../search-host
+
+  packages/plugin-sdk:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.0.4
+        version: 4.0.4
+      '@doca/plugin-contracts':
+        specifier: workspace:*
+        version: link:../plugin-contracts
+
+  packages/search-host: {}
+
+  packages/web-plugin-registry: {}
 
 packages:
 
@@ -1360,6 +1503,21 @@ packages:
 
   '@cropper/utils@2.2.0':
     resolution: {integrity: sha512-wTrpZl+F4Kr2hzovqjztSexWUU+EVK1CxPymbYgFYoAS/NZXwCDsrvikJQn+HYZVxjqyo/ClnFxA0fG+tFy6Hw==}
+
+  '@deepseek-ai/cordis@4.0.4':
+    resolution: {integrity: sha512-obgyxqWAmFn3Re8kvsuUnyW+ihrz6eJCnJO4fh1cQzDtmPYz/zzVeUkH9R94I0OwSVOocK67Kgakm04j/oQXzg==}
+    hasBin: true
+    peerDependencies:
+      '@deepseek-ai/cordis-plugin-include': ~1.0.9
+      '@deepseek-ai/cordis-plugin-loader': ~1.0.5
+    peerDependenciesMeta:
+      '@deepseek-ai/cordis-plugin-include':
+        optional: true
+      '@deepseek-ai/cordis-plugin-loader':
+        optional: true
+
+  '@deepseek-ai/cosmokit@1.8.5':
+    resolution: {integrity: sha512-LXsrlem9z8dq4sLflj2yuCuYX7KqhdzF5hZly3eZyuTo8d6oDSOXuEgC5DbQWKW+lksm6zmOutQLsP/ma6wR6A==}
 
   '@egjs/hammerjs@2.0.17':
     resolution: {integrity: sha512-XQsZgjm2EcVUiZQf11UBJQfmZeEmOW8DpI1gsFeln6w0ae0ii4dMQEQ0kjl6DspdWX1aGY1/loyXnP0JS06e/A==}
@@ -10727,6 +10885,13 @@ snapshots:
       '@cropper/element-viewer': 2.2.0
 
   '@cropper/utils@2.2.0': {}
+
+  '@deepseek-ai/cordis@4.0.4':
+    dependencies:
+      '@deepseek-ai/cosmokit': 1.8.5
+      '@standard-schema/spec': 1.1.0
+
+  '@deepseek-ai/cosmokit@1.8.5': {}
 
   '@egjs/hammerjs@2.0.17':
     dependencies:

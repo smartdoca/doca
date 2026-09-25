@@ -215,7 +215,7 @@ export function DocumentFind({
             className="icon"
             aria-label={t("doc.find")}
             title={t("doc.findShortcut")}
-            onClick={show}
+            onClick={() => show()}
           >
             <Search size={18} />
           </button>,

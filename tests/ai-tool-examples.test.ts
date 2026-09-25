@@ -105,25 +105,25 @@ it("covers the fields that usually fail on the first edit/file/image call", () =
       expect.objectContaining({ sheetId: null, row: null, column: null }),
     ]),
   );
-  expect(TOOL_EXAMPLES.file_manage.map((item) => item.action).sort()).toEqual([
+  expect(TOOL_EXAMPLES.file_manage!.map((item) => item.action).sort()).toEqual([
     "copy",
     "delete",
     "move",
     "rename",
   ]);
-  expect(TOOL_EXAMPLES.file_folder_manage.map((item) => item.action)).toEqual([
+  expect(TOOL_EXAMPLES.file_folder_manage!.map((item) => item.action)).toEqual([
     "create",
     "rename",
     "move",
     "copy",
     "delete",
   ]);
-  expect(TOOL_EXAMPLES.resource_manage[0]).toMatchObject({
+  expect(TOOL_EXAMPLES.resource_manage![0]).toMatchObject({
     action: "rename",
     version: 1,
     title: "新标题",
   });
-  expect(TOOL_EXAMPLES.submit_review[0]).toMatchObject({
+  expect(TOOL_EXAMPLES.submit_review![0]).toMatchObject({
     verdict: "pass",
     checks: [{ criterionIndex: 0, passed: true }],
   });

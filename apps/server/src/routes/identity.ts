@@ -976,7 +976,7 @@ export function registerIdentity(
         return { status: "active", user: publicUser(user) };
       });
       if (result.status === "needs_profile") return result;
-      const provisionedId = result.status === "active"
+      const provisionedId = result.status === "active" && result.user
         ? result.user.id
         : result.status === "pending" && "pendingUserId" in result
           ? result.pendingUserId
@@ -984,7 +984,10 @@ export function registerIdentity(
       if (provisionedId) {
         await provisionSystemMailbox(db, {
           id: provisionedId,
-          displayName: result.status === "active" ? result.user.display_name : undefined,
+          displayName:
+            result.status === "active" && result.user
+              ? result.user.display_name
+              : undefined,
         });
       }
       reply.header(

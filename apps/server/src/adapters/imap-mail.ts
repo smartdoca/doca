@@ -380,7 +380,15 @@ export function createImapMail(credentials: ExternalMailCredentials): StalwartMa
         };
         const appended = await client.append(inbox.id, raw, []);
         const parsed = await simpleParser(raw);
-        return fromParsed(parsed, inbox, appended?.uid ?? Date.now() % 1_000_000_000, true, false);
+        return fromParsed(
+          parsed,
+          inbox,
+          appended === false
+            ? Date.now() % 1_000_000_000
+            : (appended.uid ?? Date.now() % 1_000_000_000),
+          true,
+          false,
+        );
       });
     },
     async saveDraft(_account, draft) {
@@ -389,7 +397,7 @@ export function createImapMail(credentials: ExternalMailCredentials): StalwartMa
         const drafts = (await folderByRole(client, "drafts")) ?? { id: "Drafts", name: "草稿箱", role: "drafts" as const, total: 0, unread: 0 };
         const appended = await client.append(drafts.id, raw, ["\\Draft", "\\Seen"]);
         const parsed = await simpleParser(raw);
-        const uid = appended?.uid;
+        const uid = appended === false ? undefined : appended.uid;
         return fromParsed(parsed, drafts, uid ?? Date.now() % 1_000_000_000, false, false);
       });
     },

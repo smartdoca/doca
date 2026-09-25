@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rewritePrismLanguageModule } from "../apps/web/prismjs-language-esm.ts";
+import { rewritePrismLanguageModule } from "../apps/web/prismjs-language-esm";
 
 const languageSource = `(function (Prism) {\n  Prism.languages.typescript = {};\n}(Prism));\n`;
 

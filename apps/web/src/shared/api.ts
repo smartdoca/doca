@@ -17,6 +17,7 @@ export interface Bootstrap {
   initialized: boolean;
   user: User | null;
   capabilities: Record<string, boolean>;
+  plugins: { id: string; version: string }[];
 }
 export interface Resource {
   last_editor_id?: string | null;

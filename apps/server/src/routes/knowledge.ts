@@ -17,6 +17,7 @@ import {
   type KnowledgeIndexer,
 } from "@core/modules/knowledge/service.js";
 import { fail } from "@core/shared/errors.js";
+import { createContent } from "@core/workflows/resources.js";
 import type { DB } from "@db/index.js";
 import type { StorageRuntime } from "../adapters/storage.js";
 import { waitFileExtract } from "../services/ai/file-extract.js";
@@ -29,6 +30,7 @@ export function registerKnowledge(
   auth: (req: FastifyRequest) => Actor,
   options: { indexer?: KnowledgeIndexer; storage?: StorageRuntime } = {},
 ) {
+  const content = createContent(db);
   let stopped = false;
   let processing: Promise<void> | null = null;
   const rebuild = async (payload: Record<string, unknown>) => {
@@ -81,7 +83,14 @@ export function registerKnowledge(
   api.post<{ Params: { id: string; subscriptionId: string } }>(
     "/api/v1/knowledge/libraries/:id/subscriptions/:subscriptionId/confirm",
     { schema: { params: Type.Object({ id: Type.String({ format: "uuid" }), subscriptionId: Type.String({ format: "uuid" }) }) } },
-    async (req) => confirmKnowledgeSubscription(db, auth(req), req.params.id, req.params.subscriptionId),
+    async (req) =>
+      confirmKnowledgeSubscription(
+        db,
+        auth(req),
+        req.params.id,
+        req.params.subscriptionId,
+        (actor, input) => content.create(actor, input),
+      ),
   );
 
   api.post<{ Params: { id: string; subscriptionId: string } }>(

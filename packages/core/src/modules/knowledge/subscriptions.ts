@@ -3,10 +3,20 @@ import type { DB } from "@db/index.js";
 import type { Actor } from "../identity/passwords.js";
 import { authorize } from "../access/queries.js";
 import { fail } from "../../shared/errors.js";
-import { createContent } from "../../workflows/resources.js";
 import { mailKnowledgeIncluded } from "../mail/scope.js";
 
 export type SubscriptionKind = "document" | "file" | "folder" | "mail" | "mailbox" | "url";
+export type KnowledgeDocumentCreator = (
+  actor: Actor,
+  input: {
+    title: string;
+    kind: "document";
+    format: "markdown";
+    libraryId: string;
+    parentId?: string | null;
+    markdown: string;
+  },
+) => Promise<{ id: string }>;
 
 const kinds = new Set<SubscriptionKind>(["document", "file", "folder", "mail", "mailbox", "url"]);
 
@@ -93,7 +103,7 @@ export async function subscribeKnowledgeSource(
   })), included: 0 };
 }
 
-export async function confirmKnowledgeSubscription(db: DB, actor: Actor, libraryId: string, subscriptionId: string) {
+export async function confirmKnowledgeSubscription(db: DB, actor: Actor, libraryId: string, subscriptionId: string, createDocument: KnowledgeDocumentCreator) {
   await authorize(db, actor, libraryId, 4);
   const library = await db.selectFrom("resources").select(["id", "kind", "ai_curated"]).where("id", "=", libraryId).where("deleted_at", "is", null).executeTakeFirst();
   if (!library || library.kind !== "library") fail(404, "知识库不存在");
@@ -102,7 +112,7 @@ export async function confirmKnowledgeSubscription(db: DB, actor: Actor, library
   if (!pending) fail(404, "连线不存在");
   if (pending.status !== "pending") return { ...(await publicSubscription(db, pending)), included: 0 };
   const source = await readSource(db, actor, libraryId, { sourceKind: pending.source_kind as SubscriptionKind, sourceId: pending.source_id, url: pending.url });
-  const node = await createContent(db).create(actor, {
+  const node = await createDocument(actor, {
     title: source.title,
     kind: "document",
     format: "markdown",
@@ -117,7 +127,7 @@ export async function confirmKnowledgeSubscription(db: DB, actor: Actor, library
     const files = await filesUnderFolder(db, source.sourceId);
     for (const file of files) {
       const snapshot = await readSource(db, actor, libraryId, { sourceKind: "file", sourceId: file });
-      await ensureSubscription(db, actor, libraryId, "file", snapshot, node.id);
+      await ensureSubscription(db, actor, libraryId, "file", snapshot, node.id, createDocument);
       included += 1;
     }
   }
@@ -125,7 +135,7 @@ export async function confirmKnowledgeSubscription(db: DB, actor: Actor, library
     const messages = await messagesInMailbox(db, source.sourceId);
     for (const messageId of messages) {
       const snapshot = await readSource(db, actor, libraryId, { sourceKind: "mail", sourceId: messageId });
-      await ensureSubscription(db, actor, libraryId, "mail", snapshot, node.id);
+      await ensureSubscription(db, actor, libraryId, "mail", snapshot, node.id, createDocument);
       included += 1;
     }
   }
@@ -158,6 +168,7 @@ async function ensureSubscription(
   sourceKind: SubscriptionKind,
   source: { sourceId: string; url: string; version: string; title: string; markdown: string },
   parentId: string | null,
+  createDocument: KnowledgeDocumentCreator,
 ) {
   const existing = await db.selectFrom("knowledge_subscriptions").selectAll()
     .where("library_id", "=", libraryId)
@@ -166,7 +177,7 @@ async function ensureSubscription(
     .where("url", "=", source.url)
     .executeTakeFirst();
   if (existing) return { id: existing.id, nodeId: existing.node_id, createdAt: existing.created_at };
-  const node = await createContent(db).create(actor, {
+  const node = await createDocument(actor, {
     title: source.title,
     kind: "document",
     format: "markdown",

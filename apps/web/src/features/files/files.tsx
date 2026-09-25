@@ -1029,7 +1029,7 @@ export function FilesExplorer({
     const rootRect = root.getBoundingClientRect();
     const hits = idsInMarquee(
       normalizeRect(origin, current),
-      [...root.querySelectorAll<HTMLElement>(".file-entry")].flatMap((node) => {
+      Array.from(root.querySelectorAll<HTMLElement>(".file-entry")).flatMap((node) => {
         const id = node.dataset.id;
         if (!id) return [];
         const rect = node.getBoundingClientRect();

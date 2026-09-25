@@ -226,6 +226,7 @@ export const en = {
   "trash.filesEmpty": "The file trash is empty",
   "trash.purgeFile": "Permanently delete “{name}”? This cannot be undone.",
   "shell.offline": "Can’t reach the service",
+  "shell.pluginUnavailable": "This module is not installed or has been disabled.",
   "shell.retry": "Try again",
   "shell.connecting": "Connecting to Doca…",
   "shell.authFailed": "Sign-in was not completed",

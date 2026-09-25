@@ -72,7 +72,7 @@ export function ModelFind<M>({
             className="icon"
             title={t("doc.findShortcut")}
             aria-label={t("doc.find")}
-            onClick={show}
+            onClick={() => show()}
           >
             <Search size={18} />
           </button>,

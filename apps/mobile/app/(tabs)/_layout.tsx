@@ -10,6 +10,11 @@ import { api } from "../../src/api";
 import { setAiSession } from "../../src/ai-session";
 import { useAuth } from "../../src/auth";
 import { colors } from "../../src/chrome";
+import { useI18n } from "../../src/locale";
+import {
+  mobilePluginMessage,
+  mobilePluginRegistry,
+} from "../../src/plugins/registry";
 
 type AiSession = { id: string; title: string };
 
@@ -17,6 +22,8 @@ function AccountMenu({ close }: { close: () => void }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
+  const { locale } = useI18n();
+  const mailTab = mobilePluginRegistry.tabs.getByConflictKey("mail");
   const initial = (session?.name || "我").slice(0, 1);
 
   function open(path: "/account" | "/mail" | "/settings") {
@@ -39,10 +46,14 @@ function AccountMenu({ close }: { close: () => void }) {
         <ChevronRight color={colors.muted} size={18} />
       </Pressable>
       <Text style={styles.section}>账户</Text>
-      <Pressable style={styles.item} onPress={() => open("/mail")}>
-        <Mail color={colors.accent} size={18} />
-        <Text style={styles.itemText}>邮箱</Text>
-      </Pressable>
+      {mailTab ? (
+        <Pressable style={styles.item} onPress={() => open("/mail")}>
+          <Mail color={colors.accent} size={18} />
+          <Text style={styles.itemText}>
+            {mobilePluginMessage(locale, mailTab.labelKey)}
+          </Text>
+        </Pressable>
+      ) : null}
       <Pressable style={styles.item} onPress={() => open("/settings")}>
         <Settings color={colors.accent} size={18} />
         <Text style={styles.itemText}>设置</Text>
@@ -116,6 +127,10 @@ function SessionMenu({ close }: { close: () => void }) {
 export default function TabsLayout() {
   const [open, setOpen] = useState(false);
   const ai = useSegments().includes("ai");
+  const { locale } = useI18n();
+  const librariesTab =
+    mobilePluginRegistry.tabs.getByConflictKey("libraries");
+  const filesTab = mobilePluginRegistry.tabs.getByConflictKey("files");
   return (
     <Drawer
       open={open}
@@ -149,7 +164,9 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="libraries"
           options={{
-            title: "知识库",
+            title: librariesTab
+              ? mobilePluginMessage(locale, librariesTab.labelKey)
+              : "知识库",
             tabBarIcon: ({ color, size }) => <BookOpen color={color} size={size} />,
           }}
         />
@@ -163,7 +180,9 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="files"
           options={{
-            title: "文件",
+            title: filesTab
+              ? mobilePluginMessage(locale, filesTab.labelKey)
+              : "文件",
             tabBarIcon: ({ color, size }) => <FolderOpen color={color} size={size} />,
           }}
         />

@@ -1,0 +1,69 @@
+{
+  "name": "@doca/plugin-mail",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ai": "./src/ai.ts",
+    "./knowledge": "./src/knowledge.ts",
+    "./search": "./src/search.ts",
+    "./manifest": "./src/manifest.ts",
+    "./server": "./src/index.ts",
+    "./web": "./src/manifest.ts",
+    "./mobile": "./src/manifest.ts"
+  },
+  "doca": {
+    "manifest": "./src/manifest.ts",
+    "server": "./src/index.ts",
+    "web": "./src/manifest.ts",
+    "mobile": "./src/manifest.ts",
+    "injections": {
+      "required": [
+        "files.v1"
+      ],
+      "optional": [
+        "documents.v1",
+        "knowledge.sources.v1",
+        "search.sources.v1",
+        "doca.ai.contributions"
+      ]
+    },
+    "contributions": {
+      "server": [
+        "mail.routes.v1",
+        "mail.sync.v1",
+        "mail.messages.search-source.v1",
+        "mail.messages.knowledge-source.v1",
+        "mail.mailboxes.knowledge-source.v1",
+        "mail.accounts.admin.v1",
+        "mail.settings.admin.v1",
+        "mail.ai.v1"
+      ],
+      "web": [
+        "mail.route",
+        "mail.navigation",
+        "mail.accounts.admin",
+        "mail.settings.admin",
+        "mail.conversation.renderer",
+        "mail.search-result.renderer",
+        "mail.knowledge-source.settings"
+      ],
+      "mobile": [
+        "mail.route",
+        "mail.tab",
+        "mail.conversation.renderer",
+        "mail.search-result.renderer",
+        "mail.knowledge-source.settings"
+      ]
+    }
+  },
+  "dependencies": {
+    "@doca/ai-host": "workspace:*",
+    "@doca/documents-capability": "workspace:*",
+    "@doca/files-capability": "workspace:*",
+    "@doca/knowledge-capability": "workspace:*",
+    "@doca/search-host": "workspace:*",
+    "@doca/plugin-sdk": "workspace:*"
+  }
+}

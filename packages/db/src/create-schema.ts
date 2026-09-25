@@ -2,6 +2,7 @@ import type { Kysely } from "kysely";
 import { sql } from "kysely";
 
 const schemaStatements = [
+  `CREATE TABLE IF NOT EXISTS "plugin_migrations" ("plugin_id" varchar(160) primary key, "version" varchar(64) not null, "applied_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "users" ("id" varchar(36) primary key, "login" varchar(160) not null unique, "display_name" varchar(160) not null, "password_hash" text not null, "admin" integer not null, "status" varchar(16) not null, "created_at" varchar(32) not null, "public_id" varchar(160), "directory_mode" varchar(16), "profile_metadata" text default '{}' not null, "profile_revision" integer default 1 not null, "base_level" varchar(64) default 'standard' not null, "identity_class" varchar(64) default '' not null, "level_source" varchar(80) default 'default' not null, "level_override" integer default 0 not null, "level_revision" integer default 1 not null, "timed_level" text, "timed_level_expires_at" bigint);`,
   `CREATE TABLE IF NOT EXISTS "sessions" ("id" varchar(64) primary key, "user_id" varchar(36) not null references "users" ("id"), "expires_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "settings" ("id" varchar(16) primary key, "registration" integer not null, "revision" integer not null, "site_name" varchar(160) not null, "registration_review" integer default 0 not null, "sso_registration" varchar(16) default 'closed' not null, "social_registration" varchar(16) default 'closed' not null, "directory_mode" varchar(16) default 'all' not null);`,
@@ -53,7 +54,7 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS "editor_receipts" ("resource_id" varchar(36) not null references "resources" ("id") on delete cascade, "epoch_id" varchar(36) not null, "message_id" varchar(80) not null, "digest" varchar(64) not null, "seq" integer not null, constraint "editor_receipts_pk" primary key ("resource_id", "epoch_id", "message_id"));`,
   `CREATE TABLE IF NOT EXISTS "access_invitations" ("resource_id" varchar(36) not null references "resources" ("id") on delete cascade, "user_id" varchar(36) not null references "users" ("id") on delete cascade, "role" varchar(16) default 'reader' not null, "state" varchar(16) not null, "version" integer default 1 not null, "invited_by" varchar(36), "decided_by" varchar(36), "created_at" varchar(32) default '' not null, "updated_at" varchar(32) default '' not null, "expires_at" varchar(32), "include_descendants" integer default 1 not null, constraint "access_invitations_pk" primary key ("resource_id", "user_id"));`,
   `CREATE TABLE IF NOT EXISTS "resource_entries" ("user_id" varchar(36) not null references "users" ("id") on delete cascade, "resource_id" varchar(36) not null references "resources" ("id") on delete cascade, "state" varchar(16) not null, "source" varchar(24) not null, "version" integer default 1 not null, "updated_at" varchar(32) not null, constraint "resource_entries_pk" primary key ("user_id", "resource_id"));`,
-  `CREATE TABLE IF NOT EXISTS "projection_jobs" ("id" varchar(160) primary key, "kind" varchar(32) not null, "payload" text not null, "revision" integer not null, "attempts" integer default 0 not null, "available_at" varchar(32) not null, "last_error" varchar(300), "lease_token" varchar(36), "lease_until" varchar(32));`,
+  `CREATE TABLE IF NOT EXISTS "projection_jobs" ("id" varchar(160) primary key, "kind" varchar(32) not null, "payload" text not null, "revision" integer not null, "attempts" integer default 0 not null, "available_at" varchar(32) not null, "last_error" varchar(300), "lease_token" varchar(36), "lease_until" varchar(32), "status" varchar(32) default 'queued' not null, "plugin_id" varchar(160), "max_attempts" integer default 5 not null);`,
   `CREATE INDEX "invitations_by_user" on "access_invitations" ("user_id", "state", "resource_id");`,
   `CREATE INDEX "resources_owner_order" on "resources" ("owner_id", "deleted_at", "updated_at", "id");`,
   `CREATE INDEX "resources_library_order" on "resources" ("library_id", "deleted_at", "updated_at", "id");`,
@@ -98,6 +99,8 @@ const schemaStatements = [
   `CREATE INDEX "tickets_applicant" on "tickets" ("user_id", "created_at", "id");`,
   `CREATE INDEX "tickets_initiator" on "tickets" ("initiator_id", "created_at", "id");`,
   `CREATE TABLE IF NOT EXISTS "ai_sessions" ("id" text primary key, "user_id" text not null references "users" ("id"), "title" text not null, "model_id" text, "resource_ids" text not null, "archived" integer default 0 not null, "revision" integer default 1 not null, "created_at" text not null, "updated_at" text not null, "mentioned_resource_ids" text default '[]' not null, "approved_resource_ids" text default '[]' not null);`,
+  `CREATE TABLE IF NOT EXISTS "ai_session_events" ("session_id" text not null references "ai_sessions" ("id") on delete cascade, "seq" integer not null, "event_id" text not null, "digest" varchar(64) not null, "type" text not null, "payload" text not null, "created_at" text not null, constraint "ai_session_events_pk" primary key ("session_id", "seq"), constraint "ai_session_events_id" unique ("session_id", "event_id"));`,
+  `CREATE INDEX IF NOT EXISTS "ai_session_events_time" on "ai_session_events" ("session_id", "seq");`,
   `CREATE INDEX "ai_sessions_user" on "ai_sessions" ("user_id", "updated_at");`,
   `CREATE TABLE IF NOT EXISTS "ai_users" ("user_id" text primary key references "users" ("id"), "default_model" text, "memory_enabled" integer default 0 not null, "memory_revision" integer default 0 not null, "lock_version" integer default 0 not null);`,
   `CREATE TABLE IF NOT EXISTS "ai_jobs" ("id" text primary key, "session_id" text not null references "ai_sessions" ("id"), "user_id" text not null references "users" ("id"), "model_id" text not null, "status" text not null, "input" text not null, "digest" text not null, "result" text default '' not null, "error" text default '' not null, "lease" text, "lease_until" text, "attempts" integer default 0 not null, "cancelled" integer default 0 not null, "created_at" text not null, "updated_at" text not null);`,
@@ -144,6 +147,8 @@ const fileSchemaStatements = [
   `CREATE TABLE IF NOT EXISTS "file_items" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id") on delete cascade, "parent_type" varchar(16) not null, "parent_id" varchar(36) not null, "storage_object_id" varchar(36) not null references "file_storage_objects" ("id"), "name" varchar(255) not null, "mime" varchar(160) not null, "size" bigint not null, "metadata" text default '{}' not null, "ai_description_override" text, "locked" integer default 0 not null, "version" integer default 1 not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "deleted_at" varchar(32), "delete_batch" varchar(36), constraint "file_item_parent_type" check (parent_type in ('system','folder','document')), constraint "file_item_size" check (size >= 0), constraint "file_item_version" check (version > 0));`,
   `CREATE INDEX IF NOT EXISTS "file_items_parent" on "file_items" ("owner_id", "parent_type", "parent_id", "deleted_at", "name");`,
   `CREATE INDEX IF NOT EXISTS "file_items_storage" on "file_items" ("storage_object_id", "deleted_at");`,
+  `CREATE TABLE IF NOT EXISTS "file_bindings" ("id" varchar(36) primary key, "file_id" varchar(36) not null references "file_items" ("id") on delete cascade, "owner_plugin" varchar(160) not null, "owner_type" varchar(120) not null, "owner_id" varchar(160) not null, "role" varchar(120) not null, "created_at" varchar(32) not null, constraint "file_bindings_owner" unique ("file_id", "owner_plugin", "owner_type", "owner_id", "role"));`,
+  `CREATE INDEX IF NOT EXISTS "file_bindings_lookup" on "file_bindings" ("owner_plugin", "owner_type", "owner_id", "role");`,
   `CREATE TABLE IF NOT EXISTS "file_recognition_settings" ("id" varchar(16) primary key, "config" text not null, "revision" integer default 0 not null);`,
 ];
 
@@ -222,6 +227,26 @@ async function ensureAINoteSchema(db: Kysely<any>) {
       `CREATE TABLE IF NOT EXISTS "ai_secrets" ("user_id" varchar(36) not null references "users" ("id") on delete cascade, "key" varchar(64) not null, "value" text not null, "updated_at" varchar(32) not null, primary key ("user_id", "key"))`,
     )
     .execute(db);
+}
+
+async function ensurePlatformRuntimeSchema(db: Kysely<any>) {
+  for (const statement of [
+    `CREATE TABLE IF NOT EXISTS "plugin_migrations" ("plugin_id" varchar(160) primary key, "version" varchar(64) not null, "applied_at" varchar(32) not null)`,
+    `CREATE TABLE IF NOT EXISTS "ai_session_events" ("session_id" text not null references "ai_sessions" ("id") on delete cascade, "seq" integer not null, "event_id" text not null, "digest" varchar(64) not null, "type" text not null, "payload" text not null, "created_at" text not null, constraint "ai_session_events_pk" primary key ("session_id", "seq"), constraint "ai_session_events_id" unique ("session_id", "event_id"))`,
+    `CREATE INDEX IF NOT EXISTS "ai_session_events_time" on "ai_session_events" ("session_id", "seq")`,
+    `ALTER TABLE "ai_session_events" ADD COLUMN "digest" varchar(64) default '' not null`,
+    `ALTER TABLE "projection_jobs" ADD COLUMN "status" varchar(32) default 'queued' not null`,
+    `ALTER TABLE "projection_jobs" ADD COLUMN "plugin_id" varchar(160)`,
+    `ALTER TABLE "projection_jobs" ADD COLUMN "max_attempts" integer default 5 not null`,
+    `CREATE INDEX IF NOT EXISTS "projection_jobs_runtime" on "projection_jobs" ("status", "available_at", "id")`,
+  ]) {
+    try {
+      await sql.raw(statement).execute(db);
+    } catch (error) {
+      const message = String((error as { message?: string })?.message ?? error);
+      if (!/duplicate column|already exists/i.test(message)) throw error;
+    }
+  }
 }
 
 async function ensureReactionSchema(db: Kysely<any>) {
@@ -453,6 +478,7 @@ export async function createSchema(db: Kysely<any>) {
     await ensureReactionSchema(db);
     await ensureTemplateSchema(db);
     await ensureAINoteSchema(db);
+    await ensurePlatformRuntimeSchema(db);
     await ensureMobileSchema(db);
     await seedSystemRows(db);
     return;
@@ -469,6 +495,7 @@ export async function createSchema(db: Kysely<any>) {
   await ensureReactionSchema(db);
   await ensureTemplateSchema(db);
   await ensureAINoteSchema(db);
+  await ensurePlatformRuntimeSchema(db);
   await ensureMobileSchema(db);
   await seedSystemRows(db);
 }

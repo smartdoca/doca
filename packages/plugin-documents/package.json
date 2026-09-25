@@ -1,0 +1,61 @@
+{
+  "name": "@doca/plugin-documents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ai": "./src/ai.ts",
+    "./knowledge": "./src/knowledge.ts",
+    "./manifest": "./src/manifest.ts",
+    "./server": "./src/index.ts",
+    "./web": "./src/manifest.ts",
+    "./mobile": "./src/manifest.ts"
+  },
+  "doca": {
+    "manifest": "./src/manifest.ts",
+    "server": "./src/index.ts",
+    "web": "./src/manifest.ts",
+    "mobile": "./src/manifest.ts",
+    "injections": {
+      "required": [
+        "files.v1"
+      ],
+      "optional": [
+        "search.sources.v1",
+        "doca.ai.contributions"
+      ]
+    },
+    "contributions": {
+      "server": [
+        "documents.v1",
+        "documents.routes.v1",
+        "documents.collaboration.v1",
+        "documents.resource-callbacks.v1",
+        "documents.search-source.v1",
+        "documents.knowledge-source.v1",
+        "knowledge.sources.v1"
+      ],
+      "web": [
+        "documents.route",
+        "documents.navigation",
+        "documents.editor",
+        "documents.knowledge-source-settings"
+      ],
+      "mobile": [
+        "documents.route",
+        "documents.navigation",
+        "documents.viewer",
+        "documents.knowledge-source-settings"
+      ]
+    }
+  },
+  "dependencies": {
+    "@doca/ai-host": "workspace:*",
+    "@doca/documents-capability": "workspace:*",
+    "@doca/files-capability": "workspace:*",
+    "@doca/knowledge-capability": "workspace:*",
+    "@doca/plugin-sdk": "workspace:*",
+    "@doca/search-host": "workspace:*"
+  }
+}

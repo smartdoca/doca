@@ -23,6 +23,7 @@ export type FileExtract = {
 };
 
 const running = new Set<string>();
+const activeByDatabase = new WeakMap<DB, Set<Promise<void>>>();
 
 function profileConfig(profile: Schema["storage_profiles"]): StorageConfig {
   return {
@@ -235,7 +236,20 @@ export function beginFileExtract(
   objectId: string,
   runtime: StorageRuntime = storageRuntime(),
 ) {
-  void runExtract(db, objectId, runtime);
+  const active = activeByDatabase.get(db) ?? new Set<Promise<void>>();
+  activeByDatabase.set(db, active);
+  const task = runExtract(db, objectId, runtime)
+    .catch(() => undefined)
+    .finally(() => {
+      active.delete(task);
+    });
+  active.add(task);
+  return task;
+}
+
+export async function waitForFileExtracts(db: DB) {
+  const active = activeByDatabase.get(db);
+  while (active?.size) await Promise.allSettled([...active]);
 }
 
 export async function waitFileExtract(

@@ -1,0 +1,15 @@
+{
+  "name": "@doca/ai-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./events": "./src/events.ts",
+    "./host": "./src/host.ts",
+    "./intents": "./src/intents.ts",
+    "./json": "./src/json.ts",
+    "./registry": "./src/registry.ts",
+    "./tools": "./src/tools.ts"
+  }
+}

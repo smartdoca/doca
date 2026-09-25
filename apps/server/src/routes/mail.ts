@@ -61,7 +61,6 @@ import {
   type MailMessageDetail,
   type StalwartMail,
 } from "../adapters/stalwart.js";
-import type { StorageRuntime } from "../adapters/storage.js";
 import { persistMailAttachments } from "../services/mail-attachments.js";
 import { processProjections } from "@core/modules/automation/jobs.js";
 import { indexMailMessage, queueMailIndex, queueMailboxIndex, reconcileMailIndex, unindexMailMessage } from "../services/mail-index.js";
@@ -77,6 +76,7 @@ import {
   syncMailboxFolder,
 } from "../services/mail-store.js";
 import { createMailReconcileWorker } from "../jobs/mail-reconcile-worker.js";
+import type { FilesServiceV1 } from "@doca/files-capability";
 
 const uuid = Type.String({ format: "uuid" });
 const mailboxRole = Type.Union([
@@ -85,13 +85,16 @@ const mailboxRole = Type.Union([
   Type.Literal("admin"),
 ]);
 
-export type MailRuntime = {
+export type MailRuntimeOptions = {
   client?: StalwartMail;
   fetch?: typeof fetch;
   origin?: string;
-  storage?: StorageRuntime;
   mock?: boolean;
   externalClient?: (credentials: ExternalMailCredentials) => StalwartMail;
+};
+
+export type MailRuntime = MailRuntimeOptions & {
+  files: FilesServiceV1;
 };
 
 export function registerMail(
@@ -99,7 +102,7 @@ export function registerMail(
   db: DB,
   auth: (req: FastifyRequest) => Actor,
   admin: (req: FastifyRequest) => Actor,
-  runtime: MailRuntime = {},
+  runtime: MailRuntime,
 ) {
   const fallbackClient = runtime.client ?? createMemoryStalwart({ seed: !!runtime.mock });
 
@@ -345,8 +348,9 @@ export function registerMail(
   }
 
   async function rememberDetail(mailbox: MailboxRecord, message: MailMessageDetail) {
-    const attachments = await persistMailAttachments(db, mailbox, message, {
-      storage: runtime.storage,
+    const attachments = await persistMailAttachments(mailbox, message, {
+      files: runtime.files,
+      principalId: mailbox.owner_id,
       loadData: async (attachment) => {
         if (attachment.data) return attachment.data;
         try {
@@ -1172,25 +1176,23 @@ export function registerMail(
       const cached = await storedMessage(db, mailbox.id, req.params.id);
       if (cached?.row.body_ready) {
         const files = await db
-          .selectFrom("file_items")
-          .select(["id", "name", "mime", "size", "metadata"])
-          .where("parent_type", "=", "system")
-          .where("parent_id", "=", `mail:${mailbox.id}`)
-          .where("deleted_at", "is", null)
-          .where("metadata", "like", `%"messageId":"${req.params.id}"%`)
+          .selectFrom("file_bindings as b")
+          .innerJoin("file_items as f", "f.id", "b.file_id")
+          .select(["f.id", "f.name", "f.mime", "f.size", "b.role"])
+          .where("b.owner_plugin", "=", "doca.mail")
+          .where("b.owner_type", "=", "message")
+          .where("b.owner_id", "=", `${mailbox.id}:${req.params.id}`)
+          .where("f.deleted_at", "is", null)
           .execute();
         return {
           ...cached.message,
-          attachments: files.map((item) => {
-            const meta = JSON.parse(item.metadata || "{}") as { attachmentId?: string };
-            return {
-              id: meta.attachmentId || item.id,
-              name: item.name,
-              mime: item.mime,
-              size: Number(item.size) || 0,
-              fileId: item.id,
-            };
-          }),
+          attachments: files.map((item) => ({
+            id: item.role,
+            name: item.name,
+            mime: item.mime,
+            size: Number(item.size) || 0,
+            fileId: item.id,
+          })),
         };
       }
       const message = await (await backendFor(mailbox)).getMessage(
@@ -1230,10 +1232,12 @@ export function registerMail(
           ? { name: attachment.name, mime: attachment.mime, data: attachment.data }
           : await stalwart.getAttachment(mailbox.address, req.params.attachmentId, mailbox.secret);
       await persistMailAttachments(
-        db,
         mailbox,
         { ...message, attachments: [{ ...attachment, data: blob.data }] },
-        { storage: runtime.storage },
+        {
+          files: runtime.files,
+          principalId: mailbox.owner_id,
+        },
       ).catch(() => undefined);
       const data = Buffer.from(blob.data, "base64");
       return reply

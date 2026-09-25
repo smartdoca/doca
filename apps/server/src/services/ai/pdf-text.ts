@@ -24,10 +24,17 @@ function inflatePdf(data: Buffer) {
 }
 
 function decodeLiteral(raw: string) {
-  return raw.replace(/\\([0-7]{1,3})|\\(.)/g, (_, octal, ch) =>
+  const escapes: Record<string, string> = {
+    n: "\n",
+    r: "\r",
+    t: "\t",
+    b: "\b",
+    f: "\f",
+  };
+  return raw.replace(/\\([0-7]{1,3})|\\(.)/g, (_, octal: string, ch: string) =>
     octal
       ? String.fromCharCode(parseInt(octal, 8))
-      : ({ n: "\n", r: "\r", t: "\t", b: "\b", f: "\f" }[ch] ?? ch),
+      : (escapes[ch] ?? ch),
   );
 }
 
@@ -167,8 +174,6 @@ async function extractPdfWithPdfjs(body: Buffer) {
   );
   const doc = await pdfjs.getDocument({
     data: new Uint8Array(body),
-    disableWorker: true,
-    isEvalSupported: false,
     useSystemFonts: true,
   }).promise;
   try {
