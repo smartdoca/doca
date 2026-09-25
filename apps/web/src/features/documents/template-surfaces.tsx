@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { blankTemplateContent } from "@core/modules/templates/content.js";
 import { useEffect, useRef, useState } from "react";
 import { createYDocument, readDocument } from "@eppt/editor/core";
@@ -135,6 +136,7 @@ function RichSurface({
   readOnly: boolean;
   onContent?: (read: () => Promise<unknown>) => void;
 }) {
+  const { locale } = useI18n();
   const handle = useRef<RichTextEditorHandle | null>(null);
   useEffect(() => {
     onContent?.(() => Promise.resolve(handle.current?.getValue() ?? content));
@@ -143,6 +145,7 @@ function RichSurface({
   return (
     <div className="template-rich">
       <RichTextEditor
+        locale={locale}
         formulaRenderer={renderKatex}
         plugins={plugins}
         initialValue={content}
@@ -171,6 +174,7 @@ function SheetSurface({
   readOnly: boolean;
   onContent?: (read: () => Promise<unknown>) => void;
 }) {
+  const { locale } = useI18n();
   const [session, setSession] = useState<ExlsxCollaborationSession | null>(null);
   const [workbookId, setWorkbookId] = useState("template");
   const [error, setError] = useState("");
@@ -226,6 +230,7 @@ function SheetSurface({
       {!session && !error && <p className="empty">正在打开表格模板…</p>}
       {session && (
         <SpreadsheetEditor
+          locale={locale}
           workbookId={workbookId}
           collaboration={session}
           runtimeFactory={templateSpreadsheetRuntime}
@@ -249,6 +254,7 @@ function CanvasSurface({
   readOnly: boolean;
   onContent?: (read: () => Promise<unknown>) => void;
 }) {
+  const { locale } = useI18n();
   const [model, setModel] = useState<CanvasModel | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -283,6 +289,7 @@ function CanvasSurface({
       {!model && !error && <p className="empty">正在打开画板模板…</p>}
       {model && (
         <CanvasEditor
+          locale={locale}
           model={model}
           hostManaged
           autoSave={false}
@@ -306,6 +313,7 @@ function SlideSurface({
   readOnly: boolean;
   onContent?: (read: () => Promise<unknown>) => void;
 }) {
+  const { locale } = useI18n();
   const handle = useRef<PresentationWorkspaceHandle | null>(null);
   const [doc, setDoc] = useState<Y.Doc | null>(null);
   useEffect(() => {
@@ -327,6 +335,7 @@ function SlideSurface({
       {!doc && <p className="empty">正在打开演示文稿模板…</p>}
       {doc && (
         <PresentationWorkspace
+          locale={locale}
           ref={handle}
           document={doc}
           chrome="embedded"

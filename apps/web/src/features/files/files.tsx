@@ -33,6 +33,8 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
+import { htmlLang } from "@doca/i18n";
+import { useI18n } from "@web/shared/i18n.js";
 import { createPortal } from "react-dom";
 import { OpenFileViewerPreview } from "./open-file-viewer-preview.js";
 import "@open-file-viewer/core/style.css";
@@ -274,6 +276,8 @@ export function FilesExplorer({
   sharedRoot?: boolean;
 }) {
   const ai = useAI();
+  const { locale } = useI18n();
+  const textLocale = htmlLang(locale);
   const initialTrail = useMemo(() => readFileNavigation(initialRoot), [initialRoot.id]);
   const [location, setLocation] = useState<Location>(() => initialTrail[initialTrail.length - 1] ?? initialRoot);
   const [trail, setTrail] = useState<Location[]>(initialTrail);
@@ -358,15 +362,15 @@ export function FilesExplorer({
       .sort((a, b) => {
         const special = { ai: 0, documents: 1, shared: 2 } as Record<string, number>;
         if (a.virtual || b.virtual) return (special[a.id] ?? 99) - (special[b.id] ?? 99);
-        return a.name.localeCompare(b.name, "zh-CN");
+        return a.name.localeCompare(b.name, textLocale);
       });
-  }, [data, location.id, location.type, search]);
+  }, [data, location.id, location.type, search, textLocale]);
   const visibleFiles = useMemo(() => {
     const q = search.trim().toLocaleLowerCase();
     return (data?.files ?? [])
       .filter((file) => !q || [file.name, file.ai_description].some((value) => value?.toLocaleLowerCase().includes(q)))
-      .sort((a, b) => sortMode === "size" ? b.size - a.size : sortMode === "updated" ? b.updated_at.localeCompare(a.updated_at) : a.name.localeCompare(b.name, "zh-CN"));
-  }, [data, search, sortMode]);
+      .sort((a, b) => sortMode === "size" ? b.size - a.size : sortMode === "updated" ? b.updated_at.localeCompare(a.updated_at) : a.name.localeCompare(b.name, textLocale));
+  }, [data, search, sortMode, textLocale]);
   const items = useMemo(() => [...visibleFolders, ...visibleFiles], [visibleFolders, visibleFiles]);
   const allValues = useMemo<Selectable[]>(() => [
     ...visibleFolders.map((value) => ({ kind: "folder" as const, value })),
@@ -1220,11 +1224,11 @@ export function FilesExplorer({
       .sort((a, b) => {
         const special = { ai: 0, documents: 1, shared: 2 } as Record<string, number>;
         if (a.virtual || b.virtual) return (special[a.id] ?? 99) - (special[b.id] ?? 99);
-        return a.name.localeCompare(b.name, "zh-CN");
+        return a.name.localeCompare(b.name, textLocale);
       });
     const files = page.files
       .filter((file) => !query || file.name.toLocaleLowerCase().includes(query))
-      .sort((a, b) => sortMode === "size" ? b.size - a.size : sortMode === "updated" ? b.updated_at.localeCompare(a.updated_at) : a.name.localeCompare(b.name, "zh-CN"));
+      .sort((a, b) => sortMode === "size" ? b.size - a.size : sortMode === "updated" ? b.updated_at.localeCompare(a.updated_at) : a.name.localeCompare(b.name, textLocale));
     return [...folders.map((value) => ({ kind: "folder" as const, value })), ...files.map((value) => ({ kind: "file" as const, value }))];
   };
   const renderedColumns = columnPages.length ? columnPages : data ? [{ location, page: data }] : [];
@@ -1339,8 +1343,8 @@ export function FilesExplorer({
           {!systemReadonly && <><button onClick={() => { setTransfer({ mode: "move", items: selectedValues.length ? selectedValues : [contextMenu.target!] }); setContextMenu(null); }}><ArrowRight size={14} />移动到…</button><button onClick={() => { setTransfer({ mode: "copy", items: selectedValues.length ? selectedValues : [contextMenu.target!] }); setContextMenu(null); }}><Copy size={14} />复制到…</button></>}
           {systemReadonly && <button onClick={() => void copyToMyFiles(contextMenu.target!)}><Copy size={14} />复制到我的文件夹</button>}
           {contextMenu.target.kind === "folder" && contextMenu.target.value.parent_id === "shared" && <button onClick={() => void openShare(contextMenu.target!.value as FileFolder)}><Share2 size={14} />分享与权限</button>}
-          {contextMenu.target.kind === "folder" && <button onClick={() => { const folder = contextMenu.target!.value; setContextMenu(null); window.location.hash = `/knowledge?source=folder:${folder.id}`; }}><Sparkles size={14} />整理建议</button>}
-          {contextMenu.target.kind === "file" && <button onClick={() => { const file = contextMenu.target!.value as FileItem; setContextMenu(null); void api("/knowledge/files/" + file.id + "/parse", "POST").finally(() => { window.location.hash = `/knowledge?source=file:${file.id}`; }); }}><Sparkles size={14} />解析进知识</button>}
+          {contextMenu.target.kind === "folder" && <button onClick={() => { const folder = contextMenu.target!.value; setContextMenu(null); window.dispatchEvent(new CustomEvent("doca-subscribe-library", { detail: { kind: "folder", id: folder.id, title: folder.name } })); }}><Sparkles size={14} />收入知识库</button>}
+          {contextMenu.target.kind === "file" && <button onClick={() => { const file = contextMenu.target!.value as FileItem; setContextMenu(null); window.dispatchEvent(new CustomEvent("doca-subscribe-library", { detail: { kind: "file", id: file.id, title: file.name } })); }}><Sparkles size={14} />收入知识库</button>}
           {!systemReadonly && <><button onClick={() => void recognize(contextMenu.target)}><Sparkles size={14} />生成 AI 描述</button>
           <button disabled={!!contextMenu.target.value.locked} onClick={renameSelected}><Pencil size={14} />重命名</button>
           <button className="danger" disabled={!!contextMenu.target.value.locked} onClick={() => void requestTrash()}><Trash2 size={14} />移到回收站</button></>}

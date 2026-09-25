@@ -99,6 +99,11 @@ body,
 .library-settings-page h2 {
   margin: 0;
 }
+.library-settings-page .settings-card > p {
+  margin: 8px 0 16px;
+  color: var(--text-secondary, #646a73);
+  font-size: 13px;
+}
 .library-setting-actions {
   display: flex;
   gap: 12px;

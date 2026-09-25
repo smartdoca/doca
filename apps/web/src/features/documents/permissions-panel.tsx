@@ -11,7 +11,8 @@ import {
 import { api, type Detail } from "@web/shared/api.js";
 import { realtime } from "@web/features/documents/realtime.js";
 import { useEntitlements } from "@web/shared/hooks/entitlement-access.js";
-import { accessLabels, type Manager } from "@web/features/documents/access-management.js";
+import { accessText, type Manager } from "@web/features/documents/access-management.js";
+import { useI18n } from "@web/shared/i18n.js";
 import { RequestAccess } from "@web/features/documents/access-tasks.js";
 import { ShareLinkSettings } from "@web/features/documents/sharing.js";
 import { PersonPicker } from "@web/features/documents/person-picker.js";
@@ -68,14 +69,14 @@ const roles = (owner = false) => [
   "editor",
   ...(owner ? ["manager"] : []),
 ];
-const titles = {
-  main: "分享与权限",
-  members: "协作者",
-  invite: "邀请协作者",
-  request: "申请权限",
-  settings: "作品公开",
-  sources: "权限来源",
-};
+const pageTitles = {
+  main: "share.title",
+  members: "share.members",
+  invite: "share.invite",
+  request: "share.request",
+  settings: "share.settings",
+  sources: "share.sources",
+} as const;
 
 export function PermissionDialog({
   detail,
@@ -90,13 +91,14 @@ export function PermissionDialog({
   embedded?: boolean;
   authenticated?: boolean;
 }) {
+  const { t } = useI18n();
   const allowed = useEntitlements(),
     id = detail.resource.id;
   const [data, setData] = useState<Overview | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
-  const [trail, setTrail] = useState<Array<keyof typeof titles>>(["main"]);
+  const [trail, setTrail] = useState<Array<keyof typeof pageTitles>>(["main"]);
   const page = trail[trail.length - 1] ?? "main";
   const [person, setPerson] = useState<{
       id: string;
@@ -163,7 +165,7 @@ export function PermissionDialog({
     panel.current?.querySelector<HTMLButtonElement>("button")?.focus();
     return () => previous?.focus();
   }, [embedded]);
-  function navigate(next: keyof typeof titles) {
+  function navigate(next: keyof typeof pageTitles) {
     setTrail((current) => {
       if (current[current.length - 1] === next) return current;
       if (next === "main") return ["main"];
@@ -289,7 +291,7 @@ export function PermissionDialog({
     <div
       className={`permissions-panel ${embedded ? "permissions-embedded" : "permissions-floating"}`}
       role={embedded ? "region" : "dialog"}
-      aria-label="分享与权限"
+      aria-label={t("share.title")}
       ref={panel}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
@@ -314,7 +316,7 @@ export function PermissionDialog({
               <ArrowLeft size={18} />
             </button>
           )}
-          <h2>{titles[page]}</h2>
+          <h2>{t(pageTitles[page])}</h2>
         </div>
         <div className="permissions-header-actions">
           {data && page === "main" && (
@@ -364,7 +366,7 @@ export function PermissionDialog({
           {!embedded && (
             <button
               className="icon"
-              aria-label="关闭分享与权限"
+              aria-label={t("share.title")}
               onClick={close}
             >
               <X size={18} />
@@ -391,7 +393,7 @@ export function PermissionDialog({
                 <span>未登录用户</span>
               )}
               <span className="permissions-self-role">
-                {accessLabels[data.role] ?? "无权限"}
+                {accessText(t, data.role) === data.role ? t("role.none") : accessText(t, data.role)}
               </span>
               {data.rank < 4 && data.effectiveRequestsEnabled && (
                 <button
@@ -500,7 +502,7 @@ export function PermissionDialog({
                 >
                   {roles(data.isOwner).map((r) => (
                     <option key={r} value={r}>
-                      {accessLabels[r]}
+                      {accessText(t, r)}
                     </option>
                   ))}
                 </Select>
@@ -582,7 +584,7 @@ export function PermissionDialog({
                     >
                       {roles(data.isOwner).map((r) => (
                         <option key={r} value={r}>
-                          {accessLabels[r]}
+                          {accessText(t, r)}
                         </option>
                       ))}
                     </Select>
@@ -595,7 +597,7 @@ export function PermissionDialog({
                 ) : (
                   <>
                     <span className="permissions-member-role">
-                      {accessLabels[m.role]}
+                      {accessText(t, m.role)}
                     </span>
                     <button
                       className="icon permissions-source-button"
@@ -646,7 +648,7 @@ export function PermissionDialog({
           <section className="permissions-source-list">
             <div className="permissions-source-person">
               <UserBadge id={sourceMember.id} name={sourceMember.display_name} />
-              <span>{accessLabels[sourceMember.role] ?? sourceMember.role}</span>
+              <span>{accessText(t, sourceMember.role) ?? sourceMember.role}</span>
             </div>
             {sourceMember.sourceDetails.map((source, index) => {
               const inherited = source.type === "parent_inherited";
@@ -664,7 +666,7 @@ export function PermissionDialog({
                 <div className="permissions-source-card" key={`${source.type}:${source.id ?? index}`}>
                   <div className="permissions-source-card-title">
                     <span>{sourceLabel}</span>
-                    <span>{source.status === "disabled" ? "已禁用" : accessLabels[source.role] ?? source.role}</span>
+                    <span>{source.status === "disabled" ? "已禁用" : accessText(t, source.role) ?? source.role}</span>
                   </div>
                   <div className="permissions-source-card-meta">
                     {supportsDescendants && source.includeDescendants
@@ -685,7 +687,7 @@ export function PermissionDialog({
                           >
                             {roles(data.isOwner).map((roleName) => (
                               <option key={roleName} value={roleName}>
-                                {accessLabels[roleName]}
+                                {accessText(t, roleName)}
                               </option>
                             ))}
                           </Select>
@@ -783,7 +785,7 @@ export function PermissionDialog({
                       >
                         {roles().map((r) => (
                           <option key={r} value={r}>
-                            {accessLabels[r]}
+                            {accessText(t, r)}
                           </option>
                         ))}
                       </Select>

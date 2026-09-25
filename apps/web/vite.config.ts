@@ -112,6 +112,7 @@ export default defineConfig({
       "@web": fileURLToPath(new URL("./src", import.meta.url)),
       "@core": fileURLToPath(new URL("../../packages/core/src", import.meta.url)),
       "@db": fileURLToPath(new URL("../../packages/db/src", import.meta.url)),
+      "@doca/i18n": fileURLToPath(new URL("../../packages/i18n/src/index.ts", import.meta.url)),
       "@napi-rs/canvas": fileURLToPath(new URL("./src/shared/shims/napi-canvas.ts", import.meta.url)),
       "@online-office/univer-sheet/style.css": fileURLToPath(
         new URL(

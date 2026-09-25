@@ -309,3 +309,30 @@ it("keeps mailbox search on starred mail unless the mailbox opts in fully", asyn
   const gone = await request("POST", "/knowledge/search", { query: "园区巡检" });
   expect(gone.json().items).toEqual([]);
 });
+
+it("keeps the structure guide off the document tree until a link is confirmed", async () => {
+  const library = await request("POST", "/resources", { kind: "library", format: "rich_text", title: "凭证库" });
+  expect(library.statusCode, library.body).toBe(200);
+  const id = library.json().id;
+  const guide = await request("POST", `/knowledge/libraries/${id}/guide`, { markdown: "拆分：按来源\n" });
+  expect(guide.statusCode, guide.body).toBe(200);
+  expect(guide.json().splitMode).toBe("source");
+  const source = await request("POST", "/resources", { kind: "document", format: "markdown", title: "凭证说明", markdown: "# 凭证说明\n\n一张入库单。" });
+  expect(source.statusCode, source.body).toBe(200);
+  const subscribed = await request("POST", `/knowledge/libraries/${id}/subscriptions`, { sourceKind: "document", sourceId: source.json().id });
+  expect(subscribed.statusCode, subscribed.body).toBe(200);
+  expect(subscribed.json().status).toBe("pending");
+  expect(subscribed.json().nodeId).toBeNull();
+  const before = await request("GET", `/resources?scope=all&kind=document&libraryId=${id}`);
+  expect(before.json().items).toEqual([]);
+  const enabled = await request("POST", `/knowledge/libraries/${id}/curation`, { enabled: true });
+  expect(enabled.json().aiCurated).toBe(true);
+  const confirmed = await request("POST", `/knowledge/libraries/${id}/subscriptions/${subscribed.json().id}/confirm`, {});
+  expect(confirmed.statusCode, confirmed.body).toBe(200);
+  expect(confirmed.json().status).toBe("active");
+  const after = await request("GET", `/resources?scope=all&kind=document&libraryId=${id}`);
+  expect(after.json().items.map((item: { title: string }) => item.title)).toEqual(["凭证说明"]);
+  const bob = await login("bob");
+  const denied = await request("POST", `/knowledge/libraries/${id}/guide`, { markdown: "拆分：按客户" }, bob);
+  expect(denied.statusCode).toBe(404);
+});

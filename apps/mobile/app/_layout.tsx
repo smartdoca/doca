@@ -10,6 +10,7 @@ import { MD3LightTheme, PaperProvider } from "react-native-paper";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "../src/auth";
 import { colors } from "../src/chrome";
+import { LocaleProvider, useI18n } from "../src/locale";
 import { persistQueryCache, queryClient, restoreQueryCache } from "../src/query-cache";
 
 const theme = {
@@ -24,6 +25,36 @@ const theme = {
     outline: colors.line,
   },
 };
+
+function AppStack() {
+  const { t } = useI18n();
+  return (
+    <>
+      <StatusBar style="dark" />
+      <Stack
+        screenOptions={{
+          headerTintColor: colors.ink,
+          headerStyle: { backgroundColor: "#fff" },
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: colors.bg },
+        }}
+      >
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="document/[id]" options={{ title: t("mobile.screen.document") }} />
+        <Stack.Screen name="library/[id]" options={{ title: t("mobile.screen.library") }} />
+        <Stack.Screen name="folder/[id]" options={{ title: t("mobile.screen.folder") }} />
+        <Stack.Screen name="mailbox/[id]" options={{ title: t("mobile.screen.mailbox") }} />
+        <Stack.Screen name="message/[mailboxId]/[messageId]" options={{ title: t("mobile.screen.message") }} />
+        <Stack.Screen name="ai/[id]" options={{ title: t("mobile.screen.conversation") }} />
+        <Stack.Screen name="note/[id]" options={{ title: t("mobile.screen.note") }} />
+        <Stack.Screen name="compose" options={{ title: t("mobile.screen.compose") }} />
+        <Stack.Screen name="account" options={{ title: t("mobile.screen.account") }} />
+      </Stack>
+    </>
+  );
+}
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -48,27 +79,9 @@ export default function RootLayout() {
             >
             <QueryClientProvider client={queryClient}>
               <AuthProvider>
-                <StatusBar style="dark" />
-                <Stack
-                  screenOptions={{
-                    headerTintColor: colors.ink,
-                    headerStyle: { backgroundColor: "#fff" },
-                    headerShadowVisible: false,
-                    contentStyle: { backgroundColor: colors.bg },
-                  }}
-                >
-                  <Stack.Screen name="index" options={{ headerShown: false }} />
-                  <Stack.Screen name="login" options={{ headerShown: false }} />
-                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                  <Stack.Screen name="document/[id]" options={{ title: "文档" }} />
-                  <Stack.Screen name="library/[id]" options={{ title: "知识库" }} />
-                  <Stack.Screen name="folder/[id]" options={{ title: "文件夹" }} />
-                  <Stack.Screen name="mailbox/[id]" options={{ title: "邮箱" }} />
-                  <Stack.Screen name="message/[mailboxId]/[messageId]" options={{ title: "邮件" }} />
-                  <Stack.Screen name="ai/[id]" options={{ title: "对话" }} />
-                  <Stack.Screen name="note/[id]" options={{ title: "随手记" }} />
-                  <Stack.Screen name="compose" options={{ title: "写邮件" }} />
-                </Stack>
+                <LocaleProvider>
+                  <AppStack />
+                </LocaleProvider>
               </AuthProvider>
             </QueryClientProvider>
           </PaperProvider>

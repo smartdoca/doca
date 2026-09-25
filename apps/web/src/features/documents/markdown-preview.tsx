@@ -1,4 +1,5 @@
 import { MarkdownPreview } from "exmd-collaborative-editor";
+import { useI18n } from "@web/shared/i18n.js";
 import { assetUrl } from "@web/shared/api.js";
 import { platformAssetId } from "@web/shared/utils/asset-path.js";
 import "exmd-collaborative-editor/style.css";
@@ -13,9 +14,11 @@ export default function Preview({
   trash?: boolean;
   audit?: boolean;
 }) {
+  const { locale } = useI18n();
   return (
     <div className="doca-markdown markdown-preview-only">
       <MarkdownPreview
+        locale={locale}
         value={value}
         resolveImageUrl={(path) =>
           platformAssetId(path)

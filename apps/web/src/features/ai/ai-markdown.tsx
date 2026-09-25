@@ -1,7 +1,8 @@
 import { Image, Spin, Checkbox } from "antd";
 import { memo } from "react";
 import { CodeHighlighter, Mermaid, XProvider } from "@ant-design/x";
-import xZhCN from "@ant-design/x/locale/zh_CN";
+import { antDesignXLocale } from "@web/shared/antd-locale.js";
+import { useI18n } from "@web/shared/i18n.js";
 import XMarkdown, { type ComponentProps } from "@ant-design/x-markdown";
 import "@ant-design/x-markdown/themes/light.css";
 import Latex from "@ant-design/x-markdown/plugins/Latex";
@@ -180,13 +181,14 @@ function AIAnswer({
   ensureFolderCards?: boolean;
   streaming?: boolean;
 }) {
+  const { locale } = useI18n();
   const segments = answerSegments(text, folders, {
     ensureCards: ensureFolderCards,
     files,
     mails,
   });
   return (
-    <XProvider locale={xZhCN}>
+    <XProvider locale={antDesignXLocale(locale)}>
       <div
         className="ai-answer"
         onClickCapture={(event) => {

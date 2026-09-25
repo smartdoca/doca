@@ -1,0 +1,57 @@
+.library-system {
+  padding: 28px 32px 48px;
+  color: #1f2329;
+}
+.library-system header h2 { margin: 0; font-size: 20px; }
+.library-system header p { margin: 8px 0 0; color: #646a73; font-size: 13px; }
+.library-system header button { margin-top: 12px; }
+.library-system-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.library-system section {
+  min-width: 0;
+  border: 1px solid #e6e8ec;
+  border-radius: 12px;
+  background: #fff;
+}
+.library-system h3 { margin: 0; padding: 14px 16px 8px; font-size: 14px; }
+.library-system ul { list-style: none; margin: 0; padding: 0 8px 12px; }
+.library-system li { padding: 8px; }
+.library-system li button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+.library-system li strong, .library-system li small { display: block; }
+.library-system li small { margin-top: 2px; color: #8f959e; font-size: 12px; }
+.library-system-empty { color: #8f959e; font-size: 12px; }
+.library-system form { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 16px; }
+.library-system textarea {
+  width: 100%;
+  min-height: 180px;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font: inherit;
+  resize: vertical;
+}
+.library-system form input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+.subscribe-library-pick { display: grid; gap: 6px; margin: 12px 0; font-size: 13px; }
+.subscribe-library-pick select { height: 34px; }
+@media (max-width: 800px) {
+  .library-system { padding: 16px; }
+  .library-system-columns { grid-template-columns: 1fr; }
+}

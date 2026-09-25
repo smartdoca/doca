@@ -48,6 +48,8 @@ import { DistributionSettings } from "@web/features/settings/distribution-settin
 import { FileRecognitionSettings } from "@web/features/admin/file-recognition-settings.js";
 import { MailSettings } from "@web/features/admin/mail-settings.js";
 import { TemplateSettings } from "@web/features/admin/template-settings.js";
+import { useI18n } from "@web/shared/i18n.js";
+import type { MessageKey } from "@doca/i18n";
 
 type Member = {
   id: string;
@@ -64,54 +66,57 @@ type Member = {
   loginMethods: string[];
 };
 type Settings = { site_name: string; registration: number; revision: number };
-const sectionGroups = [
+const sectionGroups: {
+  group: MessageKey;
+  items: { id: string; label: MessageKey; Icon: typeof LayoutDashboard }[];
+}[] = [
   {
-    group: "概览",
-    items: [{ id: "overview", label: "数据概览", Icon: LayoutDashboard }],
+    group: "admin.group.overview",
+    items: [{ id: "overview", label: "admin.overview", Icon: LayoutDashboard }],
   },
   {
-    group: "账号与成员",
+    group: "admin.group.accounts",
     items: [
-      { id: "login", label: "登录与注册", Icon: KeyRound },
-      { id: "users", label: "用户管理", Icon: Users },
-      { id: "registration", label: "注册审核", Icon: UserRound },
-      { id: "levels", label: "等级与会员", Icon: ShieldCheck },
+      { id: "login", label: "admin.login", Icon: KeyRound },
+      { id: "users", label: "admin.users", Icon: Users },
+      { id: "registration", label: "admin.registration", Icon: UserRound },
+      { id: "levels", label: "admin.levels", Icon: ShieldCheck },
     ],
   },
   {
-    group: "内容与治理",
+    group: "admin.group.content",
     items: [
-      { id: "access", label: "权限与可见性", Icon: LockKeyhole },
-      { id: "moderation", label: "内容审核", Icon: ShieldCheck },
-      { id: "templates", label: "文档模板", Icon: LayoutTemplate },
+      { id: "access", label: "admin.access", Icon: LockKeyhole },
+      { id: "moderation", label: "admin.moderation", Icon: ShieldCheck },
+      { id: "templates", label: "admin.templates", Icon: LayoutTemplate },
     ],
   },
   {
-    group: "智能能力",
+    group: "admin.group.intelligence",
     items: [
-      { id: "ai", label: "AI 能力", Icon: SettingsIcon },
-      { id: "file-recognition", label: "文件识别", Icon: ScanText },
+      { id: "ai", label: "admin.ai", Icon: SettingsIcon },
+      { id: "file-recognition", label: "admin.recognition", Icon: ScanText },
     ],
   },
   {
-    group: "系统与集成",
+    group: "admin.group.system",
     items: [
-      { id: "platform", label: "站点与服务", Icon: SettingsIcon },
-      { id: "mail", label: "邮箱系统", Icon: Mail },
-      { id: "hooks", label: "Webhook 管理", Icon: Webhook },
+      { id: "platform", label: "admin.platform", Icon: SettingsIcon },
+      { id: "mail", label: "admin.mail", Icon: Mail },
+      { id: "hooks", label: "admin.hooks", Icon: Webhook },
     ],
   },
 ];
 const sections = sectionGroups.flatMap((g) => g.items);
-const platformSections = [
-  ["general", "站点信息"],
-  ["cards", "用户体验"],
-  ["storage", "文件与存储"],
-  ["search", "搜索与发现"],
+const platformSections: [string, MessageKey][] = [
+  ["general", "admin.siteInfo"],
+  ["cards", "admin.experience"],
+  ["storage", "admin.files"],
+  ["search", "admin.search"],
 ];
-const accessSections = [
-  ["permissions", "内容权限"],
-  ["directory", "用户目录"],
+const accessSections: [string, MessageKey][] = [
+  ["permissions", "admin.contentAccess"],
+  ["directory", "admin.directory"],
 ];
 type AdminRoute = {
   tab: string;
@@ -132,6 +137,7 @@ function readAdminRoute(): AdminRoute {
   return { tab, platformTab, accessTab };
 }
 export function Admin() {
+  const { t } = useI18n();
   const [accountTarget, setAccountTarget] = useState<string | null>(null),
     [membershipTarget, setMembershipTarget] = useState<string | null>(null),
     [selected, setSelected] = useState<string[]>([]),
@@ -267,16 +273,16 @@ export function Admin() {
           <ShieldCheck size={24} />
         </span>
         <div>
-          <h1>管理中心</h1>
-          <p>管理站点、成员、内容与服务能力</p>
+          <h1>{t("admin.title")}</h1>
+          <p>{t("admin.subtitle")}</p>
         </div>
-        <span className="status-badge">管理员</span>
+        <span className="status-badge">{t("admin.badge")}</span>
       </div>
       <div className="admin-layout">
-        <nav className="admin-nav" aria-label="管理模块">
+        <nav className="admin-nav" aria-label={t("admin.nav")}>
           {sectionGroups.map(({ group, items }) => (
             <div className="admin-nav-group" key={group}>
-              <h2>{group}</h2>
+              <h2>{t(group)}</h2>
               {items.map(({ id, label, Icon }) => (
                 <button
                   key={id}
@@ -289,18 +295,14 @@ export function Admin() {
                   }}
                 >
                   <Icon size={18} />
-                  {label}
+                  {t(label)}
                 </button>
               ))}
             </div>
           ))}
           <div className="admin-nav-note">
             <LockKeyhole size={16} />
-            <p>
-              内容审核中的文档查看
-              <br />
-              与处置操作均保留审计记录
-            </p>
+            <p>{t("admin.navNote")}</p>
           </div>
         </nav>
         <main className="admin-content">
@@ -312,50 +314,54 @@ export function Admin() {
             <>
               <div className="admin-section-heading">
                 <div>
-                  <h2>数据概览</h2>
-                  <p>了解本站的内容积累与用户使用情况。</p>
+                  <h2>{t("admin.overview")}</h2>
+                  <p>{t("admin.overviewLead")}</p>
                 </div>
                 <button
                   className="quiet-button"
                   disabled={busy}
-                  onClick={() => void act(async () => {}, "统计已更新")}
+                  onClick={() => void act(async () => {}, t("admin.refreshed"))}
                 >
                   <RefreshCw size={15} />
-                  刷新
+                  {t("admin.refresh")}
                 </button>
               </div>
               <div className="admin-stats">
                 {[
                   {
-                    label: "文档总数",
+                    id: "documents",
+                    label: t("admin.documents"),
                     value: stats?.documents,
                     Icon: FileText,
                     tone: "blue",
-                    hint: "个人文档与知识库文档",
+                    hint: t("admin.documentsHint"),
                   },
                   {
-                    label: "知识库",
+                    id: "libraries",
+                    label: t("admin.libraries"),
                     value: stats?.libraries,
                     Icon: BookOpen,
                     tone: "purple",
-                    hint: "不含回收站内容",
+                    hint: t("admin.librariesHint"),
                   },
                   {
-                    label: "用户总数",
+                    id: "users",
+                    label: t("admin.usersCount"),
                     value: stats?.users,
                     Icon: Users,
                     tone: "green",
-                    hint: "本站全部账号",
+                    hint: t("admin.usersHint"),
                   },
                   {
-                    label: "当前在线",
+                    id: "online",
+                    label: t("admin.online"),
                     value: stats?.online,
                     Icon: Activity,
                     tone: "orange",
-                    hint: "实时连接用户 · 多标签页去重",
+                    hint: t("admin.onlineHint"),
                   },
-                ].map(({ label, value, Icon, tone, hint }) => (
-                  <article className="admin-stat" key={label}>
+                ].map(({ id, label, value, Icon, tone, hint }) => (
+                  <article className="admin-stat" key={id}>
                     <span className={"stat-icon " + tone}>
                       <Icon size={21} />
                     </span>
@@ -367,7 +373,7 @@ export function Admin() {
               </div>
               <section className="admin-card">
                 <div className="card-heading">
-                  <h3>站点服务</h3>
+                  <h3>{t("admin.services")}</h3>
                   <span className="subtle">
                     {settings?.site_name ?? "Doca"}
                   </span>
@@ -377,13 +383,14 @@ export function Admin() {
                     <KeyRound size={20} />
                   </span>
                   <span>
-                    <strong>账号与登录</strong>
+                    <strong>{t("admin.accounts")}</strong>
                     <small>
-                      本地账号密码登录 ·{" "}
-                      {settings?.registration ? "开放注册" : "仅管理员创建账号"}
+                      {settings?.registration
+                        ? t("admin.accountsOpen")
+                        : t("admin.accountsClosed")}
                     </small>
                   </span>
-                  <span className="status-badge success">已启用</span>
+                  <span className="status-badge success">{t("admin.enabled")}</span>
                   <ArrowUpRight size={17} />
                 </button>
                 <button
@@ -396,10 +403,10 @@ export function Admin() {
                     <HardDrive size={20} />
                   </span>
                   <span>
-                    <strong>文件存储</strong>
-                    <small>头像、封面、图片和附件统一配置</small>
+                    <strong>{t("admin.storage")}</strong>
+                    <small>{t("admin.storageHint")}</small>
                   </span>
-                  <span className="subtle">查看配置</span>
+                  <span className="subtle">{t("admin.viewConfig")}</span>
                   <ArrowUpRight size={17} />
                 </button>
                 <button className="service-row" onClick={() => navigateAdmin({ tab: "hooks" })}>
@@ -407,18 +414,16 @@ export function Admin() {
                     <Webhook size={20} />
                   </span>
                   <span>
-                    <strong>事件回调</strong>
-                    <small>文档与用户事件的外部集成</small>
+                    <strong>{t("admin.webhooks")}</strong>
+                    <small>{t("admin.webhooksHint")}</small>
                   </span>
-                  <span className="subtle">查看配置</span>
+                  <span className="subtle">{t("admin.viewConfig")}</span>
                   <ArrowUpRight size={17} />
                 </button>
               </section>
               <div className="admin-note">
                 <ShieldCheck size={19} />
-                <p>
-                  这里只展示汇总统计，不展示用户私有内容。文档权限仍由拥有者和文档管理员管理。
-                </p>
+                <p>{t("admin.privacy")}</p>
               </div>
             </>
           )}
@@ -429,7 +434,7 @@ export function Admin() {
             <>
               <div className="admin-section-heading">
                 <div>
-                  <h2>用户管理</h2>
+                  <h2>{t("admin.users")}</h2>
                   <p>创建账号，管理访问状态，并在密码丢失时重置密码。</p>
                 </div>
                 <button
@@ -663,7 +668,7 @@ export function Admin() {
             <>
               <div className="admin-section-heading">
                 <div>
-                  <h2>登录与注册</h2>
+                  <h2>{t("admin.login")}</h2>
                   <p>设置登录方式与新用户的加入规则。</p>
                 </div>
               </div>
@@ -674,14 +679,14 @@ export function Admin() {
             <>
               <div className="admin-section-heading">
                 <div>
-                  <h2>站点与服务</h2>
-                  <p>统一管理站点信息、用户体验、文件存储与搜索能力。</p>
+                  <h2>{t("admin.platform")}</h2>
+                  <p>{t("admin.platformLead")}</p>
                 </div>
               </div>
               <div className="settings-tabs-column">
                 <nav
                   className="platform-settings-tabs"
-                  aria-label="站点与服务设置分类"
+                  aria-label={t("admin.platformTabs")}
                 >
                   {platformSections.map(([id, label]) => (
                     <button
@@ -690,7 +695,7 @@ export function Admin() {
                       aria-current={platformTab === id ? "page" : undefined}
                       onClick={() => navigateAdmin({ platformTab: id! })}
                     >
-                      {label}
+                      {t(label)}
                     </button>
                   ))}
                 </nav>
@@ -714,7 +719,7 @@ export function Admin() {
                   }}
                 >
                   <div className="card-heading">
-                    <h3>基本设置</h3>
+                    <h3>{t("admin.general")}</h3>
                   </div>
                   <label className="site-name-field">
                     站点名称
@@ -743,14 +748,14 @@ export function Admin() {
             <>
               <div className="admin-section-heading">
                 <div>
-                  <h2>权限与可见性</h2>
-                  <p>管理内容权限、成员可见范围与用户发现规则。</p>
+                  <h2>{t("admin.access")}</h2>
+                  <p>{t("admin.accessLead")}</p>
                 </div>
               </div>
               <div className="settings-tabs-column">
                 <nav
                   className="platform-settings-tabs"
-                  aria-label="内容权限设置分类"
+                  aria-label={t("admin.accessTabs")}
                 >
                   {accessSections.map(([id, label]) => (
                     <button
@@ -759,7 +764,7 @@ export function Admin() {
                       aria-current={accessTab === id ? "page" : undefined}
                       onClick={() => navigateAdmin({ accessTab: id! })}
                     >
-                      {label}
+                      {t(label)}
                     </button>
                   ))}
                 </nav>

@@ -2,20 +2,23 @@ import { useNavigation, useRouter } from "expo-router";
 import { useLayoutEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { Text } from "react-native-paper";
+import { localeLabel, locales } from "@doca/i18n";
 import { useAuth } from "../src/auth";
 import { colors } from "../src/chrome";
+import { useI18n } from "../src/locale";
 import { normalizeOrigin } from "../src/session";
 
 export default function Settings() {
   const navigation = useNavigation();
   const router = useRouter();
   const { session, accounts, switchServer, signOut } = useAuth();
+  const { locale, setLocale, t } = useI18n();
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
 
   useLayoutEffect(() => {
-    navigation.setOptions({ title: "设置" });
-  }, [navigation]);
+    navigation.setOptions({ title: t("mobile.settings.title") });
+  }, [navigation, t]);
 
   async function addServer() {
     setError("");
@@ -27,25 +30,35 @@ export default function Settings() {
       }
       router.push({ pathname: "/login", params: { add: "1", origin } });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "服务器地址无效");
+      setError(reason instanceof Error ? reason.message : t("mobile.settings.invalidServer"));
     }
   }
 
   function logout() {
-    Alert.alert("退出当前服务器", "只退出现在这个服务器，其他已保存的登录会保留。", [
-      { text: "取消", style: "cancel" },
-      { text: "退出", style: "destructive", onPress: () => void signOut() },
+    Alert.alert(t("mobile.settings.signOutTitle"), t("mobile.settings.signOutBody"), [
+      { text: t("mobile.settings.cancel"), style: "cancel" },
+      { text: t("mobile.settings.signOut"), style: "destructive", onPress: () => void signOut() },
     ]);
   }
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-      <Text style={styles.section}>当前服务器</Text>
+      <Text style={styles.section}>{t("settings.language")}</Text>
       <View style={styles.card}>
-        <Text style={styles.name}>{session?.name || "未登录"}</Text>
+        {locales.map((code) => (
+          <Pressable key={code} style={styles.row} onPress={() => void setLocale(code)}>
+            <Text style={styles.name}>{t(localeLabel[code])}</Text>
+            <Text style={styles.mark}>{locale === code ? t("mobile.settings.current") : ""}</Text>
+          </Pressable>
+        ))}
+        <Text style={styles.note}>{t("settings.language.hint")}</Text>
+      </View>
+      <Text style={styles.section}>{t("mobile.settings.currentServer")}</Text>
+      <View style={styles.card}>
+        <Text style={styles.name}>{session?.name || t("mobile.settings.signedOut")}</Text>
         <Text style={styles.origin}>{session?.origin}</Text>
       </View>
-      <Text style={styles.section}>已保存的服务器</Text>
+      <Text style={styles.section}>{t("mobile.settings.savedServers")}</Text>
       <View style={styles.card}>
         {accounts.map((account) => {
           const current = account.origin === session?.origin;
@@ -59,13 +72,13 @@ export default function Settings() {
                 <Text style={styles.name}>{account.name}</Text>
                 <Text style={styles.origin} numberOfLines={1}>{account.origin}</Text>
               </View>
-              <Text style={styles.mark}>{current ? "当前" : "切换"}</Text>
+              <Text style={styles.mark}>{current ? t("mobile.settings.current") : t("mobile.settings.switch")}</Text>
             </Pressable>
           );
         })}
-        {!accounts.length ? <Text style={styles.origin}>还没有保存的服务器</Text> : null}
+        {!accounts.length ? <Text style={styles.origin}>{t("mobile.settings.noneSaved")}</Text> : null}
       </View>
-      <Text style={styles.section}>添加服务器</Text>
+      <Text style={styles.section}>{t("mobile.settings.addServer")}</Text>
       <View style={styles.card}>
         <TextInput
           value={draft}
@@ -78,15 +91,18 @@ export default function Settings() {
         />
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Pressable style={styles.button} onPress={() => void addServer()}>
-          <Text style={styles.buttonText}>添加</Text>
+          <Text style={styles.buttonText}>{t("mobile.settings.add")}</Text>
         </Pressable>
-        <Text style={styles.note}>每个服务器各自保存登录。切换地址不会退出其他服务器。</Text>
+        <Text style={styles.note}>{t("mobile.settings.addNote")}</Text>
       </View>
+      <Pressable style={styles.action} onPress={() => router.push("/account")}>
+        <Text style={styles.actionText}>{t("account.profile")}</Text>
+      </Pressable>
       <Pressable style={styles.action} onPress={() => router.push("/scan")}>
-        <Text style={styles.actionText}>扫码登录网页</Text>
+        <Text style={styles.actionText}>{t("mobile.settings.scan")}</Text>
       </Pressable>
       <Pressable style={styles.action} onPress={logout}>
-        <Text style={styles.danger}>退出当前服务器</Text>
+        <Text style={styles.danger}>{t("mobile.settings.signOutServer")}</Text>
       </Pressable>
     </ScrollView>
   );

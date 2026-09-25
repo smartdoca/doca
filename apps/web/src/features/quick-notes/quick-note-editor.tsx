@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useI18n } from "@web/shared/i18n.js";
 import { Editor, Element, Node, Transforms } from "slate";
 import {
   RichTextEditor,
@@ -101,6 +102,7 @@ export function QuickNoteEditor({
   disabled?: boolean;
   autoFocus?: boolean;
 }) {
+  const { locale, t } = useI18n();
   const handle = useRef<RichTextEditorHandle | null>(null);
   const callbacks = useRef({ onChange, upload, onUploading });
   callbacks.current = { onChange, upload, onUploading };
@@ -238,8 +240,8 @@ export function QuickNoteEditor({
           ))}
           <button
             type="button"
-            aria-label="撤销"
-            title="撤销"
+            aria-label={t("toolbar.undo")}
+            title={t("toolbar.undo")}
             disabled={disabled}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => command((h) => h.commands.undo())}
@@ -248,8 +250,8 @@ export function QuickNoteEditor({
           </button>
           <button
             type="button"
-            aria-label="重做"
-            title="重做"
+            aria-label={t("toolbar.redo")}
+            title={t("toolbar.redo")}
             disabled={disabled}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => command((h) => h.commands.redo())}
@@ -259,11 +261,12 @@ export function QuickNoteEditor({
         </div>
       )}
       <RichTextEditor
+        locale={locale}
         initialValue={initial}
         autoFocus={autoFocus}
         firstLineTitle={false}
-        ariaLabel="随手记正文"
-        placeholder="记你想记…"
+        ariaLabel={t("editor.noteLabel")}
+        placeholder={t("editor.notePlaceholder")}
         mode={disabled ? "readonly" : "edit"}
         plugins={notePlugins}
         resources={resources}
@@ -306,11 +309,13 @@ export function QuickNoteEditor({
 }
 
 export function QuickNoteBody({ content }: { content: NoteContent }) {
+  const { locale } = useI18n();
   const value = useMemo(() => displayNoteContent(content), [content]);
   if (!value.length) return null;
   return (
     <div className="note-body">
       <RichTextEditor
+        locale={locale}
         key={JSON.stringify(value)}
         initialValue={value}
         mode="readonly"

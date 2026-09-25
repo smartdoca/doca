@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useAI } from "@web/features/ai/ai-context.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -88,6 +89,7 @@ export default function SheetDocument({
   targetComment?: string | null;
   loadMoreComments?: () => Promise<void>;
 }) {
+  const { locale } = useI18n();
   const id = detail.resource.id,
     sync = useSurfaceSync(
       id,
@@ -316,6 +318,7 @@ export default function SheetDocument({
       )}
       {session ? (
         <SpreadsheetEditor
+          locale={locale}
           toolbarLayout="two-row"
           menus={menus}
           renderCellObject={(object) => renderSheetObject(object, setFilePreview)}

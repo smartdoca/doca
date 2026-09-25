@@ -1,5 +1,6 @@
 import { BookOpen, FileText, FileCode2, Table2, Presentation, SquarePen } from "lucide-react";
 import { Select } from "@web/shared/components/select.js";
+import { useI18n } from "@web/shared/i18n.js";
 import type { Resource } from "@web/shared/api.js";
 import "@web/features/documents/document-icons.css";
 
@@ -35,17 +36,18 @@ export function TypeFilter({
   value: string;
   change: (v: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <Select
-      aria-label="文档类型"
+      aria-label={t("doc.filterType")}
       value={value}
       onChange={(e) => change(e.target.value)}
     >
-      <option value="">全部类型</option>
-      <option value="rich_text">文档</option>
-      <option value="spreadsheet">表格</option>
-      <option value="presentation">演示文稿</option>
-      <option value="markdown">Markdown</option>
+      <option value="">{t("doc.filter.all")}</option>
+      <option value="rich_text">{t("shell.type.rich")}</option>
+      <option value="spreadsheet">{t("shell.type.sheet")}</option>
+      <option value="presentation">{t("shell.type.slides")}</option>
+      <option value="markdown">{t("shell.type.markdown")}</option>
     </Select>
   );
 }

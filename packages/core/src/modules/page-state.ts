@@ -1,3 +1,5 @@
+import { isLocale } from "@doca/i18n";
+
 /** Per-user page state. Mail scratches are keyed by mailbox; UI keys are shared preferences the assistant can read and update. */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -51,7 +53,7 @@ export function parsePageStateKey(key: string): PageStateKey | null {
 
 export function normalizePageStateValue(key: PageStateKey, value: unknown): unknown {
   if (key === "ui.locale") {
-    if (value !== "zh" && value !== "en") throw new Error("语言只能是中文或英文");
+    if (!isLocale(value)) throw new Error("invalid_locale");
     return value;
   }
   if (key === "ui.filesView") {

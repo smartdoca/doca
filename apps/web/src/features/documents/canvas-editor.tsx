@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useAI } from "@web/features/ai/ai-context.js";
 import { useDocumentReadOnly } from "@web/features/documents/document-mode.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -69,6 +70,7 @@ export default function CanvasDocument({
   targetComment?: string | null;
   loadMoreComments?: () => Promise<void>;
 }) {
+  const { locale, t } = useI18n();
   const ai = useAI();
   const aiRef = useRef(ai);
   aiRef.current = ai;
@@ -84,24 +86,24 @@ export default function CanvasDocument({
     () => [
       {
         id: "doca.ai",
-        label: "引用给 AI",
+        label: t("editor.citeAi"),
         icon: <span>@</span>,
         allowInReadOnly: true,
-        tooltip: "引用给 AI",
+        tooltip: t("editor.citeAi"),
         onClick: () => aiRef.current?.add(),
       },
       {
         id: "doca.comment",
-        label: "评论选中区域",
+        label: t("editor.commentSelection"),
         icon: <MessageSquare className="canvas-comment-icon" size={20} />,
         allowInReadOnly: true,
-        tooltip: "评论选中区域",
+        tooltip: t("editor.commentSelection"),
         disabled: () => rank < 2 || !sync.connected || sync.blocked,
         visible: () => rank >= 2 && sync.connected,
         onClick: () => createComment.current(),
       },
     ],
-    [rank, sync.connected, sync.blocked],
+    [rank, sync.connected, sync.blocked, t],
   );
   const ref = useRef<CanvasEditorRef>(null),
     [handle, setHandle] = useState<CanvasEditorRef | null>(null),
@@ -327,6 +329,7 @@ export default function CanvasDocument({
           }}
           render={() => (
             <CanvasEditor
+              locale={locale}
               showLayers={false}
               selectionActions={selectionActions}
               model={model}

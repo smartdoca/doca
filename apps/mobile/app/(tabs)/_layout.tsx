@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Drawer } from "react-native-drawer-layout";
-import { Tabs, useRouter } from "expo-router";
-import { BookOpen, FolderOpen, Home, Mail, Settings, Sparkles, StickyNote } from "lucide-react-native";
+import { Tabs, useRouter, useSegments } from "expo-router";
+import { BookOpen, ChevronRight, FolderOpen, Home, Mail, Settings, Sparkles, StickyNote } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { IconButton } from "react-native-paper";
@@ -13,12 +13,49 @@ import { colors } from "../../src/chrome";
 
 type AiSession = { id: string; title: string };
 
-function SideMenu({ close }: { close: () => void }) {
+function AccountMenu({ close }: { close: () => void }) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { session } = useAuth();
+  const initial = (session?.name || "我").slice(0, 1);
+
+  function open(path: "/account" | "/mail" | "/settings") {
+    close();
+    router.push(path);
+  }
+
+  return (
+    <View style={[styles.menu, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 12 }]}>
+      <Pressable style={styles.user} onPress={() => open("/account")}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initial}</Text>
+        </View>
+        <View style={styles.userCopy}>
+          <Text style={styles.name}>{session?.name || "未登录"}</Text>
+          <Text style={styles.origin} numberOfLines={1}>
+            个人信息
+          </Text>
+        </View>
+        <ChevronRight color={colors.muted} size={18} />
+      </Pressable>
+      <Text style={styles.section}>账户</Text>
+      <Pressable style={styles.item} onPress={() => open("/mail")}>
+        <Mail color={colors.accent} size={18} />
+        <Text style={styles.itemText}>邮箱</Text>
+      </Pressable>
+      <Pressable style={styles.item} onPress={() => open("/settings")}>
+        <Settings color={colors.accent} size={18} />
+        <Text style={styles.itemText}>设置</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function SessionMenu({ close }: { close: () => void }) {
   const router = useRouter();
   const client = useQueryClient();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
-  const initial = (session?.name || "我").slice(0, 1);
   const [menuError, setMenuError] = useState("");
   const sessions = useQuery({
     queryKey: ["ai-sessions", session?.origin],
@@ -55,40 +92,8 @@ function SideMenu({ close }: { close: () => void }) {
 
   return (
     <View style={[styles.menu, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 12 }]}>
-      <View style={styles.user}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initial}</Text>
-        </View>
-        <View style={styles.userCopy}>
-          <Text style={styles.name}>{session?.name || "未登录"}</Text>
-          <Text style={styles.origin} numberOfLines={1}>
-            {session?.origin?.replace(/^https?:\/\//, "")}
-          </Text>
-        </View>
-      </View>
-      <Text style={styles.section}>账户</Text>
-      <Pressable
-        style={styles.item}
-        onPress={() => {
-          close();
-          router.push("/mail");
-        }}
-      >
-        <Mail color={colors.accent} size={18} />
-        <Text style={styles.itemText}>邮箱</Text>
-      </Pressable>
-      <Pressable
-        style={styles.item}
-        onPress={() => {
-          close();
-          router.push("/settings");
-        }}
-      >
-        <Settings color={colors.accent} size={18} />
-        <Text style={styles.itemText}>设置</Text>
-      </Pressable>
       <View style={styles.sessionHead}>
-        <Text style={styles.section}>AI 会话</Text>
+        <Text style={styles.section}>对话</Text>
         <Pressable onPress={() => void createSession()}>
           <Text style={styles.link}>新对话</Text>
         </Pressable>
@@ -110,6 +115,7 @@ function SideMenu({ close }: { close: () => void }) {
 
 export default function TabsLayout() {
   const [open, setOpen] = useState(false);
+  const ai = useSegments().includes("ai");
   return (
     <Drawer
       open={open}
@@ -117,7 +123,9 @@ export default function TabsLayout() {
       onClose={() => setOpen(false)}
       swipeEdgeWidth={28}
       drawerStyle={styles.drawer}
-      renderDrawerContent={() => <SideMenu close={() => setOpen(false)} />}
+      renderDrawerContent={() =>
+        ai ? <SessionMenu close={() => setOpen(false)} /> : <AccountMenu close={() => setOpen(false)} />
+      }
     >
       <Tabs
         screenOptions={{

@@ -9,6 +9,8 @@ import {
 import { api, type Me, type User } from "@web/shared/api.js";
 import { Avatar } from "@web/features/account/profile.js";
 import { MembershipIcon } from "@web/features/settings/membership-icon.js";
+import { htmlLang } from "@doca/i18n";
+import { useI18n } from "@web/shared/i18n.js";
 export function AccountMenu({
   user,
   me,
@@ -24,6 +26,7 @@ export function AccountMenu({
   refresh: () => Promise<void>;
   showWorkspaceLink?: boolean;
 }) {
+  const { locale, t } = useI18n();
   const root = useRef<HTMLDetailsElement>(null),
     [busy, setBusy] = useState(false);
   const close = () => {
@@ -61,7 +64,9 @@ export function AccountMenu({
       </span>
       {membership.expiresAt && (
         <small>
-          到期时间：{new Date(membership.expiresAt).toLocaleDateString("zh-CN")}
+          {t("account.expires", {
+            date: new Date(membership.expiresAt).toLocaleDateString(htmlLang(locale)),
+          })}
         </small>
       )}
     </>
@@ -75,7 +80,7 @@ export function AccountMenu({
           void refresh().catch((e) => onError(e.message));
       }}
     >
-      <summary aria-label="用户菜单" title="用户菜单">
+      <summary aria-label={t("account.menu")} title={t("account.menu")}>
         <Avatar
           name={displayName}
           avatar={me?.preferences.avatar}
@@ -122,24 +127,24 @@ export function AccountMenu({
             </div>
           )}
         </div>
-        <nav aria-label="账号菜单">
+        <nav aria-label={t("account.menuNav")}>
           <a href="#/account" onClick={close}>
             <UserRound size={16} />
-            个人信息
+            {t("account.profile")}
           </a>
           <a href="#/preferences" onClick={close}>
             <Settings size={16} />
-            系统设置
+            {t("account.settings")}
           </a>
           {user.admin && (
             <a href="#/admin" onClick={close}>
               <ShieldCheck size={16} />
-              管理员后台
+              {t("account.admin")}
             </a>
           )}
           {showWorkspaceLink && <a href="#/home" onClick={close}>
             <House size={16} />
-            返回工作台
+            {t("account.workspace")}
           </a>}
           <button
             type="button"
@@ -149,7 +154,7 @@ export function AccountMenu({
             }}
           >
             <LogOut size={16} />
-            退出登录
+            {t("account.signOut")}
           </button>
         </nav>
       </div>

@@ -1,4 +1,5 @@
 import { RichTextEditor, type EditorValue } from "slatetsx-kit-editor";
+import { useI18n } from "@web/shared/i18n.js";
 import { renderKatex } from "slatetsx-kit-editor/katex";
 import { assetUrl } from "@web/shared/api.js";
 import "slatetsx-kit-editor/style.css";
@@ -14,9 +15,11 @@ export default function VersionPreview({
   trash?: boolean;
   audit?: boolean;
 }) {
+  const { locale } = useI18n();
   return (
     <div className="history-editor-preview">
       <RichTextEditor
+        locale={locale}
         formulaRenderer={renderKatex}
         plugins={plugins}
         initialValue={value}

@@ -11,7 +11,8 @@ import { ChevronDown, Copy, Link as LinkIcon } from "lucide-react";
 import { api } from "@web/shared/api.js";
 import { Select } from "@web/shared/components/select.js";
 import { Feedback } from "@web/shared/components/feedback.js";
-import { accessLabels } from "@web/features/documents/access-management.js";
+import { accessText } from "@web/features/documents/access-management.js";
+import { useI18n } from "@web/shared/i18n.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
 type ShareLink = {
   id: string;
@@ -51,6 +52,7 @@ export function ShareLinkSettings({
   inheritanceControl?: ReactNode;
   inheritedEnabled?: boolean;
 }) {
+  const { t } = useI18n();
   const allowed = useEntitlements();
   const [items, setItems] = useState<ShareLink[]>([]),
     [revokedItems, setRevokedItems] = useState<ShareLink[]>([]),
@@ -381,7 +383,7 @@ export function ShareLinkSettings({
             >
               {["reader", "commenter", "editor"].map((r) => (
                 <option key={r} value={r}>
-                  {accessLabels[r]}
+                  {accessText(t, r)}
                 </option>
               ))}
             </Select>
@@ -503,7 +505,7 @@ export function ShareLinkSettings({
                         </span>
                       </header>
                       <div className="permissions-share-record-meta">
-                        <span>{accessLabels[l.role]}</span>
+                        <span>{accessText(t, l.role)}</span>
                         <span>
                           {l.includeDescendants ? "包含子文档" : "仅当前文档"}
                         </span>

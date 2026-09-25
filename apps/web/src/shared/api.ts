@@ -22,6 +22,9 @@ export interface Resource {
   last_editor_id?: string | null;
   cover_asset_id?: string | null;
   page_width?: string | null;
+  ai_curated?: number;
+  guide_document_id?: string | null;
+  aiCurated?: boolean;
   id: string;
   kind: "document" | "library";
   format: "rich_text" | "spreadsheet" | "presentation" | "markdown" | "canvas";

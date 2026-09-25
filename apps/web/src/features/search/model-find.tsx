@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Search, ChevronUp, ChevronDown, Replace, X } from "lucide-react";
+import { useI18n } from "@web/shared/i18n.js";
 export interface FindHandle<M> { find(query: string): M[]; reveal(match: M): unknown; replace(match: M, text: string): unknown; replaceAll(query: string, text: string): unknown; }
 
 /** Platform search UI; SDK enumerates, locates and mutates the model, never DOM text. */
@@ -13,6 +14,7 @@ export function ModelFind<M>({
   revision: number;
   canEdit: boolean;
 }) {
+  const { t } = useI18n();
   const [slot, setSlot] = useState<HTMLElement | null>(null),
     [open, setOpen] = useState(false),
     [query, setQuery] = useState(""),
@@ -68,8 +70,8 @@ export function ModelFind<M>({
         createPortal(
           <button
             className="icon"
-            title="文档内查找 (Ctrl / ⌘ F)，替换 (Ctrl / ⌘ R)"
-            aria-label="文档内查找"
+            title={t("doc.findShortcut")}
+            aria-label={t("doc.find")}
             onClick={show}
           >
             <Search size={18} />
@@ -81,7 +83,7 @@ export function ModelFind<M>({
           <div
             className="document-find-panel"
             role="search"
-            aria-label="文档内查找"
+            aria-label={t("doc.find")}
             onKeyDown={(e) => {
               if (e.key === "Escape") setOpen(false);
               if (e.key === "Enter") {
@@ -93,7 +95,7 @@ export function ModelFind<M>({
             {canEdit && (
               <button
                 className="icon"
-                aria-label="展开替换"
+                aria-label={t("doc.findExpand")}
                 onClick={() => setExpanded(!expanded)}
               >
                 <Replace size={16} />
@@ -102,8 +104,8 @@ export function ModelFind<M>({
             <Search size={16} />
             <input
               ref={input}
-              aria-label="查找文档内容"
-              placeholder="查找文档内容"
+              aria-label={t("doc.findQuery")}
+              placeholder={t("doc.findQuery")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -113,7 +115,7 @@ export function ModelFind<M>({
             <button
               className="icon"
               disabled={!matches.length}
-              aria-label="上一处"
+              aria-label={t("doc.findPrevious")}
               onClick={() => move(-1)}
             >
               <ChevronUp size={16} />
@@ -121,14 +123,14 @@ export function ModelFind<M>({
             <button
               className="icon"
               disabled={!matches.length}
-              aria-label="下一处"
+              aria-label={t("doc.findNext")}
               onClick={() => move(1)}
             >
               <ChevronDown size={16} />
             </button>
             <button
               className="icon"
-              aria-label="关闭文档查找"
+              aria-label={t("doc.findClose")}
               onClick={() => setOpen(false)}
             >
               <X size={16} />
@@ -137,8 +139,8 @@ export function ModelFind<M>({
               <div className="document-replace-row">
                 <input
                   value={replacement}
-                  placeholder="替换为（可留空）"
-                  aria-label="替换为"
+                  placeholder={t("doc.replacePlaceholder")}
+                  aria-label={t("doc.replaceWith")}
                   onChange={(e) => setReplacement(e.target.value)}
                 />
                 <button
@@ -148,13 +150,13 @@ export function ModelFind<M>({
                     if (match) handle.current?.replace(match, replacement);
                   }}
                 >
-                  替换
+                  {t("doc.replace")}
                 </button>
                 <button
                   disabled={!matches.length}
                   onClick={() => handle.current?.replaceAll(query, replacement)}
                 >
-                  全部替换
+                  {t("doc.replaceAll")}
                 </button>
               </div>
             )}

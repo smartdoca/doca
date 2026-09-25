@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { platformAssetId } from "@web/shared/utils/asset-path.js";
 import { useAI } from "@web/features/ai/ai-context.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -97,6 +98,7 @@ export default function MarkdownDocument({
   targetComment?: string | null;
   loadMoreComments?: () => Promise<void>;
 }) {
+  const { locale, t } = useI18n();
   const id = detail.resource.id;
   const ai = useAI();
   const createComment = useRef<() => void>(() => {});
@@ -686,6 +688,7 @@ export default function MarkdownDocument({
         )}
         <div className="doca-markdown markdown-sdk-container">
           <CollaborativeMarkdownEditor
+            locale={locale}
             ref={handle}
             roomId={id}
             collaboration={session}
@@ -694,14 +697,14 @@ export default function MarkdownDocument({
             selectionActions={[
               {
                 id: "doca.ai",
-                title: "引用给 AI",
+                title: t("editor.citeAi"),
                 icon: <AtSign size={17} />,
                 disabled: !user,
                 onClick: () => ai?.add(),
               },
               {
                 id: "doca.comment",
-                title: "评论选中区域",
+                title: t("editor.commentSelection"),
                 icon: <MessageSquare size={20} />,
                 disabled:
                   !online ||

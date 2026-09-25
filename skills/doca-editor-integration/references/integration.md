@@ -53,6 +53,12 @@ Online member avatars are a platform header concern, shared by document types; m
 
 Discovery is separate from access: permission enables reading/search, not unconditional listing. Doca config separates invitation/direct grants, direct-document list discovery, library membership discovery and optional public-library catalogue. Whole-library membership does not imply that every child is directly shared. Public documents are discoverable by search but never populate the shared-document list merely because public access exists.
 
+## Locale
+
+The host owns the active interface language and passes `locale` (`zh` or `en` today) into an editor once that package's props include it. Unknown codes fall back to English inside the package. Packages keep their own catalogs and use stable English keys, not Chinese or full-sentence English keys. Switching locale updates package chrome only and must not reconstruct the document, Y.Doc, collaboration adapter, or plugin list. Follow `doca-i18n` (`skills/doca-i18n` in the Doca repo, or the installed `$doca-i18n` skill).
+
+The host passes `locale` into each editor mount. Do not add it to a dependency list that rebuilds the document, Y.Doc, collaboration adapter, or plugin list.
+
 ## Acceptance evidence
 
 Check stable mount through selection/style/profile/save updates; readonly safety; asset callbacks and abort/errors; local edits vs remote/idle events; same-account dual sessions; snapshot reload; atomic inline roundtrips and clipboard; single and bulk replace with undo, code and split formatted leaves; target link resolution across origin changes; graph privacy; invitation accept/refuse/revoke and separate discovery rules.

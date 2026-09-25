@@ -7,10 +7,12 @@ export function DocumentSubmenu({
   label,
   icon,
   children,
+  panelLabel,
 }: {
   label: string;
   icon: ReactNode;
   children: ReactNode;
+  panelLabel?: string;
 }) {
   const root = useRef<HTMLDetailsElement>(null);
   const [open, setOpen] = useState(false);
@@ -119,7 +121,7 @@ export function DocumentSubmenu({
       <div
         className="document-submenu-panel"
         role="group"
-        aria-label={label === "内容宽度" ? "文档内容宽度" : "下载格式"}
+        aria-label={panelLabel ?? label}
         style={{ left: position.left, top: position.top }}
       >
         {children}

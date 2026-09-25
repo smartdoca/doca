@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { useI18n } from "@web/shared/i18n.js";
 import type { EditorValue } from "slatetsx-kit-editor";
 import type { WorkbookSnapshot } from "@online-office/univer-sheet";
 import { FileText, Folder, RotateCcw, Trash2 } from "lucide-react";
@@ -28,6 +29,7 @@ export function TrashPreview({
   resource: Resource;
   close: () => void;
 }) {
+  const { t } = useI18n();
   const [id, setId] = useState(resource.id),
     [data, setData] = useState<Preview | null>(null),
     [error, setError] = useState("");
@@ -49,12 +51,12 @@ export function TrashPreview({
   }, [id]);
   return (
     <Dialog
-      title={`${data?.resource.title ?? resource.title} · 回收站只读预览`}
+      title={t("trash.previewTitle", { title: data?.resource.title ?? resource.title })}
       close={close}
     >
       <div className="trash-preview">
         <Feedback message={error} tone="error" />
-        <Suspense fallback={<p className="empty">正在加载预览…</p>}>
+        <Suspense fallback={<p className="empty">{t("trash.loadingPreview")}</p>}>
           {data?.surface ? (
             <SurfacePreview id={id} surface={data.surface} trash />
           ) : typeof data?.markdown === "string" ? (
@@ -73,13 +75,13 @@ export function TrashPreview({
                   </button>
                 ))
               ) : (
-                <p className="empty">暂无可预览的文档</p>
+                <p className="empty">{t("trash.noPreview")}</p>
               )}
             </div>
           ) : (
             !error && (
               <p className="empty">
-                {data ? "此文件还没有内容" : "正在加载预览…"}
+                {data ? t("trash.emptyFile") : t("trash.loadingPreview")}
               </p>
             )
           )}
@@ -90,6 +92,7 @@ export function TrashPreview({
 }
 
 export function EmptyTrash({ done }: { done: () => void }) {
+  const { t } = useI18n();
   const [targets, setTargets] = useState<Resource[] | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -106,7 +109,7 @@ export function EmptyTrash({ done }: { done: () => void }) {
         all.push(...page.items);
         offset = page.nextOffset;
         if (all.length > 1000)
-          throw Error("回收站超过一千项，暂不支持一次清空这么多内容");
+          throw Error(t("trash.tooMany"));
       } while (offset !== null);
       setTargets(all);
     } catch (e) {
@@ -123,20 +126,19 @@ export function EmptyTrash({ done }: { done: () => void }) {
         onClick={() => void prepare()}
       >
         <Trash2 size={16} />
-        清空回收站
+        {t("trash.emptyAll")}
       </button>
       {!targets && <Feedback message={error} tone="error" />}
       {targets && (
         <Dialog
-          title="清空回收站"
+          title={t("trash.emptyAll")}
           close={() => {
             if (!busy) setTargets(null);
           }}
           className="modal-compact"
         >
           <p className="warning">
-            将永久删除 {targets.length}{" "}
-            项内容及其历史版本、评论，无法恢复。清空范围为你有管理权限的回收站文件，不受当前筛选条件影响。
+            {t("trash.emptyAllBody", { count: targets.length })}
           </p>
           <div className="trash-confirm-list">
             {targets.map((r) => (
@@ -146,7 +148,7 @@ export function EmptyTrash({ done }: { done: () => void }) {
           <Feedback message={error} tone="error" />
           <footer>
             <button disabled={busy} onClick={() => setTargets(null)}>
-              取消
+              {t("common.cancel")}
             </button>
             <button
               className="danger"
@@ -170,7 +172,7 @@ export function EmptyTrash({ done }: { done: () => void }) {
                 }
               }}
             >
-              {busy ? "正在清空…" : "永久清空"}
+              {busy ? t("trash.emptying") : t("trash.emptyNow")}
             </button>
           </footer>
         </Dialog>
@@ -181,6 +183,7 @@ export function EmptyTrash({ done }: { done: () => void }) {
 
 type FileTrashItem = { id: string; kind: "folder" | "file"; name: string; version: number; deletedAt: string | null };
 export function FileTrash() {
+  const { t } = useI18n();
   const [items, setItems] = useState<FileTrashItem[]>([]),
     [error, setError] = useState(""),
     [purgeTarget, setPurgeTarget] = useState<FileTrashItem | null>(null),
@@ -189,12 +192,12 @@ export function FileTrash() {
     try {
       const data = await api<{ folders: FileTrashItem[]; files: FileTrashItem[] }>("/files/trash");
       setItems([...data.folders, ...data.files]);
-    } catch (e) { setError(e instanceof Error ? e.message : "文件回收站加载失败"); }
+    } catch (e) { setError(e instanceof Error ? e.message : t("trash.filesFailed")); }
   }
   useEffect(() => { void load(); }, []);
   async function restore(item: FileTrashItem) {
     try { await api("/files/trash/restore", "POST", { kind: item.kind, id: item.id, version: item.version }); await load(); }
-    catch (e) { setError(e instanceof Error ? e.message : "恢复失败"); }
+    catch (e) { setError(e instanceof Error ? e.message : t("trash.restoreFailed")); }
   }
   async function purge(item: FileTrashItem) {
     setBusy(true);
@@ -205,7 +208,7 @@ export function FileTrash() {
       setPurgeTarget(null);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "永久删除失败");
+      setError(e instanceof Error ? e.message : t("trash.purgeFailed"));
     } finally {
       setBusy(false);
     }
@@ -214,10 +217,10 @@ export function FileTrash() {
     <section className="file-trash-section">
       <div className="file-trash-heading">
         <div>
-          <h3>文件和文件夹</h3>
-          <p>文档删除时，其中的文件会随文档一起恢复或清理。</p>
+          <h3>{t("trash.filesTitle")}</h3>
+          <p>{t("trash.filesHint")}</p>
         </div>
-        <span>{items.length} 项</span>
+        <span>{t("home.itemCount", { count: items.length })}</span>
       </div>
       <Feedback message={error} tone="error" />
       {items.length ? (
@@ -228,34 +231,34 @@ export function FileTrash() {
                 {item.kind === "folder" ? <Folder size={17} /> : <FileText size={17} />}
               </span>
               <strong title={item.name}>{item.name}</strong>
-              <small>{item.kind === "folder" ? "文件夹" : "文件"}</small>
-              <button type="button" className="icon" onClick={() => void restore(item)} aria-label={`恢复${item.name}`}>
+              <small>{item.kind === "folder" ? t("trash.folder") : t("trash.file")}</small>
+              <button type="button" className="icon" onClick={() => void restore(item)} aria-label={t("trash.restoreNamed", { name: item.name })}>
                 <RotateCcw size={15} />
               </button>
-              <button type="button" className="icon danger" onClick={() => setPurgeTarget(item)} aria-label={`永久删除${item.name}`}>
+              <button type="button" className="icon danger" onClick={() => setPurgeTarget(item)} aria-label={t("trash.purgeNamed", { name: item.name })}>
                 <Trash2 size={15} />
               </button>
             </div>
           ))}
         </div>
       ) : (
-        <p className="file-trash-empty">文件回收站为空</p>
+        <p className="file-trash-empty">{t("trash.filesEmpty")}</p>
       )}
       {purgeTarget && (
         <Dialog
-          title="永久删除"
+          title={t("home.purge")}
           close={() => {
             if (!busy) setPurgeTarget(null);
           }}
           className="modal-compact"
         >
-          <p className="warning">永久删除「{purgeTarget.name}」？此操作无法恢复。</p>
+          <p className="warning">{t("trash.purgeFile", { name: purgeTarget.name })}</p>
           <footer>
             <button type="button" disabled={busy} onClick={() => setPurgeTarget(null)}>
-              取消
+              {t("common.cancel")}
             </button>
             <button type="button" className="danger" disabled={busy} onClick={() => void purge(purgeTarget)}>
-              {busy ? "正在删除…" : "永久删除"}
+              {busy ? t("home.purging") : t("home.purge")}
             </button>
           </footer>
         </Dialog>

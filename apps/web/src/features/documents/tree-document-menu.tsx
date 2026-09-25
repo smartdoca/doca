@@ -6,6 +6,7 @@ import { api, type Detail, type Resource } from "@web/shared/api.js";
 import { publishReaction } from "@web/features/documents/document-reactions.js";
 import { useEntitlements } from "@web/shared/hooks/entitlement-access.js";
 import { Feedback } from "@web/shared/components/feedback.js";
+import { useI18n } from "@web/shared/i18n.js";
 import "@web/features/documents/tree-document-menu.css";
 
 export function TreeDocumentMenu({
@@ -21,6 +22,7 @@ export function TreeDocumentMenu({
   changed(): void;
   remove(): void;
 }) {
+  const { t } = useI18n();
   const allowed = useEntitlements();
   const ai = useAI();
   const panel = useRef<HTMLDivElement>(null);
@@ -115,7 +117,7 @@ export function TreeDocumentMenu({
       ref={panel}
       className="tree-document-menu"
       role="menu"
-      aria-label={resource.title + "的操作"}
+      aria-label={t("doc.menu", { title: resource.title })}
       style={{
         left: Math.max(8, Math.min(rect.left, window.innerWidth - 208)),
         top: Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 250)),
@@ -155,43 +157,43 @@ export function TreeDocumentMenu({
           }}
         >
           <AtSign size={16} />
-          引用给 AI
+          {t("doc.cite")}
         </button>
       )}
       {resource.kind === "document" && (
-        <button role="menuitem" onClick={() => { location.hash = `/knowledge?source=document:${resource.id}`; close(); }}>
+        <button role="menuitem" onClick={() => { window.dispatchEvent(new CustomEvent("doca-subscribe-library", { detail: { kind: "document", id: resource.id, title: resource.title } })); close(); }}>
           <Share2 size={16} />
-          查找相关
+          {t("doc.collect")}
         </button>
       )}
       <button
         role="menuitem"
         disabled={busy || !allowed("documents.copy")}
         onClick={() => void act("copy")}
-        title="复制此文档及子文档到个人文档"
+        title={t("doc.copyHint")}
       >
         <Copy size={16} />
-        复制文档
+        {t("doc.copy")}
       </button>
       {resource.kind === "document" && (
         <button
           role="menuitem"
           disabled={busy || pinned === null}
-          title={pinned ? "取消置顶" : "置顶文档"}
+          title={pinned ? t("nav.unpin") : t("nav.pinnedDocs")}
           onClick={() => void act("pin")}
         >
           <Pin size={16} fill={pinned ? "currentColor" : "none"} />
-          {pinned ? "取消置顶" : "置顶文档"}
+          {pinned ? t("nav.unpin") : t("nav.pinnedDocs")}
         </button>
       )}
       <button
         role="menuitem"
         disabled={busy || favorite === null}
-        title={favorite ? "取消收藏" : "收藏文档"}
+        title={favorite ? t("doc.unfavorite") : t("doc.favorite")}
         onClick={() => void act("favorite")}
       >
         <Star size={16} fill={favorite ? "currentColor" : "none"} />
-        {favorite ? "取消收藏" : "收藏文档"}
+        {favorite ? t("doc.unfavorite") : t("doc.favorite")}
       </button>
       <button
         role="menuitem"
@@ -203,7 +205,7 @@ export function TreeDocumentMenu({
         }}
       >
         <Trash2 size={16} />
-        删除文档
+        {t("doc.deleteDocument")}
       </button>
       {error && <Feedback message={error} tone="error" />}
     </div>,

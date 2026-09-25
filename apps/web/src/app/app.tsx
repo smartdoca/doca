@@ -1,9 +1,11 @@
+import type { MessageKey } from "@doca/i18n";
 import { AIProvider } from "@web/features/ai/ai-context.js";
-import { readPageState } from "@web/features/page-state/client.js";
+import { useI18n } from "@web/shared/i18n.js";
 import { AIChat, AIDocumentLayout } from "@web/features/ai/ai-chat.js";
 import "@web/features/account/account-menu.css";
 import { MembershipLink } from "@web/features/settings/membership-link.js";
 import { AccountMenu } from "@web/features/account/account-menu.js";
+import { LocaleSwitch } from "@web/features/account/locale-switch.js";
 import { useEntitlements } from "@web/shared/hooks/entitlement-access.js";
 import { AccountLogin } from "@web/features/auth/account-login.js";
 import { AccountOnboarding } from "@web/features/auth/account-fields.js";
@@ -27,7 +29,9 @@ import { DocumentReactionButtons } from "@web/features/documents/document-reacti
 import {
   LibrarySettings,
   LibraryLanding,
+  LibrarySystemPage,
   librarySettingsUrl,
+  librarySystemUrl,
 } from "@web/features/documents/library.js";
 import {
   CommentComposer,
@@ -62,7 +66,7 @@ import {
   Cloud,
   PanelLeft,
   UserRound,
-  BrainCircuit,
+  Network,
 } from "lucide-react";
 import {
   api,
@@ -91,7 +95,7 @@ import { FileIcon } from "@web/features/documents/document-controls.js";
 import { FilesExplorer, SharedFoldersPage, type FileLocation } from "@web/features/files/files.js";
 import { MailApp } from "@web/features/mail/mail.js";
 import { MobileTicketRedeem, postMobileEditor } from "@web/features/mobile/ticket-redeem.js";
-import { KnowledgeRelations } from "@web/features/knowledge/knowledge-relations.js";
+import { SubscribeLibraryHost } from "@web/features/knowledge/subscribe-library.js";
 import "@web/features/files/files.css";
 import "@web/features/workspace/workspace.css";
 import "@web/styles/theme.css";
@@ -119,26 +123,25 @@ const DocumentEditor = lazy(() =>
 const QuickNotes = lazy(() => import("@web/features/quick-notes/quick-notes.js").then(m => ({ default: m.QuickNotes })));
 const QuickNotesFloat = lazy(() => import("@web/features/quick-notes/quick-notes-float.js").then(m => ({ default: m.QuickNotesFloat })));
 
-const titles: Record<string, string> = {
-  todos: "工单",
-  tickets: "工单",
-  home: "在线文档",
-  ai: "AI 助手",
-  notes: "随手记",
-  backups: "云备份",
-  preferences: "系统设置",
-  libraries: "知识库",
-  knowledge: "知识关系",
-  files: "我的文件夹",
-  "shared-files": "共享文件夹",
-  mail: "邮箱",
-  shared: "与我共享",
-  favorites: "我的收藏",
-  all: "最近更新",
-  trash: "回收站",
+const titleKeys: Record<string, MessageKey> = {
+  todos: "nav.tickets",
+  tickets: "nav.tickets",
+  home: "nav.documents",
+  ai: "nav.assistant",
+  notes: "nav.notes",
+  backups: "nav.backups",
+  preferences: "account.settings",
+  libraries: "nav.libraries",
+  files: "nav.files",
+  "shared-files": "nav.sharedFiles",
+  mail: "nav.mail",
+  shared: "nav.shared",
+  favorites: "nav.favorites",
+  all: "nav.recent",
+  trash: "nav.trash",
 };
-const errorText = (e: unknown) => {
-  if (!(e instanceof Error)) return "操作失败";
+const errorText = (e: unknown, fallback: string) => {
+  if (!(e instanceof Error)) return fallback;
   const code =
     e && typeof e === "object" && "code" in e
       ? String((e as { code?: unknown }).code ?? "")
@@ -163,6 +166,7 @@ type ShareInvitation = {
   role: string;
 };
 export function App() {
+  const { t, reloadLocale } = useI18n();
   const [navigationCollapsed, setNavigationCollapsed] = useNavigationCollapse("doca.navigation.collapsed");
   const [adminNavigationCollapsed, setAdminNavigationCollapsed] = useNavigationCollapse("doca.admin-navigation.collapsed");
   const desktopNavigation = useDesktopNavigation();
@@ -179,8 +183,9 @@ export function App() {
     [refresh, setRefresh] = useState(0),
     [scope, setScope] = useState(() => {
       const route = location.hash.slice(2).split(/[/?]/)[0]!;
+      if (route === "knowledge") return "libraries";
       if (import.meta.env.DEV && route === "mail-preview") return "mail";
-      return titles[route] ? route : "home";
+      return titleKeys[route] ? route : "home";
     }),
     [q, setQ] = useState(""),
     [format, setFormat] = useState(""),
@@ -263,8 +268,8 @@ export function App() {
     if (direct) return direct;
     try {
       const path = JSON.parse(params.get("path") ?? "[]") as FileLocation[];
-      return path[0]?.name || "共享文件夹";
-    } catch { return "共享文件夹"; }
+      return path[0]?.name || t("nav.sharedFiles");
+    } catch { return t("nav.sharedFiles"); }
   })();
   async function loadMoreComments() {
     if (!detail || detail.commentsNextOffset == null || busy) return;
@@ -306,8 +311,9 @@ export function App() {
       : libraryInfo && libraryInfo.id === containingLibraryId
         ? libraryInfo.id
         : undefined;
-  const librarySettingsPage =
-    new URLSearchParams(hash.split("?")[1]).get("view") === "settings";
+  const libraryView = new URLSearchParams(hash.split("?")[1]).get("view");
+  const librarySettingsPage = libraryView === "settings";
+  const librarySystemPage = libraryView === "system";
   const currentDetail = detail?.resource.id === resourceId ? detail : null;
   const sharedPersonalView = !!(
     bootstrap?.user &&
@@ -327,16 +333,21 @@ export function App() {
       : detail?.resource.kind === "library" &&
           detail.resource.id === currentLibraryId
         ? detail.resource.title
-        : "正在加载知识库…";
+        : t("nav.loadingLibrary");
+  const scopeTitle = titleKeys[scope];
   const headerTitle = resourceId
     ? currentDetail
       ? librarySettingsPage && currentDetail.resource.kind === "library"
-        ? "知识库设置"
-        : currentDetail.resource.title
-      : "正在打开…"
+        ? t("nav.librarySettings")
+        : librarySystemPage && currentDetail.resource.kind === "library"
+          ? t("nav.librarySystem")
+          : currentDetail.resource.title
+      : t("nav.opening")
     : ticketsPage
-      ? "工单"
-      : titles[scope];
+      ? t("nav.tickets")
+      : scopeTitle
+        ? t(scopeTitle)
+        : "";
   function openFileTrail(index: number) {
     const nextTrail = fileTrail.slice(0, index + 1).map(({ type, id, name }) => ({ type, id, name }));
     const path = encodeURIComponent(JSON.stringify(nextTrail));
@@ -426,23 +437,12 @@ export function App() {
   }, [me?.preferences]);
   useEffect(() => {
     if (!bootstrap?.user) return;
-    let active = true;
-    void readPageState<"zh" | "en">("ui.locale").then((item) => {
-      if (!active || (item?.value !== "zh" && item?.value !== "en")) return;
-      document.documentElement.lang = item.value === "zh" ? "zh-CN" : "en";
-    }).catch(() => undefined);
-    const onPageState = (event: Event) => {
-      const detail = (event as CustomEvent<{ key?: string; value?: unknown }>).detail;
-      if (detail?.key !== "ui.locale") return;
-      if (detail.value === "zh" || detail.value === "en")
-        document.documentElement.lang = detail.value === "zh" ? "zh-CN" : "en";
-    };
-    window.addEventListener("doca-page-state", onPageState);
-    return () => {
-      active = false;
-      window.removeEventListener("doca-page-state", onPageState);
-    };
-  }, [bootstrap?.user?.id]);
+    void reloadLocale();
+  }, [bootstrap?.user?.id, reloadLocale]);
+  useEffect(() => {
+    if (bootstrap?.siteName)
+      document.title = t("app.documentTitle", { site: bootstrap.siteName });
+  }, [bootstrap?.siteName, t]);
   useEffect(() => {
     if (!bootstrap?.user) return;
     const beat = () => {
@@ -501,7 +501,6 @@ export function App() {
       void api<Bootstrap>("/bootstrap")
         .then((b) => {
           setBootstrap(b);
-          document.title = `${b.siteName} · 文档与知识库`;
         })
         .catch((e) => setFatal(e.message));
     const changed = () => {
@@ -509,8 +508,11 @@ export function App() {
       setNavigationOpen(false);
       setModal("");
       const route = location.hash.slice(2).split(/[/?]/)[0]!;
-      if (import.meta.env.DEV && route === "mail-preview") setScope("mail");
-      else if (titles[route]) setScope(route);
+      if (route === "knowledge") {
+        location.hash = "/libraries";
+        setScope("libraries");
+      } else if (import.meta.env.DEV && route === "mail-preview") setScope("mail");
+      else if (titleKeys[route]) setScope(route);
       setError("");
     };
     load();
@@ -623,7 +625,7 @@ export function App() {
       await fn();
       await reload();
     } catch (e) {
-      setError(errorText(e));
+      setError(errorText(e, t("common.failed")));
     } finally {
       setBusy(false);
     }
@@ -674,13 +676,13 @@ export function App() {
     return (
       <main className="auth">
         <div className="auth-card">
-          <h1>暂时无法连接服务</h1>
+          <h1>{t("shell.offline")}</h1>
           <p role="alert">{fatal}</p>
-          <button onClick={() => location.reload()}>重试</button>
+          <button onClick={() => location.reload()}>{t("shell.retry")}</button>
         </div>
       </main>
     );
-  if (!bootstrap) return <main className="auth">正在连接 Doca…</main>;
+  if (!bootstrap) return <main className="auth">{t("shell.connecting")}</main>;
   if (hash.startsWith("#/m/auth")) return <MobileTicketRedeem />;
   if (ticketsPage && !bootstrap.user)
     return (
@@ -706,12 +708,12 @@ export function App() {
     return (
       <main className="auth">
         <section className="auth-card">
-          <h2>未完成身份验证</h2>
+          <h2>{t("shell.authFailed")}</h2>
           <p>
-            授权被取消、流程已过期或身份源校验失败。请重新发起登录或绑定；如反复失败，请让管理员检查凭据和回调地址。
+            {t("shell.authFailedBody")}
           </p>
           <a href={bootstrap.user ? "#/account" : "#/home"}>
-            返回{bootstrap.user ? "个人信息" : "登录页"}
+            {bootstrap.user ? t("shell.backProfile") : t("shell.backLogin")}
           </a>
         </section>
       </main>
@@ -723,7 +725,7 @@ export function App() {
           <div className="document-topbar-title">
             <div className="files-topbar-title">
               <Mail size={17} aria-hidden="true" />
-              <strong>邮箱</strong>
+              <strong>{t("shell.mail")}</strong>
               <span className="files-topbar-separator">/</span>
               <span id="mail-header-mailbox" />
             </div>
@@ -753,13 +755,16 @@ export function App() {
     return (
       <main className="auth">
         <section className="auth-card" aria-labelledby="share-invitation-title">
-          <h1 id="share-invitation-title">收到一份分享邀请</h1>
+          <h1 id="share-invitation-title">{t("shell.inviteTitle")}</h1>
           <p>
-            {shareInvitation.kind === "library" ? "知识库" : "文档"}「
-            {shareInvitation.title}」邀请你以“{shareInvitation.role}”身份访问。
+            {t("shell.inviteBody", {
+              kind: shareInvitation.kind === "library" ? t("shell.inviteKind.library") : t("shell.inviteKind.document"),
+              title: shareInvitation.title,
+              role: shareInvitation.role,
+            })}
           </p>
           <p className="subtle">
-            接受后，这份内容会加入你的共享列表，并按邀请权限开放。
+            {t("shell.inviteHint")}
           </p>
           <div className="auth-actions">
             <button
@@ -767,7 +772,7 @@ export function App() {
               onClick={() => {
                 const token = rememberedShareToken();
                 if (!token) {
-                  setError("邀请链接已失效，请重新打开分享链接");
+                  setError(t("shell.inviteExpired"));
                   return;
                 }
                 void api<{ id: string }>("/share/redeem", "POST", {
@@ -782,7 +787,7 @@ export function App() {
                   .catch((e) => setError(e.message));
               }}
             >
-              接受并打开
+              {t("shell.inviteAccept")}
             </button>
             <button
               onClick={() => {
@@ -791,7 +796,7 @@ export function App() {
                 location.hash = "/home";
               }}
             >
-              暂不接受
+              {t("shell.inviteLater")}
             </button>
           </div>
           <Feedback message={error} tone="error" />
@@ -817,14 +822,15 @@ export function App() {
     return (
       <div className={`settings-shell ${adminPage && adminNavigationCollapsed ? "admin-navigation-collapsed" : ""}`}>
         <header className="settings-shell-header">
-          {adminPage && <button className="icon" title={adminNavigationCollapsed ? "展开管理导航" : "收起管理导航"} aria-label={adminNavigationCollapsed ? "展开管理导航" : "收起管理导航"} aria-expanded={!adminNavigationCollapsed} onClick={() => setAdminNavigationCollapsed(!adminNavigationCollapsed)}><PanelLeft size={19} /></button>}
+          {adminPage && <button className="icon" title={adminNavigationCollapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")} aria-label={adminNavigationCollapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")} aria-expanded={!adminNavigationCollapsed} onClick={() => setAdminNavigationCollapsed(!adminNavigationCollapsed)}><PanelLeft size={19} /></button>}
           <a href="#/home" className="settings-back">
-            <ArrowLeft size={18} /> 返回工作台
+            <ArrowLeft size={18} /> {t("account.workspace")}
           </a>
           <div className="global-header-tools">
           {!adminPage && <MembershipLink vip={me?.entitlements?.vip} onError={setError} />}
           <TodoIcon />
           <Notifications />
+          <LocaleSwitch />
           <AccountMenu
             showWorkspaceLink
             refresh={refreshMe}
@@ -847,7 +853,7 @@ export function App() {
             <Admin />
           ) : (
             <section className="empty">
-              此页面仅限管理员访问。<a href="#/home">返回主页</a>
+              {t("shell.adminOnly")}<a href="#/home">{t("shell.homeLink")}</a>
             </section>
           )
         ) : (
@@ -860,20 +866,20 @@ export function App() {
                   assetId={me?.preferences.avatar_asset_id}
                 />
                 <strong>{displayName}</strong>
-                <small>你的个人账号</small>
+                <small>{t("shell.yourAccount")}</small>
               </div>
               <a className={accountPage ? "active" : ""} href="#/account">
                 <UserRound size={18} />
-                个人信息与安全
+                {t("shell.profileSecurity")}
               </a>
               <a
                 className={preferencesPage ? "active" : ""}
                 href="#/preferences"
               >
                 <Settings size={18} />
-                外观与使用偏好
+                {t("settings.appearance")}
               </a>
-              <p>这里的设置只影响你的账号，不会更改其他用户的工作环境。</p>
+              <p>{t("shell.settingsHint")}</p>
             </aside>
             <main className="personal-settings-content">
               {me ? (
@@ -894,7 +900,7 @@ export function App() {
                   <PersonalSettings me={me} saved={refreshMe} />
                 )
               ) : (
-                <p className="empty">正在加载设置…</p>
+                <p className="empty">{t("shell.loadingSettings")}</p>
               )}
             </main>
           </div>
@@ -939,8 +945,8 @@ export function App() {
             )}
             <button
               className="icon navigation-toggle sidebar-navigation-toggle"
-              title={desktopNavigation || navigationOpen ? "收起侧边导航" : "展开侧边导航"}
-              aria-label={desktopNavigation || navigationOpen ? "收起侧边导航" : "展开侧边导航"}
+              title={desktopNavigation || navigationOpen ? t("nav.collapseSidebar") : t("nav.expandSidebar")}
+              aria-label={desktopNavigation || navigationOpen ? t("nav.collapseSidebar") : t("nav.expandSidebar")}
               aria-expanded={desktopNavigation ? !navigationCollapsed : navigationOpen}
               onClick={() => desktopNavigation ? setNavigationCollapsed(true) : setNavigationOpen(!navigationOpen)}
             >
@@ -949,18 +955,24 @@ export function App() {
           </div>
           <button className="sidebar-search" onClick={() => setModal("search")}>
             <Search size={17} />
-            <span>搜索</span>
+            <span>{t("common.search")}</span>
             <kbd>⌘ K</kbd>
           </button>
           {currentLibraryId && (
             <nav>
-              {!librarySettingsPage && <><button className="ai-navigation-entry" onClick={() => navigate("ai")}><Sparkles size={16} />AI 助手</button><button onClick={() => { navigate("notes"); window.dispatchEvent(new CustomEvent("doca-notes-float-attention")); }}><Feather size={16} />随手记</button></>}
               <a
                 className={librarySettingsPage ? "active" : ""}
                 href={librarySettingsUrl(currentLibraryId)}
               >
                 <Settings size={18} />
-                知识库设置
+                {t("nav.librarySettings")}
+              </a>
+              <a
+                className={librarySystemPage ? "active" : ""}
+                href={librarySystemUrl(currentLibraryId)}
+              >
+                <Network size={18} />
+                {t("nav.librarySystem")}
               </a>
             </nav>
           )}
@@ -970,29 +982,28 @@ export function App() {
                 type="button"
                 className="sidebar-create-entry"
                 hidden={!allowed("documents.create")}
-                title="创作"
-                aria-label="创作"
+                title={t("nav.create")}
+                aria-label={t("nav.create")}
                 aria-haspopup="dialog"
                 onClick={() => create("document")}
               >
                 <span className="sidebar-create-plus" aria-hidden="true">
                   <Plus size={16} strokeWidth={2.6} />
                 </span>
-                <span className="sidebar-create-label">创作</span>
+                <span className="sidebar-create-label">{t("nav.create")}</span>
               </button>
               <PinnedDocuments refresh={refresh} />
-              {[
-                ["home", "在线文档", Home],
-                ["ai", "AI 助手", Sparkles],
-                ["notes", "随手记", Feather],
-                ["libraries", "知识库", BookOpen],
-                ["knowledge", "知识关系", BrainCircuit],
-                ["files", "我的文件夹", FolderOpen],
-                ["shared-files", "共享文件夹", Users],
-                ["mail", "邮箱", Mail],
-                ["trash", "回收站", Trash2],
-                ["backups", "云备份", Cloud],
-              ]
+              {([
+                ["home", "nav.documents", Home],
+                ["ai", "nav.assistant", Sparkles],
+                ["notes", "nav.notes", Feather],
+                ["libraries", "nav.libraries", BookOpen],
+                ["files", "nav.files", FolderOpen],
+                ["shared-files", "nav.sharedFiles", Users],
+                ["mail", "nav.mail", Mail],
+                ["trash", "nav.trash", Trash2],
+                ["backups", "nav.backups", Cloud],
+              ] as const)
                 .filter(
                   ([key]) => key !== "backups" || allowed("backup.upload"),
                 )
@@ -1008,7 +1019,7 @@ export function App() {
                       }}
                     >
                       <I size={16} />
-                      {title as string}
+                      {t(title)}
                     </button>
                   );
                 })}
@@ -1018,15 +1029,12 @@ export function App() {
             <button
               onClick={() => { location.hash = "/r/" + currentLibraryId; }}
             >
-              目录
-            </button>
-            <button className="tree-organize" onClick={() => { location.hash = `/knowledge?source=library:${currentLibraryId}`; }}>
-              整理建议
+              {t("nav.contents")}
             </button>
             <button
               className="icon"
               hidden={!allowed("documents.create")}
-              aria-label="新建知识库文档"
+              aria-label={t("nav.newLibraryDocument")}
               disabled={!libraryInfo || roleRank(libraryInfo.role) < 3}
               onClick={() => create("document", libraryInfo ?? undefined)}
             >
@@ -1050,8 +1058,8 @@ export function App() {
             {user && desktopNavigation && navigationCollapsed && (
               <button
                 className="icon navigation-toggle"
-                title={(desktopNavigation ? !navigationCollapsed : navigationOpen) ? "收起侧边导航" : "展开侧边导航"}
-                aria-label={(desktopNavigation ? !navigationCollapsed : navigationOpen) ? "收起侧边导航" : "展开侧边导航"}
+                title={(desktopNavigation ? !navigationCollapsed : navigationOpen) ? t("nav.collapseSidebar") : t("nav.expandSidebar")}
+                aria-label={(desktopNavigation ? !navigationCollapsed : navigationOpen) ? t("nav.collapseSidebar") : t("nav.expandSidebar")}
                 aria-expanded={desktopNavigation ? !navigationCollapsed : navigationOpen}
                 onClick={() => desktopNavigation ? setNavigationCollapsed(!navigationCollapsed) : setNavigationOpen(!navigationOpen)}
               >
@@ -1061,8 +1069,8 @@ export function App() {
             {personalDocumentPage && (
               <button
                 className="icon document-back-button"
-                aria-label="返回主页"
-                title="返回主页"
+                aria-label={t("shell.home")}
+                title={t("shell.home")}
                 onClick={() => { location.hash = "/home"; }}
               >
                 <ArrowLeft size={19} />
@@ -1072,7 +1080,7 @@ export function App() {
             {!resourceId && (scope === "mail" || mailPage) && user && (
               <div className="files-topbar-title">
                 <Mail size={17} aria-hidden="true" />
-                <strong>邮箱</strong>
+                <strong>{t("shell.mail")}</strong>
                 <span className="files-topbar-separator">/</span>
                 <span id="mail-header-mailbox" />
               </div>
@@ -1080,30 +1088,27 @@ export function App() {
             {!resourceId && scope === "notes" && user && (
               <div className="files-topbar-title">
                 <Feather size={17} aria-hidden="true" />
-                <strong>随手记</strong>
+                <strong>{t("nav.notes")}</strong>
                 <span id="notes-header-slot" />
-              </div>
-            )}
-            {!resourceId && scope === "knowledge" && user && (
-              <div className="files-topbar-title">
-                <BrainCircuit size={17} aria-hidden="true" />
-                <strong>知识关系</strong>
               </div>
             )}
             {!resourceId && (scope === "files" || scope === "shared-files") && user && (
               <div className="files-topbar-title">
                 {scope === "shared-files" ? <Users size={17} aria-hidden="true" /> : <FolderOpen size={17} aria-hidden="true" />}
-                <strong>{scope === "shared-files" ? (sharedFolderId ? sharedFolderName : "共享文件夹") : "我的文件夹"}</strong>
+                <strong>{scope === "shared-files" ? (sharedFolderId ? sharedFolderName : t("nav.sharedFiles")) : t("nav.files")}</strong>
                 {(scope === "files" || sharedFolderId) && <><span className="files-topbar-separator">/</span>
-                <nav aria-label="文件夹路径">
-                  {fileTrail.slice(sharedFolderId ? 1 : 0).map((item, index) => (
+                <nav aria-label={t("nav.folderPath")}>
+                  {fileTrail.slice(sharedFolderId ? 1 : 0).map((item, index) => {
+                    const label = item.type === "system" && item.id === "root" ? t("nav.files") : item.name;
+                    return (
                     <span key={`${item.type}:${item.id}`}>
                       {index > 0 && <span className="files-topbar-chevron">/</span>}
-                      <button type="button" title={item.name} onClick={() => openFileTrail(index + (sharedFolderId ? 1 : 0))}>
-                        {item.name.length > 18 ? `…${item.name.slice(-17)}` : item.name}
+                      <button type="button" title={label} onClick={() => openFileTrail(index + (sharedFolderId ? 1 : 0))}>
+                        {label.length > 18 ? `…${label.slice(-17)}` : label}
                       </button>
                     </span>
-                  ))}
+                    );
+                  })}
                 </nav></>}
               </div>
             )}
@@ -1161,7 +1166,7 @@ export function App() {
                     {currentDetail.resource.owner_id && (
                       <>
                         {" "}
-                        · 所有者{" "}
+                        · {t("shell.owner")}{" "}
                         <UserBadge
                           id={currentDetail.resource.owner_id}
                           name={currentDetail.ownerName}
@@ -1196,7 +1201,7 @@ export function App() {
                         }
                       >
                         <ShieldCheck size={16} />
-                        分享与权限
+                        {t("shell.share")}
                       </button>
                       <DocumentModeSwitch />
                       {user && (
@@ -1219,6 +1224,7 @@ export function App() {
                 <MembershipLink vip={me?.entitlements?.vip} onError={setError} />
                 <TodoIcon />
                 <Notifications />
+                <LocaleSwitch />
                 <AccountMenu
                   refresh={refreshMe}
                   user={user}
@@ -1234,7 +1240,7 @@ export function App() {
                 />
               </div>
             ) : (
-              <a href="#/home">登录 Doca</a>
+              <a href="#/home">{t("shell.signIn")}</a>
             )}
           </div>
         </header>
@@ -1253,12 +1259,11 @@ export function App() {
         <div
           className={
             "main-scroll" +
-            (!resourceId && !backupPage && !["knowledge", "trash"].includes(scope) ? " dashboard-scroll-host" : "")
+            (!resourceId && !backupPage && scope !== "trash" ? " dashboard-scroll-host" : "")
           }
         >
-          {!resourceId && scope === "knowledge" && user ? (
-            <KnowledgeRelations />
-          ) : !resourceId && scope === "files" && user ? (
+          {user && <SubscribeLibraryHost />}
+          {!resourceId && scope === "files" && user ? (
             <FilesExplorer onNavigationChange={setFileTrail} />
           ) : !resourceId && scope === "shared-files" && sharedFolderId && user ? (
             <FilesExplorer key={sharedFolderId} initialRoot={{ type: "folder", id: sharedFolderId, name: sharedFolderName }} routeBase={`/shared-files/${sharedFolderId}`} sharedRoot onNavigationChange={setFileTrail} />
@@ -1269,19 +1274,21 @@ export function App() {
           ) : !resourceId && scope === "ai" ? (
             <AIChat full />
           ) : !resourceId && scope === "notes" && user ? (
-            <Suspense fallback={<p className="empty">正在加载随手记…</p>}><QuickNotes key={user.id} userId={user.id} changed={() => setRefresh(n => n + 1)} /></Suspense>
+            <Suspense fallback={<p className="empty">{t("shell.loadingNotes")}</p>}><QuickNotes key={user.id} userId={user.id} changed={() => setRefresh(n => n + 1)} /></Suspense>
           ) : ticketsPage ? (
             <Tickets ticketId={ticketId} />
           ) : backupPage ? (
             <CloudBackup />
           ) : resourceId ? (
             loading ? (
-              <div className="empty">正在打开…</div>
+              <div className="empty">{t("nav.opening")}</div>
             ) : detail ? (
               <>
                 {detail.resource.kind === "library" ? (
                   librarySettingsPage ? (
                     <LibrarySettings detail={detail} changed={reload} />
+                  ) : librarySystemPage ? (
+                    <LibrarySystemPage detail={detail} changed={reload} />
                   ) : (
                     <LibraryLanding
                       resource={detail.resource}
@@ -1289,7 +1296,7 @@ export function App() {
                     />
                   )
                 ) : (
-                  <Suspense fallback={<p className="empty">正在加载编辑器…</p>}>
+                  <Suspense fallback={<p className="empty">{t("shell.loadingEditor")}</p>}>
                     <DocumentEditor
                       detail={detail}
                       targetComment={targetComment}
@@ -1353,12 +1360,12 @@ export function App() {
               return;
             }
             void act(async () => {
-              setImportProgress({ phase: "parsing", message: "正在准备导入…" });
+              setImportProgress({ phase: "parsing", message: t("shell.preparingImport") });
               const input = {
                 ...creation,
                 title:
                   file.name.replace(/\.(canvas\.)?[^.]+$/, "").slice(0, 200) ||
-                  "未命名",
+                  t("shell.untitled"),
                 format,
               };
               const r = await createImportedDocument(input, file, (next) =>
@@ -1412,10 +1419,10 @@ export function App() {
         <Dialog
           title={
             modal === "rename"
-              ? "重命名"
+              ? t("shell.rename")
               : creation.kind === "library"
-                ? "创建知识库"
-                : "创建文档"
+                ? t("shell.createLibrary")
+                : t("shell.createDocument")
           }
           close={() => setModal("")}
           className="modal-compact"
@@ -1443,40 +1450,40 @@ export function App() {
             }}
           >
             <label>
-              名称
+              {t("shell.name")}
               <input
                 name="title"
                 required
                 autoFocus
                 maxLength={160}
                 defaultValue={modal === "rename" ? detail?.resource.title : ""}
-                placeholder="给内容起个名字"
+                placeholder={t("shell.namePlaceholder")}
               />
             </label>
             {modal === "create" && creation.kind === "document" && (
               <label>
-                文档类型
+                {t("shell.docType")}
                 <Select name="format">
-                  <option value="rich_text">文档</option>
-                  <option value="spreadsheet">表格</option>
+                  <option value="rich_text">{t("shell.type.rich")}</option>
+                  <option value="spreadsheet">{t("shell.type.sheet")}</option>
                   <option value="markdown">Markdown</option>
-                  <option value="canvas">无限画板</option>
-                  <option value="presentation">演示文稿</option>
+                  <option value="canvas">{t("shell.type.canvas")}</option>
+                  <option value="presentation">{t("shell.type.slides")}</option>
                 </Select>
               </label>
             )}
             <p className="subtle">
               {creation.parentId || creation.libraryId
-                ? "默认继承所在目录的权限。"
-                : "默认只有你能访问，之后可以邀请协作者。"}
+                ? t("shell.inheritAccess")
+                : t("shell.privateAccess")}
             </p>
             {error && <Feedback message={error} tone="error" />}
             <footer>
               <button type="button" onClick={() => setModal("")}>
-                取消
+                {t("common.cancel")}
               </button>
               <button className="primary" disabled={busy}>
-                确定
+                {t("common.confirm")}
               </button>
             </footer>
           </form>
@@ -1530,7 +1537,7 @@ export function App() {
       const d = await api<Page>(`/resources?${params}`);
       setPage({ ...d, items: [...page.items, ...d.items] });
     } catch (e) {
-      setError(errorText(e));
+      setError(errorText(e, t("common.failed")));
     }
   }
 }
@@ -1545,20 +1552,21 @@ function ResourceList({
   restore: (r: Resource) => void;
   loadMore: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="resource-list">
       {!page.items.length ? (
         <div className="empty">
           <FolderOpen size={40} />
-          <h3>这里还没有内容</h3>
-          <p>新建内容，或调整搜索和筛选条件。</p>
+          <h3>{t("shell.emptyList")}</h3>
+          <p>{t("shell.emptyListHint")}</p>
         </div>
       ) : (
         <>
           <div className="list-header">
-            <span>名称</span>
-            <span>访问权限</span>
-            <span>更新时间</span>
+            <span>{t("shell.name")}</span>
+            <span>{t("shell.access")}</span>
+            <span>{t("shell.updated")}</span>
             <span />
           </div>
           {page.items.map((r) => (
@@ -1571,25 +1579,25 @@ function ResourceList({
                 <FileIcon r={r} />
                 <span>
                   {r.title}
-                  {r.kind === "library" && <small>知识库</small>}
+                  {r.kind === "library" && <small>{t("shell.kind.library")}</small>}
                 </span>
               </button>
               <span className="tag">
                 {r.access_mode === "inherit"
-                  ? "继承上级"
+                  ? t("shell.access.inherit")
                   : r.visibility === "public"
-                    ? "公开阅读"
+                    ? t("shell.access.public")
                     : r.visibility === "authenticated"
-                      ? "登录可见"
-                      : "仅受邀者"}
+                      ? t("shell.access.signedIn")
+                      : t("shell.access.invited")}
               </span>
               <time>{new Date(r.updated_at).toLocaleDateString()}</time>
               {r.deleted_at ? (
-                <button onClick={() => restore(r)}>恢复</button>
+                <button onClick={() => restore(r)}>{t("common.restore")}</button>
               ) : (
                 <button
                   className="icon"
-                  aria-label={`打开${r.title}`}
+                  aria-label={t("home.openNamed", { title: r.title })}
                   onClick={() => open(r.id)}
                 >
                   <ChevronRight size={16} />
@@ -1599,7 +1607,7 @@ function ResourceList({
           ))}
           {page.nextOffset !== null && (
             <button className="load-more" onClick={loadMore}>
-              加载更多
+              {t("common.more")}
             </button>
           )}
         </>
@@ -1631,6 +1639,7 @@ function Comments({
   targetComment?: string | null;
   loadMoreComments?: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [reply, setReply] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(10);
@@ -1656,7 +1665,7 @@ function Comments({
         <button
           className={detail.liked ? "liked" : ""}
           disabled={!user || busy}
-          aria-label={detail.liked ? "取消点赞" : "点赞"}
+          aria-label={detail.liked ? t("shell.unlike") : t("shell.like")}
           onClick={() =>
             void act(() =>
               api(`/resources/${r.id}/reaction`, "PUT", {
@@ -1670,13 +1679,13 @@ function Comments({
         </button>
         <p>
           {detail.likes
-            ? `${detail.likes} 人觉得有帮助`
-            : "觉得有帮助，就点个赞吧"}
+            ? t("shell.likes", { count: detail.likes })
+            : t("shell.likePrompt")}
         </p>
         <LikePeople detail={detail} />
       </div>
       <h2>
-        全文评论{" "}
+        {t("shell.pageComments")}{" "}
         <small>{detail.comments.filter((c) => !c.deleted_at).length}</small>
       </h2>
       {detail.comments.slice(0, visibleCount).map((c) => (
@@ -1753,7 +1762,7 @@ function Comments({
           className="comments-load-more"
           onClick={() => setVisibleCount((n) => n + 10)}
         >
-          加载更多评论
+          {t("shell.moreComments")}
         </button>
       )}
       {visibleCount >= detail.comments.length &&
@@ -1763,7 +1772,7 @@ function Comments({
             disabled={busy}
             onClick={() => void loadMoreComments?.()}
           >
-            加载后续评论
+            {t("shell.laterComments")}
           </button>
         )}
       {user && rank >= 2 ? (
@@ -1780,13 +1789,14 @@ function Comments({
         />
       ) : (
         <p className="subtle">
-          {user ? "你当前只有阅读权限。" : "登录并获得评论权限后即可参与讨论。"}
+          {user ? t("shell.readOnlyComment") : t("shell.signInToComment")}
         </p>
       )}
     </section>
   );
 }
 function Notifications() {
+  const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false),
     [data, setData] = useState<{
@@ -1838,8 +1848,8 @@ function Notifications() {
     <div className="notifications" ref={panelRef}>
       <button
         className="icon notification-trigger"
-        title="通知"
-        aria-label={`通知 ${data.unread} 条未读`}
+        title={t("shell.notifications")}
+        aria-label={`${t("shell.notifications")} ${t("shell.unread", { count: data.unread })}`}
         onClick={() => {
           setOpen(!open);
           void load().catch((e) => setError(e.message));
@@ -1855,7 +1865,7 @@ function Notifications() {
       {open && (
         <section className="notification-panel">
           <header className="notification-heading">
-            <h3>通知</h3>
+            <h3>{t("shell.notifications")}</h3>
             <button
               className="text-button"
               disabled={!data.unread}
@@ -1865,37 +1875,43 @@ function Notifications() {
                   .catch((e) => setError(e.message))
               }
             >
-              全部已读
+              {t("shell.markRead")}
             </button>
           </header>
           {error && <Feedback message={error} tone="error" />}
-          {!data.items.length && <p>暂时没有新通知</p>}
+          {!data.items.length && <p>{t("shell.noNotifications")}</p>}
           {data.items.map((n) => {
             const baseDescription =
               (
                 {
-                  "comment.created": "评论了文档",
-                  "comment.mentioned": "在评论中提及了你",
-                  "document.mentioned": "在文档中提及了你",
-                  "favorite.added": "收藏了文档",
-                  "like.added": "赞了文档",
-                  "resource.permissions_changed": "邀请你协作",
-                  "resource.invited": "邀请你加入协作，请接受邀请",
-                  "access.requested": "申请文档权限，待你处理",
-                  "access.approved": "通过了你的权限申请",
-                  "access.rejected": "未通过你的权限申请",
-                  "invitation.accepted": "接受了协作邀请",
-                  "invitation.rejected": "拒绝了协作邀请",
-                  "resource.transferred": "文档已转交给你",
-                  "ticket.updated": "工单状态已更新",
-                  "ticket.reminded": "提醒你处理工单",
-                  "access.cancelled": "权限申请已撤销",
-                  "invitation.cancelled": "协作邀请已撤销",
+                  "comment.created": t("notify.comment.created"),
+                  "comment.mentioned": t("notify.comment.mentioned"),
+                  "document.mentioned": t("notify.document.mentioned"),
+                  "favorite.added": t("notify.favorite.added"),
+                  "like.added": t("notify.like.added"),
+                  "resource.permissions_changed": t("notify.resource.permissions_changed"),
+                  "resource.invited": t("notify.resource.invited"),
+                  "access.requested": t("notify.access.requested"),
+                  "access.approved": t("notify.access.approved"),
+                  "access.rejected": t("notify.access.rejected"),
+                  "invitation.accepted": t("notify.invitation.accepted"),
+                  "invitation.rejected": t("notify.invitation.rejected"),
+                  "resource.transferred": t("notify.resource.transferred"),
+                  "ticket.updated": t("notify.ticket.updated"),
+                  "ticket.reminded": t("notify.ticket.reminded"),
+                  "access.cancelled": t("notify.access.cancelled"),
+                  "invitation.cancelled": t("notify.invitation.cancelled"),
                 } as Record<string, string>
-              )[n.type] ?? "文档动态更新";
+              )[n.type] ?? t("notify.fallback");
             const grantedRole = n.grantedPermission?.role;
-            const description = grantedRole ? `${baseDescription} · ${{ reader: "可阅读", commenter: "可评论", editor: "可编辑", manager: "可管理" }[grantedRole] ?? grantedRole}（${n.grantedPermission?.includeDescendants ? "包含子文档" : "仅当前节点"}）` : baseDescription;
-            const documentTitle = n.title || (n.ticket_id ? "工单" : "未命名");
+            const roleLabel = ({
+              reader: t("role.reader"),
+              commenter: t("role.commenter"),
+              editor: t("role.editor"),
+              manager: t("role.manager"),
+            } as Record<string, string>)[grantedRole ?? ""] ?? grantedRole;
+            const description = grantedRole ? `${baseDescription} · ${roleLabel}（${n.grantedPermission?.includeDescendants ? t("role.scope.descendants") : t("role.scope.node")}）` : baseDescription;
+            const documentTitle = n.title || (n.ticket_id ? t("shell.ticket") : t("shell.unnamed"));
             const href = n.ticket_id
               ? `#/tickets/${n.ticket_id}`
               : n.type === "resource.invited" || n.type.startsWith("access.")
@@ -1908,9 +1924,9 @@ function Notifications() {
               >
                 <div className="notification-person">
                   <span
-                    title={`${n.actorName ?? "系统"} ${description} · ${documentTitle}`}
+                    title={`${n.actorName ?? t("shell.system")} ${description} · ${documentTitle}`}
                   >
-                    <strong>{n.actorName ?? "系统"}</strong> {description}
+                    <strong>{n.actorName ?? t("shell.system")}</strong> {description}
                     <span className="notification-document">
                       {documentTitle}
                     </span>
@@ -1941,7 +1957,7 @@ function Notifications() {
                       }
                     }}
                   >
-                    查看
+                    {t("shell.view")}
                   </a>
                 )}
               </div>
@@ -1963,7 +1979,7 @@ function Notifications() {
                   .catch((e) => setError(e.message));
               }}
             >
-              加载更早的通知
+              {t("shell.olderNotifications")}
             </button>
           )}
         </section>
@@ -1972,6 +1988,7 @@ function Notifications() {
   );
 }
 function Account({ user, logout }: { user: User; logout: () => void }) {
+  const { t } = useI18n();
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   return (
@@ -1989,17 +2006,17 @@ function Account({ user, logout }: { user: User; logout: () => void }) {
             logout();
             location.hash = "/mine";
           } catch (e) {
-            setError(errorText(e));
+            setError(errorText(e, t("common.failed")));
           } finally {
             setBusy(false);
           }
         }}
       >
-        <h2>修改密码</h2>
-        <p className="subtle">成功后撤销所有设备上的登录会话。</p>
+        <h2>{t("shell.changePassword")}</h2>
+        <p className="subtle">{t("shell.changePasswordHint")}</p>
 
         <label>
-          新密码
+          {t("shell.newPassword")}
           <input
             name="new"
             type="password"
@@ -2011,7 +2028,7 @@ function Account({ user, logout }: { user: User; logout: () => void }) {
         </label>
         {error && <Feedback message={error} tone="error" />}
         <button className="primary" disabled={busy}>
-          修改密码并退出
+          {t("shell.changePasswordSubmit")}
         </button>
       </form>
       <button
@@ -2025,7 +2042,7 @@ function Account({ user, logout }: { user: User; logout: () => void }) {
         }
       >
         <LogOut size={16} />
-        退出登录
+        {t("account.signOut")}
       </button>
     </section>
   );

@@ -454,7 +454,7 @@ export function registerAccounts(
           accountCookie(ctx, "doca_account_flow", token),
         );
       }
-      return verification.start(
+      const started = await verification.start(
         {
           ...req.body,
           binding: tokenHash(token),
@@ -470,6 +470,8 @@ export function registerAccounts(
             expiresInSeconds: 300,
           }),
       );
+      // React Native hides Set-Cookie, so the mobile client echoes this token as a Cookie header.
+      return req.headers["x-doca-client"] === "mobile" ? { ...started, flow: token } : started;
     },
   );
   api.post<{ Body: { challengeId: string; code: string } }>(

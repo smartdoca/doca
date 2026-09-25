@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { useI18n } from "@web/shared/i18n.js";
 import {
   SpreadsheetEditor,
   type WorkbookSnapshot,
@@ -19,6 +20,7 @@ export default function TrashSheetPreview({
   id: string;
   sheet: { snapshot: WorkbookSnapshot; checkpointId: string; update: string };
 }) {
+  const { locale } = useI18n();
   const preview = useMemo(() => {
     const doc = new Doc();
     applyUpdate(doc, fromBase64(sheet.update));
@@ -33,6 +35,7 @@ export default function TrashSheetPreview({
   useEffect(() => () => preview.doc.destroy(), [preview]);
   return (
     <SpreadsheetEditor
+      locale={locale}
       workbookId={id}
       initialSnapshot={sheet.snapshot}
       collaboration={preview.adapter}

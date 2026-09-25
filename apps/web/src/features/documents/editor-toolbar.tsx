@@ -1,4 +1,5 @@
 import { Feedback } from "@web/shared/components/feedback.js";
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { RichTextEditorHandle, BlockType } from "slatetsx-kit-editor";
 import { FONT_FAMILIES } from "slatetsx-kit-editor";
@@ -45,6 +46,7 @@ export function EditorToolbar({
   disabled: boolean;
   selectionRevision?: number;
 }) {
+  const { t: tr } = useI18n();
   const host = useRef<HTMLDivElement>(null);
   const savedSelection = useRef<SlateRange | null>(null);
   const savedColorSelection = useRef<SlateRange | null>(null);
@@ -101,22 +103,22 @@ export function EditorToolbar({
   };
   const tools = [
     {
-      name: "撤销",
+      name: tr("toolbar.undo"),
       icon: Undo2,
       action: (h: RichTextEditorHandle) => h.commands.undo(),
     },
     {
-      name: "重做",
+      name: tr("toolbar.redo"),
       icon: Redo2,
       action: (h: RichTextEditorHandle) => h.commands.redo(),
     },
     ...(
       [
-        ["加粗", Bold, "bold"],
-        ["斜体", Italic, "italic"],
-        ["下划线", Underline, "underline"],
-        ["删除线", Strikethrough, "strikethrough"],
-        ["行内代码", Code, "code"],
+        [tr("toolbar.bold"), Bold, "bold"],
+        [tr("toolbar.italic"), Italic, "italic"],
+        [tr("toolbar.underline"), Underline, "underline"],
+        [tr("toolbar.strike"), Strikethrough, "strikethrough"],
+        [tr("toolbar.inlineCode"), Code, "code"],
       ] as const
     ).map(([name, icon, mark]) => ({
       name,
@@ -126,16 +128,16 @@ export function EditorToolbar({
       action: (h: RichTextEditorHandle) => h.commands.toggleMark(mark),
     })),
     {
-      name: "清除格式",
+      name: tr("toolbar.clear"),
       icon: Eraser,
       preserveSelection: true,
       action: (h: RichTextEditorHandle) => h.commands.clearFormatting(),
     },
     ...(
       [
-        ["左对齐", AlignLeft, "left"],
-        ["居中", AlignCenter, "center"],
-        ["右对齐", AlignRight, "right"],
+        [tr("toolbar.alignLeft"), AlignLeft, "left"],
+        [tr("toolbar.alignCenter"), AlignCenter, "center"],
+        [tr("toolbar.alignRight"), AlignRight, "right"],
       ] as const
     ).map(([name, icon, align]) => ({
       name,
@@ -181,7 +183,7 @@ export function EditorToolbar({
   const marks = handle?.query.getSelection()?.marks;
   const sizeMenu = (
     <details className="menu">
-      <summary aria-label="字号" onMouseDown={rememberSelection}>
+      <summary aria-label={tr("toolbar.fontSize")} onMouseDown={rememberSelection}>
         {marks?.fontSize ?? 16}
         <ChevronDown size={12} />
       </summary>
@@ -213,7 +215,7 @@ export function EditorToolbar({
               : marks?.color || "#1f2329",
           } as CSSProperties
         }
-        aria-label={background ? "背景色" : "文字颜色"}
+        aria-label={background ? tr("toolbar.background") : tr("toolbar.textColor")}
         onMouseDown={rememberSelection}
       >
         {background ? <Highlighter size={16} /> : <Palette size={16} />}
@@ -230,7 +232,7 @@ export function EditorToolbar({
             )
           }
         >
-          {background ? "清除背景色" : "默认颜色"}
+          {background ? tr("toolbar.clearBackground") : tr("toolbar.defaultColor")}
         </button>
         <div className="toolbar-colors">
           {(background
@@ -258,7 +260,7 @@ export function EditorToolbar({
             <button
               key={color}
               disabled={disabled}
-              aria-label={color === "transparent" ? "清除背景色" : color}
+              aria-label={color === "transparent" ? tr("toolbar.clearBackground") : color}
               title={color}
               style={{ background: color }}
               aria-pressed={
@@ -279,10 +281,10 @@ export function EditorToolbar({
           ))}
         </div>
         <label className="custom-color-picker">
-          自定义颜色
+          {tr("toolbar.customColor")}
           <input
             type="color"
-            aria-label={background ? "自定义背景色" : "自定义文字颜色"}
+            aria-label={background ? tr("toolbar.customBackground") : tr("toolbar.customText")}
             disabled={disabled}
             defaultValue={background ? "#fff1b8" : "#1f2329"}
             onMouseDown={(e) => {
@@ -322,26 +324,26 @@ export function EditorToolbar({
       ),
     },
     {
-      key: "段落样式",
+      key: tr("toolbar.block"),
       width: 78,
       node: (
         <details className="menu">
-          <summary aria-label="段落样式">
-            正文 <ChevronDown size={12} />
+          <summary aria-label={tr("toolbar.block")}>
+            {tr("toolbar.paragraph")} <ChevronDown size={12} />
           </summary>
           <div>
             {(
               [
-                ["paragraph", "正文"],
-                ["heading-one", "一级标题"],
-                ["heading-two", "二级标题"],
-                ["heading-three", "三级标题"],
-                ["heading-four", "四级标题"],
-                ["heading-five", "五级标题"],
-                ["bulleted-list", "无序列表"],
-                ["numbered-list", "有序列表"],
-                ["todo", "待办事项"],
-                ["block-quote", "引用"],
+                ["paragraph", tr("toolbar.paragraph")],
+                ["heading-one", tr("toolbar.h1")],
+                ["heading-two", tr("toolbar.h2")],
+                ["heading-three", tr("toolbar.h3")],
+                ["heading-four", tr("toolbar.h4")],
+                ["heading-five", tr("toolbar.h5")],
+                ["bulleted-list", tr("toolbar.bullets")],
+                ["numbered-list", tr("toolbar.numbers")],
+                ["todo", tr("toolbar.todo")],
+                ["block-quote", tr("toolbar.quote")],
               ] as [BlockType, string][]
             ).map(([type, label]) => (
               <button
@@ -359,13 +361,19 @@ export function EditorToolbar({
       ),
     },
     {
-      key: "字体",
+      key: tr("toolbar.font"),
       width: 82,
       node: (
         <details className="menu">
-          <summary aria-label="字体" onMouseDown={rememberSelection}>
+          <summary aria-label={tr("toolbar.font")} onMouseDown={rememberSelection}>
             {
-              ["默认字体", "黑体", "宋体", "楷体", "等宽字体"][
+              [
+                tr("toolbar.fontDefault"),
+                tr("toolbar.fontHei"),
+                tr("toolbar.fontSong"),
+                tr("toolbar.fontKai"),
+                tr("toolbar.fontMono"),
+              ][
                 Math.max(
                   0,
                   FONT_FAMILIES.findIndex(
@@ -388,24 +396,30 @@ export function EditorToolbar({
                   run((h) => h.commands.setFontFamily(family.value), true)
                 }
               >
-                {["默认字体", "黑体", "宋体", "楷体", "等宽字体"][index]}
+                {[
+                  tr("toolbar.fontDefault"),
+                  tr("toolbar.fontHei"),
+                  tr("toolbar.fontSong"),
+                  tr("toolbar.fontKai"),
+                  tr("toolbar.fontMono"),
+                ][index]}
               </button>
             ))}
           </div>
         </details>
       ),
     },
-    { key: "字号", width: 52, node: sizeMenu },
-    { key: "文字颜色", width: 30, node: colorMenu(false) },
-    { key: "背景色", width: 30, node: colorMenu(true) },
+    { key: tr("toolbar.fontSize"), width: 52, node: sizeMenu },
+    { key: tr("toolbar.textColor"), width: 30, node: colorMenu(false) },
+    { key: tr("toolbar.background"), width: 30, node: colorMenu(true) },
     ...tools.slice(2).map((t) => ({ key: t.name, width: 30, node: button(t) })),
     {
-      key: "超链接",
+      key: tr("toolbar.link"),
       width: 30,
       node: <DocumentLinkControl handle={handle} disabled={disabled} />,
     },
     {
-      key: "表情",
+      key: tr("toolbar.emoji"),
       width: 30,
       node: (
         <EmojiPicker
@@ -432,7 +446,7 @@ export function EditorToolbar({
     },
     ...[
       {
-        name: "代码块",
+        name: tr("toolbar.codeBlock"),
         icon: Code,
         action: (h: RichTextEditorHandle) =>
           h.commands.insertBlock({
@@ -444,18 +458,18 @@ export function EditorToolbar({
           }),
       },
       {
-        name: "公式",
+        name: tr("toolbar.formula"),
         icon: Sigma,
         action: (h: RichTextEditorHandle) => h.commands.insertFormula(),
       },
       {
-        name: "引用",
+        name: tr("toolbar.quote"),
         icon: Quote,
         action: (h: RichTextEditorHandle) =>
           h.commands.toggleBlock("block-quote"),
       },
       {
-        name: "分割线",
+        name: tr("toolbar.divider"),
         icon: Minus,
         action: (h: RichTextEditorHandle) =>
           h.commands.insertBlock({
@@ -465,7 +479,7 @@ export function EditorToolbar({
           }),
       },
       {
-        name: "卡片",
+        name: tr("toolbar.card"),
         icon: Square,
         action: (h: RichTextEditorHandle) =>
           h.commands.insertBlock({
@@ -481,7 +495,7 @@ export function EditorToolbar({
           }),
       },
       {
-        name: "图片 / 视频",
+        name: tr("toolbar.media"),
         icon: ImagePlus,
         action: () => {
           setFileKind("media");
@@ -489,7 +503,7 @@ export function EditorToolbar({
         },
       },
       {
-        name: "附件",
+        name: tr("toolbar.attachment"),
         icon: Paperclip,
         action: () => {
           setFileKind("attachment");
@@ -498,11 +512,11 @@ export function EditorToolbar({
       },
     ].map((t) => ({ key: t.name, width: 30, node: button(t) })),
     {
-      key: "插入表格",
+      key: tr("toolbar.table"),
       width: 46,
       node: (
         <details className="menu">
-          <summary aria-label="插入表格">
+          <summary aria-label={tr("toolbar.table")}>
             <Table2 size={16} />
             <ChevronDown size={12} />
           </summary>
@@ -516,8 +530,8 @@ export function EditorToolbar({
             })).map(({ rows, columns }) => (
               <button
                 key={`${rows}:${columns}`}
-                aria-label={`${rows} 行 ${columns} 列表格`}
-                title={`${rows} 行 ${columns} 列`}
+                aria-label={tr("toolbar.tableSize", { rows, columns })}
+                title={tr("toolbar.tableSize", { rows, columns })}
                 className={
                   rows <= tableSize.rows && columns <= tableSize.columns
                     ? "in-range"
@@ -539,11 +553,11 @@ export function EditorToolbar({
       ),
     },
     {
-      key: "插入分列",
+      key: tr("toolbar.columns"),
       width: 46,
       node: (
         <details className="menu">
-          <summary aria-label="插入分列">
+          <summary aria-label={tr("toolbar.columns")}>
             <Columns3 size={16} />
             <ChevronDown size={12} />
           </summary>
@@ -555,7 +569,7 @@ export function EditorToolbar({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => run((h) => h.commands.insertColumns(n))}
               >
-                {n} 列布局
+                {tr("toolbar.columnLayout", { count: n })}
               </button>
             ))}
           </div>
@@ -567,18 +581,18 @@ export function EditorToolbar({
     typeof document !== "undefined" &&
     document.documentElement.dataset.editorShell === "mobile";
   const mobileTools = new Set([
-    "段落样式",
-    "加粗",
-    "斜体",
-    "下划线",
-    "删除线",
-    "左对齐",
-    "居中",
-    "右对齐",
-    "超链接",
-    "引用",
-    "图片 / 视频",
-    "分割线",
+    tr("toolbar.block"),
+    tr("toolbar.bold"),
+    tr("toolbar.italic"),
+    tr("toolbar.underline"),
+    tr("toolbar.strike"),
+    tr("toolbar.alignLeft"),
+    tr("toolbar.alignCenter"),
+    tr("toolbar.alignRight"),
+    tr("toolbar.link"),
+    tr("toolbar.quote"),
+    tr("toolbar.media"),
+    tr("toolbar.divider"),
   ]);
   const toolbarItems = mobileEditor
     ? items.filter((item) => mobileTools.has(item.key))
@@ -594,7 +608,7 @@ export function EditorToolbar({
     <div
       className="editor-fixed-toolbar"
       role="toolbar"
-      aria-label="文档操作栏"
+      aria-label={tr("toolbar.label")}
       onMouseDown={(e) => e.preventDefault()}
     >
       <div className="editor-toolbar-buttons" ref={host}>
@@ -609,7 +623,7 @@ export function EditorToolbar({
         ))}
         {overflow.length > 0 && (
           <details className="menu toolbar-overflow">
-            <summary aria-label="更多文字工具">
+            <summary aria-label={tr("toolbar.more")}>
               <MoreHorizontal size={17} />
             </summary>
             <div className="toolbar-overflow-panel">
@@ -651,7 +665,7 @@ export function EditorToolbar({
         if (svg || item.mime.startsWith("image/") || item.mime.startsWith("video/")) await handle.commands.uploadMedia(selected);
         else await handle.commands.uploadAttachment(selected);
       }} />}
-      {sourcePicker && <FileSourceDialog title={fileKind === "media" ? "添加图片或视频" : "添加附件"} close={() => setSourcePicker(false)} chooseDoca={() => setFolderPicker(true)} chooseLocal={() => requestAnimationFrame(() => file.current?.click())} />}
+      {sourcePicker && <FileSourceDialog title={fileKind === "media" ? tr("toolbar.addMedia") : tr("toolbar.addAttachment")} close={() => setSourcePicker(false)} chooseDoca={() => setFolderPicker(true)} chooseLocal={() => requestAnimationFrame(() => file.current?.click())} />}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { AIReferenceButton } from "@web/features/ai/ai-context.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Y from "yjs";
@@ -73,6 +74,7 @@ export default function PresentationDocument({
   targetComment?: string | null;
   loadMoreComments?: () => Promise<void>;
 }) {
+  const { locale, t } = useI18n();
   const id = detail.resource.id;
   const sync = useSurfaceSync(id, user?.id, "eppt-yjs-v5", factory, changed, 2);
   const model = sync.binding?.value;
@@ -295,6 +297,7 @@ export default function PresentationDocument({
           }
           render={() => (
             <PresentationWorkspace
+              locale={locale}
               ref={onReady}
               document={model.doc}
               chrome="embedded"
@@ -317,8 +320,8 @@ export default function PresentationDocument({
                     <AIReferenceButton anchor={{...anchor, epochId: model?.epochId}} />
                     <button
                       className="ppt-comment-action"
-                      title="评论选中内容"
-                      aria-label="评论选中内容"
+                      title={t("editor.commentSelection")}
+                      aria-label={t("editor.commentSelection")}
                       disabled={rank < 2 || !sync.connected || sync.blocked}
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {

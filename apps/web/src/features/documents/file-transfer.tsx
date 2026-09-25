@@ -11,6 +11,7 @@ import {
   type UploadProgress,
 } from "@web/shared/api.js";
 import { notifyFeedback } from "@web/shared/components/feedback.js";
+import { useI18n } from "@web/shared/i18n.js";
 import "@web/features/documents/document-download.css";
 
 export const importFormats = {
@@ -522,6 +523,7 @@ export function DocumentDownload({
   disabled?: boolean;
   onError: (message: string) => void;
 }) {
+  const { t } = useI18n();
   const [slot, setSlot] = useState<HTMLElement | null>(null),
     [busy, setBusy] = useState(false);
   useEffect(() => setSlot(document.getElementById("document-export-slot")), []);
@@ -530,7 +532,7 @@ export function DocumentDownload({
     try {
       await option.run();
     } catch (e) {
-      onError(e instanceof Error ? e.message : "下载失败");
+      onError(e instanceof Error ? e.message : t("doc.downloadFailed"));
     } finally {
       setBusy(false);
     }
@@ -544,10 +546,14 @@ export function DocumentDownload({
         onClick={() => void run(options[0]!)}
       >
         <Download size={16} />
-        {busy ? "正在生成…" : "下载"}
+        {busy ? t("doc.downloading") : t("doc.download")}
       </button>
     ) : (
-      <DocumentSubmenu label="下载" icon={<Download size={16} />}>
+      <DocumentSubmenu
+        label={t("doc.download")}
+        panelLabel={t("doc.downloadFormat")}
+        icon={<Download size={16} />}
+      >
         {options.map((option) => (
           <button
             key={option.label}
