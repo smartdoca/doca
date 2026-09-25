@@ -22,14 +22,24 @@ html, body { width: 100% !important; max-width: 100% !important; overflow-x: hid
 }
 .sk-code *, .cm-scroller * { max-width: none !important; }
 .sk-table-block, .sk-table-scroll {
-  display: block; width: 100% !important; max-width: 100% !important; margin-left: 0 !important;
-  padding-left: 0 !important; overflow-x: auto !important;
+  display: block; width: 100% !important; max-width: 100% !important; min-width: 0 !important; margin-left: 0 !important;
+  padding-left: 0 !important; overflow-x: auto !important; overflow-y: hidden !important;
 }
-[data-slate-editor="true"] .sk-table-block * {
-  white-space: nowrap !important; overflow-wrap: normal !important; word-break: normal !important; max-width: none !important;
+.sk-table-block table { width: max-content !important; min-width: 100% !important; max-width: none !important; table-layout: auto !important; }
+.sk-table-block td, .sk-table-block th {
+  min-width: 112px !important; max-width: 240px !important; vertical-align: top !important;
+  white-space: pre-wrap !important; overflow-wrap: anywhere !important; word-break: break-word !important;
 }
-.sk-table-block table { width: max-content; min-width: 100%; max-width: none; }
-.sk-page img, .markdown-body img { max-width: 100%; height: auto; }
+.sk-table-block td *, .sk-table-block th * {
+  white-space: pre-wrap !important; overflow-wrap: anywhere !important; word-break: break-word !important; max-width: 100% !important;
+}
+.sk-table-block .sk-code, .sk-table-block .sk-code * {
+  white-space: pre !important; overflow-wrap: normal !important; word-break: normal !important; max-width: none !important;
+}
+.sk-page img, .markdown-body img { max-width: 100% !important; height: auto !important; }
+.sk-table-block td img, .sk-table-block th img, .sk-table-block td video, .sk-table-block th video, .sk-table-block td svg, .sk-table-block th svg {
+  display: block !important; width: auto !important; max-width: 200px !important; height: auto !important;
+}
 .sk-block-gutter, .sk-block-menu, .sk-floating, .document-scroll-buttons, .document-outline,
 .outline-floating-toggle, .outline-drawer-host, .content-comments, .note-float, .note-float-pill {
   display: none !important;

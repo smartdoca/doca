@@ -5,6 +5,7 @@ import { Select } from "@web/shared/components/select.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { realtime } from "@web/features/documents/realtime.js";
 import { TicketStatusFilter } from "@web/features/tickets/ticket-status-filter.js";
+import { useI18n } from "@web/shared/i18n.js";
 import "@web/features/tickets/tickets.css";
 type Person = { id: string; display_name: string; public_id?: string };
 type Operation = { type?: string; role?: string; includeDescendants?: boolean };
@@ -66,12 +67,13 @@ const actionNames: Record<string, string> = {
 };
 const stamp = (s: string) => new Date(s).toLocaleString();
 export function TicketIcon() {
+  const { t } = useI18n();
   return (
     <a
       className="icon todo-icon"
       href="#/tickets"
-      title="工单"
-      aria-label="工单"
+      title={t("nav.tickets")}
+      aria-label={t("nav.tickets")}
     >
       <ClipboardList size={19} />
     </a>

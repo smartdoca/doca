@@ -1275,6 +1275,9 @@ export function MailApp({ mailboxId, preview = false }: { mailboxId?: string; pr
                 </div>
               </fieldset>
             )}
+            {mailbox && (mailbox.role === "owner" || mailbox.role === "admin") && (
+              <button type="button" onClick={() => { setSwitchOpen(false); window.dispatchEvent(new CustomEvent("doca-subscribe-library", { detail: { kind: "mailbox", id: mailbox.id, title: mailbox.displayName || mailbox.address } })); }}>收入知识库</button>
+            )}
             {mailbox?.shareable && <button type="button" data-permissions-trigger onClick={() => { setSwitchOpen(false); setShareOpen(true); }}><ShieldCheck size={15} />分享</button>}
             {mailbox?.deletable && <button type="button" disabled={busy} onClick={() => { setSwitchOpen(false); void removeMailbox(); }}><Trash2 size={15} />{mailbox.source === "external" ? "解绑邮箱" : "删除邮箱"}</button>}
           </div>}
@@ -1430,7 +1433,7 @@ export function MailApp({ mailboxId, preview = false }: { mailboxId?: string; pr
                 <div className="mail-reader-title">
                   <h2>{selected.subject || "（无主题）"}</h2>
                   <div className="mail-reader-actions">
-                    <button onClick={() => { void api("/knowledge/rebuild", "POST", { kind: "mail", id: selected.id }); location.hash = `/knowledge?source=mail:${selected.id}`; }}><Search size={15} />查找相关</button>
+                    <button onClick={() => window.dispatchEvent(new CustomEvent("doca-subscribe-library", { detail: { kind: "mail", id: selected.id, title: selected.subject || "（无主题）" } }))}><Search size={15} />收入知识库</button>
                     {canSend && <button onClick={() => startCompose({ to: selected.from.email, subject: selected.subject.startsWith("Re:") ? selected.subject : `Re: ${selected.subject}`, html: quoteOriginal(selected), text: htmlToText(quoteOriginal(selected)), inReplyTo: selected.id })}><Reply size={15} />回复</button>}
                     {canSend && <button onClick={() => startCompose({ to: [selected.from, ...selected.to].map((item) => item.email).join(", "), cc: selected.cc.map((item) => item.email).join(", "), subject: selected.subject.startsWith("Re:") ? selected.subject : `Re: ${selected.subject}`, html: quoteOriginal(selected), text: htmlToText(quoteOriginal(selected)), inReplyTo: selected.id })}><ReplyAll size={15} />全部回复</button>}
                     {canSend && <button onClick={() => startCompose({ subject: selected.subject.startsWith("Fwd:") ? selected.subject : `Fwd: ${selected.subject}`, html: quoteOriginal(selected), text: htmlToText(quoteOriginal(selected)) })}><Forward size={15} />转发</button>}

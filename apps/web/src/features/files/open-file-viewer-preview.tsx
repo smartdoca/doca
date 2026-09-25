@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from "react";
+import { useI18n } from "@web/shared/i18n.js";
 import { MarkdownPreview } from "exmd-collaborative-editor";
 import type { FileItem } from "@web/shared/api.js";
 import { fileUrl } from "@web/shared/api.js";
@@ -27,6 +28,7 @@ const isMarkdown = (file: PreviewSource) =>
   file.mime === "text/markdown" || /\.md(?:own)?$/i.test(file.name);
 
 function MarkdownFilePreview({ file }: { file: PreviewSource }) {
+  const { locale } = useI18n();
   const [source, setSource] = useState("");
   const [mode, setMode] = useState<"source" | "rendered">("source");
   const [error, setError] = useState("");
@@ -51,7 +53,7 @@ function MarkdownFilePreview({ file }: { file: PreviewSource }) {
         <button className={mode === "rendered" ? "active" : ""} onClick={() => setMode("rendered")}>阅读</button>
       </div>
       <div className={`file-markdown-body ${mode === "source" ? "source" : "rendered"}`}>
-        {error ? <div className="file-preview-empty"><strong>预览加载失败</strong><span>{error}</span></div> : !source ? <div className="file-preview-empty"><span>正在加载文件…</span></div> : mode === "source" ? <pre>{source}</pre> : <div className="doca-markdown markdown-preview-only"><MarkdownPreview value={source} resolveImageUrl={() => ""} /></div>}
+        {error ? <div className="file-preview-empty"><strong>预览加载失败</strong><span>{error}</span></div> : !source ? <div className="file-preview-empty"><span>正在加载文件…</span></div> : mode === "source" ? <pre>{source}</pre> : <div className="doca-markdown markdown-preview-only"><MarkdownPreview locale={locale} value={source} resolveImageUrl={() => ""} /></div>}
       </div>
     </div>
   );

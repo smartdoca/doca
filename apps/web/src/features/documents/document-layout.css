@@ -172,25 +172,56 @@ html[data-editor-shell="mobile"] .sk-table-scroll {
   display: block;
   width: 100% !important;
   max-width: 100% !important;
+  min-width: 0 !important;
   margin-left: 0 !important;
   padding-left: 0 !important;
   overflow-x: auto !important;
+  overflow-y: hidden !important;
 }
-html[data-editor-shell="mobile"] [data-slate-editor="true"] .sk-table-block * {
-  white-space: nowrap !important;
+html[data-editor-shell="mobile"] .sk-table-block table {
+  width: max-content !important;
+  min-width: 100% !important;
+  max-width: none !important;
+  table-layout: auto !important;
+}
+html[data-editor-shell="mobile"] .sk-table-block td,
+html[data-editor-shell="mobile"] .sk-table-block th {
+  min-width: 112px !important;
+  max-width: 240px !important;
+  vertical-align: top !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+html[data-editor-shell="mobile"] .sk-table-block td *,
+html[data-editor-shell="mobile"] .sk-table-block th * {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  max-width: 100% !important;
+}
+html[data-editor-shell="mobile"] .sk-table-block .sk-code,
+html[data-editor-shell="mobile"] .sk-table-block .sk-code * {
+  white-space: pre !important;
   overflow-wrap: normal !important;
   word-break: normal !important;
   max-width: none !important;
 }
-html[data-editor-shell="mobile"] .sk-table-block table {
-  width: max-content;
-  min-width: 100%;
-  max-width: none;
-}
 html[data-editor-shell="mobile"] .sk-page img,
 html[data-editor-shell="mobile"] .markdown-body img {
-  max-width: 100%;
-  height: auto;
+  max-width: 100% !important;
+  height: auto !important;
+}
+html[data-editor-shell="mobile"] .sk-table-block td img,
+html[data-editor-shell="mobile"] .sk-table-block th img,
+html[data-editor-shell="mobile"] .sk-table-block td video,
+html[data-editor-shell="mobile"] .sk-table-block th video,
+html[data-editor-shell="mobile"] .sk-table-block td svg,
+html[data-editor-shell="mobile"] .sk-table-block th svg {
+  display: block !important;
+  width: auto !important;
+  max-width: 200px !important;
+  height: auto !important;
 }
 .app-shell.personal-document-view {
   grid-template-columns: minmax(0, 1fr);

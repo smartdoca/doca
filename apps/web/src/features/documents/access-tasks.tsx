@@ -1,8 +1,9 @@
 import {
   Administrators,
-  accessLabels,
+  accessText,
   type Manager,
 } from "@web/features/documents/access-management.js";
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState } from "react";
 import { ClipboardCheck, Send } from "lucide-react";
 import { api } from "@web/shared/api.js";
@@ -18,6 +19,7 @@ export function RequestAccess({
   rank?: number;
   user: boolean;
 }) {
+  const { t } = useI18n();
   const [overview, setOverview] = useState<{
     requestRoles: string[];
     effectiveRequestsEnabled: boolean;
@@ -89,7 +91,7 @@ export function RequestAccess({
               )
               .map(([v]) => (
                 <option key={v} value={v}>
-                  {accessLabels[v]}
+                  {accessText(t, v)}
                 </option>
               ))}
           </Select>

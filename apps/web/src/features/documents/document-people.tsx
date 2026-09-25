@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useI18n } from "@web/shared/i18n.js";
 import { realtime } from "@web/features/documents/realtime.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
 import { uniqueOnlineUsers } from "@web/features/documents/online-users.js";
 export function DocumentPeople({ id }: { id: string }) {
+  const { t } = useI18n();
   const [users, setUsers] = useState<{ id: string; display_name: string }[]>(
     [],
   );
@@ -17,7 +19,7 @@ export function DocumentPeople({ id }: { id: string }) {
   if (!users.length) return null;
   return (
     <details className="menu document-people">
-      <summary aria-label={`${users.length} 人在线`} title="查看在线用户">
+      <summary aria-label={t("doc.online", { count: users.length })} title={t("doc.viewOnline")}>
         <span className="online-avatar-stack">
           {users.slice(0, 4).map((u) => (
             <span key={u.id}>
@@ -25,7 +27,7 @@ export function DocumentPeople({ id }: { id: string }) {
             </span>
           ))}
         </span>
-        <small className="online-user-count">{users.length}人在线</small>
+        <small className="online-user-count">{t("doc.online", { count: users.length })}</small>
       </summary>
       <div>
         {users.map((u) => (

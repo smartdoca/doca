@@ -8,8 +8,10 @@ import {
   type ReactionChange,
 } from "@web/features/documents/document-reactions.js";
 import { Feedback } from "@web/shared/components/feedback.js";
+import { useI18n } from "@web/shared/i18n.js";
 
 export function PinnedDocuments({ refresh }: { refresh: number }) {
+  const { t } = useI18n();
   const button = useRef<HTMLButtonElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const timer = useRef(0);
@@ -90,8 +92,8 @@ export function PinnedDocuments({ refresh }: { refresh: number }) {
         ref={button}
         type="button"
         className="sidebar-pin-entry"
-        title="置顶文档"
-        aria-label="置顶文档"
+        title={t("nav.pinnedDocs")}
+        aria-label={t("nav.pinnedDocs")}
         aria-expanded={open}
         aria-haspopup="true"
         onMouseEnter={show}
@@ -102,7 +104,7 @@ export function PinnedDocuments({ refresh }: { refresh: number }) {
         }}
       >
         <Pin size={16} />
-        <span className="sidebar-create-label">置顶</span>
+        <span className="sidebar-create-label">{t("nav.pin")}</span>
       </button>
       {open &&
         createPortal(
@@ -110,16 +112,16 @@ export function PinnedDocuments({ refresh }: { refresh: number }) {
             ref={card}
             className="sidebar-pin-card"
             role="region"
-            aria-label="置顶文档"
+            aria-label={t("nav.pinnedDocs")}
             style={{ left: box.left, top: box.top, maxHeight: box.maxHeight }}
             onMouseEnter={show}
             onMouseLeave={hide}
           >
             {error && <Feedback message={error} tone="error" />}
             {!loaded ? (
-              <p className="sidebar-pin-empty">正在加载…</p>
+              <p className="sidebar-pin-empty">{t("common.loading")}</p>
             ) : !items.length ? (
-              <p className="sidebar-pin-empty">还没有置顶文档</p>
+              <p className="sidebar-pin-empty">{t("nav.pinnedEmpty")}</p>
             ) : (
               items.map((item) => (
                 <div className="sidebar-pin-doc" key={item.id}>

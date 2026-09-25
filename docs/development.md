@@ -108,7 +108,7 @@ kubectl logs -f deploy/doca --tail=200
 
 ## 验证
 
-协同相关开发先读取 `skills/doca-collaboration/SKILL.md`，仓库 `AGENTS.md` 已声明触发范围。该 skill 也安装在当前机器的 Codex 全局 skills 目录，供富文本、Excel 和宿主项目复用；其他机器需要安装此目录，不能假定仓库外任务会自动读取本仓库约束。
+协同相关开发先读取 `skills/doca-collaboration/SKILL.md`，仓库 `AGENTS.md` 已声明触发范围。该 skill 也安装在当前机器的 Codex 全局 skills 目录，供富文本、Excel 和宿主项目复用；其他机器需要安装此目录，不能假定仓库外任务会自动读取本仓库约束。界面语言约定同样安装为 `$doca-i18n`，源文件是 `docs/i18n.md`。
 
 `docs/collaboration-sdk-contract.md` 是规范源文件，发布 skill 时同步 `references/contract.md`。规范中“建议 API”和待落地协议不等于当前包已支持；组件更新后宿主仍须安装新产物、核对导出和 schema，并验证保存确认、重连、已有数据恢复及在线选区，不能仅替换版本号。
 

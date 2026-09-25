@@ -20,6 +20,8 @@ import { api, assetUrl, uploadFile } from "@web/shared/api.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
 import { QuickNoteBody, QuickNoteEditor } from "@web/features/quick-notes/quick-note-editor.js";
 import { useAI } from "@web/features/ai/ai-context.js";
+import { useI18n } from "@web/shared/i18n.js";
+import { htmlLang } from "@doca/i18n";
 import {
   blankNote,
   noteBodySchema,
@@ -53,14 +55,17 @@ let openTarget: NotesOpenTarget | null = null;
 let openTargetGeneration = 0;
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message : "操作失败，请重试";
-const stamp = (date: string) =>
-  new Date(date).toLocaleString("zh-CN", {
+const stamp = (date: string, lang = "zh-CN") =>
+  new Date(date).toLocaleString(lang, {
     month: "long",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
-const notePreview = (note: QuickNote) => {
+const notePreview = (
+  note: QuickNote,
+  label: (key: "notes.image" | "notes.attachment" | "notes.noText") => string,
+) => {
   const text = noteText(note.content)
     .replace(/^(\[[ x]\] |- |\d+\. )/gm, "")
     .split("\n")
@@ -69,9 +74,10 @@ const notePreview = (note: QuickNote) => {
     .join(" ")
     .slice(0, 80);
   if (text) return text;
-  if (note.assets.some((asset) => asset.mime.startsWith("image/"))) return "图片";
-  if (note.assets.length) return "附件";
-  return "无附加文本";
+  if (note.assets.some((asset) => asset.mime.startsWith("image/")))
+    return label("notes.image");
+  if (note.assets.length) return label("notes.attachment");
+  return label("notes.noText");
 };
 function useNarrow(query = "(max-width: 800px)") {
   const [narrow, setNarrow] = useState(() =>
@@ -518,6 +524,8 @@ export function QuickNotes({
   changed: () => void;
   presentation?: "page" | "card";
 }) {
+  const { locale, t } = useI18n();
+  const lang = htmlLang(locale);
   const ai = useAI();
   const float = useNotesFloat(userId);
   const narrow = useNarrow();
@@ -612,7 +620,7 @@ export function QuickNotes({
     setTrash(false);
     setQuery("");
     setBatchMode(false);
-    setDraftStamp(stamp(new Date().toISOString()));
+    setDraftStamp(stamp(new Date().toISOString(), lang));
     setCreating(true);
     setActiveId(null);
     setNewKey((value) => value + 1);
@@ -720,14 +728,14 @@ export function QuickNotes({
         <span className="files-topbar-separator">/</span>
         <span className="notes-topbar-private">
           <LockKeyhole size={12} />
-          仅自己可见
+          {t("notes.private")}
         </span>
         <button
           type="button"
           className="note-icon-button notes-topbar-float"
           aria-pressed={float.state.open}
-          aria-label={float.state.open ? "关闭悬浮" : "开启悬浮"}
-          title={float.state.open ? "关闭悬浮" : "悬浮窗口"}
+          aria-label={float.state.open ? t("notes.closeFloat") : t("notes.openFloat")}
+          title={float.state.open ? t("notes.closeFloat") : t("notes.float")}
           onClick={() => {
             if (float.state.open) {
               float.patch({ open: false, collapsed: false });
@@ -753,7 +761,7 @@ export function QuickNotes({
     return (
       <>
         {headerTools}
-        <section className="quick-notes-hosted" aria-label="随手记已在悬浮窗口" />
+        <section className="quick-notes-hosted" aria-label={t("notes.hosted")} />
       </>
     );
   }
@@ -763,13 +771,13 @@ export function QuickNotes({
     <section
       className={`quick-notes-page ${presentation === "card" ? "is-card" : ""} ${reading ? "is-reading" : ""} ${batchMode ? "is-selecting" : ""}`}
     >
-      <aside className="note-list-pane" aria-label="随手记列表" hidden={!showList}>
+      <aside className="note-list-pane" aria-label={t("notes.list")} hidden={!showList}>
         <div className="note-list-search-row">
           <label className="note-list-search">
             <Search size={14} />
             <input
-              aria-label="搜索随手记"
-              placeholder="搜索"
+              aria-label={t("notes.searchLabel")}
+              placeholder={t("notes.search")}
               value={query}
               maxLength={200}
               onChange={(event) => setQuery(event.target.value)}
@@ -778,8 +786,8 @@ export function QuickNotes({
           <button
             type="button"
             className="note-icon-button"
-            aria-label="新建随手记"
-            title="新建随手记"
+            aria-label={t("notes.new")}
+            title={t("notes.new")}
             disabled={trash}
             onClick={startNew}
           >
@@ -798,7 +806,7 @@ export function QuickNotes({
                 setSelected([]);
               }}
             >
-              全部
+              {t("notes.all")}
             </button>
             <button
               type="button"
@@ -812,7 +820,7 @@ export function QuickNotes({
               }}
             >
               <Trash2 size={14} />
-              已删除
+              {t("notes.deleted")}
             </button>
           </div>
           {!trash && (
@@ -902,12 +910,12 @@ export function QuickNotes({
               </p>
             </div>
           ) : (
-            <div className="note-rows" role="listbox" aria-label="随手记标题">
+            <div className="note-rows" role="listbox" aria-label={t("notes.titles")}>
               {creating && !trash && (
                 <button type="button" className="note-row is-active" onClick={() => setCardView("note")}>
                   <span className="note-row-copy">
                     <span className="note-row-title">{draftStamp}</span>
-                    <span className="note-row-preview">新随手记</span>
+                    <span className="note-row-preview">{t("notes.newPreview")}</span>
                   </span>
                 </button>
               )}
@@ -921,7 +929,7 @@ export function QuickNotes({
                     <label className="note-select">
                       <input
                         type="checkbox"
-                        aria-label={`选择 ${stamp(note.created_at)} 的记录`}
+                        aria-label={t("notes.select", { when: stamp(note.created_at, lang) })}
                         checked={selected.includes(note.id)}
                         disabled={!selected.includes(note.id) && selected.length >= 20}
                         onChange={(event) =>
@@ -941,8 +949,8 @@ export function QuickNotes({
                     className="note-row-open"
                     onClick={() => openNote(note.id)}
                   >
-                    <span className="note-row-title">{stamp(note.created_at)}</span>
-                    <span className="note-row-preview">{notePreview(note)}</span>
+                    <span className="note-row-title">{stamp(note.created_at, lang)}</span>
+                    <span className="note-row-preview">{notePreview(note, t)}</span>
                   </button>
                 </div>
               ))}
@@ -979,19 +987,19 @@ export function QuickNotes({
           )}
         </div>
       </aside>
-      <div className="note-content-pane" aria-label="随手记内容" hidden={!showNote}>
+      <div className="note-content-pane" aria-label={t("notes.body")} hidden={!showNote}>
         {(creating || active) && (
           <div className="note-content-head">
             <button
               type="button"
               className="note-back"
-              aria-label="返回列表"
+              aria-label={t("notes.back")}
               onClick={backToList}
             >
               <ChevronLeft size={18} />
-              <span>全部</span>
+              <span>{t("notes.all")}</span>
             </button>
-            <h2>{creating ? draftStamp : active ? stamp(active.created_at) : ""}</h2>
+            <h2>{creating ? draftStamp : active ? stamp(active.created_at, lang) : ""}</h2>
             <div className="note-content-actions">
               {trash && active ? (
                 <button
@@ -1000,19 +1008,19 @@ export function QuickNotes({
                   onClick={() => void restoreNote(active)}
                 >
                   <RotateCcw size={14} />
-                  恢复
+                  {t("common.restore")}
                 </button>
               ) : active && !creating ? (
                 <>
                   <button type="button" onClick={() => organize([active])}>
                     <Sparkles size={14} />
-                    整理
+                    {t("notes.organize")}
                   </button>
                   <button
                     type="button"
                     className="note-delete"
-                    aria-label="删除记录"
-                    title="移到已删除，可恢复"
+                    aria-label={t("notes.deleteRecord")}
+                    title={t("notes.deleteHint")}
                     onClick={() => askDelete([active])}
                   >
                     <Trash2 size={14} />

@@ -1,4 +1,6 @@
 import { ReportDocument } from "@web/features/admin/moderation.js";
+import { useI18n } from "@web/shared/i18n.js";
+import type { MessageKey, MessageValues } from "@doca/i18n";
 import { useEntitlements } from "@web/shared/hooks/entitlement-access.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import {
@@ -37,19 +39,27 @@ import { FileIcon } from "@web/features/documents/document-controls.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
 import { FileSourceDialog, FolderFilePicker } from "@web/features/files/files.js";
 import { fileUrl, type FileItem } from "@web/shared/api.js";
-export function relativeTime(value: string | null, now = Date.now()) {
-  if (!value) return "暂无编辑记录";
+export function relativeTime(
+  value: string | null,
+  now = Date.now(),
+  t?: (key: MessageKey, values?: MessageValues) => string,
+) {
+  const say = (key: MessageKey, fallback: string, values?: MessageValues) =>
+    t ? t(key, values) : fallback;
+  if (!value) return say("time.none", "暂无编辑记录");
   const time = Date.parse(value);
-  if (!Number.isFinite(time)) return "时间未知";
+  if (!Number.isFinite(time)) return say("time.unknown", "时间未知");
   const delta = Math.max(0, now - time);
-  if (delta < 60000) return "刚刚";
-  if (delta < 3600000) return `${Math.floor(delta / 60000)} 分钟前`;
-  if (delta < 86400000) return `${Math.floor(delta / 3600000)} 小时前`;
-  return new Date(time).toLocaleDateString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
+  if (delta < 60000) return say("time.justNow", "刚刚");
+  if (delta < 3600000)
+    return say("time.minutes", `${Math.floor(delta / 60000)} 分钟前`, {
+      count: Math.floor(delta / 60000),
+    });
+  if (delta < 86400000)
+    return say("time.hours", `${Math.floor(delta / 3600000)} 小时前`, {
+      count: Math.floor(delta / 3600000),
+    });
+  return new Date(time).toLocaleDateString();
 }
 export function LastEdited({
   detail,
@@ -58,6 +68,7 @@ export function LastEdited({
   detail: Detail;
   currentUserId?: string;
 }) {
+  const { t } = useI18n();
   const [now, setNow] = useState(Date.now());
   const [open, setOpen] = useState(false);
   const canReadHistory =
@@ -72,11 +83,14 @@ export function LastEdited({
         className="last-editor"
         disabled={!canReadHistory}
         onClick={() => setOpen(true)}
-        aria-label="查看历史记录"
+        aria-label={t("doc.viewHistory")}
         title={
           detail.lastEditedAt
-            ? `${detail.lastEditorName ?? "未知用户"} ${new Date(detail.lastEditedAt).toLocaleString()} 编辑`
-            : "历史编辑人未记录"
+            ? t("time.editedBy", {
+                name: detail.lastEditorName ?? t("time.unknownUser"),
+                when: new Date(detail.lastEditedAt).toLocaleString(),
+              })
+            : t("time.noEditor")
         }
       >
         <History size={14} aria-hidden="true" />
@@ -84,13 +98,12 @@ export function LastEdited({
           {detail.lastEditorName ? (
             <>
               {currentUserId && detail.resource.last_editor_id === currentUserId
-                ? "我"
+                ? t("time.me")
                 : detail.lastEditorName}{" "}
-              {relativeTime(detail.lastEditedAt, now)}
-              编辑
+              {t("time.line", { when: relativeTime(detail.lastEditedAt, now, t) })}
             </>
           ) : (
-            "暂无编辑记录"
+            t("time.none")
           )}
         </span>
       </button>
@@ -138,6 +151,20 @@ export function useDismissMenus() {
     };
   }, []);
 }
+const createTypeKey = {
+  rich_text: "shell.type.rich",
+  spreadsheet: "shell.type.sheet",
+  markdown: "shell.type.markdown",
+  canvas: "shell.type.canvas",
+  presentation: "shell.type.slides",
+} as const satisfies Record<Resource["format"], MessageKey>;
+const importDescKey = {
+  rich_text: "import.document.desc",
+  spreadsheet: "import.sheet.desc",
+  markdown: "import.markdown.desc",
+  canvas: "import.canvas.desc",
+  presentation: "import.presentation.desc",
+} as const satisfies Record<keyof typeof importFormats, MessageKey>;
 export function CreatePopover({
   rect,
   close,
@@ -151,6 +178,7 @@ export function CreatePopover({
   busy: boolean;
   progress?: ImportProgress | null;
 }) {
+  const { t } = useI18n();
   const allowed = useEntitlements();
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{
@@ -215,7 +243,7 @@ export function CreatePopover({
       ref={ref}
       className="create-popover"
       role="dialog"
-      aria-label="选择文档类型"
+      aria-label={t("create.chooseType")}
       style={{
         left: position?.left ?? 0,
         top: position?.top ?? 0,
@@ -228,19 +256,21 @@ export function CreatePopover({
           onClick={() => (target ? setTarget(null) : setImporting(false))}
         >
           <ArrowLeft size={16} />
-          {target ? `导入为${importFormats[target].label}` : "选择导入目标"}
+          {target
+            ? t("create.importAs", { name: t(createTypeKey[target]) })
+            : t("create.chooseTarget")}
         </button>
       )}
       {target ? (
         <div className="import-file-panel">
-          <p>{importFormats[target].description}</p>
+          <p>{t(importDescKey[target])}</p>
           <small>
             {target === "markdown"
-              ? "Markdown 最大 512 KB；PDF 最大 25 MB，内嵌图片会适配 20 MB 素材上限"
+              ? t("create.markdownLimit")
               : target === "rich_text"
-                ? "文档文件最大 25 MB；PDF 内嵌图片会适配 20 MB 素材上限"
-                : "文件最大 10 MB"}
-            ；只创建新文档，不覆盖已有内容。
+                ? t("create.documentLimit")
+                : t("create.fileLimit")}{" "}
+            {t("create.newOnly")}
           </small>
           {busy && progress && (
             <div className="import-progress" role="status" aria-live="polite">
@@ -267,11 +297,13 @@ export function CreatePopover({
           {!busy && (
             <button className="markdown-import-choice" onClick={() => setSourceOpen(true)}>
               <Upload size={18} />
-              选择文件
+              {t("create.chooseFile")}
               <input
                 ref={importInput}
                 hidden
-                aria-label={`导入${importFormats[target].label}文件`}
+                aria-label={t("create.importFile", {
+                  name: t(createTypeKey[target]),
+                })}
                 type="file"
                 accept={importFormats[target].accept}
                 onChange={(e) => {
@@ -285,19 +317,12 @@ export function CreatePopover({
         </div>
       ) : (
         (
-          [
-            ["rich_text", "文档"],
-            ["spreadsheet", "表格"],
-            ["markdown", "Markdown"],
-            ["canvas", "无限画板"],
-            ["presentation", "演示文稿"],
-          ] as const
-        )
+          (["rich_text", "spreadsheet", "markdown", "canvas", "presentation"] as const)
           .filter(
-            ([format]) =>
+            (format) =>
               allowed(`format.${format}`) && allowed("documents.create"),
           )
-          .map(([format, name]) => (
+          .map((format) => (
             <button
               key={format}
               disabled={busy}
@@ -305,10 +330,13 @@ export function CreatePopover({
             >
               <FileIcon r={{ kind: "document", format }} />
               <span>
-                {importing ? `导入为${importFormats[format].label}` : name}
+                {importing
+                  ? t("create.importAs", { name: t(createTypeKey[format]) })
+                  : t(createTypeKey[format])}
               </span>
             </button>
           ))
+        )
       )}
       {!importing && (
         <button
@@ -319,10 +347,10 @@ export function CreatePopover({
           <span className="file-glyph" aria-hidden="true">
             <Upload size={19} />
           </span>
-          导入
+          {t("create.import")}
         </button>
       )}
-      {sourceOpen && <FileSourceDialog title={`导入为${importFormats[target!].label}`} close={() => setSourceOpen(false)} chooseLocal={() => importInput.current?.click()} chooseDoca={() => setFolderPicker(true)} />}
+      {sourceOpen && <FileSourceDialog title={t("create.importAs", { name: t(createTypeKey[target!]) })} close={() => setSourceOpen(false)} chooseLocal={() => importInput.current?.click()} chooseDoca={() => setFolderPicker(true)} />}
       {folderPicker && <FolderFilePicker close={() => setFolderPicker(false)} select={async (item: FileItem) => { const response = await fetch(fileUrl(item.id)); if (!response.ok) throw new Error("文件读取失败"); choose(target!, new File([await response.blob()], item.name, { type: item.mime })); }} />}
     </div>,
     document.body,
@@ -412,6 +440,7 @@ export function DocumentMore({
   remove: () => void;
   entryChanged?: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [reporting, setReporting] = useState(false);
   const [panel, setPanel] = useState(""),
     [error, setError] = useState("");
@@ -419,14 +448,14 @@ export function DocumentMore({
   return (
     <>
       <details className="menu">
-        <summary aria-label="文档信息与更多操作">
+        <summary aria-label={t("doc.more")}>
           <MoreHorizontal size={20} />
         </summary>
         <div className="document-more-menu">
           {r.role !== "owner" && (
             <button onClick={() => setReporting(true)}>
               <Flag size={16} />
-              投诉 / 举报
+              {t("doc.report")}
             </button>
           )}
           {r.format === "rich_text" && <div id="document-page-width-slot" />}
@@ -441,16 +470,16 @@ export function DocumentMore({
               const workspace =
                 document.querySelector<HTMLElement>(".workspace");
               if (!workspace?.requestFullscreen) {
-                setError("当前浏览器不支持全屏");
+                setError(t("doc.fullscreenUnsupported"));
                 return;
               }
               void workspace
                 .requestFullscreen()
-                .catch(() => setError("当前浏览器不支持全屏"));
+                .catch(() => setError(t("doc.fullscreenUnsupported")));
             }}
           >
             <Maximize size={16} />
-            演示模式
+            {t("doc.present")}
           </button>
           {r.kind === "document" && <div id="document-export-slot" />}
           {r.role !== "owner" && (
@@ -470,24 +499,24 @@ export function DocumentMore({
                 >
                   {state === "joined"
                     ? r.entry_state === "joined"
-                      ? "已加入我的列表"
-                      : "加入我的列表"
+                      ? t("doc.joined")
+                      : t("doc.join")
                     : r.entry_state === "hidden"
-                      ? "已从我的列表隐藏"
-                      : "从我的列表隐藏"}
+                      ? t("doc.hidden")
+                      : t("doc.hide")}
                 </button>
               ))}
             </>
           )}
           <button onClick={() => setPanel("stats")}>
             <Info size={16} />
-            文档信息
+            {t("doc.info")}
           </button>
           {r.kind === "document" &&
             (roleRank(r.role) >= 3 || r.history_readers) && (
               <button onClick={() => setPanel("history")}>
                 <History size={16} />
-                历史记录
+                {t("doc.history")}
               </button>
             )}
           {roleRank(r.role) >= 4 && (
@@ -495,13 +524,13 @@ export function DocumentMore({
               {(r.library_id ? roleRank(r.role) >= 4 : r.role === "owner") && (
                 <button onClick={move}>
                 <FolderInput size={16} />
-                移动位置
+                {t("doc.move")}
                 </button>
               )}
               {r.role === "owner" && (
                 <button onClick={transfer}>
                   <ArrowRightLeft size={16} />
-                  转移所有权
+                  {t("doc.transfer")}
                 </button>
               )}
               <button
@@ -510,7 +539,7 @@ export function DocumentMore({
                 onClick={remove}
               >
                 <Trash2 size={16} />
-                删除
+                {t("common.delete")}
               </button>
             </>
           )}
@@ -530,7 +559,7 @@ export function DocumentMore({
       )}
       {error && (
         <Dialog
-          title="演示模式"
+          title={t("doc.present")}
           close={() => setError("")}
           className="modal-compact"
         >
@@ -549,6 +578,7 @@ function DocumentRecords({
   initial: string;
   close: () => void;
 }) {
+  const { t } = useI18n();
   const allowed = useEntitlements();
   const [tab, setTab] = useState(initial),
     [data, setData] = useState<any>(null),
@@ -627,7 +657,7 @@ function DocumentRecords({
               <p>创建于 {new Date(data.createdAt).toLocaleString()}</p>
               <p>更新于 {new Date(data.updatedAt).toLocaleString()}</p>
               {detail.resource.format === "rich_text" && (
-                <p>内容宽度 {pageWidthLabel(data.pageWidth)}</p>
+                <p>{t("doc.width")} {pageWidthLabel(data.pageWidth, t)}</p>
               )}
             </>
           )}

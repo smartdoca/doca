@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useI18n } from "@web/shared/i18n.js";
 import * as Y from "yjs";
 import { PresentationWorkspace } from "@eppt/editor";
 import "@eppt/editor/styles.css";
@@ -33,6 +34,7 @@ export default function SurfacePreview({
   trash?: boolean;
   audit?: boolean;
 }) {
+  const { locale } = useI18n();
   const [model, setModel] = useState<
       CanvasModel | ExlsxCollaborationSession | Y.Doc | null
     >(null),
@@ -93,6 +95,7 @@ export default function SurfacePreview({
       <Feedback message={error} tone="error" />
       {model instanceof Y.Doc ? (
         <PresentationWorkspace
+          locale={locale}
           document={model}
           readOnly
           chrome="embedded"
@@ -105,6 +108,7 @@ export default function SurfacePreview({
         />
       ) : model instanceof CanvasModel ? (
         <CanvasEditor
+          locale={locale}
           model={model}
           hostManaged
           mode="readonly"
@@ -114,6 +118,7 @@ export default function SurfacePreview({
         />
       ) : model ? (
         <SpreadsheetEditor
+          locale={locale}
           workbookId={id}
           collaboration={model}
           readOnly

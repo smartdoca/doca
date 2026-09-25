@@ -88,7 +88,8 @@ import {
   Popover,
   Spin,
 } from "antd";
-import zhCN from "antd/locale/zh_CN";
+import { antdLocale } from "@web/shared/antd-locale.js";
+import { useI18n } from "@web/shared/i18n.js";
 import type {
   SenderRef,
   SlotConfigType,
@@ -529,6 +530,7 @@ export function AIDocumentLayout({
   );
 }
 export function AIChat({ full = false }: { full?: boolean }) {
+  const { locale } = useI18n();
   const ai = useAI()!;
   const currentAI = useRef(ai);
   currentAI.current = ai;
@@ -2561,7 +2563,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
   }
   return (
     <ConfigProvider
-      locale={zhCN}
+      locale={antdLocale(locale)}
       theme={{
         token: {
           colorPrimary: "#7859b8",

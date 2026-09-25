@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useAIBridge } from "@web/features/ai/ai-context.js";
 import { captureRichSelection } from "@web/features/comments/rich-selection-anchor.js";
 import { resolveRichAnchor, type RichAnchor } from "@core/modules/documents/codecs/rich-anchor.js";
@@ -192,6 +193,7 @@ function RichDocument({
   loadMoreComments?: () => Promise<void>;
 }) {
   const id = detail.resource.id;
+  const { locale, t } = useI18n();
   const [pageWidth, setPageWidth] = useDocumentPageWidth(
     detail.resource,
     canEditPageWidth(detail.resource),
@@ -1042,6 +1044,7 @@ function RichDocument({
               }}
               render={() => (
                 <RichTextEditor
+                  locale={locale}
                   formulaRenderer={renderKatex}
                   onChange={selectionChanged}
                   firstLineTitle
@@ -1052,9 +1055,9 @@ function RichDocument({
                   mode={editable ? "edit" : "readonly"}
                   onReady={editorReady}
                   onOutlineChange={outlineChanged}
-                  placeholder="输入正文，或输入 / 插入内容"
+                  placeholder={t("editor.bodyPlaceholder")}
                   bodyPlaceholder={
-                    bodyHasContent ? "" : "输入正文，或输入 / 插入内容"
+                    bodyHasContent ? "" : t("editor.bodyPlaceholder")
                   }
                 />
               )}

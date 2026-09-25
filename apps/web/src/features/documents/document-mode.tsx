@@ -8,6 +8,7 @@ import {
 } from "react";
 import { Eye, Pencil } from "lucide-react";
 import { Select } from "@web/shared/components/select.js";
+import { useI18n } from "@web/shared/i18n.js";
 import "@web/features/documents/document-mode.css";
 
 export type DocumentMode = "edit" | "read";
@@ -66,25 +67,26 @@ export function useDocumentReadOnly(permitted: boolean | undefined) {
 }
 
 export function DocumentModeSwitch() {
+  const { t } = useI18n();
   const mode = useContext(DocumentModeContext);
   if (!mode) return null;
   if (!mode.canEdit)
     return (
-      <span className="document-mode-readonly" title="当前仅有阅读权限">
+      <span className="document-mode-readonly" title={t("doc.mode.readonly")}>
         <Eye size={15} />
-        阅读
+        {t("doc.mode.read")}
       </span>
     );
   return (
     <span className="document-mode-switch">
       {mode.readOnly ? <Eye size={15} /> : <Pencil size={15} />}
       <Select
-        aria-label="文档模式"
+        aria-label={t("doc.mode")}
         value={mode.readOnly ? "read" : "edit"}
         onChange={(e) => mode.change(e.target.value as DocumentMode)}
       >
-        <option value="edit">编辑</option>
-        <option value="read">阅读</option>
+        <option value="edit">{t("doc.mode.edit")}</option>
+        <option value="read">{t("doc.mode.read")}</option>
       </Select>
     </span>
   );

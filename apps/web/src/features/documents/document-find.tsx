@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Search, ChevronUp, ChevronDown, X, Replace } from "lucide-react";
 import { Feedback } from "@web/shared/components/feedback.js";
+import { useI18n } from "@web/shared/i18n.js";
 import { findTextOffsets } from "@web/shared/utils/find-text.js";
 type Match = {
   range?: Range;
@@ -27,6 +28,7 @@ export function DocumentFind({
     index: number,
   ) => number;
 }) {
+  const { t } = useI18n();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState("");
@@ -211,8 +213,8 @@ export function DocumentFind({
         createPortal(
           <button
             className="icon"
-            aria-label="文档内查找"
-            title="文档内查找 (Ctrl / ⌘ F)，替换 (Ctrl / ⌘ R)"
+            aria-label={t("doc.find")}
+            title={t("doc.findShortcut")}
             onClick={show}
           >
             <Search size={18} />
@@ -224,7 +226,7 @@ export function DocumentFind({
           <div
             className="document-find-panel"
             role="search"
-            aria-label="文档内查找"
+            aria-label={t("doc.find")}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
                 e.stopPropagation();
@@ -239,7 +241,7 @@ export function DocumentFind({
             {replace && (
               <button
                 className="icon"
-                aria-label="展开替换"
+                aria-label={t("doc.findExpand")}
                 aria-expanded={expanded}
                 onClick={() => setExpanded(!expanded)}
               >
@@ -249,8 +251,8 @@ export function DocumentFind({
             <Search size={16} />
             <input
               ref={input}
-              aria-label="查找文档内容"
-              placeholder="查找文档内容"
+              aria-label={t("doc.findQuery")}
+              placeholder={t("doc.findQuery")}
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
@@ -262,7 +264,7 @@ export function DocumentFind({
             </span>
             <button
               className="icon"
-              aria-label="上一处"
+              aria-label={t("doc.findPrevious")}
               disabled={!matches.length}
               onClick={() => move(-1)}
             >
@@ -270,7 +272,7 @@ export function DocumentFind({
             </button>
             <button
               className="icon"
-              aria-label="下一处"
+              aria-label={t("doc.findNext")}
               disabled={!matches.length}
               onClick={() => move(1)}
             >
@@ -278,7 +280,7 @@ export function DocumentFind({
             </button>
             <button
               className="icon"
-              aria-label="关闭文档查找"
+              aria-label={t("doc.findClose")}
               onClick={() => setOpen(false)}
             >
               <X size={16} />
@@ -286,8 +288,8 @@ export function DocumentFind({
             {expanded && replace && (
               <div className="document-replace-row">
                 <input
-                  aria-label="替换为"
-                  placeholder="替换为（可留空）"
+                  aria-label={t("doc.replaceWith")}
+                  placeholder={t("doc.replacePlaceholder")}
                   value={replacement}
                   onChange={(e) => setReplacement(e.target.value)}
                   onKeyDown={(e) => {
@@ -302,13 +304,13 @@ export function DocumentFind({
                   disabled={!query || !matches.length}
                   onClick={() => performReplace(false)}
                 >
-                  替换
+                  {t("doc.replace")}
                 </button>
                 <button
                   disabled={!query || !matches.length}
                   onClick={() => performReplace(true)}
                 >
-                  全部替换
+                  {t("doc.replaceAll")}
                 </button>
               </div>
             )}

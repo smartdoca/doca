@@ -6,6 +6,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@doca/i18n": [
+        "../../packages/i18n/src/index.ts"
       ]
     }
   },

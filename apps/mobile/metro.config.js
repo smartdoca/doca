@@ -15,6 +15,12 @@ config.resolver.nodeModulesPaths = [
 const mobileModules = path.resolve(projectRoot, "node_modules");
 const singletonReact = new Set(["react", "react/jsx-runtime", "react/jsx-dev-runtime"]);
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === "@doca/i18n") {
+    return {
+      type: "sourceFile",
+      filePath: path.resolve(workspaceRoot, "packages/i18n/src/index.ts"),
+    };
+  }
   if (singletonReact.has(moduleName)) {
     return {
       type: "sourceFile",

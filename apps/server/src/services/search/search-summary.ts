@@ -31,8 +31,13 @@ export async function searchSummaries<T extends { id: string; title?: string }>(
           .select("text")
           .where("resource_id", "=", item.id)
           .executeTakeFirst();
+        const resource = await tx.selectFrom("resources").select(["library_id", "kind", "ai_curated"]).where("id", "=", item.id).executeTakeFirst();
+        const library = resource?.library_id
+          ? await tx.selectFrom("resources").select("ai_curated").where("id", "=", resource.library_id).executeTakeFirst()
+          : undefined;
         result.push({
           ...item,
+          aiCurated: Number(resource?.kind === "library" ? resource.ai_curated : library?.ai_curated) === 1,
           ...searchExcerpt(state?.text ?? "", query, 180),
           titleMatches: textMatches(item.title ?? "", query),
           searchCoverage: queryCoverage(

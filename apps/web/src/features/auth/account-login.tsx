@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState } from "react";
 import { Monitor, QrCode } from "lucide-react";
 import { api, type Bootstrap } from "@web/shared/api.js";
@@ -20,6 +21,7 @@ export function AccountLogin({
   bootstrap: Bootstrap;
   logged: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [options, setOptions] = useState<AccountOptions | null>(null),
     [mode, setMode] = useState("password"),
     [error, setError] = useState(""),
@@ -69,21 +71,21 @@ export function AccountLogin({
       setProofs({});
     } else if (r.status === "pending") {
       switchMode(mode === "email" ? "email" : "sms");
-      setError("注册申请已提交，等待管理员审核后请重新登录。");
+      setError(t("login.pendingReview"));
     } else await logged();
   }
   return (
     <main className="auth">
       <section className="auth-story">
         <h1>
-          把知识留在
+          {t("login.headline")}
           <br />
-          触手可及的地方。
+          {t("login.headlineRest")}
         </h1>
         <p>
-          个人记录，轻量共享。
+          {t("login.tagline")}
           <br />
-          你的文档与知识库，从这里开始。
+          {t("login.taglineRest")}
         </p>
       </section>
       <form
@@ -111,7 +113,7 @@ export function AccountLogin({
               );
               if (r.status === "needs_profile") await completeSms();
               else if (r.status === "pending")
-                setError("注册申请已提交，等待管理员审核后请重新登录。");
+                setError(t("login.pendingReview"));
               else await logged();
             } else if (recover) {
               await api("/auth/recover", "POST", {
@@ -120,7 +122,7 @@ export function AccountLogin({
                 password: f.get("password"),
               });
               switchMode("password");
-              setError("密码已重置，其他会话已退出，请重新登录。");
+              setError(t("login.passwordReset"));
             } else if (register) {
               const r = await api<{ status: string }>(
                 "/auth/register",
@@ -143,7 +145,7 @@ export function AccountLogin({
               );
               if (r.status === "pending") {
                 switchMode("password");
-                setError("注册申请已提交，等待管理员审核。");
+                setError(t("login.pendingShort"));
               } else await logged();
             } else {
               const r = await api<{ status?: string }>("/auth/login", "POST", {
@@ -151,7 +153,7 @@ export function AccountLogin({
                 password: f.get("password"),
               });
               if (r.status === "pending")
-                setError("账号正在等待管理员审核，通过后请重新登录。");
+                setError(t("login.waiting"));
               else await logged();
             }
           } catch (e) {
@@ -169,7 +171,7 @@ export function AccountLogin({
             onClick={() => setScanning((value) => !value)}
           >
             <span className="qr-corner-tip">
-              {scanningView ? "账号登录" : "扫码登录"}
+              {scanningView ? t("login.account") : t("login.scan")}
             </span>
             <span className="qr-corner-mark" aria-hidden="true">
               {scanningView ? (
@@ -184,14 +186,14 @@ export function AccountLogin({
         <span className="eyebrow">{bootstrap.siteName}</span>
         <h2>
           {fields
-            ? "完成注册"
+            ? t("login.finishRegister")
             : register
-              ? "创建账号"
+              ? t("login.createAccount")
               : recover
-                ? "找回账号"
-                : "欢迎回来"}
+                ? t("login.recoverAccount")
+                : t("login.welcome")}
         </h2>
-        {!bootstrap.initialized && <p>请先由部署管理员完成系统初始化。</p>}
+        {!bootstrap.initialized && <p>{t("login.needInit")}</p>}
         {options && !register && !recover && !fields && (
           <div className="account-login-tabs">
             {options.passwordEnabled && (
@@ -200,7 +202,7 @@ export function AccountLogin({
                 aria-pressed={mode === "password"}
                 onClick={() => switchMode("password")}
               >
-                账号密码
+                {t("login.passwordTab")}
               </button>
             )}
             {options.emailEnabled && (
@@ -209,7 +211,7 @@ export function AccountLogin({
                 aria-pressed={mode === "email"}
                 onClick={() => switchMode("email")}
               >
-                邮箱验证码
+                {t("login.emailCode")}
               </button>
             )}
             {options.smsEnabled && (
@@ -218,7 +220,7 @@ export function AccountLogin({
                 aria-pressed={mode === "sms"}
                 onClick={() => switchMode("sms")}
               >
-                短信验证码
+                {t("login.smsCode")}
               </button>
             )}
           </div>
@@ -268,7 +270,7 @@ export function AccountLogin({
         ) : recover ? (
           <>
             <label>
-              通过已绑定联系方式恢复
+              {t("login.recoverVia")}
               <select
                 value={recoveryKind}
                 onChange={(e) => {
@@ -279,11 +281,11 @@ export function AccountLogin({
               >
                 {options?.emailReady &&
                   options.securityMethods?.includes("email") && (
-                    <option value="email">邮箱</option>
+                    <option value="email">{t("login.email")}</option>
                   )}
                 {options?.phoneReady &&
                   options.securityMethods?.includes("phone") && (
-                    <option value="phone">手机号</option>
+                    <option value="phone">{t("login.phone")}</option>
                   )}
               </select>
             </label>
@@ -301,9 +303,9 @@ export function AccountLogin({
             <>
               {register && (
                 <>
-                  <p>请设置有意义的唯一用户ID，注册后仅系统管理员可纠错。</p>
+                  <p>{t("login.publicIdHint")}</p>
                   <label>
-                    昵称
+                    {t("login.nickname")}
                     <input
                       name="name"
                       required
@@ -315,7 +317,7 @@ export function AccountLogin({
               )}
               <label>
                 {register
-                  ? "用户名（账号）"
+                  ? t("login.username")
                   : (options?.passwordIdentifiers ?? ["username"])
                       .filter(
                         (k) =>
@@ -325,9 +327,9 @@ export function AccountLogin({
                       .map(
                         (k) =>
                           ({
-                            username: "用户名",
-                            phone: "手机号",
-                            email: "邮箱",
+                            username: t("login.username"),
+                            phone: t("login.phone"),
+                            email: t("login.email"),
                           })[k],
                       )
                       .join(" / ")}
@@ -350,7 +352,7 @@ export function AccountLogin({
         )}
         {!fields && ["password", "recover"].includes(mode) && (
           <label>
-            {recover ? "新密码" : "密码"}
+            {recover ? t("login.newPassword") : t("login.password")}
             <input
               name="password"
               type="password"
@@ -378,14 +380,14 @@ export function AccountLogin({
             }
           >
             {busy
-              ? "请稍候…"
+              ? t("login.wait")
               : fields
-                ? "确认并继续"
+                ? t("login.continue")
                 : register
-                  ? "注册"
+                  ? t("login.register")
                   : recover
-                    ? "重置密码"
-                    : "登录"}
+                    ? t("login.reset")
+                    : t("login.submit")}
           </button>
         )}
         {options?.passwordEnabled &&
@@ -399,7 +401,7 @@ export function AccountLogin({
                 switchMode(register || recover ? "password" : "register")
               }
             >
-              {register || recover ? "返回登录" : "创建账号"}
+              {register || recover ? t("login.back") : t("login.createAccount")}
             </button>
           )}
         {options?.passwordEnabled &&
@@ -419,14 +421,14 @@ export function AccountLogin({
                 switchMode("recover");
               }}
             >
-              忘记密码
+              {t("login.forgot")}
             </button>
           )}
         {!register && !recover && !fields && <ExternalLoginOptions />}
         </div>
         {scanningView && (
           <div className="qr-login-overlay">
-            <h2>扫码登录</h2>
+            <h2>{t("login.scanTitle")}</h2>
             <QrLogin logged={logged} />
           </div>
         )}

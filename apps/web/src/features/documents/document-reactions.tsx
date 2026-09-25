@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pin, Star } from "lucide-react";
 import { api, type Resource } from "@web/shared/api.js";
 import { HoverTip } from "@web/shared/components/hover-tip.js";
+import { useI18n } from "@web/shared/i18n.js";
 
 export type ReactionChange = {
   id: string;
@@ -25,6 +26,7 @@ export function DocumentReactionButtons({
   onChange?: (patch: { favorite?: boolean; pinned?: boolean }) => void;
   onError?: (message: string) => void;
 }) {
+  const { t } = useI18n();
   const [favorite, setFavorite] = useState(!!resource.favorite);
   const [pinned, setPinned] = useState(!!resource.pinned);
   useEffect(() => {
@@ -61,8 +63,8 @@ export function DocumentReactionButtons({
       onError?.((e as Error).message);
     }
   }
-  const pinLabel = pinned ? "取消置顶" : "置顶";
-  const favoriteLabel = favorite ? "取消收藏" : "收藏";
+  const pinLabel = pinned ? t("nav.unpin") : t("nav.pin");
+  const favoriteLabel = favorite ? t("doc.unfavorite") : t("doc.favorite");
   return (
     <span className="document-reaction-buttons">
       <HoverTip label={pinLabel}>

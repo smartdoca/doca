@@ -1,4 +1,6 @@
 import { useEntitlements } from "@web/shared/hooks/entitlement-access.js";
+import { useI18n } from "@web/shared/i18n.js";
+import { htmlLang } from "@doca/i18n";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { Select } from "@web/shared/components/select.js";
 import { DocumentAuthor } from "@web/features/documents/document-author.js";
@@ -55,6 +57,7 @@ export function Dashboard({
   changed: () => void;
   currentUserId?: string;
 }) {
+  const { locale, t } = useI18n();
   const allowed = useEntitlements();
   const [tab, setTab] = useState("recent"),
     [format, setFormat] = useState(""),
@@ -187,25 +190,25 @@ export function Dashboard({
     }
   }
   const heading = libraries
-    ? "知识库"
+    ? t("home.libraries")
     : trash
-      ? "回收站"
+      ? t("nav.trash")
       : mine
-        ? "个人文档"
-        : "主页";
+        ? t("home.mine")
+        : t("home.title");
   const home = !libraries && !trash && !mine;
   const tableHeader = (
     <div className="document-table-head">
-      <span>标题</span>
-      <span>位置</span>
-      <span>所有者</span>
-      <button onClick={() => setSort("created_at")}>创建时间</button>
+      <span>{t("home.titleColumn")}</span>
+      <span>{t("home.location")}</span>
+      <span>{t("home.owner")}</span>
+      <button onClick={() => setSort("created_at")}>{t("home.created")}</button>
       <button
         onClick={() =>
           setSort(sort === "visited_at" ? "updated_at" : "visited_at")
         }
       >
-        {sort === "visited_at" ? "最近访问" : "修改时间"}
+        {sort === "visited_at" ? t("home.visited") : t("home.modified")}
       </button>
       <span />
     </div>
@@ -219,14 +222,14 @@ export function Dashboard({
       )}
       {purgeTarget && (
         <Dialog
-          title="永久删除"
+          title={t("home.purge")}
           close={() => {
             if (!purgeBusy) setPurgeTarget(null);
           }}
           className="modal-compact"
         >
           <p className="warning">
-            永久删除「{purgeTarget.title}」及其回收站中的子文档？历史版本和评论会一并删除，无法恢复。
+            {t("home.purgeBody", { title: purgeTarget.title })}
           </p>
           <Feedback message={error} tone="error" />
           <footer>
@@ -235,7 +238,7 @@ export function Dashboard({
               disabled={purgeBusy}
               onClick={() => setPurgeTarget(null)}
             >
-              取消
+              {t("common.cancel")}
             </button>
             <button
               type="button"
@@ -258,7 +261,7 @@ export function Dashboard({
                 }
               }}
             >
-              {purgeBusy ? "正在删除…" : "永久删除"}
+              {purgeBusy ? t("home.purging") : t("home.purge")}
             </button>
           </footer>
         </Dialog>
@@ -302,9 +305,9 @@ export function Dashboard({
               <Plus size={23} />
             </span>
             <span>
-              <strong>{libraries ? "新建知识库" : "新建文档"}</strong>
+              <strong>{libraries ? t("home.newLibrary") : t("home.newDocument")}</strong>
               <small>
-                {libraries ? "让零散的资料变成知识" : "记录想法，开始轻量协作"}
+                {libraries ? t("home.newLibraryHint") : t("home.newDocumentHint")}
               </small>
             </span>
             <ArrowUpRight size={17} />
@@ -319,11 +322,11 @@ export function Dashboard({
               <BookOpen size={22} />
             </span>
             <span>
-              <strong>{libraries ? "返回工作台" : "创建知识库"}</strong>
+              <strong>{libraries ? t("home.backWorkspace") : t("home.createLibrary")}</strong>
               <small>
                 {libraries
-                  ? "查看最近访问和共享内容"
-                  : "整理项目资料，邀请协作者"}
+                  ? t("home.backWorkspaceHint")
+                  : t("home.createLibraryHint")}
               </small>
             </span>
             <ArrowUpRight size={17} />
@@ -332,14 +335,16 @@ export function Dashboard({
       )}
       <div className="dashboard-controls">
         {!libraries && !trash && !mine && (
-          <div className="home-tabs" role="tablist" aria-label="主页内容">
-            {[
-              ["recent", "最近访问"],
-              ["owned", "归我所有"],
-              ["shared", "与我共享"],
-              ["favorites", "收藏文档"],
-              ["favorite-libraries", "收藏知识库"],
-            ].map(([key, label]) => (
+          <div className="home-tabs" role="tablist" aria-label={t("home.tabs")}>
+            {(
+              [
+                ["recent", "home.tab.recent"],
+                ["owned", "home.tab.owned"],
+                ["shared", "home.tab.shared"],
+                ["favorites", "home.tab.favorites"],
+                ["favorite-libraries", "home.tab.libraries"],
+              ] as const
+            ).map(([key, label]) => (
               <button
                 key={key}
                 role="tab"
@@ -350,7 +355,7 @@ export function Dashboard({
                   if (key === "recent") setSort("visited_at");
                 }}
               >
-                {label}
+                {t(label)}
               </button>
             ))}
           </div>
@@ -358,10 +363,10 @@ export function Dashboard({
         <div className="dashboard-toolbar">
           {libraries ? (
             <h2>
-              全部知识库 <small>{data.total}</small>
+              {t("home.allLibraries")} <small>{data.total}</small>
             </h2>
           ) : (
-            <span className="subtle">{data.total} 项内容</span>
+            <span className="subtle">{t("home.itemCount", { count: data.total })}</span>
           )}
           <div className="grow" />
           {trash && (
@@ -378,29 +383,29 @@ export function Dashboard({
               onClick={() => setSearchOpen(true)}
             >
               <Search size={16} />
-              搜索知识库内文档
+              {t("home.searchLibraries")}
             </button>
           )}
           {!libraryCards && <TypeFilter value={format} change={setFormat} />}
           <label className="sort-select">
             <ArrowUpDown size={15} />
             <Select
-              aria-label="排序字段"
+              aria-label={t("home.sortField")}
               value={sort}
               onChange={(e) => setSort(e.target.value)}
             >
-              <option value="visited_at">访问时间</option>
-              <option value="created_at">创建时间</option>
-              <option value="updated_at">修改时间</option>
+              <option value="visited_at">{t("settings.sort.visited")}</option>
+              <option value="created_at">{t("home.created")}</option>
+              <option value="updated_at">{t("home.modified")}</option>
             </Select>
           </label>
           <Select
-            aria-label="排序顺序"
+            aria-label={t("home.sortOrder")}
             value={order}
             onChange={(e) => setOrder(e.target.value)}
           >
-            <option value="desc">最新在前</option>
-            <option value="asc">最早在前</option>
+            <option value="desc">{t("settings.order.newest")}</option>
+            <option value="asc">{t("settings.order.oldest")}</option>
           </Select>
         </div>
         {home && !libraryCards && tableHeader}
@@ -409,21 +414,21 @@ export function Dashboard({
       {trash && <FileTrash />}
       <div className="dashboard-results" key={scope + format}>
         {loadedQuery !== query || (loading && !data.items.length) ? (
-          <div className="empty">正在加载…</div>
+          <div className="empty">{t("common.loading")}</div>
         ) : !data.items.length ? (
           <div className="empty">
             <FolderOpen size={38} />
             <h3>
               {scope === "recent"
-                ? "还没有访问记录"
+                ? t("home.emptyRecent")
                 : libraries
-                  ? "创建你的第一个知识库"
-                  : "这里暂时没有内容"}
+                  ? t("home.emptyLibrary")
+                  : t("home.empty")}
             </h3>
             <p>
               {scope === "recent"
-                ? "打开个人文档或知识库中的文档后，会显示在这里。"
-                : "新建内容，或调整筛选条件。"}
+                ? t("home.emptyRecentHint")
+                : t("home.emptyHint")}
             </p>
           </div>
         ) : libraryCards ? (
@@ -450,7 +455,7 @@ export function Dashboard({
                   <BookOpen size={30} />
                   <strong>{r.title}</strong>
                   <span>
-                    知识库 ·{" "}
+                    {t("home.libraries")} ·{" "}
                     {r.owner_id && (
                       <DocumentAuthor
                         id={r.owner_id}
@@ -461,10 +466,10 @@ export function Dashboard({
                   </span>
                 </button>
                 <div className="library-card-footer">
-                  <small>更新于 {date(r.updated_at)}</small>
+                  <small>{t("common.updatedAt", { date: date(r.updated_at) })}</small>
                   <a
                     className="icon"
-                    aria-label={r.title + "的设置"}
+                    aria-label={t("home.settingsFor", { title: r.title })}
                     href={librarySettingsUrl(r.id)}
                   >
                     <Settings size={18} />
@@ -500,16 +505,16 @@ export function Dashboard({
                     }}
                   >
                     <FileIcon r={r} />
-                    <span>{r.title}</span>
+                    <span>{r.title}{r.kind === "library" && r.ai_curated ? ` · ${t("home.aiCurated")}` : ""}</span>
                   </button>
                   {home && (
                     <span className="table-row-actions">
                       <DocumentReactionButtons resource={r} size={14} onError={setError} />
                       {r.role === "owner" && (
-                        <HoverTip label="删除">
+                        <HoverTip label={t("common.delete")}>
                           <button
                             className="icon is-delete"
-                            aria-label={"删除" + r.title}
+                            aria-label={t("home.deleteNamed", { title: r.title })}
                             onClick={() => void mutate(r, "trash")}
                           >
                             <Trash2 size={14} />
@@ -522,7 +527,7 @@ export function Dashboard({
                 <span
                   className={`table-location ${r.inLibrary || r.library_id || r.kind === "library" ? "in-library" : "personal"}`}
                   title={
-                    r.libraryName ?? (r.inLibrary ? "知识库文档" : "个人文档")
+                    r.libraryName ?? (r.inLibrary ? t("home.libraryDoc") : t("home.personalDoc"))
                   }
                 >
                   {r.inLibrary || r.library_id || r.kind === "library" ? (
@@ -533,10 +538,10 @@ export function Dashboard({
                   <span>
                     {r.libraryName ??
                       (r.kind === "library"
-                        ? "知识库"
+                        ? t("home.libraries")
                         : r.inLibrary || r.library_id
-                          ? "知识库文档"
-                          : "个人文档")}{" "}
+                          ? t("home.libraryDoc")
+                          : t("home.personalDoc"))}{" "}
                   </span>
                 </span>
                 <span className="table-owner">
@@ -548,7 +553,7 @@ export function Dashboard({
                     />
                   )}
                 </span>
-                <time title={new Date(r.created_at).toLocaleString("zh-CN")}>
+                <time title={new Date(r.created_at).toLocaleString(htmlLang(locale))}>
                   {date(r.created_at)}
                 </time>
                 <time
@@ -558,7 +563,7 @@ export function Dashboard({
                           (sort === "visited_at"
                             ? r.visited_at
                             : r.updated_at)!,
-                        ).toLocaleString("zh-CN")
+                        ).toLocaleString(htmlLang(locale))
                       : undefined
                   }
                 >
@@ -570,7 +575,7 @@ export function Dashboard({
                       type="button"
                       onClick={() => void mutate(r, "restore")}
                     >
-                      恢复
+                      {t("common.restore")}
                     </button>
                     {roleRank(r.role) >= 5 && (
                       <button
@@ -578,14 +583,14 @@ export function Dashboard({
                         className="danger"
                         onClick={() => setPurgeTarget(r)}
                       >
-                        删除
+                        {t("common.delete")}
                       </button>
                     )}
                   </div>
                 ) : (
                   <button
                     className="icon"
-                    aria-label={"打开" + r.title}
+                    aria-label={t("home.openNamed", { title: r.title })}
                     onClick={() => {
                       location.hash = "/r/" + r.id;
                     }}
@@ -603,7 +608,7 @@ export function Dashboard({
             disabled={loading}
             onClick={() => void more()}
           >
-            加载更多
+            {t("common.more")}
           </button>
         )}
       </div>
@@ -611,32 +616,33 @@ export function Dashboard({
   );
 }
 export function CloudBackup() {
+  const { t } = useI18n();
   return (
     <section className="dashboard">
       <div className="dashboard-heading">
-        <h1>云备份</h1>
-        <span className="tag">尚未启用</span>
+        <h1>{t("backup.title")}</h1>
+        <span className="tag">{t("backup.off")}</span>
       </div>
       <div className="backup-layout">
         <aside>
-          <h3>备份目录</h3>
+          <h3>{t("backup.folders")}</h3>
           <div>
             <FileText size={17} />
-            个人文档
+            {t("home.mine")}
           </div>
           <div>
             <BookOpen size={17} />
-            知识库
+            {t("home.libraries")}
           </div>
         </aside>
         <div className="backup-empty">
           <Cloud size={58} />
-          <h2>你的桌面资料，安全留一份</h2>
-          <p>这里将展示桌面端备份的个人文档和知识库目录。</p>
+          <h2>{t("backup.headline")}</h2>
+          <p>{t("backup.body")}</p>
           <p className="subtle">
-            目前尚无桌面同步接入，这里不是在线文档库。备份文件只用于恢复，复制成独立文档后才能编辑。
+            {t("backup.note")}
           </p>
-          <span className="tag">云端主体完成后再接入备份与恢复</span>
+          <span className="tag">{t("backup.later")}</span>
         </div>
       </div>
     </section>

@@ -21,6 +21,7 @@ import type { DB } from "@db/index.js";
 import type { StorageRuntime } from "../adapters/storage.js";
 import { waitFileExtract } from "../services/ai/file-extract.js";
 import { normalizeWebExclude, normalizeWebSites, searchWeb, type WebSearchConstraints } from "../services/ai/web-search.js";
+import { confirmKnowledgeSubscription, dismissKnowledgeSubscription, listKnowledgeSubscriptions, saveLibraryGuide, setLibraryCuration, subscribeKnowledgeSource, subscriptionKind } from "@core/modules/knowledge/subscriptions.js";
 
 export function registerKnowledge(
   api: FastifyInstance,
@@ -51,6 +52,65 @@ export function registerKnowledge(
     clearInterval(timer);
     if (processing) await processing;
   });
+
+  api.get<{ Params: { id: string } }>(
+    "/api/v1/knowledge/libraries/:id/subscriptions",
+    { schema: { params: Type.Object({ id: Type.String({ format: "uuid" }) }) } },
+    async (req) => listKnowledgeSubscriptions(db, auth(req), req.params.id),
+  );
+
+  api.post<{ Params: { id: string }; Body: { sourceKind: string; sourceId?: string; url?: string } }>(
+    "/api/v1/knowledge/libraries/:id/subscriptions",
+    {
+      schema: {
+        params: Type.Object({ id: Type.String({ format: "uuid" }) }),
+        body: Type.Object({
+          sourceKind: Type.String({ minLength: 3, maxLength: 16 }),
+          sourceId: Type.Optional(Type.String({ maxLength: 36 })),
+          url: Type.Optional(Type.String({ maxLength: 500 })),
+        }),
+      },
+    },
+    async (req) => subscribeKnowledgeSource(db, auth(req), req.params.id, {
+      sourceKind: subscriptionKind(req.body.sourceKind),
+      sourceId: req.body.sourceId,
+      url: req.body.url,
+    }),
+  );
+
+  api.post<{ Params: { id: string; subscriptionId: string } }>(
+    "/api/v1/knowledge/libraries/:id/subscriptions/:subscriptionId/confirm",
+    { schema: { params: Type.Object({ id: Type.String({ format: "uuid" }), subscriptionId: Type.String({ format: "uuid" }) }) } },
+    async (req) => confirmKnowledgeSubscription(db, auth(req), req.params.id, req.params.subscriptionId),
+  );
+
+  api.post<{ Params: { id: string; subscriptionId: string } }>(
+    "/api/v1/knowledge/libraries/:id/subscriptions/:subscriptionId/dismiss",
+    { schema: { params: Type.Object({ id: Type.String({ format: "uuid" }), subscriptionId: Type.String({ format: "uuid" }) }) } },
+    async (req) => dismissKnowledgeSubscription(db, auth(req), req.params.id, req.params.subscriptionId),
+  );
+
+  api.post<{ Params: { id: string }; Body: { markdown?: string } }>(
+    "/api/v1/knowledge/libraries/:id/guide",
+    {
+      schema: {
+        params: Type.Object({ id: Type.String({ format: "uuid" }) }),
+        body: Type.Object({ markdown: Type.Optional(Type.String({ maxLength: 20000 })) }),
+      },
+    },
+    async (req) => saveLibraryGuide(db, auth(req), req.params.id, req.body.markdown ?? ""),
+  );
+
+  api.post<{ Params: { id: string }; Body: { enabled: boolean } }>(
+    "/api/v1/knowledge/libraries/:id/curation",
+    {
+      schema: {
+        params: Type.Object({ id: Type.String({ format: "uuid" }) }),
+        body: Type.Object({ enabled: Type.Boolean() }),
+      },
+    },
+    async (req) => setLibraryCuration(db, auth(req), req.params.id, req.body.enabled),
+  );
 
   api.get("/api/v1/knowledge/graph", async (req) => {
     if (await enqueueMissingKnowledge(db)) await processProjections(db, "knowledge", rebuild);

@@ -630,7 +630,8 @@ export function SearchPanel({
                         />
                       </span>
                       <small>
-                        {r.libraryName ?? (r.inLibrary ? "知识库文档" : "个人文档")}{" "}
+                        {r.libraryName ?? (r.inLibrary ? "知识库文档" : "个人文档")}
+                        {r.aiCurated ? " · AI 归类" : ""}{" "}
                         ·{" "}
                         {r.owner_id && (
                           <UserBadge id={r.owner_id} name={r.ownerName} />

@@ -9,6 +9,8 @@ import { api, assetUrl, fileUrl, uploadFile, type FileItem, type Me } from "@web
 import { LinkedIdentities } from "@web/features/auth/authentication.js";
 import { FileSourceDialog, FolderFilePicker } from "@web/features/files/files.js";
 import { ActivityCalendar } from "@web/features/workspace/activity-calendar.js";
+import { localeLabel, locales } from "@doca/i18n";
+import { useI18n } from "@web/shared/i18n.js";
 export const avatars: Record<string, string> = {
   fox: "🦊",
   panda: "🐼",
@@ -251,6 +253,7 @@ export function PersonalSettings({
   me: Me;
   saved: () => Promise<void>;
 }) {
+  const { locale, setLocale, t } = useI18n();
   const [p, setP] = useState(me.preferences),
     [tone, setTone] = useState<FeedbackTone>("success"),
     [message, setMessage] = useState(""),
@@ -273,7 +276,7 @@ export function PersonalSettings({
       setP((await api<Me>("/me")).preferences);
       await saved();
       setTone("success");
-      setMessage("已自动保存");
+      setMessage(t("settings.saved"));
     } catch (e) {
       setP(p);
       setTone("error");
@@ -288,11 +291,28 @@ export function PersonalSettings({
   }
   return (
     <section className="account-page">
-      <h1>系统设置</h1>
-      <p className="subtle">只影响你的使用偏好，不改变本站其他用户的设置。</p>
+      <h1>{t("account.settings")}</h1>
+      <p className="subtle">{t("settings.intro")}</p>
       <section className="settings-card">
-        <h2>外观与浏览</h2>
-        <div className="theme-choices" role="group" aria-label="页面色调">
+        <h2>{t("settings.language")}</h2>
+        <p className="subtle">{t("settings.language.hint")}</p>
+        <label>
+          {t("settings.language")}
+          <Select
+            value={locale}
+            onChange={(event) => void setLocale(event.target.value as typeof locale)}
+          >
+            {locales.map((code) => (
+              <option key={code} value={code}>
+                {t(localeLabel[code])}
+              </option>
+            ))}
+          </Select>
+        </label>
+      </section>
+      <section className="settings-card">
+        <h2>{t("settings.appearance")}</h2>
+        <div className="theme-choices" role="group" aria-label={t("settings.themeGroup")}>
           {(["light", "soft"] as const).map((theme) => (
             <button
               type="button"
@@ -306,17 +326,15 @@ export function PersonalSettings({
                 <i />
                 <span />
               </span>
-              <strong>{theme === "light" ? "清爽浅色" : "柔和灰色"}</strong>
+              <strong>{t(theme === "light" ? "settings.theme.light" : "settings.theme.soft")}</strong>
               <small>
-                {theme === "light"
-                  ? "清晰简洁，专注内容"
-                  : "柔和底色，减轻视觉负担"}
+                {t(theme === "light" ? "settings.theme.lightHint" : "settings.theme.softHint")}
               </small>
             </button>
           ))}
         </div>
         <label>
-          列表密度
+          {t("settings.density")}
           <Select
             value={p.density}
             disabled={busy}
@@ -324,12 +342,12 @@ export function PersonalSettings({
               void update({ ...p, density: e.target.value as typeof p.density })
             }
           >
-            <option value="comfortable">舒适</option>
-            <option value="compact">紧凑</option>
+            <option value="comfortable">{t("settings.density.comfortable")}</option>
+            <option value="compact">{t("settings.density.compact")}</option>
           </Select>
         </label>
         <label>
-          默认排序
+          {t("settings.sort")}
           <Select
             value={p.default_sort}
             disabled={busy}
@@ -337,20 +355,20 @@ export function PersonalSettings({
               void update({ ...p, default_sort: e.target.value })
             }
           >
-            <option value="updated_at">修改时间</option>
-            <option value="created_at">创建时间</option>
-            <option value="visited_at">访问时间</option>
+            <option value="updated_at">{t("settings.sort.updated")}</option>
+            <option value="created_at">{t("settings.sort.created")}</option>
+            <option value="visited_at">{t("settings.sort.visited")}</option>
           </Select>
         </label>
         <label>
-          顺序
+          {t("settings.order")}
           <Select
             value={p.sort_order}
             disabled={busy}
             onChange={(e) => void update({ ...p, sort_order: e.target.value })}
           >
-            <option value="desc">最新在前</option>
-            <option value="asc">最早在前</option>
+            <option value="desc">{t("settings.order.newest")}</option>
+            <option value="asc">{t("settings.order.oldest")}</option>
           </Select>
         </label>
         <Feedback message={message} tone={tone} />

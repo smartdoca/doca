@@ -7,6 +7,7 @@ export default defineConfig({
       "@core": fileURLToPath(new URL("./packages/core/src", import.meta.url)),
       "@db": fileURLToPath(new URL("./packages/db/src", import.meta.url)),
       "@server": fileURLToPath(new URL("./apps/server/src", import.meta.url)),
+      "@doca/i18n": fileURLToPath(new URL("./packages/i18n/src/index.ts", import.meta.url)),
     },
   },
   test: { include: ["tests/**/*.test.ts"], testTimeout: 15000 },

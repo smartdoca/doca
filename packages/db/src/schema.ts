@@ -32,6 +32,9 @@ export interface Resource {
   last_edited_at?: string | null;
   cover_asset_id?: string | null;
   page_width?: string | null;
+  ai_curated?: number;
+  guide_document_id?: string | null;
+  guide_text?: string;
   id: string;
   kind: "document" | "library";
   format: "rich_text" | "spreadsheet" | "presentation" | "markdown" | "canvas";
@@ -709,6 +712,17 @@ export interface Schema {
     chunk_id: string;
     judgment: string;
     query: string;
+    created_at: string;
+  };
+  knowledge_subscriptions: {
+    id: string;
+    library_id: string;
+    source_kind: string;
+    source_id: string;
+    url: string;
+    node_id: string | null;
+    source_version: string;
+    status: string;
     created_at: string;
   };
   knowledge_gaps: {

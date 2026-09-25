@@ -4,6 +4,27 @@ import { api } from "@web/shared/api.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
 import { Select } from "@web/shared/components/select.js";
 import { Feedback } from "@web/shared/components/feedback.js";
+import { useI18n } from "@web/shared/i18n.js";
+import type { MessageKey } from "@doca/i18n";
+export const accessLabelKeys: Record<string, MessageKey> = {
+  reader: "role.reader",
+  commenter: "role.commenter",
+  editor: "role.editor",
+  manager: "role.manager",
+  owner: "role.owner",
+  pending: "role.pending",
+  accepted: "role.accepted",
+  rejected: "role.rejected",
+  cancelled: "role.cancelled",
+  expired: "role.expired",
+};
+export function accessText(
+  t: (key: MessageKey) => string,
+  key: string,
+) {
+  const message = accessLabelKeys[key];
+  return message ? t(message) : key;
+}
 export const accessLabels: Record<string, string> = {
   reader: "可阅读",
   commenter: "可评论",
@@ -64,6 +85,7 @@ export function InvitationRows({
   refresh: () => Promise<void>;
   isOwner?: boolean;
 }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [editing, setEditing] = useState<Invitation | null>(null),
@@ -102,7 +124,7 @@ export function InvitationRows({
           <strong>{i.title}</strong>
           <p>
             {i.user && <UserBadge id={i.user.id} name={i.user.display_name} />}{" "}
-            · {accessLabels[i.role]} · {accessLabels[i.state]}
+            · {accessText(t, i.role)} · {accessText(t, i.state)}
           </p>
           {i.inviter && (
             <p>
@@ -153,7 +175,7 @@ export function InvitationRows({
                   ...(isOwner || i.role === "manager" ? ["manager"] : []),
                 ].map((x) => (
                   <option key={x} value={x}>
-                    {accessLabels[x]}
+                    {accessText(t, x)}
                   </option>
                 ))}
               </Select>
