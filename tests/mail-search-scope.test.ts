@@ -6,6 +6,7 @@ import { enqueueProjection } from "@core/modules/automation/jobs.js";
 import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import type { DB } from "@db/index.js";
 import { registerSearch } from "../apps/server/src/routes/search.js";
+import createInstalledMailPlugin from "../plugins/mail/src/server/install.js";
 import { openTestDatabase } from "./database.js";
 
 let db: DB;
@@ -25,6 +26,7 @@ beforeEach(async () => {
     endpoint: "http://127.0.0.1:7700",
     index_name: "doca",
   }).where("id", "=", "system").execute();
+  createInstalledMailPlugin();
   app = Fastify();
   await registerSearch(app, db, () => actor, {
     allowedOrigins: ["http://127.0.0.1:7700"],

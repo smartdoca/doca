@@ -53,8 +53,8 @@ type NotesOpenTarget = {
 };
 let openTarget: NotesOpenTarget | null = null;
 let openTargetGeneration = 0;
-const errorText = (e: unknown) =>
-  e instanceof Error ? e.message : "操作失败，请重试";
+const errorText = (e: unknown, fallback: string) =>
+  e instanceof Error ? e.message : fallback;
 const stamp = (date: string, lang = "zh-CN") =>
   new Date(date).toLocaleString(lang, {
     month: "long",
@@ -134,6 +134,7 @@ function NoteAssets({
   assets: NoteAsset[];
   remove?: (id: string) => void;
 }) {
+  const { t } = useI18n();
   if (!assets.length) return null;
   return (
     <div className="note-assets">
@@ -147,7 +148,7 @@ function NoteAssets({
               href={assetUrl(a.id)}
               target="_blank"
               rel="noreferrer"
-              aria-label={`查看图片 ${a.filename}`}
+              aria-label={t("notes.viewImage", { name: a.filename })}
             >
               <img loading="lazy" src={assetUrl(a.id)} alt={a.filename} />
             </a>
@@ -167,7 +168,7 @@ function NoteAssets({
           {remove && (
             <button
               type="button"
-              aria-label={`移除 ${a.filename}`}
+              aria-label={t("notes.removeNamed", { name: a.filename })}
               onClick={() => remove(a.id)}
             >
               <X size={13} />
@@ -194,6 +195,7 @@ function NoteForm({
   autosaveNew?: boolean;
   quiet?: boolean;
 }) {
+  const { t } = useI18n();
   const cacheKey = `doca.quick-note.${userId}.${note?.id ?? "new"}`;
   const [draft, setDraft] = useState(() => loadDraft(cacheKey, note));
   const current = useRef(draft),
@@ -208,7 +210,7 @@ function NoteForm({
     [remote, setRemote] = useState<QuickNote | null>(null);
   const [editorKey, setEditorKey] = useState(0),
     [saveState, setSaveState] = useState(
-      note ? "修改会自动保存" : "草稿保存在此浏览器",
+      note ? t("notes.autosaved") : t("notes.draftLocal"),
     );
   const busy = useRef(false),
     alive = useRef(true),
@@ -223,7 +225,7 @@ function NoteForm({
       localStorage.setItem(cacheKey, JSON.stringify(next));
     } catch {
       if (alive.current)
-        setError("浏览器无法保存恢复草稿，请保持页面打开并及时保存到云端");
+        setError(t("notes.draftBlocked"));
     }
   };
   const update = (patch: Partial<Draft>) => {
@@ -232,7 +234,7 @@ function NoteForm({
     current.current = next;
     setDraft(next);
     persist(next);
-    setSaveState(note ? "尚未保存" : "草稿保存在此浏览器");
+    setSaveState(note ? t("notes.unsaved") : t("notes.draftLocal"));
   };
   const saveRef = useRef<() => Promise<boolean>>(async () => false);
   saveRef.current = async () => {
@@ -247,7 +249,7 @@ function NoteForm({
     if (alive.current) {
       setSaving(true);
       setError("");
-      setSaveState("正在保存…");
+      setSaveState(t("notes.saving"));
     }
     try {
       const result = await api<QuickNote>(
@@ -280,13 +282,13 @@ function NoteForm({
         else persist(current.current);
       } catch {}
       savedCallback.current(result);
-      if (alive.current) setSaveState("已保存到云端");
+      if (alive.current) setSaveState(t("notes.saved"));
       return fingerprint(current.current) === signature;
     } catch (e) {
       persist(current.current);
       if (alive.current) {
-        setError(errorText(e));
-        setSaveState("未保存，草稿已保留");
+        setError(errorText(e, t("notes.failed")));
+        setSaveState(t("notes.keptDraft"));
         if ((e as { status?: number }).status === 409) {
           conflictRef.current = true;
           setConflict(true);
@@ -351,7 +353,7 @@ function NoteForm({
   }, []);
   async function upload(file: File, context: UploadContext) {
     if (current.current.assets.length + pendingUploads.current >= 12)
-      throw Error("每条随手记最多 12 个图片或附件");
+      throw Error(t("notes.assetLimit"));
     pendingUploads.current++;
     uploadingRef.current = true;
     setUploading(true);
@@ -420,22 +422,22 @@ function NoteForm({
       </div>
       {uploading && (
         <p className="note-status" role="status">
-          正在上传，请稍候…
+          {t("notes.uploading")}
         </p>
       )}
       {conflict && (
         <div className="note-conflict">
-          <p>这条记录已有较新版本。本地内容已保留，请查看最新版本后合并。</p>
+          <p>{t("notes.conflict")}</p>
           <button
             onClick={async () => {
               try {
                 setRemote(await api<QuickNote>(base + "/" + draft.id));
               } catch (e) {
-                setError(errorText(e));
+                setError(errorText(e, t("notes.failed")));
               }
             }}
           >
-            查看最新版本
+            {t("notes.viewLatest")}
           </button>
           {remote && (
             <>
@@ -445,7 +447,7 @@ function NoteForm({
                   assets={outsideAssets(remote.content, remote.assets)}
                 />
               </div>
-              <p>可以在上方编辑区合并内容，确认后用合并结果更新云端。</p>
+              <p>{t("notes.mergeHint")}</p>
               <button
                 disabled={!!remote.deleted_at}
                 onClick={() => {
@@ -457,7 +459,7 @@ function NoteForm({
                   void saveRef.current();
                 }}
               >
-                保存合并后的内容
+                {t("notes.saveMerge")}
               </button>
               <button
                 onClick={() => {
@@ -479,7 +481,7 @@ function NoteForm({
                   setError("");
                 }}
               >
-                使用云端版本
+                {t("notes.useCloud")}
               </button>
             </>
           )}
@@ -492,19 +494,19 @@ function NoteForm({
       )}
       <div className="note-form-footer">
         <span className="note-status" role="status">
-          {note || error || saving || autosaveNew ? saveState : "⌘ Enter 记下"}
+          {note || error || saving || autosaveNew ? saveState : t("notes.shortcut")}
         </span>
         {!quiet && (
         <div>
           {close && (error || conflict) && (
-            <button onClick={close}>收起并保留草稿</button>
+            <button onClick={close}>{t("notes.keepDraft")}</button>
           )}
           <button
             className="primary"
             disabled={saving || uploading || conflict || !hasContent(draft)}
             onClick={() => void submit()}
           >
-            {saving ? "正在保存…" : note ? "完成" : "记下"}
+            {saving ? t("notes.saving") : note ? t("notes.done") : t("notes.save")}
             <span className="note-shortcut" aria-hidden="true">
               ⌘ ↵
             </span>
@@ -580,7 +582,7 @@ export function QuickNotes({
           setNext(p.nextOffset);
         })
         .catch((e) => {
-          if (!controller.signal.aborted) setError(errorText(e));
+          if (!controller.signal.aborted) setError(errorText(e, t("notes.failed")));
         })
         .finally(() => {
           if (!controller.signal.aborted) setLoading(false);
@@ -648,7 +650,7 @@ export function QuickNotes({
       });
       setRefresh((n) => n + 1);
     } catch (e) {
-      setError(errorText(e));
+      setError(errorText(e, t("notes.failed")));
     } finally {
       setMutating(null);
     }
@@ -676,7 +678,7 @@ export function QuickNotes({
           removed.add(note.id);
         } catch (e) {
           failed.push(note);
-          reason ||= errorText(e);
+          reason ||= errorText(e, t("notes.failed"));
         }
       }
       setItems((rows) => rows.filter((n) => !removed.has(n.id)));
@@ -685,7 +687,7 @@ export function QuickNotes({
       if (failed.length) {
         setDeleteTargets(failed);
         setDeleteError(
-          `已删除 ${removed.size} 条，${failed.length} 条未能删除。${reason}。请返回列表刷新后重试。`,
+          t("notes.deletePartial", { removed: removed.size, failed: failed.length, reason }),
         );
       } else {
         setDeleteTargets(null);
@@ -704,7 +706,7 @@ export function QuickNotes({
         const d = new Date(n.created_at);
         return {
           id: n.id,
-          label: `随手记 ${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`,
+          label: t("notes.aiLabel", { when: `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}` }),
           content: n.content,
           attachments: n.assets.map((a) => ({
             id: a.id,
@@ -829,8 +831,8 @@ export function QuickNotes({
               className="note-icon-button note-batch-toggle"
               aria-pressed={batchMode}
               disabled={loading || !items.length}
-              aria-label="批量选择"
-              title="批量选择"
+              aria-label={t("notes.batch")}
+              title={t("notes.batch")}
               onClick={() => {
                 setBatchMode((value) => !value);
                 setSelected([]);
@@ -842,8 +844,8 @@ export function QuickNotes({
           <button
             type="button"
             className="note-icon-button"
-            title="刷新记录"
-            aria-label="刷新记录"
+            title={t("notes.refresh")}
+            aria-label={t("notes.refresh")}
             onClick={() => setRefresh((value) => value + 1)}
           >
             <RefreshCw size={15} />
@@ -851,24 +853,24 @@ export function QuickNotes({
         </div>
         {batchMode && (
           <div className="note-selection-bar">
-            <span>{selected.length ? `已选 ${selected.length}` : "选择记录"}</span>
+            <span>{selected.length ? t("notes.selected", { count: selected.length }) : t("notes.selectRows")}</span>
             <div className="note-selection-actions">
               <button
                 type="button"
-                title="最多 20 条"
+                title={t("notes.batchLimit")}
                 onClick={() => setSelected(items.slice(0, 20).map((note) => note.id))}
               >
-                全选
+                {t("notes.selectAll")}
               </button>
               <button type="button" disabled={!selected.length} onClick={() => setSelected([])}>
-                清空
+                {t("notes.clear")}
               </button>
               <button
                 type="button"
                 className="note-selection-icon note-batch-delete"
                 disabled={!selected.length}
-                aria-label="删除所选"
-                title="删除所选"
+                aria-label={t("notes.deleteSelected")}
+                title={t("notes.deleteSelected")}
                 onClick={() => askDelete(items.filter((note) => selected.includes(note.id)))}
               >
                 <Trash2 size={14} />
@@ -877,8 +879,8 @@ export function QuickNotes({
                 type="button"
                 className="note-selection-icon"
                 disabled={!selected.length}
-                aria-label="AI 整理"
-                title="AI 整理"
+                aria-label={t("notes.organizeAi")}
+                title={t("notes.organizeAi")}
                 onClick={() => organize(items.filter((note) => selected.includes(note.id)))}
               >
                 <Sparkles size={14} />
@@ -894,19 +896,19 @@ export function QuickNotes({
         <div className="note-list-scroll">
           {loading ? (
             <div className="note-empty" role="status">
-              正在加载记录…
+              {t("notes.loading")}
             </div>
           ) : !items.length && !creating ? (
             <div className="note-empty">
               <h3>
-                {query ? "没有找到相关记录" : trash ? "没有已删除的记录" : "无随手记"}
+                {query ? t("notes.emptySearch") : trash ? t("notes.emptyTrash") : t("notes.empty")}
               </h3>
               <p>
                 {query
-                  ? "换个关键词试试。"
+                  ? t("notes.emptySearchHint")
                   : trash
-                    ? "删除的记录可以在这里恢复。"
-                    : "点加号记下第一条。"}
+                    ? t("notes.emptyTrashHint")
+                    : t("notes.emptyHint")}
               </p>
             </div>
           ) : (
@@ -976,13 +978,13 @@ export function QuickNotes({
                     setNext(page.nextOffset);
                   }
                 } catch (exception) {
-                  setError(errorText(exception));
+                  setError(errorText(exception, t("notes.failed")));
                 } finally {
                   setMutating(null);
                 }
               }}
             >
-              加载更多
+              {t("common.more")}
             </button>
           )}
         </div>
@@ -1048,13 +1050,13 @@ export function QuickNotes({
           ) : (
             <div className="note-empty">
               <Feather size={36} />
-              <h3>{query ? "没有找到相关记录" : trash ? "没有已删除的记录" : "无随手记"}</h3>
+              <h3>{query ? t("notes.emptySearch") : trash ? t("notes.emptyTrash") : t("notes.empty")}</h3>
               <p>
                 {query
-                  ? "换个关键词试试。"
+                  ? t("notes.emptySearchHint")
                   : trash
-                    ? "删除的记录可以在这里恢复。"
-                    : "从左边选择一条，或新建一条。"}
+                    ? t("notes.emptyTrashHint")
+                    : t("notes.emptyPick")}
               </p>
             </div>
           )}
@@ -1062,7 +1064,7 @@ export function QuickNotes({
       </div>
       {deleteTargets && (
         <Dialog
-          title="删除随手记"
+          title={t("notes.deleteTitle")}
           close={() => {
             if (!deletingRef.current) setDeleteTargets(null);
           }}
@@ -1070,10 +1072,10 @@ export function QuickNotes({
         >
           <p>
             {deleteTargets.length === 1
-              ? "确定删除这条随手记吗？"
-              : `确定删除选中的 ${deleteTargets.length} 条随手记吗？`}
+              ? t("notes.deleteOne")
+              : t("notes.deleteMany", { count: deleteTargets.length })}
           </p>
-          <p className="note-muted">删除后会移入“已删除”，可以随时恢复。</p>
+          <p className="note-muted">{t("notes.deleteBody")}</p>
           {deleteError && (
             <p className="note-error" role="alert">
               {deleteError}
@@ -1081,14 +1083,14 @@ export function QuickNotes({
           )}
           <div className="note-delete-actions">
             <button disabled={deleting} onClick={() => setDeleteTargets(null)}>
-              取消
+              {t("common.cancel")}
             </button>
             <button
               className="note-confirm-delete"
               disabled={deleting || !!deleteError}
               onClick={() => void confirmDelete()}
             >
-              {deleting ? "正在删除…" : "确认删除"}
+              {deleting ? t("notes.deleting") : t("notes.confirmDelete")}
             </button>
           </div>
         </Dialog>

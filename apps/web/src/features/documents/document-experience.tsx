@@ -351,7 +351,7 @@ export function CreatePopover({
         </button>
       )}
       {sourceOpen && <FileSourceDialog title={t("create.importAs", { name: t(createTypeKey[target!]) })} close={() => setSourceOpen(false)} chooseLocal={() => importInput.current?.click()} chooseDoca={() => setFolderPicker(true)} />}
-      {folderPicker && <FolderFilePicker close={() => setFolderPicker(false)} select={async (item: FileItem) => { const response = await fetch(fileUrl(item.id)); if (!response.ok) throw new Error("文件读取失败"); choose(target!, new File([await response.blob()], item.name, { type: item.mime })); }} />}
+      {folderPicker && <FolderFilePicker close={() => setFolderPicker(false)} select={async (item: FileItem) => { const response = await fetch(fileUrl(item.id)); if (!response.ok) throw new Error(t("create.readFailed")); choose(target!, new File([await response.blob()], item.name, { type: item.mime })); }} />}
     </div>,
     document.body,
   );
@@ -362,6 +362,7 @@ type People = {
   nextOffset: number | null;
 };
 export function LikePeople({ detail }: { detail: Detail }) {
+  const { t } = useI18n();
   const [page, setPage] = useState<People>({
       items: [],
       total: 0,
@@ -387,7 +388,7 @@ export function LikePeople({ detail }: { detail: Detail }) {
     <>
       <button
         className="like-people"
-        aria-label={`查看全部 ${page.total} 位点赞人`}
+        aria-label={t("doc.likePeopleAll", { count: page.total })}
         onClick={() => setOpen(true)}
         disabled={!page.total}
       >
@@ -397,7 +398,7 @@ export function LikePeople({ detail }: { detail: Detail }) {
         {page.total > 8 && <span className="avatar-more">…</span>}
       </button>
       {open && (
-        <Dialog title={`点赞的人 · ${page.total}`} close={() => setOpen(false)}>
+        <Dialog title={t("doc.likePeople", { count: page.total })} close={() => setOpen(false)}>
           <div className="people-list">
             {page.items.map((u) => (
               <UserBadge key={u.id} id={u.id} name={u.display_name} />
@@ -418,7 +419,7 @@ export function LikePeople({ detail }: { detail: Detail }) {
                   .catch((e) => setError(e.message))
               }
             >
-              加载更多
+              {t("common.more")}
             </button>
           )}
           {error && <Feedback message={error} tone="error" />}
@@ -603,59 +604,61 @@ function DocumentRecords({
       });
     return () => c.abort();
   }, [path, reload]);
-  const tabs =
+  const tabs: [string, MessageKey][] =
     initial === "history"
-      ? [["history", "历史快照"]]
+      ? [["history", "record.snapshot"]]
       : [
-          ["stats", "作品数据"],
+          ["stats", "record.stats"],
           ...(roleRank(detail.resource.role) >= 4
-            ? [
-                ["visits", "访问记录"],
-                ["audit", "操作记录"],
-              ]
+            ? ([
+                ["visits", "record.visits"],
+                ["audit", "record.audit"],
+              ] as [string, MessageKey][])
             : []),
         ];
   return (
     <Dialog
-      title={initial === "history" ? "历史记录" : "文档信息"}
+      title={initial === "history" ? t("doc.history") : t("doc.info")}
       close={close}
     >
       <div className="document-records">
-        <nav aria-label="文档信息分类">
+        <nav aria-label={t("record.tabs")}>
           {tabs.map(([k, v]) => (
             <button
               key={k}
               className={tab === k ? "active" : ""}
-              onClick={() => setTab(k!)}
+              onClick={() => setTab(k)}
             >
-              {v}
+              {t(v)}
             </button>
           ))}
         </nav>
         <section>
           {error && <Feedback message={error} tone="error" />}
-          {!data && !error && <p>正在加载…</p>}
+          {!data && !error && <p>{t("common.loading")}</p>}
           {tab === "stats" && data && (
             <>
               <h3>{data.title}</h3>
               <div className="document-stat-grid">
-                {[
-                  ["字数", data.words ?? 0],
-                  ["图片数", data.images ?? 0],
-                  ["附件数", data.attachments ?? 0],
-                  ["访问次数", data.visits],
-                  ["点赞", data.likes],
-                  ["收藏", data.favorites],
-                  ["评论", data.comments],
-                ].map(([label, value]) => (
+                {(
+                  [
+                    ["record.words", data.words ?? 0],
+                    ["record.images", data.images ?? 0],
+                    ["record.attachments", data.attachments ?? 0],
+                    ["record.visitCount", data.visits],
+                    ["record.likes", data.likes],
+                    ["record.favorites", data.favorites],
+                    ["record.comments", data.comments],
+                  ] as [MessageKey, number][]
+                ).map(([label, value]) => (
                   <div key={label}>
                     <strong>{value}</strong>
-                    <span>{label}</span>
+                    <span>{t(label)}</span>
                   </div>
                 ))}
               </div>
-              <p>创建于 {new Date(data.createdAt).toLocaleString()}</p>
-              <p>更新于 {new Date(data.updatedAt).toLocaleString()}</p>
+              <p>{t("record.created", { time: new Date(data.createdAt).toLocaleString() })}</p>
+              <p>{t("record.updated", { time: new Date(data.updatedAt).toLocaleString() })}</p>
               {detail.resource.format === "rich_text" && (
                 <p>{t("doc.width")} {pageWidthLabel(data.pageWidth, t)}</p>
               )}
@@ -663,10 +666,7 @@ function DocumentRecords({
           )}
           {tab === "history" && (
             <>
-              <p className="subtle">
-                每 50 次有效更新或持续编辑超过 5
-                分钟自动留存，可查看当时的正文。升级前未留存的历史无法追溯。
-              </p>
+              <p className="subtle">{t("record.snapshotHint")}</p>
               {roleRank(detail.resource.role) >= 3 &&
                 allowed("history.create") && (
                   <button
@@ -679,7 +679,7 @@ function DocumentRecords({
                         .finally(() => setBusy(false));
                     }}
                   >
-                    保存当前快照
+                    {t("record.saveSnapshot")}
                   </button>
                 )}
             </>
@@ -691,7 +691,7 @@ function DocumentRecords({
                 name={row.name ?? row.display_name}
               />
               {row.is_ai && (
-                <span title="由 AI 协助编辑" className="ai-history-origin">
+                <span title={t("record.aiEdited")} className="ai-history-origin">
                   <Sparkles size={13} /> AI
                 </span>
               )}
@@ -699,10 +699,10 @@ function DocumentRecords({
                 {tab === "history"
                   ? row.title
                   : tab === "visits"
-                    ? "访问了文档"
-                    : eventLabel(row.action)}
+                    ? t("record.visitedDoc")
+                    : eventLabel(row.action, t)}
               </span>
-              <time>{relativeTime(row.created_at)}</time>
+              <time>{relativeTime(row.created_at, Date.now(), t)}</time>
               {tab === "history" && (
                 <button
                   onClick={() =>
@@ -711,12 +711,12 @@ function DocumentRecords({
                       .catch((e) => setError(e.message))
                   }
                 >
-                  查看
+                  {t("record.view")}
                 </button>
               )}
             </article>
           ))}
-          {data?.items?.length === 0 && <p className="empty">暂无记录</p>}
+          {data?.items?.length === 0 && <p className="empty">{t("record.empty")}</p>}
           {data?.nextOffset != null && (
             <button
               onClick={() =>
@@ -735,22 +735,22 @@ function DocumentRecords({
                   .catch((e) => setError(e.message))
               }
             >
-              加载更多
+              {t("common.more")}
             </button>
           )}
           {preview && (
             <Dialog
-              title={preview.title || "历史快照"}
+              title={preview.title || t("record.snapshotTitle")}
               close={() => setPreview(null)}
               className="version-preview-dialog"
             >
               <p>
-                {new Date(preview.createdAt).toLocaleString()} · 只读快照
+                {new Date(preview.createdAt).toLocaleString()} · {t("record.readonly")}
               </p>
               <p className="subtle">
                 {preview.canRestore === false
-                  ? "当前编辑器尚未支持保留区域锚点的版本回滚，可查看历史快照。"
-                  : "回滚前自动保留当前快照。其他在线编辑者会收到新的协同变更。"}
+                  ? t("record.rollbackLimited")
+                  : t("record.rollbackHint")}
               </p>
               {error && <Feedback message={error} tone="error" />}
               <div className="version-preview">
@@ -766,7 +766,7 @@ function DocumentRecords({
               </div>
               <footer>
                 <button type="button" onClick={() => setPreview(null)}>
-                  关闭
+                  {t("record.close")}
                 </button>
                 {roleRank(detail.resource.role) >= 4 &&
                   preview.canRestore !== false && (
@@ -788,7 +788,7 @@ function DocumentRecords({
                           .finally(() => setBusy(false));
                       }}
                     >
-                      回滚到此版本
+                      {t("record.rollback")}
                     </button>
                   )}
               </footer>
@@ -799,32 +799,34 @@ function DocumentRecords({
     </Dialog>
   );
 }
-function eventLabel(action: string) {
-  return (
-    (
-      {
-        "resource.created": "创建文档",
-        "document.created": "创建文档",
-        "library.created": "创建知识库",
-        "document.updated": "更新正文并生成自动快照",
-        "favorite.added": "收藏",
-        "favorite.removed": "取消收藏",
-        "resource.renamed": "修改标题",
-        "resource.permissions_changed": "调整权限",
-        "resource.moved": "移动位置",
-        "resource.trashed": "移入回收站",
-        "resource.restored": "恢复文档",
-        "resource.link_enabled": "开启或更新链接分享",
-        "resource.link_disabled": "关闭链接分享",
-        "document.snapshot_created": "保存快照",
-        "document.ai_edited": "AI 编辑了文档",
-        "document.version_restored": "回滚历史版本",
-        "resource.transferred": "转移所有权",
-        "comment.created": "发表评论",
-        "comment.updated": "更新评论",
-        "like.added": "点赞",
-        "like.removed": "取消点赞",
-      } as Record<string, string>
-    )[action] ?? action
-  );
+function eventLabel(
+  action: string,
+  t: (key: MessageKey) => string,
+) {
+  const known = new Set([
+    "resource.created",
+    "document.created",
+    "library.created",
+    "document.updated",
+    "favorite.added",
+    "favorite.removed",
+    "resource.renamed",
+    "resource.permissions_changed",
+    "resource.moved",
+    "resource.trashed",
+    "resource.restored",
+    "resource.link_enabled",
+    "resource.link_disabled",
+    "document.snapshot_created",
+    "document.ai_edited",
+    "document.version_restored",
+    "resource.transferred",
+    "comment.created",
+    "comment.updated",
+    "like.added",
+    "like.removed",
+  ]);
+  return known.has(action)
+    ? t(`record.event.${action}` as MessageKey)
+    : action;
 }

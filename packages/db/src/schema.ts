@@ -35,6 +35,8 @@ export interface Resource {
   ai_curated?: number;
   guide_document_id?: string | null;
   guide_text?: string;
+  knowledge_schedule?: string;
+  knowledge_preset?: string;
   id: string;
   kind: "document" | "library";
   format: "rich_text" | "spreadsheet" | "presentation" | "markdown" | "canvas";
@@ -750,6 +752,21 @@ export interface Schema {
     source_version: string;
     status: string;
     created_at: string;
+    preset?: string;
+  };
+  knowledge_runs: {
+    id: string;
+    library_id: string;
+    trigger: string;
+    status: string;
+    detail: string;
+    created_at: string;
+  };
+  knowledge_bots: {
+    library_id: string;
+    title: string;
+    published: number;
+    updated_at: string;
   };
   knowledge_gaps: {
     id: string;

@@ -5,8 +5,8 @@ import { openTestDatabase } from "./database.js";
 import { createApp } from "../apps/server/src/app/create-app.js";
 import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import type { DB } from "@db/index.js";
-import { createMemoryStalwart } from "../apps/server/src/adapters/stalwart.js";
-import { defaultMailSettings, publicMailSettings } from "@core/modules/mail/settings.js";
+import { createMemoryStalwart } from "../plugins/mail/src/server/index.js";
+import { defaultMailSettings, publicMailSettings } from "../plugins/mail/src/core/settings.js";
 
 const origin = "http://localhost:39141";
 const password = "test-only-password-2026";

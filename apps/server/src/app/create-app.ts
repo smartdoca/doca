@@ -45,8 +45,7 @@ import { transact } from "@db/transactions.js";
 import type { IdentityRuntime } from "../adapters/identity-providers.js";
 import { type StorageRuntime } from "../adapters/storage.js";
 import { registerAssets } from "../routes/assets.js";
-import type { MailRuntimeOptions } from "../routes/mail.js";
-import { provisionSystemMailbox } from "../services/system-mailbox.js";
+import { runUserProvisioners } from "../plugins/lifecycle.js";
 import { registerPageState } from "../routes/page-state.js";
 import { registerExperience } from "../routes/experience.js";
 import { registerTemplates } from "../routes/templates.js";
@@ -71,7 +70,13 @@ export interface CreateAppOptions {
   moderation?: ModerationRuntime;
   membershipSecret?: string;
   ai?: Parameters<typeof registerAI>[4];
-  mail?: MailRuntimeOptions;
+  mail?: {
+    client?: unknown;
+    fetch?: typeof fetch;
+    origin?: string;
+    mock?: boolean;
+    externalClient?: unknown;
+  };
   plugins?: {
     /** Mail routes and workers are enabled unless explicitly disabled. */
     mail?: boolean;
@@ -631,12 +636,11 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         return {...u,session:undefined};
       });
       if (result.session) reply.header('Set-Cookie',cookie(result.session));
-      if (options.plugins?.mail !== false)
-        await provisionSystemMailbox(
-          db,
-          { id: result.id, displayName: result.display_name },
-          options.mail?.client,
-        );
+      await runUserProvisioners(
+        db,
+        { id: result.id, displayName: result.display_name },
+        options.mail?.client,
+      );
       if (result.status === "pending") return { status: "pending" };
       const {session,...publicResult}=result;
       return mobileSession(req, session, publicResult);
@@ -762,12 +766,11 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       const a = admin(req);
       limit(`create:${a.id}`,20);
       const user = await createAdminUser(db,a,req.body);
-      if (options.plugins?.mail !== false)
-        await provisionSystemMailbox(
-          db,
-          { id: user.id, displayName: user.display_name },
-          options.mail?.client,
-        );
+      await runUserProvisioners(
+        db,
+        { id: user.id, displayName: user.display_name },
+        options.mail?.client,
+      );
       return user;
     },
   );

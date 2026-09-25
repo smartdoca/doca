@@ -2,15 +2,13 @@ import {
   BookOpen,
   FolderOpen,
   Home,
-  Mail,
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { lazy, Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type {
   FileDelivery,
   FolderDelivery,
-  MailDelivery,
 } from "@core/modules/ai/progress.js";
 import {
   FilesExplorer,
@@ -20,7 +18,6 @@ import {
 } from "@web/features/files/files.js";
 import { FileDeliveryCard } from "@web/features/ai/ai-file-card.js";
 import { FolderDeliveryCard } from "@web/features/ai/ai-folder-card.js";
-import { MailDeliveryCard } from "@web/features/ai/ai-mail-card.js";
 import type { FileItem } from "@web/shared/api.js";
 import {
   WebPluginRegistry,
@@ -28,17 +25,6 @@ import {
   type PluginLocale,
   type WebPluginBundle,
 } from "@doca/web-plugin-registry";
-
-const MailApp = lazy(() =>
-  import("@web/features/mail/mail.js").then((module) => ({
-    default: module.MailApp,
-  })),
-);
-const MailSettings = lazy(() =>
-  import("@web/features/admin/mail-settings.js").then((module) => ({
-    default: module.MailSettings,
-  })),
-);
 
 export interface AppPluginRouteContext {
   readonly sharedFolderName: string;
@@ -53,6 +39,10 @@ export interface AIBlockRenderContext {
 
 export interface DelegatedRenderContext {
   render(kind: string, value: unknown): ReactNode;
+}
+
+export interface KnowledgeSourceRenderContext extends DelegatedRenderContext {
+  bind?: (target: { sourceId?: string; url?: string }) => void;
 }
 
 export interface FilePickerRenderContext {
@@ -72,7 +62,7 @@ type AppWebPluginTypes = {
   readonly SettingsContext: DelegatedRenderContext;
   readonly AIBlockContext: AIBlockRenderContext;
   readonly SearchResultContext: DelegatedRenderContext;
-  readonly KnowledgeSourceContext: DelegatedRenderContext;
+  readonly KnowledgeSourceContext: KnowledgeSourceRenderContext;
   readonly FilePickerContext: FilePickerRenderContext;
 };
 
@@ -103,16 +93,12 @@ export const BUILTIN_CLIENT_MANIFESTS = {
     ],
     conversationKinds: ["file", "folder"],
   },
-  mail: {
-    pluginId: "doca.mail",
-    version: "0.1.0",
-    targets: ["web", "mobile"],
-    routes: ["doca.mail.route.mail", "doca.mail.route.mailbox"],
-    navigation: ["doca.mail.navigation.mail"],
-    adminPanels: ["doca.mail.admin.settings"],
-    conversationKinds: ["mail"],
-  },
 } as const satisfies Record<string, ClientPluginManifest>;
+
+const installedWebPlugins = import.meta.glob(
+  "../../../../plugins/*/src/web/install.tsx",
+  { eager: true },
+) as Record<string, { bundle: WebPluginBundle<AppWebPluginTypes> }>;
 
 const documentsBundle: WebPluginBundle<AppWebPluginTypes> = {
   manifest: BUILTIN_CLIENT_MANIFESTS.documents,
@@ -164,7 +150,17 @@ const documentsBundle: WebPluginBundle<AppWebPluginTypes> = {
       id: "doca.documents.knowledge.source",
       pluginId: "doca.documents",
       sourceKind: "document",
+      labelKey: "doca.documents.knowledge.source",
+      selection: "document",
       render: (config, context) => context.render("document", config),
+    },
+    {
+      id: "doca.documents.knowledge.url-source",
+      pluginId: "doca.documents",
+      sourceKind: "url",
+      labelKey: "doca.documents.knowledge.url",
+      selection: "url",
+      render: () => null,
     },
   ],
   messages: [
@@ -177,12 +173,14 @@ const documentsBundle: WebPluginBundle<AppWebPluginTypes> = {
           "doca.documents.nav.libraries": "Libraries",
           "doca.documents.search.result": "Document",
           "doca.documents.knowledge.source": "Document source",
+          "doca.documents.knowledge.url": "Link",
         },
         zh: {
           "doca.documents.nav.documents": "文档",
           "doca.documents.nav.libraries": "知识库",
           "doca.documents.search.result": "文档",
           "doca.documents.knowledge.source": "文档来源",
+          "doca.documents.knowledge.url": "链接",
         },
       },
     },
@@ -286,12 +284,16 @@ const filesBundle: WebPluginBundle<AppWebPluginTypes> = {
       id: "doca.files.knowledge.file-source",
       pluginId: "doca.files",
       sourceKind: "file",
+      labelKey: "doca.files.knowledge.file",
+      selection: "file",
       render: (config, context) => context.render("file", config),
     },
     {
       id: "doca.files.knowledge.folder-source",
       pluginId: "doca.files",
       sourceKind: "folder",
+      labelKey: "doca.files.knowledge.folder",
+      selection: "folder",
       render: (config, context) => context.render("folder", config),
     },
   ],
@@ -336,135 +338,42 @@ const filesBundle: WebPluginBundle<AppWebPluginTypes> = {
   ],
 };
 
-const mailBundle: WebPluginBundle<AppWebPluginTypes> = {
-  manifest: BUILTIN_CLIENT_MANIFESTS.mail,
-  routes: [
-    {
-      id: "doca.mail.route.mail",
-      pluginId: "doca.mail",
-      path: "/mail",
-      render: (context) => (
-        <Suspense fallback={null}>
-          <MailApp preview={context.mailPreview} />
-        </Suspense>
-      ),
-    },
-    {
-      id: "doca.mail.route.mailbox",
-      pluginId: "doca.mail",
-      path: "/mail/:id",
-      render: (context, match) => (
-        <Suspense fallback={null}>
-          <MailApp mailboxId={match.params.id} preview={context.mailPreview} />
-        </Suspense>
-      ),
-    },
-  ],
-  navigation: [
-    {
-      id: "doca.mail.navigation.mail",
-      pluginId: "doca.mail",
-      order: 70,
-      scope: "mail",
-      path: "/mail",
-      labelKey: "doca.mail.nav.mail",
-      icon: Mail,
-    },
-  ],
-  adminPanels: [
-    {
-      id: "doca.mail.admin.settings",
-      pluginId: "doca.mail",
-      order: 20,
-      tab: "mail",
-      group: "system",
-      labelKey: "doca.mail.admin.settings",
-      icon: Mail,
-      render: () => (
-        <Suspense fallback={null}>
-          <MailSettings />
-        </Suspense>
-      ),
-    },
-  ],
-  aiBlocks: [
-    {
-      id: "doca.mail.ai-block.message",
-      pluginId: "doca.mail",
-      kind: "mail",
-      render: (payload, context) => (
-        <MailDeliveryCard
-          mail={payload as MailDelivery}
-          onOpen={context.onOpen}
-        />
-      ),
-    },
-  ],
-  searchResults: [
-    {
-      id: "doca.mail.search.result",
-      pluginId: "doca.mail",
-      kind: "mail",
-      render: (result, context) => context.render("mail", result),
-    },
-  ],
-  knowledgeSources: [
-    {
-      id: "doca.mail.knowledge.message-source",
-      pluginId: "doca.mail",
-      sourceKind: "mail",
-      render: (config, context) => context.render("mail", config),
-    },
-    {
-      id: "doca.mail.knowledge.mailbox-source",
-      pluginId: "doca.mail",
-      sourceKind: "mailbox",
-      render: (config, context) => context.render("mailbox", config),
-    },
-  ],
-  messages: [
-    {
-      id: "doca.mail.messages.client",
-      pluginId: "doca.mail",
-      messages: {
-        en: {
-          "doca.mail.nav.mail": "Mail",
-          "doca.mail.admin.settings": "Mail",
-          "doca.mail.search.result": "Mail",
-          "doca.mail.knowledge.message": "Mail message source",
-          "doca.mail.knowledge.mailbox": "Mailbox source",
-        },
-        zh: {
-          "doca.mail.nav.mail": "邮箱",
-          "doca.mail.admin.settings": "邮箱服务",
-          "doca.mail.search.result": "邮件",
-          "doca.mail.knowledge.message": "邮件来源",
-          "doca.mail.knowledge.mailbox": "邮箱来源",
-        },
-      },
-    },
-  ],
-};
-
-export function createBuiltinWebPluginRegistry(options?: {
-  readonly mailEnabled?: boolean;
-}) {
+export function createBuiltinWebPluginRegistry() {
   const registry = new WebPluginRegistry<AppWebPluginTypes>();
   registry.register(documentsBundle);
   registry.register(filesBundle);
-  if (options?.mailEnabled !== false) registry.register(mailBundle);
+  for (const plugin of Object.values(installedWebPlugins))
+    registry.register(plugin.bundle);
   return registry;
 }
 
-export const webPluginFlags = Object.freeze({
-  mailEnabled: import.meta.env.VITE_DOCA_MAIL_ENABLED !== "false",
-});
+export function pluginInstalled(pluginId: string) {
+  return (
+    webPluginRegistry.routes.list().some((route) => route.pluginId === pluginId) ||
+    webPluginRegistry.navigation.list().some((item) => item.pluginId === pluginId)
+  );
+}
 
 /**
  * Build-time singleton: locale changes only change translate/render inputs and
  * never reconstruct editor, collaboration, or plugin instances.
  */
-export const webPluginRegistry = createBuiltinWebPluginRegistry(webPluginFlags);
+export const webPluginRegistry = createBuiltinWebPluginRegistry();
+
+export function renderPluginAIBlock(
+  kind: string,
+  payload: unknown,
+  onOpen?: (href: string) => void,
+) {
+  const block = webPluginRegistry.aiBlocks
+    .list()
+    .find((item) => item.kind === kind);
+  if (!block) return null;
+  return block.render(payload, {
+    onOpen,
+    renderLink: (label, href) => label || href,
+  });
+}
 
 export function pluginMessage(
   locale: PluginLocale | string,

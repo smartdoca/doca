@@ -6,8 +6,8 @@ import {
   documentSearchSource,
   fileSearchSource,
   knowledgeSearchSource,
-  mailSearchSource,
 } from "../apps/server/src/services/search/sources.js";
+import { mailSearchSource } from "../plugins/mail/src/server/search-source.js";
 import { openTestDatabase } from "./database.js";
 
 it("keeps document, file and knowledge search active when mail is absent", async () => {

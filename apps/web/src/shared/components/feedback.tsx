@@ -2,6 +2,7 @@ import { useEffect, useId, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { CircleCheck, Info, TriangleAlert, CircleAlert, X } from "lucide-react";
 import "@web/shared/components/feedback.css";
+import { useI18n } from "@web/shared/i18n.js";
 
 export type FeedbackTone = "info" | "success" | "warning" | "error";
 type Item = { id: string; message: string; tone: FeedbackTone };
@@ -52,9 +53,10 @@ export function Feedback({
   return null;
 }
 export function FeedbackViewport() {
+  const { t } = useI18n();
   const notices = useSyncExternalStore(subscribe, snapshot);
   return createPortal(
-    <section className="feedback-stack" aria-label="操作反馈">
+    <section className="feedback-stack" aria-label={t("feedback.region")}>
       {notices.map((item) => {
         const Icon = {
           info: Info,

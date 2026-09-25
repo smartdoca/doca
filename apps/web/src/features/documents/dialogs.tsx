@@ -8,6 +8,7 @@ import { UserBadge } from "@web/shared/components/user-badge.js";
 import React, { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { api, type Resource } from "@web/shared/api.js";
+import { useI18n } from "@web/shared/i18n.js";
 
 export function Dialog({
   title,
@@ -24,6 +25,7 @@ export function Dialog({
   shadeClassName?: string;
   shadeStyle?: React.CSSProperties;
 }) {
+  const { t } = useI18n();
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -76,7 +78,7 @@ export function Dialog({
       >
         <header>
           <h2>{title}</h2>
-          <button className="icon" aria-label="关闭" onClick={close}>
+          <button className="icon" aria-label={t("dialog.close")} onClick={close}>
             <X size={20} />
           </button>
         </header>
@@ -96,6 +98,7 @@ export function TransferDialog({
   close: () => void;
   saved: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [target, setTarget] = useState<{
       id: string;
       display_name: string;
@@ -119,17 +122,15 @@ export function TransferDialog({
           overview.members.filter((member) => member.id !== resource.owner_id),
         );
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "无法读取协作者"))
+      .catch((e) => setError(e instanceof Error ? e.message : t("dialog.collaboratorsFailed")))
       .finally(() => setLoadingCollaborators(false));
-  }, [personal, resource.id, resource.owner_id]);
+  }, [personal, resource.id, resource.owner_id, t]);
   return (
-    <Dialog title="转移所有权" close={close}>
-      <p>
-        转移后，对方将成为所有者。个人文档只能转给当前文档的协作者。
-      </p>
+    <Dialog title={t("dialog.transfer")} close={close}>
+      <p>{t("dialog.transferLead")}</p>
       {personal ? (
         <label>
-          选择协作者
+          {t("dialog.chooseCollaborator")}
           <Select
             value={target?.id ?? ""}
             disabled={loadingCollaborators}
@@ -141,7 +142,7 @@ export function TransferDialog({
             }
           >
             <option value="">
-              {loadingCollaborators ? "正在加载协作者…" : "请选择"}
+              {loadingCollaborators ? t("dialog.loadingCollaborators") : t("dialog.pleaseChoose")}
             </option>
             {collaborators.map((member) => (
               <option key={member.id} value={member.id}>
@@ -155,7 +156,7 @@ export function TransferDialog({
       )}
       {target && (
         <p>
-          新的所有者：
+          {t("dialog.newOwner", { name: "" })}
           <UserBadge id={target.id} name={target.display_name} />
         </p>
       )}
@@ -165,11 +166,11 @@ export function TransferDialog({
           checked={retain}
           onChange={(e) => setRetain(e.target.checked)}
         />
-        为我保留直接管理权限
+        {t("dialog.keepAdmin")}
       </label>
       {error && <Feedback message={error} tone="error" />}
       <footer>
-        <button onClick={close}>取消</button>
+        <button onClick={close}>{t("common.cancel")}</button>
         <button
           className="primary"
           disabled={busy || !target || target.id === resource.owner_id}
@@ -184,13 +185,13 @@ export function TransferDialog({
               await saved();
               close();
             } catch (e) {
-              setError(e instanceof Error ? e.message : "转移失败");
+              setError(e instanceof Error ? e.message : t("dialog.transferFailed"));
             } finally {
               setBusy(false);
             }
           }}
         >
-          确认转移
+          {t("dialog.confirmTransfer")}
         </button>
       </footer>
     </Dialog>
@@ -207,14 +208,15 @@ export function MoveDialog({
   close: () => void;
   saved: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<"subtree" | "current">("subtree"),
     [destination, setDestination] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   return (
-    <Dialog title="迁移文档" close={close}>
+    <Dialog title={t("dialog.move")} close={close}>
       <fieldset>
-        <legend>迁移方式</legend>
+        <legend>{t("dialog.moveMode")}</legend>
         <label>
           <input
             type="radio"
@@ -222,7 +224,7 @@ export function MoveDialog({
             checked={mode === "subtree"}
             onChange={() => setMode("subtree")}
           />
-          迁移当前文档及全部子文档
+          {t("dialog.moveTree")}
         </label>
         <label>
           <input
@@ -231,36 +233,34 @@ export function MoveDialog({
             checked={mode === "current"}
             onChange={() => setMode("current")}
           />
-          只复制当前文档
+          {t("dialog.copyOne")}
         </label>
       </fieldset>
       <p className="warning">
-        {mode === "subtree"
-          ? "带子文档迁出需要你拥有当前文档及全部子文档，并拥有它们的管理权限。"
-          : "只复制当前文档只需要当前文档的管理权限，子文档不会被复制。"}
+        {mode === "subtree" ? t("dialog.moveTreeHint") : t("dialog.copyOneHint")}
       </p>
       <label>
-        目标目录
+        {t("dialog.destination")}
         <Select
           value={destination}
           onChange={(e) => setDestination(e.target.value)}
         >
-          <option value="">请选择目标位置</option>
+          <option value="">{t("dialog.chooseDestination")}</option>
           {(mode === "current" || resource.library_id) && (
-            <option value="__personal__">个人文档</option>
+            <option value="__personal__">{t("search.locationPersonal")}</option>
           )}
           {targets
             .filter((r) => r.id !== resource.id && !r.deleted_at)
             .map((r) => (
               <option key={r.id} value={r.id}>
-                {r.kind === "library" ? "知识库" : "文档"} · {r.title}
+                {r.kind === "library" ? t("shell.kind.library") : t("shell.type.rich")} · {r.title}
               </option>
             ))}
         </Select>
       </label>
       {error && <Feedback message={error} tone="error" />}
       <footer>
-        <button onClick={close}>取消</button>
+        <button onClick={close}>{t("common.cancel")}</button>
         <button
           className="primary"
           disabled={busy || !destination}
@@ -296,13 +296,13 @@ export function MoveDialog({
               }
               close();
             } catch (e) {
-              setError(e instanceof Error ? e.message : "操作失败");
+              setError(e instanceof Error ? e.message : t("dialog.failed"));
             } finally {
               setBusy(false);
             }
           }}
         >
-          确认移动并重置权限
+          {t("dialog.confirmMove")}
         </button>
       </footer>
     </Dialog>

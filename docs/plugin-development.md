@@ -1,8 +1,9 @@
 # Doca 插件开发
 
-Doca 插件是管理员安装、在 `doca.config.ts` 中显式启用、随 Server/Web/Mobile
-一起构建的可信 npm 包。它不是安全沙箱；启用插件等同于允许该包在对应
-Node.js 或客户端进程中执行代码。
+Doca 插件是可信 npm 包。接入方式和 DeepSeek Harness 一样：把包下载或链接到
+`plugins/<名字>/`，宿主按 `package.json` 的 `doca` 入口加载。不要为了接一个业务
+插件去改 Server、Web 或 Mobile 的源码，这样 Doca 发版不会和本地安装冲突。
+启用插件等同于允许该包在对应 Node.js 或客户端进程中执行代码，它不是安全沙箱。
 
 ## 包结构
 
@@ -31,21 +32,9 @@ Node.js 或客户端进程中执行代码。
 不支持的客户端 target 应省略，不能注册一个运行时才报错的空页面。React、
 Yjs、Ant Design 和编辑器 SDK 必须使用 peer dependency，避免产生第二份运行时。
 
-在根配置中安装：
-
-```ts
-import { defineDocaConfig, plugin } from "@doca/plugin-sdk";
-
-export default defineDocaConfig({
-  plugins: [
-    plugin("@doca/plugin-files"),
-    plugin("@doca/plugin-documents"),
-    plugin("@example/doca-plugin", {
-      config: { endpoint: "https://example.test" },
-    }),
-  ],
-});
-```
+安装时把包放进 `plugins/<名字>/`。`doca.server` 默认导出创建插件的函数；
+Web 包在 `src/web/install.tsx` 导出 `bundle`。文件和文档是宿主内置插件，业务插件
+不要写进 `doca.config.ts`。
 
 插件 ID、route、tool、job、renderer、migration 与 contribution ID 必须带包拥有的
 命名空间。Host 在启动或构建时拒绝重复 ID、缺失依赖、版本不兼容及依赖环。
@@ -112,6 +101,13 @@ SearchHost 对来源做故障隔离，并在返回前调用来源 ACL 与 hydrat
 字段不能作为最终授权。Knowledge source 必须提供配置校验、preview、
 `pull(cursor)`、稳定 external ID/version、provenance、reader mapping 与 file IDs。
 
+客户端知识来源还可以声明 `labelKey` 和 `selection`。`selection` 为
+`document`、`file`、`folder`、`mailbox`、`message`、`url` 时，知识关系页使用宿主选择器，
+把选中的目标写成订阅。`config` 由插件自己渲染，并调用 `context.bind({ sourceId, url })`。
+未声明时，宿主按 `sourceKind` 套用同名选择器；`mail` 对应单封邮件。对不上的来源按
+`config` 处理。订阅接口目前只接受上述六种 `sourceKind`。新种类要先被订阅读取逻辑识别，
+选择结果才会写成连线。
+
 ## Web/Mobile 与国际化
 
 客户端入口在构建期注册 routes/navigation/admin/settings/AI blocks/search
@@ -141,6 +137,5 @@ API。未知对话事件或 renderer 仍使用通用事实展示，不能丢弃�
 discover/migrate/mount/ready/dispose 顺序和 effect 清理；它不能替代领域权限及端到端
 测试。
 
-首方示例见 `packages/plugin-files`、`packages/plugin-documents` 和
-`packages/plugin-mail`。邮箱插件必须能独立禁用，且不得影响文件、文档、AI 和搜索
-启动。
+首方示例见 `packages/plugin-files`、`packages/plugin-documents`，以及同级目录
+`doca-mail`。邮箱插件必须能独立禁用，且不得影响文件、文档、AI 和搜索启动。

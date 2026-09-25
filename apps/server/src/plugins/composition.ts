@@ -2,9 +2,9 @@ import { createDocumentsPlugin } from "@doca/plugin-documents";
 import { createFilesPlugin } from "@doca/plugin-files";
 import { AIContributionHost } from "@doca/ai-host";
 import { PluginHost } from "@doca/plugin-host";
-import { createMailPlugin } from "@doca/plugin-mail";
 import { definePlugin, type DocaPlugin } from "@doca/plugin-sdk";
 import type { FilesServiceV1 } from "@doca/files-capability";
+import { fileURLToPath } from "node:url";
 import { createPluginMigrationStore } from "@db/index.js";
 import { createFileProcessingWorker } from "../jobs/file-processing-worker.js";
 import { waitForFileExtracts } from "../services/ai/file-extract.js";
@@ -12,7 +12,6 @@ import { registerAI } from "../routes/ai.js";
 import type { AIContributionExecutionContext } from "../services/ai/runner.js";
 import { registerFiles } from "../routes/files.js";
 import { registerKnowledge } from "../routes/knowledge.js";
-import { registerMail } from "../routes/mail.js";
 import { registerSearch } from "../routes/search.js";
 import {
   aiContributionToken,
@@ -26,13 +25,12 @@ import {
 import { mountFastifyAdapter } from "./fastify-adapter.js";
 import { createServerFilesCapability } from "./files-capability-adapter.js";
 import { createServerDocumentsCapability } from "./documents-capability-adapter.js";
-import { createMailKnowledgeReader } from "./mail-knowledge-reader.js";
 import {
   createDocumentSource,
   createFileSource,
   createKnowledgeSource,
-  createMailSource,
 } from "../services/search/sources.js";
+import { loadInstalledPlugins } from "./directory.js";
 
 export interface ServerPluginDescriptor {
   readonly id: string;
@@ -238,34 +236,12 @@ function filesPlugin(
   });
 }
 
-function mailPlugin(runtimeService: ServerRuntimeService, files: FilesServiceV1) {
-  return createMailPlugin({
-    runtimeToken: serverRuntimeToken,
-    unload: "app-close",
-    knowledgeReader: createMailKnowledgeReader(runtimeService.db),
-    searchSource: createMailSource(runtimeService.db),
-    async mount({ runtime }) {
-      const mail = runtime.options.mail;
-      const mounted = await mountFastifyAdapter(runtime.api, (api) =>
-        registerMail(api, runtime.db, runtime.auth, runtime.admin, {
-          ...mail,
-          origin: mail?.origin ?? runtime.origin.origin,
-          files,
-          mock: mail?.mock ?? process.argv.includes("--dev"),
-        }),
-      );
-      return mounted.dispose;
-    },
-  });
-}
-
 export async function composeServerPlugins(
   runtime: ServerRuntimeService,
 ): Promise<ServerPluginComposition> {
   const host = new PluginHost({
     migrations: createPluginMigrationStore(runtime.db),
   });
-  const mailEnabled = runtime.options.plugins?.mail !== false;
   const files = createServerFilesCapability(
     runtime.db,
     runtime.runtime.storage,
@@ -276,7 +252,10 @@ export async function composeServerPlugins(
     documentsPlugin(runtime, files),
     aiPlugin(files),
     filesPlugin(runtime, files),
-    ...(mailEnabled ? [mailPlugin(runtime, files)] : []),
+    ...(await loadInstalledPlugins(
+      fileURLToPath(new URL("../../../../plugins/", import.meta.url)),
+      { disabled: runtime.options.plugins },
+    )),
   ];
   for (const plugin of plugins) host.register(plugin);
   const descriptors = host.order.map((id) => {
