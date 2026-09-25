@@ -1,5 +1,30 @@
 /** English copy is the source catalog. Every other locale must provide these keys. */
 export const en = {
+  "knowledge.manualOnly": "Manual only",
+  "knowledge.weightsAndConflicts": "Weights and conflicts",
+  "knowledge.weightsShort": "Weights",
+  "knowledge.sourceLimits": "Source limits",
+  "knowledge.sourceSubscriptions": "Subscribed sources",
+  "knowledge.sourceCardsHint":
+    "Each source has its own instructions, weight rules, and safety limits.",
+  "knowledge.addSource": "Add source",
+  "knowledge.sourceCreator": "Created by",
+  "knowledge.unknownCreator": "Creator not recorded",
+  "knowledge.guideNotConfigured":
+    "Add instructions describing the purpose and permitted scope.",
+  "knowledge.inheritWeights":
+    "Follows library weight rules · Can be customized",
+  "knowledge.sourcePaused": "Reading paused",
+  "knowledge.contactFilterOn": "Contact filtering enabled",
+  "knowledge.managedByCreator": "Creator manages",
+  "knowledge.curationSchedule": "Curation schedule",
+  "knowledge.scheduleHint":
+    "Curate on demand or check sources regularly. Unresolved conflicts never take effect automatically.",
+  "knowledge.recentRuns": "Recent runs",
+  "knowledge.weightsEditorHint":
+    "Declare source and human-edit weights, their scope, and conflict rules here. Weights affect content selection, never access or disclosure permissions. Save to apply.",
+  "knowledge.weightsTemplate":
+    "# Weight and conflict rules\n\n## Default weights\nDefault source weight: 100.\nHuman amendment weight: 100.\nIndividual sources may declare their scope and weight in their own instructions.\n\n## Selection and review\nFor the same topic and scope, propose the clearly higher-weight content.\nEqual, unclear, or incomparable weights require human review; keep the current published content until resolved.\nAutomatic publishing requires the explicit switch in runtime settings.\nWeights never override source privacy limits.",
   "plugin.renderFailed": "This plugin view could not be displayed.",
   "knowledge.saveBeforeCuration":
     "Save your edited instructions and settings before starting curation.",
@@ -333,7 +358,7 @@ export const en = {
   "fileManager.openDestination": "Open upload destination",
   "fileManager.uploadInterrupted": "Upload interrupted",
   "fileManager.closeUpload": "Close upload status",
-  "fileManager.addFolderToAi": "Add documents and files from this folder to AI",
+  "fileManager.openFolderAi": "Open AI assistant in this folder",
   "fileManager.newSharedFolder": "New shared folder",
   "fileManager.sharedLoadFailed": "Could not load shared folders",
   "fileManager.sharedJoinFailed": "Could not join shared folder",
@@ -782,9 +807,17 @@ export const en = {
   "chat.documentCreated": "Document created",
   "chat.welcome": "What's on your mind today?",
   "chat.documentWelcome": "Let's improve this document",
+  "chat.folderWelcome": "Work with “{name}”",
   "chat.welcomeHelp":
     "From finding information to creating content, work with Doca assistant.",
   "chat.documentWelcomeHelp": "Write, summarize, or draw. Start with an idea.",
+  "chat.folderWelcomeHelp":
+    "I know which folder you're viewing and can help find, organize, or create files.",
+  "chat.folderFind": "Find files",
+  "chat.folderFindPrompt": "Find relevant files in the current folder",
+  "chat.folderOrganize": "Organize folder",
+  "chat.folderOrganizePrompt":
+    "Review the current folder and suggest how to organize it",
   "chat.relatedDocuments": "Related documents",
   "chat.sessionList": "Conversations",
   "chat.newSession": "New conversation",

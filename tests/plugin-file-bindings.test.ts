@@ -1,3 +1,4 @@
+import { createApp } from "@server/app/create-app.js";
 import { expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,9 +11,10 @@ import { createServerFilesCapability } from "@server/plugins/files-capability-ad
 it("rechecks binding authorization and never changes the original file ACL", async () => {
   const db = await openTestDatabase({ driver: "sqlite", path: ":memory:" });
   const root = await mkdtemp(join(tmpdir(), "doca-binding-"));
+  let app: Awaited<ReturnType<typeof createApp>> | undefined;
   try {
     const owner = await createUser(db, { login: "owner", displayName: "Owner", password: "test-password-2026" }, { bootstrap: true });
-    const reader = await createUser(db, { login: "reader", displayName: "Reader", password: "test-password-2026" }, { actor: owner });
+    const reader = await createUser(db, { login: "reader", displayName: "Reader", password: "test-password-2026" }, { actor: { ...owner, admin: 1 } });
     const files = createServerFilesCapability(db, { root, credentials: {}, endpointHosts: [], cdnKeyPairId: undefined, cdnPrivateKey: undefined });
     const context = { principalId: owner.id };
     const upload = await files.uploads.begin(context, { filename: "attachment.txt", mime: "text/plain", size: 5 });
@@ -23,6 +25,10 @@ it("rechecks binding authorization and never changes the original file ACL", asy
     const request = { principalId: reader.id };
     await expect(files.content.read!(request, { fileId: file.id })).rejects.toMatchObject({ status: 404 });
     await expect(files.content.read!(request, { fileId: file.id, bindingId: binding.id })).rejects.toMatchObject({ status: 404 });
+    app = await createApp(db, { origin: "http://localhost:39130", storage: { root, credentials: {}, endpointHosts: [], cdnKeyPairId: undefined, cdnPrivateKey: undefined }, pluginDirectory: join(root, "plugins") });
+    const login = await app.inject({ method: "POST", url: "/api/v1/auth/login", headers: { host: "localhost:39130", origin: "http://localhost:39130" }, payload: { login: "reader", password: "test-password-2026" } });
+    const headers = { host: "localhost:39130", cookie: String(login.headers["set-cookie"]).split(";")[0]! };
+    const url = `/api/v1/plugin-file-bindings/${binding.id}/content`;
     let allowed = true;
     pluginServices(db).permissions.set("example.mail.mailbox", { pluginId: "example.mail", resourceType: "mailbox", async authorize(id, resource, action) { return allowed && id === reader.id && resource === "inbox" && action === "file.read"; } });
     const read = await files.content.read!(request, { fileId: file.id, bindingId: binding.id });
@@ -30,9 +36,13 @@ it("rechecks binding authorization and never changes the original file ACL", asy
     expect(Buffer.concat(chunks).toString()).toBe("hello");
     expect((await files.content.resolveDownload(request, { fileId: file.id, bindingId: binding.id })).href).toContain("/plugin-file-bindings/");
     await expect(files.content.read!(request, { fileId: file.id })).rejects.toMatchObject({ status: 404 });
+    const download = await app.inject({ url, headers });
+    expect(download.statusCode, download.body).toBe(200);
+    expect(download.body).toBe("hello");
     allowed = false;
+    expect((await app.inject({ url, headers })).statusCode).toBe(404);
     await expect(files.content.read!(request, { fileId: file.id, bindingId: binding.id })).rejects.toMatchObject({ status: 404 });
     pluginServices(db).permissions.clear();
     await expect(files.content.read!(request, { fileId: file.id, bindingId: binding.id })).rejects.toMatchObject({ status: 404 });
-  } finally { await db.destroy(); await rm(root, { recursive: true, force: true }); }
+  } finally { await app?.close(); await db.destroy(); await rm(root, { recursive: true, force: true }); }
 });

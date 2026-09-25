@@ -40,6 +40,11 @@ export type ExplorerTarget = {
   name?: string;
 };
 
+export type FileContextSnapshot = {
+  type: "system" | "folder" | "document";
+  id: string;
+};
+
 export const PENDING_QUEUE_EVENT = "doca-ai-pending-queue";
 export const ACTIVE_JOB_STATUSES = [
   "queued",
@@ -58,6 +63,7 @@ export type PendingSendItem = {
   modelId?: string;
   scope?: "document" | "all";
   currentResourceId?: string;
+  currentFolder?: FileContextSnapshot;
   skillIds?: string[];
   webSearch?: boolean;
   skipApprovals?: {

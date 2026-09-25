@@ -233,7 +233,8 @@ export async function knowledgeInstructions(
     } else if (source.source_kind === "url")
       sourceLabels[source.id] = source.url;
   }
-  const files = [...latest.values()].sort((a, b) =>
+  const sourceIds = new Set(subscriptions.map(source => source.id));
+  const files = [...latest.values()].filter(file => !file.path.startsWith("sources/") || sourceIds.has(file.path.split("/")[1]!)).sort((a, b) =>
     a.path.localeCompare(b.path),
   );
   if (files.reduce((n, f) => n + f.markdown.length, 0) > 120000)
@@ -1571,6 +1572,7 @@ export async function executeKnowledgeCuration(
           hash({ title: entry.title, markdown: entry.markdown }),
         ),
       );
+      const revisionSeen = new Set(existing.filter(entry => entry.status !== "superseded").map(entry => hash({ title: entry.title, markdown: entry.markdown })));
       for (const proposed of output.entries) {
         const sourceIds = [...new Set(proposed.sourceIds)];
         if (
@@ -1586,8 +1588,11 @@ export async function executeKnowledgeCuration(
         const title = sanitizeKnowledge(proposed.title, outputSettings),
           markdown = sanitizeKnowledge(proposed.markdown, outputSettings);
         const fingerprint = hash({ title, markdown });
-        if (seen.has(fingerprint)) continue;
+        // A reviewed-away historical value may still conflict with a newer human amendment.
+        // Suppress existing/rejected candidates, but let an explicit revision reference that history.
+        if ((proposed.replacesId ? revisionSeen : seen).has(fingerprint)) continue;
         seen.add(fingerprint);
+        revisionSeen.add(fingerprint);
         const replacement = proposed.replacesId
           ? existing.find(
               (e) => e.id === proposed.replacesId && e.status === "published",

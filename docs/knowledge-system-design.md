@@ -315,7 +315,7 @@ skill 流程：理解目标 → 检查已有配置 → 补齐关键范围/受众
 
 关键实现：`packages/core/src/modules/knowledge/system.ts`、`subscriptions.ts`、`apps/server/src/routes/knowledge-system.ts`、`apps/server/src/services/ai/knowledge-curation.ts`、`apps/web/src/features/knowledge/knowledge-workspace.tsx`、`knowledge-assistants.tsx`。
 
-验证使用独立临时数据库与测试文档，涵盖删除全部来源后搜索结果不变、缺源保留去重、来源创建者权限、跨库问答与全文隔离、来源级过滤、增量跳过、取消任务、过期指引/来源、草稿替换和管理权限继承。全量测试、类型检查及前端构建已执行；真实外部模型使用模拟生成器测试契约，没有借用生产模型或实际用户来源进行整理。隔离浏览器检查了问答检索、知识全文、整理指引和页面导航。
+验证使用独立临时数据库与测试文档，涵盖删除全部来源后搜索结果不变、缺源保留去重、来源创建者权限、跨库问答与全文隔离、来源级过滤、增量跳过、取消任务、过期指引/来源、草稿替换和管理权限继承。全量测试、类型检查及前端构建已执行；契约测试使用模拟生成器，另通过用户授权的测试网关完成真实模型验收（Doubao Seed 2.0 Mini），仅使用公开网页和合成内部资料。隔离浏览器检查了问答检索、知识全文、整理指引、来源卡片及配置保存。
 
 
 ## 13. 本次补充：机器人接入、链接入口与验收
@@ -333,4 +333,15 @@ URL 来源的 `sourcePolicies[id].linkAccess` 支持 public（默认）、follow
 1. DNS：主 MD 声明三层、技术/应用场景/未来发展第一层；订阅 RFC 网页和内部文档；生成目录、人工局部补充、重新扫描、冲突保持待审、明确权重采用、移除来源后答案保留。RFC 参考：[RFC 1034](https://www.rfc-editor.org/rfc/rfc1034.html)。
 2. 采购：订阅采购单文件夹及解析材料；去重与币种规则仅写在 MD；生成订单知识、人工改金额、待裁决不生效、按明确权重采用、撤销订阅后保留知识与人工记录。
 
-执行：`pnpm test tests/knowledge-system.test.ts tests/knowledge-records.test.ts tests/permission-inheritance.test.ts`。这验证真实持久化、权限、状态转换和问答检索，但网页正文与模型输出使用测试夹具，不能据此宣称真实模型发现来源、理解业务规则及总结质量已经验收。真实模型验收仍需配置测试模型并完成上述两个流程。
+执行：`pnpm test tests/knowledge-system.test.ts tests/knowledge-records.test.ts tests/permission-inheritance.test.ts`。这验证真实持久化、权限、状态转换和问答检索，但网页正文与模型输出使用测试夹具，不能据此宣称真实模型发现来源、理解业务规则及总结质量已经验收。真实模型验收另见下节。
+
+
+## 14. 真实模型与页面验收（2026-09-26）
+
+`scripts/knowledge-live-acceptance.ts` 已通过真实模型 DNS 与采购文件夹流程：发布总结、人工局部修改、来源更新、待裁决不生效、批准替换、真实问答及移除全部来源后的检索一致性。`scripts/knowledge-assistant-live-acceptance.ts` 已通过常规 AI 助手发现内部文档、建库、订阅、保存整库及独立来源 MD、配置三层目录与隐私过滤、发起整理及独立审查。报告保存在系统临时目录，不含密钥。运行需显式提供 `DOCA_KNOWLEDGE_TEST_KEY_FILE`、`DOCA_KNOWLEDGE_TEST_BASE_URL`、`DOCA_KNOWLEDGE_TEST_MODEL`；测试使用隔离数据库。
+
+整理模型必须逐项评估本来源已有发布知识，明确事实是否一致并返回保留或修订的决定；事实不同必须生成关联旧条目的候选，重复标题不能绕过冲突审核。模型输出使用 JSON 模式，并进行最多三次结构校验/修正。去重区分已被替代的历史版本和被拒绝的候选：对当前发布知识提出修订时，允许候选与历史版本相同，仍不重复生成被拒绝的候选。AI 配置工具使用增量更新，省略的安全限制不重置；版本冲突返回当前版本供重新决策。独立审查读取知识库专用只读快照，识别未编写的来源指引，不读取来源原文。
+
+页面将每个订阅呈现为独立卡片，展示创建者、状态、指引摘要、权重摘要和安全状态，直接提供来源指引、权重、来源限制入口；添加来源改为独立弹窗。权重仍保存在 Markdown 内，来源权重入口编辑 SOURCE.md，整库入口编辑 guides/weights.md。触发配置使用紧凑的手动/每天/每周选项。
+
+`scripts/knowledge-local-dns-demo.ts` 需 `DOCA_KNOWLEDGE_LOCAL_DEMO=1` 且两个真实模型报告均通过才可运行；只新建专用验收库、合成资料和私有机器人，保留原有本地数据及模型配置。预留人工发布180秒、来源600秒的冲突供用户裁决；示例值仅用于 demo.example 测试域。

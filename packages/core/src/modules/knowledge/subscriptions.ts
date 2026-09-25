@@ -1,5 +1,5 @@
 import { authorizeFileFolder, authorizeFileItem } from "../access/file-access.js";
-import { mainInstruction, knowledgeRunHistory, knowledgeSourceLinkVisible, sourceAvailable, maintainKnowledgeSource } from "./system.js";
+import { mainInstruction, knowledgeManagementView, knowledgeRunHistory, knowledgeSourceLinkVisible, sourceAvailable, maintainKnowledgeSource } from "./system.js";
 import { randomUUID } from "node:crypto";
 import type { DB } from "@db/index.js";
 import type { Actor } from "../identity/passwords.js";
@@ -32,6 +32,9 @@ export async function listKnowledgeSubscriptions(db: DB, actor: Actor, libraryId
   const library = await db.selectFrom("resources").select(["id", "kind", "owner_id", "ai_curated", "guide_text", "knowledge_schedule", "knowledge_preset"]).where("id", "=", libraryId).executeTakeFirst();
   if (!library || library.kind !== "library") fail(404, "知识库不存在");
   const rows = await db.selectFrom("knowledge_subscriptions").selectAll().where("library_id", "=", libraryId).orderBy("created_at", "desc").execute();
+  const view = await knowledgeManagementView(db, actor, libraryId);
+  const creatorIds = [...new Set(rows.map(row => row.creator_id).filter((id): id is string => typeof id === "string" && id.length > 0))];
+  const creators = creatorIds.length ? await db.selectFrom("users").select(["id", "display_name", "public_id"]).where("id", "in", creatorIds).execute() : [];
   const items = [];
   for (const row of rows) {
     const available = await sourceAvailable(db, actor, row);
@@ -43,8 +46,16 @@ export async function listKnowledgeSubscriptions(db: DB, actor: Actor, libraryId
     const node = row.node_id
       ? await db.selectFrom("resources").select("title").where("id", "=", row.node_id).where("deleted_at", "is", null).executeTakeFirst()
       : undefined;
+    const creator = creators.find(user => user.id === row.creator_id);
+    const guide = view.files.find(file => file.path === `sources/${row.id}/SOURCE.md`);
+    const policy = view.settings.sourcePolicies[row.id];
     items.push({
       id: row.id,
+      creator: { id: row.creator_id, displayName: creator?.display_name || creator?.public_id || "" },
+      guideConfigured: !!guide?.revision,
+      guidePreview: (guide?.markdown ?? "").replace(/^#+\s*/gm, "").slice(0, 180),
+      weightHint: (guide?.markdown ?? "").split("\n").filter(line => /权重|weight/i.test(line) && !/^#/.test(line)).slice(0, 2).join(" ").slice(0, 150),
+      safety: { redactContacts: view.settings.redactContacts || !!policy?.redactContacts, hiddenTerms: (policy?.redactedTerms.length ?? 0) + view.settings.redactedTerms.length, excluded: view.settings.excludedSourceIds.includes(row.id), linkAccess: policy?.linkAccess ?? (visible ? "public" : "follow"), editable: row.creator_id === actor.id },
       canEdit: row.creator_id === actor.id,
       canDelete: row.creator_id === actor.id || library.owner_id === actor.id,
       sourceKind: row.source_kind,

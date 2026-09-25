@@ -735,9 +735,10 @@ it("separates URL citation access from independent answers and protects creator-
     .execute();
   const { listKnowledgeSubscriptions } =
     await import("@core/modules/knowledge/subscriptions.js");
-  expect(
-    JSON.stringify(await listKnowledgeSubscriptions(db, bob, library)),
-  ).not.toContain("creator-private-token");
+  const sourceCards = await listKnowledgeSubscriptions(db, bob, library);
+  expect(sourceCards.items[0]?.creator).toMatchObject({ id: alice.id, displayName: "alice" });
+  expect(sourceCards.items[0]?.canEdit).toBe(false);
+  expect(JSON.stringify(sourceCards)).not.toContain("creator-private-token");
   expect(
     JSON.stringify(await knowledgeManagementView(db, bob, library)),
   ).not.toContain("creator-private-token");
@@ -1258,4 +1259,37 @@ it("provides actual library configuration and subscriptions to read-only AI revi
   expect(JSON.stringify(snapshot)).not.toContain("Do not include this original source body");
   expect((await db.selectFrom("knowledge_subscriptions").select("status").where("id", "=", source.id).executeTakeFirstOrThrow()).status).toBe("active");
   await expect(knowledgeReviewSnapshot(db, bob, library)).rejects.toThrow();
+});
+
+
+it("keeps a conflict candidate matching a superseded fact, but does not resurrect a rejected candidate", async () => {
+  const source = await subscribe("TTL is 600 seconds");
+  const original = await generate(source.id, "TTL is 600 seconds");
+  await reviewKnowledgeEntry(db, alice, library, original.id, original.revision, "publish");
+  const revised = await saveHumanKnowledge(db, alice, library, { id: original.id, expectedRevision: original.revision + 1, title: original.title, markdown: "TTL is 180 seconds" });
+  await reviewKnowledgeEntry(db, alice, library, revised.id, revised.revision, "publish");
+  const generator: CurationGenerator = async () => ({ entries: [{ title: original.title, markdown: original.markdown, sourceIds: [source.id], reason: "Source differs from human amendment", replacesId: revised.id }], notes: "" });
+  const run = await queueKnowledgeCuration(db, alice, library);
+  await executeKnowledgeCuration(db, run.id, generator);
+  const entries = await knowledgeEntries(db, alice, library);
+  const candidate = entries.find(entry => entry.status === "draft" && entry.reviewState.replaces === revised.id);
+  expect(candidate?.markdown).toBe("TTL is 600 seconds");
+  expect(entries.find(entry => entry.id === revised.id)?.status).toBe("published");
+  await reviewKnowledgeEntry(db, alice, library, candidate!.id, candidate!.revision, "delete");
+  await saveKnowledgeInstruction(db, alice, library, { path: "guides/recheck.md", expectedRevision: 0, markdown: "Check sources again without reviving rejected candidates." });
+  const next = await queueKnowledgeCuration(db, alice, library);
+  await executeKnowledgeCuration(db, next.id, generator);
+  expect((await knowledgeEntries(db, alice, library)).filter(entry => entry.status === "draft")).toHaveLength(0);
+});
+
+
+it("keeps instruction history without listing guides for removed pending subscriptions", async () => {
+  const source = await subscribe();
+  await db.updateTable("knowledge_subscriptions").set({ status: "pending" }).where("id", "=", source.id).execute();
+  const path = `sources/${source.id}/SOURCE.md`;
+  await saveKnowledgeInstruction(db, alice, library, { path, expectedRevision: 0, markdown: "Source boundary" });
+  const { dismissKnowledgeSubscription } = await import("@core/modules/knowledge/subscriptions.js");
+  await dismissKnowledgeSubscription(db, alice, library, source.id);
+  expect((await knowledgeInstructions(db, alice, library)).files.some(file => file.path === path)).toBe(false);
+  expect(await db.selectFrom("knowledge_instructions").select("path").where("library_id", "=", library).where("path", "=", path).execute()).toHaveLength(1);
 });

@@ -56,11 +56,13 @@ export function KnowledgeWorkspace({
   initialPath = "KNOWLEDGE.md",
   enabled,
   active = true,
+  refreshVersion = 0,
 }: {
   libraryId: string;
   initialPath?: string;
   enabled: boolean;
   active?: boolean;
+  refreshVersion?: number;
 }) {
   const { t } = useI18n();
   const importInput = useRef<HTMLInputElement>(null);
@@ -135,6 +137,12 @@ export function KnowledgeWorkspace({
       .then((result) => {
         if (disposed) return;
         setData(result);
+        setSettings(previous => JSON.stringify(previous) === JSON.stringify(data?.settings) ? result.settings : previous);
+        setFile(previous => {
+          const old = data?.files.find(item => item.path === previous.path);
+          const next = result.files.find(item => item.path === previous.path);
+          return old && next && previous.markdown === old.markdown ? next : previous;
+        });
         if (initialPath !== path) {
           setDrafts((current) => ({ ...current, [file.path]: file }));
           const selected =
@@ -153,7 +161,7 @@ export function KnowledgeWorkspace({
     return () => {
       disposed = true;
     };
-  }, [initialPath, active]);
+  }, [initialPath, active, refreshVersion]);
   useEffect(() => {
     if (
       !data?.runs.some((r) => r.status === "queued" || r.status === "running")
@@ -674,6 +682,8 @@ export function KnowledgeWorkspace({
       >
         {t("knowledge.curate")}
       </button>
+      <details className="knowledge-run-history" open={data?.runs.some(run => run.status === "queued" || run.status === "running")}>
+      <summary>{t("knowledge.recentRuns")}</summary>
       <ul className="library-system-links">
         {data?.runs
           .filter((r) => r.status !== "done")
@@ -737,6 +747,7 @@ export function KnowledgeWorkspace({
             );
           })}
       </ul>
+      </details>
       {!!data?.reviews.length && (
         <>
           <h3>{t("knowledge.sourceReviews")}</h3>

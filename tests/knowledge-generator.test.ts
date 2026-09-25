@@ -23,8 +23,8 @@ function respond(output: unknown) {
 }
 beforeEach(() => generate.mockReset());
 it("repairs a conflict assessment that omitted its linked revision", async () => {
-  generate.mockResolvedValueOnce(respond({ entries: [], notes: "Conflict", assessments: [{ entryId, decision: "revise", reason: "Equal weights" }] }))
-    .mockResolvedValueOnce(respond({ entries: [candidate], notes: "Await review", assessments: [{ entryId, decision: "revise", reason: "Equal weights" }] }));
+  generate.mockResolvedValueOnce(respond({ entries: [], notes: "Conflict", assessments: [{ entryId, decision: "revise", sourceAgrees: false, reason: "Equal weights" }] }))
+    .mockResolvedValueOnce(respond({ entries: [candidate], notes: "Await review", assessments: [{ entryId, decision: "revise", sourceAgrees: false, reason: "Equal weights" }] }));
   const result = await knowledgeGenerator({} as DB, "user", "job")(input);
   expect(result.entries[0]?.replacesId).toBe(entryId);
   expect(generate).toHaveBeenCalledTimes(2);
@@ -32,10 +32,10 @@ it("repairs a conflict assessment that omitted its linked revision", async () =>
 it("rejects repeated omission of existing source knowledge rather than accepting duplicate drafts", async () => {
   generate.mockResolvedValue(respond({ entries: [{ ...candidate, replacesId: undefined }], notes: "Conflict", assessments: [] }));
   await expect(knowledgeGenerator({} as DB, "user", "job")(input)).rejects.toThrow("有效的整理结构");
-  expect(generate).toHaveBeenCalledTimes(2);
+  expect(generate).toHaveBeenCalledTimes(3);
 });
 it("allows an explained unchanged assessment without manufacturing a revision", async () => {
-  generate.mockResolvedValue(respond({ entries: [], notes: "No change", assessments: [{ entryId, decision: "unchanged", reason: "Published knowledge still agrees with this source" }] }));
+  generate.mockResolvedValue(respond({ entries: [], notes: "No change", assessments: [{ entryId, decision: "unchanged", sourceAgrees: true, reason: "Published knowledge still agrees with this source" }] }));
   expect((await knowledgeGenerator({} as DB, "user", "job")(input)).entries).toEqual([]);
   expect(generate).toHaveBeenCalledTimes(1);
 });
@@ -49,4 +49,11 @@ it("preserves omitted safety settings when the assistant updates only structure 
   expect(merged.redactContacts).toBe(true);
   expect(merged.redactedTerms).toEqual(["private"]);
   expect(merged.sourcePolicies[sourceId]).toMatchObject({ redactContacts: true, redactedTerms: ["secret"], linkAccess: "closed" });
+});
+
+it("repairs a factual conflict incorrectly classified as keeping the published version", async () => {
+  generate.mockResolvedValueOnce(respond({ entries: [], notes: "Keep human value pending review", assessments: [{ entryId, decision: "unchanged", sourceAgrees: false, reason: "Source and human values differ" }] }))
+    .mockResolvedValueOnce(respond({ entries: [candidate], notes: "Await review", assessments: [{ entryId, decision: "revise", sourceAgrees: false, reason: "Equal weights" }] }));
+  expect((await knowledgeGenerator({} as DB, "user", "job")(input)).entries[0]?.replacesId).toBe(entryId);
+  expect(generate).toHaveBeenCalledTimes(2);
 });

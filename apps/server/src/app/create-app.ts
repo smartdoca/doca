@@ -226,7 +226,8 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     )
       fail(403, "来源校验失败");
     const token = bearerUser ? presentedBearer : presentedCookie;
-    const user = bearerUser ?? (token ? await sessionUser(token) : null);
+    const externalPlugin = (req.routeOptions.config as { docaPluginExternal?: boolean }).docaPluginExternal;
+    const user = externalPlugin ? null : bearerUser ?? (token ? await sessionUser(token) : null);
     sessionTokens.set(req, user && token ? token : null);
     actors.set(req, user ?? null);
     const accountPath = req.url.split("?")[0]!;

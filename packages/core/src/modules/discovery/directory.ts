@@ -51,16 +51,34 @@ export async function directoryIds(
   const related = new Set(rows.rows.map((r) => r.id));
   const sources = [...pluginServices(db).directories.values()];
   const results = await Promise.allSettled(sources.map(async source => {
+    const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
+      const collect = async () => {
+        if (source.schemaVersion !== 1) throw new Error("Unsupported directory source version");
+        const ids = new Set<string>();
+        let cursor: string | null = null;
+        const seen = new Set<string>();
+        for (let page = 0; page < 40; page++) {
+          controller.signal.throwIfAborted();
+          const batch = await source.related(actor.id, { cursor, limit: 250, signal: controller.signal });
+          if (batch.items.length > 250 || batch.items.some(item => !item.userId || !item.relationId || !item.revision)) throw new Error("Invalid directory page");
+          const candidates = new Set(batch.items.map(item => item.userId));
+          for (const id of await source.verify(actor.id, batch.items, controller.signal)) if (candidates.has(id)) ids.add(id);
+          if (batch.cursor === null) return { source, ids };
+          if (!batch.cursor || seen.has(batch.cursor)) throw new Error("Repeated directory cursor");
+          seen.add(batch.cursor); cursor = batch.cursor;
+        }
+        throw new Error("Directory source exceeded page budget");
+      };
       return await Promise.race([
-        source.related(actor.id),
-        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Directory source timed out")), 2000); }),
+        collect(),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error("Directory source timed out")); }, 2000); }),
       ]);
     } finally { if (timer) clearTimeout(timer); }
   }));
   for (const result of results)
-    if (result.status === "fulfilled")
-      for (const id of result.value) if (typeof id === "string") related.add(id);
+    if (result.status === "fulfilled" && pluginServices(db).directories.get(result.value.source.id) === result.value.source)
+      for (const id of result.value.ids) related.add(id);
   return related;
 }

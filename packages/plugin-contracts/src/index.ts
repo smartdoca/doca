@@ -5,7 +5,7 @@ export interface JsonObject {
 }
 
 export type PluginRuntimePhase =
-  "discover" | "migrate" | "mount" | "ready" | "dispose";
+  "discover" | "initialize" | "migrate" | "mount" | "ready" | "dispose";
 
 export type PluginRuntimeErrorCode =
   | "INVALID_MANIFEST"
@@ -949,6 +949,8 @@ export interface DocaPlugin<Config extends JsonObject = JsonObject> {
   readonly manifest: PluginManifest;
   readonly injections?: PluginInjections;
   discover?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
+  /** Runs on every start, including when the package version has not changed. */
+  initialize?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
   migrate?(
     context: PluginLifecycleContext<Config>,
     fromVersion: string | undefined,

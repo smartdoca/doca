@@ -13,11 +13,11 @@ afterEach(async () => { await db.destroy(); });
 it("merges live plugin relations only in related mode and isolates host instances", async () => {
   const user = { ...await createUser(db, { login: "owner", displayName: "Owner", password: "test-password-2026" }, { bootstrap: true }), admin: 1 };
   await db.updateTable("settings").set({ directory_mode: "related" }).where("id", "=", "system").execute();
-  pluginServices(db).directories.set("test.mail", { id: "test.mail", async related() { return ["colleague"]; } });
+  pluginServices(db).directories.set("test.mail", { id: "test.mail", schemaVersion: 1, async related() { return { items: [{ userId: "colleague", relationId: "shared", revision: "1" }], cursor: null }; }, async verify(_id, candidates) { return candidates.map(c => c.userId); } });
   expect(await directoryIds(db, user)).toContain("colleague");
   pluginServices(db).directories.delete("test.mail");
   expect(await directoryIds(db, user)).not.toContain("colleague");
-  pluginServices(db).directories.set("test.mail", { id: "test.mail", async related() { throw Error("offline"); } });
+  pluginServices(db).directories.set("test.mail", { id: "test.mail", schemaVersion: 1, async related() { throw Error("offline"); }, async verify() { return []; } });
   expect(await directoryIds(db, user)).not.toContain("colleague");
   await db.updateTable("settings").set({ directory_mode: "none" }).where("id", "=", "system").execute();
   expect(await directoryIds(db, user)).toEqual(new Set());
@@ -41,4 +41,21 @@ it("has no built-in membership or content-review endpoints", async () => {
     for (const url of ["/api/v1/admin/entitlements", "/api/v1/admin/moderation/settings", "/api/v1/admin/ai/credits"])
       expect((await app.inject({ url, headers: { host: "localhost:39130" } })).statusCode).toBe(404);
   } finally { await app.close(); }
+});
+
+it("pages plugin relations and rejects revoked candidates and repeated cursors", async () => {
+  const user = { ...await createUser(db, { login: "page-owner", displayName: "Owner", password: "test-password-2026" }, { bootstrap: true }), admin: 1 };
+  await db.updateTable("settings").set({ directory_mode: "related" }).where("id", "=", "system").execute();
+  let revoked = false, repeated = false;
+  pluginServices(db).directories.set("test.pages", {
+    id: "test.pages", schemaVersion: 1,
+    async related(_id, input) { return { items: [{ userId: input.cursor ? "second" : "first", relationId: "shared", revision: "1" }], cursor: repeated || !input.cursor ? "next" : null }; },
+    async verify(_id, items) { return revoked ? [] : items.map(item => item.userId); },
+  });
+  expect((await directoryIds(db, user))?.has("first")).toBe(true);
+  expect((await directoryIds(db, user))?.has("second")).toBe(true);
+  revoked = true;
+  expect((await directoryIds(db, user))?.has("second")).toBe(false);
+  revoked = false; repeated = true;
+  expect((await directoryIds(db, user))?.has("first")).toBe(false);
 });
