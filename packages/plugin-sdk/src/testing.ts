@@ -67,6 +67,8 @@ export async function runPluginContractHarness<
     await plugin.discover?.(context);
     for (const token of plugin.injections?.required ?? [])
       context.inject(token);
+    phases.push("initialize");
+    await plugin.initialize?.(context);
     phases.push("migrate");
     await plugin.migrate?.(context, options.previousVersion);
     phases.push("mount");

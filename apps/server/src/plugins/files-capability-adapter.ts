@@ -631,6 +631,7 @@ export function createServerFilesCapability(
         return {
           file: fileRecord(file),
           body: (async function* () {
+            context.signal?.throwIfAborted();
             yield selected;
           })(),
           ...(range

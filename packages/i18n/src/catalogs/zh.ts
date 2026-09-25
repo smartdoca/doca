@@ -1,6 +1,29 @@
 import type { MessageKey } from "./en";
 
 export const zh = {
+  "knowledge.manualOnly": "仅手动",
+  "knowledge.weightsAndConflicts": "权重与冲突",
+  "knowledge.weightsShort": "权重",
+  "knowledge.sourceLimits": "来源限制",
+  "knowledge.sourceSubscriptions": "来源订阅",
+  "knowledge.sourceCardsHint": "每个来源独立维护整理指引、权重和安全边界。",
+  "knowledge.addSource": "添加来源",
+  "knowledge.sourceCreator": "创建者",
+  "knowledge.unknownCreator": "未记录创建者",
+  "knowledge.guideNotConfigured":
+    "尚未填写专属指引，建议先说明用途和可提炼范围。",
+  "knowledge.inheritWeights": "权重遵循整库指引 · 可单独声明",
+  "knowledge.sourcePaused": "已暂停读取",
+  "knowledge.contactFilterOn": "已开启联系方式过滤",
+  "knowledge.managedByCreator": "仅创建者可修改",
+  "knowledge.curationSchedule": "整理方式",
+  "knowledge.scheduleHint":
+    "按需手动整理，或定期检查来源变化。未决冲突不会自动生效。",
+  "knowledge.recentRuns": "最近整理记录",
+  "knowledge.weightsEditorHint":
+    "在指引中声明来源与人工修订的权重、适用范围和冲突处理方式。权重只影响内容采用，不能扩大读取或输出权限。修改在保存后生效。",
+  "knowledge.weightsTemplate":
+    "# 权重与冲突规则\n\n## 默认权重\n默认来源权重：100。\n人工主动修改权重：100。\n各来源可在自己的整理指引中声明适用范围与权重。\n\n## 采用与裁决\n相同主题、相同适用条件下，权重明确且差异足以判断时，提出采用较高权重内容的修订。\n权重相同、不明确或适用范围不同的冲突，保留当前发布内容并生成待裁决候选。\n是否自动发布较高权重修订由模型与安全设置中的开关控制。\n任何权重都不能覆盖来源隐私限制。",
   "plugin.renderFailed": "插件页面暂时无法显示。",
   "knowledge.saveBeforeCuration":
     "指引或配置尚未保存。保存后再开始整理，确保使用的是刚修改的内容。",
@@ -321,7 +344,7 @@ export const zh = {
   "fileManager.openDestination": "打开上传目标文件夹",
   "fileManager.uploadInterrupted": "上传中断",
   "fileManager.closeUpload": "关闭上传状态",
-  "fileManager.addFolderToAi": "把当前文件夹中的文档和文件添加到 AI",
+  "fileManager.openFolderAi": "在当前文件夹中打开 AI 助手",
   "fileManager.newSharedFolder": "新建共享文件夹",
   "fileManager.sharedLoadFailed": "共享文件夹加载失败",
   "fileManager.sharedJoinFailed": "加入共享文件夹失败",
@@ -727,8 +750,15 @@ export const zh = {
   "chat.documentCreated": "已创建文档",
   "chat.welcome": "今天有什么想法？",
   "chat.documentWelcome": "一起完善这份文档",
+  "chat.folderWelcome": "一起处理「{name}」",
   "chat.welcomeHelp": "从查找资料到完成创作，交给 Doca 助手。",
   "chat.documentWelcomeHelp": "写作、总结、画图，从一个想法开始。",
+  "chat.folderWelcomeHelp":
+    "我知道你正在浏览哪个文件夹，可以帮你查找、整理或生成文件。",
+  "chat.folderFind": "查找文件",
+  "chat.folderFindPrompt": "帮我查找当前文件夹中的相关文件",
+  "chat.folderOrganize": "整理文件夹",
+  "chat.folderOrganizePrompt": "分析当前文件夹的内容，并提出整理建议",
   "chat.relatedDocuments": "关联文档",
   "chat.sessionList": "会话列表",
   "chat.newSession": "新建会话",

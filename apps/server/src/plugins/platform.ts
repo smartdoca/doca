@@ -102,7 +102,7 @@ export async function providePlatform(context: PluginLifecycleContext, runtime: 
           const bytes = body as Buffer;
           bodies.set(request, bytes);
           try { done(null, request.headers["content-type"]?.split(";")[0] === "application/json" ? JSON.parse(bytes.toString()) : bytes.toString()); }
-          catch { done(new Error("Invalid JSON body")); }
+          catch { done(Object.assign(new Error("Invalid JSON body"), { statusCode: 400 })); }
         });
         for (const route of routes) child.route({
           method: route.method, url: routePath(pluginId, route.path), schema: route.schema,

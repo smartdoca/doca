@@ -1251,6 +1251,12 @@ export async function registerAI(
             modelId: z.string(),
             scope: z.enum(["document", "all"]),
             currentResourceId: id.optional(),
+            currentFolder: z
+              .object({
+                type: z.enum(["system", "folder", "document"]),
+                id: z.string().min(1).max(80),
+              })
+              .optional(),
             references: z
               .array(
                 z.object({
@@ -1308,6 +1314,7 @@ export async function registerAI(
           text: original.text,
           scope: original.scope,
           currentResourceId: original.currentResourceId,
+          currentFolder: original.currentFolder,
           references: original.references ?? [],
           attachments: original.attachments ?? [],
           files: original.files ?? [],

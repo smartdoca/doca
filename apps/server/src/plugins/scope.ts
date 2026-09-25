@@ -1,6 +1,6 @@
 import type { DocaPlugin, PluginLifecycleContext, ServiceToken } from "@doca/plugin-sdk";
 
-/** Bind public registration/data capabilities to the plugin that received them. */
+/** Bind public registration capabilities to the plugin that received them. */
 export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {
   const contexts = new WeakMap<PluginLifecycleContext, PluginLifecycleContext>();
   const scope = (context: PluginLifecycleContext) => {
@@ -9,7 +9,7 @@ export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {
       if (exact ? id !== plugin.manifest.id : !id.startsWith(`${plugin.manifest.id}.`)) throw new Error("Plugin namespace mismatch");
     };
     const inject = <T>(token: ServiceToken<T>, optional: boolean): T | undefined => {
-      if (token.id.startsWith("doca.") || token.id === "search.sources.v1" || token.id === "files.jobs.v1") throw new Error(`Private host service is unavailable to plugins: ${token.id}`);
+      if (token.id.startsWith("doca.server.") || token.id === "doca.ai.contributions" || token.id === "search.sources.v1" || token.id === "files.jobs.v1") throw new Error(`Private host service is unavailable to plugins: ${token.id}`);
       const value = optional ? context.injectOptional(token) : context.inject(token);
       if (value && token.id === "files.v1") return new Proxy(value as object, { get(target, property) {
         const member = Reflect.get(target, property);
@@ -64,6 +64,7 @@ export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {
   return {
     ...plugin,
     discover: plugin.discover ? context => plugin.discover!(scope(context)) : undefined,
+    initialize: plugin.initialize ? context => plugin.initialize!(scope(context)) : undefined,
     migrate: plugin.migrate ? (context, version) => plugin.migrate!(scope(context), version) : undefined,
     mount: plugin.mount ? context => plugin.mount!(scope(context)) : undefined,
     ready: plugin.ready ? context => plugin.ready!(scope(context)) : undefined,

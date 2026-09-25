@@ -1133,6 +1133,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
     renderQuestions: number;
     focusedQuestionId: string | null;
     locale: typeof locale;
+    surface: "full" | "library" | "folder" | "document";
+    fileContextKey: string;
     items: BubbleItemType[];
   } | null>(null);
   const historyControl = useRef({
@@ -1498,6 +1500,9 @@ export function AIChat({ full = false }: { full?: boolean }) {
       modelId: model,
       scope: allScope ? "all" : "document",
       currentResourceId: ai.resource?.id,
+      currentFolder: ai.fileContext
+        ? { type: ai.fileContext.type, id: ai.fileContext.id }
+        : undefined,
       skillIds,
       webSearch,
       skipApprovals,
@@ -1605,6 +1610,9 @@ export function AIChat({ full = false }: { full?: boolean }) {
         modelId: model,
         scope: allScope ? "all" : "document",
         currentResourceId: ai.resource?.id,
+        currentFolder: ai.fileContext
+          ? { type: ai.fileContext.type, id: ai.fileContext.id }
+          : undefined,
         references: refs,
         ...(notes.length ? { quickNoteIds: notes.map((n) => n.id) } : {}),
         skillIds,
@@ -1733,8 +1741,15 @@ export function AIChat({ full = false }: { full?: boolean }) {
       setRenderQuestions((current) => current + RENDER_EXPAND_QUESTIONS),
     loadOlder: revealOlderHistory,
   };
+  const surface = full
+    ? "full"
+    : ai.resource?.kind === "library"
+      ? "library"
+      : ai.fileContext
+        ? "folder"
+        : "document";
   const suggestions =
-    !full && ai.resource?.kind === "library"
+    surface === "library"
       ? [
           {
             key: "knowledge-build",
@@ -1749,7 +1764,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
             description: t("knowledge.assistantReviewPrompt"),
           },
         ]
-      : full
+      : surface === "full"
         ? [
             {
               key: "search",
@@ -1776,20 +1791,35 @@ export function AIChat({ full = false }: { full?: boolean }) {
               description: t("chat.organizePrompt"),
             },
           ]
-        : [
-            {
-              key: "summary",
-              icon: <FileText size={18} />,
-              label: t("chat.summarize"),
-              description: t("chat.summarizePrompt"),
-            },
-            {
-              key: "polish",
-              icon: <WandSparkles size={18} />,
-              label: t("chat.polish"),
-              description: t("chat.polishPrompt"),
-            },
-          ];
+        : surface === "folder"
+          ? [
+              {
+                key: "folder-find",
+                icon: <Search size={18} />,
+                label: t("chat.folderFind"),
+                description: t("chat.folderFindPrompt"),
+              },
+              {
+                key: "folder-organize",
+                icon: <FolderOpen size={18} />,
+                label: t("chat.folderOrganize"),
+                description: t("chat.folderOrganizePrompt"),
+              },
+            ]
+          : [
+              {
+                key: "summary",
+                icon: <FileText size={18} />,
+                label: t("chat.summarize"),
+                description: t("chat.summarizePrompt"),
+              },
+              {
+                key: "polish",
+                icon: <WandSparkles size={18} />,
+                label: t("chat.polish"),
+                description: t("chat.polishPrompt"),
+              },
+            ];
   const messageBubble = (
     m: Conversation["messages"][number] & {
       folders?: FolderDelivery[];
@@ -2116,7 +2146,10 @@ export function AIChat({ full = false }: { full?: boolean }) {
     threadCache.current.optimistic === optimistic &&
     threadCache.current.renderQuestions === renderQuestions &&
     threadCache.current.focusedQuestionId === focusedQuestionId &&
-    threadCache.current.locale === locale
+    threadCache.current.locale === locale &&
+    threadCache.current.surface === surface &&
+    threadCache.current.fileContextKey ===
+      `${ai.fileContext?.type ?? ""}:${ai.fileContext?.id ?? ""}:${ai.fileContext?.name ?? ""}`
   );
   const bubbleItems: BubbleItemType[] = reuseThread
     ? threadCache.current!.items
@@ -2647,18 +2680,24 @@ export function AIChat({ full = false }: { full?: boolean }) {
               variant="borderless"
               icon={<Sparkles size={32} />}
               title={
-                full
+                surface === "full"
                   ? t("chat.welcome")
-                  : ai.resource?.kind === "library"
+                  : surface === "library"
                     ? t("knowledge.assistantWelcome")
-                    : t("chat.documentWelcome")
+                    : surface === "folder"
+                      ? t("chat.folderWelcome", {
+                          name: ai.fileContext?.name ?? t("trash.folder"),
+                        })
+                      : t("chat.documentWelcome")
               }
               description={
-                full
+                surface === "full"
                   ? t("chat.welcomeHelp")
-                  : ai.resource?.kind === "library"
+                  : surface === "library"
                     ? t("knowledge.assistantHelp")
-                    : t("chat.documentWelcomeHelp")
+                    : surface === "folder"
+                      ? t("chat.folderWelcomeHelp")
+                      : t("chat.documentWelcomeHelp")
               }
               styles={{
                 root: {
@@ -2694,6 +2733,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
       renderQuestions,
       focusedQuestionId,
       locale,
+      surface,
+      fileContextKey: `${ai.fileContext?.type ?? ""}:${ai.fileContext?.id ?? ""}:${ai.fileContext?.name ?? ""}`,
       items: bubbleItems,
     };
   }

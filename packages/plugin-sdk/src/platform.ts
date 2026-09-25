@@ -43,10 +43,18 @@ export interface PermissionSource {
   readonly resourceType: string;
   authorize(principalId: string, resourceId: string, action: string): Promise<boolean>;
 }
+export interface DirectoryRelation {
+  readonly userId: string;
+  readonly relationId: string;
+  readonly revision: string;
+}
 export interface DirectorySource {
   readonly id: string;
-  /** Returns only currently related users; the host still applies directory policy. */
-  related(principalId: string): Promise<readonly string[]>;
+  readonly schemaVersion: 1;
+  /** Indexed current relations from the plugin's own database. */
+  related(principalId: string, input: { cursor: string | null; limit: number; signal: AbortSignal }): Promise<{ items: readonly DirectoryRelation[]; cursor: string | null }>;
+  /** Recheck candidates against current sharing, returning only still-visible user IDs. */
+  verify(principalId: string, candidates: readonly DirectoryRelation[], signal: AbortSignal): Promise<readonly string[]>;
 }
 export interface PermissionsServiceV1 {
   register(source: PermissionSource): () => void;

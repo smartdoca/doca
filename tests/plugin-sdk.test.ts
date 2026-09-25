@@ -59,6 +59,7 @@ describe("plugin SDK context", () => {
     });
     expect(result.phases).toEqual([
       "discover",
+      "initialize",
       "migrate",
       "mount",
       "ready",

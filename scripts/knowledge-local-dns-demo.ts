@@ -7,7 +7,7 @@ import { openDatabase } from "../packages/db/src/index.js";
 import { config } from "../apps/server/src/bootstrap/config.js";
 import { aiDefaults, aiConfig, saveAIConfig } from "../packages/core/src/modules/ai/config.js";
 import { createContent } from "../packages/core/src/workflows/resources.js";
-import { subscribeKnowledgeSource, setLibraryCuration } from "../packages/core/src/modules/knowledge/subscriptions.js";
+import { subscribeKnowledgeSource, dismissKnowledgeSubscription, setLibraryCuration } from "../packages/core/src/modules/knowledge/subscriptions.js";
 import { knowledgeInstructions, saveKnowledgeInstruction, saveKnowledgeSettings, queueKnowledgeCuration, executeKnowledgeCuration, knowledgeEntries, saveHumanKnowledge, reviewKnowledgeEntry, saveKnowledgeAssistant, searchKnowledgeAssistant, knowledgeHumanChanges } from "../packages/core/src/modules/knowledge/system.js";
 import { knowledgeGenerator, answerKnowledge } from "../apps/server/src/services/ai/knowledge-curation.js";
 import { fetchWebPage } from "../apps/server/src/services/ai/web-fetch.js";
@@ -69,6 +69,7 @@ DNS查询经过哪些角色？缓存如何影响查询？内部测试域 demo.ex
     if (!current?.revision) await saveKnowledgeInstruction(db, actor, libraryId, { path, markdown, expectedRevision: 0 });
   };
   await saveGuide("KNOWLEDGE.md", instruction);
+  await saveGuide("guides/weights.md", "# 权重与冲突\n\n官方来源在通用机制与标准范围内权重：100。内部测试来源在本测试环境范围内权重：100。人工主动修改权重：100。\n\n同权、权重不明确或适用范围不同的冲突必须生成待裁决候选，裁决前保留当前发布内容。权重不能放宽任何来源安全限制。仅在显式启用自动采用且本指引明确支持较高权重新内容时才允许自动发布。");
   if (!state.internalId) {
     state.internalId = (await content.create(actor, { kind: "document", format: "markdown", title: "DNS 验收专用测试资料", private: true,
       markdown: "# DNS 验收专用测试资料\n\n本页是合成测试资料，不描述真实公司网络。\n\n测试域 demo.example 的缓存配置为600秒；仅适用于这个测试环境，不能作为互联网通用默认值。终端向测试递归解析器发起请求，解析器使用缓存或继续查询权威服务器。发生解析异常时，先区分缓存未过期、解析器配置不一致与权威记录变更。\n\n用于验证过滤的虚构邮箱：dns-private@example.test。不要把联系方式写入知识成果。" })).id;
@@ -76,15 +77,29 @@ DNS查询经过哪些角色？缓存如何影响查询？内部测试域 demo.ex
   }
   const targets = [
     { key: "generalSource", sourceKind: "url" as const, url: "https://developers.cloudflare.com/learning-paths/cybersafe/concepts/what-is-dns/", guide: "仅提炼通用DNS定义、查询链路与缓存机制，可分技术和应用场景。不得推测 demo.example 或内部部署数值，不提取联系方式和页面导航，不复制原文或网址。最多3条独立总结。" },
+    { key: "chainSource", sourceKind: "url" as const, url: "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/welcome-dns-service.html", guide: "提炼完整查询链路与缓存角色，需区分根服务器、顶级域服务器、权威服务器与递归解析器；不要将二级域本身当作必经服务器角色。独立提炼应用场景下的缓存命中、缓存过期与排障边界。已有相同主题请关联replacesId修订，最多3条。第一层覆盖技术与应用场景。" },
     { key: "privacySource", sourceKind: "url" as const, url: "https://www.rfc-editor.org/rfc/rfc8484.html", guide: "仅提炼RFC8484中的DNS over HTTPS目标、消息传输及隐私限制，最多2条独立总结，按未来发展/加密解析组织。写明这是已存在标准，不能把2018年标准说成尚未落地。忽略作者联系方式、代码字节示例与参考文献列表，不复制原文或网址。不得推测内部部署参数。" },
     { key: "internalSource", sourceKind: "document" as const, sourceId: state.internalId as string, guide: "仅用于demo.example测试环境。必须生成独立的测试域缓存配置知识，明确秒数和适用范围。禁止输出任何邮箱、电话和姓名，不将测试值作为通用DNS默认值。人工修订与本来源同权，冲突必须提出replacesId修订候选等待裁决。" },
   ];
   for (const target of targets) {
+    if (target.key === "chainSource" && state[target.key]) {
+      const old = await db.selectFrom("knowledge_subscriptions").select(["url", "status"]).where("id", "=", state[target.key]).executeTakeFirst();
+      if (old?.url !== target.url && old?.status === "pending") {
+        await dismissKnowledgeSubscription(db, actor, libraryId, state[target.key]);
+        delete state[target.key]; await persist();
+      }
+    }
     if (!state[target.key]) {
       state[target.key] = (await subscribeKnowledgeSource(db, actor, libraryId, target)).id;
       await persist();
     }
-    await saveGuide(`sources/${state[target.key]}/SOURCE.md`, `# 来源整理与边界\n\n${target.guide}`);
+    await saveGuide(`sources/${state[target.key]}/SOURCE.md`, `# 来源整理与边界\n\n${target.guide}\n\n## 权重与冲突\n本来源在上述适用范围内权重：100。人工修订权重：100。同权冲突待人工裁决。`);
+  }
+  if (!state.pendingConflictId) {
+    const bundle = await knowledgeInstructions(db, actor, libraryId);
+    const path = `sources/${state.internalSource}/SOURCE.md`;
+    const guide = bundle.files.find(file => file.path === path)!;
+    if (!guide.markdown.includes("历史版本不等于被拒绝的候选")) await saveKnowledgeInstruction(db, actor, libraryId, { path, expectedRevision: guide.revision, markdown: guide.markdown + "\n\n## 冲突产物\n保留发布版本不等于事实一致。来源秒数与人工发布秒数不同，即使暂时保留人工值，也必须生成以来源秒数为正文、关联旧条目的待裁决候选。不能只在notes描述冲突；建立草稿不会覆盖发布内容。历史版本不等于被拒绝的候选：即使来源值与更早的已被替代版本相同，仍须对当前人工发布值提出修订。" });
   }
   if (!state.configured) {
     const bundle = await knowledgeInstructions(db, actor, libraryId);
@@ -96,7 +111,12 @@ DNS查询经过哪些角色？缓存如何影响查询？内部测试域 demo.ex
   const scan = async (stage: string) => {
     log(stage);
     const run = await queueKnowledgeCuration(db, actor, libraryId);
-    await executeKnowledgeCuration(db, run.id, knowledgeGenerator(db, actor.id, run.id), async url => {
+    const generator = knowledgeGenerator(db, actor.id, run.id);
+    await executeKnowledgeCuration(db, run.id, async input => {
+      const output = await generator(input);
+      log("generated", { entries: output.entries.map(entry => ({ title: entry.title, path: entry.path, replacesId: entry.replacesId })) });
+      return output;
+    }, async url => {
       const page = await fetchWebPage(url, AbortSignal.timeout(45000));
       assert(!page.truncated, "Source is too long; choose a smaller source");
       return page;
@@ -134,6 +154,7 @@ DNS查询经过哪些角色？缓存如何影响查询？内部测试域 demo.ex
     if (!entries.some(entry => entry.status === "draft" && entry.reviewState.replaces === state.humanEntryId)) entries = await scan("human_conflict_curation");
     const conflict = entries.find(entry => entry.status === "draft" && entry.reviewState.replaces === state.humanEntryId);
     assert(conflict, "Expected a pending conflict for manual inspection");
+    for (const entry of entries.filter(entry => entry.status === "draft" && entry.id !== conflict.id && !entry.reviewState.replaces)) await reviewKnowledgeEntry(db, actor, libraryId, entry.id, entry.revision, "publish");
     state.pendingConflictId = conflict.id;
     await persist();
   }
@@ -149,6 +170,32 @@ DNS查询经过哪些角色？缓存如何影响查询？内部测试域 demo.ex
   state.humanChanges = await knowledgeHumanChanges(db, actor, libraryId);
   state.url = `${cfg.origin}/#/r/${libraryId}?view=system&section=entries`;
   state.botUrl = `${cfg.origin}/#/knowledge-assistants?bot=${state.botId}`;
+  if (!state.guideId) {
+    state.guideId = (await content.create(actor, { kind: "document", format: "markdown", libraryId, title: "DNS 知识库验收说明", markdown: `# DNS 知识库验收说明
+
+本库由真实 AI 整理公开 DNS 资料和专用合成测试资料生成。所有者与来源创建者为管理员。测试域 demo.example 的数值仅用于演示，不代表真实业务配置。
+
+## 先看知识成果
+[打开知识成果](${state.url})。目录共三层，第一层按技术、应用场景、未来发展组织。展开条目可以查看独立正文、版本与来源标签。无需打开原始来源即可使用知识。
+
+## 来源卡片与指引
+切换数据源，查看各来源卡片的创建者、状态、权重摘要和过滤状态。每张卡片都有来源指引、权重、来源限制入口。右上角权重与冲突编辑整库规则；来源权重保存在该来源自己的 SOURCE.md 中。联系方式过滤已启用，合成邮箱不应出现在知识成果里。
+
+## 人工修订与待裁决
+搜索测试域缓存条目：原始来源600秒，人工局部修订并发布180秒。当前问答使用180秒；下一次扫描已提出600秒修订，等待裁决，尚未覆盖人工版本。可查看独立人工修改记录，再选择批准候选或拒绝候选。批准后当前知识会改为600秒；拒绝则保留180秒。
+
+## 独立问答
+[打开 DNS 知识问答](${state.botUrl})。先问“demo.example 测试域的缓存配置是多少秒？”，当前应答180秒；再问DNS查询链路或DoH的限制。普通 AI 助手设置中可选择接入这个机器人。
+
+## 再次整理与来源失效
+触发页可手动整理或开启每天/每周扫描；当前未开启定时。取消订阅会保留已发布知识，下次整理列出缺源项；确认保留后不重复提醒。进行取消订阅试验前，可先记下待验证问题及答案。
+
+## 权限观察
+来源创建者可修改自己的来源。其他知识库管理员只能查看其允许公开的管理摘要，不能改来源或取消别人的订阅；知识库所有者可以取消订阅，仍不能改他人的来源。来源链接默认公开，也可由创建者选择仅自己可打开或隐藏入口。知识库管理员对库内文档始终有管理权限。
+
+## 继续建设
+右下角 AI 助手可以补充来源、编辑指引及发起整理。原文访问权限和知识检索权限分别判断；机器人只使用已发布总结。此说明是人工验收文档，不作为订阅资料。` })).id;
+  }
   state.completedAt = new Date().toISOString();
   await persist();
   log("ready", { libraryId, url: state.url, botUrl: state.botUrl, pendingConflictId: state.pendingConflictId });

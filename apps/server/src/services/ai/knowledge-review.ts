@@ -12,5 +12,5 @@ export async function knowledgeReviewSnapshot(db: DB, actor: Actor, libraryId: s
     knowledgeHumanChanges(db, actor, libraryId),
     knowledgeRunHistory(db, actor, libraryId),
   ]);
-  return { kind: "knowledge_library", instructions, sources, entries, humanChanges, runs };
+  return { kind: "knowledge_library", instructions, instructionStatus: instructions.files.map(file => ({ path: file.path, configured: file.revision > 0, state: file.revision > 0 ? "saved" : "placeholder_not_authored" })), sources, entries, humanChanges, runs };
 }

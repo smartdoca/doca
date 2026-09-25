@@ -5,7 +5,9 @@ import {
   useEffect,
   useRef,
   useState,
+  type Dispatch,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { AtSign } from "lucide-react";
 import { api, type FileItem, type Resource } from "@web/shared/api.js";
@@ -37,6 +39,11 @@ export type QuickNoteReference = {
   attachments: { id: string; filename: string; mime: string; size: number }[];
   createdAt: string;
 };
+export type AIFileContext = {
+  type: "system" | "folder" | "document";
+  id: string;
+  name: string;
+};
 type AIContextValue = {
   userId?: string;
   resource?: Resource;
@@ -54,6 +61,8 @@ type AIContextValue = {
   addNotes: (notes: QuickNoteReference[]) => void;
   add: (anchor?: unknown) => void;
   addDocument: (resource: Resource) => void;
+  fileContext: AIFileContext | null;
+  setFileContext: Dispatch<SetStateAction<AIFileContext | null>>;
   pendingStoredFiles: FileItem[];
   queueStoredFiles: (files: FileItem[]) => void;
   clearPendingStoredFiles: () => void;
@@ -93,6 +102,7 @@ export function AIProvider({
     }),
     [references, setReferences] = useState<AIReference[]>([]),
     [noteReferences, setNoteReferences] = useState<QuickNoteReference[]>([]),
+    [fileContext, setFileContext] = useState<AIFileContext | null>(null),
     [composerDraft, setComposerDraft] = useState<string | null>(null),
     [error, setError] = useState("");
   const [pendingStoredFiles, setPendingStoredFiles] = useState<FileItem[]>([]);
@@ -323,6 +333,8 @@ export function AIProvider({
           )
             location.hash = `/ai${sessionId ? `?session=${sessionId}` : ""}`;
         },
+        fileContext,
+        setFileContext,
         pendingStoredFiles,
         queueStoredFiles: (files) => {
           if (!userId || !files.length) return;

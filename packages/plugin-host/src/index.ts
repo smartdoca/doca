@@ -268,6 +268,9 @@ export class PluginHost {
             );
         }
       }
+      for (const entry of ordered)
+        if (entry.plugin.initialize)
+          await this.#invoke(entry, "initialize", () => entry.plugin.initialize!(entry.context!));
       for (const entry of ordered) {
         await this.#invoke(entry, "migrate", async () => {
           const previous = await this.#migrations.get(entry.manifest.id);
