@@ -272,11 +272,27 @@ export interface WebSearchResultContribution<Context = unknown, View = unknown>
   render(result: unknown, context: Context): View;
 }
 
+export type KnowledgeSourceSelection =
+  | "document"
+  | "file"
+  | "folder"
+  | "mailbox"
+  | "message"
+  | "url"
+  | "config";
+
 export interface WebKnowledgeSourceContribution<
   Context = unknown,
   View = unknown,
 > extends OwnedContribution {
   readonly sourceKind: string;
+  /** Plugin catalog key shown on the knowledge-relations page. */
+  readonly labelKey?: string;
+  /**
+   * Host picker used to bind one target.
+   * `config` means the plugin renders its own form and calls `context.bind`.
+   */
+  readonly selection?: KnowledgeSourceSelection;
   render(config: unknown, context: Context): View;
 }
 

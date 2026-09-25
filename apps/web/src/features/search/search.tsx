@@ -12,6 +12,8 @@ import {
 } from "@core/modules/discovery/search-intent.js";
 import { textMentionsTopic } from "@core/modules/discovery/search-excerpts.js";
 import { FileGlyph, type FileLocation } from "@web/features/files/files.js";
+import { useI18n } from "@web/shared/i18n.js";
+import type { MessageKey } from "@doca/i18n";
 import "@web/features/search/search.css";
 
 const searchPopupContainer = (trigger: HTMLElement) =>
@@ -154,8 +156,9 @@ export function GlobalSearch({
   close: () => void;
   select?: (resource: Resource) => void;
 }) {
+  const { t } = useI18n();
   return (
-    <Dialog title="搜索文档和文件" close={close} className="search-dialog">
+    <Dialog title={t("search.title")} close={close} className="search-dialog">
       <SearchPanel
         {...props}
         select={(resource) => {
@@ -176,6 +179,7 @@ export function SearchPanel({
   select,
   compact = false,
 }: SearchPanelProps) {
+  const { t } = useI18n();
   const [publicDiscovery, setPublicDiscovery] = useState(false);
   useEffect(() => {
     void api<{ publicDiscovery: boolean }>("/discovery/policy")
@@ -211,15 +215,15 @@ export function SearchPanel({
   const filtersId = useId();
   const resultList = useRef<HTMLDivElement>(null);
   const typeButtons = useRef<(HTMLButtonElement | null)[]>([]);
-  const types = [
-    { value: "all", label: "全部" },
-    { value: "rich_text", label: "文档" },
-    { value: "markdown", label: "Markdown" },
-    { value: "spreadsheet", label: "表格" },
-    { value: "presentation", label: "演示文稿" },
-    { value: "canvas", label: "画板" },
-    { value: "files", label: "文件" },
-    { value: "mail", label: "邮件" },
+  const types: { value: string; label: MessageKey }[] = [
+    { value: "all", label: "search.type.all" },
+    { value: "rich_text", label: "shell.type.rich" },
+    { value: "markdown", label: "shell.type.markdown" },
+    { value: "spreadsheet", label: "shell.type.sheet" },
+    { value: "presentation", label: "shell.type.slides" },
+    { value: "canvas", label: "search.type.canvas" },
+    { value: "files", label: "search.type.files" },
+    { value: "mail", label: "search.type.mail" },
   ];
   const filterCount =
     Number(scope !== "all") +
@@ -424,13 +428,13 @@ export function SearchPanel({
         <Search size={21} />
         <input
           autoFocus
-          aria-label={aiSearch ? "用自然语言描述要找的内容" : "输入关键字"}
-          placeholder={aiSearch ? "用一句话描述，例如：猫猫的图片" : "输入关键字"}
+          aria-label={aiSearch ? t("search.queryAi") : t("search.query")}
+          placeholder={aiSearch ? t("search.placeholderAi") : t("search.placeholder")}
           maxLength={500}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
-        <div className="search-mode-switch" role="tablist" aria-label="搜索方式">
+        <div className="search-mode-switch" role="tablist" aria-label={t("search.mode")}>
           <button
             type="button"
             role="tab"
@@ -441,7 +445,7 @@ export function SearchPanel({
               setAiUnavailable("");
             }}
           >
-            关键词
+            {t("search.keyword")}
           </button>
           <button
             type="button"
@@ -462,16 +466,16 @@ export function SearchPanel({
           className="primary"
           disabled={!q.trim() || loading}
         >
-          搜索
+          {t("search.ai")}
         </button>
       </form>
       {aiSearch && (
         <p className="search-ai-hint">
-          描述场景或内容即可，不必精确匹配标题。筛选按需展开。
+          {t("search.aiHint")}
         </p>
       )}
       <div className="search-type-bar">
-        <div className="search-type-tabs" role="tablist" aria-label="文档类型">
+        <div className="search-type-tabs" role="tablist" aria-label={t("search.types")}>
           {types.map((type, index) => (
             <button
               key={type.value}
@@ -510,7 +514,7 @@ export function SearchPanel({
                 }
               }}
             >
-              {type.label}
+              {t(type.label)}
             </button>
           ))}
         </div>
@@ -521,7 +525,7 @@ export function SearchPanel({
           onClick={() => setFiltersOpen(!filtersOpen)}
         >
           <SlidersHorizontal size={15} />
-          筛选{filterCount ? ` (${filterCount})` : ""}
+          {filterCount ? t("search.filtersCount", { count: filterCount }) : t("search.filters")}
         </button>
       </div>
       <div className="search-body">
@@ -529,42 +533,36 @@ export function SearchPanel({
           <div className="search-result-heading" role="status">
             <span>
               {waitingForAiQuery
-                ? "用自然语言查找文档和文件"
+                ? t("search.lookingAi")
                 : loading && !data.items.length && !fileResults.length
-                  ? "搜索中…"
+                  ? t("search.looking")
                   : recent
-                    ? "最近浏览的内容"
+                    ? t("search.recentHeading")
                   : leftoverFiles.length && data.items.length
-                    ? `找到 ${data.items.length} 篇文档、${leftoverFiles.length} 个文件${mailResults.length ? `、${mailResults.length} 封邮件` : ""}`
+                    ? mailResults.length
+                      ? t("search.foundMixedMail", { documents: data.items.length, files: leftoverFiles.length, mail: mailResults.length })
+                      : t("search.foundMixed", { documents: data.items.length, files: leftoverFiles.length })
                   : layout.showDocuments && !layout.showFileHits && data.items.length
-                    ? `找到 ${data.items.length} 篇相关${
-                        layout.format === "spreadsheet"
-                          ? "表格"
-                          : layout.format === "presentation"
-                            ? "演示文稿"
-                            : layout.format === "canvas"
-                              ? "画板"
-                              : "文档"
-                      }`
+                    ? t("search.foundDocs", { count: data.items.length })
                   : layout.showFileHits && !layout.showDocuments && leftoverFiles.length
-                    ? `找到 ${leftoverFiles.length} 个文件`
-                    : `找到 ${resultCount} 项内容`}
+                    ? t("search.foundFiles", { count: leftoverFiles.length })
+                    : t("search.foundItems", { count: resultCount })}
             </span>
             <span>
               {waitingForAiQuery
                 ? ""
                 : aiSearch && searchText.trim()
-                  ? "按语义相关度排序"
+                  ? t("search.sortSemantic")
                   : searchText.trim()
-                    ? "按关键词匹配排序"
-                    : "仅显示有权限的文档"}
+                    ? t("search.sortKeyword")
+                    : t("search.permittedOnly")}
             </span>
           </div>
           <div
             className="search-results"
             ref={resultList}
             aria-busy={loading}
-            aria-label="文档搜索结果"
+            aria-label={t("search.results")}
           >
             {error && (
               <p className="search-inline-error" role="alert">
@@ -574,13 +572,10 @@ export function SearchPanel({
             {aiUnavailable && (
               <div className="search-ai-empty" role="status">
                 <Sparkles size={22} />
-                <strong>AI 搜索尚未就绪</strong>
-                <p>
-                  管理员需要在「搜索与发现」中重新应用向量模型。当前 Meilisearch
-                  只有关键词索引，没有可用的向量配置。
-                </p>
+                <strong>{t("search.aiDown")}</strong>
+                <p>{t("search.aiDownHint")}</p>
                 {fileResults.length ? (
-                  <p>下面仍列出了按描述匹配到的文件。</p>
+                  <p>{t("search.aiDownFiles")}</p>
                 ) : null}
                 <button
                   type="button"
@@ -590,17 +585,15 @@ export function SearchPanel({
                     setAiUnavailable("");
                   }}
                 >
-                  改用关键词搜索
+                  {t("search.useKeyword")}
                 </button>
               </div>
             )}
             {waitingForAiQuery && (
               <div className="search-ai-empty" role="status">
                 <Sparkles size={22} />
-                <strong>描述你要找的东西</strong>
-                <p>
-                  例如「猫猫的图片」「上周的预算表格」「产品发布会的演示文稿」。按回车开始搜索。
-                </p>
+                <strong>{t("search.describe")}</strong>
+                <p>{t("search.describeHint")}</p>
               </div>
             )}
             {data.notice && (
@@ -625,26 +618,26 @@ export function SearchPanel({
                       </strong>
                       <span className="search-result-summary">
                         <MatchedText
-                          text={r.summary || "暂无可检索的正文摘要"}
+                          text={r.summary || t("search.noSummary")}
                           matches={r.summaryMatches}
                         />
                       </span>
                       <small>
-                        {r.libraryName ?? (r.inLibrary ? "知识库文档" : "个人文档")}
-                        {r.aiCurated ? " · AI 归类" : ""}{" "}
+                        {r.libraryName ?? (r.inLibrary ? t("search.libraryDoc") : t("search.personalDoc"))}
+                        {r.aiCurated ? ` · ${t("search.aiCurated")}` : ""}{" "}
                         ·{" "}
                         {r.owner_id && (
                           <UserBadge id={r.owner_id} name={r.ownerName} />
                         )}{" "}
-                        · {new Date(r.updated_at).toLocaleDateString("zh-CN")} 修改
-                        {evidence.length ? ` · 含 ${evidence.length} 个匹配文件` : ""}
+                        · {t("search.updated", { date: new Date(r.updated_at).toLocaleDateString() })}
+                        {evidence.length ? ` · ${t("search.matchedFiles", { count: evidence.length })}` : ""}
                       </small>
                     </span>
                     <ArrowUpRight size={15} />
                   </button>
                   {evidence.length > 0 && (
                     <div className="search-result-evidence">
-                      <span>文档内匹配</span>
+                      <span>{t("search.inDocument")}</span>
                       {evidence.slice(0, 4).map((file) => {
                         const location =
                           file.locations.find(
@@ -667,17 +660,17 @@ export function SearchPanel({
                 </div>
               );
             })}
-            {layout.showFileHits && leftoverFiles.length > 0 && <div className="search-file-group"><strong>文件</strong>{leftoverFiles.map((file) => <div className="search-file-card" key={file.storageObjectId}>
+            {layout.showFileHits && leftoverFiles.length > 0 && <div className="search-file-group"><strong>{t("search.files")}</strong>{leftoverFiles.map((file) => <div className="search-file-card" key={file.storageObjectId}>
               <button className="search-result search-file-result" onClick={() => file.locations[0] && openFileLocation(file.locations[0])}>
                 <FileGlyph file={fileAsGlyph(file)} />
-                <span><strong><CompactResultText text={file.name} query={searchText} /></strong><span className="search-result-summary"><CompactResultText text={file.description || file.mime} query={searchText} /></span><small>{file.locations.length} 个可访问位置 · {new Date(file.updatedAt).toLocaleDateString("zh-CN")} 修改</small></span>
+                <span><strong><CompactResultText text={file.name} query={searchText} /></strong><span className="search-result-summary"><CompactResultText text={file.description || file.mime} query={searchText} /></span><small>{t("search.places", { count: file.locations.length })} · {t("search.updated", { date: new Date(file.updatedAt).toLocaleDateString() })}</small></span>
                 <ArrowUpRight size={15} />
               </button>
-              <div className="search-file-locations"><span>资源位置</span>{file.locations.map((location) => <button key={location.id} onClick={() => openFileLocation(location)} title={location.navigation.map((item) => item.name).join(" / ")}><Folder size={12} />{location.navigation.map((item) => item.name).join(" / ") || location.name}</button>)}</div>
+              <div className="search-file-locations"><span>{t("search.locations")}</span>{file.locations.map((location) => <button key={location.id} onClick={() => openFileLocation(location)} title={location.navigation.map((item) => item.name).join(" / ")}><Folder size={12} />{location.navigation.map((item) => item.name).join(" / ") || location.name}</button>)}</div>
             </div>)}</div>}
-            {mailResults.length > 0 && <div className="search-file-group"><strong>邮件</strong>{mailResults.map((item) => <div className="search-file-card" key={item.id}>
+            {mailResults.length > 0 && <div className="search-file-group"><strong>{t("search.mail")}</strong>{mailResults.map((item) => <div className="search-file-card" key={item.id}>
               <button className="search-result search-file-result" onClick={() => { window.location.hash = `/mail/${item.mailboxId}?message=${encodeURIComponent(item.remoteId)}`; }}>
-                <span><strong><CompactResultText text={item.subject} query={searchText} /></strong><span className="search-result-summary"><CompactResultText text={`${item.from} · ${item.snippet}`} query={searchText} /></span><small>{item.address || "邮箱"} · {new Date(item.receivedAt).toLocaleDateString("zh-CN")}</small></span>
+                <span><strong><CompactResultText text={item.subject} query={searchText} /></strong><span className="search-result-summary"><CompactResultText text={`${item.from} · ${item.snippet}`} query={searchText} /></span><small>{item.address || t("search.mailbox")} · {new Date(item.receivedAt).toLocaleDateString()}</small></span>
                 <ArrowUpRight size={15} />
               </button>
             </div>)}</div>}
@@ -690,8 +683,8 @@ export function SearchPanel({
               !mailResults.length && (
               <p className="empty">
                 {aiSearch
-                  ? "没有相近的结果，试试换一种描述，或改用关键词搜索"
-                  : "没有匹配的结果，试试其他关键词或筛选条件"}
+                  ? t("search.emptyAi")
+                  : t("search.empty")}
               </p>
             )}
             {data.nextOffset !== null && (
@@ -700,7 +693,7 @@ export function SearchPanel({
                 disabled={loading}
                 onClick={() => void more()}
               >
-                {loading ? "加载中…" : "加载更多文档"}
+                {loading ? t("common.loading") : t("search.moreDocs")}
               </button>
             )}
           </div>
@@ -708,44 +701,44 @@ export function SearchPanel({
         <aside
           id={filtersId}
           className={`search-sidebar ${filtersOpen ? "is-open" : ""}`}
-          aria-label="额外筛选条件"
+          aria-label={t("search.extraFilters")}
         >
           <div className="search-sidebar-heading">
-            <strong>筛选条件{filterCount ? ` · ${filterCount}` : ""}</strong>
-            <button onClick={resetFilters}>重置</button>
+            <strong>{filterCount ? t("search.filterTitleCount", { count: filterCount }) : t("search.filterTitle")}</strong>
+            <button onClick={resetFilters}>{t("search.reset")}</button>
             <button
               className="search-sidebar-close"
-              aria-label="收起筛选"
+              aria-label={t("search.hideFilters")}
               onClick={() => setFiltersOpen(false)}
             >
               <X size={16} />
             </button>
           </div>
           <div className="search-filter-field">
-            <span>所有者</span>
+            <span>{t("search.owner")}</span>
             <SearchOwnerFilter value={owners} onChange={setOwners} />
           </div>
           <div className="search-filter-field">
-            <span>搜索范围</span>
+            <span>{t("search.scope")}</span>
             <Select
-              aria-label="搜索范围"
+              aria-label={t("search.scope")}
               value={scope}
               onChange={setScope}
               getPopupContainer={searchPopupContainer}
               options={[
-                { value: "all", label: "我的搜索范围" },
-                { value: "owned", label: "归我所有" },
-                { value: "shared", label: "与我共享" },
+                { value: "all", label: t("search.scopeMine") },
+                { value: "owned", label: t("search.scopeOwned") },
+                { value: "shared", label: t("search.scopeShared") },
                 ...(publicDiscovery
-                  ? [{ value: "discover", label: "公共发现" }]
+                  ? [{ value: "discover", label: t("search.scopeDiscover") }]
                   : []),
               ]}
             />
           </div>
           <div className="search-filter-field">
-            <span>文档位置</span>
+            <span>{t("search.location")}</span>
             <Select
-              aria-label="文档位置"
+              aria-label={t("search.location")}
               value={location}
               onChange={(value) => {
                 setLocation(value);
@@ -753,20 +746,20 @@ export function SearchPanel({
               }}
               getPopupContainer={searchPopupContainer}
               options={[
-                { value: "all", label: "全部位置" },
-                { value: "personal", label: "个人文档" },
-                { value: "library", label: "知识库内文档" },
+                { value: "all", label: t("search.locationAll") },
+                { value: "personal", label: t("search.locationPersonal") },
+                { value: "library", label: t("search.locationLibrary") },
               ]}
             />
           </div>
           <div className="search-filter-field">
-            <span>知识库</span>
+            <span>{t("search.library")}</span>
             <Select
               mode="multiple"
               allowClear
               showSearch
-              aria-label="知识库"
-              placeholder="选择或搜索知识库"
+              aria-label={t("search.library")}
+              placeholder={t("search.libraryPlaceholder")}
               value={libraryIds}
               loading={librariesLoading}
               optionFilterProp="label"
@@ -782,7 +775,7 @@ export function SearchPanel({
                 if (ids.length) setLocation("library");
               }}
               notFoundContent={
-                librariesLoading ? "正在加载…" : "暂无可选知识库"
+                librariesLoading ? t("common.loading") : t("search.libraryEmpty")
               }
             />
             {libraryError && (
@@ -791,13 +784,13 @@ export function SearchPanel({
                   {libraryError}
                 </p>
                 <button onClick={() => setLibraryRetry((n) => n + 1)}>
-                  重新加载知识库
+                  {t("search.libraryReload")}
                 </button>
               </>
             )}
           </div>
           <fieldset className="search-visit-filter">
-            <legend>最近浏览</legend>
+            <legend>{t("search.visited")}</legend>
             <div className="search-day-options">
               {[0, 1, 7, 30, 90].map((days) => (
                 <button
@@ -806,16 +799,16 @@ export function SearchPanel({
                   aria-pressed={visitedDays === days}
                   onClick={() => setVisitedDays(days)}
                 >
-                  {days ? `${days} 天` : "不限"}
+                  {days ? t("search.days", { count: days }) : t("search.anyTime")}
                 </button>
               ))}
             </div>
             <label className="search-custom-days">
-              <span>最近</span>
+              <span>{t("search.recent")}</span>
               <input
                 type="number"
-                aria-label="最近浏览天数"
-                placeholder="不限"
+                aria-label={t("search.visitedDays")}
+                placeholder={t("search.anyTime")}
                 min={1}
                 max={3650}
                 step={1}
@@ -831,18 +824,18 @@ export function SearchPanel({
                   )
                 }
               />
-              <span>天内浏览过</span>
+              <span>{t("search.visitedWithin")}</span>
             </label>
           </fieldset>
           <fieldset className="search-reaction-filter">
-            <legend>我的互动</legend>
+            <legend>{t("search.activity")}</legend>
             <label>
               <input
                 type="checkbox"
                 checked={likedOnly}
                 onChange={(e) => setLikedOnly(e.target.checked)}
               />
-              我点赞的
+              {t("search.liked")}
             </label>
             <label>
               <input
@@ -850,7 +843,7 @@ export function SearchPanel({
                 checked={favoritesOnly}
                 onChange={(e) => setFavoritesOnly(e.target.checked)}
               />
-              我收藏的
+              {t("search.favorited")}
             </label>
           </fieldset>
         </aside>

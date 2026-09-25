@@ -31,6 +31,10 @@ coverage/
 *.tsbuildinfo
 .eslintcache
 
+# Installed business plugins. Keep the README; packages dropped here are local.
+/plugins/*
+!/plugins/README.md
+
 # Local browser-test output, scratch work and logs; keep reusable tests.
 test-results/
 playwright-report/

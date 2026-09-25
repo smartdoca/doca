@@ -34,7 +34,7 @@ import {
   type Actor,
 } from "@core/modules/identity/passwords.js";
 import { fail } from "@core/shared/errors.js";
-import { provisionSystemMailbox } from "../services/system-mailbox.js";
+import { runUserProvisioners } from "../plugins/lifecycle.js";
 import { mobileSession, sessionExpiresAt } from "../app/mobile-client.js";
 import type { DB } from "@db/index.js";
 import { transact } from "@db/transactions.js";
@@ -982,7 +982,7 @@ export function registerIdentity(
           ? result.pendingUserId
           : "";
       if (provisionedId) {
-        await provisionSystemMailbox(db, {
+        await runUserProvisioners(db, {
           id: provisionedId,
           displayName:
             result.status === "active" && result.user

@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { enqueueProjection } from "../automation/jobs.js";
-import { mailKnowledgeIncluded } from "../mail/scope.js";
-import { mailAttachmentIncluded } from "../mail/search-scope.js";
+import {
+  mailAttachmentIncluded,
+  mailKnowledgeIncluded,
+} from "../plugins/policies.js";
 import type { DB } from "../../../../db/src/index.js";
 
 export type KnowledgeKind = "document" | "file" | "mail" | "folder" | "library";

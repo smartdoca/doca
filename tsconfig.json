@@ -24,7 +24,9 @@
     "apps/**/*.tsx",
     "packages/**/*.ts",
     "tests/**/*.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "../doca-mail/src/**/*.ts",
+    "../doca-mail/src/web/**/*.tsx"
   ],
-  "exclude": ["apps/mobile"]
+  "exclude": ["apps/mobile", "../doca-mail/src/mobile"]
 }

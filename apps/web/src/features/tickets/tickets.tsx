@@ -6,6 +6,7 @@ import { Feedback } from "@web/shared/components/feedback.js";
 import { realtime } from "@web/features/documents/realtime.js";
 import { TicketStatusFilter } from "@web/features/tickets/ticket-status-filter.js";
 import { useI18n } from "@web/shared/i18n.js";
+import type { MessageKey } from "@doca/i18n";
 import "@web/features/tickets/tickets.css";
 type Person = { id: string; display_name: string; public_id?: string };
 type Operation = { type?: string; role?: string; includeDescendants?: boolean };
@@ -39,32 +40,37 @@ type Ticket = {
   }[];
   actions: string[];
 };
-const kinds: Record<string, string> = {
-  access: "权限申请工单",
-  invitation: "协作邀请工单",
+const kinds: Record<string, MessageKey> = {
+  access: "ticket.access",
+  invitation: "ticket.invitation",
 };
-const states: Record<string, string> = {
-  pending: "处理中",
-  completed: "已完成",
-  approved: "审批通过",
-  accepted: "已接受",
-  rejected: "已拒绝",
-  cancelled: "已撤销",
-  expired: "已过期",
+const states: Record<string, MessageKey> = {
+  pending: "ticket.pending",
+  completed: "ticket.completed",
+  approved: "ticket.approved",
+  accepted: "ticket.accepted",
+  rejected: "ticket.rejected",
+  cancelled: "ticket.cancelled",
+  expired: "ticket.expired",
 };
-const roles: Record<string, string> = {
-  reader: "可阅读",
-  commenter: "可评论",
-  editor: "可编辑",
-  manager: "可管理",
+const roles: Record<string, MessageKey> = {
+  reader: "role.reader",
+  commenter: "role.commenter",
+  editor: "role.editor",
+  manager: "role.manager",
 };
-const actionNames: Record<string, string> = {
-  approve: "通过审批",
-  reject: "拒绝",
-  accept: "接受邀请",
-  cancel: "撤销工单",
-  remind: "催办",
+const actionNames: Record<string, MessageKey> = {
+  approve: "ticket.approve",
+  reject: "ticket.reject",
+  accept: "ticket.accept",
+  cancel: "ticket.cancel",
+  remind: "ticket.remind",
 };
+const label = (
+  t: (key: MessageKey) => string,
+  map: Record<string, MessageKey>,
+  key: string | null | undefined,
+) => (key && map[key] ? t(map[key]) : (key ?? ""));
 const stamp = (s: string) => new Date(s).toLocaleString();
 export function TicketIcon() {
   const { t } = useI18n();
@@ -83,6 +89,7 @@ export function Tickets({
   resourceId: embeddedResourceId,
   ticketId,
 }: { resourceId?: string; ticketId?: string } = {}) {
+  const { t: tr } = useI18n();
   const initialQuery = new URLSearchParams(location.hash.split("?")[1] ?? "");
   const [resourceId, setResourceId] = useState(
       embeddedResourceId ?? initialQuery.get("resourceId") ?? "",
@@ -219,7 +226,7 @@ export function Tickets({
         }),
       );
       if (action !== "remind") setMessage("");
-      if (action === "remind") setNotice("已通知当前处理人");
+      if (action === "remind") setNotice(tr("ticket.reminded"));
     } catch (e) {
       setError((e as Error).message);
       await load().catch(() => {});
@@ -231,7 +238,7 @@ export function Tickets({
     const url = `${location.origin}${location.pathname}#/tickets/${ticket!.id}`;
     try {
       await navigator.clipboard.writeText(url);
-      setNotice("工单链接已复制");
+      setNotice(tr("ticket.copied"));
     } catch {
       setManual(url);
     }
@@ -250,30 +257,30 @@ export function Tickets({
           <div className="ticket-heading">
             <a href="#/tickets">
               <ArrowLeft size={16} />
-              全部工单
+              {tr("ticket.all")}
             </a>
             <button
               onClick={() => void load().catch((e) => setError(e.message))}
             >
-              刷新
+              {tr("admin.refresh")}
             </button>
           </div>
           {ticket && (
             <>
               <div className="ticket-title">
                 <div>
-                  <small>{kinds[ticket.kind]}</small>
-                  <h2>{ticket.resource?.title ?? "关联资源"}</h2>
+                  <small>{label(tr, kinds, ticket.kind)}</small>
+                  <h2>{ticket.resource?.title ?? tr("ticket.resource")}</h2>
                   <span className={"ticket-state " + ticket.status}>
-                    {states[ticket.status]}
+                    {label(tr, states, ticket.status)}
                   </span>
                 </div>
                 <button onClick={() => void copy()}>
                   <Copy size={15} />
-                  复制工单链接
+                  {tr("ticket.copyLink")}
                 </button>
               </div>
-              <p className="ticket-number">工单编号 {ticket.id}</p>
+              <p className="ticket-number">{tr("ticket.number", { id: ticket.id })}</p>
               <ol className="ticket-steps">
                 {ticket.steps.map((s, i) => (
                   <li
@@ -299,30 +306,30 @@ export function Tickets({
                         ? stamp(ticket.createdAt)
                         : i === 1
                           ? terminal
-                            ? states[ticket.status]
-                            : "等待处理"
+                            ? label(tr, states, ticket.status)
+                            : tr("ticket.waiting")
                           : ticket.status === "completed"
-                            ? "已完成"
+                            ? tr("ticket.done")
                             : terminal
-                              ? "未执行"
-                              : "审批后自动完成"}
+                              ? tr("ticket.notRun")
+                              : tr("ticket.afterApproval")}
                     </small>
                     {i === 1 && (
                       <small>
                         {ticket.processorsHidden
-                          ? "处理人员信息已隐藏"
+                          ? tr("ticket.handlersHidden")
                           : ticket.processors
                               .map((p) => p.display_name)
-                              .join("、") || "暂无处理人"}
+                              .join(", ") || tr("ticket.noHandler")}
                       </small>
                     )}
                   </li>
                 ))}
               </ol>
               <dl className="ticket-facts">
-                <dt>发起人</dt>
-                <dd>{ticket.initiator?.display_name ?? "身份已隐藏"}</dd>
-                <dt>{ticket.kind === "invitation" ? "受邀人" : "申请人"}</dt>
+                <dt>{tr("ticket.initiator")}</dt>
+                <dd>{ticket.initiator?.display_name ?? tr("ticket.identityHidden")}</dd>
+                <dt>{ticket.kind === "invitation" ? tr("ticket.invitee") : tr("ticket.applicant")}</dt>
                 <dd>
                   {ticket.subject?.display_name}
                   {ticket.subject?.public_id &&
@@ -330,8 +337,8 @@ export function Tickets({
                 </dd>
                 {ticket.role && (
                   <>
-                    <dt>申请权限</dt>
-                    <dd>{roles[ticket.role]}</dd>
+                    <dt>{tr("ticket.requestedRole")}</dt>
+                    <dd>{label(tr, roles, ticket.role)}</dd>
                   </>
                 )}
                 {ticket.operation?.role &&
@@ -340,43 +347,43 @@ export function Tickets({
                     <>
                       <dt>
                         {ticket.status === "completed"
-                          ? "实际授权"
-                          : "邀请范围"}
+                          ? tr("ticket.grantedRole")
+                          : tr("ticket.inviteScope")}
                       </dt>
                       <dd>
-                        {roles[ticket.operation.role]} ·{" "}
+                        {label(tr, roles, ticket.operation.role)} ·{" "}
                         {ticket.operation.includeDescendants
-                          ? "包含子文档"
-                          : "仅当前节点"}
+                          ? tr("role.scope.descendants")
+                          : tr("role.scope.node")}
                       </dd>
                     </>
                   )}
                 {ticket.resource && (
                   <>
-                    <dt>资源类型</dt>
+                    <dt>{tr("ticket.resourceKind")}</dt>
                     <dd>
-                      {ticket.resourceKind === "library" ? "知识库" : "文档"}
+                      {ticket.resourceKind === "library" ? tr("shell.kind.library") : tr("shell.type.rich")}
                     </dd>
-                    <dt>资源 ID</dt>
+                    <dt>{tr("ticket.resourceId")}</dt>
                     <dd>{ticket.resourceId}</dd>
-                    <dt>关联资源</dt>
+                    <dt>{tr("ticket.resource")}</dt>
                     <dd>
                       <a href={ticket.resource.url}>
-                        打开{ticket.resource.title}
+                        {tr("ticket.openResource", { title: ticket.resource.title })}
                       </a>
                     </dd>
                   </>
                 )}
                 {ticket.expiresAt && (
                   <>
-                    <dt>有效期</dt>
+                    <dt>{tr("ticket.expires")}</dt>
                     <dd>{stamp(ticket.expiresAt)}</dd>
                   </>
                 )}
                 {ticket.message && (
                   <>
                     <dt>
-                      {ticket.kind === "invitation" ? "邀请说明" : "申请说明"}
+                      {ticket.kind === "invitation" ? tr("ticket.inviteNote") : tr("ticket.requestNote")}
                     </dt>
                     <dd>{ticket.message}</dd>
                   </>
@@ -387,16 +394,16 @@ export function Tickets({
                   {ticket.actions.includes("approve") && (
                     <div className="ticket-grant-options">
                       <label>
-                        实际授予权限
+                        {tr("ticket.grantLabel")}
                         <Select
-                          aria-label="实际授予权限"
+                          aria-label={tr("ticket.grantLabel")}
                           value={grantRole || ticket.role || "reader"}
                           disabled={busy}
                           onChange={(e) => setGrantRole(e.target.value)}
                         >
                           {ticket.approvalRoles.map((role) => (
                             <option key={role} value={role}>
-                              {roles[role]}
+                              {label(tr, roles, role)}
                             </option>
                           ))}
                         </Select>
@@ -410,14 +417,14 @@ export function Tickets({
                             setIncludeDescendants(e.target.checked)
                           }
                         />
-                        包含子文档
+                        {tr("role.scope.descendants")}
                       </label>
                     </div>
                   )}
                   {ticket.actions.some((a) => a !== "remind") && (
                     <textarea
-                      aria-label="步骤备注"
-                      placeholder="步骤备注（选填，可填写通过、拒绝、接受或撤销的说明）"
+                      aria-label={tr("ticket.stepNote")}
+                      placeholder={tr("ticket.stepPlaceholder")}
                       value={message}
                       maxLength={1000}
                       disabled={busy}
@@ -434,32 +441,32 @@ export function Tickets({
                         disabled={busy}
                         onClick={() => void act(a)}
                       >
-                        {actionNames[a]}
+                        {label(tr, actionNames, a)}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-              <h3>处理记录</h3>
+              <h3>{tr("ticket.history")}</h3>
               <div className="ticket-history">
                 {ticket.events.map((e) => (
                   <article key={e.id}>
                     <strong>
                       {e.status === "pending"
-                        ? "工单已提交"
-                        : (states[e.status] ?? e.status)}
+                        ? tr("ticket.submitted")
+                        : label(tr, states, e.status)}
                     </strong>
                     <small>
                       {stamp(e.createdAt)} ·{" "}
-                      {e.actor?.display_name ?? "人员信息已隐藏"}
+                      {e.actor?.display_name ?? tr("ticket.personHidden")}
                     </small>
                     {e.operation?.role &&
                       ["approved", "accepted"].includes(e.status) && (
                         <p>
-                          已授予{roles[e.operation.role]} ·{" "}
+                          {tr("ticket.grantedLine", { role: label(tr, roles, e.operation.role) })} ·{" "}
                           {e.operation.includeDescendants
-                            ? "包含子文档"
-                            : "仅当前节点"}
+                            ? tr("role.scope.descendants")
+                            : tr("role.scope.node")}
                         </p>
                       )}
                     {e.message && <p>{e.message}</p>}
@@ -473,23 +480,23 @@ export function Tickets({
         <>
           <div className="ticket-filters">
             <Select
-              aria-label="资源类型"
+              aria-label={tr("ticket.filterKind")}
               value={resourceKind}
               onChange={(e) => setResourceKind(e.target.value)}
             >
-              <option value="">全部资源</option>
-              <option value="document">文档</option>
-              <option value="library">知识库</option>
+              <option value="">{tr("ticket.allResources")}</option>
+              <option value="document">{tr("shell.type.rich")}</option>
+              <option value="library">{tr("shell.kind.library")}</option>
             </Select>
             <Select
-              aria-label="工单类型"
+              aria-label={tr("ticket.filterType")}
               value={kind}
               onChange={(e) => setKind(e.target.value)}
             >
-              <option value="">全部类型</option>
+              <option value="">{tr("ticket.allTypes")}</option>
               {Object.entries(kinds).map(([k, v]) => (
                 <option key={k} value={k}>
-                  {v}
+                  {tr(v)}
                 </option>
               ))}
             </Select>
@@ -500,25 +507,25 @@ export function Tickets({
                 checked={onlyMine}
                 onChange={(e) => setOnlyMine(e.target.checked)}
               />
-              待我处理
+              {tr("ticket.mine")}
             </label>
           </div>
           {resourceId && (
             <div className="ticket-resource-filter">
-              <span>资源 ID：{resourceId}</span>
+              <span>{tr("ticket.resourceIdFilter", { id: resourceId })}</span>
               {!embeddedResourceId && (
-                <button onClick={() => setResourceId("")}>清除资源筛选</button>
+                <button onClick={() => setResourceId("")}>{tr("ticket.clearResource")}</button>
               )}
             </div>
           )}
           <div className="ticket-results" aria-busy={!ready || loadingMore}>
-            <div className="ticket-table" role="table" aria-label="工单列表">
+            <div className="ticket-table" role="table" aria-label={tr("ticket.list")}>
               <div className="ticket-table-head" role="row">
-                <span role="columnheader">工单</span>
-                <span role="columnheader">类型</span>
-                <span role="columnheader">状态</span>
-                <span role="columnheader">当前步骤</span>
-                <span role="columnheader">创建时间</span>
+                <span role="columnheader">{tr("ticket.col.ticket")}</span>
+                <span role="columnheader">{tr("ticket.col.type")}</span>
+                <span role="columnheader">{tr("ticket.col.status")}</span>
+                <span role="columnheader">{tr("ticket.col.step")}</span>
+                <span role="columnheader">{tr("ticket.col.created")}</span>
               </div>
               {items.map((t) => (
                 <div className="ticket-table-row" key={t.id} role="row">
@@ -528,17 +535,17 @@ export function Tickets({
                         <ClipboardList size={18} />
                       </span>
                       <span className="ticket-name-text">
-                        <span>{t.resource?.title ?? "关联资源"}</span>
-                        {t.role && <small>{roles[t.role]}</small>}
+                        <span>{t.resource?.title ?? tr("ticket.resource")}</span>
+                        {t.role && <small>{label(tr, roles, t.role)}</small>}
                       </span>
                     </a>
                   </div>
                   <span role="cell" className="ticket-type-cell">
-                    {kinds[t.kind]}
+                    {label(tr, kinds, t.kind)}
                   </span>
                   <span role="cell">
                     <span className={"ticket-state " + t.status}>
-                      {states[t.status]}
+                      {label(tr, states, t.status)}
                     </span>
                   </span>
                   <span role="cell" className="ticket-step-cell">
@@ -546,20 +553,20 @@ export function Tickets({
                       ? t.steps[1]
                       : t.status === "completed"
                         ? t.steps[2]
-                        : "已结束"}
+                        : tr("ticket.ended")}
                   </span>
                   <time
                     role="cell"
                     dateTime={t.createdAt}
                     title={stamp(t.createdAt)}
                   >
-                    {new Date(t.createdAt).toLocaleDateString("zh-CN")}
+                    {new Date(t.createdAt).toLocaleDateString()}
                   </time>
                 </div>
               ))}
             </div>
             {ready && !items.length && !error && (
-              <p className="empty">暂无相关工单</p>
+              <p className="empty">{tr("ticket.empty")}</p>
             )}
             {ready && next !== null && (
               <button
@@ -569,24 +576,24 @@ export function Tickets({
                   void load(next).catch((e) => setError(e.message))
                 }
               >
-                {loadingMore ? "正在加载…" : "加载更多"}
+                {loadingMore ? tr("common.loading") : tr("common.more")}
               </button>
             )}
-            {!ready && <p className="empty">正在加载工单…</p>}
+            {!ready && <p className="empty">{tr("ticket.loading")}</p>}
           </div>
         </>
       )}
-      {ticketId && !ready && <p>正在加载工单…</p>}
+      {ticketId && !ready && <p>{tr("ticket.loading")}</p>}
       {error && (
         <>
           <Feedback tone="error" message={error} />
-          <a href="#/home">返回平台或登录</a>
+          <a href="#/home">{tr("ticket.signIn")}</a>
         </>
       )}
       {notice && <Feedback message={notice} />}{" "}
       {manual && (
         <input
-          aria-label="手动复制工单链接"
+          aria-label={tr("ticket.copyManual")}
           readOnly
           value={manual}
           onFocus={(e) => e.target.select()}

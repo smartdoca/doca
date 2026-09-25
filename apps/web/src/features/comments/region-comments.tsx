@@ -19,6 +19,7 @@ import { placeCommentCards, commentRailHeight } from "@web/features/comments/com
 import { CommentNavigation } from "@web/features/comments/comment-navigation.js";
 import { scrollCommentIntoView } from "@web/features/comments/comment-scroll.js";
 import { isRegionCommentInteraction } from "@web/features/comments/region-comment-interaction.js";
+import { useI18n } from "@web/shared/i18n.js";
 export type RegionController = {
   flush?(): void | Promise<void>;
   capture(): unknown | null;
@@ -69,7 +70,8 @@ export function RegionComments({
   candidateIds?: string[];
   annotationVisibility?: { visible: boolean; change(visible: boolean): void };
 }) {
-  useAIBridge(detail.resource.id, { capture: () => controller?.capture(), describe: a => controller?.label(a) ?? "选中内容", reveal: a => { if (!controller?.valid(a)) throw Error("引用已失效，请重新选择内容"); controller.reveal(a); }, ready: () => !!controller && connected && !dirty, flush: () => controller?.flush?.() });
+  const { t } = useI18n();
+  useAIBridge(detail.resource.id, { capture: () => controller?.capture(), describe: a => controller?.label(a) ?? t("comment.quote"), reveal: a => { if (!controller?.valid(a)) throw Error(t("comment.quoteStale")); controller.reveal(a); }, ready: () => !!controller && connected && !dirty, flush: () => controller?.flush?.() });
   const [open, setOpen] = useState(false),
     [draft, setDraft] = useState<any>(null),
     [reply, setReply] = useState<Detail["comments"][number] | null>(null),
@@ -241,7 +243,7 @@ export function RegionComments({
     if (rank < 2 || !connected || !controller) return;
     const anchor = controller?.capture();
     if (!anchor) {
-      setError("请先选择需要评论的内容");
+      setError(t("comment.needSelection"));
       setOpen(true);
       return;
     }
@@ -300,9 +302,9 @@ export function RegionComments({
   const visibilityAction = annotationVisibility && (
     <button
       className="icon"
-      title={annotationVisibility.visible ? "隐藏评论标记" : "显示评论标记"}
+      title={annotationVisibility.visible ? t("comment.hideMarks") : t("comment.showMarks")}
       aria-label={
-        annotationVisibility.visible ? "隐藏评论标记" : "显示评论标记"
+        annotationVisibility.visible ? t("comment.hideMarks") : t("comment.showMarks")
       }
       aria-pressed={annotationVisibility.visible}
       onClick={() => {
@@ -320,8 +322,8 @@ export function RegionComments({
         {visibilityAction}
         <button
           className="icon region-comment-toggle"
-          title="内容评论"
-          aria-label="展开内容评论"
+          title={t("comment.region")}
+          aria-label={t("comment.openRegion")}
           onClick={() => {
             if (!open) annotationVisibility?.change(true);
             setOpen(!open);
@@ -335,11 +337,11 @@ export function RegionComments({
         <aside
           ref={panel}
           className="content-comments region-comments-drawer"
-          aria-label="内容评论抽屉"
+          aria-label={t("comment.drawer")}
         >
           <header>
             <h3>
-              内容评论 <small>{roots.length}</small>
+              {t("comment.region")} <small>{roots.length}</small>
             </h3>
             <div className="region-comment-header-actions">
               <CommentNavigation
@@ -374,7 +376,7 @@ export function RegionComments({
               {visibilityAction}
               <button
                 className="icon"
-                aria-label="收起内容评论"
+                aria-label={t("comment.closeRegion")}
                 onClick={() => {
                   setOpen(false);
                   setActive(null);
@@ -385,8 +387,8 @@ export function RegionComments({
             </div>
           </header>
           {candidateIds && candidateIds.length > 1 && (
-            <div className="comment-candidates" aria-label="此区域的评论">
-              <small>此区域有 {candidateIds.length} 条评论，请选择</small>
+            <div className="comment-candidates" aria-label={t("comment.regionList")}>
+              <small>{t("comment.regionCount", { count: candidateIds.length })}</small>
               {roots
                 .filter((root) => candidateIds.includes(root.id))
                 .map((root, index) => (
@@ -398,7 +400,7 @@ export function RegionComments({
                       controller?.reveal(JSON.parse(root.anchor!));
                     }}
                   >
-                    评论 {index + 1} ·{" "}
+                    {t("comment.regionIndex", { index: index + 1 })} ·{" "}
                     {controller?.label(JSON.parse(root.anchor!))}
                   </button>
                 ))}
@@ -406,7 +408,7 @@ export function RegionComments({
           )}
           <Feedback message={error} tone="error" />
           {!roots.length && !draft && (
-            <p className="subtle">选择内容后点击评论图标，添加区域评论。</p>
+            <p className="subtle">{t("comment.regionEmpty")}</p>
           )}
           {draft && controller?.position && (
             <article className="selection-thread draft linked-comment-draft">
@@ -490,7 +492,7 @@ export function RegionComments({
                   {detail.comments.filter((c) => c.parent_id === root.id)
                     .length >= limit && (
                     <button onClick={() => setLimit((n) => n + 10)}>
-                      加载更多回复
+                      {t("comment.moreReplies")}
                     </button>
                   )}
                 </article>
@@ -509,12 +511,12 @@ export function RegionComments({
           >
             {roots.length > limit && (
               <button onClick={() => setLimit((n) => n + 10)}>
-                加载更多评论
+                {t("comment.more")}
               </button>
             )}
             {detail.commentsNextOffset != null && (
               <button disabled={busy} onClick={() => void loadMoreComments?.()}>
-                加载后续评论
+                {t("comment.moreLater")}
               </button>
             )}
           </div>

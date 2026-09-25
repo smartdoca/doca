@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Select } from "antd";
 import { api } from "@web/shared/api.js";
+import { useI18n } from "@web/shared/i18n.js";
 export type SearchOwner = { id: string; display_name: string };
 export function SearchOwnerFilter({
   value,
@@ -9,6 +10,7 @@ export function SearchOwnerFilter({
   value: SearchOwner[];
   onChange: (value: SearchOwner[]) => void;
 }) {
+  const { t } = useI18n();
   const [q, setQ] = useState("");
   const [items, setItems] = useState<SearchOwner[]>([]);
   const [loading, setLoading] = useState(false);
@@ -50,8 +52,8 @@ export function SearchOwnerFilter({
       mode="multiple"
       showSearch
       allowClear
-      aria-label="文档所有者"
-      placeholder="搜索姓名或账号"
+      aria-label={t("search.owner")}
+      placeholder={t("search.ownerPlaceholder")}
       value={value.map((u) => u.id)}
       filterOption={false}
       loading={loading}
@@ -61,9 +63,9 @@ export function SearchOwnerFilter({
       getPopupContainer={(trigger) => trigger.parentElement!}
       notFoundContent={
         loading
-          ? "正在查找…"
+          ? t("search.ownerLooking")
           : error ||
-            (q.trim().length < 2 ? "输入至少 2 个字查找用户" : "没有找到用户")
+            (q.trim().length < 2 ? t("search.ownerMin") : t("search.ownerNone"))
       }
       options={options.map((u) => ({ value: u.id, label: u.display_name }))}
       onChange={(ids: string[]) =>

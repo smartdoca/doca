@@ -11,7 +11,6 @@
     "@doca/plugin-documents": "workspace:*",
     "@doca/plugin-files": "workspace:*",
     "@doca/plugin-host": "workspace:*",
-    "@doca/plugin-mail": "workspace:*",
     "@doca/plugin-sdk": "workspace:*",
     "@doca/search-host": "workspace:*"
   }

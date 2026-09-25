@@ -145,15 +145,7 @@ import {
   saveChatMessage,
   type AIMemory,
 } from "./memory.js";
-import { persistMailAttachments } from "../mail-attachments.js";
-import { indexMailMessage, unindexMailMessage } from "../mail-index.js";
-import { cachedFolders, storedMessage } from "../mail-store.js";
-import {
-  isExternalMailbox,
-  isMailOauthProvider,
-  parseExternalSecret,
-  serializeExternalSecret,
-} from "@core/modules/mail/external.js";
+import { mailRuntimeBridge } from "../../plugins/mail-bridge.js";
 
 export type SkipApprovals = {
   create?: boolean;
@@ -259,7 +251,7 @@ export function createAIRunner(
     notify?: (id: string) => Promise<void>;
     search?: (actor: any, query: any) => Promise<any>;
     fileSearch?: (query: string, fileIds: string[], mode: "keyword" | "ai") => Promise<string[] | null>;
-    mail?: { client?: import("../../adapters/stalwart.js").StalwartMail; fetch?: typeof fetch };
+    mail?: { client?: unknown; fetch?: typeof fetch };
     webFetch?: typeof fetch;
     imageFetch?: typeof fetch;
     maxConcurrentJobs?: number;
@@ -1249,55 +1241,10 @@ export function createAIRunner(
       return requireMailbox(sender.id, "sender");
     }
     async function mailboxClient(mailbox: Schema["mailboxes"]) {
-      if (isExternalMailbox(mailbox)) {
-        const { createImapMail } = await import("../../adapters/imap-mail.js");
-        const { mailOauthApp, refreshMailOauthToken } = await import("../../adapters/mail-oauth.js");
-        const { parseMailSettings } = await import("@core/modules/mail/settings.js");
-        const credentials = parseExternalSecret(mailbox.secret);
-        if (!credentials) fail(400, "外部邮箱凭证已损坏，请重新绑定");
-        if (credentials.auth === "oauth" && isMailOauthProvider(credentials.provider)) {
-          const setting = await db
-            .selectFrom("mail_settings")
-            .select("config")
-            .where("id", "=", "system")
-            .executeTakeFirst();
-          const app = mailOauthApp(parseMailSettings(setting?.config).external, credentials.provider);
-          if (app) {
-            const live = await refreshMailOauthToken(
-              credentials.provider,
-              app,
-              credentials,
-              options.fetch ?? fetch,
-            );
-            if (
-              live.accessToken !== credentials.accessToken ||
-              live.refreshToken !== credentials.refreshToken
-            ) {
-              await db
-                .updateTable("mailboxes")
-                .set({
-                  secret: serializeExternalSecret(live),
-                  updated_at: new Date().toISOString(),
-                })
-                .where("id", "=", mailbox.id)
-                .execute();
-            }
-            return createImapMail(live);
-          }
-        }
-        return createImapMail(credentials);
-      }
-      const { createStalwart } = await import("../../adapters/stalwart.js");
-      const { parseMailSettings } = await import("@core/modules/mail/settings.js");
-      const setting = await db
-        .selectFrom("mail_settings")
-        .select("config")
-        .where("id", "=", "system")
-        .executeTakeFirst();
-      const client = createStalwart(parseMailSettings(setting?.config), options.mail);
-      if (mailbox.backend_user_id)
-        client.bindAccount({ address: mailbox.address, userId: mailbox.backend_user_id });
-      return client;
+      return mailRuntimeBridge().client(db, mailbox, {
+        fetch: options.fetch,
+        mail: options.mail,
+      });
     }
     const documentCreates: {
       key: string;
@@ -2207,7 +2154,7 @@ export function createAIRunner(
           if (!mailboxId) return { mailboxes: visible };
           const mailbox = visible.find((item) => item.id === mailboxId);
           if (!mailbox) fail(404, "邮箱不存在");
-          const folders = await cachedFolders(db, mailboxId);
+          const folders = await mailRuntimeBridge().cachedFolders(db, mailboxId);
           return { mailbox, folders };
         },
       }),
@@ -2274,7 +2221,7 @@ export function createAIRunner(
             });
             return href;
           };
-          const cached = await storedMessage(db, mailbox.id, remoteId);
+          const cached = await mailRuntimeBridge().storedMessage(db, mailbox.id, remoteId);
           if (cached?.row.body_ready) {
             return {
               id: cached.message.id,
@@ -2296,9 +2243,9 @@ export function createAIRunner(
           }
           const stalwart = await mailboxClient(mailbox);
           const message = await stalwart.getMessage(mailbox.address, remoteId, mailbox.secret);
-          await indexMailMessage(db, mailbox, message);
+          await mailRuntimeBridge().indexMessage(db, mailbox, message);
           if (options.files)
-            await persistMailAttachments(mailbox, message, {
+            await mailRuntimeBridge().persistAttachments(mailbox, message, {
               files: options.files,
               principalId: mailbox.owner_id,
               loadData: async (attachment) =>
@@ -2339,11 +2286,10 @@ export function createAIRunner(
         inputSchema: z.object({ mailboxId: z.string().uuid().optional(), to: z.string().min(1).max(2000), subject: z.string().max(500), text: z.string().max(20000), draft: z.boolean().default(false) }),
         execute: async ({ mailboxId, to, subject, text, draft }) => {
           const mailbox = await senderMailbox(mailboxId);
-          const { parseAddresses } = await import("@core/modules/mail/addresses.js");
           const stalwart = await mailboxClient(mailbox);
-          const payload = { to: parseAddresses(to), subject, text };
+          const payload = { to: mailRuntimeBridge().parseAddresses(to), subject, text };
           const message = draft ? await stalwart.saveDraft(mailbox.address, payload, mailbox.secret) : await stalwart.sendMessage(mailbox.address, payload, mailbox.secret);
-          await indexMailMessage(db, mailbox, message);
+          await mailRuntimeBridge().indexMessage(db, mailbox, message);
           if (!draft) await clearPageState(db, actor.id, mailDraftKey(mailbox.id));
           return { ok: true, id: message.id, subject: message.subject, draft };
         },
@@ -2360,16 +2306,16 @@ export function createAIRunner(
           const stalwart = await mailboxClient(mailbox);
           if (action === "delete") {
             await stalwart.deleteMessage(mailbox.address, messageId, false, mailbox.secret);
-            await unindexMailMessage(db, mailbox.id, messageId);
+            await mailRuntimeBridge().unindexMessage(db, mailbox.id, messageId);
           } else if (action === "archive") {
-            const archive = (await cachedFolders(db, mailbox.id)).find((item) => item.role === "archive")
+            const archive = (await mailRuntimeBridge().cachedFolders(db, mailbox.id)).find((item) => item.role === "archive")
               ?? (await stalwart.listFolders(mailbox.address, mailbox.secret)).find((item) => item.role === "archive");
             if (!archive) fail(400, "这个邮箱没有归档文件夹");
             const updated = await stalwart.updateMessage(mailbox.address, messageId, { folderId: archive.id }, mailbox.secret);
-            await indexMailMessage(db, mailbox, updated);
+            await mailRuntimeBridge().indexMessage(db, mailbox, updated);
           } else {
             const updated = await stalwart.updateMessage(mailbox.address, messageId, { unread: action === "unread", starred: action === "star" ? true : action === "unstar" ? false : undefined }, mailbox.secret);
-            await indexMailMessage(db, mailbox, updated);
+            await mailRuntimeBridge().indexMessage(db, mailbox, updated);
           }
           return { ok: true, action };
         },

@@ -30,8 +30,10 @@ import {
   LibrarySettings,
   LibraryLanding,
   LibrarySystemPage,
+  LibraryQaPage,
   librarySettingsUrl,
   librarySystemUrl,
+  libraryQaUrl,
 } from "@web/features/documents/library.js";
 import {
   CommentComposer,
@@ -67,6 +69,7 @@ import {
   PanelLeft,
   UserRound,
   Network,
+  MessageSquare,
 } from "lucide-react";
 import {
   api,
@@ -96,8 +99,8 @@ import type { FileLocation } from "@web/features/files/files.js";
 import { MobileTicketRedeem, postMobileEditor } from "@web/features/mobile/ticket-redeem.js";
 import { SubscribeLibraryHost } from "@web/features/knowledge/subscribe-library.js";
 import {
+  pluginInstalled,
   pluginMessage,
-  webPluginFlags,
   webPluginRegistry,
 } from "@web/plugins/registry.js";
 import "@web/features/files/files.css";
@@ -188,7 +191,7 @@ export function App() {
       const route = location.hash.slice(2).split(/[/?]/)[0]!;
       if (route === "knowledge") return "libraries";
       if (
-        webPluginFlags.mailEnabled &&
+        pluginInstalled("doca.mail") &&
         import.meta.env.DEV &&
         route === "mail-preview"
       )
@@ -261,11 +264,11 @@ export function App() {
     resourceId = mobileResourceId ?? /^#\/r\/([a-f0-9-]{36})(?:\?|$)/.exec(hash)?.[1],
     sharedFolderId = /^#\/shared-files\/([a-f0-9-]{36})(?:\?|$)/.exec(hash)?.[1],
     mailPreview =
-      webPluginFlags.mailEnabled &&
+      pluginInstalled("doca.mail") &&
       import.meta.env.DEV &&
       hash.split("?")[0] === "#/mail-preview",
     mailPage =
-      webPluginFlags.mailEnabled &&
+      pluginInstalled("doca.mail") &&
       (hash.split("?")[0] === "#/mail" ||
         hash.startsWith("#/mail/") ||
         mailPreview),
@@ -330,6 +333,7 @@ export function App() {
   const libraryView = new URLSearchParams(hash.split("?")[1]).get("view");
   const librarySettingsPage = libraryView === "settings";
   const librarySystemPage = libraryView === "system";
+  const libraryQaPage = libraryView === "qa";
   const currentDetail = detail?.resource.id === resourceId ? detail : null;
   const sharedPersonalView = !!(
     bootstrap?.user &&
@@ -366,7 +370,9 @@ export function App() {
         ? t("nav.librarySettings")
         : librarySystemPage && currentDetail.resource.kind === "library"
           ? t("nav.librarySystem")
-          : currentDetail.resource.title
+          : libraryQaPage && currentDetail.resource.kind === "library"
+            ? t("nav.libraryQa")
+            : currentDetail.resource.title
       : t("nav.opening")
     : ticketsPage
       ? t("nav.tickets")
@@ -539,14 +545,14 @@ export function App() {
         location.hash = "/libraries";
         setScope("libraries");
       } else if (
-        webPluginFlags.mailEnabled &&
+        pluginInstalled("doca.mail") &&
         import.meta.env.DEV &&
         route === "mail-preview"
       )
         setScope("mail");
       else if (titleKeys[route]) setScope(route);
       else if (pluginNavigationByScope.has(route)) setScope(route);
-      else if (route === "mail" && !webPluginFlags.mailEnabled) {
+      else if (route === "mail" && !pluginInstalled("doca.mail")) {
         location.hash = "/home";
         setScope("home");
       }
@@ -1034,6 +1040,13 @@ export function App() {
                 <Network size={18} />
                 {t("nav.librarySystem")}
               </a>
+              <a
+                className={libraryQaPage ? "active" : ""}
+                href={libraryQaUrl(currentLibraryId)}
+              >
+                <MessageSquare size={18} />
+                {t("nav.libraryQa")}
+              </a>
             </nav>
           )}
           {!currentLibraryId && (
@@ -1359,6 +1372,8 @@ export function App() {
                     <LibrarySettings detail={detail} changed={reload} />
                   ) : librarySystemPage ? (
                     <LibrarySystemPage detail={detail} changed={reload} />
+                  ) : libraryQaPage ? (
+                    <LibraryQaPage detail={detail} changed={reload} />
                   ) : (
                     <LibraryLanding
                       resource={detail.resource}

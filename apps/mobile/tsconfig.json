@@ -10,6 +10,21 @@
       "@doca/i18n": [
         "../../packages/i18n/src/index.ts"
       ],
+      "@doca/mobile/*": [
+        "./src/*"
+      ],
+      "@tanstack/react-query": [
+        "./node_modules/@tanstack/react-query"
+      ],
+      "expo-router": [
+        "./node_modules/expo-router"
+      ],
+      "react-native": [
+        "./node_modules/react-native"
+      ],
+      "react-native-paper": [
+        "./node_modules/react-native-paper"
+      ],
       "react": [
         "./node_modules/@types/react"
       ],

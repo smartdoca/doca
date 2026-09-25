@@ -5,12 +5,12 @@ import {
   parseAddresses,
   validDomain,
   validLocalPart,
-} from "../packages/core/src/modules/mail/addresses.js";
+} from "../plugins/mail/src/core/addresses.js";
 import {
   defaultMailSettings,
   mailConnectionChanged,
   parseMailSettings,
-} from "../packages/core/src/modules/mail/settings.js";
+} from "../plugins/mail/src/core/settings.js";
 
 it("normalizes mailbox local parts and domains", () => {
   expect(validLocalPart("support")).toBe(true);

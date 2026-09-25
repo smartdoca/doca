@@ -34,15 +34,13 @@ import {
   fileProjectionsForObject,
   fileSearchSource,
   knowledgeSearchSource,
-  mailMessageDocumentId,
-  mailProjectionForId,
-  mailSearchSource,
   type SearchQueryContext,
 } from "../services/search/sources.js";
 import {
   MeilisearchSearchProvider,
   SearchRequestError,
 } from "../services/search/meilisearch-provider.js";
+import { projectionDrains } from "../services/search/drains.js";
 type Config = { enabled: number; endpoint: string; index_name: string };
 export interface SearchRuntime {
   allowedOrigins: string[];
@@ -519,26 +517,10 @@ export async function registerSearch(
         }
         lastIndexedAt = new Date().toISOString();
       });
-      await processProjections(db, "search-mail", async (payload) => {
-        const id = String(payload.messageId ?? "");
-        if (
-          !id ||
-          !searchHost.registry.get(mailSearchSource)
-        )
-          return;
-        const projection = await mailProjectionForId(db, id);
-        if (projection)
-          await searchHost.upsertProjections({
-            source: mailSearchSource,
-            projections: [projection],
-          });
-        else
-          await searchHost.deleteProjections({
-            source: mailSearchSource,
-            documentIds: [mailMessageDocumentId(id)],
-          });
+      for (const drain of projectionDrains()) {
+        await drain(db, searchHost);
         lastIndexedAt = new Date().toISOString();
-      });
+      }
     })()
       .catch(() => {})
       .finally(() => {

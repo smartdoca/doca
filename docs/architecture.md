@@ -22,7 +22,7 @@ PluginHost — discover、migration、mount、ready、逆序 dispose
     ├── AIHost / SearchHost（贯穿服务）
     ├── plugin-files（files.v1 基础能力）
     ├── plugin-documents（documents.v1 / KnowledgeSource 聚合）
-    └── plugin-mail（可安装、可禁用的领域插件）
+    └── doca-mail（同级目录中的可安装、可禁用邮箱插件）
     ▼
 packages/core — 账号、权限、成熟领域算法与事务边界
     ▼

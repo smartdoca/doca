@@ -2,6 +2,7 @@ import { AIReferenceButton } from "@web/features/ai/ai-context.js";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { MessageSquare } from "lucide-react";
+import { useI18n } from "@web/shared/i18n.js";
 import { Range } from "slate";
 import { ReactEditor } from "slate-react";
 import type { RichTextEditorHandle } from "slatetsx-kit-editor";
@@ -44,6 +45,7 @@ export function SelectionCommentAction({
   canComment: boolean;
   create: () => void;
 }) {
+  const { t } = useI18n();
   const [toolbar, setToolbar] = useState<HTMLElement | null>(null),
     [rect, setRect] = useState<{ left: number; top: number } | null>(null);
   useEffect(() => {
@@ -118,8 +120,8 @@ export function SelectionCommentAction({
   const button = (
     <button
       className="doca-comment-trigger"
-      title={canComment ? "评论选中内容" : "需要评论权限"}
-      aria-label="评论选中内容"
+      title={canComment ? t("comment.selection") : t("comment.needPermission")}
+      aria-label={t("comment.selection")}
       disabled={!canComment}
       onMouseDown={(e) => e.preventDefault()}
       onClick={create}

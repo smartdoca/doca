@@ -15,7 +15,7 @@ import {
   adminDomainCapabilities,
   createMailCapabilityPlugin,
   type MailKnowledgeReader,
-} from "../packages/plugin-mail/src/index.js";
+} from "../plugins/mail/src/index.js";
 import {
   createFilesCapabilityPlugin,
   serverDomainCapabilities,

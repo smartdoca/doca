@@ -3,7 +3,7 @@ import { aiTimeline, taskDuration } from "@web/features/ai/ai-timeline.js";
 import { AIGeneratedImage } from "@web/features/ai/ai-generated-image.js";
 import { FolderDeliveryCard } from "@web/features/ai/ai-folder-card.js";
 import { FileDeliveryCard } from "@web/features/ai/ai-file-card.js";
-import { MailComposeCard, MailDeliveryCard } from "@web/features/ai/ai-mail-card.js";
+import { renderPluginAIBlock } from "@web/plugins/registry.js";
 import { readPageState, writePageState } from "@web/features/page-state/client.js";
 import { createPortal } from "react-dom";
 import { applyProgressPatch, type AIProgress, type FileDelivery, type FolderDelivery, type MailComposeDraft, type MailDelivery, type MailOpenTarget } from "@core/modules/ai/progress.js";
@@ -1798,9 +1798,10 @@ export function AIChat({ full = false }: { full?: boolean }) {
                 onDocument={openDocument}
                 onFolder={openFolderDelivery}
               />
-              {m.mailCompose && (
-                <MailComposeCard draft={m.mailCompose} onOpen={() => openComposeCard(m.mailCompose!)} />
-              )}
+              {m.mailCompose &&
+                renderPluginAIBlock("mail-compose", m.mailCompose, () =>
+                  openComposeCard(m.mailCompose!),
+                )}
             </>
           </Suspense>
         ) : (
@@ -2174,9 +2175,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
                   onOpen={openFolderDelivery}
                 />
               )}
-              {event.mail && (
-                <MailDeliveryCard mail={event.mail} onOpen={openFolderDelivery} />
-              )}
+              {event.mail &&
+                renderPluginAIBlock("mail", event.mail, openFolderDelivery)}
               {event.file && (
                 <FileDeliveryCard
                   file={event.file}

@@ -6,7 +6,7 @@ import { createFilesPlugin } from "../packages/plugin-files/src/index.js";
 import type { DocumentsServiceV1 } from "../packages/documents-capability/src/index.js";
 import type { FilesServiceV1 } from "../packages/files-capability/src/index.js";
 import { PluginHost } from "../packages/plugin-host/src/index.js";
-import { createMailPlugin } from "../packages/plugin-mail/src/index.js";
+import { createMailPlugin } from "../plugins/mail/src/index.js";
 import {
   definePlugin,
   defineService,

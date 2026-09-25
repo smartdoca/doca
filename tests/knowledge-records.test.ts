@@ -336,3 +336,79 @@ it("keeps the structure guide off the document tree until a link is confirmed", 
   const denied = await request("POST", `/knowledge/libraries/${id}/guide`, { markdown: "拆分：按客户" }, bob);
   expect(denied.statusCode).toBe(404);
 });
+
+it("schedules a knowledge pass and answers from a confirmed node", async () => {
+  const library = await request("POST", "/resources", { kind: "library", format: "rich_text", title: "问答库" });
+  expect(library.statusCode, library.body).toBe(200);
+  const id = library.json().id;
+  const early = await request("POST", `/knowledge/libraries/${id}/schedule`, { mode: "daily" });
+  expect(early.statusCode, early.body).toBe(400);
+  await request("POST", `/knowledge/libraries/${id}/curation`, { enabled: true });
+  const schedule = await request("POST", `/knowledge/libraries/${id}/schedule`, { mode: "weekly" });
+  expect(schedule.statusCode, schedule.body).toBe(200);
+  expect(schedule.json().schedule).toBe("weekly");
+  const run = await request("POST", `/knowledge/libraries/${id}/runs`, {});
+  expect(run.statusCode, run.body).toBe(200);
+  expect(run.json().trigger).toBe("manual");
+  expect(run.json().pending).toBe(0);
+  const listed = await request("GET", `/knowledge/libraries/${id}/subscriptions`);
+  expect(listed.json().schedule).toBe("weekly");
+  expect(listed.json().runs).toHaveLength(1);
+  const source = await request("POST", "/resources", { kind: "document", format: "markdown", title: "入库单说明", markdown: "# 入库单说明\n\n一张入库单。" });
+  const subscribed = await request("POST", `/knowledge/libraries/${id}/subscriptions`, { sourceKind: "document", sourceId: source.json().id });
+  const confirmed = await request("POST", `/knowledge/libraries/${id}/subscriptions/${subscribed.json().id}/confirm`, {});
+  expect(confirmed.statusCode, confirmed.body).toBe(200);
+  const saved = await request("POST", `/knowledge/libraries/${id}/bot`, { title: "凭证问答", published: true });
+  expect(saved.json()).toEqual({ title: "凭证问答", published: true });
+  const asked = await request("POST", `/knowledge/libraries/${id}/ask`, { query: "入库单" });
+  expect(asked.statusCode, asked.body).toBe(200);
+  expect(asked.json().items.some((item: { title: string }) => item.title === "入库单说明")).toBe(true);
+  const bob = await login("bob");
+  const hidden = await request("POST", `/knowledge/libraries/${id}/runs`, {}, bob);
+  expect(hidden.statusCode).toBe(404);
+});
+
+it("keeps library and source presets until they are saved", async () => {
+  const library = await request("POST", "/resources", { kind: "library", format: "rich_text", title: "预设库" });
+  expect(library.statusCode, library.body).toBe(200);
+  const id = library.json().id;
+  const early = await request("POST", `/knowledge/libraries/${id}/preset`, { weight: 8, frequency: "weekly", copyText: false, note: "手写" });
+  expect(early.statusCode, early.body).toBe(400);
+  await request("POST", `/knowledge/libraries/${id}/curation`, { enabled: true });
+  await request("POST", `/knowledge/libraries/${id}/guide`, { markdown: "拆分：按知识内容\n" });
+  const drafted = await request("POST", `/knowledge/libraries/${id}/preset/draft`, {});
+  expect(drafted.statusCode, drafted.body).toBe(200);
+  expect(drafted.json().preset.copyText).toBe(false);
+  expect(drafted.json().preset.note).toContain("整库预设");
+  const saved = await request("POST", `/knowledge/libraries/${id}/preset`, { weight: 8, frequency: "weekly", copyText: false, note: "手写说明" });
+  expect(saved.statusCode, saved.body).toBe(200);
+  const again = await request("POST", `/knowledge/libraries/${id}/preset/draft`, {});
+  expect(again.json().preset.weight).toBe(5);
+  const listed = await request("GET", `/knowledge/libraries/${id}/subscriptions`);
+  expect(listed.json().preset).toMatchObject({ weight: 8, frequency: "weekly", copyText: false, note: "手写说明" });
+  expect(listed.json().schedule).toBe("weekly");
+  const source = await request("POST", "/resources", { kind: "document", format: "markdown", title: "入库单说明", markdown: "# 入库单说明\n\n一张入库单。" });
+  const subscribed = await request("POST", `/knowledge/libraries/${id}/subscriptions`, { sourceKind: "document", sourceId: source.json().id });
+  const subscriptionId = subscribed.json().id;
+  const sourceDraft = await request("POST", `/knowledge/libraries/${id}/subscriptions/${subscriptionId}/preset/draft`, {});
+  expect(sourceDraft.statusCode, sourceDraft.body).toBe(200);
+  expect(sourceDraft.json().preset.note).toContain("入库单说明");
+  const sourceSaved = await request("POST", `/knowledge/libraries/${id}/subscriptions/${subscriptionId}/preset`, {
+    weight: 9,
+    frequency: "daily",
+    copyText: "no",
+    note: "来源说明",
+  });
+  expect(sourceSaved.statusCode, sourceSaved.body).toBe(200);
+  await request("POST", `/knowledge/libraries/${id}/subscriptions/${subscriptionId}/preset/draft`, {});
+  const afterDraft = await request("GET", `/knowledge/libraries/${id}/subscriptions`);
+  expect(afterDraft.json().items[0].preset).toMatchObject({ weight: 9, frequency: "daily", copyText: "no", note: "来源说明" });
+  const confirmed = await request("POST", `/knowledge/libraries/${id}/subscriptions/${subscriptionId}/confirm`, {});
+  expect(confirmed.statusCode, confirmed.body).toBe(200);
+  const state = await db.selectFrom("document_states").select("text").where("resource_id", "=", confirmed.json().nodeId).executeTakeFirst();
+  expect(state?.text).toContain("正文留在来源");
+  expect(state?.text.includes("一张入库单")).toBe(false);
+  const bob = await login("bob");
+  const hidden = await request("POST", `/knowledge/libraries/${id}/preset`, { weight: 1, frequency: "off", copyText: true, note: "" }, bob);
+  expect(hidden.statusCode).toBe(404);
+});

@@ -3,7 +3,7 @@ import type { DB } from "@db/index.js";
 import type { Actor } from "../identity/passwords.js";
 import { authorize } from "../access/queries.js";
 import { fail } from "../../shared/errors.js";
-import { mailKnowledgeIncluded } from "../mail/scope.js";
+import { mailKnowledgeIncluded } from "../plugins/policies.js";
 
 export type SubscriptionKind = "document" | "file" | "folder" | "mail" | "mailbox" | "url";
 export type KnowledgeDocumentCreator = (
@@ -27,7 +27,7 @@ export function subscriptionKind(value: string): SubscriptionKind {
 
 export async function listKnowledgeSubscriptions(db: DB, actor: Actor, libraryId: string) {
   await authorize(db, actor, libraryId, 1);
-  const library = await db.selectFrom("resources").select(["id", "kind", "ai_curated", "guide_text"]).where("id", "=", libraryId).executeTakeFirst();
+  const library = await db.selectFrom("resources").select(["id", "kind", "ai_curated", "guide_text", "knowledge_schedule", "knowledge_preset"]).where("id", "=", libraryId).executeTakeFirst();
   if (!library || library.kind !== "library") fail(404, "知识库不存在");
   const rows = await db.selectFrom("knowledge_subscriptions").selectAll().where("library_id", "=", libraryId).orderBy("created_at", "desc").execute();
   const items = [];
@@ -50,13 +50,24 @@ export async function listKnowledgeSubscriptions(db: DB, actor: Actor, libraryId
       sourceTitle: await sourceTitle(db, row),
       sourceVersion: row.source_version,
       createdAt: row.created_at,
+      preset: parseSourcePreset(row.preset),
     });
   }
   const guideText = await libraryGuideText(db, libraryId);
+  const runs = await db.selectFrom("knowledge_runs").selectAll().where("library_id", "=", libraryId).orderBy("created_at", "desc").limit(8).execute();
   return {
     aiCurated: Number(library.ai_curated ?? 0) === 1,
     guideText,
     splitMode: guideSplitMode(guideText),
+    schedule: knowledgeSchedule(library.knowledge_schedule || "off"),
+    preset: parseLibraryPreset(library.knowledge_preset, knowledgeSchedule(library.knowledge_schedule || "off")),
+    runs: runs.map((run) => ({
+      id: run.id,
+      trigger: run.trigger,
+      status: run.status,
+      detail: run.detail,
+      createdAt: run.created_at,
+    })),
     items,
   };
 }
@@ -105,19 +116,21 @@ export async function subscribeKnowledgeSource(
 
 export async function confirmKnowledgeSubscription(db: DB, actor: Actor, libraryId: string, subscriptionId: string, createDocument: KnowledgeDocumentCreator) {
   await authorize(db, actor, libraryId, 4);
-  const library = await db.selectFrom("resources").select(["id", "kind", "ai_curated"]).where("id", "=", libraryId).where("deleted_at", "is", null).executeTakeFirst();
+  const library = await db.selectFrom("resources").select(["id", "kind", "ai_curated", "knowledge_schedule", "knowledge_preset"]).where("id", "=", libraryId).where("deleted_at", "is", null).executeTakeFirst();
   if (!library || library.kind !== "library") fail(404, "知识库不存在");
   if (Number(library.ai_curated ?? 0) !== 1) fail(400, "先启用知识体系");
   const pending = await db.selectFrom("knowledge_subscriptions").selectAll().where("id", "=", subscriptionId).where("library_id", "=", libraryId).executeTakeFirst();
   if (!pending) fail(404, "连线不存在");
   if (pending.status !== "pending") return { ...(await publicSubscription(db, pending)), included: 0 };
   const source = await readSource(db, actor, libraryId, { sourceKind: pending.source_kind as SubscriptionKind, sourceId: pending.source_id, url: pending.url });
+  const libraryPreset = parseLibraryPreset(library.knowledge_preset, knowledgeSchedule(library.knowledge_schedule || "off"));
+  const copyText = presetCopiesText(libraryPreset, parseSourcePreset(pending.preset));
   const node = await createDocument(actor, {
     title: source.title,
     kind: "document",
     format: "markdown",
     libraryId,
-    markdown: source.markdown,
+    markdown: markdownForPreset(source.markdown, copyText),
   });
   await db.updateTable("knowledge_subscriptions").set({ node_id: node.id, status: "active", source_version: source.version }).where("id", "=", pending.id).execute();
   const mode = await librarySplitMode(db, libraryId);
@@ -127,6 +140,7 @@ export async function confirmKnowledgeSubscription(db: DB, actor: Actor, library
     const files = await filesUnderFolder(db, source.sourceId);
     for (const file of files) {
       const snapshot = await readSource(db, actor, libraryId, { sourceKind: "file", sourceId: file });
+      snapshot.markdown = markdownForPreset(snapshot.markdown, libraryPreset.copyText);
       await ensureSubscription(db, actor, libraryId, "file", snapshot, node.id, createDocument);
       included += 1;
     }
@@ -135,6 +149,7 @@ export async function confirmKnowledgeSubscription(db: DB, actor: Actor, library
     const messages = await messagesInMailbox(db, source.sourceId);
     for (const messageId of messages) {
       const snapshot = await readSource(db, actor, libraryId, { sourceKind: "mail", sourceId: messageId });
+      snapshot.markdown = markdownForPreset(snapshot.markdown, libraryPreset.copyText);
       await ensureSubscription(db, actor, libraryId, "mail", snapshot, node.id, createDocument);
       included += 1;
     }
@@ -261,6 +276,277 @@ export async function setLibraryCuration(db: DB, actor: Actor, libraryId: string
   return { aiCurated: enabled, splitMode: guideSplitMode(guideText) };
 }
 
+export type KnowledgeSchedule = "off" | "daily" | "weekly";
+
+export function knowledgeSchedule(value: string): KnowledgeSchedule {
+  if (value === "daily" || value === "weekly" || value === "off") return value;
+  return "off";
+}
+
+export type LibraryPreset = {
+  weight: number;
+  frequency: KnowledgeSchedule;
+  copyText: boolean;
+  note: string;
+};
+
+export type SourcePreset = {
+  weight: number | null;
+  frequency: "inherit" | KnowledgeSchedule;
+  copyText: "inherit" | "yes" | "no";
+  note: string;
+};
+
+function clampWeight(value: unknown, fallback: number) {
+  const weight = Number(value);
+  if (!Number.isInteger(weight) || weight < 1 || weight > 10) return fallback;
+  return weight;
+}
+
+export function parseLibraryPreset(raw: string | null | undefined, frequency: KnowledgeSchedule): LibraryPreset {
+  const fallback: LibraryPreset = { weight: 5, frequency, copyText: true, note: "" };
+  if (!raw?.trim()) return fallback;
+  try {
+    const value = JSON.parse(raw) as Partial<LibraryPreset>;
+    return {
+      weight: clampWeight(value.weight, 5),
+      frequency: value.frequency === "daily" || value.frequency === "weekly" || value.frequency === "off" ? value.frequency : frequency,
+      copyText: value.copyText !== false,
+      note: typeof value.note === "string" ? value.note.slice(0, 20000) : "",
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+export function parseSourcePreset(raw: string | null | undefined): SourcePreset {
+  const fallback: SourcePreset = { weight: null, frequency: "inherit", copyText: "inherit", note: "" };
+  if (!raw?.trim()) return fallback;
+  try {
+    const value = JSON.parse(raw) as Partial<SourcePreset>;
+    const frequency = value.frequency === "off" || value.frequency === "daily" || value.frequency === "weekly" || value.frequency === "inherit" ? value.frequency : "inherit";
+    const copyText = value.copyText === "yes" || value.copyText === "no" || value.copyText === "inherit" ? value.copyText : "inherit";
+    return {
+      weight: value.weight == null ? null : clampWeight(value.weight, 5),
+      frequency,
+      copyText,
+      note: typeof value.note === "string" ? value.note.slice(0, 20000) : "",
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+export function draftLibraryPreset(guideText: string, frequency: KnowledgeSchedule): LibraryPreset {
+  const splitMode = guideSplitMode(guideText);
+  const copyText = splitMode !== "content";
+  const weight = splitMode === "custom" ? 7 : 5;
+  const cadence = frequency === "off" ? "weekly" : frequency;
+  const splitLabel = splitMode === "content" ? "按知识内容" : splitMode === "outline" ? "按目录" : splitMode === "custom" ? "按说明里的规则" : "按来源";
+  return {
+    weight,
+    frequency: cadence,
+    copyText,
+    note: [
+      "# 整库预设",
+      "",
+      `权重 ${weight}。频率${cadence === "daily" ? "每天" : "每周"}。${copyText ? "写入节点时复制来源正文。" : "节点只记下位置，正文留在来源。"}`,
+      "",
+      `结构说明的拆分是「${splitLabel}」。这份说明可以改，保存之后才当作这套知识库的预设。`,
+    ].join("\n"),
+  };
+}
+
+export function draftSourcePreset(input: { title: string; sourceKind: string }, library: LibraryPreset): SourcePreset {
+  const broad = input.sourceKind === "folder" || input.sourceKind === "mailbox";
+  const copyText = input.sourceKind === "url" ? "no" : "inherit";
+  const weight = broad ? Math.min(10, library.weight + 2) : null;
+  return {
+    weight,
+    frequency: "inherit",
+    copyText,
+    note: [
+      `# ${input.title || input.sourceKind}`,
+      "",
+      `频率沿用整库。${copyText === "no" ? "这条来源不复制正文。" : "是否复制正文沿用整库。"}${weight == null ? "" : ` 权重 ${weight}。`}`,
+      "",
+      "生成后可以直接改。保存之后，确认加入才按这份预设写入节点。",
+    ].join("\n"),
+  };
+}
+
+function presetCopiesText(library: LibraryPreset, source: SourcePreset) {
+  if (source.copyText === "yes") return true;
+  if (source.copyText === "no") return false;
+  return library.copyText;
+}
+
+function markdownForPreset(markdown: string, copyText: boolean) {
+  if (copyText) return markdown;
+  const lines = markdown.split("\n");
+  const title = lines[0] ?? "";
+  const sourceLine = [...lines].reverse().find((line) => line.startsWith("来源")) ?? "";
+  return [title, "", "正文留在来源，这里只记下位置。", "", sourceLine].filter((line) => line !== undefined).join("\n");
+}
+
+export async function setKnowledgeSchedule(db: DB, actor: Actor, libraryId: string, mode: KnowledgeSchedule) {
+  await authorize(db, actor, libraryId, 4);
+  const library = await db.selectFrom("resources").select(["id", "kind", "ai_curated", "knowledge_preset"]).where("id", "=", libraryId).where("deleted_at", "is", null).executeTakeFirst();
+  if (!library || library.kind !== "library") fail(404, "知识库不存在");
+  if (mode !== "off" && Number(library.ai_curated ?? 0) !== 1) fail(400, "先打开知识关系");
+  const preset = parseLibraryPreset(library.knowledge_preset, mode);
+  preset.frequency = mode;
+  await db.updateTable("resources").set({ knowledge_schedule: mode, knowledge_preset: JSON.stringify(preset) }).where("id", "=", libraryId).execute();
+  return { schedule: mode, preset };
+}
+
+async function requireCuratedLibrary(db: DB, actor: Actor, libraryId: string) {
+  await authorize(db, actor, libraryId, 4);
+  const library = await db.selectFrom("resources").select(["id", "kind", "ai_curated", "guide_text", "knowledge_schedule", "knowledge_preset"]).where("id", "=", libraryId).where("deleted_at", "is", null).executeTakeFirst();
+  if (!library || library.kind !== "library") fail(404, "知识库不存在");
+  if (Number(library.ai_curated ?? 0) !== 1) fail(400, "先打开知识关系");
+  return library;
+}
+
+export async function saveLibraryPreset(db: DB, actor: Actor, libraryId: string, input: LibraryPreset) {
+  const library = await requireCuratedLibrary(db, actor, libraryId);
+  const preset = parseLibraryPreset(JSON.stringify(input), knowledgeSchedule(library.knowledge_schedule || "off"));
+  await db.updateTable("resources").set({
+    knowledge_preset: JSON.stringify(preset),
+    knowledge_schedule: preset.frequency,
+  }).where("id", "=", libraryId).execute();
+  return { preset, schedule: preset.frequency };
+}
+
+export async function draftLibraryPresetForActor(db: DB, actor: Actor, libraryId: string) {
+  const library = await requireCuratedLibrary(db, actor, libraryId);
+  const guideText = await libraryGuideText(db, libraryId);
+  return { preset: draftLibraryPreset(guideText, knowledgeSchedule(library.knowledge_schedule || "off")) };
+}
+
+export async function saveSourcePreset(db: DB, actor: Actor, libraryId: string, subscriptionId: string, input: SourcePreset) {
+  await requireCuratedLibrary(db, actor, libraryId);
+  const row = await db.selectFrom("knowledge_subscriptions").select("id").where("id", "=", subscriptionId).where("library_id", "=", libraryId).executeTakeFirst();
+  if (!row) fail(404, "连线不存在");
+  const preset = parseSourcePreset(JSON.stringify(input));
+  await db.updateTable("knowledge_subscriptions").set({ preset: JSON.stringify(preset) }).where("id", "=", subscriptionId).execute();
+  return { preset };
+}
+
+export async function draftSourcePresetForActor(db: DB, actor: Actor, libraryId: string, subscriptionId: string) {
+  const library = await requireCuratedLibrary(db, actor, libraryId);
+  const row = await db.selectFrom("knowledge_subscriptions").selectAll().where("id", "=", subscriptionId).where("library_id", "=", libraryId).executeTakeFirst();
+  if (!row) fail(404, "连线不存在");
+  const libraryPreset = parseLibraryPreset(library.knowledge_preset, knowledgeSchedule(library.knowledge_schedule || "off"));
+  return { preset: draftSourcePreset({ title: await sourceTitle(db, row), sourceKind: row.source_kind }, libraryPreset) };
+}
+
+export async function runKnowledgeLibrary(db: DB, actor: Actor, libraryId: string, trigger: "manual" | "schedule") {
+  await authorize(db, actor, libraryId, 4);
+  const listed = await listKnowledgeSubscriptions(db, actor, libraryId);
+  if (!listed.aiCurated) fail(400, "先打开知识关系");
+  const counts = { pending: 0, stale: 0, active: 0, missing: 0 };
+  for (const item of listed.items) {
+    if (item.status === "pending") counts.pending += 1;
+    else if (item.status === "stale") counts.stale += 1;
+    else if (item.status === "missing") counts.missing += 1;
+    else counts.active += 1;
+  }
+  const now = new Date().toISOString();
+  const id = randomUUID();
+  const detail = JSON.stringify(counts);
+  await db.insertInto("knowledge_runs").values({
+    id,
+    library_id: libraryId,
+    trigger,
+    status: "done",
+    detail,
+    created_at: now,
+  }).execute();
+  return { id, trigger, status: "done", createdAt: now, ...counts };
+}
+
+export async function sweepKnowledgeSchedules(db: DB) {
+  const libraries = await db.selectFrom("resources")
+    .select(["id", "owner_id", "knowledge_schedule"])
+    .where("kind", "=", "library")
+    .where("deleted_at", "is", null)
+    .where("ai_curated", "=", 1)
+    .where("knowledge_schedule", "in", ["daily", "weekly"])
+    .execute();
+  for (const library of libraries) {
+    try {
+      const last = await db.selectFrom("knowledge_runs").select("created_at").where("library_id", "=", library.id).orderBy("created_at", "desc").executeTakeFirst();
+      const wait = library.knowledge_schedule === "weekly" ? 6 * 24 * 60 * 60 * 1000 : 20 * 60 * 60 * 1000;
+      if (last && Date.now() - Date.parse(last.created_at) < wait) continue;
+      const owner = await db.selectFrom("users").select(["id", "display_name", "admin"]).where("id", "=", library.owner_id).executeTakeFirst();
+      if (!owner) continue;
+      await runKnowledgeLibrary(db, owner, library.id, "schedule");
+    } catch {
+      continue;
+    }
+  }
+}
+
+export async function getKnowledgeBot(db: DB, actor: Actor, libraryId: string) {
+  await authorize(db, actor, libraryId, 1);
+  const library = await db.selectFrom("resources").select(["id", "kind", "title"]).where("id", "=", libraryId).where("deleted_at", "is", null).executeTakeFirst();
+  if (!library || library.kind !== "library") fail(404, "知识库不存在");
+  const bot = await db.selectFrom("knowledge_bots").selectAll().where("library_id", "=", libraryId).executeTakeFirst();
+  return {
+    title: bot?.title || library.title,
+    published: Number(bot?.published ?? 0) === 1,
+  };
+}
+
+export async function saveKnowledgeBot(db: DB, actor: Actor, libraryId: string, input: { title: string; published: boolean }) {
+  await authorize(db, actor, libraryId, 4);
+  const library = await db.selectFrom("resources").select(["id", "kind", "title"]).where("id", "=", libraryId).where("deleted_at", "is", null).executeTakeFirst();
+  if (!library || library.kind !== "library") fail(404, "知识库不存在");
+  const title = input.title.trim() || library.title;
+  const now = new Date().toISOString();
+  const existing = await db.selectFrom("knowledge_bots").select("library_id").where("library_id", "=", libraryId).executeTakeFirst();
+  if (existing) {
+    await db.updateTable("knowledge_bots").set({ title, published: input.published ? 1 : 0, updated_at: now }).where("library_id", "=", libraryId).execute();
+  } else {
+    await db.insertInto("knowledge_bots").values({ library_id: libraryId, title, published: input.published ? 1 : 0, updated_at: now }).execute();
+  }
+  return { title, published: input.published };
+}
+
+export async function askKnowledgeLibrary(db: DB, actor: Actor, libraryId: string, query: string) {
+  const bot = await getKnowledgeBot(db, actor, libraryId);
+  await authorize(db, actor, libraryId, bot.published ? 1 : 4);
+  const phrase = query.trim().toLowerCase();
+  const terms = [...new Set([phrase, ...phrase.split(/\s+/)].filter((term) => term.length >= 2))].slice(0, 8);
+  const libraryRow = await db.selectFrom("resources").select(["knowledge_preset", "knowledge_schedule"]).where("id", "=", libraryId).executeTakeFirst();
+  const libraryPreset = parseLibraryPreset(libraryRow?.knowledge_preset, knowledgeSchedule(libraryRow?.knowledge_schedule || "off"));
+  const rows = await db.selectFrom("knowledge_subscriptions").select(["node_id", "preset"]).where("library_id", "=", libraryId).where("status", "=", "active").where("node_id", "is not", null).execute();
+  const items = [];
+  for (const row of rows) {
+    if (!row.node_id) continue;
+    const node = await db.selectFrom("resources").select(["id", "title"]).where("id", "=", row.node_id).where("deleted_at", "is", null).executeTakeFirst();
+    if (!node) continue;
+    const state = await db.selectFrom("document_states").select("text").where("resource_id", "=", node.id).executeTakeFirst();
+    const text = state?.text ?? "";
+    const haystack = `${node.title}\n${text}`.toLowerCase();
+    const matched = terms.filter((term) => haystack.includes(term)).length;
+    if (!matched) continue;
+    const sourcePreset = parseSourcePreset(row.preset);
+    const weight = sourcePreset.weight ?? libraryPreset.weight;
+    const score = matched + weight / 10;
+    const inText = terms.map((term) => text.toLowerCase().indexOf(term)).find((index) => index >= 0);
+    const start = Math.max(0, (inText ?? 0) - 40);
+    const excerpt = (inText == null ? text : text.slice(start, start + 160)).trim();
+    items.push({ nodeId: node.id, title: node.title, excerpt, score });
+  }
+  items.sort((left, right) => right.score - left.score);
+  return {
+    title: bot.title,
+    items: items.slice(0, 5).map((item) => ({ nodeId: item.nodeId, title: item.title, excerpt: item.excerpt })),
+  };
+}
+
 export async function saveLibraryGuide(db: DB, actor: Actor, libraryId: string, markdown: string) {
   await authorize(db, actor, libraryId, 4);
   const library = await db.selectFrom("resources").select(["id", "kind"]).where("id", "=", libraryId).where("deleted_at", "is", null).executeTakeFirst();
@@ -299,6 +585,7 @@ async function publicSubscription(db: DB, row: {
   source_version: string;
   status: string;
   created_at: string;
+  preset?: string | null;
 }) {
   const node = row.node_id
     ? await db.selectFrom("resources").select("title").where("id", "=", row.node_id).executeTakeFirst()
@@ -313,6 +600,7 @@ async function publicSubscription(db: DB, row: {
     status: row.status,
     sourceVersion: row.source_version,
     createdAt: row.created_at,
+    preset: parseSourcePreset(row.preset),
   };
 }
 

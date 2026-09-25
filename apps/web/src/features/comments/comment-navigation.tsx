@@ -1,4 +1,5 @@
 import { ArrowUpToLine, ChevronUp, ChevronDown } from "lucide-react";
+import { useI18n } from "@web/shared/i18n.js";
 
 export function CommentNavigation({
   ids,
@@ -9,13 +10,14 @@ export function CommentNavigation({
   active: string | null;
   select(id: string): void;
 }) {
+  const { t } = useI18n();
   const index = active ? ids.indexOf(active) : -1;
   return (
-    <nav className="comment-navigation" aria-label="评论定位">
+    <nav className="comment-navigation" aria-label={t("comment.nav")}>
       <button
         className="icon"
-        title="首条评论"
-        aria-label="首条评论"
+        title={t("comment.first")}
+        aria-label={t("comment.first")}
         disabled={!ids.length}
         onClick={() => select(ids[0]!)}
       >
@@ -23,8 +25,8 @@ export function CommentNavigation({
       </button>
       <button
         className="icon"
-        title="上一条评论"
-        aria-label="上一条评论"
+        title={t("comment.previous")}
+        aria-label={t("comment.previous")}
         disabled={index <= 0}
         onClick={() => select(ids[index - 1]!)}
       >
@@ -32,8 +34,8 @@ export function CommentNavigation({
       </button>
       <button
         className="icon"
-        title="下一条评论"
-        aria-label="下一条评论"
+        title={t("comment.next")}
+        aria-label={t("comment.next")}
         disabled={!ids.length || index >= ids.length - 1}
         onClick={() => select(ids[index + 1]!)}
       >

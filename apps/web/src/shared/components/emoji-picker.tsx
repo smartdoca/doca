@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Smile } from "lucide-react";
+import { useI18n } from "@web/shared/i18n.js";
 
 const emoji = [
   "😀",
@@ -40,6 +41,7 @@ export function EmojiPicker({
   insert: (emoji: string) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const host = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -60,8 +62,8 @@ export function EmojiPicker({
     <span className="emoji-picker" ref={host}>
       <button
         type="button"
-        title="插入表情"
-        aria-label="插入表情"
+        title={t("emoji.insert")}
+        aria-label={t("emoji.insert")}
         aria-expanded={open}
         disabled={disabled}
         onMouseDown={(e) => e.preventDefault()}
@@ -70,7 +72,7 @@ export function EmojiPicker({
         <Smile size={17} />
       </button>
       {open && (
-        <span className="emoji-palette" role="dialog" aria-label="选择表情">
+        <span className="emoji-palette" role="dialog" aria-label={t("emoji.choose")}>
           {emoji.map((value) => (
             <button
               type="button"

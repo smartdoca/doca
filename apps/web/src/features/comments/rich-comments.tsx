@@ -24,6 +24,7 @@ import { Avatar } from "@web/features/account/profile.js";
 import { relativeTime } from "@web/features/documents/document-experience.js";
 import "@web/features/comments/rich-comments.css";
 import { EmojiPicker } from "@web/shared/components/emoji-picker.js";
+import { useI18n } from "@web/shared/i18n.js";
 export type MentionUser = {
   id: string;
   display_name: string;
@@ -60,7 +61,8 @@ export function parsedComment(
   };
 }
 export function CommentContent({ comment }: { comment: Comment }) {
-  if (comment.deleted_at) return <p className="subtle">评论已删除</p>;
+  const { t } = useI18n();
+  if (comment.deleted_at) return <p className="subtle">{t("comment.deleted")}</p>;
   return (
     <div className="rich-comment-body">
       {parsedComment(comment).blocks.map((b, i) =>
@@ -73,7 +75,7 @@ export function CommentContent({ comment }: { comment: Comment }) {
           >
             <img
               src={assetUrl(b.assetId)}
-              alt={b.alt || "评论图片"}
+              alt={b.alt || t("comment.image")}
               loading="lazy"
             />
           </a>
@@ -114,6 +116,7 @@ export function CommentComposer({
   autoFocus?: boolean;
   replyTo?: Pick<Comment, "author_id" | "display_name">;
 }) {
+  const { t } = useI18n();
   const input = useRef<HTMLTextAreaElement>(null),
     file = useRef<HTMLInputElement>(null);
   const grow = (el: HTMLTextAreaElement | null) => {
@@ -267,8 +270,8 @@ export function CommentComposer({
     >
       <textarea
         ref={input}
-        aria-label="评论内容"
-        placeholder="输入评论，@ 提及用户。Enter 换行，⌘ / Ctrl + Enter 发送"
+        aria-label={t("comment.body")}
+        placeholder={t("comment.placeholder")}
         value={text}
         rows={3}
         maxLength={5000}
@@ -318,7 +321,7 @@ export function CommentComposer({
         <div
           className="comment-candidates"
           role="listbox"
-          aria-label="提及用户"
+          aria-label={t("comment.mention")}
         >
           {users.length ? (
             users.map((u, i) => (
@@ -338,7 +341,7 @@ export function CommentComposer({
               </button>
             ))
           ) : (
-            <p className="subtle">没有可选择的用户</p>
+            <p className="subtle">{t("comment.noUsers")}</p>
           )}
         </div>
       )}
@@ -348,8 +351,8 @@ export function CommentComposer({
             <img src={assetUrl(im.assetId)} alt={im.alt} />
             <button
               type="button"
-              title="移除图片"
-              aria-label="移除图片"
+              title={t("comment.removeImage")}
+              aria-label={t("comment.removeImage")}
               onClick={() => setImages(images.filter((_, j) => j !== i))}
             >
               <X size={12} />
@@ -376,8 +379,8 @@ export function CommentComposer({
         />
         <button
           type="button"
-          title="添加图片"
-          aria-label="添加图片"
+          title={t("comment.addImage")}
+          aria-label={t("comment.addImage")}
           disabled={busy || disabled || images.length >= 9}
           onClick={() => setSourcePicker(true)}
         >
@@ -407,14 +410,14 @@ export function CommentComposer({
             }
           }}
         />
-        {folderPicker && <FolderFilePicker accept={(item) => item.mime.startsWith("image/")} close={() => setFolderPicker(false)} select={async (item: FileItem) => { const response = await fetch(`/api/v1/files/items/${item.id}/content`); if (!response.ok) throw new Error("图片读取失败"); const uploaded = await uploadFile(new File([await response.blob()], item.name, { type: item.mime }), "comment_image", resourceId); setImages((value) => [...value, { type: "image", assetId: uploaded.id, alt: uploaded.filename }]); }} />}
-        {sourcePicker && <FileSourceDialog title="添加图片" close={() => setSourcePicker(false)} chooseDoca={() => setFolderPicker(true)} chooseLocal={() => file.current?.click()} />}
+        {folderPicker && <FolderFilePicker accept={(item) => item.mime.startsWith("image/")} close={() => setFolderPicker(false)} select={async (item: FileItem) => { const response = await fetch(`/api/v1/files/items/${item.id}/content`); if (!response.ok) throw new Error(t("comment.imageFailed")); const uploaded = await uploadFile(new File([await response.blob()], item.name, { type: item.mime }), "comment_image", resourceId); setImages((value) => [...value, { type: "image", assetId: uploaded.id, alt: uploaded.filename }]); }} />}
+        {sourcePicker && <FileSourceDialog title={t("comment.addImage")} close={() => setSourcePicker(false)} chooseDoca={() => setFolderPicker(true)} chooseLocal={() => file.current?.click()} />}
         <span className="grow" />
         {close && (
           <button
             type="button"
-            title="关闭输入"
-            aria-label="关闭输入"
+            title={t("comment.close")}
+            aria-label={t("comment.close")}
             onClick={close}
           >
             <X size={17} />
@@ -422,8 +425,8 @@ export function CommentComposer({
         )}
         <button
           className="send-comment"
-          title="发送评论"
-          aria-label="发送评论"
+          title={t("comment.send")}
+          aria-label={t("comment.send")}
           disabled={busy || disabled || (!text.trim() && !images.length)}
         >
           <Send size={17} />
@@ -448,39 +451,40 @@ export function CommentMessage({
   edit: () => void;
   act: (patch: object) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="comment-message">
       <UserBadge id={c.author_id} name={c.display_name} avatarOnly />
       <div className="grow">
         <div className="comment-byline">
           <strong>{c.display_name}</strong>
-          <time title={c.created_at}>{relativeTime(c.created_at)}</time>
+          <time title={c.created_at}>{relativeTime(c.created_at, Date.now(), t)}</time>
           <span className="comment-icon-actions">
             {user && !c.deleted_at && rank >= 2 && (
               <>
                 {reply && !c.resolved && (
-                  <button title="回复" aria-label="回复" onClick={reply}>
+                  <button title={t("comment.reply")} aria-label={t("comment.reply")} onClick={reply}>
                     <Reply size={15} />
                   </button>
                 )}
                 {c.author_id === user.id && (
-                  <button title="编辑评论" aria-label="编辑评论" onClick={edit}>
+                  <button title={t("comment.edit")} aria-label={t("comment.edit")} onClick={edit}>
                     <Pencil size={14} />
                   </button>
                 )}
                 {(c.author_id === user.id || rank >= 4) && (
                   <>
                     <button
-                      title="删除评论"
-                      aria-label="删除评论"
+                      title={t("comment.delete")}
+                      aria-label={t("comment.delete")}
                       onClick={() => act({ deleted: true })}
                     >
                       <Trash2 size={14} />
                     </button>
                     {!c.parent_id && (
                       <button
-                        title={c.resolved ? "重新打开" : "解决评论"}
-                        aria-label={c.resolved ? "重新打开" : "解决评论"}
+                        title={c.resolved ? t("comment.reopen") : t("comment.resolve")}
+                        aria-label={c.resolved ? t("comment.reopen") : t("comment.resolve")}
                         onClick={() => act({ resolved: !c.resolved })}
                       >
                         {c.resolved ? (

@@ -124,5 +124,13 @@ export default defineConfig({
   },
   // Local hash-qualified SDK tarballs need fresh prebundles after replacement.
   optimizeDeps: { force: process.env.DOCA_REBUILD_DEPS === "1" },
+  server: {
+    fs: {
+      allow: [
+        fileURLToPath(new URL("../..", import.meta.url)),
+        fileURLToPath(new URL("../../../doca-mail", import.meta.url)),
+      ],
+    },
+  },
   build: { outDir: "dist" },
 });

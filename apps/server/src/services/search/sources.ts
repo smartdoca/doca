@@ -3,8 +3,7 @@ import type {
   SearchSource,
   SearchSourceDescriptor,
 } from "@doca/search-host";
-import { mailKnowledgeIncluded } from "@core/modules/mail/scope.js";
-import { mailAttachmentIncluded } from "@core/modules/mail/search-scope.js";
+import { mailAttachmentIncluded } from "@core/modules/plugins/policies.js";
 import type { Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import type { DB } from "@db/index.js";
@@ -23,13 +22,6 @@ export const fileSearchSource = {
   sourceId: "files",
   schemaVersion: 1,
   renderer: { kind: "file-search-result", version: 1 },
-} as const satisfies SearchSourceDescriptor;
-
-export const mailSearchSource = {
-  pluginId: "doca.mail",
-  sourceId: "messages",
-  schemaVersion: 1,
-  renderer: { kind: "mail-search-result", version: 1 },
 } as const satisfies SearchSourceDescriptor;
 
 export const knowledgeSearchSource = {
@@ -102,10 +94,6 @@ export function fileObjectDocumentId(storageObjectId: string): string {
 
 export function fileItemDocumentId(fileItemId: string): string {
   return `file_item_${fileItemId.replaceAll("-", "_")}`;
-}
-
-export function mailMessageDocumentId(messageId: string): string {
-  return `mail_message_${messageId.replaceAll("-", "_")}`;
 }
 
 function documentProjection(row: {
@@ -230,50 +218,6 @@ export async function documentProjectionForId(
   return row && !row.deleted_at && row.kind === "document"
     ? documentProjection(row)
     : undefined;
-}
-
-export async function mailProjectionForId(
-  db: DB,
-  id: string,
-): Promise<SearchProjection | undefined> {
-  const row = await db
-    .selectFrom("mail_messages")
-    .leftJoin("mailboxes", "mailboxes.id", "mail_messages.mailbox_id")
-    .selectAll("mail_messages")
-    .select("mailboxes.address as mailbox_address")
-    .select("mailboxes.knowledge_scope as mailbox_knowledge_scope")
-    .select("mailboxes.deleted_at as mailbox_deleted_at")
-    .where("mail_messages.id", "=", id)
-    .executeTakeFirst();
-  if (
-    !row ||
-    row.mailbox_deleted_at ||
-    row.mailbox_knowledge_scope == null ||
-    !mailKnowledgeIncluded(row.mailbox_knowledge_scope, row.starred)
-  )
-    return undefined;
-  const document = searchDocument({
-    id: mailMessageDocumentId(id),
-    title: row.subject || "（无主题）",
-    text: [
-      row.mailbox_address ? `邮箱 ${row.mailbox_address}` : "",
-      row.from_addr ? `发件人 ${row.from_addr}` : "",
-      row.to_addrs ? `收件人 ${row.to_addrs}` : "",
-      row.ai_tags ? `标签 ${row.ai_tags}` : "",
-      row.snippet,
-      row.body_text,
-    ]
-      .filter(Boolean)
-      .join("\n"),
-  });
-  return {
-    id: document.id,
-    text: document.text,
-    metadata: {
-      title: document.title,
-      content_hash: document.content_hash,
-    },
-  };
 }
 
 async function scopedDocuments(
@@ -528,132 +472,6 @@ export function createKnowledgeSource(db: DB): SearchSource<SearchQueryContext> 
   };
 }
 
-export function createMailSource(db: DB): SearchSource<SearchQueryContext> {
-  const visibleMailboxIds = async (actor: Actor) => {
-    const owned = await db
-      .selectFrom("mailboxes")
-      .select("id")
-      .where("owner_id", "=", actor.id)
-      .where("deleted_at", "is", null)
-      .execute();
-    const shared = await db
-      .selectFrom("mailbox_shares")
-      .innerJoin("mailboxes", "mailboxes.id", "mailbox_shares.mailbox_id")
-      .select("mailboxes.id")
-      .where("mailbox_shares.user_id", "=", actor.id)
-      .where("mailboxes.deleted_at", "is", null)
-      .execute();
-    return [...new Set([...owned, ...shared].map((row) => row.id))];
-  };
-  const visibleMessages = async (
-    actor: Actor,
-    indexedIds?: readonly string[],
-  ) => {
-    const mailboxIds = await visibleMailboxIds(actor);
-    if (!mailboxIds.length) return [];
-    let query = db
-      .selectFrom("mail_messages")
-      .innerJoin("mailboxes", "mailboxes.id", "mail_messages.mailbox_id")
-      .select([
-        "mail_messages.id",
-        "mail_messages.starred",
-        "mailboxes.knowledge_scope",
-      ])
-      .where("mail_messages.mailbox_id", "in", mailboxIds)
-      .where("mailboxes.deleted_at", "is", null);
-    if (indexedIds)
-      query = query.where(
-        "mail_messages.id",
-        "in",
-        indexedIds.map((id) =>
-          id.startsWith("mail_message_")
-            ? id.slice("mail_message_".length).replaceAll("_", "-")
-            : id,
-        ),
-      );
-    return (await query.execute())
-      .filter((row) =>
-        mailKnowledgeIncluded(row.knowledge_scope, row.starred),
-      )
-      .map((row) => mailMessageDocumentId(row.id));
-  };
-  return {
-    descriptor: mailSearchSource,
-    async prepareQuery({ context, query }) {
-      if (context.kind !== "mail") return null;
-      const candidateIds = await visibleMessages(context.actor);
-      return { query, candidateIds, limit: candidateIds.length };
-    },
-    async authorize({ context, candidateIds }) {
-      return context.kind === "mail"
-        ? visibleMessages(context.actor, candidateIds)
-        : [];
-    },
-    async hydrate({ context, ids }) {
-      if (context.kind !== "mail") return new Map();
-      const allowed = new Set(await visibleMessages(context.actor, ids));
-      const messageIds = ids
-        .filter((id) => allowed.has(id))
-        .map((id) =>
-          id.slice("mail_message_".length).replaceAll("_", "-"),
-        );
-      if (!messageIds.length) return new Map();
-      const rows = await db
-        .selectFrom("mail_messages")
-        .innerJoin("mailboxes", "mailboxes.id", "mail_messages.mailbox_id")
-        .select([
-          "mail_messages.id",
-          "mail_messages.mailbox_id",
-          "mail_messages.subject",
-          "mail_messages.from_addr",
-          "mail_messages.snippet",
-          "mail_messages.received_at",
-          "mail_messages.unread",
-          "mailboxes.address",
-        ])
-        .where("mail_messages.id", "in", messageIds)
-        .execute();
-      return new Map(
-        rows.map((row) => [
-          mailMessageDocumentId(row.id),
-          {
-            id: row.id,
-            mailboxId: row.mailbox_id,
-            address: row.address,
-            subject: row.subject,
-            from: row.from_addr,
-            snippet: row.snippet,
-            receivedAt: row.received_at,
-            unread: !!row.unread,
-          },
-        ]),
-      );
-    },
-    async *projections() {
-      let cursor = "";
-      for (;;) {
-        const rows = await db
-          .selectFrom("mail_messages")
-          .select("id")
-          .where("id", ">", cursor)
-          .orderBy("id")
-          .limit(100)
-          .execute();
-        if (!rows.length) break;
-        const projections = (
-          await Promise.all(
-            rows.map((row) => mailProjectionForId(db, row.id)),
-          )
-        ).filter(
-          (projection): projection is SearchProjection => !!projection,
-        );
-        if (projections.length) yield projections;
-        cursor = rows.at(-1)!.id;
-      }
-    },
-  };
-}
-
 export function createBuiltinSearchSources(
   db: DB,
   options: {
@@ -667,6 +485,5 @@ export function createBuiltinSearchSources(
     ...(options.documents === false ? [] : [createDocumentSource(db)]),
     ...(options.files === false ? [] : [createFileSource(db)]),
     ...(options.knowledge === false ? [] : [createKnowledgeSource(db)]),
-    ...(options.mail === false ? [] : [createMailSource(db)]),
   ];
 }

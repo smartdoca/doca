@@ -3,9 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { AppError } from "@core/shared/errors.js";
 import { createUser } from "@core/modules/identity/passwords.js";
-import { defaultMailSettings } from "@core/modules/mail/settings.js";
+import { defaultMailSettings } from "../plugins/mail/src/core/settings.js";
 import type { DB } from "@db/index.js";
-import { createHttpWildduck } from "../apps/server/src/adapters/wildduck-http.js";
+import { createHttpWildduck } from "../plugins/mail/src/server/index.js";
 import { createApp } from "../apps/server/src/app/create-app.js";
 import { openTestDatabase } from "./database.js";
 

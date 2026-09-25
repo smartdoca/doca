@@ -1,13 +1,15 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import type { MessageKey } from "@doca/i18n";
+import { useI18n } from "@web/shared/i18n.js";
 
 const options = [
-  ["pending", "处理中"],
-  ["completed", "已完成"],
-  ["rejected", "已拒绝"],
-  ["cancelled", "已撤销"],
-  ["expired", "已过期"],
-] as const;
+  ["pending", "ticket.pending"],
+  ["completed", "ticket.completed"],
+  ["rejected", "ticket.rejected"],
+  ["cancelled", "ticket.cancelled"],
+  ["expired", "ticket.expired"],
+] as const satisfies readonly (readonly [string, MessageKey])[];
 
 export function TicketStatusFilter({
   value,
@@ -16,6 +18,7 @@ export function TicketStatusFilter({
   value: string[];
   onChange: (value: string[]) => void;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -30,10 +33,10 @@ export function TicketStatusFilter({
   }, [open]);
   const label =
     value.length === 0 || value.length === options.length
-      ? "全部状态"
+      ? t("ticket.statusAll")
       : value.length === 1
-        ? options.find(([key]) => key === value[0])?.[1]
-        : `已选 ${value.length} 种状态`;
+        ? t(options.find(([key]) => key === value[0])?.[1] ?? "ticket.statusAll")
+        : t("ticket.statusCount", { count: value.length });
   return (
     <div
       className="ticket-status-filter"
@@ -52,7 +55,7 @@ export function TicketStatusFilter({
       <button
         type="button"
         ref={trigger}
-        aria-label={`工单状态：${label}`}
+        aria-label={t("ticket.statusLabel", { label })}
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         onClick={() => setOpen(!open)}
@@ -65,12 +68,12 @@ export function TicketStatusFilter({
           className="ticket-status-menu"
           id={id}
           role="group"
-          aria-label="工单状态（可多选）"
+          aria-label={t("ticket.statusMulti")}
         >
           <div className="ticket-status-menu-heading">
-            <span>状态 · 可多选</span>
+            <span>{t("ticket.statusHeading")}</span>
             <button type="button" onClick={() => onChange([])}>
-              清空
+              {t("notes.clear")}
             </button>
           </div>
           {options.map(([key, name]) => (
@@ -86,10 +89,10 @@ export function TicketStatusFilter({
                   )
                 }
               />
-              {name}
+              {t(name)}
             </label>
           ))}
-          <small>不选择时显示全部状态</small>
+          <small>{t("ticket.statusHint")}</small>
         </div>
       )}
     </div>
