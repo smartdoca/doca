@@ -45,8 +45,6 @@ export async function noteAssets(
       .executeTakeFirst();
     if (!row || (noteId && row.note_id && row.note_id !== noteId))
       fail(404, "附件不存在或无权使用");
-    if (!["none", "pass"].includes(row.moderation_status ?? "none"))
-      fail(403, "图片审核中或已被封禁");
     rows.push(row);
   }
   return rows;

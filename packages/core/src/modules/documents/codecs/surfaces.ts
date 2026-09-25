@@ -1,5 +1,8 @@
-import { checkDocumentSize } from "../../entitlements/service.js";
-import { projectExlsxWorkbook, projectExlsxPlainText } from "@online-office/univer-sheet/model";
+import { checkDocumentSize } from "../../access/operation-policy.js";
+import {
+  projectExlsxWorkbook,
+  projectExlsxPlainText,
+} from "@online-office/univer-sheet/model";
 import {
   createExlsxBaseline,
   EXLSX_SCHEMA_VERSION,
@@ -37,7 +40,6 @@ import {
 } from "../../collaboration/protocol.js";
 import { recordVersion } from "../../history/repository.js";
 import type { Actor } from "../../identity/passwords.js";
-import { recordActivity } from "../../interactions/activity.js";
 import { notify, validateNewMentions } from "../../interactions/community.js";
 export const surfaceCodec = (format: string) =>
   format === "canvas"
@@ -356,7 +358,8 @@ export async function exchangeSurface(
       if (doc.getMap("exlsx:metadata").size !== 5) fail(400, "非法表格元数据");
       validateJSON(doc.toJSON());
       text = await projectExlsxPlainText({
-        baseline: loaded.baseline!, update: encoded,
+        baseline: loaded.baseline!,
+        update: encoded,
         checkpointSeq: loaded.state.checkpoint_seq,
       });
       encoded = Y.encodeStateAsUpdate(doc);
@@ -387,7 +390,8 @@ export async function exchangeSurface(
     await checkDocumentSize(tx, id, contentBytes);
     await enqueueProjection(tx, "search", id, { resourceId: id });
     await enqueueKnowledge(tx, "document", id);
-    if (embeddedMedia) await detachUnreferencedDocumentFiles(tx, id, embeddedMedia);
+    if (embeddedMedia)
+      await detachUnreferencedDocumentFiles(tx, id, embeddedMedia);
     if (resource.format === "spreadsheet") {
       const users = (snapshot: any) => {
         const ids = new Set<string>();
@@ -492,7 +496,6 @@ export async function exchangeSurface(
       })
       .where("id", "=", id)
       .execute();
-    await recordActivity(tx, actor!.id, id, "edit");
   }
   await saveReceipt(tx, id, loaded.epochId, input, receipt, seq);
   const last = resource.last_editor_id
@@ -601,28 +604,62 @@ export async function surfaceAnchor(
       model.dispose();
     }
   }
-  if (anchor?.version === 4 && loaded.baseline?.schemaVersion === DEFAULT_SPREADSHEET_SCHEMA) {
-    const validIds = (ids: unknown): ids is string[] => Array.isArray(ids) &&
-      ids.length > 0 && ids.length <= 10000 && new Set(ids).size === ids.length &&
-      ids.every(id => typeof id === "string" && /^(?:[br]:(?:0|[1-9]\d*)|i:[a-f0-9-]{36})$/.test(id));
-    if (typeof anchor.sheetId !== "string" || !anchor.sheetId || anchor.sheetId.length > 160 ||
-        anchor.epochId !== loaded.epochId ||
-        !validIds(anchor.rowIds) || !validIds(anchor.columnIds))
+  if (
+    anchor?.version === 4 &&
+    loaded.baseline?.schemaVersion === DEFAULT_SPREADSHEET_SCHEMA
+  ) {
+    const validIds = (ids: unknown): ids is string[] =>
+      Array.isArray(ids) &&
+      ids.length > 0 &&
+      ids.length <= 10000 &&
+      new Set(ids).size === ids.length &&
+      ids.every(
+        (id) =>
+          typeof id === "string" &&
+          /^(?:[br]:(?:0|[1-9]\d*)|i:[a-f0-9-]{36})$/.test(id),
+      );
+    if (
+      typeof anchor.sheetId !== "string" ||
+      !anchor.sheetId ||
+      anchor.sheetId.length > 160 ||
+      anchor.epochId !== loaded.epochId ||
+      !validIds(anchor.rowIds) ||
+      !validIds(anchor.columnIds)
+    )
       fail(400, "表格评论身份范围无效");
     const normalized = {
-      version: 4 as const, epochId: loaded.epochId, sheetId: anchor.sheetId,
-      rowIds: anchor.rowIds, columnIds: anchor.columnIds,
-      startRowId: anchor.rowIds[0], endRowId: anchor.rowIds.at(-1),
-      startColumnId: anchor.columnIds[0], endColumnId: anchor.columnIds.at(-1),
+      version: 4 as const,
+      epochId: loaded.epochId,
+      sheetId: anchor.sheetId,
+      rowIds: anchor.rowIds,
+      columnIds: anchor.columnIds,
+      startRowId: anchor.rowIds[0],
+      endRowId: anchor.rowIds.at(-1),
+      startColumnId: anchor.columnIds[0],
+      endColumnId: anchor.columnIds.at(-1),
     };
-    const doc = await restoreExlsxDocument({ baseline: loaded.baseline, update: loaded.update, checkpointSeq: loaded.state.checkpoint_seq });
+    const doc = await restoreExlsxDocument({
+      baseline: loaded.baseline,
+      update: loaded.update,
+      checkpointSeq: loaded.state.checkpoint_seq,
+    });
     try {
-      const session = await createExlsxCollaborationSession({ doc, baseline: loaded.baseline, sessionId: "anchor-validation", readOnly: true });
+      const session = await createExlsxCollaborationSession({
+        doc,
+        baseline: loaded.baseline,
+        sessionId: "anchor-validation",
+        readOnly: true,
+      });
       try {
-        if (!session.resolveCellAnchorRanges?.(normalized).length) fail(409, "所选内容已删除");
+        if (!session.resolveCellAnchorRanges?.(normalized).length)
+          fail(409, "所选内容已删除");
         return normalized;
-      } finally { session.dispose(); }
-    } finally { doc.destroy(); }
+      } finally {
+        session.dispose();
+      }
+    } finally {
+      doc.destroy();
+    }
   }
   fail(400, "表格评论锚点无效");
 }

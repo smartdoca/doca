@@ -17,7 +17,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { readPageState, writePageState } from "@web/features/page-state/client.js";
+import {
+  readPageState,
+  writePageState,
+} from "@web/features/page-state/client.js";
 
 const storageKey = "doca.locale";
 
@@ -33,7 +36,7 @@ type I18nValue = {
   locale: Locale;
   t: (key: MessageKey, values?: MessageValues) => string;
   setLocale: (locale: Locale) => Promise<void>;
-  reloadLocale: () => Promise<void>;
+  reloadLocale: (siteLocale?: string, signedIn?: boolean) => Promise<void>;
 };
 
 const I18nContext = createContext<I18nValue | null>(null);
@@ -48,7 +51,8 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   }, [locale]);
   useEffect(() => {
     const onPageState = (event: Event) => {
-      const detail = (event as CustomEvent<{ key?: string; value?: unknown }>).detail;
+      const detail = (event as CustomEvent<{ key?: string; value?: unknown }>)
+        .detail;
       if (detail?.key !== "ui.locale") return;
       const next = matchLocale(detail.value);
       if (next) setLocaleState(next);
@@ -56,20 +60,32 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     window.addEventListener("doca-page-state", onPageState);
     return () => window.removeEventListener("doca-page-state", onPageState);
   }, []);
-  const reloadLocale = useCallback(async () => {
-    try {
-      const item = await readPageState<unknown>("ui.locale");
-      const next = matchLocale(item?.value);
-      if (next) setLocaleState(next);
-    } catch {}
-  }, []);
+  const reloadLocale = useCallback(
+    async (siteLocale?: string, signedIn = true) => {
+      const fallback = matchLocale(siteLocale) ?? defaultLocale;
+      if (!signedIn) {
+        setLocaleState(fallback);
+        return;
+      }
+      try {
+        const item = await readPageState<unknown>("ui.locale");
+        const next = matchLocale(item?.value);
+        setLocaleState(next ?? fallback);
+      } catch {
+        setLocaleState(fallback);
+      }
+    },
+    [],
+  );
   const setLocale = useCallback(async (next: Locale) => {
     if (!isLocale(next)) return;
     setLocaleState(next);
     try {
       const item = await writePageState("ui.locale", next);
       if (item)
-        window.dispatchEvent(new CustomEvent("doca-page-state", { detail: item }));
+        window.dispatchEvent(
+          new CustomEvent("doca-page-state", { detail: item }),
+        );
     } catch {}
   }, []);
   const value = useMemo<I18nValue>(

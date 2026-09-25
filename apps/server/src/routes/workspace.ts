@@ -4,7 +4,6 @@ import {
   identityPolicy,
   profileRequirements,
 } from "@core/modules/identity/accounts.js";
-import { publicEntitlements } from "@core/modules/entitlements/service.js";
 import { Type } from "@sinclair/typebox";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
@@ -33,7 +32,7 @@ export function registerWorkspace(
   db: DB,
   auth: (req: FastifyRequest) => Actor,
   admin: (req: FastifyRequest) => Actor,
-  onlineCount?: () => number,
+  realtimeOnlineUsers?: () => string[],
 ) {
   registerDistribution(api, db, auth, admin);
   registerTasks(api, db, auth, admin);
@@ -152,9 +151,23 @@ export function registerWorkspace(
         "fox",
         "panda",
         "cat",
+        "dog",
+        "rabbit",
+        "lion",
+        "tiger",
+        "bear",
+        "koala",
+        "monkey",
+        "penguin",
+        "owl",
+        "dragon",
         "whale",
+        "butterfly",
         "leaf",
+        "cactus",
         "sun",
+        "moon",
+        "rocket",
       ]),
       clearSourceAvatar: Type.Optional(Type.Boolean()),
       avatarAssetId: Type.Optional(
@@ -173,6 +186,61 @@ export function registerWorkspace(
     },
     { additionalProperties: false },
   );
+  async function fallbackOnlineUsers() {
+    const now = new Date().toISOString(),
+      cutoff = new Date(Date.now() - 120000).toISOString();
+    return db
+      .selectFrom("user_presence")
+      .innerJoin("users", "users.id", "user_presence.user_id")
+      .select("users.id")
+      .where("users.status", "=", "active")
+      .where("user_presence.last_seen_at", ">=", cutoff)
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom("sessions")
+            .select("id")
+            .whereRef("sessions.user_id", "=", "users.id")
+            .where("expires_at", ">", now),
+        ),
+      )
+      .execute();
+  }
+  api.get<{ Querystring: { offset?: number } }>(
+    "/api/v1/admin/online-users",
+    {
+      schema: {
+        summary: "分页读取当前在线用户",
+        tags: ["Administration"],
+        security: [{ session: [] }],
+        querystring: Type.Object({
+          offset: Type.Optional(Type.Integer({ minimum: 0, maximum: 100000 })),
+        }),
+      },
+    },
+    async (req) => {
+      admin(req);
+      const ids = realtimeOnlineUsers
+        ? realtimeOnlineUsers()
+        : (await fallbackOnlineUsers()).map((row) => row.id);
+      if (!ids.length) return { items: [], nextOffset: null };
+      const offset = req.query.offset ?? 0;
+      const items = await db
+        .selectFrom("users")
+        .select(["id", "display_name", "public_id", "login", "last_login_at"])
+        .where("id", "in", ids)
+        .where("status", "=", "active")
+        .orderBy("display_name")
+        .orderBy("id")
+        .offset(offset)
+        .limit(21)
+        .execute();
+      return {
+        items: items.slice(0, 20),
+        nextOffset: items.length > 20 ? offset + 20 : null,
+      };
+    },
+  );
   api.get(
     "/api/v1/me",
     {
@@ -190,7 +258,7 @@ export function registerWorkspace(
         .where("id", "=", a.id)
         .executeTakeFirstOrThrow();
       return {
-        fields:(await identityPolicy(db)).fields,
+        fields: (await identityPolicy(db)).fields,
         profileName: account.display_name || account.public_id || account.login,
         needsProfile: await profileRequirements(db, a.id),
         editable: {
@@ -198,10 +266,10 @@ export function registerWorkspace(
           avatar: await profileEditable(db, a.id, "avatar"),
         },
         avatarUrl: metadata(account.profile_metadata).avatarUrl,
-        entitlements: await publicEntitlements(db, a.id),
         user: {
           ...a,
-          display_name: account.display_name || account.public_id || account.login,
+          display_name:
+            account.display_name || account.public_id || account.login,
           admin: !!a.admin,
           public_id: (
             await db
@@ -247,7 +315,11 @@ export function registerWorkspace(
         const a = auth(req),
           b = req.body;
         await transact(db, async (tx) => {
-          await tx.updateTable("users").set(eb=>({profile_revision:eb("profile_revision","+",0)})).where("id","=",a.id).execute();
+          await tx
+            .updateTable("users")
+            .set((eb) => ({ profile_revision: eb("profile_revision", "+", 0) }))
+            .where("id", "=", a.id)
+            .execute();
           if (
             !(await tx
               .selectFrom("users")
@@ -278,11 +350,15 @@ export function registerWorkspace(
                 b.avatarAssetId !== old.avatar_asset_id);
             if (
               (nameChanged &&
-                !await profileEditable(tx, a.id, "displayName")) ||
-              (avatarChanged && !await profileEditable(tx, a.id, "avatar"))
+                !(await profileEditable(tx, a.id, "displayName"))) ||
+              (avatarChanged && !(await profileEditable(tx, a.id, "avatar")))
             )
               fail(403, "该资料由认证源管理，不能自行修改");
-            if ((await identityPolicy(tx)).fields.displayName.required && !b.displayName!.trim()) fail(400, "昵称不能为空");
+            if (
+              (await identityPolicy(tx)).fields.displayName.required &&
+              !b.displayName!.trim()
+            )
+              fail(400, "昵称不能为空");
             m.overrides ??= {};
             if (nameChanged) m.overrides.displayName = false;
             if (avatarChanged) {
@@ -389,24 +465,9 @@ export function registerWorkspace(
         .selectFrom("users")
         .select((eb) => eb.fn.countAll().as("count"))
         .executeTakeFirstOrThrow();
-      const now = new Date().toISOString(),
-        cutoff = new Date(Date.now() - 120000).toISOString();
-      const online = await db
-        .selectFrom("user_presence")
-        .innerJoin("users", "users.id", "user_presence.user_id")
-        .select("users.id")
-        .where("users.status", "=", "active")
-        .where("user_presence.last_seen_at", ">=", cutoff)
-        .where((eb) =>
-          eb.exists(
-            eb
-              .selectFrom("sessions")
-              .select("id")
-              .whereRef("sessions.user_id", "=", "users.id")
-              .where("expires_at", ">", now),
-          ),
-        )
-        .execute();
+      const online = realtimeOnlineUsers
+        ? realtimeOnlineUsers()
+        : (await fallbackOnlineUsers()).map((row) => row.id);
       return {
         documents: Number(
           resources.find((x) => x.kind === "document")?.count ?? 0,
@@ -415,8 +476,8 @@ export function registerWorkspace(
           resources.find((x) => x.kind === "library")?.count ?? 0,
         ),
         users: Number(users.count),
-        online: onlineCount ? onlineCount() : online.length,
-        onlineWindowSeconds: onlineCount ? 0 : 120,
+        online: online.length,
+        onlineWindowSeconds: realtimeOnlineUsers ? 0 : 120,
       };
     },
   );

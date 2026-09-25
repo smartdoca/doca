@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { AtSign, Copy, Pin, Share2, Star, Trash2 } from "lucide-react";
 import { api, type Detail, type Resource } from "@web/shared/api.js";
 import { publishReaction } from "@web/features/documents/document-reactions.js";
-import { useEntitlements } from "@web/shared/hooks/entitlement-access.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { useI18n } from "@web/shared/i18n.js";
 import "@web/features/documents/tree-document-menu.css";
@@ -23,7 +22,6 @@ export function TreeDocumentMenu({
   remove(): void;
 }) {
   const { t } = useI18n();
-  const allowed = useEntitlements();
   const ai = useAI();
   const panel = useRef<HTMLDivElement>(null);
   const [favorite, setFavorite] = useState<boolean | null>(null);
@@ -150,7 +148,7 @@ export function TreeDocumentMenu({
       {ai?.userId && resource.kind === "document" && (
         <button
           role="menuitem"
-          disabled={favorite === null || !allowed("ai.create")}
+          disabled={favorite === null }
           onClick={() => {
             ai.addDocument(resource);
             close();
@@ -168,7 +166,7 @@ export function TreeDocumentMenu({
       )}
       <button
         role="menuitem"
-        disabled={busy || !allowed("documents.copy")}
+        disabled={busy }
         onClick={() => void act("copy")}
         title={t("doc.copyHint")}
       >
@@ -198,7 +196,7 @@ export function TreeDocumentMenu({
       <button
         role="menuitem"
         className="danger"
-        disabled={busy || resource.role !== "owner"}
+        disabled={busy || !(resource.can_remove ?? resource.role === "owner")}
         onClick={() => {
           close();
           remove();

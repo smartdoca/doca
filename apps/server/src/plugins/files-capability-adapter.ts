@@ -1,3 +1,4 @@
+import { pluginServices } from "@core/shared/plugin-services.js";
 import { createHash, randomUUID } from "node:crypto";
 import {
   createFilesProviderV1,
@@ -272,9 +273,18 @@ export function createServerFilesCapability(
   const contentRow = async (
     context: FilesRequestContext,
     fileId: FileId,
+    bindingId?: string,
   ) => {
     const actor = await actorFor(db, context);
-    const file = await fileAccess(db, actor, fileId);
+    let file;
+    if (bindingId) {
+      const binding = await db.selectFrom("file_bindings").selectAll().where("id", "=", bindingId).where("file_id", "=", fileId).executeTakeFirst();
+      if (!binding) fail(404, "File binding unavailable");
+      const source = pluginServices(db).permissions.get(`${binding.owner_plugin}.${binding.owner_type}`);
+      if (!source || !await source.authorize(actor.id, binding.owner_id, "file.read")) fail(404, "File binding unavailable");
+      file = await db.selectFrom("file_items").selectAll().where("id", "=", fileId).where("deleted_at", "is", null).executeTakeFirst();
+      if (!file) fail(404, "File unavailable");
+    } else file = await fileAccess(db, actor, fileId);
     const object = await db
       .selectFrom("file_storage_objects")
       .selectAll()
@@ -603,6 +613,7 @@ export function createServerFilesCapability(
         const { file, object, config } = await contentRow(
           context,
           input.fileId,
+          input.bindingId,
         );
         const bytes = await createStorage(runtime).read(
           config,
@@ -628,10 +639,10 @@ export function createServerFilesCapability(
         };
       },
       async resolveContent(context, input) {
-        const { file } = await contentRow(context, input.fileId);
+        const { file } = await contentRow(context, input.fileId, input.bindingId);
         return {
           fileId: stableId(file.id, "file"),
-          href: `/api/v1/files/items/${encodeURIComponent(file.id)}/content`,
+          href: input.bindingId ? `/api/v1/plugin-file-bindings/${encodeURIComponent(input.bindingId)}/content` : `/api/v1/files/items/${encodeURIComponent(file.id)}/content`,
           method: "GET" as const,
           filename: file.name,
           mime: file.mime,
@@ -640,11 +651,11 @@ export function createServerFilesCapability(
         };
       },
       async resolveDownload(context, input) {
-        const { file } = await contentRow(context, input.fileId);
+        const { file } = await contentRow(context, input.fileId, input.bindingId);
         const filename = input.filename ?? file.name;
         return {
           fileId: stableId(file.id, "file"),
-          href: `/api/v1/files/items/${encodeURIComponent(file.id)}/content?download=1&filename=${encodeURIComponent(filename)}`,
+          href: input.bindingId ? `/api/v1/plugin-file-bindings/${encodeURIComponent(input.bindingId)}/content?download=1` : `/api/v1/files/items/${encodeURIComponent(file.id)}/content?download=1&filename=${encodeURIComponent(filename)}`,
           method: "GET" as const,
           filename,
           mime: file.mime,

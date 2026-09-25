@@ -1,4 +1,4 @@
-import { entitlements } from "../entitlements/service.js";
+import { requireCapability } from "../access/operation-policy.js";
 import type { DB, Schema } from "../../../../db/src/index.js";
 import { transact } from "../../../../db/src/transactions.js";
 import { fail } from "../../shared/errors.js";
@@ -23,15 +23,7 @@ export async function recordVersion(
       .select(["format", "owner_id"])
       .where("id", "=", row.resource_id)
       .executeTakeFirstOrThrow();
-    const e = await entitlements(db, resource.owner_id),
-      limit = e.level.limits["history.versions"];
-    if (limit === 0) {
-      await db
-        .deleteFrom("document_versions")
-        .where("resource_id", "=", row.resource_id)
-        .execute();
-      return;
-    }
+    await requireCapability(db, resource.owner_id, "history.create");
     const state = await db
       .selectFrom("document_states")
       .select("codec")
@@ -69,25 +61,7 @@ export async function recordVersion(
       .insertInto("document_versions")
       .values({ ...row, recovery_json: JSON.stringify(metadata) })
       .execute();
-    if (limit !== null) {
-      // Always retain the snapshot just written, including equal timestamps/seqs.
-      // Prune in the same transaction so a failed save cannot remove old history.
-      const retained = db
-        .selectFrom("document_versions")
-        .select("id")
-        .where("resource_id", "=", row.resource_id)
-        .where("id", "!=", row.id)
-        .orderBy("created_at", "desc")
-        .orderBy("seq", "desc")
-        .orderBy("id", "desc")
-        .limit(limit - 1);
-      await db
-        .deleteFrom("document_versions")
-        .where("resource_id", "=", row.resource_id)
-        .where("id", "!=", row.id)
-        .where("id", "not in", retained)
-        .execute();
-    }
+
   });
 }
 export function recoveryMetadata(

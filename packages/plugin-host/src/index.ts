@@ -8,12 +8,12 @@ import {
   type PluginLifecycleContext,
   type PluginManifest,
   type PluginRuntimePhase,
-} from "../../plugin-contracts/src/index.js";
+} from "@doca/plugin-contracts";
 import {
   Context,
   ContributionStore,
   PluginContext,
-} from "../../plugin-sdk/src/index.js";
+} from "@doca/plugin-sdk";
 
 export type PluginHostState =
   "idle" | "starting" | "running" | "disposing" | "disposed";

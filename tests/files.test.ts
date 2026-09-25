@@ -8,7 +8,8 @@ import type { DB } from "@db/index.js";
 import sharp from "sharp";
 import { createFileProcessingWorker } from "../apps/server/src/jobs/file-processing-worker.js";
 import { enqueueProjection } from "@core/modules/automation/jobs.js";
-import { entitlementDefaults } from "@core/modules/entitlements/service.js";
+import { pluginServices } from "@core/shared/plugin-services.js";
+import { fail } from "@core/shared/errors.js";
 
 const origin = "http://localhost:39130";
 const password = "test-only-password-2026";
@@ -251,14 +252,8 @@ it("retries a persisted thumbnail job after storage becomes available again", as
   ).toBe(200);
 });
 
-it("rolls back object registration when account storage is exhausted", async () => {
-  const config = entitlementDefaults();
-  config.levels[0]!.limits["storage.bytes"] = 5;
-  await db
-    .updateTable("account_settings")
-    .set({ config: JSON.stringify(config) })
-    .where("id", "=", "entitlements")
-    .execute();
+it("rolls back object registration when a plugin rejects storage allocation", async () => {
+  pluginServices(db).policies.set("test.storage", { id: "test.storage", async check(input) { if (input.action === "storage.allocate" && Number(input.facts.additional) === 2) fail(413, "Storage denied by plugin"); } });
   expect(
     (
       await request(

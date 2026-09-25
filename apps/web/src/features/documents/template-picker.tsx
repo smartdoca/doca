@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
 import { api, type Resource } from "@web/shared/api.js";
@@ -39,6 +40,8 @@ export function TemplatePicker({
   close: () => void;
   created: (resourceId: string) => void;
 }) {
+const { t } = useI18n();
+
   const [items, setItems] = useState<TemplateCard[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -110,9 +113,7 @@ export function TemplatePicker({
                     className="primary"
                     disabled={busy}
                     onClick={() => void create(item)}
-                  >
-                    创建
-                  </button>
+                  >{t("fileManager.create")}</button>
                 </div>
               </div>
             </article>
@@ -166,6 +167,8 @@ function TemplatePreview({
   close: () => void;
   create: () => void;
 }) {
+const { t } = useI18n();
+
   const [content, setContent] = useState<unknown>(undefined);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -189,12 +192,8 @@ function TemplatePreview({
         </div>
       )}
       <footer>
-        <button type="button" onClick={close}>
-          返回
-        </button>
-        <button type="button" className="primary" disabled={busy} onClick={create}>
-          创建
-        </button>
+        <button type="button" onClick={close}>{t("library.relations.back")}</button>
+        <button type="button" className="primary" disabled={busy} onClick={create}>{t("fileManager.create")}</button>
       </footer>
     </Dialog>
   );

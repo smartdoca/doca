@@ -31,8 +31,6 @@ export async function sendPendingItem(
     modelId,
     scope: item.scope === "all" ? "all" : "document",
     currentResourceId: item.currentResourceId,
-    currentMailboxId: item.currentMailboxId,
-    currentMessageId: item.currentMessageId,
     references: item.references,
     ...(item.notes.length
       ? { quickNoteIds: item.notes.map((note) => note.id) }

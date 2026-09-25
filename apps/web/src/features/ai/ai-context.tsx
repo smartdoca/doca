@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import {
   createContext,
   useContext,
@@ -9,7 +10,6 @@ import {
 import { AtSign } from "lucide-react";
 import { api, type FileItem, type Resource } from "@web/shared/api.js";
 import type { AIReference } from "@core/workflows/ai-documents.js";
-import type { MailComposeDraft } from "@core/modules/ai/progress.js";
 import type { NoteContent } from "@core/shared/quick-notes.js";
 import { usePendingSendRunner } from "@web/features/ai/ai-pending-runner.js";
 import {
@@ -22,13 +22,6 @@ import {
   sidePanelSurface,
   writeSidePanel,
 } from "@web/features/ai/ai-side-open.js";
-
-export type MailFocus = {
-  mailboxId: string;
-  mailboxAddress?: string;
-  canSend?: boolean;
-  message?: { id: string; subject: string; from: string; snippet: string };
-};
 
 type Bridge = {
   capture: () => unknown;
@@ -70,10 +63,6 @@ type AIContextValue = {
   error: string;
   setError: (v: string) => void;
   resourcesChanged: (operationIds: string[]) => void;
-  mailFocus: MailFocus | null;
-  setMailFocus: (v: MailFocus | null) => void;
-  mailCompose: MailComposeDraft | null;
-  setMailCompose: (v: MailComposeDraft | null) => void;
 };
 const AIContext = createContext<AIContextValue | null>(null);
 export const useAI = () => useContext(AIContext);
@@ -106,8 +95,6 @@ export function AIProvider({
     [noteReferences, setNoteReferences] = useState<QuickNoteReference[]>([]),
     [composerDraft, setComposerDraft] = useState<string | null>(null),
     [error, setError] = useState("");
-  const [mailFocus, setMailFocus] = useState<MailFocus | null>(null);
-  const [mailCompose, setMailCompose] = useState<MailComposeDraft | null>(null);
   const [pendingStoredFiles, setPendingStoredFiles] = useState<FileItem[]>([]);
   const [restoring, setRestoring] = useState(false);
   const resumeAttempt = useRef<string | null>(null);
@@ -363,10 +350,6 @@ export function AIProvider({
           fresh.forEach((id) => seenOperations.current.add(id));
           onResourcesChanged?.();
         },
-        mailFocus,
-        setMailFocus,
-        mailCompose,
-        setMailCompose,
       }}
     >
       {children}
@@ -394,14 +377,16 @@ export function useAIBridge(id: string, bridge: Bridge) {
   return ai;
 }
 export function AIReferenceButton({ anchor }: { anchor?: unknown }) {
+const { t } = useI18n();
+
   const ai = useAI();
   if (!ai?.userId) return null;
   return (
     <button
       type="button"
       className="ai-reference-button"
-      title="引用给 AI"
-      aria-label="引用给 AI"
+      title={t("doc.cite")}
+      aria-label={t("doc.cite")}
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => ai.add(anchor)}
     >

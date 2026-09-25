@@ -13,10 +13,9 @@ import {
 
 it("replays progress, appends deltas and resets text between model steps and reconnects", () => {
   const initial: AIProgress = {
-    phase: "思考",
+    phase: "thinking",
     text: "",
     reasoning: "正在读取",
-    steps: [],
     sources: [],
   };
   const next = { ...initial, text: "你好", reasoning: "正在读取文档" };
@@ -131,6 +130,31 @@ it("allows an uncredentialed self-hosted endpoint and rejects missing hosted cre
   ).rejects.toThrow("尚未配置");
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
+it("distinguishes failed upstream engines from a successful empty search", async () => {
+  const config = { provider: "searxng" as const, baseUrl: "http://search.internal/", apiKey: "" };
+  await expect(searchWeb(config, "阿凡达", undefined, async () => Response.json({
+    results: [], unresponsive_engines: [["brave", "timeout"], ["wikipedia", "timeout"]],
+  }))).rejects.toThrow("上游引擎超时或不可用");
+  await expect(searchWeb(config, "无匹配主题", undefined, async () => Response.json({
+    results: [], unresponsive_engines: [],
+  }))).resolves.toMatchObject({ sources: [] });
+  await expect(searchWeb(config, "阿凡达", undefined, async () => Response.json({
+    results: [{ url: "https://example.com/", title: "电影" }], unresponsive_engines: [["brave", "timeout"]],
+  }))).resolves.toMatchObject({ sources: [{ title: "电影" }] });
+  await expect(searchWeb(config, "阿凡达", undefined, async () => Response.json(null)))
+    .rejects.toThrow("无效结果");
+});
+
+it("fills the source limit from usable links and rejects wholly invalid results", async () => {
+  const config = { provider: "tavily" as const, apiKey: "secret" };
+  await expect(searchWeb(config, "电影", undefined, async () => Response.json({
+    results: [{ url: "javascript:bad" }, { url: "https://example.com/" }],
+  }), { limit: 1 })).resolves.toMatchObject({ sources: [{ url: "https://example.com/" }] });
+  await expect(searchWeb(config, "电影", undefined, async () => Response.json({
+    results: [{ url: "javascript:bad" }],
+  }))).rejects.toThrow("有效的网页链接");
+});
+
 it("drops unsafe links and never forwards provider secrets or errors", async () => {
   const config = { provider: "tavily" as const, apiKey: "secret" };
   const fetcher = vi.fn(async () =>

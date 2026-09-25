@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { Switch } from "antd";
 import { useEffect, useState } from "react";
 import {
@@ -30,9 +31,10 @@ const formats = [
 ];
 const formatName = (id: string) => formats.find((f) => f[0] === id)?.[1] ?? id;
 export function AIAdmin() {
+  const { t } = useI18n();
+
   const [config, setConfig] = useState<any>(null),
-    [revision, setRevision] = useState(0),
-    [levels, setLevels] = useState<any[]>([]);
+    [revision, setRevision] = useState(0);
   const [tab, setTab] = useState("models"),
     [selected, setSelected] = useState("");
   const [edit, setEdit] = useState<{
@@ -50,7 +52,6 @@ export function AIAdmin() {
     const { revision, limits, taskBudget, ...c } = r.config;
     setConfig(c);
     setRevision(revision);
-    setLevels(r.levels);
     setSelected((id) =>
       c.vendors.some((v: any) => v.id === id) ? id : (c.vendors[0]?.id ?? ""),
     );
@@ -113,7 +114,8 @@ export function AIAdmin() {
   const d = edit?.draft;
   const modelVendor = config.vendors.find((v: any) => v.id === d?.vendorId);
   const modelProtocol = providerPreset(modelVendor?.provider).protocol;
-  const supportsApiMode = modelProtocol === "openai" || modelProtocol === "azure";
+  const supportsApiMode =
+    modelProtocol === "openai" || modelProtocol === "azure";
   const newModel = () =>
     open("model", {
       id: crypto.randomUUID(),
@@ -125,10 +127,8 @@ export function AIAdmin() {
       embedding: false,
       vision: false,
       pdf: false,
-      levels: [],
       inputRate: 1,
       outputRate: 1,
-      cacheRate: 1,
       imageRate: 1,
       maxInput: 32000,
       maxOutput: 4096,
@@ -211,7 +211,7 @@ export function AIAdmin() {
         <div>
           <h2>AI 管理</h2>
           <p className="subtle">
-            管理大模型、Agent 工具、官方 Skill 与积分规则。
+            管理大模型、Token 折算、Agent 工具与官方 Skill。
           </p>
         </div>
         <button
@@ -235,7 +235,7 @@ export function AIAdmin() {
         <span>
           {config.vendors.length} 个厂商 · {config.models.length} 个模型
         </span>
-        <span>积分配置位于「等级与会员 → AI 积分」</span>
+        <span>{t("aiusage.rateSummary")}</span>
       </div>
       <SettingsTabs
         label="AI 管理分类"
@@ -340,7 +340,7 @@ export function AIAdmin() {
                       (m: any) =>
                         m.enabled &&
                         !m.embedding &&
-                        (m.vision) &&
+                        m.vision &&
                         (!m.vendorId ||
                           config.vendors.some(
                             (v: any) => v.id === m.vendorId && v.enabled,
@@ -354,13 +354,14 @@ export function AIAdmin() {
                 </select>
               </label>
               <p className="subtle ai-tool-card-note">
-                仅显示已启用图片理解的对话模型。未配置时，不支持视觉的主模型会拒绝图片附件。PDF、Office 和文本会先解析成文字再送给当前对话模型。
+                仅显示已启用图片理解的对话模型。未配置时，不支持视觉的主模型会拒绝图片附件。PDF、Office
+                和文本会先解析成文字再送给当前对话模型。
               </p>
             </article>
             <article className="ai-config-card ai-tool-card">
               <div className="ai-tool-card-heading">
                 <div>
-                  <h4>联网搜索</h4>
+                  <h4>{t("chat.webSearch")}</h4>
                   <p className="subtle">为助手提供公开网页检索能力。</p>
                 </div>
                 <span className={`ai-status ${config.webSearch ? "on" : ""}`}>
@@ -377,7 +378,8 @@ export function AIAdmin() {
                 )[config.webSearch?.provider] ?? "尚未配置搜索服务"}
               </p>
               <p className="subtle ai-tool-card-note">
-                支持第三方搜索服务和自建 SearXNG。网页链接读取已内置，知识库检索仍使用平台搜索。
+                支持第三方搜索服务和自建
+                SearXNG。网页链接读取已内置，知识库检索仍使用平台搜索。
               </p>
               <div className="ai-card-footer">
                 <button
@@ -418,7 +420,8 @@ export function AIAdmin() {
                 )[config.webFetch?.provider ?? "builtin"] ?? "内置解析"}
               </p>
               <p className="subtle ai-tool-card-note">
-                默认使用内置解析；动态网页可切换到 Firecrawl、Jina Reader 或 Tavily Extract。
+                默认使用内置解析；动态网页可切换到 Firecrawl、Jina Reader 或
+                Tavily Extract。
               </p>
               <div className="ai-card-footer">
                 <button
@@ -589,23 +592,18 @@ export function AIAdmin() {
                         <span>仅文本 · 不可用于助手</span>
                       )}
                     </div>
-                    <p className="ai-muted">
-                      {m.embedding
-                        ? `向量维度：${m.embeddingDimensions ?? "模型默认值"}`
-                        : `上下文 ${m.maxInput.toLocaleString()} · 输出 ${m.maxOutput.toLocaleString()}`}
-                    </p>
-                    <p className="ai-muted">
-                      {m.embedding
-                        ? "用于平台文档检索，不出现在助手模型列表"
-                        : m.levels.length
-                          ? m.levels
-                              .map(
-                                (id: string) =>
-                                  levels.find((l) => l.id === id)?.name ?? id,
-                              )
-                              .join("、")
-                          : "所有具备 AI 权益的等级"}
-                    </p>
+                    {!m.embedding && (
+                      <p className="ai-muted">
+                        {m.imageGeneration && !m.tools
+                          ? t("aiusage.imageRateValue", {
+                              rate: m.imageRate ?? 1,
+                            })
+                          : t("aiusage.modelRateValue", {
+                              input: m.inputRate ?? 1,
+                              output: m.outputRate ?? 1,
+                            })}
+                      </p>
+                    )}
                     <div className="ai-card-footer">
                       <button disabled={busy} onClick={() => open("model", m)}>
                         编辑模型
@@ -910,7 +908,8 @@ export function AIAdmin() {
                         <option value="responses">Responses API</option>
                       </select>
                       <small>
-                        保存模型后点击“测试连接”会自动识别并回填；火山方舟 Agent Plan 通常选择 Chat Completions。
+                        保存模型后点击“测试连接”会自动识别并回填；火山方舟 Agent
+                        Plan 通常选择 Chat Completions。
                       </small>
                     </label>
                   )}
@@ -937,7 +936,6 @@ export function AIAdmin() {
                                 vision: false,
                                 pdf: false,
                                 imageGeneration: false,
-                                levels: [],
                               }
                             : { embedding: false, tools: true },
                         )
@@ -1060,6 +1058,58 @@ export function AIAdmin() {
                         )}
                       </label>
                     ))}
+                  {!d.embedding && (
+                    <fieldset className="ai-field-wide">
+                      <legend>{t("aiusage.rates")}</legend>
+                      <p className="subtle">{t("aiusage.rateHelp")}</p>
+                      <div className="ai-admin-grid">
+                        <label>
+                          {t("aiusage.inputRate")}
+                          <input
+                            type="number"
+                            required
+                            min={0}
+                            max={1000}
+                            step="0.000001"
+                            value={d.inputRate ?? 1}
+                            onChange={(e) =>
+                              change({ inputRate: Number(e.target.value) })
+                            }
+                          />
+                        </label>
+                        <label>
+                          {t("aiusage.outputRate")}
+                          <input
+                            type="number"
+                            required
+                            min={0}
+                            max={1000}
+                            step="0.000001"
+                            value={d.outputRate ?? 1}
+                            onChange={(e) =>
+                              change({ outputRate: Number(e.target.value) })
+                            }
+                          />
+                        </label>
+                        {d.imageGeneration && (
+                          <label>
+                            {t("aiusage.imageRate")}
+                            <input
+                              type="number"
+                              required
+                              min={0}
+                              max={1000000000}
+                              step={1}
+                              value={d.imageRate ?? 1}
+                              onChange={(e) =>
+                                change({ imageRate: Number(e.target.value) })
+                              }
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </fieldset>
+                  )}
                   <label className="ai-field-wide ai-model-enabled">
                     <span>启用模型</span>
                     <Switch
@@ -1092,7 +1142,8 @@ export function AIAdmin() {
                       ))}
                     {!d.embedding && (
                       <small className="subtle">
-                        日常 PDF 会先解析成文字再送给模型。只有厂商明确支持把 PDF 原件直接交给模型时，才需要打开原生 PDF 阅读。
+                        日常 PDF 会先解析成文字再送给模型。只有厂商明确支持把
+                        PDF 原件直接交给模型时，才需要打开原生 PDF 阅读。
                       </small>
                     )}
                   </div>
@@ -1108,39 +1159,9 @@ export function AIAdmin() {
                         }
                       />
                       <small className="subtle">
-                        按厂商支持填写，例如 1024x1024 或
-                        2048x2048。生图按每张图片积分结算，可在 AI
-                        积分中按尺寸分档，与对话共用会员额度。
+                        按厂商支持填写，例如 1024x1024 或 2048x2048。
                       </small>
                     </label>
-                  )}
-                  {!d.embedding && (
-                    <fieldset className="ai-field-wide">
-                      <legend>允许使用的等级</legend>
-                      <p className="subtle">
-                        不选择表示所有具备 AI 权益的等级。
-                      </p>
-                      <div className="ai-actions">
-                        {levels.map((l) => (
-                          <label key={l.id}>
-                            <input
-                              type="checkbox"
-                              checked={d.levels.includes(l.id)}
-                              onChange={(e) =>
-                                change({
-                                  levels: e.target.checked
-                                    ? [...d.levels, l.id]
-                                    : d.levels.filter(
-                                        (x: string) => x !== l.id,
-                                      ),
-                                })
-                              }
-                            />
-                            {l.name}
-                          </label>
-                        ))}
-                      </div>
-                    </fieldset>
                   )}
                 </>
               )}
@@ -1280,103 +1301,105 @@ export function AIAdmin() {
                 <>
                   {d.section === "search" && (
                     <fieldset className="ai-field-wide">
-                    <legend>联网搜索</legend>
-                    <label>
-                      搜索服务
-                      <select
-                        value={d.webSearch?.provider ?? ""}
-                        onChange={(e) =>
-                          change({
-                            webSearch: e.target.value
-                              ? {
-                                  provider: e.target.value,
-                                  apiKey: "",
-                                  ...(e.target.value === "searxng"
-                                    ? { baseUrl: "" }
-                                    : {}),
-                                }
-                              : undefined,
-                          })
-                        }
+                      <legend>{t("chat.webSearch")}</legend>
+                      <label>
+                        搜索服务
+                        <select
+                          value={d.webSearch?.provider ?? ""}
+                          onChange={(e) =>
+                            change({
+                              webSearch: e.target.value
+                                ? {
+                                    provider: e.target.value,
+                                    apiKey: "",
+                                    ...(e.target.value === "searxng"
+                                      ? { baseUrl: "" }
+                                      : {}),
+                                  }
+                                : undefined,
+                            })
+                          }
+                        >
+                          <option value="">
+                            {t("accountPolicy.notConfigured")}
+                          </option>
+                          <option value="tavily">Tavily</option>
+                          <option value="brave">Brave Search</option>
+                          <option value="searxng">自建 SearXNG</option>
+                        </select>
+                      </label>
+                      {d.webSearch?.provider === "searxng" && (
+                        <label>
+                          自建搜索地址
+                          <input
+                            type="url"
+                            required
+                            placeholder="https://search.example.com/"
+                            value={d.webSearch.baseUrl ?? ""}
+                            onChange={(e) =>
+                              change({
+                                webSearch: {
+                                  ...d.webSearch,
+                                  baseUrl: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                      )}
+                      {d.webSearch && (
+                        <label>
+                          {d.webSearch.provider === "searxng"
+                            ? "访问令牌（可选）"
+                            : "搜索服务 API Key"}
+                          <input
+                            type="password"
+                            autoComplete="new-password"
+                            value={d.webSearch.apiKey ?? ""}
+                            placeholder={
+                              d.webSearch.hasKey
+                                ? "已配置，留空保留原密钥"
+                                : "密钥仅保存在服务端"
+                            }
+                            onChange={(e) =>
+                              change({
+                                webSearch: {
+                                  ...d.webSearch,
+                                  apiKey: e.target.value || null,
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                      )}
+                      <p className="subtle">
+                        用户可在输入框选择本轮是否联网。自建 SearXNG 需开启 JSON
+                        搜索接口。此服务只检索公开网页，知识库检索仍使用平台搜索。
+                      </p>
+                      <button
+                        type="button"
+                        disabled={busy || !config.webSearch}
+                        onClick={async () => {
+                          setBusy(true);
+                          setError("");
+                          setMessage("");
+                          try {
+                            const r = await api<any>(
+                              "/admin/ai/web-search/test",
+                              "POST",
+                            );
+                            setMessage(
+                              `搜索连接成功，获得 ${r.count} 条结果（测试已保存的配置）`,
+                            );
+                          } catch (e) {
+                            setError((e as Error).message);
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
                       >
-                        <option value="">未配置</option>
-                        <option value="tavily">Tavily</option>
-                        <option value="brave">Brave Search</option>
-                        <option value="searxng">自建 SearXNG</option>
-                      </select>
-                    </label>
-                    {d.webSearch?.provider === "searxng" && (
-                      <label>
-                        自建搜索地址
-                        <input
-                          type="url"
-                          required
-                          placeholder="https://search.example.com/"
-                          value={d.webSearch.baseUrl ?? ""}
-                          onChange={(e) =>
-                            change({
-                              webSearch: {
-                                ...d.webSearch,
-                                baseUrl: e.target.value,
-                              },
-                            })
-                          }
-                        />
-                      </label>
-                    )}
-                    {d.webSearch && (
-                      <label>
-                        {d.webSearch.provider === "searxng"
-                          ? "访问令牌（可选）"
-                          : "搜索服务 API Key"}
-                        <input
-                          type="password"
-                          autoComplete="new-password"
-                          value={d.webSearch.apiKey ?? ""}
-                          placeholder={
-                            d.webSearch.hasKey
-                              ? "已配置，留空保留原密钥"
-                              : "密钥仅保存在服务端"
-                          }
-                          onChange={(e) =>
-                            change({
-                              webSearch: {
-                                ...d.webSearch,
-                                apiKey: e.target.value || null,
-                              },
-                            })
-                          }
-                        />
-                      </label>
-                    )}
-                    <p className="subtle">
-                      用户可在输入框选择本轮是否联网。自建 SearXNG 需开启 JSON
-                      搜索接口。此服务只检索公开网页，知识库检索仍使用平台搜索。
-                    </p>
-                    <button
-                      type="button"
-                      disabled={busy || !config.webSearch}
-                      onClick={async () => {
-                        setBusy(true);
-                        setError("");
-                        setMessage("");
-                        try {
-                          const r = await api<any>(
-                            "/admin/ai/web-search/test",
-                            "POST",
-                          );
-                          setMessage(
-                            `搜索连接成功，获得 ${r.count} 条结果（测试已保存的配置）`,
-                          );
-                        } catch (e) {
-                          setError((e as Error).message);
-                        } finally {
-                          setBusy(false);
-                        }
-                      }}
-                    >
-                      测试已保存的搜索配置
-                    </button>
+                        测试已保存的搜索配置
+                      </button>
                     </fieldset>
                   )}
                   {d.section === "fetch" && (
@@ -1399,9 +1422,13 @@ export function AIAdmin() {
                           }
                         >
                           <option value="builtin">内置解析（免配置）</option>
-                          <option value="firecrawl">Firecrawl（开源/自建）</option>
+                          <option value="firecrawl">
+                            Firecrawl（开源/自建）
+                          </option>
                           <option value="jina">Jina Reader（外部 API）</option>
-                          <option value="tavily">Tavily Extract（厂商 API）</option>
+                          <option value="tavily">
+                            Tavily Extract（厂商 API）
+                          </option>
                         </select>
                       </label>
                       {d.webFetch?.provider !== "builtin" && (
@@ -1432,11 +1459,15 @@ export function AIAdmin() {
                               }
                             />
                             <small>
-                              留空使用官方地址；Firecrawl 自建可填内网 HTTP 地址，无需 HTTPS。
+                              留空使用官方地址；Firecrawl 自建可填内网 HTTP
+                              地址，无需 HTTPS。
                             </small>
                           </label>
                           <label>
-                            API Key{d.webFetch?.provider === "firecrawl" ? "（可选）" : ""}
+                            API Key
+                            {d.webFetch?.provider === "firecrawl"
+                              ? "（可选）"
+                              : ""}
                             <input
                               type="password"
                               autoComplete="new-password"
@@ -1461,7 +1492,9 @@ export function AIAdmin() {
                         </>
                       )}
                       <p className="subtle">
-                        动态网页可使用 Firecrawl、Jina Reader 或 Tavily Extract；内置解析适合普通公开 HTML。网页内容只作为资料，不执行其中的指令。
+                        动态网页可使用 Firecrawl、Jina Reader 或 Tavily
+                        Extract；内置解析适合普通公开
+                        HTML。网页内容只作为资料，不执行其中的指令。
                       </p>
                       <button
                         type="button"
@@ -1528,7 +1561,8 @@ export function AIAdmin() {
                           })
                         }
                       >
-                        移除{hasModels ? "（旗下有模型）" : ""}
+                        {t("credentials.remove")}
+                        {hasModels ? "（旗下有模型）" : ""}
                       </button>
                     )
                   );
@@ -1538,7 +1572,7 @@ export function AIAdmin() {
                 disabled={busy}
                 onClick={() => setEdit(null)}
               >
-                取消
+                {t("common.cancel")}
               </button>
               <button className="primary" disabled={busy}>
                 {busy ? "保存中…" : "保存"}

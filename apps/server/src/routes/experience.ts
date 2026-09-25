@@ -2,7 +2,6 @@ import { Type } from "@sinclair/typebox";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { createDocuments } from "@core/modules/collaboration/documents.js";
 import type { Actor } from "@core/modules/identity/passwords.js";
-import { activityCalendar } from "@core/modules/interactions/activity.js";
 import { createExperience } from "@core/workflows/experience.js";
 import type { DB } from "@db/index.js";
 export function registerExperience(
@@ -20,26 +19,6 @@ export function registerExperience(
         Type.Union(["stats", "visits", "audit"].map((x) => Type.Literal(x))),
       ),
     });
-  api.get<{ Querystring: { from: string; to: string; day?: string } }>(
-    "/api/v1/me/activity",
-    {
-      schema: {
-        querystring: Type.Object({
-          from: Type.String({ format: "date" }),
-          to: Type.String({ format: "date" }),
-          day: Type.Optional(Type.String({ format: "date" })),
-        }),
-      },
-    },
-    (req) => {
-      const { from, to, day } = req.query;
-      if (from > to || Date.parse(to) - Date.parse(from) > 366 * 86400000)
-        throw Object.assign(new Error("最多查询一年的创作记录"), {
-          statusCode: 400,
-        });
-      return activityCalendar(db, authenticated(req), from, to, day);
-    },
-  );
   for (const kind of ["likes", "info", "versions"] as const)
     api.get<{
       Params: { id: string };

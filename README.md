@@ -20,7 +20,7 @@
 - WebSocket 复用文档协作、通知失效推送、去重在线人数；所有用户展示统一头像。
 - 管理员可配置 Meilisearch；关闭或不可用时回退数据库标题/正文匹配。
 
-表格/幻灯片预留独立类型，编辑器暂未接入。SSO 已实现客户端接入；作为 OIDC 身份源、SAML、Hook、AI、桌面、DSH、云备份仍未实现。编辑器使用上游协同预览包，尚不能将当前版本等同生产认证。详见 [协同与搜索接入说明](docs/collaboration.md)、[存储部署说明](docs/storage.md)。
+表格/幻灯片预留独立类型，编辑器暂未接入。SSO 已实现客户端接入；作为 OIDC 身份源、SAML、Hook、AI、桌面、DSH 仍未实现。编辑器使用上游协同预览包，尚不能将当前版本等同生产认证。详见 [协同与搜索接入说明](docs/collaboration.md)、[存储部署说明](docs/storage.md)。
 
 ## 启动
 
@@ -56,6 +56,7 @@ bash scripts/bootstrap-admin.sh
 
 ## 文档
 
+- [插件 SDK、核心边界与业务拆分目标](docs/plugin-sdk-contract.md)；[插件开发规范](docs/plugin-development.md)；[当前插件架构](docs/plugin-architecture.md)
 - [整体前后端架构与开发边界](docs/architecture.md)
 - [编辑器、协同、内容评论与搜索](docs/collaboration.md)
 - [数据库结构](docs/database.md)

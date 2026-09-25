@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { UserFieldSettings } from "@web/features/settings/user-field-settings.js";
 import { SettingsTabs } from "@web/features/settings/settings-tabs.js";
 import {
@@ -48,14 +49,7 @@ type Policy = {
   social: string;
   providers: Provider[];
 };
-const names: Record<string, string> = {
-  oidc: "自定义 SSO · OpenID Connect",
-  oauth2: "自定义 OAuth 2.0",
-  google: "Google",
-  github: "GitHub",
-  wechat: "微信网站扫码",
-  qq: "QQ",
-};
+
 function ProviderIcon({ type }: { type: string }) {
   return (
     <span className={`provider-icon ${type}`}>
@@ -66,7 +60,7 @@ function ProviderIcon({ type }: { type: string }) {
       ) : type === "google" ? (
         "G"
       ) : type === "wechat" ? (
-        "微"
+        "W"
       ) : type === "qq" ? (
         "Q"
       ) : (
@@ -80,6 +74,17 @@ export function AuthenticationSettings({
 }: {
   saved: () => Promise<void>;
 }) {
+const { t, locale } = useI18n();
+
+const names: Record<string, string> = {
+  oidc: t("authAdmin.customOidc"),
+  oauth2: t("authAdmin.customOauth"),
+  google: "Google",
+  github: "GitHub",
+  wechat: t("authAdmin.wechat"),
+  qq: "QQ",
+};
+
   const [data, setData] = useState<Policy | null>(null),
     [draft, setDraft] = useState<Provider | null>(null),
     [tab, setTab] = useState("login"),
@@ -116,15 +121,15 @@ export function AuthenticationSettings({
   return (
     <>
       <SettingsTabs
-        label="登录与注册分类"
+        label={t("authAdmin.categories")}
         value={tab}
         onChange={setTab}
         items={[
-          ["login", "登录方式"],
-          ["registration", "注册规则"],
-          ["profile", "用户字段"],
-          ["security", "安全验证"],
-          ["sources", "SSO 与第三方"],
+          ["login", t("authAdmin.login")],
+          ["registration", t("authAdmin.registration")],
+          ["profile", t("authAdmin.fields")],
+          ["security", t("authAdmin.security")],
+          ["sources", t("authAdmin.providers")],
         ]}
       />
       {["login", "registration"].includes(tab) && (
@@ -142,8 +147,8 @@ export function AuthenticationSettings({
       >
         <div className="card-heading">
           <div>
-            <h3>新用户加入策略</h3>
-            <p>分别控制不同入口。关闭注册不会阻止已有绑定账号登录。</p>
+            <h3>{t("authAdmin.joinPolicy")}</h3>
+            <p>{t("authAdmin.joinHelp")}</p>
           </div>
           <ShieldCheck size={22} />
         </div>
@@ -159,15 +164,15 @@ export function AuthenticationSettings({
                     sso: data.sso,
                     social: data.social,
                   }),
-                "注册策略已保存",
+                t("authAdmin.policySaved"),
               );
             }}
           >
             {(
               [
-                ["local", "账号密码注册", "用户在本站创建账号和密码"],
-                ["sso", "企业 SSO 首次登录", "由可信企业身份源创建本站账号"],
-                ["social", "第三方首次登录", "使用已配置的第三方身份源加入"],
+                ["local", t("authAdmin.passwordRegistration"), t("authAdmin.passwordRegistrationHelp")],
+                ["sso", t("authAdmin.ssoRegistration"), t("authAdmin.ssoRegistrationHelp")],
+                ["social", t("authAdmin.socialRegistration"), t("authAdmin.socialRegistrationHelp")],
               ] as const
             ).map(([key, label, help]) => (
               <div className="policy-row" key={key}>
@@ -180,29 +185,23 @@ export function AuthenticationSettings({
                   value={data[key]}
                   onChange={(e) => setData({ ...data, [key]: e.target.value })}
                 >
-                  <option value="closed">不允许新用户加入</option>
-                  <option value="auto">自动注册，直接使用</option>
-                  <option value="approval">注册后需管理员审核</option>
+                  <option value="closed">{t("authAdmin.noRegistration")}</option>
+                  <option value="auto">{t("authAdmin.autoRegistration")}</option>
+                  <option value="approval">{t("authAdmin.reviewRegistration")}</option>
                 </Select>
               </div>
             ))}
             <div className="auth-security-note">
               <ShieldCheck size={17} />
-              <span>
-                待审核用户不能登录或访问文档。不同身份不会因为邮箱或昵称相同而自动合并。
-              </span>
+              <span>{t("authAdmin.reviewHelp")}</span>
             </div>
             <div className="admin-form-footer">
-              <span>
-                管理员创建的用户直接生效；公开注册需另行部署防滥用措施
-              </span>
-              <button className="primary" disabled={busy}>
-                保存注册策略
-              </button>
+              <span>{t("authAdmin.registrationNote")}</span>
+              <button className="primary" disabled={busy}>{t("authAdmin.savePolicy")}</button>
             </div>
           </form>
         ) : (
-          <p>正在加载…</p>
+          <p>{t("common.loading")}</p>
         )}
       </section>
       <section
@@ -211,8 +210,8 @@ export function AuthenticationSettings({
       >
         <div className="card-heading">
           <div>
-            <h3>SSO 与第三方身份源</h3>
-            <p>一个账号可主动绑定多个身份，文档归属保持不变。</p>
+            <h3>{t("authAdmin.providerTitle")}</h3>
+            <p>{t("authAdmin.providerHelp")}</p>
           </div>
           <button
             onClick={() => {
@@ -221,7 +220,7 @@ export function AuthenticationSettings({
               setDraft({
                 id: "",
                 type: "oidc",
-                name: "企业 SSO",
+                name: t("authAdmin.enterprise"),
                 issuer: "",
                 client_id: "",
                 credential_ref: "",
@@ -230,19 +229,14 @@ export function AuthenticationSettings({
               });
             }}
           >
-            <Plus size={16} />
-            添加身份源
-          </button>
+            <Plus size={16} />{t("authAdmin.addProvider")}</button>
         </div>
         {!data?.providers.length && (
           <div className="auth-provider-empty">
             <Globe size={28} />
-            <strong>连接你的登录服务</strong>
-            <p>
-              支持通用 OIDC、自定义 OAuth 2.0、Google、GitHub、微信网站扫码和
-              QQ。
-            </p>
-            <small>企业 SSO 可连接 Keycloak、authentik 等 OIDC 身份源。</small>
+            <strong>{t("authAdmin.connect")}</strong>
+            <p>{t("authAdmin.supported")}</p>
+            <small>{t("authAdmin.enterpriseHelp")}</small>
           </div>
         )}
         {data?.providers.map((p) => (
@@ -252,13 +246,13 @@ export function AuthenticationSettings({
               <strong>{p.name}</strong>
               <small>
                 {names[p.type]} ·{" "}
-                {p.ready ? "服务端凭据就绪" : "待配置服务端凭据"}
+                {p.ready ? t("authAdmin.credentialsReady") : t("authAdmin.credentialsPending")}
               </small>
             </div>
             <span
               className={`status-badge ${p.enabled && p.ready ? "success" : ""}`}
             >
-              {p.enabled ? "已启用" : "未启用"}
+              {p.enabled ? t("admin.enabled") : t("services.disabled")}
             </span>
             <button
               onClick={() => {
@@ -266,24 +260,19 @@ export function AuthenticationSettings({
                 setSourceTab("connection");
                 setDraft(p);
               }}
-            >
-              配置
-            </button>
+            >{t("authAdmin.configure")}</button>
           </div>
         ))}
         <div className="auth-security-note">
           <KeyRound size={17} />
-          <span>
-            在下方按“凭据名称”维护各身份源的 Client
-            Secret，已保存的密钥不会回显。
-          </span>
+          <span>{t("authAdmin.credentialsHelp")}</span>
         </div>
       </section>
       {tab === "sources" && <ServiceCredentials onlyIdentity />}
       {draft && (
         <Dialog
           className="provider-dialog"
-          title={draft.id ? "配置身份源" : "添加身份源"}
+          title={draft.id ? t("authAdmin.configureProvider") : t("authAdmin.addProvider")}
           close={() => {
             if (!busy) setDraft(null);
           }}
@@ -302,7 +291,7 @@ export function AuthenticationSettings({
                       id ? "PUT" : "POST",
                       body,
                     ),
-                  id ? "身份源已保存" : "身份源已创建，请配置下方回调地址",
+                  id ? t("authAdmin.providerSaved") : t("authAdmin.providerCreated"),
                 )
               ) {
                 if (id) setDraft(null);
@@ -320,22 +309,20 @@ export function AuthenticationSettings({
             }}
           >
             <SettingsTabs
-              label="身份源配置分类"
+              label={t("authAdmin.providerCategories")}
               value={sourceTab}
               onChange={setSourceTab}
               items={[
-                ["connection", "连接配置"],
-                ["fields", "资料映射"],
-                ["policy", "注册与账号"],
+                ["connection", t("authAdmin.connection")],
+                ["fields", t("authAdmin.mapping")],
+                ["policy", t("authAdmin.accounts")],
               ]}
             />
             <div
               hidden={sourceTab !== "connection"}
               className="admin-form-section"
             >
-              <label>
-                登录类型
-                <Select
+              <label>{t("authAdmin.loginType")}<Select
                   value={draft.type}
                   disabled={!!draft.id}
                   onChange={(e) =>
@@ -354,9 +341,7 @@ export function AuthenticationSettings({
                   ))}
                 </Select>
               </label>
-              <label>
-                按钮显示名称
-                <input
+              <label>{t("authAdmin.buttonName")}<input
                   required
                   maxLength={160}
                   value={draft.name}
@@ -364,9 +349,7 @@ export function AuthenticationSettings({
                 />
               </label>
               {draft.type === "oidc" && (
-                <label>
-                  Issuer 地址
-                  <input
+                <label>{t("authAdmin.issuer")}<input
                     type="url"
                     required
                     disabled={!!draft.id}
@@ -376,9 +359,7 @@ export function AuthenticationSettings({
                       setDraft({ ...draft, issuer: e.target.value })
                     }
                   />
-                  <small>
-                    填写身份源颁发者地址，不是登录页；域名须加入服务器白名单。
-                  </small>
+                  <small>{t("authAdmin.issuerHelp")}</small>
                 </label>
               )}
               <label>
@@ -395,36 +376,28 @@ export function AuthenticationSettings({
                   }
                 />
               </label>
-              <label>
-                凭据名称
-                <input
+              <label>{t("authAdmin.credentialName")}<input
                   required
                   pattern="[a-zA-Z0-9_-]{1,64}"
-                  placeholder="例如 company-sso"
+                  placeholder={t("authAdmin.credentialExample")}
                   value={draft.credential_ref}
                   onChange={(e) =>
                     setDraft({ ...draft, credential_ref: e.target.value })
                   }
                 />
-                <small>
-                  对应下方“SSO Client Secret”中添加的凭据名称。
-                </small>
+                <small>{t("authAdmin.credentialHelp")}</small>
               </label>
               {draft.type === "oauth2" && (
                 <>
-                  <small>
-                    用于支持授权码和 PKCE
-                    的认证源；端点域名需加入下方“SSO Client
-                    Secret”中的允许来源。稳定身份字段不能使用邮箱或用户名。
-                  </small>
+                  <small>{t("authAdmin.oauthHelp")}</small>
                   {(
                     [
-                      ["authorizationEndpoint", "授权端点"],
-                      ["tokenEndpoint", "令牌端点"],
-                      ["userinfoEndpoint", "用户资料端点"],
-                      ["subjectField", "稳定身份字段"],
-                      ["nameField", "显示名称字段"],
-                      ["scopes", "授权范围"],
+                      ["authorizationEndpoint", t("authAdmin.authorizationEndpoint")],
+                      ["tokenEndpoint", t("authAdmin.tokenEndpoint")],
+                      ["userinfoEndpoint", t("authAdmin.profileEndpoint")],
+                      ["subjectField", t("authAdmin.subjectField")],
+                      ["nameField", t("authAdmin.displayNameField")],
+                      ["scopes", t("authAdmin.scopes")],
                     ] as const
                   ).map(([key, label]) => (
                     <label key={key}>
@@ -462,20 +435,18 @@ export function AuthenticationSettings({
             </div>
             <div hidden={sourceTab !== "connection"}>
               {draft.callbackUrl && (
-                <label>
-                  授权回调地址
-                  <input
+                <label>{t("authAdmin.callback")}<input
                     readOnly
                     value={draft.callbackUrl}
                     onFocus={(e) => e.target.select()}
                   />
-                  <small>原样填写到身份源的应用配置中。</small>
+                  <small>{t("authAdmin.callbackHelp")}</small>
                 </label>
               )}
               <label className="setting-toggle">
                 <span>
-                  <strong>启用此身份源</strong>
-                  <small>启用后显示在登录页和账号绑定页</small>
+                  <strong>{t("authAdmin.enableProvider")}</strong>
+                  <small>{t("authAdmin.enableHelp")}</small>
                 </span>
                 <input
                   className="switch-input"
@@ -486,23 +457,15 @@ export function AuthenticationSettings({
                   }
                 />
               </label>
-              <p className="subtle">
-                类型、Issuer、Client ID 和自定义协议配置
-                保存后不可修改，以避免把已有绑定指向另一个身份源。微信、QQ
-                还需完成平台侧网站应用申请与域名审核。
-              </p>
+              <p className="subtle">{t("authAdmin.immutableHelp")}</p>
             </div>
             <footer>
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => setDraft(null)}
-              >
-                取消
-              </button>
-              <button className="primary" disabled={busy}>
-                保存身份源
-              </button>
+              >{t("common.cancel")}</button>
+              <button className="primary" disabled={busy}>{t("authAdmin.saveProvider")}</button>
             </footer>
           </form>
         </Dialog>
@@ -520,19 +483,21 @@ async function start(id: string, intent: "login" | "link" | "replace") {
   location.assign(result.url);
 }
 export function ExternalLoginOptions() {
+const { t, locale } = useI18n();
+
   const [items, setItems] = useState<Provider[]>([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   useEffect(() => {
     void api<{ items: Provider[] }>("/auth/providers")
       .then((r) => setItems(r.items))
-      .catch(() => setError("第三方登录方式暂时加载失败，请刷新重试"));
+      .catch(() => setError(t("authAdmin.loadFailed")));
   }, []);
   return (
     <>
       {items.length > 0 && (
         <div className="external-login">
-          <span>或使用以下方式</span>
+          <span>{t("authAdmin.alternative")}</span>
           <div>
             {items.map((p) => (
               <button
@@ -563,7 +528,9 @@ export function AuthCompletion({
 }: {
   done: (status: string) => Promise<void>;
 }) {
-  const [message, setMessage] = useState("正在验证登录结果…"),
+const { t, locale } = useI18n();
+
+  const [message, setMessage] = useState(t("authAdmin.verifying")),
     [busy, setBusy] = useState(true),
     [fields, setFields] = useState<RegistrationField[] | null>(null),
     [values, setValues] = useState<Record<string, string>>({}),
@@ -578,10 +545,10 @@ export function AuthCompletion({
       if (r.status === "needs_profile") {
         setFields(r.fields!);
         setValues(Object.fromEntries(r.fields!.map((f) => [f.key, f.value])));
-        setMessage("请确认并补全你的账号资料。");
+        setMessage(t("authAdmin.completeProfile"));
       } else if (r.status === "pending") {
         setFields(null);
-        setMessage("注册申请已提交，等待管理员审核后请重新登录。");
+        setMessage(t("login.pendingReview"));
       } else if (r.status === "security_verified" || r.status === "linked") {
         await done(r.status);
         location.hash = "/account";
@@ -598,7 +565,7 @@ export function AuthCompletion({
   return (
     <main className="auth">
       <section className="auth-card">
-        <h2>身份验证与注册</h2>
+        <h2>{t("authAdmin.completion")}</h2>
         <p role="status">{message}</p>
         {fields && (
           <form
@@ -614,12 +581,10 @@ export function AuthCompletion({
               proofs={proofs}
               setProofs={setProofs}
             />
-            <button className="primary" disabled={busy}>
-              确认并继续
-            </button>
+            <button className="primary" disabled={busy}>{t("login.continue")}</button>
           </form>
         )}
-        {!busy && <a href="#/home">返回登录页</a>}
+        {!busy && <a href="#/home">{t("shell.backLogin")}</a>}
       </section>
     </main>
   );
@@ -637,6 +602,8 @@ export function LinkedIdentities({
 }: {
   passwordStatus?: (enabled: boolean) => void;
 }) {
+const { t, locale } = useI18n();
+
   const [data, setData] = useState<{
       login: string;
       passwordEnabled: boolean;
@@ -684,8 +651,8 @@ export function LinkedIdentities({
     <section className="settings-card identity-card">
       <div className="card-heading">
         <div>
-          <h2>登录方式与安全</h2>
-          <p>同一个账号，多种登录方式。你的文档和权限始终保留。</p>
+          <h2>{t("authAdmin.accountSecurity")}</h2>
+          <p>{t("authAdmin.accountSecurityHelp")}</p>
         </div>
         <Link2 size={22} />
       </div>
@@ -694,17 +661,17 @@ export function LinkedIdentities({
           <KeyRound size={20} />
         </span>
         <div>
-          <strong>账号密码</strong>
+          <strong>{t("login.passwordTab")}</strong>
           <small>
             {data?.passwordEnabled
               ? data.login
               : data?.passwordAllowed
-                ? "当前通过其他方式登录，可在下方设置本站密码"
-                : "账号密码认证已关闭"}
+                ? t("authAdmin.passwordHelp")
+                : t("authAdmin.passwordDisabled")}
           </small>
         </div>
         <span className="status-badge">
-          {data?.passwordEnabled ? "已设置" : "未设置"}
+          {data?.passwordEnabled ? t("authAdmin.passwordSet") : t("authAdmin.passwordUnset")}
         </span>
       </div>
       {data?.items.map((b) => (
@@ -713,22 +680,18 @@ export function LinkedIdentities({
           <div>
             <strong>{b.name}</strong>
             <small>
-              {b.display_name} · {b.available ? "已绑定" : "身份源当前不可用"}
+              {b.display_name} · {b.available ? t("authAdmin.linked") : t("authAdmin.providerUnavailable")}
             </small>
           </div>
           <button
             type="button"
             disabled={busy}
             onClick={() =>
-              void act(() => start(b.provider_id, "replace"), "正在跳转…")
+              void act(() => start(b.provider_id, "replace"), t("authAdmin.redirecting"))
             }
-          >
-            更换绑定
-          </button>
+          >{t("authAdmin.replaceLink")}</button>
           <button type="button" disabled={busy} onClick={() => setUnlink(b)}>
-            <Unlink size={14} />
-            解除绑定
-          </button>
+            <Unlink size={14} />{t("authAdmin.unlink")}</button>
         </div>
       ))}
       {providers
@@ -742,19 +705,17 @@ export function LinkedIdentities({
             <ProviderIcon type={p.type} />
             <div>
               <strong>{p.name}</strong>
-              <small>未绑定</small>
+              <small>{t("authAdmin.notLinked")}</small>
             </div>
             <button
               disabled={busy}
-              onClick={() => void act(() => start(p.id, "link"), "正在跳转…")}
+              onClick={() => void act(() => start(p.id, "link"), t("authAdmin.redirecting"))}
             >
-              <Plus size={14} />
-              绑定
-            </button>
+              <Plus size={14} />{t("library.relations.bind")}</button>
           </div>
         ))}
       {!providers.length && (
-        <p className="subtle">管理员尚未启用 SSO 或第三方登录。</p>
+        <p className="subtle">{t("authAdmin.noProviders")}</p>
       )}
 
       {!data?.passwordEnabled && data?.passwordAllowed && (
@@ -768,12 +729,10 @@ export function LinkedIdentities({
                 password: new FormData(f).get("password"),
               });
               f.reset();
-            }, "密码已设置");
+            }, t("authAdmin.passwordSaved"));
           }}
         >
-          <label>
-            设置密码
-            <input
+          <label>{t("authAdmin.setPassword")}<input
               name="password"
               type="password"
               required
@@ -781,26 +740,23 @@ export function LinkedIdentities({
               maxLength={128}
             />
           </label>
-          <button disabled={busy}>设置密码</button>
+          <button disabled={busy}>{t("authAdmin.setPassword")}</button>
         </form>
       )}
       {message && <Feedback message={message} tone={tone} />}
       {unlink && (
         <Dialog
-          title="解除登录绑定"
+          title={t("authAdmin.unlinkTitle")}
           close={() => {
             if (!busy) setUnlink(null);
           }}
           className="modal-compact"
         >
           <p>
-            解除「{unlink.name}
-            」后，该身份将不能再登录当前账号。文档不会被删除。
+            {t("authAdmin.unlinkWarning", { name: unlink.name })}
           </p>
           <footer>
-            <button disabled={busy} onClick={() => setUnlink(null)}>
-              取消
-            </button>
+            <button disabled={busy} onClick={() => setUnlink(null)}>{t("common.cancel")}</button>
             <button
               className="danger"
               disabled={busy}
@@ -808,11 +764,9 @@ export function LinkedIdentities({
                 void act(async () => {
                   await api(`/me/identities/${unlink.id}`, "DELETE");
                   setUnlink(null);
-                }, "已解除绑定")
+                }, t("authAdmin.unlinked"))
               }
-            >
-              确认解除
-            </button>
+            >{t("authAdmin.confirmUnlink")}</button>
           </footer>
         </Dialog>
       )}

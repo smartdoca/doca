@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { DB } from "@db/index.js";
 import { fail } from "@core/shared/errors.js";
 import { tokenHash } from "@core/modules/identity/passwords.js";
-import { requireCapability } from "@core/modules/entitlements/service.js";
+import { requireCapability } from "@core/modules/access/operation-policy.js";
 import {
   createToolCall,
   type AIContributionHost,

@@ -1778,12 +1778,6 @@ body.ai-panel-resizing {
   flex-shrink: 0;
   color: #8069aa;
 }
-.ai-mail-card .ai-document-card-icon {
-  background: #fde8d8;
-}
-.ai-mail-card .ai-document-card-icon svg {
-  color: #c05621;
-}
 .ai-folder-card .ai-document-card-icon {
   background: #e7f0fb;
 }

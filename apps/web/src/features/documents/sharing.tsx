@@ -1,4 +1,4 @@
-import { useEntitlements } from "@web/shared/hooks/entitlement-access.js";
+import { htmlLang } from "@doca/i18n";
 import {
   useEffect,
   useLayoutEffect,
@@ -52,8 +52,7 @@ export function ShareLinkSettings({
   inheritanceControl?: ReactNode;
   inheritedEnabled?: boolean;
 }) {
-  const { t } = useI18n();
-  const allowed = useEntitlements();
+  const { t, locale } = useI18n();
   const [items, setItems] = useState<ShareLink[]>([]),
     [revokedItems, setRevokedItems] = useState<ShareLink[]>([]),
     [role, setRole] = useState("reader"),
@@ -195,7 +194,7 @@ export function ShareLinkSettings({
       setFallback("");
     } catch {
       setFallback(linkUrl(l));
-      setError("请选中下方链接手动复制");
+      setError(t("sharingUi.manualCopyHelp"));
     }
   }
   async function share() {
@@ -268,13 +267,13 @@ export function ShareLinkSettings({
   return (
     <section className="share-settings permissions-section">
       <label className="permissions-switch">
-        <span>链接分享 {inheritanceControl}</span>
+        <span>{t("sharingUi.linkSharing")}{inheritanceControl}</span>
         <input
           type="checkbox"
           role="switch"
-          aria-label="链接分享"
+          aria-label={t("sharingUi.linkSharing")}
           checked={enabled}
-          disabled={busy || !ready || (!enabled && !allowed("sharing.links"))}
+          disabled={busy || !ready}
           onChange={(e) => void toggle(e.target.checked)}
         />
       </label>
@@ -285,15 +284,15 @@ export function ShareLinkSettings({
               <LinkIcon size={19} />
             </span>
             <div className="permissions-link-label">
-              <span>获得链接并加入的人</span>
-              <small>登录后加入协作</small>
+              <span>{t("sharingUi.linkAudience")}</span>
+              <small>{t("sharingUi.joinAfterLogin")}</small>
             </div>
             <div className="permissions-link-limit-wrap">
               <button
                 type="button"
                 className="permissions-link-limit"
                 ref={limitTrigger}
-                aria-label="分享链接人数限制"
+                aria-label={t("sharingUi.memberLimit")}
                 aria-haspopup="dialog"
                 aria-expanded={limitOpen}
                 disabled={busy || !ready}
@@ -301,7 +300,7 @@ export function ShareLinkSettings({
                   limitOpen ? setLimitOpen(false) : openLimitDialog()
                 }
               >
-                {maxMembers === null ? "不限人数" : `${maxMembers}人`}
+                {maxMembers === null ? t("sharingUi.unlimited") : t("sharingUi.members", { count: maxMembers })}
               </button>
               {limitOpen &&
                 createPortal(
@@ -310,12 +309,12 @@ export function ShareLinkSettings({
                     className="permissions-link-limit-menu"
                     data-permissions-popup="true"
                     role="dialog"
-                    aria-label="设置分享人数"
+                    aria-label={t("sharingUi.setLimit")}
                     style={limitPosition}
                   >
                   <div className="permissions-link-limit-heading">
-                    <span>允许加入人数</span>
-                    <small>每条链接独立计算</small>
+                    <span>{t("sharingUi.allowedMembers")}</span>
+                    <small>{t("sharingUi.perLink")}</small>
                   </div>
                   <div className="permissions-link-limit-presets">
                     {[1, 5, 10, 20].map((value) => (
@@ -327,17 +326,17 @@ export function ShareLinkSettings({
                         }
                         onClick={() => applyLimit(value)}
                       >
-                        {value}人
+                        {t("sharingUi.members", { count: value })}
                       </button>
                     ))}
                   </div>
                   <label className="permissions-link-limit-custom">
-                    <span>自定义</span>
+                    <span>{t("sharingUi.custom")}</span>
                     <input
                       type="number"
                       min={1}
                       step={1}
-                      aria-label="自定义分享人数"
+                      aria-label={t("sharingUi.customLimit")}
                       value={draftMaxMembers}
                       onChange={(e) => {
                         setDraftMaxMembers(e.target.value);
@@ -346,7 +345,7 @@ export function ShareLinkSettings({
                         if (e.key === "Enter") applyLimit();
                       }}
                     />
-                    <span>人</span>
+                    <span>{t("sharingUi.memberUnit")}</span>
                     <button
                       type="button"
                       className="permissions-link-limit-apply"
@@ -355,9 +354,7 @@ export function ShareLinkSettings({
                         Number(draftMaxMembers) < 1
                       }
                       onClick={() => applyLimit()}
-                    >
-                      确定
-                    </button>
+                    >{t("common.confirm")}</button>
                   </label>
                   <button
                     type="button"
@@ -365,15 +362,13 @@ export function ShareLinkSettings({
                       maxMembers === null ? " is-selected" : ""
                     }`}
                     onClick={() => applyLimit(null)}
-                  >
-                    不限人数
-                  </button>
+                  >{t("sharingUi.unlimited")}</button>
                   </div>,
                   document.body,
                 )}
             </div>
             <Select
-              aria-label="链接访问权限"
+              aria-label={t("sharingUi.linkAccess")}
               value={role}
               disabled={busy || !ready}
               onChange={(e) => {
@@ -390,12 +385,12 @@ export function ShareLinkSettings({
             <button
               className="primary"
               disabled={
-                busy || !ready || !allowed("sharing.links")
+                busy || !ready
               }
               onClick={() => void share()}
             >
               <Copy size={14} />
-              {copied ? "已复制" : "复制链接"}
+              {copied ? t("sharingUi.copied") : t("sharingUi.copyLink")}
             </button>
           </div>
           <div className="permissions-link-footer">
@@ -409,27 +404,21 @@ export function ShareLinkSettings({
                     setIncludeDescendants(e.target.checked);
                     setCopied("");
                   }}
-                />
-                包含子文档
-              </label>
+                />{t("role.scope.descendants")}</label>
             )}
             <button
               className="permissions-text-button"
               aria-expanded={advanced}
               onClick={() => setAdvanced(!advanced)}
-            >
-              链接设置
-              <ChevronDown size={13} />
+            >{t("sharingUi.linkSettings")}<ChevronDown size={13} />
             </button>
           </div>
           {advanced && (
             <div className="permissions-link-settings">
-              <label>
-                新链接有效期（留空不过期）
-                <input
+              <label>{t("sharingUi.newExpiry")}<input
                   type="datetime-local"
                   step="0.001"
-                  aria-label="链接有效期"
+                  aria-label={t("sharingUi.expiry")}
                   value={expires}
                   disabled={busy}
                   onChange={(e) => {
@@ -438,9 +427,7 @@ export function ShareLinkSettings({
                   }}
                 />
               </label>
-              <p className="subtle">
-                到期或停用只停止新用户加入；已加入的人保留权限。
-              </p>
+              <p className="subtle">{t("sharingUi.expiryHelp")}</p>
               <button
                 type="button"
                 className="permissions-share-records-toggle"
@@ -450,8 +437,8 @@ export function ShareLinkSettings({
                   setExpandedMembers(null);
                 }}
               >
-                <span>分享记录</span>
-                <small>{items.length} 条链接</small>
+                <span>{t("sharingUi.history")}</span>
+                <small>{t("sharingUi.links", { count: items.length })}</small>
                 <ChevronDown size={14} />
               </button>
               {recordsOpen && (
@@ -464,8 +451,7 @@ export function ShareLinkSettings({
                         setRecordTab("active");
                         setExpandedMembers(null);
                       }}
-                    >
-                      分享记录 <small>{items.length}</small>
+                    >{t("sharingUi.history")}<small>{items.length}</small>
                     </button>
                     <button
                       type="button"
@@ -474,22 +460,21 @@ export function ShareLinkSettings({
                         setRecordTab("revoked");
                         setExpandedMembers(null);
                       }}
-                    >
-                      撤销记录 <small>{revokedItems.length}</small>
+                    >{t("sharingUi.revokedHistory")}<small>{revokedItems.length}</small>
                     </button>
                   </div>
                   {!recordItems.length && (
                     <p className="subtle">
                       {recordTab === "active"
-                        ? "复制链接后会显示在这里。"
-                        : "暂无撤销记录。"}
+                        ? t("sharingUi.historyEmpty")
+                        : t("sharingUi.noRevocations")}
                     </p>
                   )}
                   {recordItems.map((l) => (
                     <article className="permissions-share-record" key={l.id}>
                       <header>
                         <div className="permissions-share-record-title">
-                          <strong>链接 ID</strong>
+                          <strong>{t("sharingUi.linkId")}</strong>
                           <code title={l.id}>{l.id}</code>
                         </div>
                         <span
@@ -498,31 +483,30 @@ export function ShareLinkSettings({
                           }`}
                         >
                           {l.expired
-                            ? "已过期"
+                            ? t("ticket.expired")
                             : l.enabled
-                              ? "有效"
-                              : "已停用"}
+                              ? t("sharingUi.valid")
+                              : t("users.disabled")}
                         </span>
                       </header>
                       <div className="permissions-share-record-meta">
                         <span>{accessText(t, l.role)}</span>
                         <span>
-                          {l.includeDescendants ? "包含子文档" : "仅当前文档"}
+                          {l.includeDescendants ? t("role.scope.descendants") : t("permissionsUi.currentOnly")}
                         </span>
                         <span>
                           {l.maxMembers === null
-                            ? "不限人数"
-                            : `${l.maxMembers}人上限`}
-                          · 已接受 {l.memberCount} 人
+                            ? t("sharingUi.unlimited")
+                            : t("sharingUi.limit", { count: l.maxMembers })}{t("sharingUi.acceptedCount", { count: l.memberCount })}
                         </span>
                         <span>
                           {l.expiresAt
-                            ? `有效至 ${new Date(l.expiresAt).toLocaleString()}`
-                            : "不过期"}
+                            ? t("sharingUi.expiresAt", { date: new Date(l.expiresAt).toLocaleString(htmlLang(locale)) })
+                            : t("sharingUi.noExpiry")}
                         </span>
                         {l.revokedAt && (
                           <span>
-                            撤销于 {new Date(l.revokedAt).toLocaleString()}
+                            {t("sharingUi.revokedAt", { date: new Date(l.revokedAt).toLocaleString(htmlLang(locale)) })}
                           </span>
                         )}
                       </div>
@@ -554,13 +538,11 @@ export function ShareLinkSettings({
                                 </span>
                               )}
                             </span>
-                            <span>查看已接受用户</span>
+                            <span>{t("sharingUi.acceptedUsers")}</span>
                             <ChevronDown size={13} />
                           </button>
                         ) : (
-                          <span className="permissions-share-members-empty">
-                            暂无用户接受
-                          </span>
+                          <span className="permissions-share-members-empty">{t("sharingUi.noAccepted")}</span>
                         )}
                         {expandedMembers === l.id && (
                           <div className="permissions-share-members-list">
@@ -584,40 +566,31 @@ export function ShareLinkSettings({
                           <button
                             disabled={busy || l.expired}
                             onClick={() => void copy(l)}
-                          >
-                            复制此链接
-                          </button>
+                          >{t("sharingUi.copyThis")}</button>
                         )}
                         <button
                           disabled={
                             busy ||
                             l.expired ||
-                            l.revoked ||
-                            (!l.enabled && !allowed("sharing.links"))
+                            l.revoked
                           }
                           onClick={() => void change(l)}
                         >
-                          {l.revoked ? "已撤销" : l.enabled ? "停用链接" : "启用链接"}
+                          {l.revoked ? t("ticket.cancelled") : l.enabled ? t("sharingUi.disable") : t("sharingUi.enable")}
                         </button>
                         <button
                           disabled={busy || l.revoked}
                           onClick={() => setConfirm(l.id)}
-                        >
-                          撤销链接权限
-                        </button>
+                        >{t("sharingUi.revoke")}</button>
                       </footer>
                       {confirm === l.id && (
                         <div className="permissions-confirm">
-                          <p>
-                            停用此链接，并移除通过此链接加入的权限。其他授权会保留。
-                          </p>
+                          <p>{t("sharingUi.revokeHelp")}</p>
                           <button
                             disabled={busy}
                             onClick={() => void change(l, true)}
-                          >
-                            确认撤销权限
-                          </button>
-                          <button onClick={() => setConfirm("")}>取消</button>
+                          >{t("sharingUi.confirmRevoke")}</button>
+                          <button onClick={() => setConfirm("")}>{t("common.cancel")}</button>
                         </div>
                       )}
                     </article>
@@ -631,7 +604,7 @@ export function ShareLinkSettings({
       {error && <Feedback tone="error" message={error} />}
       {enabled && fallback && (
         <input
-          aria-label="手动复制邀请链接"
+          aria-label={t("sharingUi.manualCopy")}
           readOnly
           value={fallback}
           onFocus={(e) => e.target.select()}

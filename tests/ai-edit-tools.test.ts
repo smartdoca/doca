@@ -31,7 +31,6 @@ beforeEach(async () => {
     {
       ...aiDefaults,
       defaultModel: "test",
-      limits: { standard: { day: 1000, week: 3000, month: 10000 } },
       vendors: [
         {
           id: "test-vendor",
@@ -49,10 +48,6 @@ beforeEach(async () => {
           model: "private-real-model",
           alias: "创作助手",
           enabled: true,
-          levels: [],
-          inputRate: 1,
-          outputRate: 2,
-          cacheRate: 0.5,
           maxInput: 32000,
           maxOutput: 4000,
           tools: true,

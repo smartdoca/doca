@@ -1,6 +1,6 @@
 import { textMentionsTopic } from "./search-excerpts.js";
 
-export type SearchFocus = "document" | "file" | "mail" | "mixed";
+export type SearchFocus = "document" | "file" | "mixed";
 export type DocumentFormat =
   | "rich_text"
   | "markdown"
@@ -8,7 +8,7 @@ export type DocumentFormat =
   | "presentation"
   | "canvas";
 export type SearchMode = "keyword" | "ai";
-export type ContentMode = "all" | "documents" | "files" | "mail";
+export type ContentMode = "all" | "documents" | "files";
 export type SearchIntent = {
   focus: SearchFocus;
   topic: string;
@@ -26,7 +26,6 @@ const containPattern = /含有|包含|带有|带了|里面有|里边有|里头�
 const mediaPattern = /图片|照片|图像|截图|images?|photos?|pictures?/iu;
 const documentKindPattern = /在线文档|文档|知识库|documents?/iu;
 const fileAskPattern = /的?(图片|照片|图像|截图|文件|images?|photos?|pictures?|files?)们?$/iu;
-const mailAskPattern = /邮件|邮箱|inbox|email|mail/iu;
 const formatPatterns: Array<{ format: DocumentFormat; match: RegExp }> = [
   {
     format: "spreadsheet",
@@ -50,8 +49,7 @@ function stripConstraints(text: string) {
   let next = text
     .replace(containPattern, " ")
     .replace(mediaPattern, " ")
-    .replace(documentKindPattern, " ")
-    .replace(mailAskPattern, " ");
+    .replace(documentKindPattern, " ");
   for (const row of formatPatterns) next = next.replace(row.match, " ");
   return next.replace(/的/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -81,16 +79,6 @@ export function searchRetrieval(
 ) {
   const tab = hard.contentMode ?? "all";
   const tabFormat = asFormat(hard.format);
-  if (tab === "mail")
-    return {
-      documents: false,
-      files: false,
-      fileEvidence: false,
-      nestMatchingFiles: false,
-      format: undefined,
-      mode: hard.mode,
-      tool: "mail_search" as const,
-    };
   if (tab === "files")
     return {
       documents: false,
@@ -112,8 +100,8 @@ export function searchRetrieval(
       tool: "knowledge_search" as const,
     };
   return {
-    documents: intent.focus !== "file" && intent.focus !== "mail",
-    files: intent.focus !== "document" && intent.focus !== "mail",
+    documents: intent.focus !== "file",
+    files: intent.focus !== "document",
     fileEvidence: intent.requireEvidence,
     nestMatchingFiles: intent.requireEvidence || intent.focus === "mixed",
     format: intent.format,
@@ -123,9 +111,7 @@ export function searchRetrieval(
         ? ("file_search" as const)
         : intent.focus === "document"
           ? ("knowledge_search" as const)
-          : intent.focus === "mail"
-            ? ("mail_search" as const)
-            : ("both" as const),
+          : ("both" as const),
   };
 }
 
@@ -216,9 +202,7 @@ export function searchIntent(query: string): SearchIntent {
         ? "document"
         : fileAsk
           ? "file"
-          : mailAskPattern.test(text)
-            ? "mail"
-            : "mixed",
+          : "mixed",
     topic,
     ...(format ? { format } : {}),
     ...(media ? { media } : {}),

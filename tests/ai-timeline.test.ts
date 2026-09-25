@@ -1,5 +1,9 @@
 import { expect, it } from "vitest";
-import { aiTimeline, taskDuration } from "../apps/web/src/features/ai/ai-timeline.js";
+import {
+  aiTimeline,
+  completionPresentation,
+  taskDuration,
+} from "../apps/web/src/features/ai/ai-timeline.js";
 const keys = (items: ReturnType<typeof aiTimeline>) =>
   items.map((i) => (i.kind === "message" ? i.message.id : `task:${i.job.id}`));
 it("places each failed task immediately after its own question, including repeated prompts", () => {
@@ -62,8 +66,23 @@ it("retains partial history answers and active jobs before their message arrives
 });
 
 it("formats completed duration and tolerates missing historical timestamps", () => {
-  expect(taskDuration("2026-09-16T00:00:00Z", "2026-09-16T01:02:03Z")).toBe(
-    "用时 1小时2分钟3秒",
+  expect(taskDuration("2026-09-16T00:00:00Z", "2026-09-16T01:02:03Z")).toEqual({
+    hours: 1,
+    minutes: 2,
+    seconds: 3,
+  });
+  expect(taskDuration()).toBeNull();
+});
+
+it("derives completed presentation without comparing localized phase text", () => {
+  expect(completionPresentation({})).toBe("done");
+  expect(completionPresentation({ questions: [{}] })).toBe("waiting-choice");
+  expect(completionPresentation({ pendingAccess: {} })).toBe("waiting-access");
+  expect(completionPresentation({ plan: { mode: "clarify" } })).toBe(
+    "waiting-input",
   );
-  expect(taskDuration()).toBe("执行详情");
+  expect(completionPresentation({ review: { verdict: "needs_user" } })).toBe(
+    "waiting-input",
+  );
+  expect(completionPresentation({ plan: { mode: "deliver" } })).toBe("done");
 });

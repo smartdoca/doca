@@ -30,8 +30,8 @@ import {
 export * from "./manifest.js";
 export * from "./knowledge.js";
 
-export const filesServiceToken =
-  defineService<FilesServiceV1>(FILES_SERVICE_ID);
+import { filesServiceToken } from "@doca/plugin-sdk/files";
+export { filesServiceToken } from "@doca/plugin-sdk/files";
 export const filesKnowledgeSourceRegistryToken =
   defineService<KnowledgeSourceRegistryV1>(
     KNOWLEDGE_SOURCE_REGISTRY_SERVICE_ID,

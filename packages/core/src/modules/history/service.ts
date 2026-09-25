@@ -1,4 +1,4 @@
-import { requireCapability, entitlements } from "../entitlements/service.js";
+import { requireCapability } from "../access/operation-policy.js";
 import type { Transaction } from "kysely";
 import { randomUUID } from "node:crypto";
 import { applyUpdate, Doc, encodeStateAsUpdate } from "slatetsx-kit-editor/yjs";
@@ -69,9 +69,7 @@ export function createHistory(db: DB) {
       return locked(async (tx) => {
         const r = await access(tx, actor, id, "create_history");
         await requireCapability(tx, actor.id, "history.create");
-        const e = await entitlements(tx, r.owner_id);
-        if (e.level.limits["history.versions"] === 0)
-          fail(409, "当前等级未启用历史版本保留");
+        await requireCapability(tx, r.owner_id, "history.create");
         if (["spreadsheet", "canvas", "presentation"].includes(r.format)) {
           const loaded = await restoreSurface(tx, id, r.format),
             snapshotId = randomUUID();

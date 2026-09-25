@@ -1,6 +1,6 @@
-import { useEntitlements } from "@web/shared/hooks/entitlement-access.js";
 import { htmlLang } from "@doca/i18n";
 import { useI18n } from "@web/shared/i18n.js";
+import { Feedback } from "@web/shared/components/feedback.js";
 import { useEffect, useState } from "react";
 import {
   ImagePlus,
@@ -25,7 +25,6 @@ export function LibraryLanding({
   resource: Resource;
   create: () => void;
 }) {
-  const allowed = useEntitlements();
   const { locale } = useI18n();
   const [empty, setEmpty] = useState(false),
     [error, setError] = useState("");
@@ -70,7 +69,6 @@ export function LibraryLanding({
           {roleRank(resource.role) >= 3 && (
             <button
               className="primary"
-              hidden={!allowed("documents.create")}
               onClick={create}
             >
               创建第一篇文档
@@ -90,6 +88,8 @@ export function LibrarySettings({
   detail: Detail;
   changed: () => Promise<void>;
 }) {
+const { t } = useI18n();
+
   const [action, setAction] = useState<
     "cover" | "rename" | "trash" | "transfer" | null
   >(null);
@@ -106,9 +106,7 @@ export function LibrarySettings({
             设置封面
           </button>
           <button disabled={!manager} onClick={() => setAction("rename")}>
-            <Pencil size={18} />
-            重命名
-          </button>
+            <Pencil size={18} />{t("shell.rename")}</button>
           <button
             disabled={r.role !== "owner"}
             onClick={() => setAction("transfer")}

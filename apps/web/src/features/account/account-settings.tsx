@@ -1,3 +1,5 @@
+import { htmlLang } from "@doca/i18n";
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { Feedback } from "@web/shared/components/feedback.js";
@@ -6,7 +8,7 @@ import { Select } from "@web/shared/components/select.js";
 import {
   VerificationField,
   compactProofs,
-  fieldLabels,
+  useFieldLabels,
   type AccountOptions,
   type Proofs,
 } from "@web/features/auth/account-fields.js";
@@ -15,6 +17,8 @@ export function AccountPolicySettings({
 }: {
   section?: string;
 }) {
+const { t, locale } = useI18n();
+
   const [data, setData] = useState<AccountOptions | null>(null),
     [providers, setProviders] = useState<{ id: string; name: string }[]>([]),
     [message, setMessage] = useState(""),
@@ -32,7 +36,7 @@ export function AccountPolicySettings({
   }, []);
   return (
     <section className="admin-card">
-      <h3>{section === "registration" ? "验证码注册" : "基础登录方式"}</h3>
+      <h3>{section === "registration" ? t("accountPolicy.codeRegistration") : t("accountPolicy.basicLogin")}</h3>
       {data && (
         <form
           className="admin-settings-form"
@@ -47,7 +51,7 @@ export function AccountPolicySettings({
               } = data;
               await api("/admin/accounts/policy", "PUT", body);
               setData(await api("/admin/accounts/policy"));
-              setMessage("账号策略已保存");
+              setMessage(t("accountPolicy.saved"));
             } catch (e) {
               setMessage((e as Error).message);
             } finally {
@@ -59,11 +63,11 @@ export function AccountPolicySettings({
             <>
               {(
                 [
-                  ["passwordEnabled", "允许账号密码登录"],
-                  ["smsEnabled", "允许手机验证码登录"],
-                  ["emailEnabled", "允许邮箱验证码登录"],
-                  ["qrLoginEnabled", "允许 App 扫码登录"],
-                  ["recoveryEnabled", "允许找回密码"],
+                  ["passwordEnabled", t("accountPolicy.password")],
+                  ["smsEnabled", t("accountPolicy.phone")],
+                  ["emailEnabled", t("accountPolicy.email")],
+                  ["qrLoginEnabled", t("accountPolicy.qr")],
+                  ["recoveryEnabled", t("accountPolicy.recovery")],
                 ] as const
               ).map(([key, label]) => (
                 <label className="setting-toggle" key={key}>
@@ -79,15 +83,13 @@ export function AccountPolicySettings({
               ))}
               {data.passwordEnabled && (
                 <fieldset className="admin-form-section">
-                  <legend>密码登录可使用的账号</legend>
-                  <p className="admin-field-help">
-                    选择用户可填入账号栏的信息。用户名与手机号或邮箱相同时，任意对应选项启用即可登录。
-                  </p>
+                  <legend>{t("accountPolicy.identifiers")}</legend>
+                  <p className="admin-field-help">{t("accountPolicy.identifiersHelp")}</p>
                   {(
                     [
-                      ["username", "用户名"],
-                      ["phone", "手机号"],
-                      ["email", "邮箱"],
+                      ["username", t("fields.username")],
+                      ["phone", t("login.phone")],
+                      ["email", t("fields.email")],
                     ] as const
                   ).map(([key, label]) => (
                     <label className="setting-toggle" key={key}>
@@ -112,9 +114,7 @@ export function AccountPolicySettings({
                   ))}
                 </fieldset>
               )}
-              <label>
-                强制用户补充登录方式
-                <Select
+              <label>{t("accountPolicy.forceMethod")}<Select
                   value={data.forcedLoginMethod ?? ""}
                   onChange={(e) =>
                     setData({
@@ -123,56 +123,45 @@ export function AccountPolicySettings({
                     })
                   }
                 >
-                  <option value="">不强制（新增方式默认如此）</option>
-                  {data.passwordEnabled && <option value="password">账号密码</option>}
-                  {data.smsEnabled && data.phoneReady && <option value="phone">手机验证码</option>}
-                  {data.emailEnabled && data.emailReady && <option value="email">邮箱验证码</option>}
+                  <option value="">{t("accountPolicy.noForce")}</option>
+                  {data.passwordEnabled && <option value="password">{t("login.passwordTab")}</option>}
+                  {data.smsEnabled && data.phoneReady && <option value="phone">{t("accountPolicy.phoneCode")}</option>}
+                  {data.emailEnabled && data.emailReady && <option value="email">{t("login.emailCode")}</option>}
                   {providers.map((provider) => (
                     <option value={`provider:${provider.id}`} key={provider.id}>
                       {provider.name}
                     </option>
                   ))}
                 </Select>
-                <small>
-                  仅用于替换旧登录方式：先让用户补充完成，再关闭旧方式。
-                </small>
+                <small>{t("accountPolicy.forceHelp")}</small>
               </label>
             </>
           )}
-          <label hidden={section !== "registration"}>
-            手机验证码首次注册
-            <Select
+          <label hidden={section !== "registration"}>{t("accountPolicy.firstPhone")}<Select
               value={data.smsRegistration ?? "closed"}
               onChange={(e) =>
                 setData({ ...data, smsRegistration: e.target.value })
               }
             >
-              <option value="closed">不允许新用户加入</option>
-              <option value="auto">自动注册，直接使用</option>
-              <option value="approval">注册后需管理员审核</option>
+              <option value="closed">{t("authAdmin.noRegistration")}</option>
+              <option value="auto">{t("authAdmin.autoRegistration")}</option>
+              <option value="approval">{t("authAdmin.reviewRegistration")}</option>
             </Select>
           </label>
-          <label hidden={section !== "registration"}>
-            邮箱验证码首次注册
-            <Select
+          <label hidden={section !== "registration"}>{t("accountPolicy.firstEmail")}<Select
               value={data.emailRegistration ?? "closed"}
               onChange={(e) =>
                 setData({ ...data, emailRegistration: e.target.value })
               }
             >
-              <option value="closed">不允许新用户加入</option>
-              <option value="auto">自动注册，直接使用</option>
-              <option value="approval">注册后需管理员审核</option>
+              <option value="closed">{t("authAdmin.noRegistration")}</option>
+              <option value="auto">{t("authAdmin.autoRegistration")}</option>
+              <option value="approval">{t("authAdmin.reviewRegistration")}</option>
             </Select>
           </label>
           <p className="admin-field-help" hidden={section !== "login"}>
-            短信服务：{data.phoneReady ? "已配置" : "未配置"} · 邮件服务：
-            {data.emailReady ? "已配置" : "未配置"}
-            。关闭密码认证前，请先给当前管理员绑定其他可用登录方式。
-          </p>
-          <button className="primary" disabled={busy}>
-            保存账号策略
-          </button>
+            {t("accountPolicy.serviceStatus", { phone: t(data.phoneReady ? "accountPolicy.configured" : "accountPolicy.notConfigured"), email: t(data.emailReady ? "accountPolicy.configured" : "accountPolicy.notConfigured") })}{" "}{t("accountPolicy.serviceHelp")}</p>
+          <button className="primary" disabled={busy}>{t("accountPolicy.save")}</button>
         </form>
       )}
       <Feedback message={message} tone="info" />
@@ -190,55 +179,41 @@ export function SourceProfileSettings({
   value?: string;
   onChange: (v: string) => void;
 }) {
+const { t, locale } = useI18n();
+
+const fieldLabels = useFieldLabels();
+
   const p = JSON.parse(value || "{}"),
-    [fieldPolicy, setFieldPolicy] = useState<AccountOptions | null>(null),
-    [levels, setLevels] = useState<{ id: string; name: string }[]>([]);
+    [fieldPolicy, setFieldPolicy] = useState<AccountOptions | null>(null);
   useEffect(() => {
     void api<AccountOptions>("/admin/accounts/policy")
       .then(setFieldPolicy)
       .catch(() => {});
-    void api<{ levels: typeof levels }>("/admin/entitlements")
-      .then((r) => setLevels(r.levels))
-      .catch(() => {});
   }, []);
   const update = (v: Record<string, unknown>) =>
     onChange(JSON.stringify({ ...p, ...v }));
-  const lm = {
-    field: "",
-    sync: true,
-    fallback: "standard",
-    rules: {},
-    ...p.levelMapping,
-  };
   return (
     <div className="source-fields admin-settings-form">
       <div hidden={section !== "policy"}>
-        <label>
-          此身份源首次加入策略
-          <Select
+        <label>{t("accountPolicy.sourceRegistration")}<Select
             value={p.signup ?? "inherit"}
             onChange={(e) => update({ signup: e.target.value })}
           >
-            <option value="inherit">使用该类身份源的默认策略</option>
-            <option value="closed">不允许新用户加入</option>
-            <option value="auto">自动注册，直接使用</option>
-            <option value="approval">注册后需管理员审核</option>
+            <option value="inherit">{t("accountPolicy.defaultRegistration")}</option>
+            <option value="closed">{t("authAdmin.noRegistration")}</option>
+            <option value="auto">{t("authAdmin.autoRegistration")}</option>
+            <option value="approval">{t("authAdmin.reviewRegistration")}</option>
           </Select>
         </label>
       </div>
       <div hidden={section !== "fields"}>
-        <h3>注册资料映射</h3>
-        <p>
-          手机号和邮箱全局唯一。SSO
-          返回的值若已被其他账号占用，会阻止注册或同步，不会自动合并账号。
-          每个字段只能指定一个来源。修改规则统一在“用户字段”配置；仅 SSO
-          更新的字段每次登录同步，禁用或不可修改的字段不会同步。
-        </p>
+        <h3>{t("accountPolicy.profileMapping")}</h3>
+        <p>{t("accountPolicy.mappingHelp")}</p>
         <div className="source-mapping-head">
-          <span>资料</span>
-          <span>来源字段（选填）</span>
-          <span>修改规则</span>
-          <span>登录同步</span>
+          <span>{t("accountPolicy.profile")}</span>
+          <span>{t("accountPolicy.sourceField")}</span>
+          <span>{t("accountPolicy.editRules")}</span>
+          <span>{t("accountPolicy.loginSync")}</span>
         </div>
         {Object.entries(fieldLabels)
           .filter(([key]) => key !== "password")
@@ -265,7 +240,7 @@ export function SourceProfileSettings({
                 <strong>{label}</strong>
                 <input
                   disabled={disabled}
-                  aria-label={`${label}来源字段`}
+                  aria-label={t("accountPolicy.sourceLabel", { name: label })}
                   placeholder={
                     (
                       {
@@ -286,15 +261,15 @@ export function SourceProfileSettings({
                 />
                 <span className="admin-field-help">
                   {!owned
-                    ? "已指定其他来源"
+                    ? t("accountPolicy.otherSource")
                     : {
-                        editable: "支持修改",
-                        sso: "仅 SSO 更新",
-                        immutable: "不允许修改",
+                        editable: t("accountPolicy.editable"),
+                        sso: t("accountPolicy.ssoOnly"),
+                        immutable: t("accountPolicy.immutable"),
                       }[global?.mode ?? "editable"]}
                 </span>
                 {key === "username" ? (
-                  <span className="admin-field-help">固定账号</span>
+                  <span className="admin-field-help">{t("accountPolicy.fixedAccount")}</span>
                 ) : (
                   <label>
                     <input
@@ -311,17 +286,17 @@ export function SourceProfileSettings({
                       }
                       onChange={(e) => set({ sync: e.target.checked })}
                     />
-                    <span className="sr-only">{label}登录时同步</span>
+                    <span className="sr-only">{label}{t("accountPolicy.syncOnLogin")}</span>
                   </label>
                 )}
                 {["email", "phone"].includes(key) && (
                   <input
-                    aria-label={`${label}已验证字段`}
+                    aria-label={t("accountPolicy.verifiedLabel", { name: label })}
                     className="source-verification-field"
                     placeholder={
                       key === "email"
-                        ? "已验证标记（选填），如 email_verified"
-                        : "已验证标记（选填），如 phone_number_verified"
+                        ? t("accountPolicy.emailVerifiedField")
+                        : t("accountPolicy.phoneVerifiedField")
                     }
                     value={r.verifiedField}
                     onChange={(e) => set({ verifiedField: e.target.value })}
@@ -339,127 +314,23 @@ export function SourceProfileSettings({
               checked={p[key] ?? true}
               onChange={(e) => update({ [key]: e.target.checked })}
             />
-            {"允许此来源账号追加第三方绑定"}
+            {t("accountPolicy.allowLinking")}
           </label>
         ))}
       </div>
-      <div hidden={section !== "levels"}>
-        <h3>永久基础等级与身份分类</h3>
-        <label>
-          来源字段
-          <input
-            value={lm.field}
-            placeholder="例如 employment_type，留空使用本站默认等级"
-            onChange={(e) =>
-              update({ levelMapping: { ...lm, field: e.target.value } })
-            }
-          />
-        </label>
-        {lm.field && (
-          <>
-            <label>
-              未匹配时的基础等级
-              <Select
-                value={lm.fallback}
-                onChange={(e) =>
-                  update({ levelMapping: { ...lm, fallback: e.target.value } })
-                }
-              >
-                {levels.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={lm.sync}
-                onChange={(e) =>
-                  update({ levelMapping: { ...lm, sync: e.target.checked } })
-                }
-              />
-              每次通过此来源登录时同步
-            </label>
-            {Object.entries(lm.rules).map(([key, v]: [string, any]) => (
-              <div className="source-field" key={key}>
-                <strong>{key}</strong>
-                <Select
-                  value={v.levelId}
-                  onChange={(e) =>
-                    update({
-                      levelMapping: {
-                        ...lm,
-                        rules: {
-                          ...lm.rules,
-                          [key]: { ...v, levelId: e.target.value },
-                        },
-                      },
-                    })
-                  }
-                >
-                  {levels.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
-                </Select>
-                <input
-                  aria-label={`${key}身份分类`}
-                  placeholder="身份分类，例如 employee"
-                  value={v.identityClass}
-                  onChange={(e) =>
-                    update({
-                      levelMapping: {
-                        ...lm,
-                        rules: {
-                          ...lm.rules,
-                          [key]: { ...v, identityClass: e.target.value },
-                        },
-                      },
-                    })
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const rules = { ...lm.rules };
-                    delete rules[key];
-                    update({ levelMapping: { ...lm, rules } });
-                  }}
-                >
-                  移除
-                </button>
-              </div>
-            ))}
-            <MappingAdd
-              add={(key) => {
-                if (!["__proto__", "constructor", "prototype"].includes(key))
-                  update({
-                    levelMapping: {
-                      ...lm,
-                      rules: {
-                        ...lm.rules,
-                        [key]: { levelId: lm.fallback, identityClass: "" },
-                      },
-                    },
-                  });
-              }}
-            />
-          </>
-        )}
-      </div>
+
     </div>
   );
 }
 function MappingAdd({ add }: { add: (key: string) => void }) {
+const { t, locale } = useI18n();
+
   const [value, setValue] = useState("");
   return (
     <div className="verification-code">
       <input
-        aria-label="新的来源值"
-        placeholder="来源返回值，例如 employee"
+        aria-label={t("accountPolicy.newSource")}
+        placeholder={t("accountPolicy.sourceExample")}
         value={value}
         maxLength={64}
         onChange={(e) => setValue(e.target.value)}
@@ -471,13 +342,15 @@ function MappingAdd({ add }: { add: (key: string) => void }) {
           add(value.trim());
           setValue("");
         }}
-      >
-        添加映射
-      </button>
+      >{t("accountPolicy.addMapping")}</button>
     </div>
   );
 }
 export function AccountContacts() {
+const { t, locale } = useI18n();
+
+const fieldLabels = useFieldLabels();
+
   const [data, setData] = useState<{
       editable: Record<string, boolean>;
       contacts: { kind: string; value: string }[];
@@ -503,17 +376,13 @@ export function AccountContacts() {
     return null;
   return (
     <section className="settings-card">
-      <h2>手机号与邮箱</h2>
+      <h2>{t("accountPolicy.contacts")}</h2>
       {data?.contacts.map((c) => (
         <p key={c.kind}>
-          {fieldLabels[c.kind]}：{c.value} · 已验证
-          {data.editable[c.kind] === false ? " · 不可自行修改" : ""}
+          {fieldLabels[c.kind]}：{c.value}{t("accountPolicy.verifiedSuffix")}{data.editable[c.kind] === false ? t("accountPolicy.readOnlySuffix") : ""}
         </p>
       ))}
-      <p className="subtle">
-        绑定或更换联系方式需在最近 5
-        分钟内验证身份。新联系方式不能已属于其他账号。
-      </p>
+      <p className="subtle">{t("accountPolicy.contactsHelp")}</p>
 
       <select
         value={kind}
@@ -524,10 +393,10 @@ export function AccountContacts() {
         }}
       >
         {data?.policy.fields?.email.enabled !== false && (
-          <option value="email">邮箱</option>
+          <option value="email">{t("fields.email")}</option>
         )}
         {data?.policy.fields?.phone.enabled !== false && (
-          <option value="phone">手机号</option>
+          <option value="phone">{t("login.phone")}</option>
         )}
       </select>
       <VerificationField
@@ -548,16 +417,14 @@ export function AccountContacts() {
             setProof("");
             window.dispatchEvent(new Event("security-verification-changed"));
             await load();
-            setMessage("联系方式已保存");
+            setMessage(t("accountPolicy.contactsSaved"));
           } catch (e) {
             setMessage((e as Error).message);
           } finally {
             setBusy(false);
           }
         }}
-      >
-        保存联系方式
-      </button>
+      >{t("accountPolicy.saveContacts")}</button>
       <Feedback message={message} tone="info" />
     </section>
   );
@@ -571,6 +438,10 @@ export function AdminAccountEditor({
   close: () => void;
   saved: () => void;
 }) {
+const { t, locale } = useI18n();
+
+const fieldLabels = useFieldLabels();
+
   const [data, setData] = useState<any>(null),
     [reason, setReason] = useState(""),
     [restore, setRestore] = useState<string[]>([]),
@@ -590,7 +461,7 @@ export function AdminAccountEditor({
   }, [userId]);
   return (
     <Dialog
-      title="编辑用户信息"
+      title={t("accountPolicy.editUser")}
       close={() => {
         if (!busy) close();
       }}
@@ -666,13 +537,11 @@ export function AdminAccountEditor({
               </label>
             ))}
           </div>
-          <p className="admin-field-help">
-            管理员可直接纠正手机号和邮箱，无需验证码。 修改会记录到操作日志。
-          </p>
+          <p className="admin-field-help">{t("accountPolicy.adminContactHelp")}</p>
           <label className="setting-toggle">
             <span>
-              <strong>系统管理员</strong>
-              <small>允许管理用户和平台配置，不授予私有文档权限。</small>
+              <strong>{t("accountPolicy.systemAdmin")}</strong>
+              <small>{t("accountPolicy.systemAdminHelp")}</small>
             </span>
             <input
               type="checkbox"
@@ -684,7 +553,7 @@ export function AdminAccountEditor({
             ([k, v]) => k !== "username" && v,
           ).length && (
             <details className="admin-form-section">
-              <summary>身份源同步</summary>
+              <summary>{t("accountPolicy.identitySync")}</summary>
               {Object.entries(data.metadata.overrides ?? {})
                 .filter(([k, v]) => k !== "username" && v)
                 .map(([key]) => (
@@ -699,48 +568,41 @@ export function AdminAccountEditor({
                             : restore.filter((k) => k !== key),
                         )
                       }
-                    />
-                    恢复{fieldLabels[key]}的来源同步
+                    />{t("accountPolicy.restoreSync", { name: fieldLabels[key]! })}
                   </label>
                 ))}
             </details>
           )}
-          <label>
-            调整原因 *
-            <textarea
+          <label>{t("accountPolicy.reason")}<textarea
               required
               maxLength={500}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="例如：用户原手机号已停用，协助更换联系方式"
+              placeholder={t("accountPolicy.reasonExample")}
             />
           </label>
           <details className="admin-form-section">
-            <summary>最近操作记录</summary>
+            <summary>{t("accountPolicy.recentActions")}</summary>
             {data.audit.length ? (
               data.audit.map((a: any) => (
                 <p className="admin-field-help" key={a.id}>
-                  {new Date(a.created_at).toLocaleString()} · {a.action}
+                  {new Date(a.created_at).toLocaleString(htmlLang(locale))} · {a.action}
                 </p>
               ))
             ) : (
-              <p className="admin-field-help">暂无记录</p>
+              <p className="admin-field-help">{t("record.empty")}</p>
             )}
           </details>
           <Feedback message={message} tone="error" />
           <footer>
-            <button type="button" disabled={busy} onClick={close}>
-              取消
-            </button>
-            <button className="primary" disabled={busy}>
-              保存用户信息
-            </button>
+            <button type="button" disabled={busy} onClick={close}>{t("common.cancel")}</button>
+            <button className="primary" disabled={busy}>{t("accountPolicy.saveUser")}</button>
           </footer>
         </form>
       )}
       {!data && (
         <Feedback
-          message={message || "正在加载…"}
+          message={message || t("common.loading")}
           tone={message ? "error" : "info"}
         />
       )}

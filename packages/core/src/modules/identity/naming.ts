@@ -16,12 +16,7 @@ export type ProfilePolicy = {
   fields: Record<ProfileField, FieldRule>;
   signup: "inherit" | "closed" | "auto" | "approval";
   allowLinking: boolean;
-  levelMapping: {
-    field: string;
-    sync: boolean;
-    fallback: string;
-    rules: Record<string, { levelId: string; identityClass: string }>;
-  };
+
 };
 export const normalizeUsername = (value: string) => value.trim().toLowerCase();
 export const validUsername = (value: string) =>
@@ -66,31 +61,6 @@ export function profilePolicy(raw?: string): ProfilePolicy {
       ];
     }),
   ) as Record<ProfileField, FieldRule>;
-  const levelMapping = {
-    field: "",
-    sync: true,
-    fallback: "standard",
-    rules: {},
-    ...input.levelMapping,
-  };
-  if (
-    !validPath(levelMapping.field) ||
-    typeof levelMapping.sync !== "boolean" ||
-    typeof levelMapping.fallback !== "string" ||
-    !levelMapping.rules ||
-    typeof levelMapping.rules !== "object" ||
-    Array.isArray(levelMapping.rules) ||
-    Object.keys(levelMapping.rules).length > 100
-  )
-    fail(400, "等级来源映射无效");
-  for (const r of Object.values(levelMapping.rules) as any[])
-    if (
-      !r ||
-      typeof r.levelId !== "string" ||
-      typeof r.identityClass !== "string" ||
-      r.identityClass.length > 64
-    )
-      fail(400, "等级映射值无效");
   for (const k of ["allowLinking"])
     if (input[k] !== undefined && typeof input[k] !== "boolean")
       fail(400, "账号策略无效");
@@ -104,7 +74,6 @@ export function profilePolicy(raw?: string): ProfilePolicy {
     signup: input.signup ?? "inherit",
     fields,
     allowLinking: input.allowLinking ?? true,
-    levelMapping,
   };
 }
 export function claimField(claims: unknown, path: string): unknown {

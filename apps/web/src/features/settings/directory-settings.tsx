@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
@@ -28,6 +29,8 @@ type Member = {
   directory_mode?: string | null;
 };
 export function DirectorySettings() {
+const { t } = useI18n();
+
   const [policy, setPolicy] = useState<{
     mode: string;
     revision: number;
@@ -169,9 +172,7 @@ export function DirectorySettings() {
                 setNext(d.nextOffset);
               })
             }
-          >
-            加载更多
-          </button>
+          >{t("common.more")}</button>
         )}
       </section>
     </section>

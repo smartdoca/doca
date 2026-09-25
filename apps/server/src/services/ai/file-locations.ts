@@ -53,15 +53,6 @@ export const systemFolders = [
     copyOnly: true,
     role: "文档附件只读入口。目录不能增删改；里面的文件只能复制出去。",
   },
-  {
-    id: "mail",
-    name: "邮箱系统",
-    parentId: "root",
-    path: "我的文件夹 / 系统文件 / 邮箱系统",
-    writable: false,
-    copyOnly: true,
-    role: "邮箱附件只读入口。目录不能增删改；里面的文件只能复制出去。",
-  },
 ] as const;
 
 export const systemFolderIds = new Set<string>(
@@ -151,19 +142,15 @@ export function parseFolderId(id?: string | null): FileParent {
     value === "系统文档"
   )
     return { type: "system", id: "documents" };
-  if (value === "mail" || value === "邮箱系统" || value === "邮箱")
-    return { type: "system", id: "mail" };
-  if (value.startsWith("mail:") && isFileUuid(value.slice(5)))
-    return { type: "system", id: value };
   if (isFileUuid(value)) return { type: "folder", id: value };
   if (looksLikeTruncatedUuid(value))
     fail(
       400,
-      `「${value}」不是完整文件夹 ID。系统文件夹用 root / ai / shared / documents / mail，用户文件夹用完整 UUID。`,
+      `「${value}」不是完整文件夹 ID。系统文件夹用 root / ai / shared / documents，用户文件夹用完整 UUID。`,
     );
   fail(
     400,
-    `无法识别文件夹 ID「${value}」。系统文件夹用 root / ai / shared / documents / mail，用户文件夹用完整 UUID。`,
+    `无法识别文件夹 ID「${value}」。系统文件夹用 root / ai / shared / documents，用户文件夹用完整 UUID。`,
   );
 }
 
@@ -196,19 +183,6 @@ export function folderRecordParentId(parent: FileParent) {
 }
 
 export function describeFileParent(parent: FileParent) {
-  if (parent.type === "system" && parent.id.startsWith("mail:")) {
-    return {
-      ...parent,
-      name: "邮箱",
-      path: "我的文件夹 / 系统文件 / 邮箱系统",
-      parentId: "mail",
-      inMyFilesRoot: false,
-      writable: false,
-      copyOnly: true,
-      special: true,
-      role: "邮箱附件只读入口。",
-    };
-  }
   if (parent.type === "system") {
     const known = systemFolder(parent.id);
     return {
@@ -276,7 +250,7 @@ export function isCopyOnlyParent(parentType: string, parentId: string) {
   if (parentType === "document") return true;
   return (
     parentType === "system" &&
-    (parentId === "ai" || parentId === "documents" || parentId === "mail" || parentId.startsWith("mail:"))
+    (parentId === "ai" || parentId === "documents")
   );
 }
 

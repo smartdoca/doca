@@ -1,7 +1,6 @@
-import { ReportDocument } from "@web/features/admin/moderation.js";
+import { htmlLang, type Locale } from "@doca/i18n";
 import { useI18n } from "@web/shared/i18n.js";
 import type { MessageKey, MessageValues } from "@doca/i18n";
-import { useEntitlements } from "@web/shared/hooks/entitlement-access.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import {
   lazy,
@@ -43,6 +42,7 @@ export function relativeTime(
   value: string | null,
   now = Date.now(),
   t?: (key: MessageKey, values?: MessageValues) => string,
+  locale: Locale = "zh",
 ) {
   const say = (key: MessageKey, fallback: string, values?: MessageValues) =>
     t ? t(key, values) : fallback;
@@ -59,7 +59,7 @@ export function relativeTime(
     return say("time.hours", `${Math.floor(delta / 3600000)} 小时前`, {
       count: Math.floor(delta / 3600000),
     });
-  return new Date(time).toLocaleDateString();
+  return new Date(time).toLocaleDateString(htmlLang(locale));
 }
 export function LastEdited({
   detail,
@@ -68,7 +68,7 @@ export function LastEdited({
   detail: Detail;
   currentUserId?: string;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [now, setNow] = useState(Date.now());
   const [open, setOpen] = useState(false);
   const canReadHistory =
@@ -88,7 +88,7 @@ export function LastEdited({
           detail.lastEditedAt
             ? t("time.editedBy", {
                 name: detail.lastEditorName ?? t("time.unknownUser"),
-                when: new Date(detail.lastEditedAt).toLocaleString(),
+                when: new Date(detail.lastEditedAt).toLocaleString(htmlLang(locale)),
               })
             : t("time.noEditor")
         }
@@ -100,7 +100,7 @@ export function LastEdited({
               {currentUserId && detail.resource.last_editor_id === currentUserId
                 ? t("time.me")
                 : detail.lastEditorName}{" "}
-              {t("time.line", { when: relativeTime(detail.lastEditedAt, now, t) })}
+              {t("time.line", { when: relativeTime(detail.lastEditedAt, now, t, locale) })}
             </>
           ) : (
             t("time.none")
@@ -179,7 +179,6 @@ export function CreatePopover({
   progress?: ImportProgress | null;
 }) {
   const { t } = useI18n();
-  const allowed = useEntitlements();
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{
     left: number;
@@ -318,10 +317,6 @@ export function CreatePopover({
       ) : (
         (
           (["rich_text", "spreadsheet", "markdown", "canvas", "presentation"] as const)
-          .filter(
-            (format) =>
-              allowed(`format.${format}`) && allowed("documents.create"),
-          )
           .map((format) => (
             <button
               key={format}
@@ -341,7 +336,6 @@ export function CreatePopover({
       {!importing && (
         <button
           disabled={busy}
-          hidden={!allowed("documents.import")}
           onClick={() => setImporting(true)}
         >
           <span className="file-glyph" aria-hidden="true">
@@ -442,7 +436,6 @@ export function DocumentMore({
   entryChanged?: () => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [reporting, setReporting] = useState(false);
   const [panel, setPanel] = useState(""),
     [error, setError] = useState("");
   const r = detail.resource;
@@ -453,12 +446,6 @@ export function DocumentMore({
           <MoreHorizontal size={20} />
         </summary>
         <div className="document-more-menu">
-          {r.role !== "owner" && (
-            <button onClick={() => setReporting(true)}>
-              <Flag size={16} />
-              {t("doc.report")}
-            </button>
-          )}
           {r.format === "rich_text" && <div id="document-page-width-slot" />}
           <button
             onClick={() => {
@@ -536,7 +523,7 @@ export function DocumentMore({
               )}
               <button
                 className="danger"
-                disabled={r.role !== "owner"}
+                disabled={!(r.can_remove ?? r.role === "owner")}
                 onClick={remove}
               >
                 <Trash2 size={16} />
@@ -546,9 +533,6 @@ export function DocumentMore({
           )}
         </div>
       </details>
-      {reporting && (
-        <ReportDocument id={r.id} close={() => setReporting(false)} />
-      )}
       <span id="document-live-info" className="document-live-hidden" />
       {panel && (
         <DocumentRecords
@@ -579,8 +563,7 @@ function DocumentRecords({
   initial: string;
   close: () => void;
 }) {
-  const { t } = useI18n();
-  const allowed = useEntitlements();
+  const { t, locale } = useI18n();
   const [tab, setTab] = useState(initial),
     [data, setData] = useState<any>(null),
     [preview, setPreview] = useState<any>(null),
@@ -657,8 +640,8 @@ function DocumentRecords({
                   </div>
                 ))}
               </div>
-              <p>{t("record.created", { time: new Date(data.createdAt).toLocaleString() })}</p>
-              <p>{t("record.updated", { time: new Date(data.updatedAt).toLocaleString() })}</p>
+              <p>{t("record.created", { time: new Date(data.createdAt).toLocaleString(htmlLang(locale)) })}</p>
+              <p>{t("record.updated", { time: new Date(data.updatedAt).toLocaleString(htmlLang(locale)) })}</p>
               {detail.resource.format === "rich_text" && (
                 <p>{t("doc.width")} {pageWidthLabel(data.pageWidth, t)}</p>
               )}
@@ -668,7 +651,7 @@ function DocumentRecords({
             <>
               <p className="subtle">{t("record.snapshotHint")}</p>
               {roleRank(detail.resource.role) >= 3 &&
-                allowed("history.create") && (
+                (
                   <button
                     disabled={busy}
                     onClick={() => {
@@ -745,7 +728,7 @@ function DocumentRecords({
               className="version-preview-dialog"
             >
               <p>
-                {new Date(preview.createdAt).toLocaleString()} · {t("record.readonly")}
+                {new Date(preview.createdAt).toLocaleString(htmlLang(locale))} · {t("record.readonly")}
               </p>
               <p className="subtle">
                 {preview.canRestore === false

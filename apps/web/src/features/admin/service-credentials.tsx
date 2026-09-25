@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { Feedback } from "@web/shared/components/feedback.js";
@@ -35,7 +36,11 @@ function SecretField({
   onChange: (value: string | null) => void;
   multiline?: boolean;
 }) {
-  const hint = value === null ? "已配置，留空保留现有密钥" : "尚未配置";
+  const { t } = useI18n();
+  const hint =
+    value === null
+      ? t("credentials.configured")
+      : t("credentials.unconfigured");
   return (
     <label className="service-secret">
       <span>{label}</span>
@@ -59,7 +64,7 @@ function SecretField({
       )}
       {value === null && (
         <button type="button" onClick={() => onChange("")}>
-          清除现有密钥
+          {t("credentials.clear")}
         </button>
       )}
     </label>
@@ -76,6 +81,7 @@ function Origins({
   onChange: (v: string[]) => void;
   placeholder: string;
 }) {
+  const { t } = useI18n();
   return (
     <label>
       {label}
@@ -85,7 +91,7 @@ function Origins({
         onChange={(e) => onChange(e.target.value.split("\n"))}
         placeholder={placeholder}
       />
-      <small>每行一个，保存时忽略空行。</small>
+      <small>{t("credentials.linesHelp")}</small>
     </label>
   );
 }
@@ -104,6 +110,7 @@ export function ServiceCredentials({
   onlyCdn?: boolean;
   onSearchSaved?: (config: Config["search"]) => void;
 } = {}) {
+  const { t } = useI18n();
   const embedded =
       onlySearch || onlyIdentity || onlyMessaging || onlyStorage || onlyCdn,
     [data, setData] = useState<{ revision: number; config: Config } | null>(
@@ -146,7 +153,7 @@ export function ServiceCredentials({
   if (!data)
     return (
       <p className="admin-field-help" role={error ? "alert" : "status"}>
-        {error || "正在读取服务凭据…"}
+        {error || t("credentials.loading")}
       </p>
     );
   const c = data.config;
@@ -156,13 +163,13 @@ export function ServiceCredentials({
       !/^[a-zA-Z0-9_-]{1,64}$/.test(id) ||
       ["__proto__", "prototype", "constructor"].includes(id)
     ) {
-      setError("凭据名称只支持字母、数字、下划线和短横线");
+      setError(t("credentials.invalidName"));
       return;
     }
     const entries =
       tab === "identity" ? c.identity.credentials : c.storage.credentials;
     if (Object.hasOwn(entries, id)) {
-      setError("该凭据名称已存在");
+      setError(t("credentials.duplicateName"));
       return;
     }
     change((v) => {
@@ -187,10 +194,8 @@ export function ServiceCredentials({
     >
       {!embedded && (
         <>
-          <h3>服务凭据</h3>
-          <p className="admin-field-help">
-            凭据保存在本站数据库中，保存后生效。已保存的密钥不会回显；修改其他设置时保留原值。
-          </p>
+          <h3>{t("credentials.title")}</h3>
+          <p className="admin-field-help">{t("credentials.help")}</p>
         </>
       )}
       {embedded && !onlySearch && (
@@ -198,22 +203,22 @@ export function ServiceCredentials({
           {onlyIdentity
             ? "SSO Client Secret"
             : onlyMessaging
-              ? "验证码网关"
+              ? t("credentials.gateway")
               : onlyStorage
-                ? "对象存储密钥"
-                : "CDN 签名密钥"}
+                ? t("credentials.storageKeys")
+                : t("credentials.cdnKeys")}
         </h3>
       )}
       {!embedded && (
         <SettingsTabs
-          label="服务凭据分类"
+          label={t("credentials.categories")}
           value={tab}
           items={[
-            ["identity", "SSO 认证"],
-            ["messaging", "验证码网关"],
-            ["storage", "对象存储"],
-            ["cdn", "CDN 签名"],
-            ["search", "文档搜索"],
+            ["identity", t("credentials.sso")],
+            ["messaging", t("credentials.gateway")],
+            ["storage", t("credentials.storage")],
+            ["cdn", t("credentials.cdn")],
+            ["search", t("credentials.search")],
           ]}
           onChange={(v) => {
             setTab(v);
@@ -246,10 +251,10 @@ export function ServiceCredentials({
             onSearchSaved?.(saved.config.search);
             setMessage(
               onlySearch
-                ? "搜索凭据已保存并生效"
+                ? t("credentials.searchSaved")
                 : embedded
-                  ? "密钥已保存并生效"
-                  : "服务凭据已保存并生效",
+                  ? t("credentials.keysSaved")
+                  : t("credentials.saved"),
             );
           } catch (e) {
             setError((e as Error).message);
@@ -262,8 +267,8 @@ export function ServiceCredentials({
           {tab === "identity" && (
             <>
               <p className="admin-field-help">
-                认证源的“凭据名称”与这里保持一致。
-                {!embedded && "Client ID 和字段映射仍在“登录与注册”中设置。"}
+                {t("credentials.identityHelp")}{" "}
+                {!embedded && t("credentials.identityMore")}
               </p>
               {Object.entries(c.identity.credentials).map(([id, value]) => (
                 <div className="service-credential-row" key={id}>
@@ -277,7 +282,7 @@ export function ServiceCredentials({
                         })
                       }
                     >
-                      移除
+                      {t("credentials.remove")}
                     </button>
                   </header>
                   <SecretField
@@ -292,7 +297,7 @@ export function ServiceCredentials({
                 </div>
               ))}
               <Origins
-                label="自定义 SSO 允许的来源"
+                label={t("credentials.ssoOrigins")}
                 values={c.identity.allowedOrigins}
                 onChange={(values) =>
                   change((v) => {
@@ -305,9 +310,7 @@ export function ServiceCredentials({
           )}
           {tab === "storage" && (
             <>
-              <p className="admin-field-help">
-                文件存储设置使用这里的凭据名称。旧文件仍依赖其原存储凭据，请使用修改密钥来轮换。
-              </p>
+              <p className="admin-field-help">{t("credentials.storageHelp")}</p>
               {Object.entries(c.storage.credentials).map(([id, value]) => (
                 <div className="service-credential-row" key={id}>
                   <header>
@@ -320,7 +323,7 @@ export function ServiceCredentials({
                         })
                       }
                     >
-                      移除
+                      {t("credentials.remove")}
                     </button>
                   </header>
                   <label>
@@ -345,7 +348,7 @@ export function ServiceCredentials({
                     }
                   />
                   <SecretField
-                    label="Session Token（可选）"
+                    label={t("credentials.sessionToken")}
                     value={value.sessionToken}
                     onChange={(value) =>
                       change((v) => {
@@ -356,7 +359,7 @@ export function ServiceCredentials({
                 </div>
               ))}
               <Origins
-                label="允许的存储端点域名"
+                label={t("credentials.storageHosts")}
                 values={c.storage.endpointHosts}
                 onChange={(values) =>
                   change((v) => {
@@ -370,20 +373,20 @@ export function ServiceCredentials({
           {(tab === "identity" || tab === "storage") && (
             <div className="service-credential-add">
               <input
-                aria-label="新凭据名称"
-                placeholder="凭据名称，例如 company-sso"
+                aria-label={t("credentials.newName")}
+                placeholder={t("credentials.namePlaceholder")}
                 value={ref}
                 onChange={(e) => setRef(e.target.value)}
               />
               <button type="button" onClick={add}>
-                添加凭据
+                {t("credentials.add")}
               </button>
             </div>
           )}
           {tab === "messaging" && (
             <>
               <label>
-                验证码网关地址
+                {t("credentials.gatewayUrl")}
                 <input
                   type="url"
                   placeholder="https://messages.example.com/send"
@@ -396,7 +399,7 @@ export function ServiceCredentials({
                 />
               </label>
               <SecretField
-                label="网关密钥"
+                label={t("credentials.gatewayKey")}
                 value={c.messaging.secret}
                 onChange={(value) =>
                   change((v) => {
@@ -407,8 +410,8 @@ export function ServiceCredentials({
               <div className="service-channels">
                 {(
                   [
-                    ["phone", "发送手机验证码"],
-                    ["email", "发送邮箱验证码"],
+                    ["phone", t("credentials.phone")],
+                    ["email", t("credentials.email")],
                   ] as const
                 ).map(([id, label]) => (
                   <label key={id}>
@@ -427,16 +430,13 @@ export function ServiceCredentials({
                   </label>
                 ))}
               </div>
-              <p className="admin-field-help">
-                网关接收 POST 请求，Authorization 使用 Bearer 密钥；请求包含
-                kind、destination、code、purpose、expiresInSeconds。
-              </p>
+              <p className="admin-field-help">{t("credentials.gatewayHelp")}</p>
             </>
           )}
           {tab === "cdn" && (
             <>
               <label>
-                CloudFront 密钥 ID
+                {t("credentials.cloudfrontId")}
                 <input
                   value={c.storage.cdnKeyPairId}
                   onChange={(e) =>
@@ -447,7 +447,7 @@ export function ServiceCredentials({
                 />
               </label>
               <SecretField
-                label="签名私钥（PEM）"
+                label={t("credentials.privateKey")}
                 multiline
                 value={c.storage.cdnPrivateKey}
                 onChange={(value) =>
@@ -461,7 +461,7 @@ export function ServiceCredentials({
           {tab === "search" && (
             <>
               <SecretField
-                label="Meilisearch API 密钥"
+                label={t("credentials.searchKey")}
                 value={c.search.apiKey}
                 onChange={(value) =>
                   change((v) => {
@@ -469,16 +469,16 @@ export function ServiceCredentials({
                   })
                 }
               />
-              {onlySearch && (
-                <small>已保存的密钥不会回显，留空保留原值。</small>
-              )}
+              {onlySearch && <small>{t("credentials.keepKey")}</small>}
               <details
                 open={onlySearch ? undefined : true}
                 className={onlySearch ? "search-settings-details" : undefined}
               >
-                <summary hidden={!onlySearch}>高级连接设置</summary>
+                <summary hidden={!onlySearch}>
+                  {t("credentials.advanced")}
+                </summary>
                 <Origins
-                  label="允许的搜索服务来源"
+                  label={t("credentials.searchOrigins")}
                   values={c.search.allowedOrigins}
                   onChange={(values) =>
                     change((v) => {
@@ -490,7 +490,7 @@ export function ServiceCredentials({
               </details>
               {!onlySearch && (
                 <p className="admin-field-help">
-                  搜索地址、索引与启用状态在“文档搜索”中设置。
+                  {t("credentials.searchHelp")}
                 </p>
               )}
             </>
@@ -503,12 +503,12 @@ export function ServiceCredentials({
         <footer>
           <button className="primary" disabled={busy}>
             {busy
-              ? "正在保存…"
+              ? t("credentials.saving")
               : onlySearch
-                ? "保存密钥与来源"
+                ? t("credentials.saveSearch")
                 : embedded
-                  ? "保存密钥"
-                  : "保存服务凭据"}
+                  ? t("credentials.saveKeys")
+                  : t("credentials.save")}
           </button>
         </footer>
       </form>

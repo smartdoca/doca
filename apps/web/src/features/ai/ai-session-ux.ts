@@ -58,8 +58,6 @@ export type PendingSendItem = {
   modelId?: string;
   scope?: "document" | "all";
   currentResourceId?: string;
-  currentMailboxId?: string;
-  currentMessageId?: string;
   skillIds?: string[];
   webSearch?: boolean;
   skipApprovals?: {

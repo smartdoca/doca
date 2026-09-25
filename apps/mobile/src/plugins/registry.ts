@@ -6,7 +6,7 @@ import {
 
 type AppMobilePluginTypes = {
   readonly View: never;
-  readonly Icon: "documents" | "files" | "mail";
+  readonly Icon: "documents" | "files";
   readonly RouteContext: never;
   readonly NodeContext: never;
   readonly FilePickerContext: never;
@@ -28,18 +28,6 @@ export const MOBILE_BUILTIN_MANIFESTS = {
     routes: ["doca.files.mobile.files", "doca.files.mobile.folder"],
     navigation: ["doca.files.mobile-tab.files"],
     conversationKinds: ["file", "folder"],
-  },
-  mail: {
-    pluginId: "doca.mail",
-    version: "0.1.0",
-    targets: ["web", "mobile"],
-    routes: [
-      "doca.mail.mobile.mail",
-      "doca.mail.mobile.mailbox",
-      "doca.mail.mobile.message",
-    ],
-    navigation: ["doca.mail.mobile-tab.mail"],
-    conversationKinds: ["mail"],
   },
 } as const satisfies Record<string, ClientPluginManifest>;
 
@@ -99,50 +87,15 @@ const filesBundle: MobilePluginBundle<AppMobilePluginTypes> = {
   ],
 };
 
-const mailBundle: MobilePluginBundle<AppMobilePluginTypes> = {
-  manifest: MOBILE_BUILTIN_MANIFESTS.mail,
-  tabs: [
-    {
-      id: "doca.mail.mobile-tab.mail",
-      pluginId: "doca.mail",
-      order: 50,
-      route: "mail",
-      labelKey: "doca.mail.mobile.mail",
-      icon: "mail",
-    },
-  ],
-  messages: [
-    {
-      id: "doca.mail.messages.mobile",
-      pluginId: "doca.mail",
-      messages: {
-        en: {
-          "doca.mail.mobile.mail": "Mail",
-        },
-        zh: {
-          "doca.mail.mobile.mail": "邮箱",
-        },
-      },
-    },
-  ],
-};
-
-export function createBuiltinMobilePluginRegistry(options?: {
-  readonly mailEnabled?: boolean;
-}) {
+export function createBuiltinMobilePluginRegistry() {
   const registry = new MobilePluginRegistry<AppMobilePluginTypes>();
   registry.register(documentsBundle);
   registry.register(filesBundle);
-  if (options?.mailEnabled !== false) registry.register(mailBundle);
   return registry;
 }
 
-export const mobilePluginFlags = Object.freeze({
-  mailEnabled: process.env.EXPO_PUBLIC_DOCA_MAIL_ENABLED !== "false",
-});
-
 export const mobilePluginRegistry =
-  createBuiltinMobilePluginRegistry(mobilePluginFlags);
+  createBuiltinMobilePluginRegistry();
 
 export function mobilePluginMessage(locale: string, key: string) {
   const selected = locale === "zh" ? "zh" : "en";

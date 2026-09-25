@@ -1,3 +1,4 @@
+import { emitIntegrationEvent } from "@core/modules/automation/events.js";
 import {
   grantSecurity,
   requireSecurity,
@@ -15,10 +16,6 @@ import {
   passwordAllowed,
   availableLoginMethods,
 } from "@core/modules/identity/accounts.js";
-import {
-  entitlementConfig,
-  applyLevelMapping,
-} from "@core/modules/entitlements/service.js";
 import { contactProofs } from "@core/modules/identity/verification.js";
 import { profileSubmission } from "./accounts.js";
 import { accountBinding } from "../app/account-context.js";
@@ -29,12 +26,12 @@ import { profilePolicy } from "@core/modules/identity/naming.js";
 import {
   hashPassword,
   publicUser,
+  recordLogin,
   tokenHash,
   verifyPassword,
   type Actor,
 } from "@core/modules/identity/passwords.js";
 import { fail } from "@core/shared/errors.js";
-import { runUserProvisioners } from "../plugins/lifecycle.js";
 import { mobileSession, sessionExpiresAt } from "../app/mobile-client.js";
 import type { DB } from "@db/index.js";
 import { transact } from "@db/transactions.js";
@@ -224,16 +221,7 @@ export function registerIdentity(
       version: id ? b.version + 1 : 1,
     };
     if (!p.name || !p.client_id.trim()) fail(400, "名称和 Client ID 不能为空");
-    const profile = profilePolicy(p.profile_config),
-      levels = (await entitlementConfig(db)).levels;
-    if (
-      profile.levelMapping.field &&
-      [
-        profile.levelMapping.fallback,
-        ...Object.values(profile.levelMapping.rules).map((r) => r.levelId),
-      ].some((id) => !levels.some((l) => l.id === id))
-    )
-      fail(400, "来源映射的等级不存在");
+    const profile = profilePolicy(p.profile_config);
     p.profile_config = JSON.stringify(profile);
     try {
       adapter.validate(p);
@@ -352,11 +340,13 @@ export function registerIdentity(
           missing: string[] = [];
         for (const user of users)
           if (
-            !(await availableLoginMethods(tx, user.id, policy, {
-              phoneReady: ctx.loginMethodRuntime?.phoneReady ?? false,
-              emailReady: ctx.loginMethodRuntime?.emailReady ?? false,
-              providerReady: hasSecret,
-            })).length
+            !(
+              await availableLoginMethods(tx, user.id, policy, {
+                phoneReady: ctx.loginMethodRuntime?.phoneReady ?? false,
+                emailReady: ctx.loginMethodRuntime?.emailReady ?? false,
+                providerReady: hasSecret,
+              })
+            ).length
           )
             missing.push(user.public_id ?? user.id);
         if (missing.length)
@@ -906,7 +896,6 @@ export function registerIdentity(
               admin: 0,
               status: policy === "approval" ? "pending" : "active",
               created_at: now(),
-              base_level: (await entitlementConfig(tx)).defaultLevel,
               profile_metadata: JSON.stringify({
                 providerId: p.id,
                 avatarUrl: profile.values.avatar,
@@ -916,6 +905,7 @@ export function registerIdentity(
               }),
             })
             .execute();
+          await emitIntegrationEvent(tx, "user.created", { userId: id });
           await claimIdentifier(tx, id, publicId, "username");
           for (const key of ["email", "phone"] as const)
             if (profile.values[key])
@@ -947,13 +937,6 @@ export function registerIdentity(
             { displayName: identity.name, ...identity.fields },
             identity.verified ?? {},
           );
-        await applyLevelMapping(
-          tx,
-          linked.user_id,
-          p.id,
-          mapping,
-          identity.levelValue,
-        );
         const user = await tx
           .selectFrom("users")
           .selectAll()
@@ -973,22 +956,17 @@ export function registerIdentity(
             expires_at: sessionExpiresAt(req),
           })
           .execute();
+        await recordLogin(tx, user.id);
         return { status: "active", user: publicUser(user) };
       });
       if (result.status === "needs_profile") return result;
-      const provisionedId = result.status === "active" && result.user
-        ? result.user.id
-        : result.status === "pending" && "pendingUserId" in result
-          ? result.pendingUserId
-          : "";
+      const provisionedId =
+        result.status === "active" && result.user
+          ? result.user.id
+          : result.status === "pending" && "pendingUserId" in result
+            ? result.pendingUserId
+            : "";
       if (provisionedId) {
-        await runUserProvisioners(db, {
-          id: provisionedId,
-          displayName:
-            result.status === "active" && result.user
-              ? result.user.display_name
-              : undefined,
-        });
       }
       reply.header(
         "Set-Cookie",
@@ -998,7 +976,9 @@ export function registerIdentity(
       );
       if (result.status === "pending" && "pendingUserId" in result)
         return { status: "pending" };
-      return result.status === "active" ? mobileSession(req, token, result) : result;
+      return result.status === "active"
+        ? mobileSession(req, token, result)
+        : result;
     },
   );
 }

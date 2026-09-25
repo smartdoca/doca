@@ -11,7 +11,7 @@ import {
   type DocaPlugin,
   type JsonObject,
   type ServiceToken,
-} from "../../plugin-contracts/src/index.js";
+} from "@doca/plugin-contracts";
 
 export interface PluginContractHarnessOptions {
   readonly config?: JsonObject;

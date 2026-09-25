@@ -12,7 +12,7 @@ import {
   type ToolContext,
   type EditOperation,
 } from "@core/workflows/ai-documents.js";
-import { requireCapability } from "@core/modules/entitlements/service.js";
+import { requireCapability } from "@core/modules/access/operation-policy.js";
 import { lockAIUser } from "@core/modules/ai/config.js";
 import { enqueueProjection } from "@core/modules/automation/jobs.js";
 import {
@@ -139,11 +139,6 @@ async function sourceImage(
     fail(403, "只能插入自己生成的图片");
   if (asset.resource_id) await checkScope(db, ctx, asset.resource_id);
   else if (asset.owner_id !== ctx.actor.id) fail(403, "无权读取图片");
-  if (
-    !includePending &&
-    !["none", "pass"].includes(asset.moderation_status ?? "none")
-  )
-    fail(403, "图片审核中或已被封禁");
   return asset;
 }
 export async function generatedImageStatus(
@@ -153,8 +148,8 @@ export async function generatedImageStatus(
 ) {
   const asset = await sourceImage(db, ctx, id, true);
   return {
-    ready: ["none", "pass"].includes(asset.moderation_status ?? "none"),
-    pending: asset.moderation_status === "pending",
+    ready: true,
+    pending: false,
   };
 }
 

@@ -1,23 +1,48 @@
 import { SecurityVerification } from "@web/features/auth/security-verification.js";
 import { AccountContacts } from "@web/features/account/account-settings.js";
-import { MyMembership } from "@web/features/settings/membership-settings.js";
-import { Feedback, type FeedbackTone } from "@web/shared/components/feedback.js";
+import {
+  Feedback,
+  type FeedbackTone,
+} from "@web/shared/components/feedback.js";
 import { Select } from "@web/shared/components/select.js";
 import { useRef, useState } from "react";
 import { Pencil, Camera } from "lucide-react";
-import { api, assetUrl, fileUrl, uploadFile, type FileItem, type Me } from "@web/shared/api.js";
+import {
+  api,
+  assetUrl,
+  fileUrl,
+  uploadFile,
+  type FileItem,
+  type Me,
+} from "@web/shared/api.js";
 import { LinkedIdentities } from "@web/features/auth/authentication.js";
-import { FileSourceDialog, FolderFilePicker } from "@web/features/files/files.js";
-import { ActivityCalendar } from "@web/features/workspace/activity-calendar.js";
+import {
+  FileSourceDialog,
+  FolderFilePicker,
+} from "@web/features/files/files.js";
 import { localeLabel, locales } from "@doca/i18n";
 import { useI18n } from "@web/shared/i18n.js";
 export const avatars: Record<string, string> = {
   fox: "🦊",
   panda: "🐼",
   cat: "🐱",
+  dog: "🐶",
+  rabbit: "🐰",
+  lion: "🦁",
+  tiger: "🐯",
+  bear: "🐻",
+  koala: "🐨",
+  monkey: "🐵",
+  penguin: "🐧",
+  owl: "🦉",
+  dragon: "🐲",
   whale: "🐳",
+  butterfly: "🦋",
   leaf: "🌿",
+  cactus: "🌵",
   sun: "☀️",
+  moon: "🌙",
+  rocket: "🚀",
 };
 export function Avatar({
   name,
@@ -30,16 +55,17 @@ export function Avatar({
   assetId?: string | null;
   sourceUrl?: string;
 }) {
+  const { t } = useI18n();
   return (
     <span className={"user-avatar " + (avatar ?? "initials")}>
       {sourceUrl && /^https:\/\//.test(sourceUrl) ? (
         <img
           src={sourceUrl}
           referrerPolicy="no-referrer"
-          alt={name + "的头像"}
+          alt={t("profile.avatarAlt", { name })}
         />
       ) : assetId ? (
-        <img src={assetUrl(assetId)} alt={name + "的头像"} />
+        <img src={assetUrl(assetId)} alt={t("profile.avatarAlt", { name })} />
       ) : (
         (avatars[avatar ?? ""] ?? name[0])
       )}
@@ -55,6 +81,8 @@ export function Profile({
   saved: () => Promise<void>;
   passwordForm: React.ReactNode;
 }) {
+  const { t } = useI18n();
+
   const fallbackName = me.user.display_name || me.user.public_id || me.user.id,
     [name, setName] = useState(me.profileName || fallbackName),
     [avatar, setAvatar] = useState(me.preferences.avatar),
@@ -96,21 +124,31 @@ export function Profile({
       });
       const latest = await api<Me>("/me");
       version.current = latest.preferences.version;
-      setName(latest.profileName || latest.user.display_name || latest.user.public_id || latest.user.id);
+      setName(
+        latest.profileName ||
+          latest.user.display_name ||
+          latest.user.public_id ||
+          latest.user.id,
+      );
       setAvatar(latest.preferences.avatar);
       setAssetId(latest.preferences.avatar_asset_id ?? null);
       setEditingName(false);
       await saved();
       window.dispatchEvent(new Event("profile-updated"));
       setTone("success");
-      setMessage("已自动保存");
+      setMessage(t("profile.autoSaved"));
     } catch (e) {
       setTone("error");
       setMessage((e as Error).message);
       try {
         const latest = await api<Me>("/me");
         version.current = latest.preferences.version;
-        setName(latest.profileName || latest.user.display_name || latest.user.public_id || latest.user.id);
+        setName(
+          latest.profileName ||
+            latest.user.display_name ||
+            latest.user.public_id ||
+            latest.user.id,
+        );
         setAvatar(latest.preferences.avatar);
         setAssetId(latest.preferences.avatar_asset_id ?? null);
       } catch {
@@ -123,15 +161,15 @@ export function Profile({
   }
   return (
     <section className="account-page">
-      <h1>个人信息</h1>
-      <p className="subtle">管理对协作者展示的资料与账号安全。</p>
+      <h1>{t("mobile.screen.account")}</h1>
+      <p className="subtle">{t("profile.intro")}</p>
       <section className="settings-card">
-        <h2>个人资料</h2>
+        <h2>{t("profile.details")}</h2>
         <div className="profile-preview">
           <button
             hidden={me.fields?.avatar.enabled === false}
             className="profile-avatar-upload"
-            aria-label="上传头像"
+            aria-label={t("profile.uploadAvatar")}
             disabled={busy || me.editable?.avatar === false}
             onClick={() => setSourceOpen(true)}
           >
@@ -148,7 +186,7 @@ export function Profile({
               (editingName ? (
                 <input
                   autoFocus
-                  aria-label="昵称"
+                  aria-label={t("login.nickname")}
                   value={name}
                   maxLength={160}
                   disabled={busy}
@@ -173,17 +211,17 @@ export function Profile({
                   className="profile-name"
                   disabled={busy || me.editable?.displayName === false}
                   onClick={() => setEditingName(true)}
-                  aria-label="编辑昵称"
+                  aria-label={t("profile.editName")}
                 >
-                  <strong>{name || "添加昵称"}</strong>
+                  <strong>{name || t("profile.addName")}</strong>
                   <Pencil size={15} />
                 </button>
               ))}
             {me.fields?.avatar.enabled !== false && (
-              <small>上传自己的头像，或选择下方预设图案</small>
+              <small>{t("profile.avatarHint")}</small>
             )}
             <small className="profile-public-id">
-              用户标识：@{me.user.public_id ?? me.user.id}
+              {t("profile.publicId", { id: me.user.public_id ?? me.user.id })}
             </small>
           </div>
         </div>
@@ -210,10 +248,33 @@ export function Profile({
             }
           }}
         />
-        {sourceOpen && <FileSourceDialog title="选择头像" close={() => setSourceOpen(false)} chooseDoca={() => setFolderPicker(true)} chooseLocal={() => upload.current?.click()} />}
-        {folderPicker && <FolderFilePicker accept={(item) => item.mime.startsWith("image/")} close={() => setFolderPicker(false)} select={async (item: FileItem) => { const response = await fetch(fileUrl(item.id)); if (!response.ok) throw new Error("图片读取失败"); const asset = await uploadFile(new File([await response.blob()], item.name, { type: item.mime }), "avatar"); await update({ avatarAssetId: asset.id }); }} />}
+        {sourceOpen && (
+          <FileSourceDialog
+            title={t("profile.chooseAvatar")}
+            close={() => setSourceOpen(false)}
+            chooseDoca={() => setFolderPicker(true)}
+            chooseLocal={() => upload.current?.click()}
+          />
+        )}
+        {folderPicker && (
+          <FolderFilePicker
+            accept={(item) => item.mime.startsWith("image/")}
+            close={() => setFolderPicker(false)}
+            select={async (item: FileItem) => {
+              const response = await fetch(fileUrl(item.id));
+              if (!response.ok) throw new Error(t("profile.imageReadFailed"));
+              const asset = await uploadFile(
+                new File([await response.blob()], item.name, {
+                  type: item.mime,
+                }),
+                "avatar",
+              );
+              await update({ avatarAssetId: asset.id });
+            }}
+          />
+        )}
         <small className="subtle" hidden={me.fields?.avatar.enabled === false}>
-          PNG、JPEG、WebP、GIF，最大 5MB；自动裁切为正方形。
+          {t("profile.avatarFormats")}
         </small>
         <div
           className="avatar-options"
@@ -224,19 +285,19 @@ export function Profile({
               type="button"
               key={key}
               className={!assetId && avatar === key ? "selected" : ""}
-              aria-label={"头像：" + (avatars[key] ?? "昵称首字")}
+              aria-label={t("profile.avatarOption", {
+                name: avatars[key] ?? t("profile.initials"),
+              })}
               aria-pressed={!assetId && avatar === key}
               disabled={busy || me.editable?.avatar === false}
               onClick={() => void update({ avatar: key, avatarAssetId: null })}
             >
-              <Avatar name={name || "我"} avatar={key} />
+              <Avatar name={name || t("time.me")} avatar={key} />
             </button>
           ))}
         </div>
         <Feedback message={message} tone={tone} />
       </section>
-      <ActivityCalendar />
-      <MyMembership me={me} />
       <section className="settings-card" id="account-security">
         <SecurityVerification />
       </section>
@@ -300,7 +361,9 @@ export function PersonalSettings({
           {t("settings.language")}
           <Select
             value={locale}
-            onChange={(event) => void setLocale(event.target.value as typeof locale)}
+            onChange={(event) =>
+              void setLocale(event.target.value as typeof locale)
+            }
           >
             {locales.map((code) => (
               <option key={code} value={code}>
@@ -312,7 +375,11 @@ export function PersonalSettings({
       </section>
       <section className="settings-card">
         <h2>{t("settings.appearance")}</h2>
-        <div className="theme-choices" role="group" aria-label={t("settings.themeGroup")}>
+        <div
+          className="theme-choices"
+          role="group"
+          aria-label={t("settings.themeGroup")}
+        >
           {(["light", "soft"] as const).map((theme) => (
             <button
               type="button"
@@ -326,9 +393,19 @@ export function PersonalSettings({
                 <i />
                 <span />
               </span>
-              <strong>{t(theme === "light" ? "settings.theme.light" : "settings.theme.soft")}</strong>
+              <strong>
+                {t(
+                  theme === "light"
+                    ? "settings.theme.light"
+                    : "settings.theme.soft",
+                )}
+              </strong>
               <small>
-                {t(theme === "light" ? "settings.theme.lightHint" : "settings.theme.softHint")}
+                {t(
+                  theme === "light"
+                    ? "settings.theme.lightHint"
+                    : "settings.theme.softHint",
+                )}
               </small>
             </button>
           ))}
@@ -342,7 +419,9 @@ export function PersonalSettings({
               void update({ ...p, density: e.target.value as typeof p.density })
             }
           >
-            <option value="comfortable">{t("settings.density.comfortable")}</option>
+            <option value="comfortable">
+              {t("settings.density.comfortable")}
+            </option>
             <option value="compact">{t("settings.density.compact")}</option>
           </Select>
         </label>

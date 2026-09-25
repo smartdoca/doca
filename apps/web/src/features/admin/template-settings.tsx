@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { blankTemplateContent } from "@core/modules/templates/content.js";
 import { templateFormatLabel } from "@web/features/documents/template-picker.js";
 import { renderTemplatePreview } from "@web/features/documents/template-preview-image.js";
@@ -29,6 +30,8 @@ type Draft = {
 const formats = Object.keys(templateFormatLabel) as Resource["format"][];
 
 export function TemplateSettings() {
+const { t } = useI18n();
+
   const [format, setFormat] = useState<Resource["format"]>("rich_text");
   const [items, setItems] = useState<TemplateCard[]>([]);
   const [error, setError] = useState("");
@@ -72,7 +75,7 @@ export function TemplateSettings() {
     <>
       <div className="admin-section-heading">
         <div>
-          <h2>文档模板</h2>
+          <h2>{t("admin.templates")}</h2>
           <p>维护各类文档的模板。保存后，所有用户新建时都可以选用。</p>
         </div>
         <button className="primary" onClick={() => void open()}>
@@ -105,12 +108,8 @@ export function TemplateSettings() {
                   <strong>{item.title}</strong>
                   <small>{new Date(item.updated_at).toLocaleString()}</small>
                 </div>
-                <button type="button" onClick={() => void open(item)}>
-                  编辑
-                </button>
-                <button type="button" className="danger" onClick={() => setRemoving(item)}>
-                  删除
-                </button>
+                <button type="button" onClick={() => void open(item)}>{t("time.edited")}</button>
+                <button type="button" className="danger" onClick={() => setRemoving(item)}>{t("common.delete")}</button>
               </article>
             ))}
           </div>
@@ -131,9 +130,7 @@ export function TemplateSettings() {
           <p>删除「{removing.title}」后，用户将不能再从它创建文档。已经创建的文档不会变化。</p>
           {error && <Feedback message={error} tone="error" />}
           <footer>
-            <button type="button" onClick={() => setRemoving(null)}>
-              取消
-            </button>
+            <button type="button" onClick={() => setRemoving(null)}>{t("common.cancel")}</button>
             <button
               type="button"
               className="danger"
@@ -149,9 +146,7 @@ export function TemplateSettings() {
                   .catch((reason: Error) => setError(reason.message))
                   .finally(() => setBusy(false));
               }}
-            >
-              删除
-            </button>
+            >{t("common.delete")}</button>
           </footer>
         </Dialog>
       )}
@@ -168,6 +163,8 @@ function TemplateEditor({
   close: () => void;
   saved: () => void;
 }) {
+const { t } = useI18n();
+
   const reader = useRef<(() => Promise<unknown>) | null>(null);
   const [title, setTitle] = useState(draft.title);
   const [ready, setReady] = useState(false);
@@ -194,14 +191,12 @@ function TemplateEditor({
       <p className="subtle">直接编辑后保存，不进入协同。</p>
       {error && <Feedback message={error} tone="error" />}
       <div className="template-editor-stage">
-        <Suspense fallback={<p className="empty">正在加载编辑器…</p>}>
+        <Suspense fallback={<p className="empty">{t("shell.loadingEditor")}</p>}>
           <TemplateSurface format={draft.format} content={draft.content} onContent={accept} />
         </Suspense>
       </div>
       <footer>
-        <button type="button" onClick={close}>
-          取消
-        </button>
+        <button type="button" onClick={close}>{t("common.cancel")}</button>
         <button
           type="button"
           className="primary"
@@ -222,9 +217,7 @@ function TemplateEditor({
               setBusy(false);
             });
           }}
-        >
-          保存
-        </button>
+        >{t("library.qa.save")}</button>
       </footer>
     </Dialog>
   );

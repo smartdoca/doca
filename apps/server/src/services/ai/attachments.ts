@@ -45,8 +45,6 @@ export async function checkAttachments(
       .where("deleted_at", "is", null)
       .executeTakeFirst();
     if (!row) fail(404, "附件不存在或无权访问");
-    if (!["none", "pass"].includes(row.moderation_status ?? "none"))
-      fail(403, "附件尚未通过内容审核");
     if (model && row.mime.startsWith("image/") && !model.vision && !media?.vision)
       fail(
         400,

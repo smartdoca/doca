@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { api, type Detail } from "@web/shared/api.js";
 import { realtime } from "@web/features/documents/realtime.js";
-import { useEntitlements } from "@web/shared/hooks/entitlement-access.js";
 import { accessText, type Manager } from "@web/features/documents/access-management.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { RequestAccess } from "@web/features/documents/access-tasks.js";
@@ -92,8 +91,7 @@ export function PermissionDialog({
   authenticated?: boolean;
 }) {
   const { t } = useI18n();
-  const allowed = useEntitlements(),
-    id = detail.resource.id;
+  const id = detail.resource.id;
   const [data, setData] = useState<Overview | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -209,7 +207,7 @@ export function PermissionDialog({
       const next = await load();
       setSourceMember(next.members.find((member) => member.id === sourceMember.id) ?? null);
       await saved();
-      setNotice(action === "delete" ? "授权来源已删除" : "授权来源已更新");
+      setNotice(action === "delete" ? t("permissionsUi.sourceDeleted") : t("permissionsUi.sourceUpdated"));
     } catch (e) {
       setError((e as Error).message);
       await load().catch(() => {});
@@ -217,7 +215,7 @@ export function PermissionDialog({
       setBusy(false);
     }
   }
-  async function act(path: string, body: unknown, message = "已保存") {
+  async function act(path: string, body: unknown, message = t("common.settingsSaved")) {
     setBusy(true);
     setError("");
     setNotice("");
@@ -255,19 +253,19 @@ export function PermissionDialog({
         role: nextRole,
         includeDescendants: scope,
       },
-      nextRole ? "权限已更新" : "已移除协作者",
+      nextRole ? t("permissionsUi.updated") : t("permissionsUi.collaboratorRemoved"),
     );
     if (next) {
       setRemoving(null);
       const effective = next.members.find((x) => x.id === m.id);
       if (effective && effective.role !== (nextRole ?? "none"))
-        setNotice("已保存，公开访问或其他授权仍让对方保留当前权限。");
+        setNotice(t("permissionsUi.otherAccess"));
     }
   }
   function origin(field: string) {
     if (!data || data.accessMode !== "inherit") return null;
     return data.inheritedFields.includes(field) ? (
-      <small className="permissions-origin">继承自上级</small>
+      <small className="permissions-origin">{t("permissionsUi.inherited")}</small>
     ) : (
       <button
         type="button"
@@ -278,9 +276,7 @@ export function PermissionDialog({
           e.stopPropagation();
           void settings({ resetFields: [field] });
         }}
-      >
-        恢复上级设置
-      </button>
+      >{t("permissionsUi.restoreParent")}</button>
     );
   }
   const inherited = data?.accessMode === "inherit",
@@ -306,7 +302,7 @@ export function PermissionDialog({
             <button
               type="button"
               className="icon"
-              aria-label="返回"
+              aria-label={t("library.relations.back")}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -324,7 +320,7 @@ export function PermissionDialog({
               {data.hasParent && (
                 <label
                   className="permissions-inherit-control"
-                  title="继承上级协作者及未单独设置的权限；只有所有者可以切换"
+                  title={t("permissionsUi.inheritHelp")}
                 >
                   <input
                     type="checkbox"
@@ -335,15 +331,13 @@ export function PermissionDialog({
                         accessMode: e.target.checked ? "inherit" : "custom",
                       })
                     }
-                  />
-                  继承上级
-                </label>
+                  />{t("shell.access.inherit")}</label>
               )}
               {authenticated && (
                 <a
                   className="icon"
-                  title="相关工单"
-                  aria-label="相关工单"
+                  title={t("permissionsUi.tickets")}
+                  aria-label={t("permissionsUi.tickets")}
                   href={`#/tickets?resourceKind=${detail.resource.kind}&resourceId=${id}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -354,11 +348,11 @@ export function PermissionDialog({
               {data.canManage && (
                 <button
                   className="permissions-public-button"
-                  title="作品公开"
+                  title={t("share.settings")}
                   onClick={() => navigate("settings")}
                 >
                   <Globe size={16} />
-                  <span>作品公开</span>
+                  <span>{t("share.settings")}</span>
                 </button>
               )}
             </>
@@ -376,11 +370,11 @@ export function PermissionDialog({
       </header>
       <div className="permissions-body" aria-busy={busy}>
         {error && <Feedback tone="error" message={error} />}
-        {!data && !error && <p className="permissions-empty">正在加载…</p>}
+        {!data && !error && <p className="permissions-empty">{t("common.loading")}</p>}
         {data && page === "main" && (
           <>
             <section className="permissions-self">
-              <span className="permissions-self-title">当前用户</span>
+              <span className="permissions-self-title">{t("permissionsUi.currentUser")}</span>
               {data.currentUser ? (
                 <UserBadge
                   id={data.currentUser.id}
@@ -390,7 +384,7 @@ export function PermissionDialog({
                   passive
                 />
               ) : (
-                <span>未登录用户</span>
+                <span>{t("permissionsUi.anonymous")}</span>
               )}
               <span className="permissions-self-role">
                 {accessText(t, data.role) === data.role ? t("role.none") : accessText(t, data.role)}
@@ -399,9 +393,7 @@ export function PermissionDialog({
                 <button
                   className="permissions-request-button"
                   onClick={() => navigate("request")}
-                >
-                  申请权限
-                </button>
+                >{t("ticket.requestedRole")}</button>
               )}
             </section>
             {data.rank >= 3 && (
@@ -410,13 +402,13 @@ export function PermissionDialog({
                   type="button"
                   className="permissions-collaborators"
                   disabled={!data.canManage}
-                  aria-label={`协作者，${data.members.length}人`}
+                  aria-label={t("permissionsUi.collaboratorCount", { count: data.members.length })}
                   onClick={() => navigate("members")}
                 >
                   <span>
-                    {data.canManage && allowed("sharing.invite")
-                      ? "邀请协作者"
-                      : "协作者"}
+                    {data.canManage
+                      ? t("share.invite")
+                      : t("share.members")}
                   </span>
                   <span className="permissions-avatars">
                     {data.members.slice(0, 5).map((m) => (
@@ -436,14 +428,14 @@ export function PermissionDialog({
                     {data.canManage && <ChevronRight size={17} />}
                   </span>
                 </button>
-                {data.canManage && allowed("sharing.invite") && (
+                {data.canManage  && (
                   <button
                     type="button"
                     className="permissions-invite-entry"
                     onClick={() => navigate("invite")}
                   >
                     <Search size={16} />
-                    <span>搜索用户名或昵称，邀请协作者</span>
+                    <span>{t("permissionsUi.search")}</span>
                   </button>
                 )}
               </section>
@@ -458,7 +450,7 @@ export function PermissionDialog({
             )}
           </>
         )}
-        {data?.canManage && page === "invite" && allowed("sharing.invite") && (
+        {data?.canManage && page === "invite"  && (
           <form
             className="permissions-invite-form"
             onSubmit={async (e) => {
@@ -473,19 +465,19 @@ export function PermissionDialog({
                     includeDescendants,
                     message: invitationMessage.trim(),
                   },
-                  "邀请已提交",
+                  t("permissionsUi.invited"),
                 )
               ) {
                 setPerson(null);
                 setInvitationMessage("");
                 navigate("main");
-                setNotice("邀请已提交");
+                setNotice(t("permissionsUi.invited"));
               }
             }}
           >
             <fieldset className="permissions-form" disabled={busy}>
               <div className="permissions-invite-recipient">
-                <h3>选择协作者</h3>
+                <h3>{t("dialog.chooseCollaborator")}</h3>
                 <PersonPicker
                   autoFocus
                   selected={person}
@@ -493,10 +485,8 @@ export function PermissionDialog({
                   select={setPerson}
                 />
               </div>
-              <label>
-                授予权限
-                <Select
-                  aria-label="邀请权限"
+              <label>{t("permissionsUi.grant")}<Select
+                  aria-label={t("permissionsUi.inviteAccess")}
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
                 >
@@ -513,17 +503,14 @@ export function PermissionDialog({
                     type="checkbox"
                     checked={includeDescendants}
                     onChange={(e) => setIncludeDescendants(e.target.checked)}
-                  />
-                  包含子文档
-                </label>
+                  />{t("role.scope.descendants")}</label>
               )}
               <label>
-                <span>
-                  备注 <span className="permissions-optional">（选填）</span>
+                <span>{t("permissionsUi.note")}<span className="permissions-optional">{t("permissionsUi.optional")}</span>
                 </span>
                 <textarea
-                  aria-label="邀请说明"
-                  placeholder="说说邀请对方参与什么协作"
+                  aria-label={t("ticket.inviteNote")}
+                  placeholder={t("permissionsUi.noteHint")}
                   maxLength={1000}
                   rows={3}
                   value={invitationMessage}
@@ -531,15 +518,13 @@ export function PermissionDialog({
                 />
               </label>
               <footer>
-                <button type="button" onClick={() => navigate("main")}>
-                  取消
-                </button>
+                <button type="button" onClick={() => navigate("main")}>{t("common.cancel")}</button>
                 <button
                   className="primary"
                   type="submit"
                   disabled={!person || busy}
                 >
-                  {busy ? "正在邀请…" : "发送邀请"}
+                  {busy ? t("permissionsUi.inviting") : t("permissionsUi.sendInvite")}
                 </button>
               </footer>
             </fieldset>
@@ -559,15 +544,15 @@ export function PermissionDialog({
                   <UserBadge id={m.id} name={m.display_name} />
                   <small>
                     @{m.public_id}
-                    {m.sources.includes("inherit") ? " · 继承自上级" : ""}
+                    {m.sources.includes("inherit") ? t("permissionsUi.inheritedSuffix") : ""}
                   </small>
                 </div>
                 {m.canAdjust ? (
                   <div className="permissions-member-controls">
                     <button
                       className="icon permissions-source-button"
-                      title="查看权限来源"
-                      aria-label={`${m.display_name}的权限来源`}
+                      title={t("permissionsUi.viewSources")}
+                      aria-label={t("permissionsUi.sourcesFor", { name: m.display_name })}
                       disabled={busy}
                       onClick={() => {
                         setSourceMember(m);
@@ -577,7 +562,7 @@ export function PermissionDialog({
                       <Info size={15} />
                     </button>
                     <Select
-                      aria-label={`${m.display_name}的权限`}
+                      aria-label={t("permissionsUi.accessFor", { name: m.display_name })}
                       value={m.role}
                       disabled={busy}
                       onChange={(e) => void member(m, e.target.value)}
@@ -589,9 +574,7 @@ export function PermissionDialog({
                       ))}
                     </Select>
                     {m.canAdjust && (
-                      <button disabled={busy} onClick={() => setRemoving(m.id)}>
-                        移除
-                      </button>
+                      <button disabled={busy} onClick={() => setRemoving(m.id)}>{t("credentials.remove")}</button>
                     )}
                   </div>
                 ) : (
@@ -601,8 +584,8 @@ export function PermissionDialog({
                     </span>
                     <button
                       className="icon permissions-source-button"
-                      title="查看权限来源"
-                      aria-label={`${m.display_name}的权限来源`}
+                      title={t("permissionsUi.viewSources")}
+                      aria-label={t("permissionsUi.sourcesFor", { name: m.display_name })}
                       onClick={() => {
                         setSourceMember(m);
                         navigate("sources");
@@ -619,28 +602,22 @@ export function PermissionDialog({
                       checked={m.includeDescendants}
                       disabled={busy}
                       onChange={(e) => void member(m, m.role, e.target.checked)}
-                    />
-                    包含子文档
-                  </label>
+                    />{t("role.scope.descendants")}</label>
                 )}
                 {removing === m.id && (
                   <div className="permissions-confirm">
-                    <p>
-                      取消该协作者在本文档的权限，并停止继承其上级授权。公开访问权限仍按作品设置生效。
-                    </p>
+                    <p>{t("permissionsUi.removeHelp")}</p>
                     <button
                       disabled={busy}
                       onClick={() => void member(m, null)}
-                    >
-                      确认移除
-                    </button>
-                    <button onClick={() => setRemoving(null)}>取消</button>
+                    >{t("permissionsUi.confirmRemove")}</button>
+                    <button onClick={() => setRemoving(null)}>{t("common.cancel")}</button>
                   </div>
                 )}
               </div>
             ))}
             {!data.members.length && (
-              <p className="permissions-empty">暂无协作者</p>
+              <p className="permissions-empty">{t("permissionsUi.noCollaborators")}</p>
             )}
           </>
         )}
@@ -654,31 +631,31 @@ export function PermissionDialog({
               const inherited = source.type === "parent_inherited";
               const parentOverride = source.type === "parent_override";
               const sourceLabel = inherited
-                ? "父文档继承"
+                ? t("permissionsUi.parentSource")
                 : parentOverride
                   ? source.status === "disabled"
-                    ? "阻断父文档权限"
-                    : "覆盖父文档权限"
+                    ? t("permissionsUi.blockParent")
+                    : t("permissionsUi.overrideParent")
                   : source.type === "link"
-                    ? `分享链接 ${source.id ?? ""}`
-                    : "主动授权";
+                    ? t("permissionsUi.shareSource", { id: source.id ?? "" })
+                    : t("permissionsUi.directGrant");
               return (
                 <div className="permissions-source-card" key={`${source.type}:${source.id ?? index}`}>
                   <div className="permissions-source-card-title">
                     <span>{sourceLabel}</span>
-                    <span>{source.status === "disabled" ? "已禁用" : accessText(t, source.role) ?? source.role}</span>
+                    <span>{source.status === "disabled" ? t("permissionsUi.disabled") : accessText(t, source.role) ?? source.role}</span>
                   </div>
                   <div className="permissions-source-card-meta">
                     {supportsDescendants && source.includeDescendants
-                      ? "包含子文档"
-                      : "仅当前文档"}
+                      ? t("role.scope.descendants")
+                      : t("permissionsUi.currentOnly")}
                   </div>
                   {!inherited && (
                     <div className="permissions-source-card-actions">
                       {source.status !== "disabled" && (
                         <>
                           <Select
-                            aria-label={`${sourceLabel}权限`}
+                            aria-label={t("permissionsUi.sourceAccess", { name: sourceLabel })}
                             value={source.role}
                             disabled={busy}
                             onChange={(event) =>
@@ -705,9 +682,7 @@ export function PermissionDialog({
                                     event.target.checked,
                                   )
                                 }
-                              />
-                              子文档
-                            </label>
+                              />{t("permissionsUi.children")}</label>
                           )}
                         </>
                       )}
@@ -715,7 +690,7 @@ export function PermissionDialog({
                         disabled={busy}
                         onClick={() => void sourceAction(source, "delete")}
                       >
-                        {parentOverride ? "取消覆盖" : "删除来源"}
+                        {parentOverride ? t("permissionsUi.clearOverride") : t("permissionsUi.deleteSource")}
                       </button>
                     </div>
                   )}
@@ -723,7 +698,7 @@ export function PermissionDialog({
               );
             })}
             {!sourceMember.sourceDetails.length && (
-              <p className="permissions-empty">暂无可展示的授权来源</p>
+              <p className="permissions-empty">{t("permissionsUi.noSources")}</p>
             )}
           </section>
         )}
@@ -732,23 +707,16 @@ export function PermissionDialog({
             <fieldset className="permissions-form" disabled={busy}>
               <section className="permissions-section">
                 <label className="permissions-switch">
-                  <span>公开访问 {origin("visibility")}</span>
+                  <span>{t("permissionsUi.publicAccess")}{origin("visibility")}</span>
                   <input
                     role="switch"
-                    aria-label="公开访问"
+                    aria-label={t("permissionsUi.publicAccess")}
                     type="checkbox"
                     checked={!!isPublic}
-                    disabled={
-                      !isPublic &&
-                      !allowed("sharing.site") &&
-                      !allowed("sharing.public")
-                    }
                     onChange={(e) =>
                       void settings({
                         visibility: e.target.checked
-                          ? allowed("sharing.site")
-                            ? "authenticated"
-                            : "public"
+                          ? "authenticated"
                           : "invited",
                       })
                     }
@@ -760,10 +728,6 @@ export function PermissionDialog({
                       <input
                         type="checkbox"
                         checked={data.effectiveVisibility === "public"}
-                        disabled={
-                          data.effectiveVisibility !== "public" &&
-                          !allowed("sharing.public")
-                        }
                         onChange={(e) =>
                           void settings({
                             visibility: e.target.checked
@@ -771,13 +735,11 @@ export function PermissionDialog({
                               : "authenticated",
                           })
                         }
-                      />
-                      公网开放（未登录可阅读）
-                    </label>
+                      />{t("permissionsUi.publicWeb")}</label>
                     <div className="permissions-option-row">
-                      <span>公开权限 {origin("public_role")}</span>
+                      <span>{t("permissionsUi.publicPermission")}{origin("public_role")}</span>
                       <Select
-                        aria-label="公开权限"
+                        aria-label={t("permissionsUi.publicPermission")}
                         value={data.publicRole}
                         onChange={(e) =>
                           void settings({ publicRole: e.target.value })
@@ -794,17 +756,17 @@ export function PermissionDialog({
                 ) : (
                   <p className="subtle">
                     {data.effectiveRequestsEnabled
-                      ? "获得文档地址的人可以申请访问。"
-                      : "只有已获授权的人可以访问。"}
+                      ? t("permissionsUi.requestHelp")
+                      : t("permissionsUi.privateHelp")}
                   </p>
                 )}
               </section>
               <section className="permissions-section permissions-application">
                 <label className="permissions-switch">
-                  <span>允许申请权限 {origin("requests_enabled")}</span>
+                  <span>{t("permissionsUi.allowRequests")}{origin("requests_enabled")}</span>
                   <input
                     role="switch"
-                    aria-label="允许申请权限"
+                    aria-label={t("permissionsUi.allowRequests")}
                     type="checkbox"
                     checked={data.effectiveRequestsEnabled}
                     onChange={(e) =>
@@ -824,11 +786,9 @@ export function PermissionDialog({
                     onChange={(e) =>
                       void settings({ discoverable: e.target.checked })
                     }
-                  />
-                  允许在公共发现中展示
-                  {origin("discoverable")}
+                  />{t("permissionsUi.discoverable")}{origin("discoverable")}
                 </label>
-                <p className="subtle">仍受公开范围和系统发现策略限制。</p>
+                <p className="subtle">{t("permissionsUi.discoveryHelp")}</p>
               </section>
               {detail.resource.kind === "document" && (
                 <section className="permissions-section">
@@ -839,9 +799,7 @@ export function PermissionDialog({
                       onChange={(e) =>
                         void settings({ historyReaders: e.target.checked })
                       }
-                    />
-                    允许阅读者查看历史版本
-                    {origin("history_readers")}
+                    />{t("permissionsUi.readerHistory")}{origin("history_readers")}
                   </label>
                 </section>
               )}
@@ -849,7 +807,7 @@ export function PermissionDialog({
           </div>
         )}
         <div className="permissions-status" role="status">
-          {busy ? "正在保存…" : notice}
+          {busy ? t("notes.saving") : notice}
         </div>
       </div>
     </div>

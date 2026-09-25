@@ -58,7 +58,6 @@ function fileIcon(mime: string) {
 const systemFolders: Folder[] = [
   { id: "documents", name: "系统文件夹", type: "system", virtual: true, locked: true, version: 0 },
   { id: "ai", name: "AI助手", type: "system", virtual: true, locked: true, version: 0 },
-  { id: "mail", name: "邮件", type: "system", virtual: true, locked: true, version: 0 },
   { id: "shared", name: "共享文件夹", type: "system", virtual: true, locked: true, version: 0 },
 ];
 

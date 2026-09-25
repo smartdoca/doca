@@ -1,7 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigation } from "expo-router";
 import { useLayoutEffect, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from "react-native";
 import { Text } from "react-native-paper";
 import { ApiError, api } from "../src/api";
 import { useAuth } from "../src/auth";
@@ -11,24 +18,68 @@ import { loadSession, saveSession } from "../src/session";
 type Me = {
   profileName: string;
   editable?: { displayName?: boolean };
-  preferences: { version: number; avatar: string; avatar_asset_id?: string | null };
+  preferences: {
+    version: number;
+    avatar: string;
+    avatar_asset_id?: string | null;
+  };
   user: { public_id?: string };
 };
 type AccountInfo = {
   editable: Record<string, boolean>;
   contacts: { kind: string; value: string }[];
-  policy: { fields?: { email?: { enabled?: boolean }; phone?: { enabled?: boolean } } };
+  policy: {
+    fields?: { email?: { enabled?: boolean }; phone?: { enabled?: boolean } };
+  };
 };
-type Identities = { login: string; passwordEnabled: boolean; passwordAllowed: boolean };
-type Security = { methods: { id: string; label: string; value: string }[]; verified: boolean };
+type Identities = {
+  login: string;
+  passwordEnabled: boolean;
+  passwordAllowed: boolean;
+};
+type Security = {
+  methods: { id: string; label: string; value: string }[];
+  verified: boolean;
+};
 type ContactKind = "phone" | "email";
 
-const avatars = new Set(["initials", "fox", "panda", "cat", "whale", "leaf", "sun"]);
-const labels: Record<string, string> = { phone: "手机号", email: "邮箱", password: "密码" };
+const avatars = new Set([
+  "initials",
+  "fox",
+  "panda",
+  "cat",
+  "dog",
+  "rabbit",
+  "lion",
+  "tiger",
+  "bear",
+  "koala",
+  "monkey",
+  "penguin",
+  "owl",
+  "dragon",
+  "whale",
+  "butterfly",
+  "leaf",
+  "cactus",
+  "sun",
+  "moon",
+  "rocket",
+]);
+const labels: Record<string, string> = {
+  phone: "手机号",
+  email: "邮箱",
+  password: "密码",
+};
 
 async function accountCall<T>(
   path: string,
-  init: { method?: string; body?: unknown; flow?: string; mobile?: boolean } = {},
+  init: {
+    method?: string;
+    body?: unknown;
+    flow?: string;
+    mobile?: boolean;
+  } = {},
 ) {
   const session = await loadSession();
   if (!session) throw new ApiError(401, "请先登录");
@@ -50,7 +101,8 @@ async function accountCall<T>(
   });
   const text = await response.text();
   const data = text ? JSON.parse(text) : {};
-  if (!response.ok) throw new ApiError(response.status, data.message ?? "请求失败");
+  if (!response.ok)
+    throw new ApiError(response.status, data.message ?? "请求失败");
   return data as T;
 }
 
@@ -107,7 +159,9 @@ export default function Account() {
   const emailOn = account.data?.policy.fields?.email?.enabled !== false;
   const methods = security.data?.methods ?? [];
   const verified = !!security.data?.verified;
-  const contactMethods = methods.filter((item) => item.id === "phone" || item.id === "email");
+  const contactMethods = methods.filter(
+    (item) => item.id === "phone" || item.id === "email",
+  );
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -124,7 +178,9 @@ export default function Account() {
   async function saveName() {
     if (!me.data) return;
     const displayName = name.trim();
-    const avatar = avatars.has(me.data.preferences.avatar) ? me.data.preferences.avatar : "initials";
+    const avatar = avatars.has(me.data.preferences.avatar)
+      ? me.data.preferences.avatar
+      : "initials";
     await api("/me/profile", {
       method: "PUT",
       body: {
@@ -145,18 +201,23 @@ export default function Account() {
   async function verifyPassword() {
     await api("/auth/reauth", { body: { password: currentPassword } });
     setCurrentPassword("");
-    await client.invalidateQueries({ queryKey: ["me-security", session?.origin] });
+    await client.invalidateQueries({
+      queryKey: ["me-security", session?.origin],
+    });
     setMessage("安全验证通过，5 分钟内可以修改一项认证信息");
   }
 
   async function sendSecurityCode() {
     const method = contactMethods.find((item) => item.id === securityKind);
     if (!method?.value) return;
-    const started = await accountCall<{ challengeId: string; flow?: string }>("/auth/challenges", {
-      body: { kind: securityKind, value: method.value, purpose: "security" },
-      mobile: true,
-      flow: flow.current,
-    });
+    const started = await accountCall<{ challengeId: string; flow?: string }>(
+      "/auth/challenges",
+      {
+        body: { kind: securityKind, value: method.value, purpose: "security" },
+        mobile: true,
+        flow: flow.current,
+      },
+    );
     if (started.flow) flow.current = started.flow;
     setSecurityChallenge(started.challengeId);
     setSecurityCode("");
@@ -164,17 +225,22 @@ export default function Account() {
   }
 
   async function confirmSecurityCode() {
-    const result = await accountCall<{ proof: string }>("/auth/challenges/verify", {
-      body: { challengeId: securityChallenge, code: securityCode },
-      flow: flow.current,
-    });
+    const result = await accountCall<{ proof: string }>(
+      "/auth/challenges/verify",
+      {
+        body: { challengeId: securityChallenge, code: securityCode },
+        flow: flow.current,
+      },
+    );
     await accountCall("/auth/security/contact", {
       body: { kind: securityKind, proof: result.proof },
       flow: flow.current,
     });
     setSecurityChallenge("");
     setSecurityCode("");
-    await client.invalidateQueries({ queryKey: ["me-security", session?.origin] });
+    await client.invalidateQueries({
+      queryKey: ["me-security", session?.origin],
+    });
     setMessage("安全验证通过，5 分钟内可以修改一项认证信息");
   }
 
@@ -183,8 +249,12 @@ export default function Account() {
     if (setup) {
       await api("/auth/password/setup", { body: { password: nextPassword } });
       setNextPassword("");
-      await client.invalidateQueries({ queryKey: ["me-identities", session?.origin] });
-      await client.invalidateQueries({ queryKey: ["me-security", session?.origin] });
+      await client.invalidateQueries({
+        queryKey: ["me-identities", session?.origin],
+      });
+      await client.invalidateQueries({
+        queryKey: ["me-security", session?.origin],
+      });
       setMessage("密码已设置");
       return;
     }
@@ -195,11 +265,14 @@ export default function Account() {
   }
 
   async function sendContactCode() {
-    const started = await accountCall<{ challengeId: string; flow?: string }>("/auth/challenges", {
-      body: { kind, value: contact, purpose: "contact" },
-      mobile: true,
-      flow: flow.current,
-    });
+    const started = await accountCall<{ challengeId: string; flow?: string }>(
+      "/auth/challenges",
+      {
+        body: { kind, value: contact, purpose: "contact" },
+        mobile: true,
+        flow: flow.current,
+      },
+    );
     if (started.flow) flow.current = started.flow;
     setChallengeId(started.challengeId);
     setCode("");
@@ -207,10 +280,13 @@ export default function Account() {
   }
 
   async function saveContact() {
-    const result = await accountCall<{ proof: string }>("/auth/challenges/verify", {
-      body: { challengeId, code },
-      flow: flow.current,
-    });
+    const result = await accountCall<{ proof: string }>(
+      "/auth/challenges/verify",
+      {
+        body: { challengeId, code },
+        flow: flow.current,
+      },
+    );
     await accountCall("/me/contacts", {
       method: "PUT",
       body: { kind, proof: result.proof },
@@ -219,13 +295,21 @@ export default function Account() {
     setContact("");
     setCode("");
     setChallengeId("");
-    await client.invalidateQueries({ queryKey: ["me-account", session?.origin] });
-    await client.invalidateQueries({ queryKey: ["me-security", session?.origin] });
+    await client.invalidateQueries({
+      queryKey: ["me-account", session?.origin],
+    });
+    await client.invalidateQueries({
+      queryKey: ["me-security", session?.origin],
+    });
     setMessage("联系方式已保存");
   }
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       <Text style={styles.section}>个人资料</Text>
       <View style={styles.card}>
         <Text style={styles.label}>昵称</Text>
@@ -238,8 +322,14 @@ export default function Account() {
           placeholderTextColor={colors.muted}
           style={styles.input}
         />
-        <Text style={styles.note}>用户标识：@{me.data?.user.public_id || "…"}</Text>
-        <Pressable style={styles.button} disabled={busy || !name.trim()} onPress={() => void run(saveName)}>
+        <Text style={styles.note}>
+          用户标识：@{me.data?.user.public_id || "…"}
+        </Text>
+        <Pressable
+          style={styles.button}
+          disabled={busy || !name.trim()}
+          onPress={() => void run(saveName)}
+        >
           <Text style={styles.buttonText}>保存昵称</Text>
         </Pressable>
       </View>
@@ -247,20 +337,28 @@ export default function Account() {
       <Text style={styles.section}>已绑定</Text>
       <View style={styles.card}>
         <Text style={styles.line}>账号：{identities.data?.login || "…"}</Text>
-        <Text style={styles.line}>密码：{identities.data?.passwordEnabled ? "已设置" : "未设置"}</Text>
+        <Text style={styles.line}>
+          密码：{identities.data?.passwordEnabled ? "已设置" : "未设置"}
+        </Text>
         {(account.data?.contacts ?? []).map((item) => (
           <Text key={item.kind} style={styles.line}>
             {labels[item.kind] || item.kind}：{item.value}
-            {account.data?.editable[item.kind] === false ? " · 由认证源管理" : ""}
+            {account.data?.editable[item.kind] === false
+              ? " · 由认证源管理"
+              : ""}
           </Text>
         ))}
-        {!account.data?.contacts.length ? <Text style={styles.note}>还没有绑定手机号或邮箱</Text> : null}
+        {!account.data?.contacts.length ? (
+          <Text style={styles.note}>还没有绑定手机号或邮箱</Text>
+        ) : null}
       </View>
 
       <Text style={styles.section}>安全验证</Text>
       <View style={styles.card}>
         <Text style={styles.note}>
-          {verified ? "已通过，5 分钟内可以修改一项认证信息。" : "修改密码或联系方式前，先用已绑定的方式验证身份。"}
+          {verified
+            ? "已通过，5 分钟内可以修改一项认证信息。"
+            : "修改密码或联系方式前，先用已绑定的方式验证身份。"}
         </Text>
         {methods.some((item) => item.id === "password") ? (
           <>
@@ -272,7 +370,11 @@ export default function Account() {
               placeholderTextColor={colors.muted}
               style={styles.input}
             />
-            <Pressable style={styles.button} disabled={busy || !currentPassword} onPress={() => void run(verifyPassword)}>
+            <Pressable
+              style={styles.button}
+              disabled={busy || !currentPassword}
+              onPress={() => void run(verifyPassword)}
+            >
               <Text style={styles.buttonText}>验证身份</Text>
             </Pressable>
           </>
@@ -283,18 +385,35 @@ export default function Account() {
               {contactMethods.map((item) => (
                 <Pressable
                   key={item.id}
-                  style={[styles.choice, securityKind === item.id && styles.choiceOn]}
+                  style={[
+                    styles.choice,
+                    securityKind === item.id && styles.choiceOn,
+                  ]}
                   onPress={() => {
                     setSecurityKind(item.id as ContactKind);
                     setSecurityChallenge("");
                   }}
                 >
-                  <Text style={securityKind === item.id ? styles.choiceTextOn : styles.choiceText}>{item.label}</Text>
+                  <Text
+                    style={
+                      securityKind === item.id
+                        ? styles.choiceTextOn
+                        : styles.choiceText
+                    }
+                  >
+                    {item.label}
+                  </Text>
                 </Pressable>
               ))}
             </View>
-            <Pressable style={styles.button} disabled={busy} onPress={() => void run(sendSecurityCode)}>
-              <Text style={styles.buttonText}>{securityChallenge ? "重新发送验证码" : "发送验证码"}</Text>
+            <Pressable
+              style={styles.button}
+              disabled={busy}
+              onPress={() => void run(sendSecurityCode)}
+            >
+              <Text style={styles.buttonText}>
+                {securityChallenge ? "重新发送验证码" : "发送验证码"}
+              </Text>
             </Pressable>
             {securityChallenge ? (
               <>
@@ -318,18 +437,30 @@ export default function Account() {
             ) : null}
           </>
         ) : null}
-        {!methods.length ? <Text style={styles.note}>没有可用的安全验证方式，请联系管理员。</Text> : null}
-        {methods.length > 0 && !methods.some((item) => item.id === "password") && !contactMethods.length ? (
-          <Text style={styles.note}>当前只能通过网页上的身份源完成安全验证。</Text>
+        {!methods.length ? (
+          <Text style={styles.note}>
+            没有可用的安全验证方式，请联系管理员。
+          </Text>
+        ) : null}
+        {methods.length > 0 &&
+        !methods.some((item) => item.id === "password") &&
+        !contactMethods.length ? (
+          <Text style={styles.note}>
+            当前只能通过网页上的身份源完成安全验证。
+          </Text>
         ) : null}
       </View>
 
       {identities.data?.passwordAllowed ? (
         <>
-          <Text style={styles.section}>{identities.data.passwordEnabled ? "修改密码" : "设置密码"}</Text>
+          <Text style={styles.section}>
+            {identities.data.passwordEnabled ? "修改密码" : "设置密码"}
+          </Text>
           <View style={styles.card}>
             <Text style={styles.note}>
-              {identities.data.passwordEnabled ? "修改成功后，所有设备都需要用新密码重新登录。" : "密码至少 12 位。"}
+              {identities.data.passwordEnabled
+                ? "修改成功后，所有设备都需要用新密码重新登录。"
+                : "密码至少 12 位。"}
             </Text>
             <TextInput
               value={nextPassword}
@@ -342,9 +473,17 @@ export default function Account() {
             <Pressable
               style={styles.button}
               disabled={busy || nextPassword.length < 12}
-              onPress={() => void run(() => changePassword(!identities.data?.passwordEnabled))}
+              onPress={() =>
+                void run(() =>
+                  changePassword(!identities.data?.passwordEnabled),
+                )
+              }
             >
-              <Text style={styles.buttonText}>{identities.data.passwordEnabled ? "修改密码并退出" : "设置密码"}</Text>
+              <Text style={styles.buttonText}>
+                {identities.data.passwordEnabled
+                  ? "修改密码并退出"
+                  : "设置密码"}
+              </Text>
             </Pressable>
           </View>
         </>
@@ -354,16 +493,37 @@ export default function Account() {
         <>
           <Text style={styles.section}>更换联系方式</Text>
           <View style={styles.card}>
-            <Text style={styles.note}>手机号需要国家/地区码，例如 +8613800138000。新号码不能属于其他账号。</Text>
+            <Text style={styles.note}>
+              手机号需要国家/地区码，例如
+              +8613800138000。新号码不能属于其他账号。
+            </Text>
             <View style={styles.choices}>
               {phoneOn ? (
-                <Pressable style={[styles.choice, kind === "phone" && styles.choiceOn]} onPress={() => setKind("phone")}>
-                  <Text style={kind === "phone" ? styles.choiceTextOn : styles.choiceText}>手机号</Text>
+                <Pressable
+                  style={[styles.choice, kind === "phone" && styles.choiceOn]}
+                  onPress={() => setKind("phone")}
+                >
+                  <Text
+                    style={
+                      kind === "phone" ? styles.choiceTextOn : styles.choiceText
+                    }
+                  >
+                    手机号
+                  </Text>
                 </Pressable>
               ) : null}
               {emailOn ? (
-                <Pressable style={[styles.choice, kind === "email" && styles.choiceOn]} onPress={() => setKind("email")}>
-                  <Text style={kind === "email" ? styles.choiceTextOn : styles.choiceText}>邮箱</Text>
+                <Pressable
+                  style={[styles.choice, kind === "email" && styles.choiceOn]}
+                  onPress={() => setKind("email")}
+                >
+                  <Text
+                    style={
+                      kind === "email" ? styles.choiceTextOn : styles.choiceText
+                    }
+                  >
+                    邮箱
+                  </Text>
                 </Pressable>
               ) : null}
             </View>
@@ -376,13 +536,21 @@ export default function Account() {
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType={kind === "email" ? "email-address" : "phone-pad"}
-              placeholder={kind === "phone" ? "+8613800138000" : "name@example.com"}
+              placeholder={
+                kind === "phone" ? "+8613800138000" : "name@example.com"
+              }
               placeholderTextColor={colors.muted}
               editable={account.data?.editable[kind] !== false}
               style={styles.input}
             />
-            <Pressable style={styles.button} disabled={busy || !contact.trim()} onPress={() => void run(sendContactCode)}>
-              <Text style={styles.buttonText}>{challengeId ? "重新发送验证码" : "发送验证码"}</Text>
+            <Pressable
+              style={styles.button}
+              disabled={busy || !contact.trim()}
+              onPress={() => void run(sendContactCode)}
+            >
+              <Text style={styles.buttonText}>
+                {challengeId ? "重新发送验证码" : "发送验证码"}
+              </Text>
             </Pressable>
             {challengeId ? (
               <>
@@ -395,7 +563,11 @@ export default function Account() {
                   placeholderTextColor={colors.muted}
                   style={styles.input}
                 />
-                <Pressable style={styles.button} disabled={busy || code.length !== 6} onPress={() => void run(saveContact)}>
+                <Pressable
+                  style={styles.button}
+                  disabled={busy || code.length !== 6}
+                  onPress={() => void run(saveContact)}
+                >
                   <Text style={styles.buttonText}>保存联系方式</Text>
                 </Pressable>
               </>
@@ -411,8 +583,19 @@ export default function Account() {
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, paddingBottom: 48 },
-  section: { color: colors.muted, fontSize: 12, marginTop: 16, marginBottom: 8, marginLeft: 4 },
-  card: { backgroundColor: colors.card, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12 },
+  section: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 16,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
   label: { color: colors.secondary, fontSize: 13, marginBottom: 8 },
   line: { color: colors.ink, fontSize: 15, lineHeight: 24 },
   note: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 8 },
@@ -436,7 +619,12 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: "#fff", fontSize: 15, fontWeight: "600" },
   choices: { flexDirection: "row", gap: 8, marginTop: 10 },
-  choice: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: colors.bg },
+  choice: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: colors.bg,
+  },
   choiceOn: { backgroundColor: colors.selected },
   choiceText: { color: colors.secondary, fontSize: 13 },
   choiceTextOn: { color: colors.accent, fontSize: 13, fontWeight: "600" },

@@ -137,7 +137,7 @@ POST /notifications/read：{ids:UUID[]}，1–100条，仅修改当前用户的�
 ## 工作台新增接口
 
 - GET /me：登录后返回 {user,preferences}。preferences含avatar、theme、density、default_sort、sort_order、version，默认version=0。
-- PUT /me/profile：{version,displayName,avatar,avatarAssetId?}，只修改本人；avatar为initials/fox/panda/cat/whale/leaf/sun。avatarAssetId须为本人上传的avatar资产，null清除，省略保留。不接受外部图片URL。GET /me 的 preferences 额外返回 avatar_asset_id。
+- PUT /me/profile：{version,displayName,avatar,avatarAssetId?}，只修改本人；avatar 为 initials 或系统预设头像标识（fox/panda/cat/dog/rabbit/lion/tiger/bear/koala/monkey/penguin/owl/dragon/whale/butterfly/leaf/cactus/sun/moon/rocket）。avatarAssetId 须为本人上传的 avatar 资产，null 清除，省略保留。不接受外部图片 URL。GET /me 的 preferences 额外返回 avatar_asset_id。
 - PUT /me/preferences：{version,theme,density,defaultSort,sortOrder}。theme=light/soft，density=comfortable/compact，defaultSort=created_at/updated_at/visited_at，sortOrder=asc/desc。修改成功{ok:true}，过期版本409。
 - POST /me/heartbeat：登录且页面可见时每60秒调用，成功{ok:true}。
 - GET /admin/stats：仅管理员，返回documents、libraries、users、online、onlineWindowSeconds=0。内容数不含回收站；online按真实WebSocket连接的用户ID去重，不再把HTTP心跳计为在线。
@@ -179,7 +179,7 @@ config={provider:local或s3,bucket,region,endpoint,forcePathStyle,credentialRef,
 
 上传头像/封面仅接受PNG/JPEG/WebP/GIF，最大5MB；附件最大20MB。图片重新编码成WebP并移除元数据。上传成功不自动绑定头像或封面，需要相应PUT；附件直接归属资源。错误413代表请求体超限，429表示上传限流；任何asset ID都不是无权限的公开文件链接。
 
-复制资源会给附件/封面生成独立资产ID和权限关联，复用不可变存储对象。上传的文件不属于桌面云备份，不实现双向同步。
+复制资源会给附件/封面生成独立资产ID和权限关联，复用不可变存储对象。文件上传不实现跨端双向同步。
 
 ## 运维与冲突
 

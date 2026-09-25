@@ -1,3 +1,4 @@
+import { emitIntegrationEvent } from "../automation/events.js";
 import {
   createHash,
   scrypt as derive,
@@ -5,7 +6,8 @@ import {
   randomUUID,
   timingSafeEqual,
 } from "node:crypto";
-import type { DB, User } from "../../../../db/src/index.js";
+import type { Transaction } from "kysely";
+import type { DB, Schema, User } from "../../../../db/src/index.js";
 import { transact } from "../../../../db/src/transactions.js";
 import { fail } from "../../shared/errors.js";
 import {
@@ -15,7 +17,6 @@ import {
   securityAudit,
 } from "./accounts.js";
 import { validUsername } from "./naming.js";
-import { entitlementConfig } from "../entitlements/service.js";
 export type Actor = Pick<User, "id" | "display_name" | "admin"> &
   Partial<Pick<User, "public_id">>;
 const deriveKey = (password: string, salt: string) =>
@@ -40,6 +41,17 @@ export async function verifyPassword(password: string, encoded: string) {
 }
 export const tokenHash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
+export async function recordLogin(
+  tx: DB | Transaction<Schema>,
+  userId: string,
+  at = new Date(),
+) {
+  await tx
+    .updateTable("users")
+    .set({ last_login_at: at.toISOString() })
+    .where("id", "=", userId)
+    .execute();
+}
 export function publicUser(user: Actor) {
   return {
     id: user.id,
@@ -125,7 +137,6 @@ export async function createUser(
     )
       fail(409, "账号不可用");
     const user = {
-      base_level: (await entitlementConfig(tx)).defaultLevel,
       public_id: publicId,
       id: randomUUID(),
       login,
@@ -147,6 +158,7 @@ export async function createUser(
     )
       fail(409, "用户标识已被使用");
     await tx.insertInto("users").values(user).execute();
+    await emitIntegrationEvent(tx, "user.created", { userId: user.id, status: user.status });
     if (user.status === "pending") await registrationReview(tx, user.id);
     await claimIdentifier(tx, user.id, publicId, "username");
     for (const kind of ["email", "phone"] as const)

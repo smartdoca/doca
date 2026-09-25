@@ -10,7 +10,7 @@ import {
 
 const memory = new Map<string, string>();
 
-it("remembers the side panel and its session separately for mail and folders", () => {
+it("remembers the side panel and its session separately for different users", () => {
   const store = {
     getItem: (key: string) => memory.get(key) ?? null,
     setItem: (key: string, value: string) => {
@@ -21,15 +21,15 @@ it("remembers the side panel and its session separately for mail and folders", (
     },
   };
   Object.defineProperty(globalThis, "localStorage", { value: store, configurable: true });
-  expect(sidePanelSurface("#/mail/20117e32-13ad-4c3f-87ec-0541eb39fc97?message=a")).toBe("mail");
+  expect(sidePanelSurface("#/mail/20117e32-13ad-4c3f-87ec-0541eb39fc97?message=a")).toBeNull();
   expect(sidePanelSurface("#/files?path=%5B%5D")).toBe("files");
   expect(sidePanelSurface("#/ai")).toBeNull();
-  writeSidePanel("user-a", "mail", {
+  writeSidePanel("user-b", "files", {
     open: true,
     sessionId: "20117e32-13ad-4c3f-87ec-0541eb39fc97",
   });
   writeSidePanel("user-a", "files", { open: false, sessionId: null });
-  expect(readSidePanel("user-a", "mail")).toEqual({
+  expect(readSidePanel("user-b", "files")).toEqual({
     open: true,
     sessionId: "20117e32-13ad-4c3f-87ec-0541eb39fc97",
   });

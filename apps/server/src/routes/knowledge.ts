@@ -1,3 +1,7 @@
+import { registerKnowledgeSystem } from "./knowledge-system.js";
+import { executeKnowledgeCuration, queueKnowledgeCuration } from "@core/modules/knowledge/system.js";
+import { knowledgeGenerator } from "../services/ai/knowledge-curation.js";
+import { fetchWebPage } from "../services/ai/web-fetch.js";
 import { Type } from "@sinclair/typebox";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Actor } from "@core/modules/identity/passwords.js";
@@ -30,6 +34,7 @@ export function registerKnowledge(
   auth: (req: FastifyRequest) => Actor,
   options: { indexer?: KnowledgeIndexer; storage?: StorageRuntime } = {},
 ) {
+  registerKnowledgeSystem(api, db, auth);
   const content = createContent(db);
   let stopped = false;
   let processing: Promise<void> | null = null;
@@ -43,9 +48,25 @@ export function registerKnowledge(
   const drain = async () => {
     if (processing || stopped) return;
     processing = Promise.resolve(processProjections(db, "knowledge", rebuild)).then(async () => {
+      // Jobs are persisted; stale attempts fail visibly rather than reporting success.
+      const stale = await db.selectFrom("knowledge_runs").select(["id", "detail"]).where("status", "=", "running").execute();
+      for (const run of stale) {
+        const detail = JSON.parse(run.detail);
+        if (Date.now() - Date.parse(detail.startedAt || "") > 300_000)
+          await db.updateTable("knowledge_runs").set({ status: "failed", detail: JSON.stringify({ ...detail, error: "整理中断，请重新发起" }) }).where("id", "=", run.id).where("status", "=", "running").execute();
+      }
+      const next = await db.selectFrom("knowledge_runs").select(["id", "detail"]).where("status", "=", "queued").orderBy("created_at").executeTakeFirst();
+      if (next && !stopped) {
+        const detail = JSON.parse(next.detail);
+        await executeKnowledgeCuration(db, next.id, knowledgeGenerator(db, detail.actorId, next.id), async url => {
+          const page = await fetchWebPage(url, AbortSignal.timeout(20000));
+          if (page.truncated) fail(413, "网页正文过长，请使用具体章节来源");
+          return page;
+        });
+      }
       if (Date.now() - lastSweep < 60_000) return;
       lastSweep = Date.now();
-      await sweepKnowledgeSchedules(db);
+      await sweepKnowledgeSchedules(db, (actor, id) => queueKnowledgeCuration(db, actor, id, "schedule"));
     })
       .catch(() => {})
       .finally(() => {
@@ -245,12 +266,12 @@ export function registerKnowledge(
     },
   );
 
-  api.post<{ Body: { kind: "document" | "file" | "mail"; id: string } }>(
+  api.post<{ Body: { kind: "document" | "file"; id: string } }>(
     "/api/v1/knowledge/rebuild",
     {
       schema: {
         body: Type.Object({
-          kind: Type.Union([Type.Literal("document"), Type.Literal("file"), Type.Literal("mail")]),
+          kind: Type.Union([Type.Literal("document"), Type.Literal("file")]),
           id: Type.String({ format: "uuid" }),
         }),
       },
@@ -261,7 +282,7 @@ export function registerKnowledge(
     },
   );
 
-  api.post<{ Body: { kind: "document" | "file" | "mail" | "folder" | "library"; id: string } }>(
+  api.post<{ Body: { kind: "document" | "file" | "folder" | "library"; id: string } }>(
     "/api/v1/knowledge/related",
     {
       schema: {
@@ -269,7 +290,6 @@ export function registerKnowledge(
           kind: Type.Union([
             Type.Literal("document"),
             Type.Literal("file"),
-            Type.Literal("mail"),
             Type.Literal("folder"),
             Type.Literal("library"),
           ]),

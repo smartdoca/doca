@@ -1,4 +1,5 @@
 import { sql } from "kysely";
+import { pluginServices } from "../../shared/plugin-services.js";
 import type { DB } from "../../../../db/src/index.js";
 import { activeActor } from "../access/queries.js";
 import type { Actor } from "../identity/passwords.js";
@@ -47,5 +48,19 @@ export async function directoryIds(
     ) select u.id from users u join participants p on p.id = u.id where u.status = 'active'`.execute(
     db,
   );
-  return new Set(rows.rows.map((r) => r.id));
+  const related = new Set(rows.rows.map((r) => r.id));
+  const sources = [...pluginServices(db).directories.values()];
+  const results = await Promise.allSettled(sources.map(async source => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        source.related(actor.id),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Directory source timed out")), 2000); }),
+      ]);
+    } finally { if (timer) clearTimeout(timer); }
+  }));
+  for (const result of results)
+    if (result.status === "fulfilled")
+      for (const id of result.value) if (typeof id === "string") related.add(id);
+  return related;
 }

@@ -139,8 +139,8 @@ it("keeps mixed queries as topical search", () => {
   });
   expect(searchIntent("")).toEqual({ focus: "mixed", topic: "", requireEvidence: false });
   expect(searchIntent("查找预算邮件")).toMatchObject({
-    focus: "mail",
-    topic: "预算",
+    focus: "mixed",
+    topic: "预算邮件",
   });
 });
 

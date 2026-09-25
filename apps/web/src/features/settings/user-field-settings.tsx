@@ -1,6 +1,7 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
-import { fieldLabels, type AccountOptions } from "@web/features/auth/account-fields.js";
+import { useFieldLabels, type AccountOptions } from "@web/features/auth/account-fields.js";
 import { Select } from "@web/shared/components/select.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import {
@@ -12,6 +13,10 @@ export function UserFieldSettings({
 }: {
   security?: boolean;
 }) {
+const { t, locale } = useI18n();
+
+const fieldLabels = useFieldLabels();
+
   const [data, setData] = useState<AccountOptions | null>(null),
     [providers, setProviders] = useState<{ id: string; name: string }[]>([]),
     [message, setMessage] = useState(""),
@@ -29,11 +34,11 @@ export function UserFieldSettings({
   }, []);
   return (
     <section className="admin-card">
-      <h3>{security ? "基础安全验证" : "用户信息字段"}</h3>
+      <h3>{security ? t("fields.securityTitle") : t("fields.title")}</h3>
       <p className="admin-field-help">
         {security
-          ? "修改密码、联系方式或第三方绑定前，用户需通过下列已绑定方式中的任意一种。验证 5 分钟有效，每次用于一项修改。"
-          : "必填和修改规则适用于所有登录方式。禁用字段不展示、不允许修改；空字段可首次补填，填写后按修改规则控制。手填用户名不能使用手机号或邮箱格式。"}
+          ? t("fields.securityHelp")
+          : t("fields.help")}
       </p>
       {data && (
         <form
@@ -47,7 +52,7 @@ export function UserFieldSettings({
                 ...body,
               });
               setData(await api("/admin/accounts/policy"));
-              setMessage("设置已保存");
+              setMessage(t("common.settingsSaved"));
             } catch (e) {
               setMessage((e as Error).message);
             } finally {
@@ -58,9 +63,9 @@ export function UserFieldSettings({
           {security ? (
             (
               [
-                ["password", "当前密码"],
-                ["phone", "已绑定手机号"],
-                ["email", "已绑定邮箱"],
+                ["password", t("fields.currentPassword")],
+                ["phone", t("fields.linkedPhone")],
+                ["email", t("fields.linkedEmail")],
                 ...providers.map((p) => [`provider:${p.id}`, p.name]),
               ] as [string, string][]
             ).map(([id, label]) => (
@@ -85,11 +90,11 @@ export function UserFieldSettings({
               <table>
                 <thead>
                   <tr>
-                    <th>字段</th>
-                    <th>启用</th>
-                    <th>必填</th>
-                    <th>可修改性</th>
-                    <th>唯一来源</th>
+                    <th>{t("fields.field")}</th>
+                    <th>{t("users.enable")}</th>
+                    <th>{t("fields.required")}</th>
+                    <th>{t("fields.editability")}</th>
+                    <th>{t("fields.source")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -104,7 +109,7 @@ export function UserFieldSettings({
                         <td>{fieldLabels[key]}</td>
                         <td>
                           <input
-                            aria-label={`${fieldLabels[key]}启用`}
+                            aria-label={t("fields.enabledLabel", { name: fieldLabels[key]! })}
                             type="checkbox"
                             disabled={key === "username"}
                             checked={f.enabled}
@@ -121,7 +126,7 @@ export function UserFieldSettings({
                         <td>
                           <input
                             type="checkbox"
-                            aria-label={`${fieldLabels[key]}必填`}
+                            aria-label={t("fields.requiredLabel", { name: fieldLabels[key]! })}
                             disabled={key === "username" || !f.enabled}
                             checked={f.required}
                             onChange={(e) =>
@@ -131,30 +136,30 @@ export function UserFieldSettings({
                         </td>
                         <td>
                           <Select
-                            aria-label={`${fieldLabels[key]}可修改性`}
+                            aria-label={t("fields.editabilityLabel", { name: fieldLabels[key]! })}
                             disabled={key === "username" || !f.enabled}
                             value={f.mode}
                             onChange={(e) =>
                               set({ mode: e.target.value as any })
                             }
                           >
-                            <option value="editable">支持修改</option>
-                            <option value="sso">仅 SSO 更新</option>
-                            <option value="immutable">不允许修改</option>
+                            <option value="editable">{t("accountPolicy.editable")}</option>
+                            <option value="sso">{t("accountPolicy.ssoOnly")}</option>
+                            <option value="immutable">{t("accountPolicy.immutable")}</option>
                           </Select>
                         </td>
                         <td>
                           <Select
-                            aria-label={`${fieldLabels[key]}来源`}
+                            aria-label={t("fields.sourceLabel", { name: fieldLabels[key]! })}
                             disabled={!f.enabled}
                             value={f.source}
                             onChange={(e) => set({ source: e.target.value })}
                           >
-                            <option value="manual">用户填写</option>
+                            <option value="manual">{t("fields.manual")}</option>
                             {key === "username" && (
                               <>
-                                <option value="phone">已验证手机号</option>
-                                <option value="email">已验证邮箱</option>
+                                <option value="phone">{t("fields.verifiedPhone")}</option>
+                                <option value="email">{t("fields.verifiedEmail")}</option>
                               </>
                             )}
                             {providers.map((p) => (
@@ -165,9 +170,7 @@ export function UserFieldSettings({
                           </Select>
                           {["phone", "email"].includes(key) &&
                             f.source.startsWith("provider:") && (
-                              <small className="admin-field-help">
-                                全局唯一；SSO 返回重复值将无法注册或同步。
-                              </small>
+                              <small className="admin-field-help">{t("fields.uniqueHelp")}</small>
                             )}
                         </td>
                       </tr>
@@ -177,8 +180,7 @@ export function UserFieldSettings({
               </table>
             </div>
           )}
-          <button className="primary" disabled={busy}>
-            保存{security ? "安全验证" : "用户字段"}
+          <button className="primary" disabled={busy}>{t(security ? "fields.saveSecurity" : "fields.saveFields")}
           </button>
         </form>
       )}

@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { useEffect, useState } from "react";
 import { HardDrive, Cloud, ShieldCheck, Check } from "lucide-react";
@@ -20,6 +21,8 @@ interface Settings {
   cdnSigningReady: boolean;
 }
 export function StorageSettings() {
+const { t } = useI18n();
+
   const [data, setData] = useState<Settings | null>(null),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
@@ -41,7 +44,7 @@ export function StorageSettings() {
     <>
       <div className="admin-section-heading">
         <div>
-          <h2>文件存储</h2>
+          <h2>{t("admin.storage")}</h2>
           <p>统一管理头像、知识库封面、文档图片和附件。</p>
         </div>
       </div>

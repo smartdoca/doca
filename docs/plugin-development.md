@@ -1,141 +1,111 @@
-# Doca 插件开发
+# Doca 插件开发规范
 
-Doca 插件是可信 npm 包。接入方式和 DeepSeek Harness 一样：把包下载或链接到
-`plugins/<名字>/`，宿主按 `package.json` 的 `doca` 入口加载。不要为了接一个业务
-插件去改 Server、Web 或 Mobile 的源码，这样 Doca 发版不会和本地安装冲突。
-启用插件等同于允许该包在对应 Node.js 或客户端进程中执行代码，它不是安全沙箱。
+完整目标及尚未实现部分见 [SDK 契约](plugin-sdk-contract.md)。项目尚未上线，删除不合理的旧接口，不维护旧会员、审核或源码加载兼容层。
 
-## 包结构
+## 安装与启动
 
-一个同时支持三端的包至少应声明：
+宿主只读取 `DOCA_PLUGINS_DIR/package.json` 的直接 dependencies。默认目录是 `${DOCA_DATA_DIR:-./data}/plugins`。在这个独立目录执行 npm/pnpm 安装，重启 Doca 生效。安装目录应位于宿主发布目录之外，升级宿主不会覆盖插件；SDK 版本仍须匹配。
+
+插件包的 package.json：
 
 ```json
 {
-  "name": "@example/doca-plugin",
+  "name": "@example/attachments",
+  "version": "1.0.0",
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts",
-    "./server": "./src/server.ts",
-    "./web": "./src/web.ts",
-    "./mobile": "./src/mobile.ts",
-    "./manifest": "./src/manifest.ts"
-  },
   "doca": {
-    "manifest": "./src/manifest.ts",
-    "server": "./src/server.ts",
-    "web": "./src/web.ts",
-    "mobile": "./src/mobile.ts"
+    "manifest": "./manifest.json",
+    "server": "./dist/server.js",
+    "web": { "directory": "./web", "entry": "./index.js" }
   }
 }
 ```
 
-不支持的客户端 target 应省略，不能注册一个运行时才报错的空页面。React、
-Yjs、Ant Design 和编辑器 SDK 必须使用 peer dependency，避免产生第二份运行时。
+manifest.json 必须为静态 JSON，版本与 package.json 一致：
 
-安装时把包放进 `plugins/<名字>/`。`doca.server` 默认导出创建插件的函数；
-Web 包在 `src/web/install.tsx` 导出 `bundle`。文件和文档是宿主内置插件，业务插件
-不要写进 `doca.config.ts`。
+```json
+{
+  "schemaVersion": 1,
+  "id": "example.attachments",
+  "version": "1.0.0",
+  "displayName": "Attachments",
+  "sdkRange": "^0.1.0",
+  "dependencies": [{ "id": "doca.files", "range": "^0.1.0" }]
+}
+```
 
-插件 ID、route、tool、job、renderer、migration 与 contribution ID 必须带包拥有的
-命名空间。Host 在启动或构建时拒绝重复 ID、缺失依赖、版本不兼容及依赖环。
+仅加载已编译 JavaScript，不扫描间接依赖，不运行安装命令，不使用 doca.config.ts 或仓库源码目录。支持 scoped 包和 pnpm 链接。入口、静态资源和真实符号链接路径必须位于包声明的目录内。依赖冲突在执行插件前报错。
 
-## Service、Provider、Consumer
+## SDK 与宿主文件服务
 
-能力定义与实现分开发布。Consumer 只注入稳定 Definition，不能导入 Provider
-内部表或底层 SDK：
+依赖公开契约，禁止导入 `@server/*`、`@core/*`、`@web/*`、`@db/*`、同级 Doca 源码或全局桥接。SDK 的服务 ID 在不同安装副本之间保持一致；运行时由宿主注入实现。
 
 ```ts
-const files = defineService<FilesServiceV1>("files.v1");
+import { definePlugin } from "@doca/plugin-sdk";
+import { filesServiceToken } from "@doca/plugin-sdk/files";
+import { httpServiceToken, usersServiceToken } from "@doca/plugin-sdk/platform";
+import manifest from "../manifest.json" with { type: "json" };
 
-export default definePlugin({
-  manifest,
-  injections: { required: [files] },
-  discover(ctx) {
-    const service = ctx.inject(files);
-    ctx.effect(() => service.registerConsumer("example"));
-  },
-});
+export default () =>
+  definePlugin({
+    manifest,
+    injections: {
+      required: [filesServiceToken, httpServiceToken, usersServiceToken],
+    },
+    async mount(context) {
+      const files = context.inject(filesServiceToken);
+      const users = context.inject(usersServiceToken);
+      await context.inject(httpServiceToken).register(manifest.id, [
+        {
+          method: "GET",
+          path: "/folders",
+          async handle(request) {
+            const user = await users.get(request, request.principal.id);
+            const folders = await files.folders.list(
+              { principalId: request.principal.id, signal: request.signal },
+              { parentId: null },
+            );
+            return { user, folders };
+          },
+        },
+      ]);
+    },
+  });
 ```
 
-一个 Service key 只能有一个 Provider。AI tools、Search sources、Knowledge
-sources 和 UI renderers 属于多贡献 registry；每次注册必须返回 disposer，并由
-`ctx.effect()`/`ctx.effectAsync()` 持有。生命周期固定为：
+该接口实际地址为 `/api/v1/plugins/example.attachments/folders`，身份来自宿主会话。文件操作重新检查权限。文件业务保存稳定 file ID 和 owner binding，不保存本地磁盘路径。完整资料可通过 users.get 获取本人或管理员授权的目标用户，包含联系信息和自定义资料，不返回密码哈希及认证密钥。浏览器响应应由插件按用途裁剪。
 
-```text
-discover -> required injection check -> migrate -> mount -> ready
-dispose  <- reverse dependency order
-```
+## 当前公共服务
 
-Fastify 已挂载路由不能在运行中移除，因此生产只在应用关闭时卸载 Server 路由。
-定时器、监听器、source、tool 和 renderer 仍必须可逆清理。
+| 导入入口            | 服务                    | 用途                                         |
+| ------------------- | ----------------------- | -------------------------------------------- |
+| plugin-sdk/files    | filesServiceToken       | 文件夹、文件、上传、内容、绑定及访问授权     |
+| plugin-sdk/platform | usersServiceToken       | 当前授权用户资料、统一用户搜索               |
+| plugin-sdk/platform | permissionsServiceToken | 注册业务资源鉴权及用户关系来源               |
+| plugin-sdk/platform | httpServiceToken        | 已认证、独立命名空间的后端路由               |
+| plugin-sdk/platform | dataServiceToken        | 插件独立 JSON 键值存储，版本条件写入         |
+| plugin-sdk/platform | policiesServiceToken    | 创建、存储、分享、转移及 AI 调用前的业务准入 |
+| plugin-sdk/platform | eventsServiceToken      | 读取持久事件流，包括 ai.usage.recorded       |
+| plugin-sdk/ai       | aiServiceToken          | 注册带 JSON Schema 的 AI 工具和 skill 手册   |
 
-## 持久化与任务
+注册 ID 必须以插件 ID 加点开头。数据 scope 和路由 namespace 必须等于插件 ID。这些公共注册自动归属插件生命周期，关闭或启动失败时回收；自建定时器、连接仍用 context.effect/effectAsync 回收。关闭不删除持久数据。
 
-- 插件只通过有前缀的表和从零 migration 建库；版本写入
-  `plugin_migrations`。
-- 业务事务将领域事实追加到 transactional outbox，不在事务内调用搜索、
-  知识投影或外部网络。
-- 后台处理使用 JobHost 的租约、幂等、指数重试和死信。handler 被移除时任务进入
-  `blocked-plugin-missing`，不会无限重试。
-- 文件引用只保存稳定 file ID。附件关系使用
-  `(ownerPlugin, ownerType, ownerId, role)`，不能保存临时签名 URL。
+目录来源返回当前有效用户关系。宿主统一执行管理员 all/related/none 策略，并过滤有效用户；来源错误不扩大可见范围。可搜索不等于可以读取资源。当前采用实时来源接口，大规模关系投影仍待实现。
 
-## AI、搜索与知识贡献
+AI 工具通过 `aiServiceToken.registerTool` 注册，包含 id、description、inputSchema 和 execute。execute 获得认证用户、sessionId、turnId、jobId、callId、signal，不能绕过文件权限。`registerSkill` 接收 id、name、description、content、formats；手册进入宿主技能库。业务工具必须自行校验业务资源权限，使用 callId 做副作用幂等。
 
-AI intent 的路由次序为资格过滤、置信度、相同置信度下的 priority、稳定 ID。
-intent 应关联 workflow、acceptance 和按需 skill。所有 tool 调用经过统一
-call/result、guard、审批、wrapper 与 receipt pipeline；注册工具并不授予用户权限。
-Chat 与 MCP 消费同一 registry。
+Doca 不内置会员、货币价格、积分或业务额度。模型管理中的输入/输出速率和每张图片 Token 只负责把厂商原始用量统一折算为 Token，不是最终售价。用量记录区分未确认调用与实际指标；`ai.usage.recorded` 在结算事务内写入持久事件，顶层 `metrics` 是已折算用量，`provider.metrics` 保留厂商原始事实。插件通过 events.read(cursor, limit) 拉取，持久保存消费位置并按事件 ID 幂等处理。策略 check 可以拒绝调用；跨插件预留、失败补偿和资金一致性尚未提供完整事务协议，不能将一次 check 当作完整计费实现。
 
-领域插件应在自己的 lifecycle 中注册贡献，宿主只提供 registry service。比如邮箱
-插件注册 `doca.mail.*` intent/tool/workflow/acceptance/skill；停用邮箱后这些条目、
-邮件 SearchSource 和 KnowledgeSource 必须同时消失。领域 tool 的实现可以由 Server
-adapter 提供，但不能作为始终存在的 AI 内建工具绕过插件开关。
+数据 put(key, value, expectedVersion) 的初始版本是 0；冲突返回 409。单值上限 1 MiB。该接口不是任意宿主 SQL，也不提供跨文件服务事务。
 
-模型可见输入、意图、workflow、tool call/result、验收及最终消息写入 append-only
-SessionEvent。流式 token/progress 是临时事件，不能冒充已提交事实。UI 用稳定
-`(kind, id)` 和 sequence 投影节点；未知事件必须显示通用事实卡片。
+## Web
 
-Search source 声明独立 schema version、enumerate/project/delete/query/ACL/hydrate。
-SearchHost 对来源做故障隔离，并在返回前调用来源 ACL 与 hydrate；索引内的 reader
-字段不能作为最终授权。Knowledge source 必须提供配置校验、preview、
-`pull(cursor)`、稳定 external ID/version、provenance、reader mapping 与 file IDs。
+可选 Web 产物默认导出 `async host => bundle`，host 提供 React 和插件 apiBase。React 从 host 注入，避免重复 renderer；其他依赖须打入浏览器产物，不要求宿主解析 npm 裸路径。bundle 遵循 `@doca/web-plugin-registry` 的 WebPluginBundle，manifest.pluginId/version 与服务端一致，支持页面、导航、管理和设置贡献。
 
-客户端知识来源还可以声明 `labelKey` 和 `selection`。`selection` 为
-`document`、`file`、`folder`、`mailbox`、`message`、`url` 时，知识关系页使用宿主选择器，
-把选中的目标写成订阅。`config` 由插件自己渲染，并调用 `context.bind({ sourceId, url })`。
-未声明时，宿主按 `sourceKind` 套用同名选择器；`mail` 对应单封邮件。对不上的来源按
-`config` 处理。订阅接口目前只接受上述六种 `sourceKind`。新种类要先被订阅读取逻辑识别，
-选择结果才会写成连线。
+宿主从 `/api/v1/plugin-assets/{id}/{version}/` 提供声明目录，启动前加载注册。插件加载错误隔离并记录，禁止暴露服务端包文件。通用目录树插槽和渲染级错误边界尚待补齐。
 
-## Web/Mobile 与国际化
+## 构建与验证
 
-客户端入口在构建期注册 routes/navigation/admin/settings/AI blocks/search
-results/knowledge config/file picker。route ID 和 path 会检查冲突。renderer 只接收
-schema 校验后的 DTO 与宿主 capability，不能读取 Cookie、数据库或存储密钥。
+宿主仓库运行 `pnpm build:plugin-sdk` 生成 SDK、契约和文件能力包的 JS 与 d.ts。使用 pnpm pack 生成发布包，publishConfig 指向 dist；未执行 npm 发布。安装消费者只能依赖发布产物。
 
-`/api/v1/bootstrap.plugins` 是运行时活动清单。客户端构建中存在、但服务端未启用的
-插件必须隐藏导航和管理入口；旧深链应显示“模块未安装或已停用”，不能继续请求缺失
-API。未知对话事件或 renderer 仍使用通用事实展示，不能丢弃已提交记录。
-
-每个插件自带 `zh`/`en` 字典，key 使用稳定英文标识。locale 由宿主传入；插件不得
-读取 localStorage。locale 或 registry 更新不能重建 Y.Doc、协同 adapter 或编辑器
-实例。
-
-## 验证
-
-提交插件前至少验证：
-
-1. manifest、依赖、配置及 migration 幂等；
-2. Provider、route、job、tool、renderer 冲突会在启动时失败；
-3. 权限二次检查、禁用插件启动和逆序 shutdown；
-4. SessionEvent replay 与乱序客户端投影确定；
-5. Search ACL/hydrate、索引切换和单来源故障；
-6. Web/Mobile 构建清单与 `/api/v1/bootstrap` 的活动插件版本一致。
-
-`@doca/plugin-sdk/testing` 提供 lifecycle contract harness，可用于验证第三方包的
-discover/migrate/mount/ready/dispose 顺序和 effect 清理；它不能替代领域权限及端到端
-测试。
-
-首方示例见 `packages/plugin-files`、`packages/plugin-documents`，以及同级目录
-`doca-mail`。邮箱插件必须能独立禁用，且不得影响文件、文档、AI 和搜索启动。
+至少验证独立安装、无插件启动、依赖冲突、跨用户拒绝、版本冲突、调用幂等、撤销关系、两个宿主实例隔离和关闭回收。测试使用独立数据库、用户和文档。界面文案遵循 [语言规范](i18n.md)，编辑器遵循 [集成规范](editor-integration.md) 和 [协同规范](collaboration-sdk-contract.md)。

@@ -6,6 +6,7 @@ import { transact } from "../../../../db/src/transactions.js";
 import { fail } from "../../shared/errors.js";
 import {
   actionMinimum,
+  canRemoveResource,
   isResourceOwnerLike,
   label,
   permission,
@@ -60,6 +61,7 @@ export function get(
   )
     fail(404, "内容不存在或无权访问");
   if (
+    !((minimum === "trash" || minimum === "purge") && canRemoveResource(r, ctx.actor, ctx.resources, ctx.grants)) &&
     permission(r, ctx.actor, ctx.resources, ctx.grants) <
     (typeof minimum === "number" ? minimum : actionMinimum(effectiveResource(r, ctx.resources), minimum))
   )
@@ -91,6 +93,7 @@ export function project(ctx: Context, r: Resource) {
     parent_id: visible(r.parent_id),
     library_id: visible(r.library_id),
     role: label(permission(r, ctx.actor, ctx.resources, ctx.grants)),
+    can_remove: canRemoveResource(r, ctx.actor, ctx.resources, ctx.grants),
   };
 }
 export function clean(value: string) {

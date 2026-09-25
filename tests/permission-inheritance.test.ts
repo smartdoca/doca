@@ -126,7 +126,7 @@ it("local downgrade and cancellation override the whole ancestor chain, includin
     sources: expect.arrayContaining(["direct", "parent_override"]),
     includeDescendants: true,
   });
-  await member(parent, "manager");
+  await member(parent, "editor");
   await rank(child, 1);
   await member(child, null);
   await rank(child, 0);
@@ -444,4 +444,35 @@ it("HTTP parent changes immediately invalidate an open descendant session", asyn
     socket?.terminate();
     await app.close();
   }
+});
+
+it("library managers retain management over custom, blocked, and future descendant documents", async () => {
+  await member(parent, "manager", false, manager);
+  await settings(child, {accessMode: "custom"});
+  await member(child, null, true, manager);
+  await rank(child, 4, manager);
+  await rank(grandchild, 4, manager);
+  const future = await content.create(owner, {kind: "document", title: "Future", format: "markdown", parentId: child.id});
+  await rank(future, 4, manager);
+  await member(parent, null, true, manager);
+  await rank(child, 0, manager);
+  await rank(grandchild, 0, manager);
+});
+
+it("library managers can remove and restore blocked documents without gaining ownership of the library", async () => {
+  await member(parent, "manager", false, manager);
+  await settings(child, {accessMode: "custom"});
+  await member(child, null, true, manager);
+  await authorize(db, manager, child.id, "trash");
+  await expect(authorize(db, manager, parent.id, "trash")).rejects.toThrow();
+  const current = await db.selectFrom("resources").selectAll().where("id", "=", child.id).executeTakeFirstOrThrow();
+  await content.trash(manager, child.id, current.version);
+  const trashed = await db.selectFrom("resources").selectAll().where("id", "=", child.id).executeTakeFirstOrThrow();
+  expect(trashed.deleted_at).not.toBeNull();
+  await authorize(db, manager, child.id, "purge", true);
+  await content.trash(manager, child.id, trashed.version, true);
+  await rank(child, 4, manager);
+  await member(parent, null, true, manager);
+  await member(child, "manager", true, manager);
+  await expect(authorize(db, manager, child.id, "trash")).rejects.toThrow();
 });

@@ -128,7 +128,6 @@ export default defineConfig({
     fs: {
       allow: [
         fileURLToPath(new URL("../..", import.meta.url)),
-        fileURLToPath(new URL("../../../doca-mail", import.meta.url)),
       ],
     },
   },

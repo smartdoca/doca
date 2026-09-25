@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { Select } from "@web/shared/components/select.js";
@@ -9,6 +10,7 @@ import {
   type ContentDistribution,
 } from "@core/modules/deployment/policies.js";
 export function DistributionSettings() {
+  const { t } = useI18n();
   const [value, setValue] = useState<Distribution | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -63,9 +65,19 @@ export function DistributionSettings() {
       <section className="admin-card" key={kind}>
         <h3>{name}</h3>
         <label className="policy-row">
-          <strong>新建{name}的默认范围</strong>
+          <strong>
+            {t(
+              kind === "document"
+                ? "policy.defaultDocumentVisibility"
+                : "policy.defaultLibraryVisibility",
+            )}
+          </strong>
           <Select
-            aria-label={`${name}默认范围`}
+            aria-label={t(
+              kind === "document"
+                ? "policy.defaultDocumentVisibility"
+                : "policy.defaultLibraryVisibility",
+            )}
             disabled={!value || busy}
             value={policy?.defaultVisibility ?? "invited"}
             onChange={(e) =>
@@ -75,17 +87,17 @@ export function DistributionSettings() {
               })
             }
           >
-            <option value="invited">私有，仅有权限的人可访问</option>
-            <option value="requestable">允许申请访问</option>
-            <option value="authenticated">站内公开</option>
-            <option value="public">全网公开</option>
+            <option value="invited">{t("policy.private")}</option>
+            <option value="requestable">{t("policy.requestable")}</option>
+            <option value="authenticated">{t("policy.authenticated")}</option>
+            <option value="public">{t("policy.public")}</option>
           </Select>
-          <small>只影响新建内容，知识库中的文档仍按继承规则创建。</small>
+          <small>{t("policy.newHelp")}</small>
         </label>
         <label className="policy-row">
-          <strong>新协作者授权方式</strong>
+          <strong>{t("policy.grantMode")}</strong>
           <Select
-            aria-label={`${name}授权方式`}
+            aria-label={t("policy.grantLabel", { name })}
             disabled={!value || busy}
             value={policy?.grantMode ?? "direct"}
             onChange={(e) =>
@@ -94,23 +106,25 @@ export function DistributionSettings() {
               })
             }
           >
-            <option value="direct">直接生效</option>
-            <option value="invite">接受邀请后生效</option>
+            <option value="direct">{t("policy.direct")}</option>
+            <option value="invite">{t("policy.invite")}</option>
           </Select>
         </label>
         {toggle(
-          "展示所有者和管理员",
-          "允许无权限或普通协作者查看，方便联系。",
+          t("policy.showManagers"),
+          t("policy.showManagersHelp"),
           policy?.managerInfoVisible ?? false,
           (v) => patch({ managerInfoVisible: v }),
         )}
-        <h4>列表展示</h4>
+        <h4>{t("policy.list")}</h4>
         <label className="policy-row">
           <strong>
-            {kind === "document" ? "与我共享的文档" : "协作知识库"}
+            {kind === "document"
+              ? t("policy.sharedDocuments")
+              : t("policy.libraries")}
           </strong>
           <Select
-            aria-label={`${name}列表展示`}
+            aria-label={t("policy.listLabel", { name })}
             disabled={!value || busy}
             value={
               kind === "document"
@@ -124,27 +138,27 @@ export function DistributionSettings() {
               })
             }
           >
-            <option value="granted">授权生效后展示</option>
-            <option value="interacted">接受邀请或主动加入后展示</option>
+            <option value="granted">{t("policy.granted")}</option>
+            <option value="interacted">{t("policy.interacted")}</option>
           </Select>
         </label>
         {kind === "library" &&
           toggle(
-            "展示站内公开知识库",
-            "关闭后，需用户主动加入才出现在知识库列表。",
+            t("policy.showPublic"),
+            t("policy.showPublicHelp"),
             value?.publicLibraries ?? false,
             (v) => void save({ publicLibraries: v }),
           )}
         {toggle(
-          "打开后自动加入列表",
-          "仅对已有访问权限的内容生效。",
+          t("policy.autoCollect"),
+          t("policy.autoCollectHelp"),
           policy?.autoCollectOpened ?? false,
           (v) => patch({ autoCollectOpened: v }),
         )}
-        <h4>工单人员信息</h4>
+        <h4>{t("policy.ticketPeople")}</h4>
         {toggle(
-          "向申请人展示审批人",
-          "仅控制申请人看到的人员信息。",
+          t("policy.showReviewers"),
+          t("policy.showReviewersHelp"),
           policy?.ticketReviewers.access ?? false,
           (v) =>
             patch({
@@ -152,8 +166,8 @@ export function DistributionSettings() {
             }),
         )}
         {toggle(
-          "向受邀人展示邀请处理人员",
-          "其他相关人员的查看权限不变。",
+          t("policy.showInvitationReviewers"),
+          t("policy.showInvitationReviewersHelp"),
           policy?.ticketReviewers.invitation ?? false,
           (v) =>
             patch({
@@ -166,17 +180,15 @@ export function DistributionSettings() {
   return (
     <>
       <div className="distribution-cards">
-        {contentCard("document", "文档")}
-        {contentCard("library", "知识库")}
+        {contentCard("document", t("policy.document"))}
+        {contentCard("library", t("policy.library"))}
       </div>
       <section className="admin-card admin-form-section">
-        <h3>公共发现</h3>
+        <h3>{t("policy.discovery")}</h3>
         <label className="setting-toggle">
           <span>
-            <strong>开放公共发现入口</strong>
-            <small>
-              适用于文档和知识库，仅展示允许被发现且用户有权访问的内容。
-            </small>
+            <strong>{t("policy.enableDiscovery")}</strong>
+            <small>{t("policy.discoveryHelp")}</small>
           </span>
           <input
             type="checkbox"
@@ -192,6 +204,7 @@ export function DistributionSettings() {
 }
 
 export function Invitations({ changed }: { changed: () => void }) {
+  const { t } = useI18n();
   const [items, setItems] = useState<
       {
         id: string;
@@ -217,18 +230,24 @@ export function Invitations({ changed }: { changed: () => void }) {
   }, []);
   return (
     <details className="invitation-inbox">
-      <summary>待处理分享{items.length ? ` · ${items.length}` : ""}</summary>
+      <summary>
+        {t("invitations.pending")}
+        {items.length ? ` · ${items.length}` : ""}
+      </summary>
       <div>
-        {!items.length && <p className="subtle">暂无待处理分享</p>}
+        {!items.length && <p className="subtle">{t("invitations.empty")}</p>}
         {items.map((i) => (
           <div className="invitation-row" key={i.id}>
             <span>
               <strong>{i.title}</strong>
               <small>
-                {i.kind === "library" ? "知识库" : "文档"} ·{" "}
+                {i.kind === "library"
+                  ? t("policy.library")
+                  : t("policy.document")}{" "}
+                ·{" "}
                 {i.state === "pending"
-                  ? "接受后获得权限"
-                  : "已授权，可加入列表"}
+                  ? t("invitations.acceptHelp")
+                  : t("invitations.joinHelp")}
               </small>
             </span>
             {[true, false].map((accept) => (
@@ -251,7 +270,7 @@ export function Invitations({ changed }: { changed: () => void }) {
                   }
                 }}
               >
-                {accept ? "接受" : "拒绝"}
+                {accept ? t("invitations.accept") : t("invitations.decline")}
               </button>
             ))}
           </div>

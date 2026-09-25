@@ -1,8 +1,8 @@
 import { effectiveResource } from "./inheritance.js";
 import { distributionPolicy } from "../deployment/policies.js";
 import { sql, type Transaction } from "kysely";
-import { requireCapability, entitlements } from "../entitlements/service.js";
-import { checkMemberAdmission } from "../entitlements/admission.js";
+import { requireCapability } from "../access/operation-policy.js";
+import { checkMemberAdmission } from "../access/operation-policy.js";
 import { label, namedPermission, permission, ranks } from "./policy.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { DB, Schema } from "../../../../db/src/index.js";
@@ -132,23 +132,12 @@ export function createShareLinks(db: DB) {
             .where("id", "=", id)
             .executeTakeFirstOrThrow();
           await requireCapability(tx, actor.id, "sharing.links");
-          const e = await requireCapability(
+          await requireCapability(
             tx,
             resource.owner_id,
             "sharing.links",
           );
-          const links = await tx
-            .selectFrom("share_links")
-            .select("expires_at")
-            .where("resource_id", "=", id)
-            .where("enabled", "=", 1)
-            .execute();
-          const count = links.filter(
-            (l) => !l.expires_at || l.expires_at > new Date().toISOString(),
-          ).length;
-          const limit = e.level.limits["sharing.links"];
-          if (limit !== null && count > limit)
-            fail(409, "已达到分享链接数量上限");
+
         }
         await tx
           .updateTable("resources")
@@ -231,27 +220,12 @@ export function createShareLinks(db: DB) {
               input.expiresAt > old.expires_at))
         ) {
           await requireCapability(tx, actor.id, "sharing.links");
-          const e = await requireCapability(
+          await requireCapability(
             tx,
             resource.owner_id,
             "sharing.links",
           );
-          const links = await tx
-            .selectFrom("share_links")
-            .selectAll()
-            .where("resource_id", "=", id)
-            .where("enabled", "=", 1)
-            .execute();
-          const n = links.filter(
-            (l) =>
-              l.generation !== old?.generation &&
-              (!l.expires_at || l.expires_at > new Date().toISOString()),
-          ).length;
-          if (
-            e.level.limits["sharing.links"] !== null &&
-            n + 1 > e.level.limits["sharing.links"]!
-          )
-            fail(409, "已达到分享链接数量上限");
+
         }
         const token = old?.token ?? randomBytes(32).toString("base64url");
         const row = {
@@ -405,8 +379,7 @@ export function createShareLinks(db: DB) {
           .executeTakeFirst();
         if (
           !r ||
-          r.moderation_status === "blocked" ||
-          !effectiveResource(r, await loadResources(tx, [r.id]))
+                !effectiveResource(r, await loadResources(tx, [r.id]))
             .share_links_enabled ||
           (r.library_id &&
             (

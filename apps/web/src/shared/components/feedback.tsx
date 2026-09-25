@@ -78,7 +78,7 @@ export function FeedbackViewport() {
             <span>{item.message}</span>
             <button
               type="button"
-              aria-label="关闭提示"
+              aria-label={t("fileManager.closeNotice")}
               onClick={() => remove(item.id)}
             >
               <X size={16} />

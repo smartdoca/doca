@@ -7,9 +7,9 @@ import type { DB } from "@db/index.js";
 import { AppError, fail } from "@core/shared/errors.js";
 import { requireModel } from "@core/modules/ai/config.js";
 import {
-  reserveCall,
+  beginCall,
   settleCall,
-} from "@core/modules/ai/quota.js";
+} from "@core/modules/ai/usage.js";
 import {
   MODEL_INPUT_BYTE_FACTOR,
   fitPromptToModelInput,
@@ -115,7 +115,7 @@ export async function meteredModel(
           options.maxOutputTokens ?? model.maxOutput,
           model.maxOutput,
         );
-        const call = await reserveCall(
+        const call = await beginCall(
           db,
           userId,
           modelId,

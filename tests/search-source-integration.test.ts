@@ -7,7 +7,6 @@ import {
   fileSearchSource,
   knowledgeSearchSource,
 } from "../apps/server/src/services/search/sources.js";
-import { mailSearchSource } from "../plugins/mail/src/server/search-source.js";
 import { openTestDatabase } from "./database.js";
 
 it("keeps document, file and knowledge search active when mail is absent", async () => {
@@ -28,7 +27,6 @@ it("keeps document, file and knowledge search active when mail is absent", async
   try {
     const registration = await registerSearch(app, db, () => actor, {
       allowedOrigins: ["http://127.0.0.1:7700"],
-      sources: { mail: false },
     });
     const descriptors = registration.searchHost.registry
       .list()
@@ -40,7 +38,7 @@ it("keeps document, file and knowledge search active when mail is absent", async
         knowledgeSearchSource,
       ]),
     );
-    expect(descriptors).not.toContainEqual(mailSearchSource);
+    expect(descriptors).toHaveLength(3);
   } finally {
     await app.close();
     await db.destroy();

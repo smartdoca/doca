@@ -1,3 +1,5 @@
+import { KnowledgeConnections } from "@web/features/knowledge/knowledge-connections.js";
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
@@ -12,6 +14,8 @@ export function AIUserSettings({
   close: () => void;
   openSession?: (id: string) => Promise<void> | void;
 }) {
+  const { t } = useI18n();
+
   const [tab, setTab] = useState("usage"),
     [data, setData] = useState<any>(null),
     [error, setError] = useState(""),
@@ -26,7 +30,7 @@ export function AIUserSettings({
   );
   const load = async () => {
     const version = ++requestVersion.current;
-    if (tab === "note") {
+    if (tab === "note" || tab === "knowledge") {
       setData({ ok: true });
       return;
     }
@@ -69,6 +73,7 @@ export function AIUserSettings({
             ["skills", "Skill"],
             ["archived", "已归档会话"],
             ["note", "备忘"],
+            ["knowledge", t("knowledge.connections")],
           ].map(([id, title]) => (
             <button
               key={id}
@@ -85,90 +90,52 @@ export function AIUserSettings({
           ))}
         </nav>
         <Feedback message={error} tone="error" />
+        {tab === "knowledge" && <KnowledgeConnections />}
         {tab === "usage" && data && (
           <>
             <div className="ai-usage-grid">
-              {[
-                ["day", "今日"],
-                ["week", "本周"],
-                ["month", "本月"],
-              ].map(([id, title]) => (
-                <div key={id}>
-                  <small>{title}基础积分</small>
+              {(["day", "week", "month"] as const).map((period) => (
+                <div key={period}>
+                  <small>{t(("aiusage." + period) as "aiusage.day")}</small>
                   <strong>
-                    {data.used[id!].toLocaleString()} /{" "}
-                    {data.limits[id!] ?? "不限"}
+                    {(data.tokens?.[period]?.total ?? 0).toLocaleString()}
                   </strong>
-                  <small>周期：{data.periods[id!]}</small>
                   <small>
-                    实际 Token：
-                    {(
-                      (data.tokens?.[id!]?.input ?? 0) +
-                      (data.tokens?.[id!]?.output ?? 0)
-                    ).toLocaleString()}
+                    {t("aiusage.input")}:{" "}
+                    {(data.tokens?.[period]?.input ?? 0).toLocaleString()}
                   </small>
                   <small>
-                    输入缓存命中：
-                    {(data.tokens?.[id!]?.cached ?? 0).toLocaleString()}
-                    {data.tokens?.[id!]?.input > 0 &&
-                      `（${((data.tokens[id!].cached / data.tokens[id!].input) * 100).toFixed(1)}%）`}
+                    {t("aiusage.output")}:{" "}
+                    {(data.tokens?.[period]?.output ?? 0).toLocaleString()}
+                  </small>
+                  <small>
+                    {t("aiusage.image")}:{" "}
+                    {(data.tokens?.[period]?.image ?? 0).toLocaleString()}
                   </small>
                 </div>
               ))}
-              <div>
-                <small>额外积分</small>
-                <strong>{data.bonus.toLocaleString()}</strong>
-              </div>
             </div>
-            {!!data.grants.length && (
-              <details>
-                <summary>额外积分明细</summary>
-                {data.grants.map((g: any) => (
-                  <p key={g.id}>
-                    {g.reason}：剩余 {g.remaining} / {g.amount} ·{" "}
-                    {g.expires_at
-                      ? `${new Date(g.expires_at).toLocaleDateString()} 到期`
-                      : "长期有效"}
-                  </p>
-                ))}
-              </details>
-            )}
-            <p className="ai-muted">
-              倍率用于积分换算，实际 Token
-              另行统计。待对账调用保留预占，不会重复扣减。
-              缓存命中以厂商回传为准，命中部分按管理员设置的缓存倍率换算积分。命中率越高，长任务越便宜；同一会话里请避免中途更换模型。
-            </p>
+            <p className="ai-muted">{t("aiusage.note")}</p>
             <table>
               <thead>
                 <tr>
-                  <th>模型</th>
-                  <th>实际 Token</th>
-                  <th>缓存命中</th>
-                  <th>积分</th>
-                  <th>状态</th>
+                  <th>{t("aiusage.model")}</th>
+                  <th>{t("aiusage.input")}</th>
+                  <th>{t("aiusage.output")}</th>
+                  <th>{t("aiusage.image")}</th>
+                  <th>{t("aiusage.total")}</th>
+                  <th>{t("aiusage.state")}</th>
                 </tr>
               </thead>
               <tbody>
-                {data.calls.map((c: any) => (
-                  <tr key={c.id}>
-                    <td>{c.model}</td>
-                    <td>{c.input + c.output}</td>
-                    <td>
-                      {c.callKind === "image"
-                        ? "—"
-                        : (c.cached ?? 0).toLocaleString()}
-                    </td>
-                    <td>{c.points}</td>
-                    <td>
-                      {{
-                        confirmed: "已结算",
-                        reserved: "预占中",
-                        pending: "待对账",
-                        site_test: "站点测试",
-                        failed: "失败",
-                        reconciled: "已对账",
-                      }[c.state as string] ?? c.state}
-                    </td>
+                {data.calls.map((call: any) => (
+                  <tr key={call.id}>
+                    <td>{call.model}</td>
+                    <td>{call.input ?? "—"}</td>
+                    <td>{call.output ?? "—"}</td>
+                    <td>{call.image ?? "—"}</td>
+                    <td>{call.total ?? "—"}</td>
+                    <td>{call.state}</td>
                   </tr>
                 ))}
               </tbody>
@@ -306,7 +273,7 @@ export function AIUserSettings({
                     void act(() => api(`/ai/skills/${s.id}`, "DELETE"))
                   }
                 >
-                  删除
+                  {t("common.delete")}
                 </button>
               </div>
             ))}
@@ -322,7 +289,7 @@ export function AIUserSettings({
                 }}
               >
                 <label>
-                  名称
+                  {t("shell.name")}
                   <input
                     required
                     value={skill.name}
@@ -360,13 +327,13 @@ export function AIUserSettings({
                       setSkill({ ...skill, enabled: e.target.checked })
                     }
                   />
-                  启用
+                  {t("users.enable")}
                 </label>
                 <button className="primary" disabled={busy}>
-                  保存
+                  {t("library.qa.save")}
                 </button>
                 <button type="button" onClick={() => setSkill(null)}>
-                  取消
+                  {t("common.cancel")}
                 </button>
               </form>
             )}
@@ -379,7 +346,10 @@ export function AIUserSettings({
             </p>
             {!data.length && <p className="ai-muted">暂无归档会话</p>}
             {data.map((session: any) => (
-              <div className="ai-settings-row ai-archived-session" key={session.id}>
+              <div
+                className="ai-settings-row ai-archived-session"
+                key={session.id}
+              >
                 <span>
                   <strong>{session.title}</strong>
                   {session.updated_at && (

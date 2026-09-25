@@ -167,8 +167,8 @@ export function QuickNoteEditor({
         role="toolbar"
         aria-label="快捷记录"
       >
-        <button type="button" className="note-upload" title="添加图片" aria-label="添加图片" disabled={disabled} onClick={() => { sourceKindRef.current = "image"; setSourceKind("image"); }}><ImagePlus size={18} /></button>
-        <button type="button" className="note-upload" title="添加附件" aria-label="添加附件" disabled={disabled} onClick={() => { sourceKindRef.current = "attachment"; setSourceKind("attachment"); }}><Paperclip size={18} /></button>
+        <button type="button" className="note-upload" title={t("comment.addImage")} aria-label={t("comment.addImage")} disabled={disabled} onClick={() => { sourceKindRef.current = "image"; setSourceKind("image"); }}><ImagePlus size={18} /></button>
+        <button type="button" className="note-upload" title={t("toolbar.addAttachment")} aria-label={t("toolbar.addAttachment")} disabled={disabled} onClick={() => { sourceKindRef.current = "attachment"; setSourceKind("attachment"); }}><Paperclip size={18} /></button>
         <input ref={localFile} hidden type="file" accept={sourceKind === "image" ? "image/*,.svg,image/svg+xml" : undefined} multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; command((h) => { for (const file of files) void (sourceKindRef.current === "image" ? h.commands.uploadImage(file) : h.commands.uploadAttachment(file)).catch((e) => setError(String(e))); }); }} />
         <button
           type="button"

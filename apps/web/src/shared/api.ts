@@ -13,6 +13,8 @@ export interface Bootstrap {
     recoveryEnabled: boolean;
   };
   siteName: string;
+  defaultLocale?: string;
+  defaultTimezone?: string;
   registrationEnabled: boolean;
   initialized: boolean;
   user: User | null;
@@ -20,6 +22,7 @@ export interface Bootstrap {
   plugins: { id: string; version: string }[];
 }
 export interface Resource {
+  can_remove?: boolean;
   last_editor_id?: string | null;
   cover_asset_id?: string | null;
   page_width?: string | null;
@@ -67,12 +70,6 @@ export interface Me {
   needsProfile?: boolean;
   editable?: { displayName: boolean; avatar: boolean };
   avatarUrl?: string;
-  entitlements?: {
-    can: Record<string, boolean>;
-    level?: { id: string; name: string; color?: string; icon?: string };
-    expiresAt?: string | null;
-    vip?: { enabled: boolean; label: string; icon: string } | null;
-  };
   user: User;
   preferences: Preferences;
 }
@@ -184,7 +181,6 @@ export async function api<T>(
   }
   if (path === "/bootstrap" && lastAccount !== (data.user?.id ?? null)) {
     lastAccount = data.user?.id ?? null;
-    window.dispatchEvent(new Event("entitlements-updated"));
   }
   return data;
 }

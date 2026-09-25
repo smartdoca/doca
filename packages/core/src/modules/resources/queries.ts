@@ -1,3 +1,4 @@
+import { distributionBehavior } from "../access/distribution-behavior.js";
 import { policyFieldQuery } from "../access/queries.js";
 import { sql } from "kysely";
 import { createHash } from "node:crypto";
@@ -72,12 +73,12 @@ export async function queryResourcePage(
     const enrolled = entryQuery(
       sql.ref("r.id"),
       actor.id,
-      policy.sharedDocuments === "granted",
+      distributionBehavior(policy, "document").includeGranted,
     );
     const libraryEnrolled = entryQuery(
       sql.ref("r.library_id"),
       actor.id,
-      policy.libraryMembers === "granted",
+      distributionBehavior(policy, "library").includeGranted,
       policy.publicLibraries,
     );
     const treeMode = !!input.includeAncestors && libraryIds.length > 0;
@@ -168,7 +169,7 @@ export async function queryResourcePage(
             entryQuery(
               sql.ref("r.id"),
               actor.id,
-              policy.libraryMembers === "granted",
+              distributionBehavior(policy, "library").includeGranted,
               policy.publicLibraries,
             ),
           );
@@ -191,7 +192,7 @@ export async function queryResourcePage(
           !libraryIds.length &&
           !input.parentId &&
           input.scope !== "trash" &&
-          policy.normalSearch !== "accessible"
+          distributionBehavior(policy, "document").requireSearchIntersection
         )
           query = query.where(
             sql<boolean>`(r.owner_id = ${actor.id} or ${enrolled} or ${libraryEnrolled})`,

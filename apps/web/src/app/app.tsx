@@ -1,12 +1,11 @@
+import { KnowledgeAssistants } from "@web/features/knowledge/knowledge-assistants.js";
 import type { MessageKey } from "@doca/i18n";
 import { AIProvider } from "@web/features/ai/ai-context.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { AIChat, AIDocumentLayout } from "@web/features/ai/ai-chat.js";
 import "@web/features/account/account-menu.css";
-import { MembershipLink } from "@web/features/settings/membership-link.js";
 import { AccountMenu } from "@web/features/account/account-menu.js";
 import { LocaleSwitch } from "@web/features/account/locale-switch.js";
-import { useEntitlements } from "@web/shared/hooks/entitlement-access.js";
 import { AccountLogin } from "@web/features/auth/account-login.js";
 import { AccountOnboarding } from "@web/features/auth/account-fields.js";
 import { Feedback } from "@web/shared/components/feedback.js";
@@ -62,10 +61,8 @@ import {
   ThumbsUp,
   LogOut,
   FolderOpen,
-  Mail,
   ArrowLeft,
   Home,
-  Cloud,
   PanelLeft,
   UserRound,
   Network,
@@ -90,7 +87,7 @@ import {
 import { Admin } from "@web/features/admin/admin.js";
 import { AuthCompletion, ExternalLoginOptions } from "@web/features/auth/authentication.js";
 import { DocumentTree } from "@web/features/documents/tree.js";
-import { Dashboard, GlobalSearch, CloudBackup } from "@web/features/workspace/dashboard.js";
+import { Dashboard, GlobalSearch } from "@web/features/workspace/dashboard.js";
 import { Avatar, Profile, PersonalSettings } from "@web/features/account/profile.js";
 import { CoverDialog, ResourceActionDialog } from "@web/features/documents/uploads.js";
 import "@web/styles/globals.css";
@@ -134,8 +131,8 @@ const titleKeys: Record<string, MessageKey> = {
   todos: "nav.tickets",
   tickets: "nav.tickets",
   ai: "nav.assistant",
+  "knowledge-assistants": "knowledge.assistants",
   notes: "nav.notes",
-  backups: "nav.backups",
   preferences: "account.settings",
   shared: "nav.shared",
   favorites: "nav.favorites",
@@ -176,7 +173,6 @@ export function App() {
   const [navigationCollapsed, setNavigationCollapsed] = useNavigationCollapse("doca.navigation.collapsed");
   const [adminNavigationCollapsed, setAdminNavigationCollapsed] = useNavigationCollapse("doca.admin-navigation.collapsed");
   const desktopNavigation = useDesktopNavigation();
-  const allowed = useEntitlements();
   useDismissMenus();
   const [createAnchor, setCreateAnchor] = useState<DOMRect | null>(null);
   const [templateFormat, setTemplateFormat] = useState<Resource["format"] | null>(null);
@@ -190,12 +186,6 @@ export function App() {
     [scope, setScope] = useState(() => {
       const route = location.hash.slice(2).split(/[/?]/)[0]!;
       if (route === "knowledge") return "libraries";
-      if (
-        pluginInstalled("doca.mail") &&
-        import.meta.env.DEV &&
-        route === "mail-preview"
-      )
-        return "mail";
       return titleKeys[route] || pluginNavigationByScope.has(route)
         ? route
         : "home";
@@ -263,19 +253,9 @@ export function App() {
     mobileShell = !!mobileResourceId,
     resourceId = mobileResourceId ?? /^#\/r\/([a-f0-9-]{36})(?:\?|$)/.exec(hash)?.[1],
     sharedFolderId = /^#\/shared-files\/([a-f0-9-]{36})(?:\?|$)/.exec(hash)?.[1],
-    mailPreview =
-      pluginInstalled("doca.mail") &&
-      import.meta.env.DEV &&
-      hash.split("?")[0] === "#/mail-preview",
-    mailPage =
-      pluginInstalled("doca.mail") &&
-      (hash.split("?")[0] === "#/mail" ||
-        hash.startsWith("#/mail/") ||
-        mailPreview),
     adminPage = hash.split("?")[0] === "#/admin",
     accountPage = hash === "#/account",
-    preferencesPage = hash === "#/preferences",
-    backupPage = hash === "#/backups";
+    preferencesPage = hash === "#/preferences";
   const ticketId = /^#\/tickets\/([a-f0-9-]{36})$/.exec(hash)?.[1];
   const ticketsPage = !!ticketId || hash.split("?")[0] === "#/tickets" || hash === "#/todos";
   const targetComment = new URLSearchParams(hash.split("?")[1] ?? "").get(
@@ -408,24 +388,6 @@ export function App() {
   }, [bootstrap?.user?.id, accountPage]);
   useEffect(() => {
     if (!bootstrap?.user) return;
-    const refresh = () => {
-      void refreshMe().catch((e) => setError(e.message));
-    };
-    window.addEventListener("entitlements-updated", refresh);
-    window.addEventListener("focus", refresh);
-    const expiresAt = me?.entitlements?.expiresAt;
-    const wait = expiresAt ? new Date(expiresAt).getTime() - Date.now() : NaN;
-    const timer = Number.isFinite(wait) && wait > 0
-      ? setTimeout(refresh, Math.min(wait + 50, 2147483647))
-      : undefined;
-    return () => {
-      window.removeEventListener("entitlements-updated", refresh);
-      window.removeEventListener("focus", refresh);
-      if (timer) clearTimeout(timer);
-    };
-  }, [bootstrap?.user?.id, me?.entitlements?.expiresAt]);
-  useEffect(() => {
-    if (!bootstrap?.user) return;
     return realtime.retain();
   }, [bootstrap?.user?.id]);
   useEffect(
@@ -469,9 +431,9 @@ export function App() {
       me?.preferences.density ?? "comfortable";
   }, [me?.preferences]);
   useEffect(() => {
-    if (!bootstrap?.user) return;
-    void reloadLocale();
-  }, [bootstrap?.user?.id, reloadLocale]);
+    if (!bootstrap) return;
+    void reloadLocale(bootstrap.defaultLocale, !!bootstrap.user);
+  }, [bootstrap?.user?.id, bootstrap?.defaultLocale, reloadLocale]);
   useEffect(() => {
     if (bootstrap?.siteName)
       document.title = t("app.documentTitle", { site: bootstrap.siteName });
@@ -544,18 +506,9 @@ export function App() {
       if (route === "knowledge") {
         location.hash = "/libraries";
         setScope("libraries");
-      } else if (
-        pluginInstalled("doca.mail") &&
-        import.meta.env.DEV &&
-        route === "mail-preview"
-      )
-        setScope("mail");
-      else if (titleKeys[route]) setScope(route);
+      } else if (titleKeys[route]) setScope(route);
       else if (pluginNavigationByScope.has(route)) setScope(route);
-      else if (route === "mail" && !pluginInstalled("doca.mail")) {
-        location.hash = "/home";
-        setScope("home");
-      }
+      else
       setError("");
     };
     load();
@@ -715,9 +668,7 @@ export function App() {
       setModal("move");
     });
   }
-  const pluginRoutePath = mailPreview
-    ? "/mail"
-    : hash.replace(/^#/, "").split("?")[0] || "/home";
+  const pluginRoutePath = hash.replace(/^#/, "").split("?")[0] || "/home";
   const matchedPluginRoute = webPluginRegistry.resolveRoute(pluginRoutePath);
   const pluginRoute =
     matchedPluginRoute &&
@@ -729,7 +680,6 @@ export function App() {
   const renderedPluginRoute = pluginRoute?.contribution.render(
       {
         sharedFolderName,
-        mailPreview,
         onFileNavigationChange: setFileTrail,
       },
       pluginRoute.match,
@@ -779,32 +729,6 @@ export function App() {
           </a>
         </section>
       </main>
-    );
-  if (mailPreview && !bootstrap.user)
-    return (
-      <div className="mail-preview-shell">
-        <header className="topbar workspace-topbar">
-          <div className="document-topbar-title">
-            <div className="files-topbar-title">
-              <Mail size={17} aria-hidden="true" />
-              <strong>{t("shell.mail")}</strong>
-              <span className="files-topbar-separator">/</span>
-              <span id="mail-header-mailbox" />
-            </div>
-          </div>
-          <div className="inline document-topbar-actions">
-            <span id="mail-header-actions" className="mail-header-actions" />
-            <div className="global-header-tools">
-              <TodoIcon />
-            </div>
-          </div>
-        </header>
-        {unavailablePluginRoute ? (
-          <section className="empty">{t("shell.pluginUnavailable")}</section>
-        ) : (
-          renderedPluginRoute
-        )}
-      </div>
     );
   if (!bootstrap.user && !resourceId)
     return (
@@ -893,7 +817,6 @@ export function App() {
             <ArrowLeft size={18} /> {t("account.workspace")}
           </a>
           <div className="global-header-tools">
-          {!adminPage && <MembershipLink vip={me?.entitlements?.vip} onError={setError} />}
           <TodoIcon />
           <Notifications />
           <LocaleSwitch />
@@ -975,7 +898,7 @@ export function App() {
     );
   return (
     <DocumentModeContext.Provider value={documentMode}>
-    <AIProvider userId={user?.id} resource={detail?.resource.kind === "document" ? detail.resource : undefined} hash={hash} onResourcesChanged={() => setRefresh((n) => n + 1)}>
+    <AIProvider userId={user?.id} resource={detail?.resource} hash={hash} onResourcesChanged={() => setRefresh((n) => n + 1)}>
     <div
       className={`app-shell ${mobileShell ? "mobile-editor-shell" : ""} ${!user || sharedPersonalView ? "public-view" : ""} ${personalDocumentPage ? "personal-document-view" : ""} ${resourceId ? "document-view" : ""} ${["spreadsheet", "canvas", "presentation"].includes(detail?.resource.format ?? "") ? "spreadsheet-view surface-view" : ""} ${navigationOpen ? "navigation-expanded" : ""} ${navigationCollapsed ? "navigation-collapsed" : ""}`}
     >
@@ -1054,7 +977,6 @@ export function App() {
               <button
                 type="button"
                 className="sidebar-create-entry"
-                hidden={!allowed("documents.create")}
                 title={t("nav.create")}
                 aria-label={t("nav.create")}
                 aria-haspopup="dialog"
@@ -1077,21 +999,18 @@ export function App() {
                   order: item.order ?? 0,
                   path: item.path,
                 })),
+                { key: "knowledge-assistants", label: "knowledge.assistants", plugin: false as const, Icon: Sparkles, order: 25, path: "/knowledge-assistants" },
                 { key: "ai", label: "nav.assistant", plugin: false as const, Icon: Sparkles, order: 20, path: "/ai" },
                 { key: "notes", label: "nav.notes", plugin: false as const, Icon: Feather, order: 30, path: "/notes" },
                 { key: "trash", label: "nav.trash", plugin: false as const, Icon: Trash2, order: 80, path: "/trash" },
-                { key: "backups", label: "nav.backups", plugin: false as const, Icon: Cloud, order: 90, path: "/backups" },
               ])
                 .sort((left, right) => left.order - right.order || left.key.localeCompare(right.key))
-                .filter(
-                  ({ key }) => key !== "backups" || allowed("backup.upload"),
-                )
                 .map(({ key, label, plugin, Icon, path }) => {
                   const I = Icon as typeof Home;
                   return (
                     <button
                       key={key}
-                      className={`${key === "ai" ? "ai-navigation-entry" : ""} ${key === "trash" ? "sidebar-trash-navigation-entry" : ""} ${!resourceId && (scope === key || (key === "mail" && mailPage)) ? "active" : ""}`}
+                      className={`${key === "ai" ? "ai-navigation-entry" : ""} ${key === "trash" ? "sidebar-trash-navigation-entry" : ""} ${!resourceId && scope === key ? "active" : ""}`}
                       onClick={() => {
                         navigate(key, path);
                         if (key === "notes") window.dispatchEvent(new CustomEvent("doca-notes-float-attention"));
@@ -1114,7 +1033,6 @@ export function App() {
             </button>
             <button
               className="icon"
-              hidden={!allowed("documents.create")}
               aria-label={t("nav.newLibraryDocument")}
               disabled={!libraryInfo || roleRank(libraryInfo.role) < 3}
               onClick={() => create("document", libraryInfo ?? undefined)}
@@ -1128,6 +1046,7 @@ export function App() {
             userId={user.id}
             selected={resourceId}
             libraryId={currentLibraryId}
+            knowledgeEnabled={!!libraryInfo?.ai_curated && roleRank(libraryInfo.role) >= 4}
             create={(r) => create("document", r)}
             changed={() => setRefresh((n) => n + 1)}
           />}
@@ -1158,14 +1077,7 @@ export function App() {
               </button>
             )}
             {!resourceId && scope === "ai" && <div id="ai-header-slot" />}
-            {!resourceId && (scope === "mail" || mailPage) && user && (
-              <div className="files-topbar-title">
-                <Mail size={17} aria-hidden="true" />
-                <strong>{t("shell.mail")}</strong>
-                <span className="files-topbar-separator">/</span>
-                <span id="mail-header-mailbox" />
-              </div>
-            )}
+
             {!resourceId && scope === "notes" && user && (
               <div className="files-topbar-title">
                 <Feather size={17} aria-hidden="true" />
@@ -1259,7 +1171,7 @@ export function App() {
             </div>}
           </div>
           <div className="inline document-topbar-actions">
-            {!resourceId && (scope === "mail" || mailPage) && user && <span id="mail-header-actions" className="mail-header-actions" />}
+
             {!resourceId && scope === "shared-files" && sharedFolderId && <span id="files-header-actions" />}
             {resourceId &&
               detail?.resource.id === resourceId &&
@@ -1302,7 +1214,6 @@ export function App() {
               )}
             {user ? (
               <div className="global-header-tools">
-                <MembershipLink vip={me?.entitlements?.vip} onError={setError} />
                 <TodoIcon />
                 <Notifications />
                 <LocaleSwitch />
@@ -1330,9 +1241,7 @@ export function App() {
           surface={
             !resourceId && user && (scope === "files" || (scope === "shared-files" && !!sharedFolderId))
               ? "files"
-              : !resourceId && user && (scope === "mail" || mailPage)
-                ? "mail"
-                : undefined
+              : undefined
           }
         >
         {resourceId && <div id="editor-toolbar-slot" hidden={documentMode.readOnly} />}
@@ -1340,7 +1249,7 @@ export function App() {
         <div
           className={
             "main-scroll" +
-            (!resourceId && !backupPage && scope !== "trash" ? " dashboard-scroll-host" : "")
+            (!resourceId && scope !== "trash" ? " dashboard-scroll-host" : "")
           }
         >
           {user && <SubscribeLibraryHost />}
@@ -1354,14 +1263,14 @@ export function App() {
             pluginRoute &&
             renderedPluginRoute !== undefined ? (
             renderedPluginRoute
+          ) : !resourceId && scope === "knowledge-assistants" && user ? (
+            <KnowledgeAssistants />
           ) : !resourceId && scope === "ai" ? (
             <AIChat full />
           ) : !resourceId && scope === "notes" && user ? (
             <Suspense fallback={<p className="empty">{t("shell.loadingNotes")}</p>}><QuickNotes key={user.id} userId={user.id} changed={() => setRefresh(n => n + 1)} /></Suspense>
           ) : ticketsPage ? (
             <Tickets ticketId={ticketId} />
-          ) : backupPage ? (
-            <CloudBackup />
           ) : resourceId ? (
             loading ? (
               <div className="empty">{t("nav.opening")}</div>

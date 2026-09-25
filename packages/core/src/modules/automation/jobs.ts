@@ -57,11 +57,7 @@ export async function enqueueProjection(
         })),
     )
     .execute();
-  if (kind === "search") {
-    const row = await db.selectFrom("moderation_settings").select("config").where("id", "=", "system").executeTakeFirst();
-    const config = row ? JSON.parse(row.config) : null;
-    if (config?.enabled) await enqueueProjection(db, "moderation-text", key, { resourceId: key }, config.delaySeconds * 1000);
-  }
+
 }
 export async function processProjections(
   db: DB,

@@ -1,3 +1,4 @@
+import { emitIntegrationEvent } from "../automation/events.js";
 import type { DB } from "../../../../db/src/index.js";
 import { transact } from "../../../../db/src/transactions.js";
 import { fail } from "../../shared/errors.js";
@@ -35,6 +36,7 @@ export async function decideRegistration(
       .where("status", "=", "pending")
       .executeTakeFirst();
     if (!changed.numUpdatedRows) fail(409, "注册申请已处理，请刷新");
+    await emitIntegrationEvent(tx, "user.status.changed", { userId, previousStatus: "pending", status: decision === "approved" ? "active" : "disabled" });
     await tx
       .updateTable("registration_reviews")
       .set({

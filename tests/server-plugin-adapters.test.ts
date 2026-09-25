@@ -6,7 +6,6 @@ import { createFilesPlugin } from "../packages/plugin-files/src/index.js";
 import type { DocumentsServiceV1 } from "../packages/documents-capability/src/index.js";
 import type { FilesServiceV1 } from "../packages/files-capability/src/index.js";
 import { PluginHost } from "../packages/plugin-host/src/index.js";
-import { createMailPlugin } from "../plugins/mail/src/index.js";
 import {
   definePlugin,
   defineService,
@@ -102,13 +101,6 @@ it("orders adapter plugins and disposes their effects in reverse", async () => {
       mount: adapter("files"),
     }),
   );
-  host.register(
-    createMailPlugin({
-      runtimeToken,
-      unload: "app-close",
-      mount: adapter("mail"),
-    }),
-  );
 
   expect(host.order).toEqual([
     "doca.server-runtime",
@@ -116,25 +108,22 @@ it("orders adapter plugins and disposes their effects in reverse", async () => {
     "doca.files",
     "doca.documents",
     "doca.ai",
-    "doca.mail",
   ]);
   await host.start();
   expect(events).toEqual([
     "mount:files",
     "mount:documents",
-    "mount:mail",
   ]);
   await host.dispose();
-  expect(events.slice(-3)).toEqual([
-    "dispose:mail",
+  expect(events.slice(-2)).toEqual([
     "dispose:documents",
     "dispose:files",
   ]);
 });
 
-it("publishes active plugin versions and can disable only mail", async () => {
+it("publishes only core plugin versions without a default business installation", async () => {
   const origin = "http://localhost:39240";
-  const create = async (mail: boolean | undefined) => {
+  const create = async () => {
     const directory = await mkdtemp(
       join(process.env.TMPDIR ?? "/tmp", "doca-server-plugins-"),
     );
@@ -152,12 +141,12 @@ it("publishes active plugin versions and can disable only mail", async () => {
         cdnKeyPairId: undefined,
         cdnPrivateKey: undefined,
       },
-      ...(mail === undefined ? {} : { plugins: { mail } }),
+      pluginDirectory: join(directory, "plugins"),
     });
     return { app, db };
   };
 
-  const enabled = await create(undefined);
+  const enabled = await create();
   try {
     const response = await enabled.app.inject({
       method: "GET",
@@ -171,17 +160,16 @@ it("publishes active plugin versions and can disable only mail", async () => {
       { id: "doca.files", version: "0.1.0" },
       { id: "doca.documents", version: "0.1.0" },
       { id: "doca.ai", version: "0.1.0" },
-      { id: "doca.mail", version: "0.1.0" },
     ]);
     expect(
       enabled.app.hasRoute({ method: "GET", url: "/api/v1/mail" }),
-    ).toBe(true);
+    ).toBe(false);
   } finally {
     await enabled.app.close();
     await enabled.db.destroy();
   }
 
-  const disabled = await create(false);
+  const disabled = await create();
   try {
     expect(
       disabled.app.hasRoute({ method: "GET", url: "/api/v1/mail" }),

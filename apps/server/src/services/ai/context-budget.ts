@@ -11,6 +11,16 @@ const KEEP_KEYS = [
   "ok",
   "status",
   "nextOffset",
+  "nextCursor",
+  "hasMore",
+  "requiresApproval",
+  "approvalId",
+  "callId",
+  "fileId",
+  "jobId",
+  "href",
+  "code",
+  "error",
   "title",
   "accepted",
   "verdict",
@@ -27,9 +37,9 @@ function previewValue(value: unknown, max: number): unknown {
   if (!json || json.length <= max) return value;
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const obj = value as Record<string, unknown>;
-    if (obj.error) return { error: obj.error, truncated: true };
     const slim: Record<string, unknown> = { truncated: true };
-    for (const key of KEEP_KEYS) if (key in obj) slim[key] = obj[key];
+    for (const key of KEEP_KEYS)
+      if (key in obj) slim[key] = previewValue(obj[key], Math.min(200, max));
     if (typeof obj.content === "string")
       slim.contentPreview = obj.content.slice(0, Math.min(200, max));
     return slim;
@@ -68,7 +78,9 @@ function cloneMessage(message: any) {
       ? message.content.map((part: any) =>
           part && typeof part === "object" ? { ...part } : part,
         )
-      : message.content,
+      : Array.isArray(message.content?.parts)
+        ? { ...message.content, parts: message.content.parts.map((part: any) => part && typeof part === "object" ? { ...part } : part) }
+        : message.content,
   };
 }
 
@@ -106,20 +118,20 @@ export function trimToolResults(messages: any[], keepRecent = 2) {
   const cloned = messages.map(cloneMessage);
   const indexes: number[] = [];
   cloned.forEach((message, index) => {
-    const parts = Array.isArray(message?.content) ? message.content : [];
+    const parts = messageParts(message);
     if (parts.some(isToolResultPart)) indexes.push(index);
   });
   const keep = new Set(keepRecent > 0 ? indexes.slice(-keepRecent) : []);
   for (const [index, message] of cloned.entries()) {
-    if (keep.has(index) || !Array.isArray(message?.content)) continue;
-    message.content = message.content.map((part: any) => {
+    if (keep.has(index)) continue;
+    const parts = messageParts(message).map((part: any) => {
       if (!isToolResultPart(part)) return part;
       const payload = resultPayload(part);
-      if (payload && typeof payload === "object" && "error" in payload)
-        return part;
       const preview = previewValue(payload, 500);
       return preview === payload ? part : withPayload(part, preview);
     });
+    if (Array.isArray(message?.content)) message.content = parts;
+    else if (Array.isArray(message?.content?.parts)) message.content.parts = parts;
   }
   return cloned;
 }
@@ -133,13 +145,15 @@ export function trimToolCalls(messages: any[], keepRecent = 2) {
   });
   const keep = new Set(keepRecent > 0 ? indexes.slice(-keepRecent) : []);
   for (const [index, message] of cloned.entries()) {
-    if (keep.has(index) || !Array.isArray(message?.content)) continue;
-    message.content = message.content.map((part: any) => {
+    if (keep.has(index)) continue;
+    const parts = messageParts(message).map((part: any) => {
       if (!isToolCallPart(part)) return part;
       const payload = callPayload(part);
       const preview = previewValue(payload, 240);
       return preview === payload ? part : withCallPayload(part, preview);
     });
+    if (Array.isArray(message?.content)) message.content = parts;
+    else if (Array.isArray(message?.content?.parts)) message.content.parts = parts;
   }
   return cloned;
 }

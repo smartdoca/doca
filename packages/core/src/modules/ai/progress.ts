@@ -14,12 +14,90 @@ export type FileDelivery = {
   mime?: string;
   local?: boolean;
 };
-export type AIProgressEvent = {
+
+export type AIProgressPhase =
+  | "analyzing_request"
+  | "waiting_approval"
+  | "approval_rejected"
+  | "resuming"
+  | "waiting_choice"
+  | "waiting_access"
+  | "waiting_requirements"
+  | "plan_ready"
+  | "thinking"
+  | "answering"
+  | "using_tool"
+  | "reviewing_delivery"
+  | "completed";
+
+export type AIProgressData = Record<string, string | number>;
+
+export type AIProgressEventCode =
+  | "checkpoint_resumed"
+  | "retry_resumed"
+  | "image_saved"
+  | "folder_available"
+  | "file_available"
+  | "local_file_saved"
+  | "history_compressing"
+  | "history_compressed"
+  | "history_compression_failed"
+  | "tool_call"
+  | "approval_requested"
+  | "access_requested"
+  | "shrinking_batch"
+  | "image_receipt_missing"
+  | "folder_receipt_missing"
+  | "file_receipt_missing"
+  | "secret_receipt_missing"
+  | "spreadsheet_image_receipt_missing"
+  | "document_receipt_missing"
+  | "reviewing_delivery"
+  | "review_passed"
+  | "review_needs_action";
+
+export type AIProgressDetailCode = "tool_failed_recovering";
+
+export type AIApprovalCode =
+  | "download_file"
+  | "create_file"
+  | "session_document_access"
+  | "request_document_read_access"
+  | "request_document_edit_access"
+  | "update_knowledge_instructions"
+  | "update_knowledge_settings"
+  | "subscribe_knowledge_source"
+  | "curate_knowledge"
+  | "configure_knowledge_assistant"
+  | "write_knowledge_entry"
+  | "review_knowledge_entry"
+  | "delete_files"
+  | "copy_files"
+  | "rename_file"
+  | "move_files"
+  | "create_folder"
+  | "delete_folder"
+  | "rename_folder"
+  | "copy_folder"
+  | "move_folder"
+  | "create_documents"
+  | "rename_document"
+  | "move_document";
+
+export type AIApproval = {
+  id: string;
+  action: "create" | "move" | "delete" | "access" | "permission_request";
+  code: AIApprovalCode;
+  data?: AIProgressData;
+  resourceId?: string;
+  preview?: string;
+  state: "pending" | "approved" | "rejected";
+  resolvedAt?: string;
+};
+
+type AIProgressEventBase = {
   id: string;
   at: string;
-  kind: "reasoning" | "text" | "tool" | "status";
-  text: string;
-  detail?: string;
   resourceId?: string;
   image?: {
     assetId: string;
@@ -30,54 +108,38 @@ export type AIProgressEvent = {
   };
   folder?: FolderDelivery;
   file?: FileDelivery;
-  mail?: MailDelivery;
   status: "loading" | "success" | "error";
 };
-export type MailComposeDraft = {
-  mailboxId: string;
-  to: string;
-  cc?: string;
-  bcc?: string;
-  subject: string;
-  text: string;
-  html?: string;
-};
-export type MailDelivery = {
-  id: string;
-  mailboxId: string;
-  subject: string;
-  from: string;
-  snippet?: string;
-  receivedAt?: string;
-  href: string;
-};
-export type MailOpenTarget = {
-  mailboxId: string;
-  messageId: string;
-  href: string;
-};
+export type AIProgressEvent = AIProgressEventBase &
+  (
+    | { kind: "reasoning"; text: string }
+    | { kind: "text"; text: string }
+    | {
+        kind: "tool";
+        code: AIProgressEventCode;
+        data?: AIProgressData;
+        detailCode?: AIProgressDetailCode;
+        detailData?: AIProgressData;
+      }
+    | {
+        kind: "status";
+        code: AIProgressEventCode;
+        data?: AIProgressData;
+        detailCode?: AIProgressDetailCode;
+        detailData?: AIProgressData;
+      }
+  );
 export type AIProgress = {
-  mailCompose?: MailComposeDraft;
-  mailOpen?: MailOpenTarget;
   pageState?: { key: string; value: unknown };
   imageGenerationError?: string;
   questions?: { id: string; title: string; options: string[] }[];
   pendingAccess?: { requestId: string; resourceId: string };
-  approvals?: {
-    id: string;
-    action: "create" | "move" | "delete" | "access" | "permission_request";
-    resourceId?: string;
-    title: string;
-    detail: string;
-    preview?: string;
-    state: "pending" | "approved" | "rejected";
-    resolvedAt?: string;
-  }[];
+  approvals?: AIApproval[];
   events?: AIProgressEvent[];
-  phase: string;
+  phase: AIProgressPhase;
+  phaseData?: AIProgressData;
   text: string;
   reasoning: string;
-  steps: { title: string; status: "loading" | "success" | "error" }[];
   sources: { title: string; url: string; retrievedAt: string }[];
   plan?: {
     goal: string;
@@ -152,7 +214,7 @@ export function applyProgressPatch(
         }
       : {}),
     phase: patch.phase,
-    steps: patch.steps,
+    phaseData: patch.phaseData,
     sources: patch.sources,
     plan: patch.plan,
     review: patch.review,
@@ -160,8 +222,6 @@ export function applyProgressPatch(
     questions: patch.questions,
     imageGenerationError: patch.imageGenerationError,
     pendingAccess: patch.pendingAccess,
-    mailCompose: patch.mailCompose ?? previous?.mailCompose,
-    mailOpen: patch.mailOpen ?? previous?.mailOpen,
     pageState: patch.pageState ?? previous?.pageState,
     text: (patch.appendText ? (previous?.text ?? "") : "") + patch.text,
     reasoning:

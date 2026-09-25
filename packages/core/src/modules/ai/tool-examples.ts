@@ -4,7 +4,6 @@ export const SAMPLE = {
   asset: "22222222-2222-4222-8222-222222222222",
   file: "33333333-3333-4333-8333-333333333333",
   folder: "44444444-4444-4444-8444-444444444444",
-  mailbox: "55555555-5555-4555-8555-555555555555",
   note: "66666666-6666-4666-8666-666666666666",
   sheet: "77777777-7777-4777-8777-777777777777",
 };
@@ -143,35 +142,6 @@ export const TOOL_EXAMPLES: Record<string, Record<string, unknown>[]> = {
       value: { open: true, collapsed: false, x: 24, y: 80, width: 380, height: 560 },
     },
     { action: "set", key: "ai.model", value: "model-id" },
-  ],
-  mail_browse: [{}, { mailboxId: SAMPLE.mailbox }],
-  mail_search: [{ query: "发票", mailboxId: SAMPLE.mailbox, limit: 20 }],
-  mail_read: [
-    { mailboxId: SAMPLE.mailbox, messageId: "msg-1" },
-    { mailboxId: SAMPLE.mailbox, messageId: "msg-1", reveal: true },
-  ],
-  mail_compose: [
-    {
-      mailboxId: SAMPLE.mailbox,
-      to: "user@example.com",
-      subject: "会议纪要",
-      text: "纪要正文",
-    },
-  ],
-  mail_send: [
-    {
-      mailboxId: SAMPLE.mailbox,
-      to: "user@example.com",
-      subject: "会议纪要",
-      text: "纪要正文",
-      draft: false,
-    },
-  ],
-  mail_manage: [
-    { mailboxId: SAMPLE.mailbox, messageId: "msg-1", action: "read" },
-    { mailboxId: SAMPLE.mailbox, messageId: "msg-1", action: "star" },
-    { mailboxId: SAMPLE.mailbox, messageId: "msg-1", action: "archive" },
-    { mailboxId: SAMPLE.mailbox, messageId: "msg-1", action: "delete" },
   ],
   document_read: [
     { resourceId: SAMPLE.doc },

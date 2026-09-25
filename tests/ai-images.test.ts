@@ -11,11 +11,7 @@ import type { DB } from "@db/index.js";
 import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import { aiDefaults, aiConfig, saveAIConfig } from "@core/modules/ai/config.js";
-import {
-  quotaSummary,
-  reserveCall,
-  settleCall,
-} from "@core/modules/ai/quota.js";
+import { usageSummary, beginCall, settleCall } from "@core/modules/ai/usage.js";
 import { createApp } from "../apps/server/src/app/create-app.js";
 import {
   generateImageAsset,
@@ -75,7 +71,6 @@ beforeEach(async () => {
     {
       ...aiDefaults,
       imageModel: "image",
-      limits: { standard: { day: null, week: null, month: null } },
       vendors: [
         {
           id: "image-vendor",
@@ -93,14 +88,11 @@ beforeEach(async () => {
           model: "gpt-image-test",
           alias: "生图",
           enabled: true,
-          levels: [],
           tools: false,
-          inputRate: 0,
-          outputRate: 4.5,
-          cacheRate: 0,
           maxInput: 32000,
           maxOutput: 1000,
           imageGeneration: true,
+          imageRate: 250,
         },
       ],
     },
@@ -208,7 +200,7 @@ it("preserves the configured Seedream default and rejects explicit unsupported s
     ),
   ).rejects.toThrow("不支持此小尺寸");
   expect(calls).toBe(0);
-  expect((await quotaSummary(db, user.id)).calls).toHaveLength(0);
+  expect((await usageSummary(db, user.id)).calls).toHaveLength(0);
   await generateImageAsset(
     db,
     { actor: user },
@@ -241,7 +233,7 @@ it("reports a local save failure separately from uncertain provider usage and pr
     .where("id", "=", operation)
     .executeTakeFirstOrThrow();
   expect(JSON.parse(row.result).state).toBe("save_failed");
-  expect((await quotaSummary(db, user.id)).calls[0]).toMatchObject({
+  expect((await usageSummary(db, user.id)).calls[0]).toMatchObject({
     images: 1,
     state: "confirmed",
   });
@@ -353,7 +345,7 @@ it.each(["chat", "document"] as const)(
     expect(await db.selectFrom("assets").select("id").execute()).toHaveLength(
       2,
     );
-    expect((await quotaSummary(db, user.id)).calls).toHaveLength(2);
+    expect((await usageSummary(db, user.id)).calls).toHaveLength(2);
   },
 );
 
@@ -408,7 +400,7 @@ it("keeps uncertain requests protected across retries without blocking different
   expect(requested.state).toBe("saved");
   expect(calls).toBe(2);
   expect(
-    (await quotaSummary(db, user.id)).calls.filter(
+    (await usageSummary(db, user.id)).calls.filter(
       (c) => c.state === "pending",
     ),
   ).toHaveLength(1);
@@ -426,11 +418,7 @@ it("tests the configured image endpoint with a real minimal generation request",
       model: "gpt-image-test",
       alias: "生图",
       enabled: true,
-      levels: [],
       tools: false,
-      inputRate: 0,
-      outputRate: 4.5,
-      cacheRate: 0,
       maxInput: 32000,
       maxOutput: 1000,
       imageGeneration: true,
@@ -553,10 +541,8 @@ it("generates a private chat image without a document and inserts into five nati
       const raw = (result.value as any).resources?.find(
         (r: any) => r.name === "EXLSX_FLOATING_OBJECTS",
       )?.data;
-      const floating = typeof raw === "string" ? JSON.parse(raw) : raw ?? [];
-      expect(
-        JSON.stringify(floating),
-      ).toContain(saved.assetId);
+      const floating = typeof raw === "string" ? JSON.parse(raw) : (raw ?? []);
+      expect(JSON.stringify(floating)).toContain(saved.assetId);
     }
   }
   const physicalObjects = await db
@@ -585,32 +571,10 @@ it("generates a private chat image without a document and inserts into five nati
       ),
     ),
   ).toEqual(new Set([asset.object_key]));
-  expect((await quotaSummary(db, user.id)).calls).toHaveLength(1);
+  expect((await usageSummary(db, user.id)).calls).toHaveLength(1);
   expect(
     await generatedImageStatus(db, { actor: user }, image.assetId),
   ).toEqual({ ready: true, pending: false });
-  await db
-    .updateTable("assets")
-    .set({ moderation_status: "pending" })
-    .where("id", "=", image.assetId)
-    .execute();
-  expect(
-    await generatedImageStatus(db, { actor: user }, image.assetId),
-  ).toEqual({ ready: false, pending: true });
-  await expect(
-    insertGeneratedImage(
-      db,
-      { actor: user },
-      { assetId: image.assetId, resourceId: doc },
-      randomUUID(),
-      runtime,
-    ),
-  ).rejects.toThrow("审核中");
-  await db
-    .updateTable("assets")
-    .set({ moderation_status: "pass" })
-    .where("id", "=", image.assetId)
-    .execute();
   const otherDoc = await createContent(db).create(other, {
     kind: "document",
     format: "markdown",
@@ -648,7 +612,7 @@ it("requires an image count for pending image reconciliation and charges the con
       payload: { login: "image-owner", password: "image-test-2026" },
     });
     const cookie = String(login.headers["set-cookie"]).split(";")[0]!;
-    const call = await reserveCall(db, user.id, "image", null, 0, 0, 1);
+    const call = await beginCall(db, user.id, "image", null, 0, 0, 1);
     await settleCall(db, call.id, null);
     const reconcile = (payload: object) =>
       app.inject({
@@ -668,62 +632,21 @@ it("requires an image count for pending image reconciliation and charges the con
     expect(
       (await reconcile({ input: 12, output: 30, images: 1 })).statusCode,
     ).toBe(409);
-    const usage = (await quotaSummary(db, user.id)).calls.find(
+    const usage = (await usageSummary(db, user.id)).calls.find(
       (c) => c.id === call.id,
     )!;
     expect(usage).toMatchObject({
       callKind: "image",
       images: 1,
-      points: 4.5,
-      input: 12,
-      output: 30,
+      input: 0,
+      output: 0,
+      image: 250,
+      total: 250,
       state: "reconciled",
     });
   } finally {
     await app.close();
   }
-});
-it("bills configured image size tiers and falls back to the flat per-image rate", async () => {
-  const { revision, ...config } = await aiConfig(db);
-  await saveAIConfig(
-    db,
-    {
-      ...config,
-      models: config.models.map((m) => ({
-        ...m,
-        imageRate: 4.5,
-        imageSizeRates: { "1024x1024": 8 },
-      })),
-    },
-    revision,
-  );
-  const tiered = await reserveCall(
-    db,
-    user.id,
-    "image",
-    null,
-    0,
-    0,
-    1,
-    "1024x1024",
-  );
-  expect(tiered.maximum).toBe(8000);
-  await settleCall(db, tiered.id, { input: 0, output: 0, images: 1 });
-  const flat = await reserveCall(
-    db,
-    user.id,
-    "image",
-    null,
-    0,
-    0,
-    1,
-    "2048x2048",
-  );
-  expect(flat.maximum).toBe(4500);
-  await settleCall(db, flat.id, { input: 0, output: 0, images: 1 });
-  const calls = (await quotaSummary(db, user.id)).calls;
-  expect(calls.find((c) => c.id === tiered.id)?.points).toBe(8);
-  expect(calls.find((c) => c.id === flat.id)?.points).toBe(4.5);
 });
 it("stores an owned asset, inserts through native document tools, and bills once per image with real tokens separate", async () => {
   let calls = 0;
@@ -794,12 +717,18 @@ it("stores an owned asset, inserts through native document tools, and bills once
   expect(
     JSON.stringify((await readAIDocument(db, { actor: user }, doc)).value),
   ).toContain(result.assetId);
-  const usage = await quotaSummary(db, user.id);
-  expect(usage.used.day).toBe(4.5);
+  const usage = await usageSummary(db, user.id);
+  expect(usage.tokens.day).toMatchObject({
+    input: 0,
+    output: 0,
+    image: 250,
+    total: 250,
+  });
   expect(usage.calls[0]).toMatchObject({
-    points: 4.5,
-    input: 12,
-    output: 30,
+    input: 0,
+    output: 0,
+    image: 250,
+    total: 250,
     images: 1,
     state: "confirmed",
   });
@@ -807,27 +736,6 @@ it("stores an owned asset, inserts through native document tools, and bills once
     generateImageAsset(db, { actor: other }, args(), operation, options),
   ).rejects.toThrow();
   expect(calls).toBe(1);
-});
-it("rejects exhausted membership credits before requesting images", async () => {
-  const { revision, ...config } = await aiConfig(db);
-  await saveAIConfig(
-    db,
-    { ...config, limits: { standard: { day: 0, week: 0, month: 0 } } },
-    revision,
-  );
-  let called = false;
-  await expect(
-    generateImageAsset(db, { actor: user }, args(), randomUUID(), {
-      fetch: (async () => {
-        called = true;
-        return imageResponse();
-      }) as typeof fetch,
-    }),
-  ).rejects.toThrow("积分不足");
-  expect(called).toBe(false);
-  expect(
-    await db.selectFrom("ai_operations").selectAll().execute(),
-  ).toHaveLength(0);
 });
 it("does not fetch provider-supplied URLs or repeat an uncertain generation", async () => {
   let calls = 0;
@@ -845,7 +753,7 @@ it("does not fetch provider-supplied URLs or repeat an uncertain generation", as
     generateImageAsset(db, { actor: user }, args(), operation, options),
   ).rejects.toThrow("请勿重复生成");
   expect(calls).toBe(1);
-  expect((await quotaSummary(db, user.id)).calls[0]?.state).toBe("pending");
+  expect((await usageSummary(db, user.id)).calls[0]?.state).toBe("pending");
 });
 it("releases credit reservation on definitive authentication rejection and redacts secrets", async () => {
   await expect(
@@ -857,8 +765,8 @@ it("releases credit reservation on definitive authentication rejection and redac
         )) as typeof fetch,
     }),
   ).rejects.toThrow("图片模型认证失败");
-  const quota = await quotaSummary(db, user.id);
-  expect(quota.used.day).toBe(0);
+  const quota = await usageSummary(db, user.id);
+  expect(quota.tokens.day?.input).toBe(0);
   expect(quota.calls[0]).toMatchObject({ images: 0, state: "failed" });
 });
 it("rechecks revoked account access after provider returns and never persists the image", async () => {
@@ -958,7 +866,7 @@ it("inserts a spreadsheet image at flattened sheetId/row/column", async () => {
   const raw = (after.value as any).resources?.find(
     (r: any) => r.name === "EXLSX_FLOATING_OBJECTS",
   )?.data;
-  const floating = typeof raw === "string" ? JSON.parse(raw) : raw ?? [];
+  const floating = typeof raw === "string" ? JSON.parse(raw) : (raw ?? []);
   expect(JSON.stringify(floating)).toContain(saved.assetId);
   expect(JSON.stringify(floating)).toMatch(/"startRow":2/);
   expect(JSON.stringify(floating)).toMatch(/"startColumn":3/);

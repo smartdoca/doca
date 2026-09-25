@@ -69,7 +69,7 @@ export function RequestAccess({
         <span className="subtle">暂未开放权限申请，可联系协作者邀请加入。</span>
       ) : !user ? (
         <span>
-          请先<a href="#/home">登录</a>后申请访问
+          请先<a href="#/home">{t("login.submit")}</a>后申请访问
         </span>
       ) : overview && !overview.requestRoles.length ? (
         <span>当前没有可申请的更高权限</span>
@@ -78,7 +78,7 @@ export function RequestAccess({
       ) : (
         <>
           <Select
-            aria-label="申请权限"
+            aria-label={t("ticket.requestedRole")}
             value={role}
             disabled={busy || !overview}
             onChange={(e) => setRole(e.target.value)}
@@ -98,7 +98,7 @@ export function RequestAccess({
           <details className="request-note">
             <summary>添加申请说明（选填）</summary>
             <textarea
-              aria-label="申请说明"
+              aria-label={t("ticket.requestNote")}
               placeholder="申请说明（选填）"
               maxLength={1000}
               value={message}
@@ -128,9 +128,7 @@ export function RequestAccess({
               }
             }}
           >
-            <Send size={15} />
-            申请权限
-          </button>
+            <Send size={15} />{t("ticket.requestedRole")}</button>
         </>
       )}
       {error && <Feedback tone="error" message={error} />}
@@ -138,6 +136,8 @@ export function RequestAccess({
   );
 }
 export function AccessGate({ id, user }: { id: string; user: boolean }) {
+const { t } = useI18n();
+
   const [preview, setPreview] = useState<{
       title: string;
       loginRequired?: boolean;
@@ -176,7 +176,7 @@ export function AccessGate({ id, user }: { id: string; user: boolean }) {
               : "此文档需要授权，申请通过后即可访问。"}
           </p>
           {preview.loginRequired ? (
-            <a href="#/home">登录</a>
+            <a href="#/home">{t("login.submit")}</a>
           ) : (
             <RequestAccess id={id} user={user} />
           )}

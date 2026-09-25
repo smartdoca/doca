@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useState } from "react";
 import { Button, Card, Input, Radio, Space } from "antd";
 
@@ -10,6 +11,8 @@ export function AIChoiceCard({
   disabled: boolean;
   answer: (value: string) => Promise<void>;
 }) {
+const { t } = useI18n();
+
   const [selection, setSelection] = useState<string>();
   const [custom, setCustom] = useState("");
   const value = custom.trim() || selection;
@@ -62,9 +65,7 @@ export function AIChoiceCard({
           onClick={() =>
             value && void answer(`${question.title}\n我的选择：${value}`)
           }
-        >
-          确认并继续
-        </Button>
+        >{t("login.continue")}</Button>
       </Space>
     </Card>
   );

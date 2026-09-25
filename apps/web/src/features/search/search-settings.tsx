@@ -1,3 +1,5 @@
+import { htmlLang } from "@doca/i18n";
+import { useI18n } from "@web/shared/i18n.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
@@ -43,6 +45,7 @@ type Config = {
 };
 import "@web/features/search/search-settings.css";
 export function SearchSettings() {
+  const { t, locale } = useI18n();
   const [data, setData] = useState<Config | null>(null);
   const [saved, setSaved] = useState<Config | null>(null);
   const [error, setError] = useState("");
@@ -59,7 +62,7 @@ export function SearchSettings() {
   if (!data || !saved)
     return (
       <p className="empty" role={error ? "alert" : "status"}>
-        {error || "正在加载搜索配置…"}
+        {error || t("searchAdmin.loading")}
       </p>
     );
   const connection = { enabled: data.enabled, endpoint: data.endpoint };
@@ -104,7 +107,9 @@ export function SearchSettings() {
           : value,
       );
       setMessage(
-        section === "connection" ? "连接设置已保存" : "索引设置已保存",
+        section === "connection"
+          ? t("searchAdmin.connectionSaved")
+          : t("searchAdmin.indexSaved"),
       );
       return true;
     } catch (e) {
@@ -134,7 +139,9 @@ export function SearchSettings() {
           : value,
       );
       setMessage(
-        action === "reindex" ? "已安排后台重建索引" : "已安排后台对账",
+        action === "reindex"
+          ? t("searchAdmin.reindexQueued")
+          : t("searchAdmin.reconcileQueued"),
       );
     } catch (e) {
       setError((e as Error).message);
@@ -143,13 +150,13 @@ export function SearchSettings() {
     }
   }
   const phase = !saved.enabled
-    ? "已暂停"
+    ? t("searchAdmin.paused")
     : {
-        idle: "等待下一轮",
-        remote: "读取索引清单",
-        source: "核对文档",
-        enqueue: "安排修复",
-        waiting: "等待修复完成",
+        idle: t("searchAdmin.idle"),
+        remote: t("searchAdmin.remote"),
+        source: t("searchAdmin.source"),
+        enqueue: t("searchAdmin.enqueue"),
+        waiting: t("searchAdmin.waiting"),
       }[data.reconciliation.phase];
   const syncError =
     data.syncDiagnostic ||
@@ -164,13 +171,15 @@ export function SearchSettings() {
       >
         <header className="search-card-heading">
           <div>
-            <h3 id="search-connection-heading">Meilisearch 连接设置</h3>
-            <p>连接搜索服务，管理访问密钥。</p>
+            <h3 id="search-connection-heading">
+              {t("searchAdmin.connection")}
+            </h3>
+            <p>{t("searchAdmin.connectionHelp")}</p>
           </div>
           <span
             className={`search-status-badge ${saved.enabled ? "is-active" : ""}`}
           >
-            {saved.enabled ? "已启用" : "未启用"}
+            {saved.enabled ? t("services.enabled") : t("services.disabled")}
           </span>
         </header>
         <form
@@ -182,7 +191,8 @@ export function SearchSettings() {
         >
           <label className="search-setting-toggle">
             <span>
-              启用 Meilisearch<small>关闭后使用数据库基础检索。</small>
+              {t("searchAdmin.enable")}
+              <small>{t("searchAdmin.enableHelp")}</small>
             </span>
             <input
               type="checkbox"
@@ -202,7 +212,7 @@ export function SearchSettings() {
           </label>
           <div className="search-connection-row">
             <label>
-              服务地址
+              {t("searchAdmin.endpoint")}
               <input
                 value={data.endpoint}
                 disabled={busy}
@@ -211,7 +221,7 @@ export function SearchSettings() {
               />
             </label>
             <button className="primary" disabled={busy}>
-              保存连接
+              {t("searchAdmin.saveConnection")}
             </button>
           </div>
         </form>
@@ -237,15 +247,15 @@ export function SearchSettings() {
       >
         <header className="search-card-heading">
           <div>
-            <h3 id="search-index-heading">索引管理</h3>
-            <p>管理文档索引、同步策略与修复任务。</p>
+            <h3 id="search-index-heading">{t("searchAdmin.index")}</h3>
+            <p>{t("searchAdmin.indexHelp")}</p>
           </div>
           <button
             type="button"
             disabled={busy}
             onClick={() => void refresh().catch((e) => setError(e.message))}
           >
-            刷新状态
+            {t("searchAdmin.refresh")}
           </button>
         </header>
         <form
@@ -257,7 +267,7 @@ export function SearchSettings() {
         >
           <div className="search-field-grid">
             <label>
-              索引名称
+              {t("searchAdmin.indexName")}
               <input
                 value={data.index_name}
                 disabled={busy}
@@ -269,7 +279,7 @@ export function SearchSettings() {
               />
             </label>
             <label>
-              自动对账间隔（小时）
+              {t("searchAdmin.interval")}
               <input
                 type="number"
                 min={1}
@@ -285,16 +295,16 @@ export function SearchSettings() {
                   })
                 }
               />
-              <small>定期检查遗漏，只修复有差异的记录。</small>
+              <small>{t("searchAdmin.intervalHelp")}</small>
             </label>
           </div>
           <label className="search-setting-toggle">
             <span>
-              识别文档中的图片
+              {t("searchAdmin.images")}
               <small>
                 {data.imageRecognitionAvailable
-                  ? "提取图片中的信息用于检索，可能产生模型费用。"
-                  : "暂未开放识别，当前仅保存偏好，不产生费用。"}
+                  ? t("searchAdmin.imagesHelp")
+                  : t("searchAdmin.imagesUnavailable")}
               </small>
             </span>
             <input
@@ -311,41 +321,56 @@ export function SearchSettings() {
           </label>
           <div className="search-index-status" role="status">
             <div className="search-status-title">
-              <strong>{data.indexing ? "正在建立索引" : phase}</strong>
+              <strong>
+                {data.indexing ? t("searchAdmin.indexing") : phase}
+              </strong>
               <span>
                 {data.lastIndexedAt
-                  ? `最近索引：${new Date(data.lastIndexedAt).toLocaleString()}`
-                  : "尚无本次启动的索引记录"}
+                  ? t("searchAdmin.lastIndex", {
+                      date: new Date(data.lastIndexedAt).toLocaleString(
+                        htmlLang(locale),
+                      ),
+                    })
+                  : t("searchAdmin.noIndex")}
               </span>
             </div>
             <dl>
               <div>
-                <dt>已检查文档</dt>
+                <dt>{t("searchAdmin.scanned")}</dt>
                 <dd>{data.reconciliation.scanned}</dd>
               </div>
               <div>
-                <dt>已安排修复</dt>
+                <dt>{t("searchAdmin.differences")}</dt>
                 <dd>{data.reconciliation.differences}</dd>
               </div>
               <div>
-                <dt>待修复</dt>
+                <dt>{t("searchAdmin.pending")}</dt>
                 <dd>{data.reconciliation.pending}</dd>
               </div>
             </dl>
             {saved.enabled && data.reconciliation.phase === "idle" && (
               <small>
-                下次对账：
-                {new Date(data.reconciliation.nextAt).toLocaleString()}
+                {t("searchAdmin.nextReconcile", {
+                  date: new Date(data.reconciliation.nextAt).toLocaleString(
+                    htmlLang(locale),
+                  ),
+                })}
               </small>
             )}
             {syncError && (
               <div className="search-sync-error" role="alert">
-                <strong>同步失败，正在自动重试</strong>
+                <strong>{t("searchAdmin.syncFailed")}</strong>
                 <p>{syncError}</p>
                 <small>
-                  已重试 {data.reconciliation.failedAttempts} 次
+                  {t("searchAdmin.retries", {
+                    count: data.reconciliation.failedAttempts,
+                  })}
                   {data.reconciliation.retryAt
-                    ? ` · 下次重试：${new Date(data.reconciliation.retryAt).toLocaleString()}`
+                    ? t("searchAdmin.nextRetry", {
+                        date: new Date(
+                          data.reconciliation.retryAt,
+                        ).toLocaleString(htmlLang(locale)),
+                      })
                     : ""}
                 </small>
               </div>
@@ -353,52 +378,62 @@ export function SearchSettings() {
             {data.embedding &&
               (data.embedding.error || data.embedding.taskUid !== null) && (
                 <details className="search-sync-diagnostics">
-                  <summary>查看向量任务详情</summary>
+                  <summary>{t("searchAdmin.diagnostics")}</summary>
                   <p>
-                    配置：{data.embedding.name || "未命名"} · 平台状态：
-                    {data.embedding.status} · Meilisearch 状态：
-                    {data.embedding.remoteStatus || "未读取"}
+                    {t("searchAdmin.embeddingState", {
+                      name: data.embedding.name || t("searchAdmin.unnamed"),
+                      status: data.embedding.status,
+                      remote:
+                        data.embedding.remoteStatus || t("searchAdmin.unread"),
+                    })}
                   </p>
                   <p>
-                    任务 UID：{data.embedding.taskUid ?? "未生成"}
+                    {t("searchAdmin.task", {
+                      id: data.embedding.taskUid ?? t("searchAdmin.noTask"),
+                    })}
                     {data.embedding.batchUid !== null &&
                     data.embedding.batchUid !== undefined
-                      ? ` · 批次 UID：${data.embedding.batchUid}`
+                      ? t("searchAdmin.batch", { id: data.embedding.batchUid })
                       : ""}
                   </p>
                   {data.embedding.updatedAt && (
                     <p>
-                      最近更新：
-                      {new Date(data.embedding.updatedAt).toLocaleString()}
+                      {t("searchAdmin.lastUpdated", {
+                        date: new Date(data.embedding.updatedAt).toLocaleString(
+                          htmlLang(locale),
+                        ),
+                      })}
                     </p>
                   )}
-                  {data.embedding.error && (
-                    <pre>{data.embedding.error}</pre>
-                  )}
+                  {data.embedding.error && <pre>{data.embedding.error}</pre>}
                 </details>
               )}
           </div>
           <details className="search-settings-details">
-            <summary>同步说明与历史</summary>
-            <p>
-              文档变更通过后台增量同步，定期对账补齐遗漏。所有搜索结果都会重新校验用户权限。
-            </p>
+            <summary>{t("searchAdmin.history")}</summary>
+            <p>{t("searchAdmin.historyHelp")}</p>
             {data.reconciliation.checkedAt && (
               <p>
-                最近扫描完成：
-                {new Date(data.reconciliation.checkedAt).toLocaleString()}
+                {t("searchAdmin.lastScan", {
+                  date: new Date(data.reconciliation.checkedAt).toLocaleString(
+                    htmlLang(locale),
+                  ),
+                })}
               </p>
             )}
             {data.reconciliation.completedAt && (
               <p>
-                最近修复完成：
-                {new Date(data.reconciliation.completedAt).toLocaleString()}
+                {t("searchAdmin.lastRepair", {
+                  date: new Date(
+                    data.reconciliation.completedAt,
+                  ).toLocaleString(htmlLang(locale)),
+                })}
               </p>
             )}
           </details>
           <footer className="search-card-actions">
             <button className="primary" disabled={busy}>
-              保存索引设置
+              {t("searchAdmin.saveIndex")}
             </button>
             <button
               type="button"
@@ -410,14 +445,14 @@ export function SearchSettings() {
               }
               onClick={() => void run("reconcile")}
             >
-              立即对账
+              {t("searchAdmin.reconcile")}
             </button>
             <button
               type="button"
               disabled={!saved.enabled || busy || data.indexing}
               onClick={() => void run("reindex")}
             >
-              重建索引
+              {t("searchAdmin.rebuild")}
             </button>
           </footer>
         </form>

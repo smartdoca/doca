@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Drawer } from "react-native-drawer-layout";
 import { Tabs, useRouter, useSegments } from "expo-router";
-import { BookOpen, ChevronRight, FolderOpen, Home, Mail, Settings, Sparkles, StickyNote } from "lucide-react-native";
+import { BookOpen, ChevronRight, FolderOpen, Home, Settings, Sparkles, StickyNote } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { IconButton } from "react-native-paper";
@@ -23,10 +23,9 @@ function AccountMenu({ close }: { close: () => void }) {
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
   const { locale } = useI18n();
-  const mailTab = mobilePluginRegistry.tabs.getByConflictKey("mail");
   const initial = (session?.name || "我").slice(0, 1);
 
-  function open(path: "/account" | "/mail" | "/settings") {
+  function open(path: "/account" | "/settings") {
     close();
     router.push(path);
   }
@@ -46,14 +45,7 @@ function AccountMenu({ close }: { close: () => void }) {
         <ChevronRight color={colors.muted} size={18} />
       </Pressable>
       <Text style={styles.section}>账户</Text>
-      {mailTab ? (
-        <Pressable style={styles.item} onPress={() => open("/mail")}>
-          <Mail color={colors.accent} size={18} />
-          <Text style={styles.itemText}>
-            {mobilePluginMessage(locale, mailTab.labelKey)}
-          </Text>
-        </Pressable>
-      ) : null}
+
       <Pressable style={styles.item} onPress={() => open("/settings")}>
         <Settings color={colors.accent} size={18} />
         <Text style={styles.itemText}>设置</Text>
@@ -186,7 +178,6 @@ export default function TabsLayout() {
             tabBarIcon: ({ color, size }) => <FolderOpen color={color} size={size} />,
           }}
         />
-        <Tabs.Screen name="mail" options={{ href: null, title: "邮箱" }} />
         <Tabs.Screen
           name="ai"
           options={{

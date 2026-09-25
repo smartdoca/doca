@@ -1,9 +1,12 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { VerificationField } from "@web/features/auth/account-fields.js";
 import { Select } from "@web/shared/components/select.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 export function SecurityVerification() {
+const { t, locale } = useI18n();
+
   const [data, setData] = useState<{
       methods: { id: string; label: string; value: string }[];
       verified: boolean;
@@ -37,7 +40,7 @@ export function SecurityVerification() {
       await fn();
       setPassword("");
       await load();
-      setMessage("安全验证通过，5 分钟内可完成一项修改。");
+      setMessage(t("security.success"));
     } catch (e) {
       setGeneration((v) => v + 1);
       setMessage((e as Error).message);
@@ -48,17 +51,15 @@ export function SecurityVerification() {
   const current = data?.methods.find((m) => m.id === method);
   return (
     <div className="security-verification">
-      <strong>安全验证{data?.verified ? " · 已通过" : ""}</strong>
-      <p className="admin-field-help">
-        任选一种已绑定方式验证，再修改认证信息。
-      </p>
+      <strong>{t("authAdmin.security")}{data?.verified ? t("security.passedSuffix") : ""}</strong>
+      <p className="admin-field-help">{t("security.help")}</p>
       {data && !data.methods.length && (
-        <p>没有可用的安全验证方式，请联系系统管理员纠错。</p>
+        <p>{t("security.unavailable")}</p>
       )}
       {!!data?.methods.length && (
         <>
           <Select
-            aria-label="安全验证方式"
+            aria-label={t("security.method")}
             value={method}
             onChange={(e) => {
               setMethod(e.target.value);
@@ -67,14 +68,14 @@ export function SecurityVerification() {
           >
             {data.methods.map((m) => (
               <option value={m.id} key={m.id}>
-                {m.label}
+                {m.id === "password" ? t("fields.currentPassword") : m.id === "phone" ? t("fields.linkedPhone") : m.id === "email" ? t("fields.linkedEmail") : m.label}
               </option>
             ))}
           </Select>
           {method === "password" ? (
             <div className="admin-inline-actions">
               <input
-                aria-label="安全验证当前密码"
+                aria-label={t("security.passwordLabel")}
                 type="password"
                 autoComplete="current-password"
                 value={password}
@@ -86,9 +87,7 @@ export function SecurityVerification() {
                 onClick={() =>
                   void act(() => api("/auth/reauth", "POST", { password }))
                 }
-              >
-                验证身份
-              </button>
+              >{t("security.verify")}</button>
             </div>
           ) : method === "phone" || method === "email" ? (
             <VerificationField
@@ -122,9 +121,7 @@ export function SecurityVerification() {
                   location.assign(r.url);
                 })
               }
-            >
-              使用原绑定账号验证
-            </button>
+            >{t("security.originalIdentity")}</button>
           )}
         </>
       )}
@@ -136,9 +133,7 @@ export function SecurityVerification() {
             setData({ ...data, verified: false });
             setMessage("");
           }}
-        >
-          重新验证
-        </button>
+        >{t("security.retry")}</button>
       )}
       <Feedback message={message} tone="info" />
     </div>

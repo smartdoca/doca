@@ -5,7 +5,7 @@ import { enqueueProjection } from "@core/modules/automation/jobs.js";
 import {
   checkStorage,
   requireCapability,
-} from "@core/modules/entitlements/service.js";
+} from "@core/modules/access/operation-policy.js";
 import { fail } from "@core/shared/errors.js";
 import { lockAIUser } from "@core/modules/ai/config.js";
 import {
@@ -88,9 +88,7 @@ export async function storeUserFile(
     }
     const result = await transact(db, async (tx) => {
       await lockAIUser(tx, input.actorId);
-      const rights = await requireCapability(tx, input.actorId, "assets.upload");
-      if (size > (rights.level.limits["asset.bytes"] ?? Infinity))
-        fail(413, "文件超过当前等级的大小上限");
+      await requireCapability(tx, input.actorId, "assets.upload");
       await checkStorage(tx, input.ownerId, size);
       let object = await findExisting(tx);
       if (!object) {

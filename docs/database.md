@@ -26,35 +26,35 @@ resources 保留 nullable 的 last_editor_id（关联 users.id）和 last_edited
 
 ## 表
 
-| 表                                       | 主键                         | 主要字段与用途                                                                                          |
-| ---------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------- |
-| users                                    | id                           | login 唯一、display_name、password_hash、admin、status(active/disabled)、created_at                     |
-| sessions                                 | id                           | id 是随机会话的 SHA-256，不是明文；user_id FK、expires_at                                               |
-| settings                                 | id                           | 唯一业务行 system；site_name、registration、revision                                                    |
-| resources                                | id                           | 文档与知识库共用的权限/生命周期实体，详细见下                                                           |
-| grants                                   | resource_id + user_id + source_type + source_id | 主动授权、链接授权和父权限覆盖/阻断的统一授权记录 |
-| comments                                 | id                           | resource_id FK、author_id FK、body、parent_id FK、resolved、deleted_at、version、created_at、updated_at |
-| reactions                                | resource_id + user_id + kind | FK；kind=like/favorite，复合主键避免重复                                                                |
-| notifications                            | id                           | user_id FK、resource_id FK 可空、type、read_at、created_at                                              |
-| audit_events                             | id                           | actor_id FK、resource_id FK 可空、action、created_at                                                    |
+| 表            | 主键                                            | 主要字段与用途                                                                                          |
+| ------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| users         | id                                              | login 唯一、display_name、password_hash、admin、status(active/disabled)、created_at                     |
+| sessions      | id                                              | id 是随机会话的 SHA-256，不是明文；user_id FK、expires_at                                               |
+| settings      | id                                              | 唯一业务行 system；site_name、registration、revision                                                    |
+| resources     | id                                              | 文档与知识库共用的权限/生命周期实体，详细见下                                                           |
+| grants        | resource_id + user_id + source_type + source_id | 主动授权、链接授权和父权限覆盖/阻断的统一授权记录                                                       |
+| comments      | id                                              | resource_id FK、author_id FK、body、parent_id FK、resolved、deleted_at、version、created_at、updated_at |
+| reactions     | resource_id + user_id + kind                    | FK；kind=like/favorite，复合主键避免重复                                                                |
+| notifications | id                                              | user_id FK、resource_id FK 可空、type、read_at、created_at                                              |
+| audit_events  | id                                              | actor_id FK、resource_id FK 可空、action、created_at                                                    |
 
 ### resources
 
-| 字段                    | 类型/空值                     | 约束与含义                                                                     |
-| ----------------------- | ----------------------------- | ------------------------------------------------------------------------------ |
-| id                      | varchar(36) PK                | 稳定资源身份                                                                   |
-| kind                    | varchar(16) NOT NULL          | document / library；DB CHECK                                                   |
-| format                  | varchar(24) NOT NULL          | rich_text / spreadsheet / presentation；请求 schema 校验，知识库忽略正文类型   |
-| title                   | varchar(160) NOT NULL         | 富文本编辑时从第一行派生；管理重命名同步更新已初始化的第一行                   |
-| owner_id                | varchar(36) NOT NULL FK users | 一个所有者，不通过 grant 表表达                                                |
-| library_id              | varchar(36) NULL FK resources | 文档所属知识库；知识库自身为空                                                 |
-| parent_id               | varchar(36) NULL FK resources | 父文档，根文档为空                                                             |
-| access_mode             | varchar(16) NOT NULL          | inherit / custom；DB CHECK                                                     |
+| 字段                    | 类型/空值                     | 约束与含义                                                                                   |
+| ----------------------- | ----------------------------- | -------------------------------------------------------------------------------------------- |
+| id                      | varchar(36) PK                | 稳定资源身份                                                                                 |
+| kind                    | varchar(16) NOT NULL          | document / library；DB CHECK                                                                 |
+| format                  | varchar(24) NOT NULL          | rich_text / spreadsheet / presentation；请求 schema 校验，知识库忽略正文类型                 |
+| title                   | varchar(160) NOT NULL         | 富文本编辑时从第一行派生；管理重命名同步更新已初始化的第一行                                 |
+| owner_id                | varchar(36) NOT NULL FK users | 一个所有者，不通过 grant 表表达                                                              |
+| library_id              | varchar(36) NULL FK resources | 文档所属知识库；知识库自身为空                                                               |
+| parent_id               | varchar(36) NULL FK resources | 父文档，根文档为空                                                                           |
+| access_mode             | varchar(16) NOT NULL          | inherit / custom；DB CHECK                                                                   |
 | visibility              | varchar(16) NOT NULL          | invited / requestable / authenticated / public；DB CHECK；inherit 时不使用本字段作为开放范围 |
-| version                 | integer NOT NULL              | 正整数 CHECK；元数据修改递增                                                   |
-| deleted_at              | varchar(32) NULL              | 软删除时间                                                                     |
-| delete_batch            | varchar(36) NULL              | 同一次级联删除的标记                                                           |
-| created_at / updated_at | varchar(32) NOT NULL          | 创建与元数据最后修改时间                                                       |
+| version                 | integer NOT NULL              | 正整数 CHECK；元数据修改递增                                                                 |
+| deleted_at              | varchar(32) NULL              | 软删除时间                                                                                   |
+| delete_batch            | varchar(36) NULL              | 同一次级联删除的标记                                                                         |
+| created_at / updated_at | varchar(32) NOT NULL          | 创建与元数据最后修改时间                                                                     |
 
 个人文档是 owner_id=当前用户、kind=document、library_id为空的查询，不建个人空间表，不自动创建根文档。个人文档的 parent_id 必须为空；文档父子关系只存在于知识库内。
 
@@ -113,15 +113,19 @@ PostgreSQL：pg 连接池 max=10，使用同一建表定义。当前环境没有
 - `resources.cover_asset_id`：知识库封面，绑定时检查库ID、用途和元数据version；变更递增version。
 - `user_preferences.avatar_asset_id`：自定义头像，绑定时必须为本人上传的avatar；使用个人设置version防并发覆盖。
 - 上传对象不可变。复制文档/知识库时为附件/封面生成新的资产ID和资源关联，可以复用物理对象，不复用权限。未来垃圾清理必须在所有引用都消失后才能删除物理对象。
+
 # 评论与社区
 
 社区字段直接包含在当前基线：用户 public_id / directory_mode、站点 directory_mode、评论 body_json、通知操作者和去重字段。字段语义见 [评论与社区能力](./comments-and-community.md)。
+
 # 活动与表格
 
 活动与表格结构直接包含在当前基线，具体以当前接口实现为准。
+
 # 用户卡片配置
 
 `user_card_settings(id, config, revision)` 为单行 `id=system`。config 保存 enabled/text/style/url，revision 用于管理员配置乐观锁。
+
 # 授权与引用关系增量表
 
 站点展示策略、授权回应状态、文档引用边及派生索引进度直接包含在当前基线，字段和事务约束见 [文档接入说明](editor-integration.md#数据库与引用一致性)。
@@ -131,3 +135,20 @@ PostgreSQL：pg 连接池 max=10，使用同一建表定义。当前环境没有
 - `ai_sessions.mentioned_resource_ids` 保存用户主动 @ 的文档，不从模型检索/读取记录推导授权。
 - `ai_sessions.approved_resource_ids` 保存用户在会话审批卡片明确授权的文档。`resource_ids` 仍用于关联展示和历史会话访问校验，不能单独作为模型授权范围。
 - `ai_jobs.result.progress.approvals` 保存具体操作摘要、服务端参数摘要 ID、状态和可选目标文档。`awaiting_approval` 释放执行租约；决定接口锁用户并校验任务归属后恢复。管理员权限申请复用 `access_requests`，不会直接修改文档授权。
+
+## 2026-09-25 开发库对齐
+
+当前开发库已与新建核心库的表、索引、字段类型、默认值、非空约束和主键逐项对齐，并通过 SQLite integrity_check、foreign_key_check。对齐是一次性开发操作，不加入启动兼容分支。重建在写锁下提交，失败整体回滚，本地备份位于 `.local/schema-alignment/`。
+
+移除的业务及废弃表：
+
+- `mail_settings`、`mailboxes`、`mailbox_shares`、`mailbox_share_links`、`mail_messages`、`mail_mailbox_sync`。
+- `membership_grants`、`membership_events`、`quota_usage`、`ai_grants`。
+- `moderation_settings`、`moderation_cases`、`moderation_actions`。
+- 未被现有实现使用的 `ai_credentials`、`user_activity`。
+
+移除 users 的等级字段、resources/assets 的审核字段，以及 ai_calls 的 points/base_points/allocations。AI 配置中的商业价格、额度和内置邮件 skill 同步清理；保留按模型设置的输入/输出 Token 折算速率与每张图片 Token，用于统一用量口径。新增字段采用当前定义的默认值，包括 nullable 字段的 NULL。
+
+`user_page_state` 属于核心界面偏好，从原邮件建表分组移回核心；保留语言、文件视图和 AI 模型选择，移除邮件草稿。`plugin_data` 也归入统一建库定义，插件加载器不再临时建表。已有邮件附件文件保留用户所有权，移入根目录，删除邮件业务绑定及搜索/知识投影。
+
+AI 回归原因是开发库残留积分字段的 NOT NULL 约束，而新调用已不写积分。已修正开发库并用生产 beginCall 逻辑验证准入和写入，测试事务回滚且未请求外部模型。新增 database-schema 测试核对类型声明中的所有核心表都由空库建立，防止公共表再次被业务拆分误删。

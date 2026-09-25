@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { Select } from "@web/shared/components/select.js";
@@ -19,6 +20,8 @@ const labels: Record<string, string> = {
   rejected: "已拒绝",
 };
 export function RegistrationReviews() {
+const { t } = useI18n();
+
   const [status, setStatus] = useState("pending"),
     [items, setItems] = useState<Review[]>([]),
     [next, setNext] = useState<number | null>(null),
@@ -57,12 +60,10 @@ export function RegistrationReviews() {
     <section>
       <div className="admin-section-heading">
         <div>
-          <h2>注册审核</h2>
+          <h2>{t("admin.registration")}</h2>
           <p>审核新用户的加入申请，通过后用户可重新登录。</p>
         </div>
-        <button onClick={() => void load().catch((e) => setError(e.message))}>
-          刷新
-        </button>
+        <button onClick={() => void load().catch((e) => setError(e.message))}>{t("admin.refresh")}</button>
       </div>
       <div className="admin-card">
         <Select
@@ -70,7 +71,7 @@ export function RegistrationReviews() {
           value={status}
           onChange={(e) => setStatus(e.target.value)}
         >
-          <option value="">全部状态</option>
+          <option value="">{t("ticket.statusAll")}</option>
           {Object.entries(labels).map(([key, label]) => (
             <option key={key} value={key}>
               {label}
@@ -78,14 +79,14 @@ export function RegistrationReviews() {
           ))}
         </Select>
         <div className="account-table-scroll">
-          <table className="membership-level-table">
+          <table className="registration-review-table">
             <thead>
               <tr>
-                <th>用户</th>
+                <th>{t("users.user")}</th>
                 <th>申请时间</th>
-                <th>状态</th>
+                <th>{t("ticket.col.status")}</th>
                 <th>审核人</th>
-                <th>操作</th>
+                <th>{t("users.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -118,9 +119,7 @@ export function RegistrationReviews() {
         {next !== null && (
           <button
             onClick={() => void load(next).catch((e) => setError(e.message))}
-          >
-            加载更多
-          </button>
+          >{t("common.more")}</button>
         )}
       </div>
       <Feedback message={error} tone="error" />
@@ -146,9 +145,7 @@ export function RegistrationReviews() {
                 />
               </label>
               <div className="admin-inline-actions">
-                <button disabled={busy} onClick={() => void decide("rejected")}>
-                  拒绝申请
-                </button>
+                <button disabled={busy} onClick={() => void decide("rejected")}>{t("users.reject")}</button>
                 <button
                   className="primary"
                   disabled={busy}

@@ -65,12 +65,14 @@ export async function registerRealtime(
     "#5366ad",
   ];
   let colorIndex = 0;
-  const online = () =>
-    new Set(
+  const onlineUsers = () => [
+    ...new Set(
       [...clients]
         .filter((c) => c.ws.readyState === 1 && c.user)
         .map((c) => c.user!.id),
-    ).size;
+    ),
+  ];
+  const online = () => onlineUsers().length;
   function statistics() {
     for (const c of clients)
       if (c.user?.admin) send(c, { type: "stats", online: online() });
@@ -542,21 +544,39 @@ export async function registerRealtime(
         recipients.add(row.user_id);
     const affectedRooms = new Set<string>(room ? [room] : []);
     // Inspect only active rooms, never expand an entire document subtree for invalidation.
-    if (room && /permissions|members|share-link|tickets|access-requests|invitations|transfer|move|arrange|trash/.test(req.url)) {
-      const rooms = [...new Set([...clients].map(c => c.room).filter((id): id is string => !!id))];
+    if (
+      room &&
+      /permissions|members|share-link|tickets|access-requests|invitations|transfer|move|arrange|trash/.test(
+        req.url,
+      )
+    ) {
+      const rooms = [
+        ...new Set(
+          [...clients].map((c) => c.room).filter((id): id is string => !!id),
+        ),
+      ];
       const ancestors = await loadResources(db, rooms);
       for (const id of rooms) {
         const seen = new Set<string>();
-        let current = ancestors.find(r => r.id === id);
+        let current = ancestors.find((r) => r.id === id);
         while (current && !seen.has(current.id)) {
-          if (current.id === room) { affectedRooms.add(id); break; }
+          if (current.id === room) {
+            affectedRooms.add(id);
+            break;
+          }
           seen.add(current.id);
-          current = ancestors.find(r => r.id === (current!.parent_id ?? current!.library_id));
+          current = ancestors.find(
+            (r) => r.id === (current!.parent_id ?? current!.library_id),
+          );
         }
       }
     }
     for (const c of clients)
-      if (c.user && (recipients.has(c.user.id) || (c.room && affectedRooms.has(c.room))) && (await valid(c)))
+      if (
+        c.user &&
+        (recipients.has(c.user.id) || (c.room && affectedRooms.has(c.room))) &&
+        (await valid(c))
+      )
         send(c, { type: "notifications.changed" });
     for (const c of clients)
       if (c.room && affectedRooms.has(c.room) && (await valid(c)))
@@ -582,16 +602,38 @@ export async function registerRealtime(
     await Promise.all([...clients].map((c) => c.queue));
   });
   return {
-    async enforceAccess() { for (const c of clients) await valid(c); },
+    async enforceAccess() {
+      for (const c of clients) await valid(c);
+    },
     async documentChanged(room: string) {
       await inRoom(room, async () => {
         for (const c of clients) {
           if (c.room !== room || !(await valid(c))) continue;
-          const r = await db.selectFrom("resources").select("format").where("id", "=", room).executeTakeFirst();
+          const r = await db
+            .selectFrom("resources")
+            .select("format")
+            .where("id", "=", room)
+            .executeTakeFirst();
           if (!r) continue;
-          const epoch = await db.selectFrom("editor_epochs").select("baseline").where("resource_id", "=", room).executeTakeFirst();
-          const codec = r.format === "markdown" ? "markdown-ytext" : r.format === "rich_text" ? "slate-kit" : surfaceCodec(r.format);
-          const schemaVersion = r.format === "rich_text" ? 3 : r.format === "presentation" ? PPT_SCHEMA : r.format === "spreadsheet" ? JSON.parse(epoch?.baseline ?? "{}").schemaVersion : 1;
+          const epoch = await db
+            .selectFrom("editor_epochs")
+            .select("baseline")
+            .where("resource_id", "=", room)
+            .executeTakeFirst();
+          const codec =
+            r.format === "markdown"
+              ? "markdown-ytext"
+              : r.format === "rich_text"
+                ? "slate-kit"
+                : surfaceCodec(r.format);
+          const schemaVersion =
+            r.format === "rich_text"
+              ? 3
+              : r.format === "presentation"
+                ? PPT_SCHEMA
+                : r.format === "spreadsheet"
+                  ? JSON.parse(epoch?.baseline ?? "{}").schemaVersion
+                  : 1;
           const protocol = { codec, schemaVersion, protocolVersion: 1 };
           const state = await documents.exchange(c.user, room, protocol);
           // A pull response with an empty vector preserves identities and does not create an ACK.
@@ -600,11 +642,7 @@ export async function registerRealtime(
         }
       });
     },
-    online: () =>
-      new Set(
-        [...clients]
-          .filter((c) => c.ws.readyState === 1 && c.user)
-          .map((c) => c.user!.id),
-      ).size,
+    online: () => onlineUsers().length,
+    onlineUsers,
   };
 }

@@ -1,3 +1,4 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { MessageSquare, Paperclip, FileText, Link } from "lucide-react";
@@ -25,6 +26,8 @@ export function SheetSelectionComment({
   enabled: boolean;
   add(): void;
 }) {
+const { t } = useI18n();
+
   const [rect, setRect] = useState<DOMRect | null>(null);
   useEffect(() => {
     let visible = false;
@@ -54,8 +57,8 @@ export function SheetSelectionComment({
   return createPortal(
     <button
       className="sheet-selection-comment"
-      aria-label="评论选中区域"
-      title="评论选中区域"
+      aria-label={t("editor.commentSelection")}
+      title={t("editor.commentSelection")}
       style={{
         left: Math.max(8, Math.min(rect.left, innerWidth - 48)),
         top: Math.max(140, rect.top - 38),
@@ -77,6 +80,8 @@ export function SheetUserPicker({
   choose(user: MentionUser): void;
   close(): void;
 }) {
+const { t } = useI18n();
+
   const [q, setQ] = useState(""),
     [users, setUsers] = useState<MentionUser[]>([]),
     [error, setError] = useState("");
@@ -111,8 +116,8 @@ export function SheetUserPicker({
       >
         <input
           autoFocus
-          aria-label="搜索用户"
-          placeholder="搜索用户"
+          aria-label={t("users.search")}
+          placeholder={t("users.search")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />

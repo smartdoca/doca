@@ -454,6 +454,69 @@ describe("cloud baseline", () => {
     ).toBe(200);
     expect((await request("GET", "/resources", bob)).statusCode).toBe(401);
   });
+  it("validates and persists site defaults with admin and revision protection", async () => {
+    const initial = (
+      await request("GET", "/admin/settings", adminCookie)
+    ).json();
+    expect(initial).toMatchObject({
+      default_locale: "zh",
+      default_timezone: "Asia/Shanghai",
+    });
+    const payload = {
+      revision: initial.revision,
+      siteName: "Site",
+      registrationEnabled: false,
+      defaultLocale: "en",
+      defaultTimezone: "America/Los_Angeles",
+    };
+    expect(
+      (await request("PUT", "/admin/settings", bob, payload)).statusCode,
+    ).toBe(403);
+    expect(
+      (
+        await request("PUT", "/admin/settings", adminCookie, {
+          ...payload,
+          defaultTimezone: "Invalid/Zone",
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await request("PUT", "/admin/settings", adminCookie, {
+          ...payload,
+          defaultLocale: "invalid",
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (await request("PUT", "/admin/settings", adminCookie, payload))
+        .statusCode,
+    ).toBe(200);
+    expect((await request("GET", "/bootstrap")).json()).toMatchObject({
+      defaultLocale: "en",
+      defaultTimezone: "America/Los_Angeles",
+    });
+    expect(
+      (await request("PUT", "/admin/settings", adminCookie, payload))
+        .statusCode,
+    ).toBe(409);
+    // Older clients can still update existing fields without resetting defaults.
+    expect(
+      (
+        await request("PUT", "/admin/settings", adminCookie, {
+          revision: initial.revision + 1,
+          siteName: "Renamed",
+          registrationEnabled: false,
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (await request("GET", "/admin/settings", adminCookie)).json(),
+    ).toMatchObject({
+      default_locale: "en",
+      default_timezone: "America/Los_Angeles",
+    });
+  });
   it("allows an existing short test password without weakening new password rules", async () => {
     await db
       .updateTable("users")
@@ -466,7 +529,10 @@ describe("cloud baseline", () => {
     });
     expect(r.statusCode).toBe(200);
     const cookie = String(r.headers["set-cookie"]).split(";")[0]!;
-    expect((await request("POST", "/auth/reauth", cookie, { password: "admin" })).statusCode).toBe(200);
+    expect(
+      (await request("POST", "/auth/reauth", cookie, { password: "admin" }))
+        .statusCode,
+    ).toBe(200);
     expect(
       (
         await request("POST", "/auth/password", cookie, {
@@ -483,7 +549,9 @@ describe("cloud baseline", () => {
     ).toBe(200);
   });
   it("revokes sessions on password changes and logout", async () => {
-    expect((await request("POST", "/auth/reauth", alice, { password })).statusCode).toBe(200);
+    expect(
+      (await request("POST", "/auth/reauth", alice, { password })).statusCode,
+    ).toBe(200);
     expect(
       (
         await request("POST", "/auth/password", alice, {
@@ -570,13 +638,13 @@ describe("cloud baseline", () => {
         await request("PUT", "/me/profile", alice, {
           version: 0,
           displayName: "Alice 新昵称",
-          avatar: "fox",
+          avatar: "dragon",
         })
       ).statusCode,
     ).toBe(200);
     const me = (await request("GET", "/me", alice)).json();
     expect(me.user.display_name).toBe("Alice 新昵称");
-    expect(me.preferences.avatar).toBe("fox");
+    expect(me.preferences.avatar).toBe("dragon");
     expect(
       (
         await request("PUT", "/me/preferences", alice, {
@@ -620,9 +688,15 @@ describe("cloud baseline", () => {
     await create();
     await create(alice, { kind: "library" });
     expect((await request("GET", "/admin/stats", alice)).statusCode).toBe(403);
+    expect((await request("GET", "/admin/online-users", alice)).statusCode).toBe(
+      403,
+    );
     expect(
       (await request("GET", "/admin/stats", adminCookie)).json(),
     ).toMatchObject({ documents: 1, libraries: 1, users: 3, online: 0 });
+    expect(
+      (await request("GET", "/admin/online-users", adminCookie)).json(),
+    ).toEqual({ items: [], nextOffset: null });
     await request("POST", "/me/heartbeat", alice);
     expect(
       (await request("GET", "/admin/stats", adminCookie)).json().online,

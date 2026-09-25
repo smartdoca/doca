@@ -462,16 +462,6 @@ textarea:where(:not([data-aidcanvas] *)) {
 .stat-card span {
   color: var(--text-secondary);
 }
-.backup-layout {
-  border-color: var(--line);
-}
-.backup-layout aside {
-  background: var(--sidebar);
-  border-color: var(--line);
-}
-.backup-empty > svg {
-  color: #b7c3d6;
-}
 .like-area button {
   border-color: var(--brand);
   color: var(--brand);

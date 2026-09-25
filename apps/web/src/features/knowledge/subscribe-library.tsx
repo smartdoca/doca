@@ -1,7 +1,8 @@
+import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState } from "react";
 import { api, roleRank, type Resource } from "@web/shared/api.js";
 
-export type SubscribeTarget = { kind: "document" | "file" | "folder" | "mail" | "mailbox" | "url"; id: string; title: string; url?: string };
+export type SubscribeTarget = { kind: "document" | "file" | "folder" | "url"; id: string; title: string; url?: string };
 
 export function SubscribeLibraryHost() {
   const [target, setTarget] = useState<SubscribeTarget | null>(null);
@@ -18,6 +19,8 @@ export function SubscribeLibraryHost() {
 }
 
 export function SubscribeLibraryDialog({ target, close }: { target: SubscribeTarget; close: () => void }) {
+const { t } = useI18n();
+
   const [libraries, setLibraries] = useState<Resource[]>([]);
   const [libraryId, setLibraryId] = useState("");
   const [error, setError] = useState("");
@@ -57,13 +60,13 @@ export function SubscribeLibraryDialog({ target, close }: { target: SubscribeTar
 
   return (
     <div className="file-info-backdrop" role="presentation" onClick={close}>
-      <section className="file-confirm-dialog" role="dialog" aria-modal="true" aria-label="收入知识库" onClick={(event) => event.stopPropagation()}>
+      <section className="file-confirm-dialog" role="dialog" aria-modal="true" aria-label={t("doc.collect")} onClick={(event) => event.stopPropagation()}>
         <header>
           <div>
-            <strong>收入知识库</strong>
+            <strong>{t("doc.collect")}</strong>
             <span>{target.title}</span>
           </div>
-          <button className="icon" onClick={close} aria-label="关闭">×</button>
+          <button className="icon" onClick={close} aria-label={t("dialog.close")}>×</button>
         </header>
         {libraries.length ? (
           <label className="subscribe-library-pick">
@@ -76,7 +79,7 @@ export function SubscribeLibraryDialog({ target, close }: { target: SubscribeTar
         <p>提交后出现在知识体系页。确认加入之后，才写进文档树。</p>
         {error && <p role="alert">{error}</p>}
         <footer>
-          <button className="secondary" onClick={close}>取消</button>
+          <button className="secondary" onClick={close}>{t("common.cancel")}</button>
           <button className="primary" disabled={busy || !libraryId} onClick={() => void submit()}>收入</button>
         </footer>
       </section>
