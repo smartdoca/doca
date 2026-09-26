@@ -41,6 +41,7 @@ export interface MeilisearchSearchProviderOptions<
     timeoutMs?: number,
   ) => Promise<any>;
   readonly waitTask: (config: TConnection, task: any) => Promise<void>;
+  readonly replicaEmbedders?: (remote: Record<string, any>) => Promise<Record<string, unknown>>;
   readonly queryEmbedder?: () => Promise<string | undefined>;
 }
 
@@ -467,6 +468,7 @@ export class MeilisearchSearchProvider<
       if (this.#notFound(error)) return;
       throw error;
     }
+    if(this.#options.replicaEmbedders)embedders=await this.#options.replicaEmbedders(embedders);
     const fingerprint = JSON.stringify(embedders);
     const key = `${this.#target(config)}\n${physical}`;
     if (

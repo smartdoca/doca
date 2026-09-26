@@ -64,6 +64,7 @@ function richOutline(value: unknown) {
         id: block?.id,
         type: block?.type,
         preview: previewText(block, 80),
+        textLength: richTextLength(block),
       };
       if (block?.title) node.title = block.title;
       if (block?.type === "code-block") node.language = block.language;
@@ -95,6 +96,16 @@ function richOutline(value: unknown) {
       return node;
     }),
   };
+}
+
+/** Native rich-text offsets count UTF-16 code units across text leaves, including links. */
+export function richTextLength(value: unknown): number {
+  if (!value || typeof value !== "object") return 0;
+  const node = value as { text?: unknown; children?: unknown[] };
+  if (typeof node.text === "string") return node.text.length;
+  return Array.isArray(node.children)
+    ? node.children.reduce<number>((total, child) => total + richTextLength(child), 0)
+    : 0;
 }
 
 function markdownOutline(text: string) {

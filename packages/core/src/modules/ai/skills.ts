@@ -105,8 +105,8 @@ Markdown：
 - 新增页：{type:"addSlide",after:已有slideId}，随后读取生成的页面ID。也可传合法slide对象；没有结构样例时优先默认创建后局部编辑。
 - 插入原生文本示例：{type:"insert",slideId,element:{id:"新唯一ID",type:"text",transform:{x:1000000,y:1500000,width:9000000,height:1000000,rotation:0},fill:"#202124",paragraphs:[{type:"paragraph",children:[{text:"标题",fontSize:36,bold:true,color:"#202124"}]}]}}。使用读取的页面尺寸调整，不能套用越界坐标。
 - 通用新增：{type:"add",slideId,kind:"text"}后回读元素ID，再{type:"patch",slideId,id,patch:{...}}；不把kind当作原生element.type。
-- 修改文字可patch该文本元素paragraphs；replaceText:{type:"replaceText",query,text}是全文范围替换，只有用户明确要求全稿替换时才用。
-- 超链接是文字叶子的link属性：paragraphs:[{type:"paragraph",children:[{text:"链接文字",link:"https://…"}]}]，insert或patch文本元素时写入；保存后回读确认link属性存在。
+- 修改已有文字禁止 patch.paragraphs（SDK 不支持）；使用 {type:"replaceText",slideId,id,query:"原段落中的准确文字",text:"新文字"}，保留元素标识和格式。query 不跨段落，先按 slideId 读取完整正文，不得用截断预览；不提供 slideId/id 时是全稿替换，只有用户要求全稿替换时才省略范围。
+- 超链接是文字叶子的link属性：paragraphs:[{type:"paragraph",children:[{text:"链接文字",link:"https://…"}]}]，insert 新文本元素时写入；已有文本链接不能用 patch.paragraphs 改写；保存后回读确认link属性存在。
 - formatText带slideId、ids、marks；paragraphFormat带slideId、ids、format；patch只修改目标属性，保留transform及其他属性。
 - 对齐align带slideId、ids、axis；等距distribute带同类参数；层级arrange带action=front/back/forward/backward；具体axis使用当前SDK支持值，不猜未知枚举。
 - group/ungroup/duplicate带slideId、ids。页面moveSlide带slideId、before(目标ID或null)；duplicateSlides带ids；setSlidesHidden带ids、hidden；deleteSlide带slideId仅删除明确要求的页面。
@@ -154,6 +154,7 @@ Markdown：
 
 工具：
 - file_search { query, folderId? } 返回 files[].id（完整 UUID）、path、folderId、href、movable。生成的图片 folderId=ai，movable=false。命中的文件会显示为文件卡片。
+- file_read { fileId, offset?, limit? } 读取PDF、Word、Markdown、表格、PPT和图片的正文；扫描页自动识别。nextOffset非空继续读，partial/failed说明未识别部分，不能用文件描述冒充正文。
 - file_browse { folderId? } 或 { fileId } 看该节点、父级、直接子级。默认 folderId=root。copyOnly=true 的目录不能动。
 - file_folder_manage：create 要 name，parentId 默认 root（或用户文件夹 UUID / shared），成功回执里的 id 就是新文件夹 UUID。rename 必须同时给 folderId（完整 UUID）和 name（新名字）。用户只说「改成某某」「就叫某某」时，视为对当前讨论的文件夹立刻改名，必须马上调用工具；没有 ok 回执不得声称已改名，也不能把思考过程里的计划当成结果。
 - file_manage：rename/move/copy/delete。一次可传 fileIds=[完整UUID,...]，目标 parentId 用 root / shared / 文件夹 UUID，不能是 ai 或 documents。movable=false 时必须 copy，禁止 move。
@@ -199,14 +200,15 @@ export function relevantSkillFormats(
     formats.add("spreadsheet");
   if (/(?:ppt|幻灯片|演示文稿|presentation)/i.test(text))
     formats.add("presentation");
-  if (/(?:画板|流程图|思维导图|\bcanvas\b)/i.test(text)) formats.add("canvas");
+  if (/(?:画布|画板|流程图|思维导图|\bcanvas\b)/i.test(text))
+    formats.add("canvas");
   const fileExport =
     /(?:保存为|导出为?|下载为?).{0,12}(?:word|docx|pdf|excel|xlsx|markdown|\.md)|(?:word|pdf|excel|markdown)文件/i.test(
       text,
     );
   if (
     !fileExport &&
-    /(?:写|起草|润色|改写|翻译|续写|保存).{0,12}(?:文档|报告|周报|纪要|prd|教程)|(?:文档|报告|周报|纪要|prd|富文本).{0,8}(?:写|改|保存|创建)/i.test(
+    /(?:写|起草|创建|新建|生成|制作|排版|美化|优化|润色|改写|翻译|续写|保存).{0,12}(?:文档|报告|周报|纪要|prd|教程)|(?:文档|报告|周报|纪要|prd|富文本).{0,8}(?:写|改|保存|创建|排版|美化|样式优化)/i.test(
       text,
     )
   )

@@ -602,6 +602,10 @@ export async function registerRealtime(
     await Promise.all([...clients].map((c) => c.queue));
   });
   return {
+    async notificationsChanged(userId: string) {
+      for (const client of clients)
+        if (client.user?.id === userId && await valid(client)) send(client, { type: "notifications.changed" });
+    },
     async enforceAccess() {
       for (const c of clients) await valid(c);
     },

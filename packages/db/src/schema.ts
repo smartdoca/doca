@@ -48,6 +48,11 @@ export interface Resource {
   updated_at: string;
 }
 export interface Schema {
+  file_operation_receipts: {
+    plugin_id: string; user_id: string; operation: string; operation_key: string;
+    request_hash: string; status: "pending" | "completed"; result: string | null;
+    object_id: string | null; profile_id: string | null; object_key: string | null; cleanup_at: string | null; created_at: string;
+  };
   plugin_migrations: {
     plugin_id: string;
     version: string;
@@ -690,6 +695,17 @@ export interface Schema {
     kind: "like" | "favorite" | "pin";
     created_at?: string;
   };
+  plugin_notifications: {
+    notification_id: string;
+    plugin_id: string;
+    resource_type: string;
+    resource_id: string;
+    title: string;
+    body: string;
+    path: string;
+    request_hash: string;
+    withdrawn_at: string | null;
+  };
   notifications: {
     ticket_id?: string | null;
     actor_id?: string | null;
@@ -752,7 +768,39 @@ export interface Schema {
     query: string;
     created_at: string;
   };
+  knowledge_conversations: {
+    id: string; scope_id: string; kind: string; owner_id: string; title: string;
+    summary: string; state: string; created_at: string; updated_at: string;
+  };
+  knowledge_messages: {
+    id: string; conversation_id: string; role: string; author_id: string | null;
+    trigger: string; content: string; detail: string; created_at: string;
+  };
+  knowledge_tasks: {
+    id: string; conversation_id: string; actor_id: string; status: string;
+    error: string; created_at: string; updated_at: string;
+  };
+  knowledge_checkpoints: {
+    task_id:string; detail:string; attempts:number; available_at:string;
+  };
+  knowledge_source_observations: {
+    library_id:string; source_id:string; fingerprint:string; updated_at:string;
+  };
+  knowledge_cases: {
+    id: string; bot_id: string; message_id: string; user_id: string;
+    judgment: string; reason: string; snapshot: string; status: string; created_at: string;
+  };
+  knowledge_source_actions: {
+    id: string; library_id: string; source_key: string; actor_id: string;
+    action: string; detail: string; created_at: string;
+  };
+  knowledge_publications: {
+    library_id: string; revision: number; fingerprint: string; documents: string;
+    status: string; error: string; updated_at: string;
+  };
+  knowledge_source_groups: { config?: string; id: string; library_id: string; title: string; source_kind: string; created_at: string };
   knowledge_subscriptions: {
+    group_id?: string | null;
     id: string;
     creator_id?: string;
     library_id: string;

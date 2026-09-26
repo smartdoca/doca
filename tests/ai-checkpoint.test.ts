@@ -307,3 +307,17 @@ it.each(["shutdown", "expired lease", "repeated shutdown"])(
   },
   20000,
 );
+
+it("does not send recovered folder, file or image receipts to document acceptance", async () => {
+  const { recoveredDocumentArtifacts } = await import("../apps/server/src/services/ai/checkpoint.js");
+  expect(recoveredDocumentArtifacts([
+    { id: "folder", kind: "file_folder" },
+    { id: "file", kind: "file_item" },
+    { id: "image", kind: "image_generation" },
+    { id: "created", kind: "document" },
+    { resourceId: "edited" },
+    { resourceId: "illustrated", kind: "image_insert" },
+  ], ["folder", "file", "image", "edited", "checkpoint-document"])).toEqual([
+    "created", "edited", "illustrated", "checkpoint-document",
+  ]);
+});

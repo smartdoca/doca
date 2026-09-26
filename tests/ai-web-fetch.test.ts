@@ -110,17 +110,21 @@ it("rejects login pages, files, empty pages and oversized responses honestly", a
 });
 it("downloads binary files that page fetch would reject", async () => {
   const body = Buffer.from("%PDF-1.7\nfixture");
-  const result = await fetchWebFile("https://example.com/report.pdf", undefined, {
-    resolve: publicDns,
-    request: async () => ({
-      status: 200,
-      headers: {
-        "content-type": "application/pdf",
-        "content-disposition": 'attachment; filename="report.pdf"',
-      },
-      body,
-    }),
-  });
+  const result = await fetchWebFile(
+    "https://example.com/report.pdf",
+    undefined,
+    {
+      resolve: publicDns,
+      request: async () => ({
+        status: 200,
+        headers: {
+          "content-type": "application/pdf",
+          "content-disposition": 'attachment; filename="report.pdf"',
+        },
+        body,
+      }),
+    },
+  );
   expect(result.filename).toBe("report.pdf");
   expect(result.mime).toBe("application/pdf");
   expect(result.body.equals(body)).toBe(true);
@@ -204,14 +208,21 @@ it("uses the Firecrawl SDK with a self-hosted API URL", async () => {
         formats: ["markdown"],
         timeout: 60000,
       });
-      return { markdown: "# Firecrawl\n\n正文", metadata: { title: "页面标题" } };
+      return {
+        markdown: "# Firecrawl\n\n正文",
+        metadata: { title: "页面标题" },
+      };
     }),
   }));
   const result = await fetchWebPage(
     "https://example.com",
     undefined,
     { firecrawlFactory: firecrawlFactory as any },
-    { provider: "firecrawl", apiKey: "provider-secret", baseUrl: "https://self-hosted.example/v2" },
+    {
+      provider: "firecrawl",
+      apiKey: "provider-secret",
+      baseUrl: "https://self-hosted.example/v2",
+    },
   );
   expect(firecrawlFactory).toHaveBeenCalledOnce();
   expect(result.title).toBe("页面标题");
@@ -226,7 +237,9 @@ it("reads the Tavily provider response", async () => {
       extract_depth: "advanced",
     });
     return Response.json({
-      results: [{ url: "https://example.com", raw_content: "# Tavily\n\n正文" }],
+      results: [
+        { url: "https://example.com", raw_content: "# Tavily\n\n正文" },
+      ],
     });
   });
   const result = await fetchWebPage(
@@ -290,7 +303,9 @@ it("saves a keyless Firecrawl service on private HTTP and docker hostnames", asy
       },
       1,
     );
-    expect((await aiConfig(db)).webFetch?.baseUrl).toBe("http://firecrawl:3002");
+    expect((await aiConfig(db)).webFetch?.baseUrl).toBe(
+      "http://firecrawl:3002",
+    );
     await expect(
       saveAIConfig(
         db,
@@ -307,5 +322,59 @@ it("saves a keyless Firecrawl service on private HTTP and docker hostnames", asy
     ).rejects.toThrow("HTTPS");
   } finally {
     await db.destroy();
+  }
+});
+
+it.each([
+  ['attachment; filename="budget%20final.pdf"', "budget%20final.pdf"],
+  ["attachment; filename*=UTF-8'zh'%E8%B0%83%E7%A0%94.pdf", "调研.pdf"],
+  ['attachment; filename=".."', "download"],
+])("preserves valid download filenames: %s", async (disposition, expected) => {
+  const result = await fetchWebFile("https://example.com/download", undefined, {
+    resolve: publicDns,
+    request: async () =>
+      page("content", 200, { "content-disposition": disposition }),
+  });
+  expect(result.filename).toBe(expected);
+});
+
+it("cancels a pending Firecrawl read without waiting for its SDK timeout", async () => {
+  const controller = new AbortController();
+  const scrape = vi.fn(() => new Promise<never>(() => {}));
+  const pending = fetchWebPage(
+    "https://example.com",
+    controller.signal,
+    {
+      firecrawlFactory: (() => ({ scrape })) as any,
+    },
+    { provider: "firecrawl" },
+  );
+  const rejected = expect(pending).rejects.toThrow("User cancelled");
+  controller.abort(new Error("User cancelled"));
+  await rejected;
+  expect(scrape).toHaveBeenCalledOnce();
+});
+
+it("does not start an external read after cancellation", async () => {
+  const factory = vi.fn();
+  await expect(
+    fetchWebPage(
+      "https://example.com",
+      AbortSignal.abort(new Error("User cancelled")),
+      {
+        firecrawlFactory: factory,
+      },
+      { provider: "firecrawl" },
+    ),
+  ).rejects.toThrow("User cancelled");
+  expect(factory).not.toHaveBeenCalled();
+});
+
+it("preserves withdrawn claims as obsolete instead of current research evidence", () => {
+  for (const tag of ['s', 'del', 'strike', 'span style="text-decoration: line-through"']) {
+    const result = extractWebText(`<main><${tag}>Old transaction limit.</${tag.split(' ')[0]}> Since version 3.11 the limit no longer applies.</main>`, "https://example.com");
+    expect(result.text).toContain("已删除或废弃的原文：Old transaction limit.");
+    expect(result.text).toContain("不作为现行结论");
+    expect(result.text).toContain("Since version 3.11");
   }
 });

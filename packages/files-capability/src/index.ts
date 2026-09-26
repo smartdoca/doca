@@ -62,7 +62,7 @@ export interface FileRecord {
 export interface FileFolderOperationsV1 {
   create(
     context: FilesRequestContext,
-    input: { parentId: FolderId | null; name: string },
+    input: { parentId: FolderId | null; name: string; idempotencyKey?: string },
   ): Promise<FileFolder>;
   get(
     context: FilesRequestContext,
@@ -95,7 +95,20 @@ export interface FileFolderOperationsV1 {
   ): Promise<void>;
 }
 
+export interface FileContentIdentity { readonly sha256: string; readonly size: number; readonly mime: string }
+export interface FileOperationReceipt {
+  readonly status: "pending" | "completed";
+  readonly operation: "file.create" | "folder.create";
+  readonly result: FileRecord | FileFolder | null;
+}
+export interface FileReceiptsV1 {
+  get(context: FilesRequestContext, input: { operation: "file.create" | "folder.create"; key: string }): Promise<FileOperationReceipt | null>;
+}
+
 export type FileCreateInput = {
+  readonly idempotencyKey?: string;
+  /** Required for idempotent upload creation; obtained from uploads.complete. uploadId may change on retry. */
+  readonly contentIdentity?: FileContentIdentity;
   readonly folderId: FolderId | null;
   readonly name: string;
 } & (
@@ -146,6 +159,7 @@ export interface FileOperationsV1 {
 export type FileUploadState = "open" | "completed" | "aborted" | "failed";
 
 export interface FileUpload {
+  readonly contentIdentity?: FileContentIdentity;
   readonly id: FileUploadId;
   readonly filename: string;
   readonly declaredMime?: string;
@@ -435,6 +449,7 @@ export interface FilesServiceV1 {
   readonly folders: FileFolderOperationsV1;
   readonly files: FileOperationsV1;
   readonly uploads: FileUploadLifecycleV1;
+  readonly receipts: FileReceiptsV1;
   readonly bindings: FileBindingOperationsV1;
   readonly content: FileContentResolutionV1;
   readonly webCapabilities: readonly FilesWebCapabilityDescriptor[];
@@ -444,6 +459,7 @@ export interface FilesProviderAdapterV1 {
   readonly folders: FileFolderOperationsV1;
   readonly files: FileOperationsV1;
   readonly uploads: FileUploadLifecycleV1;
+  readonly receipts: FileReceiptsV1;
   readonly bindings: FileBindingOperationsV1;
   readonly content: FileContentOperationsV1;
   readonly webCapabilities?: readonly FilesWebCapabilityDescriptor[];
@@ -462,6 +478,7 @@ export function createFilesProviderV1(
     files: adapter.files,
     uploads: adapter.uploads,
     bindings: adapter.bindings,
+    receipts: adapter.receipts,
     content: adapter.content,
     webCapabilities: adapter.webCapabilities ?? FILES_WEB_CAPABILITIES_V1,
   });

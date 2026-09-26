@@ -1,0 +1,523 @@
+{
+  "checks": [
+    {
+      "label": "internal-only",
+      "conversationId": "3e38109c-b963-486c-9ad7-cff8307d9aad",
+      "taskId": "2b8e7982-e364-426a-9075-ee62bef6b0b3",
+      "scope": "internal",
+      "calls": [
+        {
+          "name": "search_internal"
+        },
+        {
+          "name": "search_internal"
+        },
+        {
+          "name": "search_internal"
+        },
+        {
+          "name": "read_document"
+        },
+        {
+          "name": "read_document",
+          "error": "文档不在本库"
+        },
+        {
+          "name": "read_source"
+        },
+        {
+          "name": "draft"
+        },
+        {
+          "name": "review"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "label": "scheduled-internal-scope",
+      "conversationId": "24a0eb58-1df2-47d5-8ce0-13bc511ec1ac",
+      "taskId": "6d6f4fa0-6de2-4353-b0a0-1a3e7cea3cd4",
+      "scope": "internal",
+      "calls": [
+        {
+          "name": "scan_sources"
+        },
+        {
+          "name": "read_source"
+        },
+        {
+          "name": "source_processed"
+        },
+        {
+          "name": "work_plan"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "label": "explicit-web-opt-in",
+      "conversationId": "a57d012a-de9f-40ef-8a42-8dc1d6bf0a22",
+      "taskId": "165c3f0b-b1bf-475d-a260-d40b897d78d8",
+      "scope": "web",
+      "calls": [
+        {
+          "name": "inspect"
+        }
+      ],
+      "passed": true
+    }
+  ],
+  "internalLibraryId": "6204c6f3-732b-42f0-beec-e20f40d851c6",
+  "internalSourceId": "04a34d3f-de28-4b71-b8e0-8140b7e7218b",
+  "publication": {
+    "revision": 1,
+    "status": "ready",
+    "error": "",
+    "updatedAt": "2026-09-26T16:33:04.917Z",
+    "dirty": false
+  },
+  "answers": [
+    {
+      "query": "DNS负缓存的TTL如何计算？如果SOA记录TTL是600秒、MINIMUM是3600秒，结果是多少？",
+      "conversationId": "78547119-1195-4bbe-b982-96b7747974ec",
+      "messageId": "8bd6f314-9694-4aaa-8908-08bfdd9544c5",
+      "answer": "DNS负缓存的初始TTL计算规则为：**负缓存初始TTL = min(SOA记录自身的TTL值, SOA记录中MINIMUM字段的值)**。\n\n代入本题给出的数值：SOA记录自身TTL是600秒，MINIMUM是3600秒，取两者较小值，因此结果为600秒。",
+      "citations": [
+        {
+          "id": "qa_64d15f8b37a6967f60acba8c117afb7d71db817a",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "六、带解析的自测",
+          "text": "## 六、带解析的自测\n\n1. SOA TTL 为 900、MINIMUM 为 300，一次新的否定回答应按哪个值计算？\n\n  - 按两者较小值 300 秒，随后缓存转发会扣减寿命。不是只看 SOA 的最后一列。\n\n2. `dig @recursive.example www.example.com A +norecurse` 能保证拿到最新权威答案吗？\n\n  - 不能。RD=0 不清缓存；目标递归服务器可能只返回缓存或拒绝处理。应定位并直接查询权威服务器，核对 AA。\n\n3. 原 TTL 为 3600，刚把它改成 60，马上迁移地址是否只需等 60 秒？\n\n  - 不能保证。远端旧缓存可能仍按原剩余寿命存在，需要提前降低并等待旧窗口。\n\n4. 所有 DNS 查询都返回新 IP，为什么客户端仍请求旧 IP？\n\n  - 排查进程自己的解析缓存、代理、hosts、硬编码地址和已经建立的连接；DNS TTL 不终止连接。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.8265422582626343
+        },
+        {
+          "id": "qa_a26cbd127e95deea4fb700fa1209e426b3177b66",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "2.2 NXDOMAIN 与 NODATA",
+          "text": "### 2.2 NXDOMAIN 与 NODATA\n\n- **NXDOMAIN**：响应码为 3，表示被查询名称不存在。CNAME 场景下要注意回答描述的最终名称。\n\n- **NODATA**：名称存在，但所问类型不存在；通常为 `NOERROR`、空 Answer，并带有用于否定回答的 SOA。NODATA 不是一种独立响应码。\n\n- **SERVFAIL**：解析失败，可能来自验证失败、上游超时或其他问题；不能把它解释为“名称不存在”。\n\nRFC1034 最初讨论负缓存时有可选语义，RFC2308 后来明确要求缓存解析器实现负缓存，并规定缓存粒度与寿命。不能仅按早期 RFC1034 描述现代实现。\n\n**负缓存初始 TTL = min(SOA 记录自身的 TTL, SOA.MINIMUM)。** 权威服务器在否定回答中携带适当的 SOA；解析器转发已缓存否定回答时应扣减剩余时间。无合适 SOA 的否定回答不应按普通长期负缓存处理。参见 RFC2308 §3、§5。\n\n例如某区域 SOA 记录自身 TTL 为 600 秒，RDATA 中最后一个 `MINIMUM` 为 3600 秒：\n\n```dns\nexample.com. 600 IN SOA ns1.example.com. hostmaster.example.com. (\n  2026092701  ; serial\n  3600        ; refresh\n  600         ; retry\n  1209600     ; expire\n  3600        ; minimum\n)\n```\n\n在此情况下，一次 NXDOMAIN 回答的负缓存初始寿命为 **600 秒**，不是 3600 秒。五分钟后，未受其他实现策略影响的缓存剩余时间约为 **300 秒**。这时即使管理员创建了该名称，已经保存否定结果的解析器仍可能在剩余寿命内回答 NXDOMAIN。现在降低权威服务器上的参数，不会追溯修改远端已经缓存的剩余 TTL。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.8148709535598755
+        },
+        {
+          "id": "qa_8ce961ce1a6b91d7e1dacfde3ab2b0240df54ffb",
+          "documentId": "e523dbd4-8b98-4dc2-8a32-5eb378c12974",
+          "title": "DNS运维",
+          "heading": "核心概念关系",
+          "text": "## 核心概念关系\n\n核心以DNS资源记录（RR）为基础，需区分**TYPE（资源记录本身类型，如A、CNAME）**与**QTYPE（查询端指定类型，含扩展类型）**两个维度；正缓存存储已存在的RR，由TTL（生存时间）控制缓存生命周期，负缓存存储不存在的域名/记录查询结果，依赖SOA的MINIMUM字段控制过期时间；TTL、正/负缓存的联动逻辑是DNS解析效率与故障定位的核心依据。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.808295488357544
+        },
+        {
+          "id": "qa_443505357d405322e4835f4cec6dde22e8eab762",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "参考依据",
+          "text": "## 参考依据\n\n- [RFC1034](https://www.rfc-editor.org/rfc/rfc1034.html)：域名空间、区域、递归与权威职责。\n\n- [RFC1035](https://www.rfc-editor.org/rfc/rfc1035.html)：资源记录与 DNS 报文。\n\n- [RFC2181](https://www.rfc-editor.org/rfc/rfc2181.html)：RRset、TTL 与别名约束。\n\n- [RFC2308](https://www.rfc-editor.org/rfc/rfc2308.html)：现代负缓存语义与寿命计算。\n\n- [RFC4592](https://www.rfc-editor.org/rfc/rfc4592.html)：通配符合成规则。\n\n- [RFC8767](https://www.rfc-editor.org/rfc/rfc8767.html)：故障场景下提供过期 DNS 数据的边界。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7831332087516785
+        },
+        {
+          "id": "qa_6aa4ce5c3038367c58f90e382dadd77b49cfa06e",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "2.1 正缓存的时间线",
+          "text": "### 2.1 正缓存的时间线\n\n假设权威服务器在 12:00 返回 `www.example.com. 3600 IN A 192.0.2.10`。递归解析器此时缓存记录，12:10 再返回时通常附带约 3000 秒的剩余 TTL，而不是重新赋予完整 3600 秒。管理员在 12:15 把权威地址改成 `192.0.2.20`，已缓存旧记录的解析器一般仍可在剩余有效期内返回旧地址。\n\n不同解析器最初缓存的时刻不同，所以不会在一个全球统一时刻切换。某些解析器实施预取、TTL 上下限或故障时提供过期数据的策略；RFC8767 讨论了 serve-stale。TTL 也不能关闭已经建立的 TCP 连接或清空应用连接池。因此“TTL 已到但仍访问旧服务”需要继续检查应用解析路径和连接复用。\n\nTTL 为 0 表示结果不应被常规缓存用于后续查询，但会增加查询量和对 DNS 服务可用性的依赖，不能靠设成 0 获得绝对实时切换。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7801185250282288
+        },
+        {
+          "id": "qa_61ddcd2e399d1d51d8a1b83fbfe8733d643b10e2",
+          "documentId": "e523dbd4-8b98-4dc2-8a32-5eb378c12974",
+          "title": "DNS运维",
+          "heading": "推荐阅读路径",
+          "text": "## 推荐阅读路径\n\n按基础到进阶顺序学习：1. 掌握RFC定义的标准DNS资源记录类型及适用场景；2. 理解正/负缓存的作用机制与TTL的控制规则；3. 学习DNS变更后的排障方法，区分缓存延迟与实际记录错误。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.77138352394104
+        },
+        {
+          "id": "qa_140dcf858485107ba06e1f78220e59d8f6b48d47",
+          "documentId": "e523dbd4-8b98-4dc2-8a32-5eb378c12974",
+          "title": "DNS运维",
+          "heading": "排障入口",
+          "text": "## 排障入口\n\n故障排查时，优先通过负缓存逻辑定位“域名不存在”类问题，再按TTL规则排查DNS变更后的缓存延迟，通过区分TYPE与QTYPE解决查询类型匹配异常的问题。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7708295583724976
+        },
+        {
+          "id": "qa_33795fe4bcb31dc7a7d0e01344bacbfc91f6e436",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "一、先区分名称、区域、记录集",
+          "text": "## 一、先区分名称、区域、记录集\n\n域名是名称空间中的节点；区域是由一组权威服务器管理的连续范围；委派把某个子域交给另一组权威服务器。一个名称可以拥有多个类型的记录，但区域边界与字符串后缀并不总是一回事。查 `api.example.com` 时，应该先确定其权威区域，不能只把所有请求发到 `example.com` 的某一台服务器。\n\n资源记录的基本结构是 `NAME TYPE CLASS TTL RDATA`。同名称、同类型、同类的一组记录构成 RRset；例如同一服务配置两个 A 地址，是一个 A RRset。缓存与 DNSSEC 验证都需要正确处理记录集，不能把不同时间获得的不一致记录任意拼接。记录的 TTL 表示可缓存时长，不是健康检查、连接超时，也不是服务自动切换的保证。\n\n| 类型 | 编号 | 用途 | 运维边界 |\n| --- | --- | --- | --- |\n| A | 1 | 名称到 IPv4 地址 | 多个地址不等于具备主动健康检查的负载均衡 |\n| AAAA | 28 | 名称到 IPv6 地址 | A 正常并不能证明 IPv6 路径正常 |\n| NS | 2 | 区域权威服务器名称与委派 | 父区委派与子区顶点 NS 需要保持一致 |\n| CNAME | 5 | 名称别名 | 别名节点通常不能同时放其他普通数据；区域顶点必须有 SOA/NS，因此不能简单配置普通 CNAME |\n| SOA | 6 | 区域管理信息与负缓存参数 | serial 是区域版本标识；refresh/retry/expire 主要用于从服务器维护，不是普通记录 TTL |\n| PTR | 12 | 反向地址查询 | 正反向记录由不同区域维护，彼此不会自动生成 |\n| MX | 15 | 邮件服务器与优先级 | 数值越小越优先，目标应能解析到地址，不应指向 CNAME |\n| TXT | 16 | 文本数据，如域名验证、邮件策略 | 没有统一的业务语义，需由使用它的协议解释 |\n| SRV | 33 | 服务目标、端口、优先级与权重 | 客户端必须支持该服务发现方式才能使用 |\n| CAA | 257 | 限制允许签发证书的 CA | 属于证书签发策略，不替代 TLS 客户端的证书验证 |\n\nAAAA、SRV、CAA 分别参见 RFC3596、RFC2782、RFC8659。基础记录格式参见 RFC1035 §3；CNAME/RRset 的约束参见 RFC2181 §5、§10。查询中的 QTYPE 可以是记录类型，也可以有查询专用值；不要把 TYPE 错理解成“只出现在响应中”。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7675266265869141
+        },
+        {
+          "id": "qa_e90c97dc0ba0f29c6390e6600ec8fb514b9405f5",
+          "documentId": "e523dbd4-8b98-4dc2-8a32-5eb378c12974",
+          "title": "DNS运维",
+          "heading": "子页学习价值",
+          "text": "### 子页学习价值\n\n- [应用层协议 \\> DNS运维：DNS记录类型、缓存与变更排障](#/r/b5d7056d-554a-4f78-9d52-8d389b329a75)：掌握核心DNS资源记录的类型编码、适用场景；理解正/负缓存机制与TTL的作用；学会排查DNS变更、域名不存在类故障。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7641945481300354
+        },
+        {
+          "id": "qa_f540bb1665b55963db91a422ffef98752ceef433",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "二、正缓存与负缓存",
+          "text": "## 二、正缓存与负缓存\n\n典型链路是：应用自身缓存 → 操作系统解析服务 → 递归解析器 → 权威服务器。实际系统也可能由浏览器通过 DoH 使用另一台解析器。每层的缓存与刷新接口不同，清除本机缓存不会清除公司 DNS、公共递归服务器或浏览器自己的缓存。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7635940313339233
+        },
+        {
+          "id": "qa_7138fe37d5e25c9102c37aef42405170b90cd81f",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "三、可靠的 DNS 变更流程",
+          "text": "## 三、可靠的 DNS 变更流程\n\n以计划迁移 A/AAAA 地址为例：\n\n1. **盘点依赖。** 记录旧地址、权威服务器、委派、原 TTL、AAAA、相关 CNAME 链、客户端是否使用专用 DoH，以及服务端 TLS 证书和新地址可用性。\n\n2. **提前降低 TTL。** 在真正改地址之前将相关记录 TTL 降到合适值，例如测试环境的 60 秒；至少为可能仍持有旧 TTL 的缓存留出原 TTL 的等待窗口。60 秒是示例，并非标准要求。\n\n3. **准备新目标。** 确认新目标的路由、防火墙、TLS 和应用健康；旧目标继续服务以覆盖迁移窗口。\n\n4. **修改记录并核对所有权威节点。** 检查 A 与 AAAA、SOA serial 和多个权威实例的一致性；只核对管理控制台不够。\n\n5. **观察不同解析路径。** 对比企业递归、公共递归、系统解析与浏览器实际结果，同时监控错误率、流量落点和连接复用。\n\n6. **稳定后恢复 TTL。** 根据可用性和变更频率恢复长期策略。恢复较长 TTL 应在地址迁移验证完成后进行，而不是在改地址之前。\n\n新建一个此前查询过的名称时，还应提前考虑负缓存的寿命。CNAME 链有多个 RRset，各段独立缓存；只修改其中一段 TTL 不会清除其他段。若出现异常，回滚记录同样受缓存影响，需要保留新旧服务并行或应用层回退方案。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7616912722587585
+        },
+        {
+          "id": "qa_fa3e14a01e5367825d5f3bb4a444c61aa62b292a",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "同样检查 IPv6 与区域管理信息",
+          "text": "# 同样检查 IPv6 与区域管理信息\ndig @ns1.example.com www.example.com AAAA +norecurse\ndig @ns1.example.com example.com SOA +norecurse\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7566157579421997
+        }
+      ]
+    },
+    {
+      "query": "那五分钟后还剩多久？我刚创建了这个域名，缓存会立即失效吗？",
+      "conversationId": "78547119-1195-4bbe-b982-96b7747974ec",
+      "messageId": "a886aa46-e1aa-472a-abae-a2e935acae87",
+      "answer": "### 1. 关于“那五分钟后还剩多久”\n根据证据1的示例：当负缓存初始寿命为600秒（由SOA记录自身TTL 600秒、SOA.MINIMUM 3600秒取较小值得到）时，五分钟后，未受其他实现策略影响的该负缓存剩余时间约为300秒（即5分钟）[1]。\n\n### 2. 关于“刚创建域名，缓存会立即失效吗？”\n不会立即失效，原因如下：\n- DNS存在多层独立缓存（应用自身、操作系统解析服务、递归解析器等，每层缓存互不影响）[11]；\n- 若之前查询过该域名不存在，解析器会缓存负缓存，其寿命由`min(SOA记录自身TTL, SOA.MINIMUM)`决定[1]；创建该域名后，已缓存否定结果的解析器在剩余负缓存寿命内仍可能返回该域名不存在的结果（NXDOMAIN）[1]；\n- 需等待对应层级缓存的TTL过期后，缓存才会失效，且权威服务器参数的修改不会追溯修改远端已缓存的剩余TTL[1][7]。\n\n[1] DNS记录类型、缓存与变更排障 2.2 NXDOMAIN与NODATA\n[7] DNS记录类型、缓存与变更排障 三、可靠的DNS变更流程\n[11] DNS记录类型、缓存与变更排障 二、正缓存与负缓存",
+      "citations": [
+        {
+          "id": "qa_a26cbd127e95deea4fb700fa1209e426b3177b66",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "2.2 NXDOMAIN 与 NODATA",
+          "text": "### 2.2 NXDOMAIN 与 NODATA\n\n- **NXDOMAIN**：响应码为 3，表示被查询名称不存在。CNAME 场景下要注意回答描述的最终名称。\n\n- **NODATA**：名称存在，但所问类型不存在；通常为 `NOERROR`、空 Answer，并带有用于否定回答的 SOA。NODATA 不是一种独立响应码。\n\n- **SERVFAIL**：解析失败，可能来自验证失败、上游超时或其他问题；不能把它解释为“名称不存在”。\n\nRFC1034 最初讨论负缓存时有可选语义，RFC2308 后来明确要求缓存解析器实现负缓存，并规定缓存粒度与寿命。不能仅按早期 RFC1034 描述现代实现。\n\n**负缓存初始 TTL = min(SOA 记录自身的 TTL, SOA.MINIMUM)。** 权威服务器在否定回答中携带适当的 SOA；解析器转发已缓存否定回答时应扣减剩余时间。无合适 SOA 的否定回答不应按普通长期负缓存处理。参见 RFC2308 §3、§5。\n\n例如某区域 SOA 记录自身 TTL 为 600 秒，RDATA 中最后一个 `MINIMUM` 为 3600 秒：\n\n```dns\nexample.com. 600 IN SOA ns1.example.com. hostmaster.example.com. (\n  2026092701  ; serial\n  3600        ; refresh\n  600         ; retry\n  1209600     ; expire\n  3600        ; minimum\n)\n```\n\n在此情况下，一次 NXDOMAIN 回答的负缓存初始寿命为 **600 秒**，不是 3600 秒。五分钟后，未受其他实现策略影响的缓存剩余时间约为 **300 秒**。这时即使管理员创建了该名称，已经保存否定结果的解析器仍可能在剩余寿命内回答 NXDOMAIN。现在降低权威服务器上的参数，不会追溯修改远端已经缓存的剩余 TTL。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.8195840120315552
+        },
+        {
+          "id": "qa_64d15f8b37a6967f60acba8c117afb7d71db817a",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "六、带解析的自测",
+          "text": "## 六、带解析的自测\n\n1. SOA TTL 为 900、MINIMUM 为 300，一次新的否定回答应按哪个值计算？\n\n  - 按两者较小值 300 秒，随后缓存转发会扣减寿命。不是只看 SOA 的最后一列。\n\n2. `dig @recursive.example www.example.com A +norecurse` 能保证拿到最新权威答案吗？\n\n  - 不能。RD=0 不清缓存；目标递归服务器可能只返回缓存或拒绝处理。应定位并直接查询权威服务器，核对 AA。\n\n3. 原 TTL 为 3600，刚把它改成 60，马上迁移地址是否只需等 60 秒？\n\n  - 不能保证。远端旧缓存可能仍按原剩余寿命存在，需要提前降低并等待旧窗口。\n\n4. 所有 DNS 查询都返回新 IP，为什么客户端仍请求旧 IP？\n\n  - 排查进程自己的解析缓存、代理、hosts、硬编码地址和已经建立的连接；DNS TTL 不终止连接。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.8162837624549866
+        },
+        {
+          "id": "qa_8ce961ce1a6b91d7e1dacfde3ab2b0240df54ffb",
+          "documentId": "e523dbd4-8b98-4dc2-8a32-5eb378c12974",
+          "title": "DNS运维",
+          "heading": "核心概念关系",
+          "text": "## 核心概念关系\n\n核心以DNS资源记录（RR）为基础，需区分**TYPE（资源记录本身类型，如A、CNAME）**与**QTYPE（查询端指定类型，含扩展类型）**两个维度；正缓存存储已存在的RR，由TTL（生存时间）控制缓存生命周期，负缓存存储不存在的域名/记录查询结果，依赖SOA的MINIMUM字段控制过期时间；TTL、正/负缓存的联动逻辑是DNS解析效率与故障定位的核心依据。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7989218831062317
+        },
+        {
+          "id": "qa_6aa4ce5c3038367c58f90e382dadd77b49cfa06e",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "2.1 正缓存的时间线",
+          "text": "### 2.1 正缓存的时间线\n\n假设权威服务器在 12:00 返回 `www.example.com. 3600 IN A 192.0.2.10`。递归解析器此时缓存记录，12:10 再返回时通常附带约 3000 秒的剩余 TTL，而不是重新赋予完整 3600 秒。管理员在 12:15 把权威地址改成 `192.0.2.20`，已缓存旧记录的解析器一般仍可在剩余有效期内返回旧地址。\n\n不同解析器最初缓存的时刻不同，所以不会在一个全球统一时刻切换。某些解析器实施预取、TTL 上下限或故障时提供过期数据的策略；RFC8767 讨论了 serve-stale。TTL 也不能关闭已经建立的 TCP 连接或清空应用连接池。因此“TTL 已到但仍访问旧服务”需要继续检查应用解析路径和连接复用。\n\nTTL 为 0 表示结果不应被常规缓存用于后续查询，但会增加查询量和对 DNS 服务可用性的依赖，不能靠设成 0 获得绝对实时切换。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7868442535400391
+        },
+        {
+          "id": "qa_443505357d405322e4835f4cec6dde22e8eab762",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "参考依据",
+          "text": "## 参考依据\n\n- [RFC1034](https://www.rfc-editor.org/rfc/rfc1034.html)：域名空间、区域、递归与权威职责。\n\n- [RFC1035](https://www.rfc-editor.org/rfc/rfc1035.html)：资源记录与 DNS 报文。\n\n- [RFC2181](https://www.rfc-editor.org/rfc/rfc2181.html)：RRset、TTL 与别名约束。\n\n- [RFC2308](https://www.rfc-editor.org/rfc/rfc2308.html)：现代负缓存语义与寿命计算。\n\n- [RFC4592](https://www.rfc-editor.org/rfc/rfc4592.html)：通配符合成规则。\n\n- [RFC8767](https://www.rfc-editor.org/rfc/rfc8767.html)：故障场景下提供过期 DNS 数据的边界。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7760210037231445
+        },
+        {
+          "id": "qa_140dcf858485107ba06e1f78220e59d8f6b48d47",
+          "documentId": "e523dbd4-8b98-4dc2-8a32-5eb378c12974",
+          "title": "DNS运维",
+          "heading": "排障入口",
+          "text": "## 排障入口\n\n故障排查时，优先通过负缓存逻辑定位“域名不存在”类问题，再按TTL规则排查DNS变更后的缓存延迟，通过区分TYPE与QTYPE解决查询类型匹配异常的问题。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7664681077003479
+        },
+        {
+          "id": "qa_7138fe37d5e25c9102c37aef42405170b90cd81f",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "三、可靠的 DNS 变更流程",
+          "text": "## 三、可靠的 DNS 变更流程\n\n以计划迁移 A/AAAA 地址为例：\n\n1. **盘点依赖。** 记录旧地址、权威服务器、委派、原 TTL、AAAA、相关 CNAME 链、客户端是否使用专用 DoH，以及服务端 TLS 证书和新地址可用性。\n\n2. **提前降低 TTL。** 在真正改地址之前将相关记录 TTL 降到合适值，例如测试环境的 60 秒；至少为可能仍持有旧 TTL 的缓存留出原 TTL 的等待窗口。60 秒是示例，并非标准要求。\n\n3. **准备新目标。** 确认新目标的路由、防火墙、TLS 和应用健康；旧目标继续服务以覆盖迁移窗口。\n\n4. **修改记录并核对所有权威节点。** 检查 A 与 AAAA、SOA serial 和多个权威实例的一致性；只核对管理控制台不够。\n\n5. **观察不同解析路径。** 对比企业递归、公共递归、系统解析与浏览器实际结果，同时监控错误率、流量落点和连接复用。\n\n6. **稳定后恢复 TTL。** 根据可用性和变更频率恢复长期策略。恢复较长 TTL 应在地址迁移验证完成后进行，而不是在改地址之前。\n\n新建一个此前查询过的名称时，还应提前考虑负缓存的寿命。CNAME 链有多个 RRset，各段独立缓存；只修改其中一段 TTL 不会清除其他段。若出现异常，回滚记录同样受缓存影响，需要保留新旧服务并行或应用层回退方案。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7616887092590332
+        },
+        {
+          "id": "qa_33795fe4bcb31dc7a7d0e01344bacbfc91f6e436",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "一、先区分名称、区域、记录集",
+          "text": "## 一、先区分名称、区域、记录集\n\n域名是名称空间中的节点；区域是由一组权威服务器管理的连续范围；委派把某个子域交给另一组权威服务器。一个名称可以拥有多个类型的记录，但区域边界与字符串后缀并不总是一回事。查 `api.example.com` 时，应该先确定其权威区域，不能只把所有请求发到 `example.com` 的某一台服务器。\n\n资源记录的基本结构是 `NAME TYPE CLASS TTL RDATA`。同名称、同类型、同类的一组记录构成 RRset；例如同一服务配置两个 A 地址，是一个 A RRset。缓存与 DNSSEC 验证都需要正确处理记录集，不能把不同时间获得的不一致记录任意拼接。记录的 TTL 表示可缓存时长，不是健康检查、连接超时，也不是服务自动切换的保证。\n\n| 类型 | 编号 | 用途 | 运维边界 |\n| --- | --- | --- | --- |\n| A | 1 | 名称到 IPv4 地址 | 多个地址不等于具备主动健康检查的负载均衡 |\n| AAAA | 28 | 名称到 IPv6 地址 | A 正常并不能证明 IPv6 路径正常 |\n| NS | 2 | 区域权威服务器名称与委派 | 父区委派与子区顶点 NS 需要保持一致 |\n| CNAME | 5 | 名称别名 | 别名节点通常不能同时放其他普通数据；区域顶点必须有 SOA/NS，因此不能简单配置普通 CNAME |\n| SOA | 6 | 区域管理信息与负缓存参数 | serial 是区域版本标识；refresh/retry/expire 主要用于从服务器维护，不是普通记录 TTL |\n| PTR | 12 | 反向地址查询 | 正反向记录由不同区域维护，彼此不会自动生成 |\n| MX | 15 | 邮件服务器与优先级 | 数值越小越优先，目标应能解析到地址，不应指向 CNAME |\n| TXT | 16 | 文本数据，如域名验证、邮件策略 | 没有统一的业务语义，需由使用它的协议解释 |\n| SRV | 33 | 服务目标、端口、优先级与权重 | 客户端必须支持该服务发现方式才能使用 |\n| CAA | 257 | 限制允许签发证书的 CA | 属于证书签发策略，不替代 TLS 客户端的证书验证 |\n\nAAAA、SRV、CAA 分别参见 RFC3596、RFC2782、RFC8659。基础记录格式参见 RFC1035 §3；CNAME/RRset 的约束参见 RFC2181 §5、§10。查询中的 QTYPE 可以是记录类型，也可以有查询专用值；不要把 TYPE 错理解成“只出现在响应中”。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7609456181526184
+        },
+        {
+          "id": "qa_8da36452cec460ec051d5285cf5870cce864d113",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "4.3 故障判定表",
+          "text": "### 4.3 故障判定表\n\n| 现象 | 优先验证 | 可能原因与下一步 |\n| --- | --- | --- |\n| 所有权威节点都是旧记录 | 查询对象、区域与 serial | 修改了错误区域，或发布尚未完成 |\n| 不同权威节点回答不同 | 逐台查询 SOA 与记录 | 区域同步、隐藏主服务器、Anycast 实例配置差异 |\n| 权威已更新，递归仍旧 | 递归答案的剩余 TTL | 正常旧缓存；过期后仍旧再查 serve-stale、转发链和策略 |\n| A 正确但连接间歇失败 | AAAA 与 IPv6 路径 | 客户端优先选择或并行尝试 IPv6，不能只测 A |\n| 刚创建名称仍 NXDOMAIN | Authority 中 SOA 与剩余负 TTL | 已有负缓存；等待剩余寿命或处理可控解析器缓存 |\n| NOERROR 但没有所问记录 | QTYPE、CNAME、Authority | NODATA 与委派回答需要区分 |\n| SERVFAIL 且权威可达 | DNSSEC 验证日志、时间、DS/DNSKEY | 签名链或验证失败，不能当成普通 NXDOMAIN |\n| DNS 已正确，仍到旧后端 | 实际连接目标与连接池 | 长连接、代理缓存、hosts 或应用硬编码地址 |\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7603685855865479
+        },
+        {
+          "id": "qa_e90c97dc0ba0f29c6390e6600ec8fb514b9405f5",
+          "documentId": "e523dbd4-8b98-4dc2-8a32-5eb378c12974",
+          "title": "DNS运维",
+          "heading": "子页学习价值",
+          "text": "### 子页学习价值\n\n- [应用层协议 \\> DNS运维：DNS记录类型、缓存与变更排障](#/r/b5d7056d-554a-4f78-9d52-8d389b329a75)：掌握核心DNS资源记录的类型编码、适用场景；理解正/负缓存机制与TTL的作用；学会排查DNS变更、域名不存在类故障。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7601563930511475
+        },
+        {
+          "id": "qa_f540bb1665b55963db91a422ffef98752ceef433",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "二、正缓存与负缓存",
+          "text": "## 二、正缓存与负缓存\n\n典型链路是：应用自身缓存 → 操作系统解析服务 → 递归解析器 → 权威服务器。实际系统也可能由浏览器通过 DoH 使用另一台解析器。每层的缓存与刷新接口不同，清除本机缓存不会清除公司 DNS、公共递归服务器或浏览器自己的缓存。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7598109245300293
+        },
+        {
+          "id": "qa_6ff1468b042b2844e130edfa02c155a884fa4e24",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "查询指定递归解析器；观察 Answer、Authority、status 和剩余 TTL",
+          "text": "# 查询指定递归解析器；观察 Answer、Authority、status 和剩余 TTL\ndig @192.0.2.53 www.example.com A\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7595582008361816
+        }
+      ]
+    },
+    {
+      "query": "dig +norecurse 能保证绕过递归解析器的缓存吗？",
+      "conversationId": "78547119-1195-4bbe-b982-96b7747974ec",
+      "messageId": "3793313e-ee33-4d91-8ec0-36690e4901a9",
+      "answer": "不能保证。根据证据：\n1. **+norecurse的作用是清零DNS查询中的递归期望位（RD位）**，并非清除或强制绕过缓存的开关（证据1）；\n2. 若向**递归解析器**发送带`+norecurse`的查询，递归解析器仍会使用自身缓存响应请求，无法绕过其缓存（证据5、7）；\n3. 仅当查询目标是**权威服务器**时，`+norecurse`仅让权威服务器直接返回区域主数据（权威服务器本身不会用缓存存储区域数据），但此场景下并非绕过缓存，而是直接查询权威源数据（证据7）；\n\n因此，`dig +norecurse`无法保证绕过递归解析器的缓存，要获取最新数据需直接查询对应权威服务器。",
+      "citations": [
+        {
+          "id": "qa_0ef5b24f66faeb78bc73d5763aa6cc009c1fd0f3",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "查看委派链路，用于发现父区、子区、胶水地址问题",
+          "text": "# 查看委派链路，用于发现父区、子区、胶水地址问题\ndig example.com NS +trace\n```\n\n`+norecurse` 仅把 RD 位清零，**不是清缓存或强制绕过缓存的开关**。如果目标是一台递归解析器，它仍可能返回已有缓存。要检查权威内容，必须选对实际权威服务器，并检查响应的 `AA` 标志、区域和名称。普通 `dig` 命令本身不维护可供下一次独立调用使用的持久 DNS 缓存，没有通用的 `+nocache` 参数。\n\n`+trace` 显示迭代查询过程，但不等同于应用真实解析路径，也不自动证明每份数据可信。DNSSEC 验证、DoH/DoT 传输加密以及正确查询权威对象是不同层面的措施。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.8384599685668945
+        },
+        {
+          "id": "qa_f9a218ab495717f1cbfe93346d987aa924ea7629",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "直接查询实际权威服务器，并明确不请求递归",
+          "text": "# 直接查询实际权威服务器，并明确不请求递归\ndig @ns1.example.com www.example.com A +norecurse\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.8139704465866089
+        },
+        {
+          "id": "qa_6ff1468b042b2844e130edfa02c155a884fa4e24",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "查询指定递归解析器；观察 Answer、Authority、status 和剩余 TTL",
+          "text": "# 查询指定递归解析器；观察 Answer、Authority、status 和剩余 TTL\ndig @192.0.2.53 www.example.com A\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7912188768386841
+        },
+        {
+          "id": "qa_fa3e14a01e5367825d5f3bb4a444c61aa62b292a",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "同样检查 IPv6 与区域管理信息",
+          "text": "# 同样检查 IPv6 与区域管理信息\ndig @ns1.example.com www.example.com AAAA +norecurse\ndig @ns1.example.com example.com SOA +norecurse\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7783104777336121
+        },
+        {
+          "id": "qa_64d15f8b37a6967f60acba8c117afb7d71db817a",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "六、带解析的自测",
+          "text": "## 六、带解析的自测\n\n1. SOA TTL 为 900、MINIMUM 为 300，一次新的否定回答应按哪个值计算？\n\n  - 按两者较小值 300 秒，随后缓存转发会扣减寿命。不是只看 SOA 的最后一列。\n\n2. `dig @recursive.example www.example.com A +norecurse` 能保证拿到最新权威答案吗？\n\n  - 不能。RD=0 不清缓存；目标递归服务器可能只返回缓存或拒绝处理。应定位并直接查询权威服务器，核对 AA。\n\n3. 原 TTL 为 3600，刚把它改成 60，马上迁移地址是否只需等 60 秒？\n\n  - 不能保证。远端旧缓存可能仍按原剩余寿命存在，需要提前降低并等待旧窗口。\n\n4. 所有 DNS 查询都返回新 IP，为什么客户端仍请求旧 IP？\n\n  - 排查进程自己的解析缓存、代理、hosts、硬编码地址和已经建立的连接；DNS TTL 不终止连接。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7657229900360107
+        },
+        {
+          "id": "qa_f540bb1665b55963db91a422ffef98752ceef433",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "二、正缓存与负缓存",
+          "text": "## 二、正缓存与负缓存\n\n典型链路是：应用自身缓存 → 操作系统解析服务 → 递归解析器 → 权威服务器。实际系统也可能由浏览器通过 DoH 使用另一台解析器。每层的缓存与刷新接口不同，清除本机缓存不会清除公司 DNS、公共递归服务器或浏览器自己的缓存。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.757956862449646
+        },
+        {
+          "id": "qa_7d8d1ffd83612744c0ef31b34af0ad3e3a056bc5",
+          "documentId": "0023abd2-92f3-4d6d-9732-c939876352a4",
+          "title": "DNS命名体系、委派与递归/权威链路",
+          "heading": "4.2 常见故障的诊断思路",
+          "text": "### 4.2 常见故障的诊断思路\n\n- 域名不存在：`dig`返回RCODE=3，需检查父区域的NS记录是否正确，子区域是否已完成委派（父服务器是否存在子域的NS记录）；\n\n- 查询超时：可能是UDP 53端口被防火墙拦截（DNS默认使用UDP，大数据量查询会切换为TCP），或递归服务器不可达；\n\n- Referral不更新：委派的NS记录变更后，需等待DNS缓存刷新（TTL时间，通常为300秒），可通过指定权威服务器地址并使用 `dig +norecurse` 参数发送非递归查询：仅当查询的是权威服务器时，该参数仅设置DNS查询的递归期望位（RD）为0，权威服务器直接存储区域主数据且不会使用自身缓存，因此返回区域中的真实数据；若向递归服务器发送 `dig +norecurse`，递归服务器仍会使用自身缓存响应非递归查询，无法绕过缓存。\n",
+          "version": 2,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7568305134773254
+        },
+        {
+          "id": "qa_6aa4ce5c3038367c58f90e382dadd77b49cfa06e",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "2.1 正缓存的时间线",
+          "text": "### 2.1 正缓存的时间线\n\n假设权威服务器在 12:00 返回 `www.example.com. 3600 IN A 192.0.2.10`。递归解析器此时缓存记录，12:10 再返回时通常附带约 3000 秒的剩余 TTL，而不是重新赋予完整 3600 秒。管理员在 12:15 把权威地址改成 `192.0.2.20`，已缓存旧记录的解析器一般仍可在剩余有效期内返回旧地址。\n\n不同解析器最初缓存的时刻不同，所以不会在一个全球统一时刻切换。某些解析器实施预取、TTL 上下限或故障时提供过期数据的策略；RFC8767 讨论了 serve-stale。TTL 也不能关闭已经建立的 TCP 连接或清空应用连接池。因此“TTL 已到但仍访问旧服务”需要继续检查应用解析路径和连接复用。\n\nTTL 为 0 表示结果不应被常规缓存用于后续查询，但会增加查询量和对 DNS 服务可用性的依赖，不能靠设成 0 获得绝对实时切换。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7504242658615112
+        },
+        {
+          "id": "qa_8aca94e0b94fd2ea3896a2a8e5ef568428bad3b7",
+          "documentId": "5409dee0-445c-4fc6-b812-4e404cd73b8f",
+          "title": "DNS安全：UDP/TCP传输、EDNS与DoT/DoH",
+          "heading": "强制使用TCP查询",
+          "text": "# 强制使用TCP查询\ndig @8.8.8.8 google.com +tcp | grep \"status\"",
+          "version": 2,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7490920424461365
+        },
+        {
+          "id": "qa_def9c12ff04f1883fe82131097d4ec3c7e86b097",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "4.2 缓存定位",
+          "text": "### 4.2 缓存定位\n\n在使用 systemd-resolved 的 Linux 主机上，可用 `resolvectl status` 查看实际 DNS 配置，`resolvectl statistics` 查看统计，`resolvectl flush-caches` 清除该服务的本地缓存。缓存枚举命令随 systemd 版本不同，应先看 `resolvectl --help`，不要假设每台机器都有 `show-cache`。Windows 可使用 `ipconfig /displaydns` 与 `ipconfig /flushdns`。\n\n清缓存前先记录故障答案与 TTL，否则会失去关键证据。清完本机仍看到旧答案时，继续对比指定递归服务器，而不是重复清本机。浏览器、JVM、代理、容器和服务网格还可能各有独立解析路径。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7456755638122559
+        },
+        {
+          "id": "qa_a26cbd127e95deea4fb700fa1209e426b3177b66",
+          "documentId": "b5d7056d-554a-4f78-9d52-8d389b329a75",
+          "title": "DNS记录类型、缓存与变更排障",
+          "heading": "2.2 NXDOMAIN 与 NODATA",
+          "text": "### 2.2 NXDOMAIN 与 NODATA\n\n- **NXDOMAIN**：响应码为 3，表示被查询名称不存在。CNAME 场景下要注意回答描述的最终名称。\n\n- **NODATA**：名称存在，但所问类型不存在；通常为 `NOERROR`、空 Answer，并带有用于否定回答的 SOA。NODATA 不是一种独立响应码。\n\n- **SERVFAIL**：解析失败，可能来自验证失败、上游超时或其他问题；不能把它解释为“名称不存在”。\n\nRFC1034 最初讨论负缓存时有可选语义，RFC2308 后来明确要求缓存解析器实现负缓存，并规定缓存粒度与寿命。不能仅按早期 RFC1034 描述现代实现。\n\n**负缓存初始 TTL = min(SOA 记录自身的 TTL, SOA.MINIMUM)。** 权威服务器在否定回答中携带适当的 SOA；解析器转发已缓存否定回答时应扣减剩余时间。无合适 SOA 的否定回答不应按普通长期负缓存处理。参见 RFC2308 §3、§5。\n\n例如某区域 SOA 记录自身 TTL 为 600 秒，RDATA 中最后一个 `MINIMUM` 为 3600 秒：\n\n```dns\nexample.com. 600 IN SOA ns1.example.com. hostmaster.example.com. (\n  2026092701  ; serial\n  3600        ; refresh\n  600         ; retry\n  1209600     ; expire\n  3600        ; minimum\n)\n```\n\n在此情况下，一次 NXDOMAIN 回答的负缓存初始寿命为 **600 秒**，不是 3600 秒。五分钟后，未受其他实现策略影响的缓存剩余时间约为 **300 秒**。这时即使管理员创建了该名称，已经保存否定结果的解析器仍可能在剩余寿命内回答 NXDOMAIN。现在降低权威服务器上的参数，不会追溯修改远端已经缓存的剩余 TTL。\n",
+          "version": 3,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7444567680358887
+        },
+        {
+          "id": "qa_00cf89f04dd0988e442138038585a1f743412a64",
+          "documentId": "0023abd2-92f3-4d6d-9732-c939876352a4",
+          "title": "DNS命名体系、委派与递归/权威链路",
+          "heading": "3.2 递归查询的完整流程",
+          "text": "### 3.2 递归查询的完整流程\n\n递归查询是客户端最常用的模式，核心角色为**递归解析器**（如本地网络的DNS服务器、ISP提供的解析器），具备以下特点：\n\n1. 主动迭代：收到RD=1的查询后，解析器会自动向根→TLD→子域权威服务器发起顺序查询，无需客户端介入；\n\n2. 缓存加速：解析器会缓存近期查询结果，降低后续查询的延迟；\n\n3. 可选行为：递归服务是**可选协议能力**（RFC1034 §4.3.2），服务器需显式设置RA=1才支持递归，不支持时会返回RA=0的响应。\n\n**推演示例：递归查询的链路观测**\n\nPC设置DNS服务器为`8.8.8.8`（Google公共递归解析器），执行`dig www.example.com`，输出关键信息：\n\n- RESPONSE的RA位为1，说明`8.8.8.8`支持递归；\n\n- ANSWER段直接返回`www.example.com`的A记录（`93.184.216.34`），无Referral段，说明答案由递归解析器从权威服务器获取后返回。\n",
+          "version": 2,
+          "libraryId": "20e776ed-246b-436e-980e-064411e5a309",
+          "publication": 1,
+          "score": 0.7436301708221436
+        }
+      ]
+    }
+  ],
+  "retrieval": {
+    "engine": "hybrid",
+    "evidenceCount": 12
+  },
+  "stream": {
+    "update": true,
+    "done": true,
+    "containsAnswer": true
+  },
+  "feedback": {
+    "saved": true,
+    "count": 1
+  },
+  "mcp": {
+    "tools": [
+      "knowledge_search",
+      "knowledge_ask",
+      "knowledge_answer"
+    ],
+    "answerReadable": true
+  }
+}

@@ -1,0 +1,467 @@
+.knowledge-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+  height: calc(100vh - 170px);
+  max-height: 1000px;
+  border: 1px solid var(--border, #e2e5eb);
+  border-radius: 16px;
+  background: var(--panel, #fff);
+  overflow: hidden;
+}
+.kc-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border, #e2e5eb);
+}
+.kc-header h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.kc-header p {
+  font-size: 12px;
+  color: var(--muted, #697386);
+  margin: 5px 0 0;
+}
+.kc-header > a {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.kc-emblem {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+.kc-emblem.curation {
+  background: #e4f3ec;
+  color: #246b50;
+}
+.kc-emblem.answer {
+  background: #e8eefb;
+  color: #365eaf;
+}
+.kc-layout {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+.kc-threads {
+  width: 170px;
+  flex-shrink: 0;
+  overflow: auto;
+  padding: 12px 8px;
+  background: var(--surface, #f8f9fb);
+  border-right: 1px solid var(--border, #e2e5eb);
+}
+.kc-threads button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  text-align: left;
+  margin-bottom: 5px;
+}
+.kc-threads button.selected {
+  background: var(--panel, #fff);
+  box-shadow: 0 1px 5px #0000000c;
+}
+.kc-threads button span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kc-threads small {
+  color: var(--muted, #697386);
+  font-size: 11px;
+  margin-top: 5px;
+}
+.kc-threads .kc-new {
+  flex-direction: row;
+  gap: 6px;
+  border: 1px solid var(--border, #e2e5eb);
+  margin-bottom: 14px;
+}
+.kc-conversation {
+  min-width: 260px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.kc-messages {
+  padding: 22px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  scroll-behavior: smooth;
+}
+.kc-welcome {
+  text-align: center;
+  max-width: 460px;
+  margin: 50px auto;
+  color: var(--muted, #697386);
+}
+.kc-welcome h3 {
+  color: var(--text, #202938);
+}
+.kc-suggestions {
+  display: grid;
+  gap: 8px;
+  margin-top: 24px;
+}
+.kc-suggestions button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  padding: 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--border, #e2e5eb);
+}
+.kc-message {
+  margin: 0 0 24px;
+  line-height: 1.75;
+}
+.kc-message.user {
+  background: var(--surface, #f5f7fa);
+  padding: 13px 16px;
+  border-radius: 12px;
+  margin-left: 30px;
+}
+.kc-author {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #697386);
+  margin-bottom: 8px;
+}
+.kc-author time {
+  font-weight: 400;
+  font-size: 11px;
+}
+.kc-message.error,
+.kc-error {
+  color: #a13b35;
+}
+.kc-error {
+  padding: 10px 20px;
+  background: #fff2ee;
+}
+.kc-error button {
+  float: right;
+}
+.kc-tool {
+  border: 1px solid var(--border, #e2e5eb);
+  border-radius: 8px;
+  margin: 10px 0;
+  font-size: 12px;
+}
+.kc-tool summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  cursor: pointer;
+}
+.kc-tool summary span {
+  margin-left: auto;
+  color: var(--muted, #697386);
+}
+.kc-tool pre {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  padding: 10px;
+}
+.kc-composer {
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--border, #e2e5eb);
+}
+.kc-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  border: 1px solid var(--border, #cdd3df);
+  border-radius: 12px;
+  padding: 8px;
+}
+.kc-input textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  border: 0;
+  background: transparent;
+  padding: 5px;
+  max-height: 180px;
+  font: inherit;
+  outline: 0;
+}
+.kc-input button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+.kc-composer > small {
+  display: block;
+  color: var(--muted, #697386);
+  font-size: 11px;
+  margin-top: 8px;
+}
+.kc-activity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.kc-activity button {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.kc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 100%;
+  background: #328d6b;
+}
+.kc-assets {
+  width: 280px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border, #e2e5eb);
+  overflow: auto;
+  padding: 14px;
+}
+.kc-publication {
+  display: grid;
+  gap: 8px;
+  background: var(--surface, #f7f9fb);
+  padding: 13px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+.kc-publication small {
+  color: var(--muted, #697386);
+}
+.kc-assets nav {
+  display: flex;
+  gap: 3px;
+}
+.kc-assets nav button {
+  flex: 1;
+  border: 0;
+  padding: 8px 4px;
+  background: transparent;
+  font-size: 12px;
+}
+.kc-assets nav button[aria-pressed="true"] {
+  border-bottom: 2px solid #348269;
+}
+.kc-entry {
+  padding: 13px 0;
+  border-bottom: 1px solid var(--border, #e2e5eb);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.kc-entry strong,
+.kc-entry small {
+  display: block;
+}
+.kc-entry small {
+  color: var(--muted, #697386);
+  margin: 5px 0;
+}
+.kc-entry a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.kc-entry details {
+  margin: 8px 0;
+}
+.kc-entry dl div {
+  display: flex;
+  justify-content: space-between;
+}
+.kc-citations {
+  font-size: 12px;
+  border-top: 1px solid var(--border, #e2e5eb);
+  padding-top: 10px;
+}
+.kc-citations details {
+  margin: 8px 0;
+}
+.kc-citations summary {
+  cursor: pointer;
+}
+.kc-votes {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+.kc-votes button {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--muted, #697386);
+  font-size: 12px;
+}
+.kc-votes button[aria-pressed="true"] {
+  color: #26815d;
+}
+.kc-votes small {
+  font-size: 11px;
+  color: var(--muted, #697386);
+}
+@media (max-width: 1100px) {
+  .kc-assets {
+    width: 230px;
+  }
+  .kc-threads {
+    width: 135px;
+  }
+}
+@media (max-width: 800px) {
+  .kc-layout {
+    flex-wrap: wrap;
+    overflow: auto;
+  }
+  .kc-threads {
+    width: 100%;
+    display: flex;
+    max-height: 65px;
+    border-right: 0;
+  }
+  .kc-threads button {
+    min-width: 120px;
+    margin: 0 4px;
+  }
+  .kc-conversation {
+    min-height: 450px;
+    width: 100%;
+  }
+  .kc-assets {
+    width: 100%;
+    border-left: 0;
+    border-top: 1px solid var(--border, #e2e5eb);
+  }
+  .kc-header {
+    padding: 12px;
+  }
+  .knowledge-chat {
+    height: auto;
+    max-height: none;
+  }
+  .kc-messages {
+    max-height: 60vh;
+  }
+  .kc-header > a {
+    font-size: 11px;
+  }
+}
+
+.knowledge-embedded {
+  height: 100vh;
+  padding: 0;
+}
+.knowledge-embedded .knowledge-chat {
+  height: 100vh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+.knowledge-list-heading {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 24px;
+}
+.knowledge-advanced {
+  margin-top: 18px;
+}
+.knowledge-advanced > summary {
+  cursor: pointer;
+  color: var(--muted, #697386);
+  padding: 10px;
+}
+
+.kc-tool-body {
+  padding: 0 12px 12px;
+  max-height: 480px;
+  overflow: auto;
+}
+.kc-tool-body > details {
+  margin-top: 12px;
+  color: var(--muted, #697386);
+}
+.kc-source-controls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.kc-source-controls button {
+  font-size: 11px;
+  padding: 5px 7px;
+}
+.knowledge-chat .kc-composer {
+  display: block;
+  flex-shrink: 0;
+  padding: 12px 18px 16px;
+  margin: 0;
+  width: auto;
+}
+.knowledge-chat .kc-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.knowledge-chat .kc-input textarea {
+  width: 100%;
+  min-height: 52px;
+  height: 52px;
+  max-height: 160px;
+  border: 0;
+  padding: 5px;
+  box-shadow: none;
+}
+.knowledge-chat .kc-messages .markdown-preview {
+  min-height: 0;
+}
+.knowledge-chat .kc-tool summary {
+  font-weight: 400;
+}
+.knowledge-chat .markdown-body {
+  padding: 0;
+  margin: 0;
+  min-height: 0;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.knowledge-chat .markdown-body > p:first-child {
+  margin-top: 0;
+}
+.knowledge-chat .markdown-body > p:last-child {
+  margin-bottom: 0;
+}
+.knowledge-chat .preview-pane {
+  min-height: 0;
+}

@@ -672,6 +672,24 @@ export async function registerSearchEmbeddings(
   }
   return {
     assertIdle,
+    async replicaEmbedders(remote: Record<string,any>) {
+      const c=await config(),models=await aiConfig(db);
+      const bindings=await db.selectFrom("search_embedding_models").selectAll().where("endpoint","=",c.endpoint).where("index_name","=",c.index_name).where("applied","=",1).execute();
+      const result:Record<string,unknown>={};
+      for(const [name,value] of Object.entries(remote)) {
+        const binding=bindings.find(x=>x.embedder_name===name),model=binding&&models.models.find(x=>x.id===binding.model_id);
+        if(model) {
+          const issue=embeddingModelIssue(models,model);if(issue)fail(503,issue);
+          // GET /settings redacts apiKey. Reconstruct from the trusted host binding;
+          // never send the host credential to a URL supplied by remote settings.
+          result[name]={...embeddingSettings(model),documentTemplate:binding!.document_template??value.documentTemplate,documentTemplateMaxBytes:binding!.document_template_max_bytes??value.documentTemplateMaxBytes};
+        } else {
+          if(value.apiKey)fail(503,"独立索引需要在 Doca 中绑定对应向量模型，不能复制远端脱敏凭据");
+          result[name]=value;
+        }
+      }
+      return result;
+    },
     refreshStatus: async () => status(await config()),
     async queryEmbedder() {
       const c = await config();

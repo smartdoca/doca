@@ -14,6 +14,7 @@ const notImplemented = async (): Promise<never> => {
 it("defines the storage-independent files v1 interface", () => {
   const service = defineFilesServiceV1({
     version: 1,
+    receipts: { get: notImplemented },
     folders: {
       create: notImplemented,
       get: notImplemented,

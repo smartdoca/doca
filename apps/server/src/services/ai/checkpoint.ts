@@ -28,3 +28,18 @@ export function completeExchanges(messages: any[]): boolean {
   }
   return messages.length > 0 && [...calls].every((id) => results.has(id));
 }
+
+/** File/image receipts carry IDs too, but they are not editor documents. */
+export function recoveredDocumentArtifacts(
+  receipts: { id?: string; resourceId?: string; kind?: string }[],
+  artifacts: string[] = [],
+): string[] {
+  const isDocument = (receipt: (typeof receipts)[number]) =>
+    receipt.kind === "document" || receipt.kind === "library" ||
+    receipt.kind === "image_insert" || (!receipt.kind && !!receipt.resourceId);
+  const nonDocuments = new Set(receipts.filter(r => !isDocument(r)).flatMap(r => [r.id, r.resourceId].filter((id): id is string => !!id)));
+  return [...new Set([
+    ...receipts.filter(isDocument).map(r => r.resourceId ?? r.id),
+    ...artifacts,
+  ].filter((id): id is string => typeof id === "string" && !!id && !nonDocuments.has(id)))];
+}

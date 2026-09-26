@@ -207,9 +207,7 @@ it("only treats same-sentence document persistence claims as delivery, and honor
   ])
     expect(unverifiedDocumentDelivery(text, false)?.verdict).toBe("revise");
   expect(documentDeliveryDeclined(["把这条随手记转成文字发我"])).toBe(false);
-  expect(documentDeliveryDeclined(["把随手记内容发我，不需要文档"])).toBe(
-    true,
-  );
+  expect(documentDeliveryDeclined(["把随手记内容发我，不需要文档"])).toBe(true);
   expect(documentDeliveryDeclined(["谢谢", "不用创建文档，直接发我"])).toBe(
     true,
   );
@@ -223,7 +221,9 @@ it("only treats same-sentence document persistence claims as delivery, and honor
 
 it("rejects folder rename claims without a folder tool receipt", () => {
   expect(
-    folderMutationRequested("把「猫猫」文件夹改成什么名字？也可以自定义输入\n我的选择：可爱猫猫"),
+    folderMutationRequested(
+      "把「猫猫」文件夹改成什么名字？也可以自定义输入\n我的选择：可爱猫猫",
+    ),
   ).toBe(true);
   expect(folderMutationRequested("帮我把猫猫文件夹改名")).toBe(true);
   expect(folderMutationRequested("看看猫猫文件夹里有什么")).toBe(false);
@@ -233,9 +233,7 @@ it("rejects folder rename claims without a folder tool receipt", () => {
       "把「猫猫」文件夹改成什么名字？也可以自定义输入",
     ]),
   ).toBe(true);
-  expect(
-    folderMutationRequested("改成中文吧", ["把这段翻译一下"]),
-  ).toBe(false);
+  expect(folderMutationRequested("改成中文吧", ["把这段翻译一下"])).toBe(false);
   expect(
     unverifiedFolderDelivery(
       "我的文件夹 / 可爱猫猫（原「猫猫」文件夹，改名成功）",
@@ -280,8 +278,7 @@ it("rejects folder rename claims without a folder tool receipt", () => {
 });
 
 it("finds an existing file instead of copying it, and requires a card", () => {
-  const ask =
-    "需要武汉大学品牌声誉深度分析报告.pdf（2 份相同副本）";
+  const ask = "需要武汉大学品牌声誉深度分析报告.pdf（2 份相同副本）";
   expect(fileCopyRequested(ask)).toBe(false);
   expect(fileSendRequested(ask)).toBe(true);
   expect(fileCopyRequested("把这个 pdf 复制到我的文件夹")).toBe(true);
@@ -302,11 +299,13 @@ it("finds an existing file instead of copying it, and requires a card", () => {
       false,
     )?.verdict,
   ).toBe("revise");
+  expect(unverifiedFileDelivery(ask, "已找到该文件。", true)).toBeNull();
   expect(
-    unverifiedFileDelivery(ask, "已找到该文件。", true),
-  ).toBeNull();
-  expect(
-    unverifiedFileDelivery("把这个文件再发给我一下", "没有找到这个文件。", false),
+    unverifiedFileDelivery(
+      "把这个文件再发给我一下",
+      "没有找到这个文件。",
+      false,
+    ),
   ).toBeNull();
 });
 
@@ -323,9 +322,7 @@ it("does not treat research questions as folder-create requests", () => {
   expect(folderMutationRequested("调研一下竞品方案怎么做")).toBe(false);
   expect(folderMutationRequested("成熟做法是如何创建文件夹的")).toBe(false);
   expect(folderMutationRequested("帮我创建一个文件夹叫调研资料")).toBe(true);
-  expect(
-    unverifiedFolderDelivery("创建文件夹并完成调研", false),
-  ).toBeNull();
+  expect(unverifiedFolderDelivery("创建文件夹并完成调研", false)).toBeNull();
   expect(
     unverifiedFolderDelivery("思考：将创建文件夹一张审批", false),
   ).toBeNull();
@@ -344,4 +341,51 @@ it("does not treat spreadsheet image insert as finished without image_insert", (
   ).toBe(
     "图片尚未写入表格。请调用 image_insert，必须传 assetId、resourceId、sheetId、row、column。",
   );
+});
+
+it("keeps contradictory acceptance checks unresolved", () => {
+  const review = report("pass");
+  review.checks.push({
+    ...review.checks[0]!,
+    passed: false,
+    evidence: "缺少方法章节",
+  });
+  expect(missingReviewCriteria(["方法章节"], review)).toEqual(["方法章节"]);
+});
+
+it.each([
+  ["不用创建文档，还是保存成文档吧", false],
+  ["保存成文档吧，不用创建文档了", true],
+])("honors the latest decision within a user turn: %s", (text, declined) => {
+  expect(documentDeliveryDeclined([text])).toBe(declined);
+});
+
+it.each([
+  "把这个文件复制到资料文件夹",
+  "把这个文件移动到资料文件夹",
+  "把这个文件改名为报告.pdf",
+])("does not confuse file mutation with sending: %s", (text) => {
+  expect(fileSendRequested(text)).toBe(false);
+});
+
+it.each(["已将文档改名为季度报告。", "已将幻灯片标题重命名为项目进展。"])(
+  "does not demand a folder receipt for document edits: %s",
+  (text) => {
+    expect(unverifiedFolderDelivery(text, false)).toBeNull();
+  },
+);
+
+it("requires a receipt for a claimed folder move", () => {
+  expect(
+    unverifiedFolderDelivery("已移动文件夹到归档目录。", false)?.verdict,
+  ).toBe("revise");
+});
+
+it("distinguishes moving a file into a folder from moving the folder", () => {
+  expect(
+    unverifiedFolderDelivery("已将报告.pdf移入文件夹。", false),
+  ).toBeNull();
+  expect(
+    unverifiedFolderDelivery("已把资料文件夹移到归档目录。", false)?.verdict,
+  ).toBe("revise");
 });

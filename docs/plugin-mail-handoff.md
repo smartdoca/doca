@@ -14,7 +14,7 @@ Doca 不提供插件数据库、任意 SQL、键值业务存储或插件凭证�
 
 ### HTTP：`@doca/plugin-sdk/platform`
 
-`httpServiceToken.register(pluginId, routes)` 的路径为 `/api/v1/plugins/<pluginId>/...`。默认路由仍要求有效用户会话，支持 admin 限制。请求新增 `headers` 和精确 `rawBody: Uint8Array`，请求体上限 1 MiB。handler 第二个参数支持 `status(code)`、`header(name, value)` 和 `redirect(location, code)`；重定向默认 303。
+`httpServiceToken.register(pluginId, routes)` 的路径为 `/api/v1/plugins/<pluginId>/...`。默认路由仍要求有效用户会话，支持 admin 限制。请求新增 `headers` 和精确 `rawBody: Uint8Array`，请求体默认上限 1 MiB，可按路由指定 bodyLimit，最大 32 MiB。handler 第二个参数支持 `status(code)`、`header(name, value)` 和 `redirect(location, code)`；重定向默认 303。
 
 外部回调声明 `auth: "external"`，必须提供 `verify(request)`。返回 true 才调用 handler；失败为 401。此时 `principal` 明确为 null，不借用浏览器已有登录身份。只有该路由免于宿主的浏览器 Origin 写入校验，Host 校验仍执行。OAuth 的一次性 state、过期、PKCE 和绑定用户保存在插件数据库，由 verify 原子消费；webhook 使用 rawBody 校验签名并自行防重放。
 
@@ -48,7 +48,23 @@ await http.register(id, [{
 
 调用 `files.content.read(context, {fileId, bindingId})` 可读取字节；`resolveContent` / `resolveDownload` 支持同一 bindingId，返回宿主 `/api/v1/plugin-file-bindings/<bindingId>/content` 地址。浏览器下载时宿主重新校验账号、绑定、当前注册的授权器和文件未删除状态。插件停用、撤销共享、解绑均不能继续下载。该路径不改变原文件 ACL；不传 bindingId 仍按原文件权限读取。
 
-宿主文件服务是受控产品能力，不是开放数据库或对象存储路径。
+宿主文件服务是受控产品能力，不是开放数据库或对象存储路径。文件/文件夹创建现已支持持久 idempotencyKey；绑定已有元组幂等。上传完成返回 contentIdentity，邮箱将它与稳定业务操作键保存到自己的 outbox，再调用创建。重启丢失 uploadId 时重新上传相同内容即可继续；completed 重放返回同一结果，异参为 409，删除/撤权后不会重建或继续返回历史结果。详见 [SDK 契约第 7.1 节](plugin-sdk-contract.md#71-文件创建持久幂等)。
+
+```ts
+const completed = await files.uploads.complete(ctx, { uploadId });
+// 先在邮箱自己的 outbox 持久化 operationKey、目标目录、名称和 contentIdentity。
+const file = await files.files.create(ctx, {
+  uploadId: completed.id, folderId, name,
+  idempotencyKey: operationKey,
+  contentIdentity: completed.contentIdentity,
+});
+// 响应丢失或重启后的查询：
+const receipt = await files.receipts.get(ctx, {
+  operation: "file.create", key: operationKey,
+});
+```
+
+回执不自动过期；pending 可以按原参数重试，completed 返回第一次结果快照。备用对象与中断临时文件已由宿主自动回收，和上传重试互斥并校验对象引用；邮箱侧仍保存自己的操作意图。
 
 ### 用户与事件：`@doca/plugin-sdk/platform`
 
@@ -70,7 +86,7 @@ await http.register(id, [{
 
 公开 knowledgeSourceRegistryToken（knowledge.sources.v1）以及配置、preview、pull、record/cursor 契约；来源 ownerPlugin 必须为本插件，注册随生命周期释放。知识契约包已纳入独立 JS/d.ts 构建，消除跨包源码导入。
 
-注意：当前宿主的通用来源注册不等于知识库自动订阅已经接通。插件来源持久订阅、pull 调度、游标提交、撤权后的索引清理和知识 UI 还需单独实现验收；邮箱不能据此宣称已支持自动知识同步。
+注意：当前宿主的通用来源注册不等于知识库自动订阅已经接通。宿主负责插件来源的知识订阅持久模型、pull 调度、订阅游标提交、撤权后的派生索引清理和知识 UI，仍需单独实现验收；插件负责账号、凭证、业务同步及授权事实；邮箱不能据此宣称已支持自动知识同步。
 
 ### Web：`@doca/plugin-sdk/web`
 
@@ -86,8 +102,54 @@ await http.register(id, [{
 
 已经验证独立安装、外部回调的签名/状态拒绝与可信重定向、原始请求体、Host 约束，以及附件共享/撤销/原 ACL 不变。插件仍需自己的数据库恢复、邮件协议、OAuth 服务商、发送幂等与实际业务权限集成测试。宿主单元测试不能替代邮箱端到端验收。
 
-## 本次验证
+## 2026-09-26 已有验证记录
+
+以下是此前实现验证记录，本次需求文档调整未重新运行这些测试，也不代表完整邮箱 tgz 离线验收已通过。
 
 129 个测试文件通过，819 项通过、1 项跳过。SDK 已构建为 JS/d.ts，并通过仓库外独立安装及各公共入口导入验证；Web 构建通过。邮箱端需安装本次构建的包，不能继续使用之前缓存的 0.1.0 产物；当前未发布 npm。
 
 本次本地构建包位于 Doca `.local/plugin-sdk-artifacts/2026-09-26/`，包含 plugin-sdk、plugin-contracts、files-capability、search-host、knowledge-capability、web-plugin-registry 六个 tgz。发布前在邮箱项目的 pnpm-workspace.yaml 为这六个 `@doca/<name>` 配置 overrides，指向对应 tgz 的绝对 `file:` 路径，再添加 SDK 依赖。这样传递依赖也来自同一批产物，不会访问尚未发布的 npm 版本或误用旧缓存。正式发布后移除本地 overrides，改用匹配的发布版本。
+
+## 调整后的接入需求与验收顺序
+
+以下是待实施或待完整验收的要求，不是新增 SDK 导出。通用边界以 [SDK 契约第 7 节及第 13 节](plugin-sdk-contract.md) 为准。
+
+| 分级 | 需求 | 完成标准 |
+| --- | --- | --- |
+| 已实现，待邮箱接入 | 文件/文件夹创建持久幂等 | 同键并发、响应丢失及重启重试返回同一结果；异参冲突、权限复核、保留期限和故障恢复明确；插件邮件发送幂等仍独立负责 |
+| 优先明确 | search.v1 与知识归属 | search.v1 是共享基础能力；插件内、全局、AI 入口独立启用。宿主管知识订阅和派生索引，插件管外部业务及授权事实 |
+| 交付门槛 | 实际 tgz 离线集成验收 | 仓库外使用宿主交付物、SDK、邮箱插件及完整依赖闭包；无源码链接、无未声明缓存、无包仓库访问；完成启动、Web 加载和业务端到端验证 |
+| 交付/升级基础 | 禁用、卸载、保留数据及兼容声明 | 首次交付明确停任务、来源不可用及保留数据；首次升级前验证数据兼容、迁移和回滚条件，管理 UI 可后置 |
+| 按产品承诺 | 外部知识自动订阅 | 若首版承诺邮件自动同步知识库，须交付持久订阅、调度、批次/游标一致性、重启恢复、来源删除及撤权立即不可检索；独立副本另行定义 |
+| 按产品承诺 | 全局联邦搜索 | 若首版承诺全局搜索邮件，须接通 endpoint、来源选择、排序分页、超时/部分失败、UI 和 renderer 降级；不自动开启 AI 来源 |
+| 随账号删除功能 | 用户删除生命周期与异步清理 | 宿主持久协调撤权、插件清理确认及完成状态；覆盖停用/卸载/故障插件；超时不算成功，不采用分布式两阶段提交 |
+| 随移动端免发版需求 | 动态 WebView shell | 短期一次性 ticket 兑换受限会话，限制来源/导航及最小原生桥；当前原生构建模式仍为首版边界 |
+
+完整 tgz 验收需覆盖空插件、单插件及组合、缺失依赖、版本冲突、权限撤销、实例隔离、重试、重启恢复、禁用/卸载保留数据及升级恢复。外部邮件/OAuth 服务可使用测试服务；真实服务商兼容测试由邮箱插件另行负责。测试只能使用隔离数据库、用户和文档，保留包版本、校验和、锁文件及测试结果作为验收证据。
+
+后续增加默认插件数据目录（不托管数据库）、脱敏结构化日志、健康状态和最近任务错误、后台任务及 outbox backlog 管理页。任务状态通过插件公开接口提供，宿主不直读插件数据库。显式清除数据与卸载分离，需明确范围和确认；不得误删共享附件。
+
+不做通用插件 SQL/data.v2、跨插件数据库分布式事务、默认开放所有来源给 AI，以及在原生进程动态执行 npm 插件代码。
+
+## 通知补充
+
+已公开 notificationsServiceToken（notifications.v1），提供幂等 publish 和 withdraw。插件注册业务资源的 notification.read 授权器，宿主在发布、展示、未读数和点击时复核；停用或撤权后隐藏。点击通过鉴权端点跳转站内 path。后台任务另可使用 users.status(userId) 即时复核账号状态。具体字段见插件开发规范；这不表示系统邮件或移动端推送已支持。
+
+## 2026-09-27 文件幂等及包验证增量
+
+文件/文件夹幂等已实现。相关 6 个测试文件、18 项测试通过，覆盖同键并发、异参冲突、复制、关闭数据库后重放、上传状态丢失、字节写入后提交失败恢复、插件作用域隔离、删除结果和账号停用。本轮文件改动的 TypeScript 检查及 SDK JS/d.ts 构建曾通过；最终复核时，同时变动的 knowledge/subscriptions.ts 出现 subscribeKnowledgeSource/persist 递归返回类型推断错误（TS7023），当前仓库类型检查未通过。当前全量结果为 131 个文件通过、1 个失败，839 项通过、1 项失败、1 项跳过；失败为 knowledge-records 中机器人成员检索已发布知识返回空列表，单独复跑亦失败，不能记为全量通过。
+
+新 SDK 六包及当前邮箱 0.2.0 的实际 tgz、哈希和安装日志位于 `.local/plugin-sdk-artifacts/2026-09-27/`，此前同版本包必须替换。邮箱包取自现有 dist，未修改邮箱源码，也未宣称已接入新增幂等协议。首次离线安装发现依赖未缓存；随后联网准备了专用 pnpm store，再删除 node_modules，从空目录用 offline + frozen-lockfile 重装，56 包复用、0 下载。此验证使用明确准备的缓存，不能据此声称只靠六个 SDK tgz 即可完整离线部署；交付必须同时携带匹配锁文件和依赖 store。
+
+`scripts/verify-mail-package.ts <安装目录>` 验证实际包扫描、启动、认证 status、Web JS 资源响应、关闭后禁用/重新启用，以及独立 mail.sqlite 保留。安装目录中的邮箱没有源码符号链接。验证运行宿主源码，尚不是宿主生产交付物的完全离线验收；没有浏览器渲染、真实收发、OAuth 提供商、附件 outbox 或不同版本迁移/回滚验收。升级和卸载约定仍按部署文档执行，不把同版本重新启动当作升级测试。
+
+
+## 2026-09-27 邮箱 0.3.0 接入验收（最新）
+
+本节覆盖前面的历史未完成记录。新增 notifications.v1、users.status、路由 bodyLimit；文件暂存对象已支持保守定时回收。插件目录可在 `.env` 设置 DOCA_PLUGINS_DIR；缺失、空白回退 `${DOCA_DATA_DIR:-./data}/plugins`，重启生效。
+
+已接手相邻 doca-mail 并接入持久附件意图、文件夹/文件幂等、绑定授权、收件箱 UID 游标、通知 outbox 与深链接、发送去重及后台账号复核。数据库由插件自己管理，支持版本 1→2 迁移并拒绝未来版本；未知发送结果不自动重发。SDK 六包更新到 `.local/plugin-sdk-artifacts/2026-09-27-mail/`，不要混用之前同版本包。
+
+实际邮箱 tgz 在仓库外安装，第三方依赖来自明确准备的离线 store，邮箱没有源码符号链接。隔离 IMAP/SMTP 端到端已覆盖收件、正文、并发附件导入和下载、发送重放、重启游标及通知恢复、账号撤权和禁用保留数据。浏览器已验证通知打开对应正文、侧栏入口和列表；修复了宿主模块导入时提前缓存插件导航的问题。
+
+邮箱类型检查、构建和包校验通过，7 个测试文件、18 项通过；宿主插件专项 4 个文件、8 项通过。详细范围见相邻邮箱仓库 `docs/DOCA_CONTRACT_ACCEPTANCE.md`。不将本次使用宿主源码的验证描述为生产宿主交付物/Docker 完全离线验收，也未测试真实服务商 OAuth、真实邮件投递或数据库降级恢复演练。全局邮件搜索、自动知识订阅、用户删除协调和动态 Mobile 仍按产品承诺另行验收。

@@ -14,7 +14,7 @@ export interface InstalledPlugin {
   readonly web?: { readonly root: string; readonly entry: string };
 }
 export function pluginDirectory() {
-  return path.resolve(process.env.DOCA_PLUGINS_DIR ?? path.join(process.env.DOCA_DATA_DIR ?? "./data", "plugins"));
+  return path.resolve(process.env.DOCA_PLUGINS_DIR?.trim() || path.join(process.env.DOCA_DATA_DIR?.trim() || "./data", "plugins"));
 }
 export async function packageFile(root: string, entry: string): Promise<string> {
   if (typeof entry !== "string" || !entry.startsWith("./") || entry.includes("\\"))

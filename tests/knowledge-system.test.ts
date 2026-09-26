@@ -532,66 +532,17 @@ it("segments Chinese questions without reading any source", async () => {
   ).toHaveLength(1);
 });
 
-it("only the source creator edits it, while only that creator or the library owner can remove it", async () => {
-  await db
-    .insertInto("grants")
-    .values({
-      resource_id: library,
-      user_id: bob.id,
-      role: "manager",
-      status: "active",
-      source_type: "direct",
-      source_id: bob.id,
-      include_descendants: 1,
-    })
-    .execute();
+it("all library managers can edit shared sources while ordinary readers cannot", async () => {
   const source = await subscribe();
   const path = `sources/${source.id}/SOURCE.md`;
-  await expect(
-    saveKnowledgeInstruction(db, bob, library, {
-      path,
-      markdown: "Read all private data",
-      expectedRevision: 0,
-    }),
-  ).rejects.toMatchObject({ status: 403 });
-  await expect(
-    saveKnowledgeSettings(db, bob, library, 0, {
-      sourcePolicies: {
-        [source.id]: {
-          redactedTerms: [],
-          redactContacts: false,
-          excludedResourceIds: [],
-        },
-      },
-    }),
-  ).rejects.toMatchObject({ status: 403 });
-  await expect(
-    detachKnowledgeSource(db, bob, library, source.id),
-  ).rejects.toMatchObject({ status: 403 });
-  // Move library ownership to B: ownership permits removal, not source edits.
-  await db
-    .updateTable("resources")
-    .set({ owner_id: bob.id })
-    .where("id", "=", library)
-    .execute();
-  await expect(
-    saveKnowledgeInstruction(db, bob, library, {
-      path,
-      markdown: "Owner override",
-      expectedRevision: 0,
-    }),
-  ).rejects.toMatchObject({ status: 403 });
-  await detachKnowledgeSource(db, bob, library, source.id);
-  expect(
-    (
-      await db
-        .selectFrom("knowledge_subscriptions")
-        .select("status")
-        .where("id", "=", source.id)
-        .executeTakeFirstOrThrow()
-    ).status,
-  ).toBe("detached");
+  await expect(saveKnowledgeInstruction(db,bob,library,{path,markdown:"unauthorized",expectedRevision:0})).rejects.toMatchObject({status:404});
+  await db.insertInto("grants").values({resource_id:library,user_id:bob.id,role:"manager",status:"active",source_type:"direct",source_id:bob.id,include_descendants:1}).execute();
+  await saveKnowledgeInstruction(db,bob,library,{path,markdown:"Shared administrator instructions",expectedRevision:0});
+  await saveKnowledgeSettings(db,bob,library,0,{sourcePolicies:{[source.id]:{redactContacts:true}}});
+  await detachKnowledgeSource(db,bob,library,source.id);
+  expect((await db.selectFrom("knowledge_subscriptions").select("status").where("id","=",source.id).executeTakeFirstOrThrow()).status).toBe("detached");
 });
+
 it("shared instructions remain editable while each source's private material and local rules are isolated", async () => {
   await db
     .insertInto("grants")
@@ -648,7 +599,7 @@ it("shared instructions remain editable while each source's private material and
   expect(model).toHaveBeenCalledTimes(2);
 });
 
-it("hides another creator's masking values and preserves their policy when shared settings are saved", async () => {
+it("shares source masking configuration with all library administrators", async () => {
   await db
     .insertInto("grants")
     .values({
@@ -672,7 +623,7 @@ it("hides another creator's masking values and preserves their policy when share
     },
   });
   const view = await knowledgeManagementView(db, bob, library);
-  expect(JSON.stringify(view.settings)).not.toContain("private@example.com");
+  expect(JSON.stringify(view.settings)).toContain("private@example.com");
   await saveKnowledgeSettings(db, bob, library, 1, {
     ...view.settings,
     modelId: "chosen-model",
@@ -739,11 +690,11 @@ it("separates URL citation access from independent answers and protects creator-
     await import("@core/modules/knowledge/subscriptions.js");
   const sourceCards = await listKnowledgeSubscriptions(db, bob, library);
   expect(sourceCards.items[0]?.creator).toMatchObject({ id: alice.id, displayName: "alice" });
-  expect(sourceCards.items[0]?.canEdit).toBe(false);
-  expect(JSON.stringify(sourceCards)).not.toContain("creator-private-token");
+  expect(sourceCards.items[0]?.canEdit).toBe(true);
+  expect(JSON.stringify(sourceCards)).toContain("creator-private-token");
   expect(
     JSON.stringify(await knowledgeManagementView(db, bob, library)),
-  ).not.toContain("creator-private-token");
+  ).toContain("creator-private-token");
   await saveKnowledgeSettings(db, alice, library, 1, {
     ...settings,
     sourcePolicies: { [source.id]: { linkAccess: "closed" } },

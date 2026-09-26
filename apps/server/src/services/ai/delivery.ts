@@ -30,16 +30,15 @@ export function missingReviewCriteria(
   criteria: string[],
   review: DeliveryReview,
 ) {
-  return criteria.filter(
-    (criterion, index) =>
-      !review.checks.some(
-        (check) =>
-          check.passed &&
-          (check.criterionIndex === index ||
-            (check.criterionIndex === undefined &&
-              check.requirement.trim() === criterion.trim())),
-      ),
-  );
+  return criteria.filter((criterion, index) => {
+    const checks = review.checks.filter(
+      (check) =>
+        check.criterionIndex === index ||
+        (check.criterionIndex === undefined &&
+          check.requirement.trim() === criterion.trim()),
+    );
+    return !checks.length || checks.some((check) => !check.passed);
+  });
 }
 
 // Text is not evidence that a side effect happened. Check claims even for tasks
@@ -124,8 +123,11 @@ export function documentDeliveryDeclined(userTexts: string[]): boolean {
   const decline =
     /(?:不需要|不用|不要|无需|无须|不必|不再|别|取消)[^。！？\n]{0,10}(?:文档|文件)|(?:文档|文件)[^。！？\n]{0,6}(?:不需要|不用|不要|没必要|算了)|(?:don't|do not|no need to)[^.!?\n]{0,20}(?:document|file)/i;
   for (const text of userTexts) {
-    if (decline.test(text)) return true;
-    if (request.test(text)) return false;
+    // Within a turn, the last decisive clause wins as well.
+    for (const clause of text.split(/[，,。！？;；\n]/).reverse()) {
+      if (decline.test(clause)) return true;
+      if (request.test(clause)) return false;
+    }
   }
   return false;
 }
@@ -186,7 +188,9 @@ function directFolderMutation(text: string) {
     )
   )
     return true;
-  return /我的选择：/.test(text) && /(?:名字|名称|改名|重命名|文件夹)/.test(text);
+  return (
+    /我的选择：/.test(text) && /(?:名字|名称|改名|重命名|文件夹)/.test(text)
+  );
 }
 
 function renameFollowUp(text: string) {
@@ -259,8 +263,8 @@ export function fileCopyRequested(text: string) {
 export function fileSendRequested(text: string) {
   const t = text.trim();
   if (!t) return false;
-  if (/文件卡片|把这个文件|再发给我|发给我一下/.test(t)) return true;
   if (fileCopyRequested(t)) return false;
+  if (/文件卡片|再发给我|发给我一下/.test(t)) return true;
   if (/(?:写|起草|生成|制作|总结|摘要)/.test(t) && !/(?:找|发给|卡片)/.test(t))
     return false;
   return /(?:需要|找|查找|搜索|发给我|发我).{0,80}[\w\u4e00-\u9fff ._-]{0,80}\.(?:pdf|docx|xlsx|pptx|png|jpe?g|webp|zip)/i.test(
@@ -341,8 +345,13 @@ export function unverifiedFolderDelivery(
         ),
     );
   const claim =
-    /(?:已|已经|本次|这次)[^。！？\n]{0,40}(?:改名|重命名|创建文件夹|新建文件夹)|(?:改名|重命名|创建文件夹)(?:成功|完成|完毕)|(?:改名|重命名)完成|folder rename is complete|(?:renamed|created)\s+(?:the\s+)?folder|\brenamed to\b/i;
-  if (!sentences.some((s) => claim.test(s))) return null;
+    /(?:已|已经|本次|这次)[^。！？\n]{0,40}(?:改名|重命名|创建文件夹|新建文件夹|移动文件夹|文件夹[^。！？\n]{0,20}(?:移动|移入|移到))|(?:改名|重命名|创建文件夹)(?:成功|完成|完毕)|(?:改名|重命名)完成|folder rename is complete|(?:renamed|created)\s+(?:the\s+)?folder|\brenamed to\b/i;
+  if (
+    !sentences.some(
+      (s) => claim.test(s) && /文件夹|目录|\bfolder\b|\brenamed to\b/i.test(s),
+    )
+  )
+    return null;
   return {
     verdict: "revise",
     summary:

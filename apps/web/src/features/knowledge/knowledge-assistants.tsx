@@ -1,3 +1,5 @@
+import { KnowledgeChat } from "./knowledge-chat.js";
+import { Bot } from "lucide-react";
 import Preview from "@web/features/documents/markdown-preview.js";
 import { useEffect, useState } from "react";
 import { api, roleRank } from "@web/shared/api.js";
@@ -123,7 +125,7 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
   return (
     <section className="library-system knowledge-assistants">
       <header>
-        <h2>{t("knowledge.assistants")}</h2>
+        <a href="#/libraries">{t("studio.documents")}</a>
         <p>{t("knowledge.assistantsHint")}</p>
       </header>
       {error && <Feedback tone="error" message={error} />}
@@ -332,103 +334,9 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
           {t("knowledge.acceptInvitation")}
         </button>
       )}
-      {bot?.enabled && !bot.invitationPending && (
-        <form
-          className="knowledge-question"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void work(async () => {
-              setFullText(undefined);
-              await api(`/knowledge/assistants/${selected}/visit`, "POST", {});
-              setAnswer(
-                await api(
-                  "/knowledge/assistants/" + selected + "/ask",
-                  "POST",
-                  { query },
-                ),
-              );
-            });
-          }}
-        >
-          <input
-            required
-            maxLength={500}
-            value={query}
-            placeholder={t("knowledge.questionPlaceholder")}
-            aria-label={t("library.qa.question")}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <button className="primary" disabled={busy || !query.trim()}>
-            {t(busy ? "knowledge.answering" : "library.qa.ask")}
-          </button>
-        </form>
-      )}
-      {answer?.answer && (
-        <article className="knowledge-answer">
-          <Preview value={answer.answer} />
-        </article>
-      )}
-      {answer && !answer.items.length && (
-        <p className="knowledge-empty">{t("knowledge.noEvidence")}</p>
-      )}
-      {!!answer?.items.length && (
-        <>
-          <h3>{t("knowledge.evidence")}</h3>
-          <ul className="library-system-links">
-            {answer.items.map((item) => (
-              <li key={item.id}>
-                <strong>{item.title}</strong>
-                <div className="knowledge-evidence">
-                  <Preview value={item.excerpt} />
-                </div>
-                {!!item.sources?.length && (
-                  <ul>
-                    {item.sources.map((source) => (
-                      <li key={source.id}>
-                        {source.href ? (
-                          <a
-                            href={source.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {source.title}
-                          </a>
-                        ) : (
-                          <span>{source.title}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {item.documentUrl && (
-                  <button
-                    onClick={() =>
-                      void work(async () =>
-                        setFullText(
-                          await api(
-                            item.documentUrl!.replace(/^\/api\/v1/, ""),
-                          ),
-                        ),
-                      )
-                    }
-                  >
-                    {t("knowledge.read")}
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      {fullText && (
-        <section className="knowledge-answer">
-          <h3>{fullText.title}</h3>
-          <Preview value={fullText.markdown} />
-          <button onClick={() => setFullText(undefined)}>
-            {t("knowledge.close")}
-          </button>
-        </section>
-      )}
+      {bot?.canManage && <details className="knowledge-integration"><summary>{t("studio.integrations")}</summary><p>{t("studio.integrationHint")}</p><a href={`/knowledge/embed/${bot.id}`} target="_blank" rel="noreferrer">{t("studio.embedPage")}</a><pre>{`<iframe src="${location.origin}/knowledge/embed/${bot.id}" title="${bot.title.replaceAll('"','&quot;')}" width="100%" height="720"></iframe>`}</pre><p>API: <code>{`/api/v1/knowledge/assistants/${bot.id}/ask`}</code></p><p>MCP: <code>/api/v1/knowledge/mcp</code></p></details>}
+      {bot?.enabled && !bot.invitationPending && <KnowledgeChat key={selected} scopeId={selected} kind="answer" />}
+
     </section>
   );
 }

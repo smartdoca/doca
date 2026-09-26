@@ -1,3 +1,4 @@
+import { pluginNotificationVisible } from "./plugin-notifications.js";
 import { managementVisible } from "../access/presentation.js";
 import { sql } from "kysely";
 import { randomUUID } from "node:crypto";
@@ -302,6 +303,7 @@ export async function notificationPage(db: DB, actor: Actor, offset: number) {
     .where(
       sql<boolean>`(notifications.ticket_id is not null or notifications.type <> 'access.requested' or exists(select 1 from access_requests q join resources r on r.id=q.resource_id where q.resource_id=notifications.resource_id and q.status='pending' and notifications.dedupe_key = q.id || ':' || ${actor.id} and (q.role <> 'manager' or r.owner_id=${actor.id})))`,
     ).where(sql<boolean>`(${canRead}
+      or notifications.type = 'plugin.notification'
       or exists(select 1 from tickets t where t.id=notifications.ticket_id and (t.user_id=${actor.id} or t.initiator_id=${actor.id}))
       or (notifications.type = 'resource.invited' and exists(select 1 from access_invitations i join resources r on r.id = i.resource_id where i.resource_id = notifications.resource_id and i.user_id = ${actor.id} and i.state = 'pending' and r.deleted_at is null))
       or (notifications.type in ('access.approved', 'access.rejected') and exists(select 1 from access_requests q where q.resource_id = notifications.resource_id and q.user_id = ${actor.id})))`);
@@ -319,6 +321,7 @@ export async function notificationPage(db: DB, actor: Actor, offset: number) {
   const count = await base
     .select((eb) => eb.fn.countAll().as("count"))
     .where("read_at", "is", null)
+    .where("notifications.type", "!=", "plugin.notification")
     .executeTakeFirstOrThrow();
   const ctx = await accessContext(
     db,
@@ -326,7 +329,20 @@ export async function notificationPage(db: DB, actor: Actor, offset: number) {
     items.map((n) => n.resource_id),
   );
   const projected = [];
+  const pluginRows = await db.selectFrom("plugin_notifications as p").innerJoin("notifications as n", "n.id", "p.notification_id").selectAll("p").select(["n.read_at", "n.id"]).where("n.user_id", "=", actor.id).where("p.withdrawn_at", "is", null).execute();
+  const visiblePluginRows = new Map<string, typeof pluginRows[number]>();
+  // Permissions are live, including when calculating unread counts. Fail closed.
+  for (let start = 0; start < pluginRows.length; start += 50) {
+    await Promise.all(pluginRows.slice(start, start + 50).map(async row => {
+      if (await pluginNotificationVisible(db, actor.id, row)) visiblePluginRows.set(row.id, row);
+    }));
+  }
   for (const { canRead, ...n } of items.slice(0, 50)) {
+    if (n.type === "plugin.notification") {
+      const detail = visiblePluginRows.get(n.id);
+      if (detail) projected.push({ ...n, title: detail.title, description: detail.body, pluginId: detail.plugin_id, href: `/api/v1/notifications/${n.id}/open` });
+      continue;
+    }
     const r = ctx.resources.find((r) => r.id === n.resource_id);
     let grantedPermission: { role?: string; includeDescendants?: boolean } | undefined;
     let show =
@@ -367,7 +383,7 @@ export async function notificationPage(db: DB, actor: Actor, offset: number) {
   }
   return {
     items: projected,
-    unread: Number(count.count),
+    unread: Number(count.count) + [...visiblePluginRows.values()].filter(row => !row.read_at).length,
     nextOffset: items.length > 50 ? offset + 50 : null,
   };
 }

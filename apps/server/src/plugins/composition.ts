@@ -1,3 +1,4 @@
+import { cleanupFileReceipts } from "./file-receipt-cleanup.js";
 import { searchServiceToken } from "@doca/plugin-sdk/search";
 import { activeActor } from "@core/modules/access/queries.js";
 import { provideAI } from "./ai-capability.js";
@@ -171,6 +172,8 @@ function documentsPlugin(
       const mounted = await mountFastifyAdapter(runtime.api, (api) =>
         registerKnowledge(api, runtime.db, runtime.auth, {
           indexer: registration.knowledgeIndex,
+          answerIndex: registration.answerIndex,
+          notify: runtime.realtime.documentChanged,
           storage: runtime.runtime.storage,
         }),
       );
@@ -202,6 +205,7 @@ function aiPlugin(files: FilesServiceV1) {
             files,
             notify: runtime.realtime.documentChanged,
             search: search.search,
+            answerIndex: search.answerIndex,
             fileSearch: search.searchFiles,
             contributions,
           }),
@@ -239,6 +243,16 @@ function filesPlugin(
         runtime.runtime.storage,
       );
       let processing: Promise<unknown> | undefined;
+      let cleaning: Promise<unknown> | undefined;
+      const clean = () => {
+        if (cleaning || !runtime.runtime.storage) return;
+        cleaning = cleanupFileReceipts(runtime.db, runtime.runtime.storage)
+          .catch(error => runtime.api.log.error(error, "File staging cleanup failed"))
+          .finally(() => { cleaning = undefined; });
+      };
+      const cleanupTimer = setInterval(clean, 60 * 60 * 1000);
+      cleanupTimer.unref();
+      clean();
       const timer = setInterval(() => {
         if (processing) return;
         processing = worker
@@ -253,6 +267,8 @@ function filesPlugin(
       timer.unref();
       return async () => {
         clearInterval(timer);
+        clearInterval(cleanupTimer);
+        await cleaning;
         await processing;
         await waitForFileExtracts(runtime.db);
         await routes.dispose();

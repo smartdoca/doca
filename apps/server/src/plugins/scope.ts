@@ -1,3 +1,4 @@
+import { fileOperationScope } from "./file-operation-scope.js";
 import type { DocaPlugin, PluginLifecycleContext, ServiceToken } from "@doca/plugin-sdk";
 
 /** Bind public registration capabilities to the plugin that received them. */
@@ -13,20 +14,23 @@ export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {
       const value = optional ? context.injectOptional(token) : context.inject(token);
       if (value && token.id === "files.v1") return new Proxy(value as object, { get(target, property) {
         const member = Reflect.get(target, property);
-        if (property !== "bindings") return member;
+        if (!["folders", "files", "uploads", "receipts", "bindings", "content"].includes(String(property))) return member;
         return new Proxy(member, { get(bindings, action) {
           const method = Reflect.get(bindings, action);
+          if (typeof method !== "function") return method;
           return (...args: any[]) => {
+            args[0] = { ...args[0], [fileOperationScope]: plugin.manifest.id };
             if (args[1]?.owner) owned(args[1].owner.ownerPlugin, true);
             return method.apply(bindings, args);
           };
         } });
       } }) as T;
-      if (!value || !["http.v1", "permissions.v1", "policies.v1", "ai.v1", "search.v1", "knowledge.sources.v1"].includes(token.id)) return value;
+      if (!value || !["notifications.v1", "http.v1", "permissions.v1", "policies.v1", "ai.v1", "search.v1", "knowledge.sources.v1"].includes(token.id)) return value;
       return new Proxy(value as object, { get(target, property) {
         const method = Reflect.get(target, property);
         if (typeof method !== "function") return method;
         return (...args: any[]) => {
+          if (token.id === "notifications.v1") owned(args[0], true);
           if (token.id === "http.v1" && property === "callbackUrl") owned(args[0], true);
           if (token.id === "http.v1" && property === "register") {
             owned(args[0], true);

@@ -42,11 +42,11 @@ it("creates Word, Markdown, Excel and PDF files from report text", () => {
   expect(documentXml).not.toContain("# 平台概况");
   expect(rels).toContain("https://github.com/pricing");
   expect(packed["word/styles.xml"]).toBeTruthy();
-  expect(extractAttachmentText("report.docx", report.body)).toContain("平台概况");
+  expect(extractAttachmentText("report.docx", report.body)).toContain(
+    "平台概况",
+  );
   expect(extractAttachmentText("report.docx", report.body)).toContain("订阅");
-  expect(
-    parseTable("|项目|金额|\n|---|---|\n|差旅|1200|"),
-  ).toEqual([
+  expect(parseTable("|项目|金额|\n|---|---|\n|差旅|1200|")).toEqual([
     ["项目", "金额"],
     ["差旅", "1200"],
   ]);
@@ -60,9 +60,9 @@ it("creates Word, Markdown, Excel and PDF files from report text", () => {
   expect(pdf.body.subarray(0, 5).toString()).toBe("%PDF-");
   expect(pdf.body.toString("latin1")).toMatch(/FEFF/);
   expect(extractAttachmentText("report.pdf", pdf.body)).toContain("调研结论");
-  expect(extractAttachmentText("blank.pdf", Buffer.from("%PDF-1.7\nfixture"))).toContain(
-    "未能从该 PDF",
-  );
+  expect(
+    extractAttachmentText("blank.pdf", Buffer.from("%PDF-1.7\nfixture")),
+  ).toContain("未能从该 PDF");
   const payload = Buffer.from("BT /F1 12 Tf 10 100 Td (Flate Hello) Tj ET");
   const compressed = deflateSync(payload);
   const flate = Buffer.concat([
@@ -124,4 +124,17 @@ it("keeps embedded Office and PDF images in document order", async () => {
   const pages = extractFileParts("scan.pdf", pdf);
   expect(pages[0]).toMatchObject({ type: "text", text: "Before image" });
   expect(pages.some((part) => part.type === "image")).toBe(true);
+});
+
+it.each([
+  ["生成一份调研报告", "rich_text"],
+  ["创建一份文档", "rich_text"],
+  ["优化文档样式", "rich_text"],
+  ["文档样式优化", "rich_text"],
+  ["制作三页PPT", "presentation"],
+  ["创建项目画布", "canvas"],
+  ["制作预算表格", "spreadsheet"],
+  ["生成 Markdown 文档", "markdown"],
+])("suggests an editing manual for %s", (text, format) => {
+  expect([...relevantSkillFormats(text)]).toContain(format);
 });

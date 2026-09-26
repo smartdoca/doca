@@ -1,0 +1,657 @@
+{
+  "chapters": [
+    {
+      "key": "net-01",
+      "title": "网络分层模型、数据封装解封装与端到端/设备角色",
+      "path": [
+        "网络基础概念"
+      ],
+      "objectives": "解释TCP/IP与OSI分层模型的对应关系，演示数据在分层模型中的封装与解封装过程，区分端到端通信的核心要求与各类网络设备的功能角色",
+      "sourceQueries": [
+        "network layering model",
+        "data encapsulation",
+        "end-to-end communication",
+        "network device roles",
+        "TCP/IP vs OSI"
+      ],
+      "sources": [
+        "RFC1122"
+      ],
+      "sourceGap": "缺少IEEE 802系列链路层模型的一手标准补充，仅覆盖TCP/IP分层的核心RFC规范内容"
+    },
+    {
+      "key": "link-01",
+      "title": "物理介质、以太网标准与二层链路技术",
+      "path": [
+        "链路层技术",
+        "有线链路"
+      ],
+      "objectives": "列举主流物理介质特性，解析以太网帧格式，区分MAC地址、VLAN的核心作用，识别二层环路产生原因",
+      "sourceQueries": [
+        "physical media type",
+        "Ethernet standard",
+        "MAC address",
+        "VLAN",
+        "layer 2 loop prevention"
+      ],
+      "sources": [
+        "RFC1122"
+      ],
+      "sourceGap": "缺少IEEE 802.3以太网、802.1Q VLAN的一手IEEE标准材料，仅覆盖链路层的核心RFC框架内容"
+    },
+    {
+      "key": "link-02",
+      "title": "无线局域网（WLAN）机制与漫游特性",
+      "path": [
+        "链路层技术",
+        "无线链路"
+      ],
+      "objectives": "说明802.11 WLAN的基本工作流程，对比无线与有线网络的差异，解释漫游的核心机制与适用场景",
+      "sourceQueries": [
+        "WLAN 802.11",
+        "WiFi roaming",
+        "wireless vs Ethernet",
+        "BSS framework",
+        "802.11 mobility"
+      ],
+      "sources": [],
+      "sourceGap": "缺少IEEE 802.11系列无线标准的一手IEEE材料，无法覆盖物理层帧、漫游交互的详细规范"
+    },
+    {
+      "key": "net-02",
+      "title": "IPv4子网划分、CIDR与最长前缀匹配",
+      "path": [
+        "网络层技术",
+        "IPv4协议"
+      ],
+      "objectives": "实现IPv4子网的灵活划分，解释CIDR地址表示方法，掌握最长前缀匹配的路由决策逻辑",
+      "sourceQueries": [
+        "IPv4 subnet",
+        "CIDR",
+        "longest prefix match",
+        "subnet mask",
+        "IPv4 routing"
+      ],
+      "sources": [
+        "RFC1122"
+      ],
+      "sourceGap": "缺少RFC950 IPv4子网划分的详细一手规范，仅覆盖CIDR相关的核心逻辑"
+    },
+    {
+      "key": "net-03",
+      "title": "IPv6地址体系、扩展首部与邻居发现",
+      "path": [
+        "网络层技术",
+        "IPv6协议"
+      ],
+      "objectives": "解析IPv6地址类型与格式，说明扩展首部的作用，掌握IPv6邻居发现（NDP）的核心流程",
+      "sourceQueries": [
+        "IPv6 address",
+        "IPv6 extension header",
+        "IPv6 ND",
+        "stateless address autoconfig",
+        "IPv6 routing"
+      ],
+      "sources": [
+        "RFC8200",
+        "RFC4861"
+      ],
+      "sourceGap": "缺少RFC7707 IPv6移动性的一手补充材料，仅覆盖基础IPv6地址与NDP功能"
+    },
+    {
+      "key": "net-04",
+      "title": "ARP协议与IPv6邻居发现（NDP）对照",
+      "path": [
+        "网络层技术",
+        "地址解析协议"
+      ],
+      "objectives": "对比ARP与NDP的工作流程、消息格式，分析两者在链路层地址解析中的差异",
+      "sourceQueries": [
+        "ARP protocol",
+        "IPv6 NDP",
+        "address resolution",
+        "ARP vs NDP",
+        "link layer address mapping"
+      ],
+      "sources": [
+        "RFC826",
+        "RFC4861"
+      ],
+      "sourceGap": "缺少无线场景下ARP与NDP交互的一手补充材料，仅覆盖有线场景的标准对比"
+    },
+    {
+      "key": "net-05",
+      "title": "DHCPv4与DHCPv6/SLAAC地址自动配置",
+      "path": [
+        "网络层技术",
+        "地址自动配置"
+      ],
+      "objectives": "解释DHCPv4的地址分配流程，对比DHCPv6与SLAAC的无状态自动配置机制",
+      "sourceQueries": [
+        "DHCPv4",
+        "DHCPv6",
+        "SLAAC",
+        "stateless address autoconfig",
+        "IPv6 auto config"
+      ],
+      "sources": [
+        "RFC2131",
+        "RFC8415"
+      ],
+      "sourceGap": "缺少RFC7084运营商级DHCPv6部署的一手材料，仅覆盖基础客户端配置逻辑"
+    },
+    {
+      "key": "net-06",
+      "title": "ICMP协议、Traceroute与路径MTU发现",
+      "path": [
+        "网络层技术",
+        "ICMP协议"
+      ],
+      "objectives": "区分ICMPv4与ICMPv6的消息类型，掌握Traceroute的原理，实现路径MTU发现的配置",
+      "sourceQueries": [
+        "ICMP",
+        "ICMPv6",
+        "traceroute",
+        "path MTU",
+        "ICMP error message"
+      ],
+      "sources": [
+        "RFC792",
+        "RFC4443"
+      ],
+      "sourceGap": "缺少RFC4884扩展ICMP报文的一手材料，仅覆盖基础ICMP功能"
+    },
+    {
+      "key": "net-07",
+      "title": "NAT/PAT技术与连接跟踪机制",
+      "path": [
+        "网络层技术",
+        "地址转换"
+      ],
+      "objectives": "解析NAT与PAT的工作原理，区分静态/动态NAT，掌握连接跟踪的核心逻辑",
+      "sourceQueries": [
+        "NAT",
+        "PAT",
+        "connection tracking",
+        "network address translation",
+        "port forwarding"
+      ],
+      "sources": [
+        "RFC3022"
+      ],
+      "sourceGap": "缺少RFC5164 hairpin NAT等高级场景的一手材料，仅覆盖基础NAT/PAT机制"
+    },
+    {
+      "key": "net-08",
+      "title": "路由表、静态路由与路由收敛",
+      "path": [
+        "网络层技术",
+        "路由基础"
+      ],
+      "objectives": "理解路由表的结构，配置静态路由的基本规则，解释路由收敛的核心条件",
+      "sourceQueries": [
+        "routing table",
+        "static routing",
+        "route convergence",
+        "longest prefix match",
+        "IP forwarding"
+      ],
+      "sources": [
+        "RFC1122"
+      ],
+      "sourceGap": "缺少RFC1058 RIP协议的路由收敛补充材料，仅覆盖基础路由表逻辑"
+    },
+    {
+      "key": "net-09",
+      "title": "OSPF协议：区域划分、邻接关系与链路状态",
+      "path": [
+        "网络层技术",
+        "内部网关协议"
+      ],
+      "objectives": "解析OSPF区域划分的意义，区分邻接与邻居节点，掌握链路状态数据库的构建逻辑",
+      "sourceQueries": [
+        "OSPF",
+        "link state routing",
+        "OSPF area",
+        "adjacency",
+        "LSDB construction"
+      ],
+      "sources": [
+        "RFC2328"
+      ],
+      "sourceGap": "缺少RFC5340 OSPFv3的一手材料，仅覆盖OSPFv2核心机制"
+    },
+    {
+      "key": "net-10",
+      "title": "BGP协议：路径策略、AS角色与安全边界",
+      "path": [
+        "网络层技术",
+        "外部网关协议"
+      ],
+      "objectives": "解释自治系统（AS）的作用，掌握BGP路径属性与路由策略配置，理解BGP安全边界的设置",
+      "sourceQueries": [
+        "BGP",
+        "autonomous system",
+        "BGP path attribute",
+        "route policy",
+        "BGP security"
+      ],
+      "sources": [
+        "RFC4271"
+      ],
+      "sourceGap": "缺少RFC8212 BGP路由通告的安全一手材料，仅覆盖基础BGP协议流程"
+    },
+    {
+      "key": "trans-01",
+      "title": "UDP协议：语义、数据报与应用可靠性",
+      "path": [
+        "传输层技术",
+        "UDP协议"
+      ],
+      "objectives": "说明UDP的无连接语义，解析UDP数据报格式，分析UDP适用的应用场景",
+      "sourceQueries": [
+        "UDP protocol",
+        "UDP datagram",
+        "connectionless",
+        "UDP semantics",
+        "application layer reliability"
+      ],
+      "sources": [
+        "RFC768"
+      ],
+      "sourceGap": "缺少RFC5405 UDP应用设计的一手材料，仅覆盖基础UDP规范"
+    },
+    {
+      "key": "trans-02",
+      "title": "TCP连接：建立、关闭与状态机机制",
+      "path": [
+        "传输层技术",
+        "TCP基础"
+      ],
+      "objectives": "掌握TCP三次握手建立与四次挥手关闭的流程，解析TCP状态机的核心状态转换",
+      "sourceQueries": [
+        "TCP connection",
+        "3-way handshake",
+        "4-way close",
+        "TCP state machine",
+        "TCP connection setup"
+      ],
+      "sources": [
+        "RFC9293"
+      ],
+      "sourceGap": "缺少RFC6298 TCP重传定时器的一手补充，仅覆盖连接建立关闭的核心逻辑"
+    },
+    {
+      "key": "trans-03",
+      "title": "TCP序号、确认、重传与流量控制",
+      "path": [
+        "传输层技术",
+        "TCP可靠性"
+      ],
+      "objectives": "解析TCP序号与确认机制的作用，解释重传机制的触发条件，掌握滑动窗口流量控制",
+      "sourceQueries": [
+        "TCP sequence number",
+        "TCP acknowledgment",
+        "TCP retransmission",
+        "sliding window",
+        "flow control"
+      ],
+      "sources": [
+        "RFC9293"
+      ],
+      "sourceGap": "缺少RFC3168 ECN的一手补充，仅覆盖基础可靠性机制"
+    },
+    {
+      "key": "trans-04",
+      "title": "TCP拥塞控制与性能优化",
+      "path": [
+        "传输层技术",
+        "TCP性能"
+      ],
+      "objectives": "掌握TCP拥塞窗口的调整逻辑，计算带宽时延积（BDP），分析RTT对性能的影响",
+      "sourceQueries": [
+        "TCP congestion control",
+        "RTT",
+        "bandwidth-delay product",
+        "TCP throughput",
+        "congestion window"
+      ],
+      "sources": [
+        "RFC5681",
+        "RFC9002"
+      ],
+      "sourceGap": "缺少RFC8311 BBR拥塞控制的一手材料，仅覆盖传统拥塞控制算法"
+    },
+    {
+      "key": "trans-05",
+      "title": "QUIC传输：迁移、可靠流与拥塞控制",
+      "path": [
+        "传输层技术",
+        "新型传输协议"
+      ],
+      "objectives": "解释QUIC的无连接迁移特性，区分QUIC可靠流与TCP流的差异，掌握QUIC拥塞控制机制",
+      "sourceQueries": [
+        "QUIC",
+        "QUIC migration",
+        "QUIC stream",
+        "QUIC congestion control",
+        "HTTP/3 protocol"
+      ],
+      "sources": [
+        "RFC9000"
+      ],
+      "sourceGap": "缺少QUIC RFC的更新补充材料，仅覆盖RFC9000基础内容"
+    },
+    {
+      "key": "app-01",
+      "title": "DNS命名体系、委派与递归/权威链路",
+      "path": [
+        "应用层协议",
+        "DNS基础"
+      ],
+      "objectives": "解析DNS层级命名体系，说明区域委派的作用，区分递归查询与权威查询的流程",
+      "sourceQueries": [
+        "DNS domain name",
+        "DNS delegation",
+        "recursive query",
+        "authoritative DNS",
+        "DNS hierarchy"
+      ],
+      "sources": [
+        "RFC1034",
+        "RFC1035"
+      ],
+      "sourceGap": "缺少RFC4033 DNSSEC委派的一手补充，仅覆盖基础命名逻辑"
+    },
+    {
+      "key": "app-02",
+      "title": "DNS记录类型、缓存与变更排障",
+      "path": [
+        "应用层协议",
+        "DNS运维"
+      ],
+      "objectives": "掌握核心DNS记录类型，解释DNS缓存与负缓存的作用，定位DNS变更后的故障点",
+      "sourceQueries": [
+        "DNS record type",
+        "DNS cache",
+        "DNS negative cache",
+        "DNS troubleshooting",
+        "DNS TTL"
+      ],
+      "sources": [
+        "RFC1034",
+        "RFC1035"
+      ],
+      "sourceGap": "缺少RFC8109 DNS缓存一致性的一手补充，仅覆盖基础缓存逻辑"
+    },
+    {
+      "key": "app-03",
+      "title": "DNS安全：UDP/TCP传输、EDNS与DoT/DoH",
+      "path": [
+        "应用层协议",
+        "DNS安全"
+      ],
+      "objectives": "对比DNS的UDP/TCP传输场景，解释EDNS的作用，区分DoT与DoH的安全特性",
+      "sourceQueries": [
+        "DNS over UDP",
+        "DNS over TCP",
+        "EDNS",
+        "DNS over TLS",
+        "DNS over HTTPS"
+      ],
+      "sources": [
+        "RFC6891",
+        "RFC8484",
+        "RFC7858"
+      ],
+      "sourceGap": "缺少RFC9508 ECH与DNS的交互补充，仅覆盖DoT/DoH基础规范"
+    },
+    {
+      "key": "app-04",
+      "title": "HTTP语义：缓存、代理与条件请求机制",
+      "path": [
+        "应用层协议",
+        "HTTP基础"
+      ],
+      "objectives": "解析HTTP请求/响应语义，掌握HTTP缓存规则，理解条件请求（If-Modified-Since等）的作用",
+      "sourceQueries": [
+        "HTTP semantics",
+        "HTTP cache",
+        "HTTP proxy",
+        "conditional request",
+        "HTTP caching"
+      ],
+      "sources": [
+        "RFC9110"
+      ],
+      "sourceGap": "缺少RFC7234 HTTP缓存的详细补充，仅覆盖核心语义"
+    },
+    {
+      "key": "app-05",
+      "title": "HTTP/1.1：连接复用与消息边界处理",
+      "path": [
+        "应用层协议",
+        "HTTP/1.x"
+      ],
+      "objectives": "解释HTTP/1.1的长连接与管道化连接复用，掌握HTTP消息边界的识别方法",
+      "sourceQueries": [
+        "HTTP/1.1",
+        "persistent connection",
+        "HTTP pipelining",
+        "message boundary",
+        "HTTP chunked encoding"
+      ],
+      "sources": [
+        "RFC9112"
+      ],
+      "sourceGap": "缺少RFC7540 HTTP/2的对比补充，仅覆盖HTTP/1.1核心特性"
+    },
+    {
+      "key": "app-06",
+      "title": "HTTP/2多路复用、流控与HTTP/3对比",
+      "path": [
+        "应用层协议",
+        "HTTP演进"
+      ],
+      "objectives": "掌握HTTP/2的帧多路复用与流控机制，对比HTTP/2与HTTP/3的核心差异",
+      "sourceQueries": [
+        "HTTP/2",
+        "multiplexing",
+        "flow control",
+        "HTTP/3 vs HTTP/2",
+        "HTTP framing"
+      ],
+      "sources": [
+        "RFC9113",
+        "RFC9114"
+      ],
+      "sourceGap": "缺少HTTP/3的最新更新补充，仅覆盖RFC9114基础内容"
+    },
+    {
+      "key": "sec-01",
+      "title": "TLS1.3：握手流程、证书与0-RTT机制",
+      "path": [
+        "安全协议",
+        "传输层安全"
+      ],
+      "objectives": "解析TLS1.3的简化握手流程，区分证书验证逻辑，掌握0-RTTEarly Data的适用场景",
+      "sourceQueries": [
+        "TLS 1.3",
+        "TLS handshake",
+        "X.509 certificate",
+        "0-RTT",
+        "TLS key exchange"
+      ],
+      "sources": [
+        "RFC8446"
+      ],
+      "sourceGap": "缺少RFC9000 QUIC TLS的交互补充，仅覆盖TLS1.3核心机制"
+    },
+    {
+      "key": "sec-02",
+      "title": "IPsec：VPN与隧道安全机制",
+      "path": [
+        "安全协议",
+        "网络层安全"
+      ],
+      "objectives": "区分IPsec的AH与ESP协议，解释IPsec隧道模式的应用场景，掌握VPN安全的核心特性",
+      "sourceQueries": [
+        "IPsec",
+        "VPN",
+        "AH protocol",
+        "ESP protocol",
+        "IP tunnel security"
+      ],
+      "sources": [
+        "RFC4301"
+      ],
+      "sourceGap": "缺少RFC3706 IPsec DPD的一手补充，仅覆盖基础IPsec框架"
+    },
+    {
+      "key": "net-11",
+      "title": "VXLAN与Overlay网络：容器网络分层解释",
+      "path": [
+        "网络进阶技术",
+        "Overlay网络"
+      ],
+      "objectives": "解析VXLAN的封装格式，说明Overlay网络与Underlay网络的分层关系，解释容器网络的VXLAN应用",
+      "sourceQueries": [
+        "VXLAN",
+        "Overlay network",
+        "tunnel encapsulation",
+        "container network",
+        "VXLAN tunneling"
+      ],
+      "sources": [
+        "RFC7348"
+      ],
+      "sourceGap": "缺少容器网络VXLAN部署的工业级一手补充，仅覆盖VXLAN标准规范"
+    },
+    {
+      "key": "net-12",
+      "title": "IP组播：IGMP与PIM协议机制",
+      "path": [
+        "网络进阶技术",
+        "组播技术"
+      ],
+      "objectives": "解释IP组播的核心作用，掌握IGMP的组成员管理逻辑，区分PIM-SM与PIM-DM的差异",
+      "sourceQueries": [
+        "IP multicast",
+        "IGMP",
+        "PIM-SM",
+        "PIM-DM",
+        "multicast routing"
+      ],
+      "sources": [
+        "RFC3376",
+        "RFC7761"
+      ],
+      "sourceGap": "缺少RFC4601 PIM-SM的详细一手补充，仅覆盖基础组播框架"
+    },
+    {
+      "key": "net-13",
+      "title": "QoS机制：DSCP、队列与拥塞管理",
+      "path": [
+        "网络进阶技术",
+        "服务质量"
+      ],
+      "objectives": "解析DSCP的标记规则，区分队列调度算法，掌握拥塞管理的核心机制",
+      "sourceQueries": [
+        "QoS",
+        "DSCP",
+        "traffic class",
+        "queue management",
+        "congestion avoidance"
+      ],
+      "sources": [
+        "RFC2475",
+        "RFC4594"
+      ],
+      "sourceGap": "缺少RFC8325 DSCP演进的一手补充，仅覆盖基础QoS框架"
+    },
+    {
+      "key": "app-07",
+      "title": "SSH远程管理：安全访问与身份认证",
+      "path": [
+        "运维协议",
+        "远程管理"
+      ],
+      "objectives": "解释SSH的加密传输机制，掌握SSH用户身份认证的核心方式，说明SSH的安全特性",
+      "sourceQueries": [
+        "SSH protocol",
+        "remote management",
+        "SSH authentication",
+        "SSH encryption",
+        "SSH secure access"
+      ],
+      "sources": [
+        "RFC4251"
+      ],
+      "sourceGap": "缺少SSH的最新版本更新补充，仅覆盖RFC4251基础内容"
+    },
+    {
+      "key": "app-08",
+      "title": "邮件系统：SMTP/IMAP与端到端投递",
+      "path": [
+        "应用层协议",
+        "邮件服务"
+      ],
+      "objectives": "区分SMTP与IMAP的作用，解释邮件端到端投递的流程，掌握邮件安全的基本机制",
+      "sourceQueries": [
+        "SMTP",
+        "IMAP",
+        "email delivery",
+        "MIME",
+        "end-to-end email security"
+      ],
+      "sources": [
+        "RFC5321",
+        "RFC9051"
+      ],
+      "sourceGap": "缺少RFC8314邮件加密传输的一手补充，仅覆盖基础邮件协议"
+    },
+    {
+      "key": "app-09",
+      "title": "时钟同步：NTP与网络监测：SNMP机制",
+      "path": [
+        "运维与监测",
+        "时钟与监控"
+      ],
+      "objectives": "掌握NTP的时间同步机制，解释SNMP的管理模型，区分网络监测的核心组件",
+      "sourceQueries": [
+        "NTP",
+        "SNMP",
+        "clock synchronization",
+        "network monitoring",
+        "SNMP management"
+      ],
+      "sources": [
+        "RFC5905",
+        "RFC3411"
+      ],
+      "sourceGap": "缺少RFC7822 NTP安全的一手补充，仅覆盖基础同步机制"
+    },
+    {
+      "key": "exp-01",
+      "title": "从DNS到TLS到HTTP的全链路排障实验",
+      "path": [
+        "运维与实验",
+        "网络排障"
+      ],
+      "objectives": "设计并实施包含DNS解析、TLS握手、HTTP请求的全链路排障实验，使用工具定位分层故障，验证协议交互过程",
+      "sourceQueries": [
+        "end-to-end troubleshooting",
+        "DNS TLS HTTP",
+        "network fault isolation",
+        "protocol debug experiment",
+        "Wireshark analysis"
+      ],
+      "sources": [
+        "RFC1034",
+        "RFC8446",
+        "RFC9110"
+      ],
+      "sourceGap": "缺少权威实验手册的正式验证材料，仅基于RFC规范的理论逻辑，无实际实验案例的标准化依据"
+    }
+  ]
+}

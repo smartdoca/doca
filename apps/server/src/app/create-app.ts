@@ -188,6 +188,11 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       .header("X-Content-Type-Options", "nosniff")
       .header("Referrer-Policy", "no-referrer")
       .header("X-Frame-Options", "DENY");
+    if (/^\/knowledge\/embed\/[a-f0-9-]{36}(?:\?|$)/.test(req.url)) {
+      const origins=(process.env.DOCA_KNOWLEDGE_EMBED_ORIGINS??"").split(",").map(value=>value.trim()).filter(value=>{try{return new URL(value).origin===value&&/^https?:/.test(value);}catch{return false;}});
+      reply.removeHeader("X-Frame-Options");
+      reply.header("Content-Security-Policy",`frame-ancestors 'self' ${origins.join(" ")}`);
+    }
     if (
       req.raw.rawHeaders
         .filter((_, i) => i % 2 === 0)

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { createKnowledgeConversation, sendKnowledgeMessage } from "@core/modules/knowledge/conversations.js";
 import { answerKnowledge } from "../services/ai/knowledge-curation.js";
 import { Type } from "@sinclair/typebox";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -36,6 +38,7 @@ export function registerKnowledgeSystem(
   api: FastifyInstance,
   db: DB,
   auth: (req: FastifyRequest) => Actor,
+  notify?: (id:string)=>Promise<void>,
 ) {
   const root = "/api/v1/knowledge/libraries/:id";
   const params = Type.Object({ id: Type.String({ format: "uuid" }) });
@@ -146,6 +149,9 @@ export function registerKnowledgeSystem(
                 ),
               ),
               modelId: Type.String({ maxLength: 64 }),
+              sourceScope: Type.Optional(Type.Union([Type.Literal("internal"),Type.Literal("web")])),
+              automationPolicy: Type.Optional(Type.Union([Type.Literal("safe"),Type.Literal("draft")])),
+              publicationMode: Type.Optional(Type.Union([Type.Literal("automatic"),Type.Literal("manual")])),
               maxDocumentDepth: Type.Optional(
                 Type.Integer({ minimum: 1, maximum: 8 }),
               ),
@@ -261,15 +267,18 @@ export function registerKnowledgeSystem(
         }),
       },
     },
-    (req) =>
-      reviewKnowledgeEntry(
+    async (req) => {
+      const entry = await reviewKnowledgeEntry(
         db,
         auth(req),
         req.params.id,
         req.params.entryId,
         req.body.expectedRevision,
         req.body.action,
-      ),
+      );
+      if(entry.reviewState.nodeId) await notify?.(entry.reviewState.nodeId).catch(()=>{});
+      return entry;
+    },
   );
   api.post<{ Params: { id: string; subscriptionId: string } }>(
     `${root}/subscriptions/:subscriptionId/detach`,
@@ -289,25 +298,11 @@ export function registerKnowledgeSystem(
   }>(
     `${root}/curate`,
     { schema: { params } },
-    (req) => {
-      const gap = req.body?.gap;
-      if (gap && (typeof gap.title !== "string" || !gap.title.trim()))
-        fail(400, "缺口需要标题");
-      return queueKnowledgeCuration(
-        db,
-        auth(req),
-        req.params.id,
-        "manual",
-        gap?.title
-          ? {
-              title: gap.title,
-              path: Array.isArray(gap.path)
-                ? gap.path.filter((segment) => typeof segment === "string")
-                : [],
-              detail: typeof gap.detail === "string" ? gap.detail : "",
-            }
-          : undefined,
-      );
+    async (req) => {
+      const actor=auth(req),gap=req.body?.gap;
+      const conversation=await createKnowledgeConversation(db,actor,req.params.id,"curation",gap?.title||"知识整理");
+      await sendKnowledgeMessage(db,actor,conversation.id,gap?.title?`补全主题：${gap.title}。${gap.detail||""}`:"检查来源质量与覆盖缺口，整理详细知识文档，保留人工修改，并推荐可靠来源。",randomUUID());
+      return {id:conversation.id,conversationId:conversation.id,status:"queued"};
     },
   );
   api.post<{ Params: { id: string; runId: string } }>(
@@ -396,30 +391,5 @@ export function registerKnowledgeSystem(
       },
     },
     (req) => saveKnowledgeAssistant(db, auth(req), req.body),
-  );
-  api.post<{ Params: { id: string }; Body: { query: string } }>(
-    "/api/v1/knowledge/assistants/:id/ask",
-    {
-      schema: {
-        params,
-        body: Type.Object({
-          query: Type.String({ minLength: 1, maxLength: 500 }),
-        }),
-      },
-    },
-    (req) => answerKnowledge(db, auth(req), req.params.id, req.body.query),
-  );
-  api.post<{ Params: { id: string }; Body: { query: string } }>(
-    "/api/v1/knowledge/assistants/:id/search",
-    {
-      schema: {
-        params,
-        body: Type.Object({
-          query: Type.String({ minLength: 1, maxLength: 500 }),
-        }),
-      },
-    },
-    (req) =>
-      searchKnowledgeAssistant(db, auth(req), req.params.id, req.body.query),
   );
 }

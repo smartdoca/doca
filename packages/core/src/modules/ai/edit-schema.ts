@@ -267,7 +267,7 @@ const schemas = {
         }),
       ]),
     }),
-    op("replaceText", { query: z.string().min(1), text: z.string() }),
+    op("replaceText", { query: z.string().min(1), text: z.string(), slideId: optionalId, id: optionalId }),
     op("formatText", { slideId: id, ids, marks: json }),
     op("paragraphFormat", { slideId: id, ids, format: json }),
     op("pageSize", {
@@ -561,7 +561,7 @@ export function validateEditOperations(format: string, operations: any[]) {
     assert(
       command,
       typeof operation?.type === "string"
-        ? `不支持 ${format} 命令 ${String(operation.type)}，请读取 capabilities.operations`
+        ? `不支持 ${format} 命令 ${String(operation.type)}，${format === "rich_text" && operation.type === "remove" ? "删除块请用 {type:\"deleteBlock\",blockId:\"已读取的块ID\"}；" : ""}请读取 capabilities.operations`
         : `${format} 命令缺少 type 字段，请读取 capabilities.operations`,
     );
     const parsed = command!.safeParse(operation);
@@ -573,7 +573,7 @@ export function validateEditOperations(format: string, operations: any[]) {
           .map((issue) => `${issue.path.join(".") || "参数"} ${issue.message}`)
           .join("；")
           .slice(0, 1500)
-      }；请按 capabilities 中该命令的参数重试`,
+      }；该命令字段：${Object.keys(command!.shape).join("、")}；请按 capabilities 中该命令的参数重试`,
     );
     if (format === "spreadsheet" && operation.type === "cells") {
       const cells = (parsed.data as { cells?: Record<string, unknown> }).cells;
