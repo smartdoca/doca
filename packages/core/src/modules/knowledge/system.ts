@@ -10,15 +10,95 @@ import {
 } from "../access/operation-policy.js";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { sql } from "kysely";
+import { sql, type Transaction } from "kysely";
 import type { DB, Schema } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import type { Actor } from "../identity/passwords.js";
 import { activeActor, authorize } from "../access/queries.js";
 import { AppError, fail } from "../../shared/errors.js";
+import {
+  writeKnowledgeRichDocument,
+  type KnowledgeFigure,
+} from "./rich-document.js";
 
 const hash = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
+function knowledgeFigures(value: unknown): KnowledgeFigure[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((figure) => {
+    if (!figure || (figure.type !== "flowchart" && figure.type !== "mindmap"))
+      return [];
+    const nodes = Array.isArray(figure.nodes)
+      ? figure.nodes.flatMap((node: { id?: string; label?: string; shape?: string }) =>
+          typeof node?.id === "string" && typeof node.label === "string" && node.label
+            ? [{ id: node.id, label: node.label, shape: node.shape }]
+            : [],
+        )
+      : [];
+    const edges = Array.isArray(figure.edges)
+      ? figure.edges.flatMap((edge: { source?: string; target?: string }) =>
+          typeof edge?.source === "string" && typeof edge.target === "string"
+            ? [{ source: edge.source, target: edge.target }]
+            : [],
+        )
+      : [];
+    return nodes.length >= 2
+      ? [{ type: figure.type as KnowledgeFigure["type"], nodes, edges }]
+      : [];
+  });
+}
+const gapStop = new Set(
+  "什么 哪些 如何 是否 可以 不能 以及 其中 这个 一个 多少 怎么 还是".split(" "),
+);
+/** Topics and questions named in the guide that published knowledge does not yet cover. */
+export function knowledgeOutlineGaps(
+  guide: string,
+  entries: { title: string; markdown: string; path?: string[]; status: string }[],
+) {
+  const published = entries.filter((entry) => entry.status === "published");
+  const hay = published
+    .map((entry) => `${(entry.path ?? []).join("\n")}\n${entry.title}\n${entry.markdown}`)
+    .join("\n");
+  const gaps: { key: string; title: string; path: string[]; detail: string }[] = [];
+  const seen = new Set<string>();
+  const add = (title: string, detail: string) => {
+    const name = title.trim().slice(0, 80);
+    if (!name || seen.has(name) || hay.includes(name)) return;
+    seen.add(name);
+    gaps.push({
+      key: hash({ name }).slice(0, 16),
+      title: name,
+      path: [],
+      detail,
+    });
+  };
+  for (const match of guide.matchAll(/[“"]([^”"\n]{2,24})[”"]/g))
+    add(match[1]!, `指引提到「${match[1]}」，已发布知识里还没有。`);
+  for (const match of guide.matchAll(/[^。\n#？?]{6,80}[？?]/g)) {
+    const question = match[0].replace(/^[\s\-*]+/, "").trim();
+    const tokens = question
+      .replace(/[？?，,。.（）()]/g, " ")
+      .replace(/哪些|如何|什么|是否|多少|怎么/g, " ")
+      .replace(/([A-Za-z0-9][A-Za-z0-9.-]*)/g, " $1 ")
+      .split(/\s+|、|或|与|和/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2 && !gapStop.has(token));
+    const hits = tokens.filter((token) => {
+      if (hay.includes(token)) return true;
+      const chars = [...token];
+      if (chars.length < 4) return false;
+      return chars.some(
+        (char, index) =>
+          index > 0 &&
+          /[\u4e00-\u9fff]/.test(chars[index - 1] + char) &&
+          hay.includes(chars[index - 1] + char),
+      );
+    });
+    if (tokens.length && hits.length / tokens.length >= 0.5) continue;
+    add(question.replace(/[？?]$/, ""), question);
+  }
+  return gaps.slice(0, 8);
+}
 const sourcePolicySchema = z
   .object({
     redactedTerms: z
@@ -275,6 +355,7 @@ export async function knowledgeManagementView(
   libraryId: string,
 ) {
   const bundle = await knowledgeInstructions(db, actor, libraryId);
+  await projectPublishedKnowledge(db, actor, libraryId);
   const visibleSettings = await hideRestrictedKnowledgeLinks(
     db,
     actor,
@@ -800,6 +881,200 @@ export async function saveHumanKnowledge(
     return publicEntry(entry);
   });
 }
+async function insertKnowledgeDocument(
+  tx: Transaction<Schema>,
+  libraryId: string,
+  ownerId: string,
+  parentId: string | null,
+  title: string,
+  markdown: string,
+  figures: KnowledgeFigure[] = [],
+) {
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  await tx
+    .insertInto("resources")
+    .values({
+      id,
+      kind: "document",
+      format: "rich_text",
+      title: title.slice(0, 160),
+      owner_id: ownerId,
+      library_id: libraryId,
+      parent_id: parentId,
+      access_mode: "inherit",
+      visibility: "invited",
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+      delete_batch: null,
+      requests_enabled: 0,
+      tree_order: 0,
+      authz_revision: 1,
+      history_readers: 0,
+      discoverable: 0,
+      public_role: "reader",
+      content_bytes: Buffer.byteLength(markdown),
+      share_links_enabled: 0,
+      permission_overrides: 0,
+      ai_curated: 0,
+      guide_text: "",
+      knowledge_schedule: "off",
+      knowledge_preset: "",
+    })
+    .execute();
+  await writeKnowledgeRichDocument(tx, id, markdown, figures);
+  return id;
+}
+
+/** Published knowledge becomes the library document tree: path segments are parent documents, the entry is the leaf. */
+export async function projectKnowledgeEntry(
+  tx: Transaction<Schema>,
+  libraryId: string,
+  ownerId: string,
+  entry: { id: string; title: string; markdown: string; review_state: string },
+) {
+  const state = JSON.parse(entry.review_state) as {
+    path?: string[];
+    nodeId?: string;
+    figures?: unknown;
+    projectedHash?: string;
+  };
+  const path = (state.path ?? []).filter((segment) => segment.trim());
+  let parentId: string | null = null;
+  const segments: string[] = [];
+  for (const segment of path) {
+    segments.push(segment);
+    const key = segments.join("\u001f");
+    const recorded = await tx
+      .selectFrom("knowledge_directories")
+      .select("resource_id")
+      .where("library_id", "=", libraryId)
+      .where("path", "=", key)
+      .executeTakeFirst();
+    const live = recorded
+      ? await tx
+          .selectFrom("resources")
+          .select("id")
+          .where("id", "=", recorded.resource_id)
+          .where("deleted_at", "is", null)
+          .executeTakeFirst()
+      : undefined;
+    if (live) {
+      const directory = await tx
+        .selectFrom("resources")
+        .select("format")
+        .where("id", "=", live.id)
+        .executeTakeFirst();
+      if (directory?.format !== "rich_text")
+        await writeKnowledgeRichDocument(tx, live.id, `# ${segment}\n`);
+      parentId = live.id;
+    } else {
+      parentId = await insertKnowledgeDocument(
+        tx,
+        libraryId,
+        ownerId,
+        parentId,
+        segment,
+        `# ${segment}\n`,
+      );
+      if (recorded)
+        await tx
+          .updateTable("knowledge_directories")
+          .set({ resource_id: parentId })
+          .where("library_id", "=", libraryId)
+          .where("path", "=", key)
+          .execute();
+      else
+        await tx
+          .insertInto("knowledge_directories")
+          .values({ library_id: libraryId, path: key, resource_id: parentId })
+          .execute();
+    }
+  }
+  const figures = knowledgeFigures(state.figures);
+  const contentHash = hash({ markdown: entry.markdown, figures });
+  const markdown = entry.markdown.startsWith("#")
+    ? entry.markdown
+    : `# ${entry.title}\n\n${entry.markdown}`;
+  const liveNode = state.nodeId
+    ? await tx
+        .selectFrom("resources")
+        .select(["id", "format", "title", "parent_id"])
+        .where("id", "=", state.nodeId)
+        .where("deleted_at", "is", null)
+        .executeTakeFirst()
+    : undefined;
+  const placed =
+    liveNode?.title === entry.title.slice(0, 160) &&
+    (liveNode?.parent_id ?? null) === parentId;
+  if (
+    liveNode?.format === "rich_text" &&
+    state.projectedHash === contentHash &&
+    placed
+  )
+    return liveNode.id;
+  const nodeId =
+    liveNode?.id ??
+    (await insertKnowledgeDocument(
+      tx,
+      libraryId,
+      ownerId,
+      parentId,
+      entry.title,
+      markdown,
+      figures,
+    ));
+  if (liveNode) {
+    if (!placed)
+      await tx
+        .updateTable("resources")
+        .set({
+          title: entry.title.slice(0, 160),
+          parent_id: parentId,
+          library_id: libraryId,
+          updated_at: new Date().toISOString(),
+        })
+        .where("id", "=", liveNode.id)
+        .execute();
+    await writeKnowledgeRichDocument(tx, liveNode.id, markdown, figures);
+  }
+  state.nodeId = nodeId;
+  state.projectedHash = contentHash;
+  await tx
+    .updateTable("knowledge_entries")
+    .set({ review_state: JSON.stringify(state) })
+    .where("id", "=", entry.id)
+    .execute();
+  return nodeId;
+}
+
+export async function projectPublishedKnowledge(
+  db: DB,
+  actor: Actor,
+  libraryId: string,
+) {
+  await maintainKnowledge(db, actor, libraryId);
+  const library = await db
+    .selectFrom("resources")
+    .select("owner_id")
+    .where("id", "=", libraryId)
+    .executeTakeFirst();
+  if (!library) return;
+  const published = await db
+    .selectFrom("knowledge_entries")
+    .selectAll()
+    .where("library_id", "=", libraryId)
+    .where("status", "=", "published")
+    .execute();
+  if (!published.length) return;
+  await transact(db, async (tx) => {
+    for (const entry of published)
+      await projectKnowledgeEntry(tx, libraryId, library.owner_id, entry);
+  });
+}
+
 export async function reviewKnowledgeEntry(
   db: DB,
   actor: Actor,
@@ -833,6 +1108,9 @@ export async function reviewKnowledgeEntry(
         .where("revision", "=", state.replacesRevision)
         .executeTakeFirst();
       if (!original) fail(409, "原知识已变化，请核对后重新发布");
+      const originalState = JSON.parse(original.review_state);
+      if (!state.nodeId && typeof originalState.nodeId === "string")
+        state.nodeId = originalState.nodeId;
       const archived = {
         ...original,
         status: "superseded",
@@ -874,7 +1152,23 @@ export async function reviewKnowledgeEntry(
       .executeTakeFirst();
     if (!Number(result.numUpdatedRows)) fail(409, "知识已变化，请刷新");
     await versionEntry(tx, updated, actor);
-    return publicEntry(updated);
+    if (action === "publish") {
+      const library = await tx
+        .selectFrom("resources")
+        .select("owner_id")
+        .where("id", "=", libraryId)
+        .executeTakeFirstOrThrow();
+      await projectKnowledgeEntry(tx, libraryId, library.owner_id, {
+        ...updated,
+        review_state: updated.review_state,
+      });
+    }
+    const stored = await tx
+      .selectFrom("knowledge_entries")
+      .selectAll()
+      .where("id", "=", updated.id)
+      .executeTakeFirstOrThrow();
+    return publicEntry(stored);
   });
 }
 
@@ -1087,6 +1381,38 @@ export const curationOutput = z
             reason: z.string().max(4000),
             replacesId: z.string().uuid().optional(),
             path: knowledgePath.optional(),
+            figures: z
+              .array(
+                z
+                  .object({
+                    type: z.enum(["flowchart", "mindmap"]),
+                    nodes: z
+                      .array(
+                        z
+                          .object({
+                            id: z.string().trim().min(1).max(40),
+                            label: z.string().trim().min(1).max(80),
+                            shape: z.string().max(40).optional(),
+                          })
+                          .strict(),
+                      )
+                      .min(2)
+                      .max(12),
+                    edges: z
+                      .array(
+                        z
+                          .object({
+                            source: z.string().min(1).max(40),
+                            target: z.string().min(1).max(40),
+                          })
+                          .strict(),
+                      )
+                      .max(16),
+                  })
+                  .strict(),
+              )
+              .max(2)
+              .optional(),
             resolution: z
               .object({
                 mode: z.enum(["review", "weighted"]),
@@ -1117,13 +1443,20 @@ export type CurationGenerator = (input: {
     path?: string[];
     sourceIds?: string[];
   }[];
+  focus?: KnowledgeFocus;
 }) => Promise<z.infer<typeof curationOutput>>;
+export type KnowledgeFocus = {
+  title: string;
+  path: string[];
+  detail: string;
+};
 
 export async function queueKnowledgeCuration(
   db: DB,
   actor: Actor,
   libraryId: string,
   trigger = "manual",
+  focus?: KnowledgeFocus,
 ) {
   return transact(db, async (tx) => {
     const library = await maintainKnowledge(tx, actor, libraryId);
@@ -1153,6 +1486,18 @@ export async function queueKnowledgeCuration(
           actorId: actor.id,
           instructionHash: bundle.hash,
           queuedAt: new Date().toISOString(),
+          ...(focus
+            ? {
+                focus: {
+                  title: focus.title.trim().slice(0, 80),
+                  path: focus.path
+                    .map((segment) => segment.trim())
+                    .filter(Boolean)
+                    .slice(0, 8),
+                  detail: focus.detail.trim().slice(0, 400),
+                },
+              }
+            : {}),
         }),
         created_at: new Date().toISOString(),
       })
@@ -1476,10 +1821,18 @@ export async function executeKnowledgeCuration(
     const changedMaterials = materials.filter(
       (material) => !observed.has(hash(material)),
     );
-    const output: z.infer<typeof curationOutput> = { entries: [], notes: "" };
+    const focus = detail.focus as KnowledgeFocus | undefined;
+    const targets = focus?.title ? materials : changedMaterials;
+    const output: z.infer<typeof curationOutput> = {
+      entries: [],
+      notes:
+        focus?.title && !targets.length
+          ? "没有可读取的来源，这条缺口还补不上。"
+          : "",
+    };
     // Each source is extracted in isolation. Another source's instructions never
     // see its raw material; shared guidance cannot override source-local limits.
-    for (const material of changedMaterials) {
+    for (const material of targets) {
       const currentRun = await db
         .selectFrom("knowledge_runs")
         .select("status")
@@ -1526,6 +1879,7 @@ export async function executeKnowledgeCuration(
               path: JSON.parse(entry.review_state).path ?? [],
             };
           }),
+          ...(focus?.title ? { focus } : {}),
         }),
       );
       if (
@@ -1567,12 +1921,28 @@ export async function executeKnowledgeCuration(
       for (const guard of readGuards) await guard(tx);
       const ids: string[] = [];
       let pendingCount = 0;
+      const entryFingerprint = (title: string, markdown: string, figures: unknown = []) =>
+        hash({ title, markdown, figures: figures ?? [] });
       const seen = new Set(
         existing.map((entry) =>
-          hash({ title: entry.title, markdown: entry.markdown }),
+          entryFingerprint(
+            entry.title,
+            entry.markdown,
+            knowledgeFigures(JSON.parse(entry.review_state).figures),
+          ),
         ),
       );
-      const revisionSeen = new Set(existing.filter(entry => entry.status !== "superseded").map(entry => hash({ title: entry.title, markdown: entry.markdown })));
+      const revisionSeen = new Set(
+        existing
+          .filter((entry) => entry.status !== "superseded")
+          .map((entry) =>
+            entryFingerprint(
+              entry.title,
+              entry.markdown,
+              knowledgeFigures(JSON.parse(entry.review_state).figures),
+            ),
+          ),
+      );
       for (const proposed of output.entries) {
         const sourceIds = [...new Set(proposed.sourceIds)];
         if (
@@ -1587,7 +1957,14 @@ export async function executeKnowledgeCuration(
         );
         const title = sanitizeKnowledge(proposed.title, outputSettings),
           markdown = sanitizeKnowledge(proposed.markdown, outputSettings);
-        const fingerprint = hash({ title, markdown });
+        const figures = knowledgeFigures(proposed.figures).map((figure) => ({
+          ...figure,
+          nodes: figure.nodes.map((node) => ({
+            ...node,
+            label: sanitizeKnowledge(node.label, outputSettings),
+          })),
+        })).filter((figure) => figure.nodes.every((node) => node.label));
+        const fingerprint = entryFingerprint(title, markdown, figures);
         // A reviewed-away historical value may still conflict with a newer human amendment.
         // Suppress existing/rejected candidates, but let an explicit revision reference that history.
         if ((proposed.replacesId ? revisionSeen : seen).has(fingerprint)) continue;
@@ -1634,6 +2011,7 @@ export async function executeKnowledgeCuration(
             resolution: proposed.resolution,
             conflict: !!replacement,
             reason: sanitizeKnowledge(proposed.reason, outputSettings),
+            ...(figures.length ? { figures } : {}),
             runId,
             ...(replacement
               ? {

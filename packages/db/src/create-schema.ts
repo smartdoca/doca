@@ -430,6 +430,7 @@ async function ensureKnowledgeSchema(db: Kysely<any>) {
     `CREATE TABLE IF NOT EXISTS "knowledge_runs" ("id" varchar(36) primary key, "library_id" varchar(36) not null references "resources" ("id") on delete cascade, "trigger" varchar(16) not null, "status" varchar(16) not null, "detail" text not null default '', "created_at" varchar(32) not null)`,
     `CREATE INDEX IF NOT EXISTS "knowledge_runs_library" on "knowledge_runs" ("library_id", "created_at")`,
     `CREATE TABLE IF NOT EXISTS "knowledge_bots" ("library_id" varchar(36) primary key references "resources" ("id") on delete cascade, "title" varchar(200) not null default '', "published" integer not null default 0, "updated_at" varchar(32) not null)`,
+    `CREATE TABLE IF NOT EXISTS "knowledge_directories" ("library_id" varchar(36) not null references "resources" ("id") on delete cascade, "path" varchar(800) not null, "resource_id" varchar(36) not null references "resources" ("id") on delete cascade, primary key ("library_id", "path"))`,
   ]) {
     try {
       await sql.raw(statement).execute(db);

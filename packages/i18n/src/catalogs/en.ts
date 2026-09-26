@@ -126,6 +126,11 @@ export const en = {
   "knowledge.curationHint":
     "Curate subscribed material using current instructions. Review is the default; explicitly enabled weighted revisions may apply automatically. Unresolved conflicts still require a decision.",
   "knowledge.curate": "Start curation",
+  "knowledge.gaps": "Find gaps",
+  "knowledge.gapsHint":
+    "Topics named in the guide that published knowledge does not cover yet. Filling one drafts from subscribed material and waits for confirmation.",
+  "knowledge.gapsEmpty": "Published knowledge already covers the topics named in the guide.",
+  "knowledge.fillGap": "Fill this gap",
   "knowledge.sourceReviews": "Missing sources to review",
   "knowledge.sourceReviewsHint":
     "This knowledge remains usable. Keep it to stop repeated reminders about the same missing sources.",

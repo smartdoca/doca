@@ -15,6 +15,8 @@ import {
   executeKnowledgeCuration,
   knowledgeSourceReviews,
   knowledgeEntries,
+  knowledgeOutlineGaps,
+  projectPublishedKnowledge,
   saveKnowledgeAssistant,
   searchKnowledgeAssistant,
   detachKnowledgeSource,
@@ -1292,4 +1294,57 @@ it("keeps instruction history without listing guides for removed pending subscri
   await dismissKnowledgeSubscription(db, alice, library, source.id);
   expect((await knowledgeInstructions(db, alice, library)).files.some(file => file.path === path)).toBe(false);
   expect(await db.selectFrom("knowledge_instructions").select("path").where("library_id", "=", library).where("path", "=", path).execute()).toHaveLength(1);
+});
+
+it("places a published entry three levels deep in the library tree", async () => {
+  const draft = await saveHumanKnowledge(db, alice, library, {
+    title: "DNS 递归链路",
+    markdown: "查询从工作站进入递归解析器。",
+    path: ["技术", "递归解析"],
+    expectedRevision: 0,
+  });
+  await reviewKnowledgeEntry(db, alice, library, draft.id, draft.revision, "publish");
+  const docs = await db
+    .selectFrom("resources")
+    .select(["id", "title", "parent_id", "format"])
+    .where("library_id", "=", library)
+    .where("kind", "=", "document")
+    .where("deleted_at", "is", null)
+    .execute();
+  const first = docs.find((doc) => doc.title === "技术" && !doc.parent_id);
+  const second = docs.find((doc) => doc.title === "递归解析" && doc.parent_id === first?.id);
+  const leaf = docs.find((doc) => doc.title === "DNS 递归链路" && doc.parent_id === second?.id);
+  expect(first?.format).toBe("rich_text");
+  expect(second?.format).toBe("rich_text");
+  expect(leaf?.format).toBe("rich_text");
+  const text = await db.selectFrom("document_states").select(["text", "codec"]).where("resource_id", "=", leaf!.id).executeTakeFirst();
+  expect(text?.codec).toBe("slate-kit");
+  expect(text?.text).toContain("递归解析器");
+  const stored = await db.selectFrom("knowledge_entries").select("review_state").where("id", "=", draft.id).executeTakeFirstOrThrow();
+  const state = JSON.parse(stored.review_state);
+  state.figures = [{
+    type: "flowchart",
+    nodes: [
+      { id: "ask", label: "解析器节点", shape: "terminator" },
+      { id: "resolve", label: "递归解析", shape: "process" },
+    ],
+    edges: [{ source: "ask", target: "resolve" }],
+  }];
+  delete state.projectedHash;
+  await db.updateTable("knowledge_entries").set({ review_state: JSON.stringify(state) }).where("id", "=", draft.id).execute();
+  await projectPublishedKnowledge(db, alice, library);
+  const drawn = await db.selectFrom("document_states").select("text").where("resource_id", "=", leaf!.id).executeTakeFirst();
+  expect(drawn?.text).toContain("解析器节点");
+});
+
+it("lists guide topics that published knowledge does not cover", () => {
+  const gaps = knowledgeOutlineGaps("范围包括“缓存与记录”。缓存如何影响查询？", [
+    { status: "published", title: "查询入口", markdown: "工作站发起查询。", path: ["技术"] },
+  ]);
+  expect(gaps.map((gap) => gap.title)).toContain("缓存与记录");
+  expect(gaps.some((gap) => gap.title.includes("缓存如何影响"))).toBe(false);
+  const missed = knowledgeOutlineGaps("量子中继何时落地？", [
+    { status: "published", title: "查询入口", markdown: "工作站发起查询。", path: ["技术"] },
+  ]);
+  expect(missed.map((gap) => gap.title)).toContain("量子中继何时落地");
 });

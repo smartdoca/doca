@@ -28,6 +28,7 @@ import {
   sanitizeKnowledge,
   knowledgeSettingsSchema,
   knowledgeHumanChanges,
+  knowledgeOutlineGaps,
   hideRestrictedKnowledgeLinks,
 } from "@core/modules/knowledge/system.js";
 
@@ -44,9 +45,16 @@ export function registerKnowledgeSystem(
     async (req) => {
       const actor = auth(req),
         id = req.params.id;
+      const view = await knowledgeManagementView(db, actor, id);
+      const entries = await knowledgeEntries(db, actor, id);
       return {
-        ...(await knowledgeManagementView(db, actor, id)),
-        entries: await knowledgeEntries(db, actor, id),
+        ...view,
+        entries,
+        gaps: knowledgeOutlineGaps(
+          view.files.find((file) => file.path === "KNOWLEDGE.md")?.markdown ??
+            "",
+          entries,
+        ),
         humanChanges: await knowledgeHumanChanges(db, actor, id),
         reviews: await knowledgeSourceReviews(db, actor, id),
         runs: await knowledgeRunHistory(db, actor, id),
@@ -273,10 +281,34 @@ export function registerKnowledgeSystem(
         req.params.subscriptionId,
       ),
   );
-  api.post<{ Params: { id: string } }>(
+  api.post<{
+    Params: { id: string };
+    Body: {
+      gap?: { title?: string; path?: string[]; detail?: string };
+    };
+  }>(
     `${root}/curate`,
     { schema: { params } },
-    (req) => queueKnowledgeCuration(db, auth(req), req.params.id),
+    (req) => {
+      const gap = req.body?.gap;
+      if (gap && (typeof gap.title !== "string" || !gap.title.trim()))
+        fail(400, "缺口需要标题");
+      return queueKnowledgeCuration(
+        db,
+        auth(req),
+        req.params.id,
+        "manual",
+        gap?.title
+          ? {
+              title: gap.title,
+              path: Array.isArray(gap.path)
+                ? gap.path.filter((segment) => typeof segment === "string")
+                : [],
+              detail: typeof gap.detail === "string" ? gap.detail : "",
+            }
+          : undefined,
+      );
+    },
   );
   api.post<{ Params: { id: string; runId: string } }>(
     `${root}/runs/:runId/cancel`,
