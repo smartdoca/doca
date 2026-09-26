@@ -251,3 +251,31 @@ export async function sendKnowledgeMessage(
     return { ...conversation, state: "queued" };
   });
 }
+
+/** One scheduled occurrence owns one conversation; task retries retain this identity. */
+export async function createScheduledKnowledgeConversation(
+  db: DB,
+  actor: Actor,
+  libraryId: string,
+  triggeredAt = new Date(),
+) {
+  return transact(db, async (tx) => {
+    const timestamp = triggeredAt.toISOString();
+    const conversation = await createKnowledgeConversation(
+      tx,
+      actor,
+      libraryId,
+      "curation",
+      timestamp.replace("T", " ").replace(/\.\d{3}Z$/, " UTC"),
+    );
+    await sendKnowledgeMessage(
+      tx,
+      actor,
+      conversation.id,
+      "检查来源变化和质量，整理需要更新的知识，遵守本库来源范围和人工操作，按需推荐符合范围的高质量来源。",
+      randomUUID(),
+      "schedule",
+    );
+    return conversation;
+  });
+}

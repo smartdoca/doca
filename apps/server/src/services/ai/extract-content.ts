@@ -52,18 +52,30 @@ function clipParts(parts: ExtractedPart[]): ExtractedPart[] {
   const out: ExtractedPart[] = [];
   let text = 0;
   let images = 0;
+  let omitted = false;
   for (const part of parts) {
     if (part.type === "text") {
-      if (text >= MAX_TEXT) continue;
+      if (text >= MAX_TEXT) {
+        omitted = true;
+        continue;
+      }
       const remaining = MAX_TEXT - text;
-      const next = part.text.length > remaining ? part.text.slice(0, remaining) + "\n[附件文字超过上限，后文已截断]" : part.text;
+      const next =
+        part.text.length > remaining
+          ? part.text.slice(0, remaining) + "\n[附件文字超过上限，后文已截断]"
+          : part.text;
       text += next.length;
       out.push({ type: "text", text: next });
     } else if (images < MAX_IMAGES && sniffImage(part.data)) {
       images += 1;
       out.push(part);
-    }
+    } else omitted = true;
   }
+  if (omitted)
+    out.push({
+      type: "text",
+      text: "[部分文字或图片超过上限或无法解码，未识别]",
+    });
   return out;
 }
 
@@ -264,7 +276,9 @@ export async function extractFilePartsAsync(
 export function extractAttachmentText(filename: string, body: Buffer) {
   const parts = extractFileParts(filename, body);
   const text = parts
-    .filter((part): part is ExtractedPart & { type: "text" } => part.type === "text")
+    .filter(
+      (part): part is ExtractedPart & { type: "text" } => part.type === "text",
+    )
     .map((part) => part.text)
     .join("\n")
     .trim();

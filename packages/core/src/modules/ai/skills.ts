@@ -84,7 +84,7 @@ Markdown：
       `
 先读scene、元素树及稳定ID，检查已有元素边界。tag负责绘制，name负责原生属性面板；新增工具会按tag补齐name，自己指定时应使用原生值rect、ellipse、text、line、arrow、path、polygon、star、image、group、frame，不能用描述性名称覆盖name。用户指定选区时只改选中的节点，不移动整张画布。
 - 图形：{type:"add",element:{id:"唯一ID",tag:"Rect",x:80,y:160,width:160,height:64,fill:"#E8F1FE"}}。
-- 文字单独建原生Text：{type:"add",element:{id:"唯一ID",tag:"Text",x:96,y:176,width:128,height:32,text:"开始",fill:"#1f2937"}}；不要假设Rect.text会显示。
+- 文字单独建原生Text：{type:"add",element:{id:"唯一ID",tag:"Text",x:96,y:176,width:128,height:32,text:"开始",fill:"#1f2937",textAlign:"center",verticalAlign:"middle"}}；不要假设Rect.text会显示。文本框位置居中不等于文字居中；需要明确 textAlign/verticalAlign，回读属性和边界，不能仅凭保存成功宣称版面通过。
 - 连线用原生Line，例：{tag:"Line",x:240,y:192,points:[0,0,80,0],stroke:"#64748b",strokeWidth:2,endArrow:"angle"}。points是相对x/y的坐标数组，不能写模型不支持的toPoint/x1/y1/x2/y2。startArrow/endArrow仅使用none、angle、triangle、circle、diamond；不能用true或"arrow"。明确端点坐标和节点连接关系。
 - 从左到右或从上到下排列，预留40~80像素节点间距，文字位于节点内部，考虑文本长度，不重叠。分支流程标明条件，节点和线放到合适层级。
 - patch:{type:"patch",id,patch:{x,y,width,height,fill,...}}局部修改；text:{type:"text",id,index,deleteCount,text}替换标签。

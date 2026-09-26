@@ -243,6 +243,7 @@ export function KnowledgeChat({
           {threads.map((thread) => (
             <button
               key={thread.id}
+              title={thread.title}
               className={selected === thread.id ? "selected" : ""}
               onClick={() => setSelected(thread.id)}
             >

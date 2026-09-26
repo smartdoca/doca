@@ -7,6 +7,18 @@ import {
 } from "../packages/core/src/modules/ai/edit-normalize.js";
 import { validateEditOperations } from "../packages/core/src/modules/ai/edit-schema.js";
 
+it("accepts an unambiguous canvas params alias but rejects conflicting patches", () => {
+  const operations = normalizeEditOperations("canvas", [
+    { type: "patch", id: "label", params: { textAlign: "center", verticalAlign: "middle" } },
+  ]);
+  expect(operations[0]).toEqual({ type: "patch", id: "label", patch: { textAlign: "center", verticalAlign: "middle" } });
+  expect(() => validateEditOperations("canvas", operations)).not.toThrow();
+  const conflict = normalizeEditOperations("canvas", [
+    { type: "patch", id: "label", patch: { x: 10 }, params: { x: 20 } },
+  ]);
+  expect(() => validateEditOperations("canvas", conflict)).toThrow();
+});
+
 it("parses A1 and common spreadsheet payloads into cells", () => {
   expect(parseA1("B2")).toEqual({ row: 1, column: 1 });
   const [op] = normalizeEditOperations("spreadsheet", [
@@ -173,4 +185,15 @@ it("accepts image cells written with assetId or wrapped in a paragraph", () => {
   expect(() =>
     validateEditOperations("rich_text", [direct!, wrapped!]),
   ).not.toThrow();
+});
+
+it("advertises concrete cell fields and rejects the null payload seen in live model loops", async () => {
+  const { z } = await import("zod");
+  const { editToolSchema } = await import("../packages/core/src/modules/ai/edit-schema.js");
+  const schema=editToolSchema("spreadsheet");
+  const wire=JSON.stringify(z.toJSONSchema(schema));
+  expect(wire).toContain('"column"');
+  expect(wire).toContain('"row"');
+  expect(wire).toContain('"pattern"');
+  expect(schema.safeParse({resourceId:"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",seq:0,epochId:"e",operations:[{type:"cells",sheetId:"s",cells:null}]}).success).toBe(false);
 });

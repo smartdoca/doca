@@ -49,7 +49,7 @@ export function unverifiedImageDelivery(
 ): DeliveryReview | null {
   if (hasImageReceipt) return null;
   const claims =
-    /(?:图片|图像|生图|生成接口|生成工具|工具)[^。！？\n]{0,45}(?:已生成|已展示|生成成功|生成.{0,4}成功|返回.{0,8}成功|报告成功)|(?:已生成|已展示|生成了|生成成功)[^。！？\n]{0,25}(?:图片|图像|照片)|(?:image|picture)[^.!?\n]{0,40}(?:generated|displayed|created)|(?:generated|created|displayed)[^.!?\n]{0,25}(?:image|picture)/i;
+    /(?:图片|图像|生图|生成接口|生成工具)[^。！？\n]{0,45}(?:已生成|已展示|生成成功|生成.{0,4}成功|返回.{0,8}成功|报告成功)|(?:已生成|已展示|生成了|生成成功)[^。！？\n]{0,25}(?:图片|图像|照片)|(?:image|picture)[^.!?\n]{0,40}(?:generated|displayed|created)|(?:generated|created|displayed)[^.!?\n]{0,25}(?:image|picture)/i;
   const asserted = text
     .split(/[。！？\n]/)
     .filter(
@@ -155,7 +155,7 @@ export function unverifiedDocumentDelivery(
   return {
     verdict: "revise",
     summary:
-      "文档交付未通过：本轮没有已保存的文档操作回执，不能声称已修复、写入或回读确认。先调用 document_read 查看目标和 capabilities，再实际调用对应类型的编辑工具。只需说明或无法完成时如实回答，不得编造操作和保存结果。",
+      "文档交付未通过：本轮没有已保存的文档操作回执，不能声称已修复、写入或回读确认。需要修改时先调用 document_read 查看目标和 capabilities，再调用对应编辑工具。若本轮仅核验已有成果，回读后明确“本轮未修改”，不要为获取回执重复写入。只需说明或无法完成时如实回答，不得编造操作和保存结果。",
     checks: [
       {
         requirement: "文档修改必须有真实保存回执",

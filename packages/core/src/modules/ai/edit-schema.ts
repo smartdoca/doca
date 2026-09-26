@@ -267,7 +267,12 @@ const schemas = {
         }),
       ]),
     }),
-    op("replaceText", { query: z.string().min(1), text: z.string(), slideId: optionalId, id: optionalId }),
+    op("replaceText", {
+      query: z.string().min(1),
+      text: z.string(),
+      slideId: optionalId,
+      id: optionalId,
+    }),
     op("formatText", { slideId: id, ids, marks: json }),
     op("paragraphFormat", { slideId: id, ids, format: json }),
     op("pageSize", {
@@ -364,7 +369,40 @@ const wireOperation = z
   })
   .passthrough();
 
-export function editToolSchema(_format: DocumentFormat) {
+const wireCells = z
+  .union([
+    z
+      .array(
+        z
+          .object({
+            row: index,
+            column: index,
+            v: z
+              .union([z.string(), z.number(), z.boolean(), z.null()])
+              .optional(),
+            f: z.string().nullable().optional(),
+            s: z
+              .object({
+                bl: z.number().optional(),
+                n: z.object({ pattern: z.string() }).optional(),
+              })
+              .passthrough()
+              .optional(),
+          })
+          .passthrough(),
+      )
+      .min(1),
+    z.record(z.string(), z.record(z.string(), json.nullable())),
+  ])
+  .describe(
+    '必须提供实际单元格数据。优先使用 [{row:0,column:0,v:"表头"},{row:1,column:0,f:"=SUM(B2:B4)"}]。零基坐标，禁止 null 或空数组。',
+  );
+
+export function editToolSchema(format: DocumentFormat) {
+  const operation =
+    format === "spreadsheet"
+      ? wireOperation.extend({ cells: wireCells.optional() })
+      : wireOperation;
   // Keep union checks out of the wire schema: Mastra reports those as a bare
   // "Invalid input". Named fields still have to be listed, otherwise providers
   // drop sheetId/cells and the model only retries with type.
@@ -374,8 +412,8 @@ export function editToolSchema(_format: DocumentFormat) {
       seq: index,
       epochId: id,
       sheetId: z.string().min(1).max(200).optional(),
-      cells: z.any().optional(),
-      operations: z.array(wireOperation).min(1).max(80),
+      cells: (format === "spreadsheet" ? wireCells : z.any()).optional(),
+      operations: z.array(operation).min(1).max(80),
     })
     .passthrough();
 }
@@ -561,19 +599,22 @@ export function validateEditOperations(format: string, operations: any[]) {
     assert(
       command,
       typeof operation?.type === "string"
-        ? `不支持 ${format} 命令 ${String(operation.type)}，${format === "rich_text" && operation.type === "remove" ? "删除块请用 {type:\"deleteBlock\",blockId:\"已读取的块ID\"}；" : ""}请读取 capabilities.operations`
+        ? `不支持 ${format} 命令 ${String(operation.type)}，${format === "rich_text" && operation.type === "remove" ? '删除块请用 {type:"deleteBlock",blockId:"已读取的块ID"}；' : ""}请读取 capabilities.operations`
         : `${format} 命令缺少 type 字段，请读取 capabilities.operations`,
     );
     const parsed = command!.safeParse(operation);
     assert(
       parsed.success,
-      `${format} 的 ${String(operation.type)} 参数不合法：${
-        (parsed.error?.issues ?? [])
-          .slice(0, 5)
-          .map((issue) => `${issue.path.join(".") || "参数"} ${issue.message}`)
-          .join("；")
-          .slice(0, 1500)
-      }；该命令字段：${Object.keys(command!.shape).join("、")}；请按 capabilities 中该命令的参数重试`,
+      `${format} 的 ${String(operation.type)} 参数不合法：${(
+        parsed.error?.issues ?? []
+      )
+        .slice(0, 5)
+        .map((issue) => `${issue.path.join(".") || "参数"} ${issue.message}`)
+        .join("；")
+        .slice(
+          0,
+          1500,
+        )}；该命令字段：${Object.keys(command!.shape).join("、")}；请按 capabilities 中该命令的参数重试`,
     );
     if (format === "spreadsheet" && operation.type === "cells") {
       const cells = (parsed.data as { cells?: Record<string, unknown> }).cells;

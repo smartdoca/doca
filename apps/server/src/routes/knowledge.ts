@@ -1,6 +1,6 @@
 import { registerKnowledgeStudio } from "./knowledge-studio.js";
 import type { AnswerIndex } from "@core/modules/knowledge/publications.js";
-import { createKnowledgeConversation, sendKnowledgeMessage } from "@core/modules/knowledge/conversations.js";
+import { createScheduledKnowledgeConversation } from "@core/modules/knowledge/conversations.js";
 import { randomUUID } from "node:crypto";
 import { registerKnowledgeSystem } from "./knowledge-system.js";
 import { executeKnowledgeCuration, queueKnowledgeCuration } from "@core/modules/knowledge/system.js";
@@ -72,8 +72,7 @@ export function registerKnowledge(
       if (Date.now() - lastSweep < 60_000) return;
       lastSweep = Date.now();
       await sweepKnowledgeSchedules(db, async (actor, id) => {
-        const conversation=await createKnowledgeConversation(db,actor,id,"curation","定时知识整理");
-        return sendKnowledgeMessage(db,actor,conversation.id,"检查来源变化和质量，整理需要更新的知识，推荐可以补充缺口的高质量来源。",randomUUID(),"schedule");
+        return createScheduledKnowledgeConversation(db,actor,id);
       });
     })
       .catch(() => {})

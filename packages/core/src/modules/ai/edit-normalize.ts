@@ -187,6 +187,13 @@ function spreadsheetOperation(
 }
 
 function canvasOperation(op: Record<string, unknown>) {
+  // Some models use the generic tool payload name for a native patch.
+  // Only accept the unambiguous alias; conflicting payloads still fail validation.
+  if (op.type === "patch" && op.patch === undefined && op.params &&
+      typeof op.params === "object" && !Array.isArray(op.params)) {
+    const { params, ...rest } = op;
+    return { ...rest, patch: params };
+  }
   const element = op.element;
   if (op.type !== "add" || !element || typeof element !== "object") return op;
   const tag = String((element as { tag?: string }).tag ?? "");

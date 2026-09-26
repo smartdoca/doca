@@ -391,10 +391,17 @@ export async function sweepKnowledgeSchedules(db: DB, curate?: (actor: Actor, id
       const last = await db.selectFrom("knowledge_runs").select("created_at").where("library_id", "=", library.id).orderBy("created_at", "desc").executeTakeFirst();
       const wait = library.knowledge_schedule === "weekly" ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
       if (last && Date.now() - Date.parse(last.created_at) < wait) continue;
+      // Scheduling is represented by a conversation task, not a legacy curation run.
+      // Count queued/failed occurrences too: recovery belongs to that same conversation.
+      const scheduled = await db.selectFrom("knowledge_messages as m")
+        .innerJoin("knowledge_conversations as c", "c.id", "m.conversation_id")
+        .select("m.created_at").where("c.scope_id", "=", library.id)
+        .where("c.kind", "=", "curation").where("m.trigger", "=", "schedule")
+        .where("m.role", "=", "user").orderBy("m.created_at", "desc").executeTakeFirst();
+      if (scheduled && Date.now() - Date.parse(scheduled.created_at) < wait) continue;
       const owner = await db.selectFrom("users").select(["id", "display_name", "admin"]).where("id", "=", library.owner_id).executeTakeFirst();
       if (!owner) continue;
-      const configured = await db.selectFrom("knowledge_instructions").select("path").where("library_id", "=", library.id).executeTakeFirst();
-      if (curate && configured) await curate(owner, library.id);
+      if (curate) await curate(owner, library.id);
       else await runKnowledgeLibrary(db, owner, library.id, "schedule");
     } catch {
       continue;
