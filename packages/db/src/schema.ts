@@ -813,6 +813,11 @@ export interface Schema {
     enabled: number;
     updated_at: string;
   };
+  knowledge_directories: {
+    library_id: string;
+    path: string;
+    resource_id: string;
+  };
   knowledge_runs: {
     id: string;
     library_id: string;

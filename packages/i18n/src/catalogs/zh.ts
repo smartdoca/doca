@@ -119,6 +119,11 @@ export const zh = {
   "knowledge.curationHint":
     "按当前指引整理订阅材料。默认先审核；启用明确权重自动采用后，符合规则的修订可直接生效，未决冲突仍需裁决。",
   "knowledge.curate": "开始整理",
+  "knowledge.gaps": "查漏补缺",
+  "knowledge.gapsHint":
+    "对照知识库指引，列出还没写进已发布知识的主题。补上一条会按现有材料起草，发布前需要你确认。",
+  "knowledge.gapsEmpty": "指引里提到的主题，已发布知识都覆盖到了。",
+  "knowledge.fillGap": "补上这一条",
   "knowledge.sourceReviews": "来源缺失，待你决定",
   "knowledge.sourceReviewsHint":
     "这些知识仍可正常使用。确认保留后，同一缺源情况不再重复提醒。",

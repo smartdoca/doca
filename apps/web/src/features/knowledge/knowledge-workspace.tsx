@@ -50,6 +50,7 @@ type Payload = {
   }[];
   reviews: { id: string; revision: number; title: string }[];
   runs: { id: string; status: string; detail: string; created_at: string }[];
+  gaps: { key: string; title: string; path: string[]; detail: string }[];
 };
 export function KnowledgeWorkspace({
   libraryId,
@@ -678,10 +679,46 @@ export function KnowledgeWorkspace({
             (r) => r.status === "queued" || r.status === "running",
           )
         }
-        onClick={() => void work(() => api(`${root}/curate`, "POST"))}
+        onClick={() => void work(() => api(`${root}/curate`, "POST", {}))}
       >
         {t("knowledge.curate")}
       </button>
+      <h3>{t("knowledge.gaps")}</h3>
+      <p>{t("knowledge.gapsHint")}</p>
+      {!data?.gaps.length && (
+        <p className="knowledge-empty">{t("knowledge.gapsEmpty")}</p>
+      )}
+      <ul className="library-system-links">
+        {data?.gaps.map((gap) => (
+          <li key={gap.key}>
+            <strong>{gap.title}</strong>
+            <p>{gap.detail}</p>
+            <button
+              disabled={
+                busy ||
+                !enabled ||
+                unsaved ||
+                data.runs.some(
+                  (run) => run.status === "queued" || run.status === "running",
+                )
+              }
+              onClick={() =>
+                void work(() =>
+                  api(`${root}/curate`, "POST", {
+                    gap: {
+                      title: gap.title,
+                      path: gap.path,
+                      detail: gap.detail,
+                    },
+                  }),
+                )
+              }
+            >
+              {t("knowledge.fillGap")}
+            </button>
+          </li>
+        ))}
+      </ul>
       <details className="knowledge-run-history" open={data?.runs.some(run => run.status === "queued" || run.status === "running")}>
       <summary>{t("knowledge.recentRuns")}</summary>
       <ul className="library-system-links">
