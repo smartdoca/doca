@@ -2,6 +2,7 @@ import type { Kysely } from "kysely";
 import { sql } from "kysely";
 
 const schemaStatements = [
+  `CREATE TABLE IF NOT EXISTS "file_operation_receipts" ("plugin_id" varchar(160) not null, "user_id" varchar(36) not null, "operation" varchar(32) not null, "operation_key" varchar(200) not null, "request_hash" varchar(64) not null, "status" varchar(16) not null, "result" text, "object_id" varchar(36), "profile_id" varchar(36), "object_key" text, "cleanup_at" varchar(32), "created_at" varchar(32) not null, primary key ("plugin_id", "user_id", "operation", "operation_key"));`,
   `CREATE TABLE IF NOT EXISTS "user_page_state" ("user_id" varchar(36) not null references "users" ("id") on delete cascade, "key" varchar(160) not null, "value" text not null, "version" integer not null, "updated_at" varchar(32) not null, constraint "user_page_state_pk" primary key ("user_id", "key"), constraint "user_page_state_version" check (version > 0));`,
   `CREATE TABLE IF NOT EXISTS "plugin_migrations" ("plugin_id" varchar(160) primary key, "version" varchar(64) not null, "applied_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "users" ("id" varchar(36) primary key, "login" varchar(160) not null unique, "display_name" varchar(160) not null, "password_hash" text not null, "admin" integer not null, "status" varchar(16) not null, "created_at" varchar(32) not null, "last_login_at" varchar(32), "public_id" varchar(160), "directory_mode" varchar(16), "profile_metadata" text default '{}' not null, "profile_revision" integer default 1 not null);`,
@@ -185,6 +186,10 @@ async function ensureAINoteSchema(db: Kysely<any>) {
 
 async function ensurePlatformRuntimeSchema(db: Kysely<any>) {
   for (const statement of [
+    schemaStatements.find(statement => statement.startsWith('CREATE TABLE IF NOT EXISTS "file_operation_receipts"'))!,
+    `ALTER TABLE "file_operation_receipts" ADD COLUMN "object_key" text`,
+    `ALTER TABLE "file_operation_receipts" ADD COLUMN "cleanup_at" varchar(32)`,
+    `CREATE TABLE IF NOT EXISTS "plugin_notifications" ("notification_id" varchar(36) primary key references "notifications" ("id") on delete cascade, "plugin_id" varchar(160) not null, "resource_type" varchar(160) not null, "resource_id" text not null, "title" text not null, "body" text not null, "path" text not null, "request_hash" varchar(64) not null, "withdrawn_at" varchar(32))`,
     `CREATE TABLE IF NOT EXISTS "plugin_migrations" ("plugin_id" varchar(160) primary key, "version" varchar(64) not null, "applied_at" varchar(32) not null)`,
     `CREATE TABLE IF NOT EXISTS "ai_session_events" ("session_id" text not null references "ai_sessions" ("id") on delete cascade, "seq" integer not null, "event_id" text not null, "digest" varchar(64) not null, "type" text not null, "payload" text not null, "created_at" text not null, constraint "ai_session_events_pk" primary key ("session_id", "seq"), constraint "ai_session_events_id" unique ("session_id", "event_id"))`,
     `CREATE INDEX IF NOT EXISTS "ai_session_events_time" on "ai_session_events" ("session_id", "seq")`,
@@ -427,6 +432,9 @@ async function ensureKnowledgeSchema(db: Kysely<any>) {
     `ALTER TABLE "resources" ADD COLUMN "knowledge_preset" text not null default ''`,
     `ALTER TABLE "knowledge_subscriptions" ADD COLUMN "creator_id" varchar(36) not null default ''`,
     `ALTER TABLE "knowledge_subscriptions" ADD COLUMN "preset" text not null default ''`,
+    `CREATE TABLE IF NOT EXISTS knowledge_source_groups (id varchar(36) primary key, library_id varchar(36) not null references resources(id) on delete cascade, title text not null, source_kind varchar(16) not null, created_at varchar(32) not null)`,
+    `ALTER TABLE knowledge_source_groups ADD COLUMN config text not null default '{}'`,
+    `ALTER TABLE knowledge_subscriptions ADD COLUMN group_id varchar(36) references knowledge_source_groups(id) on delete set null`,
     `CREATE TABLE IF NOT EXISTS "knowledge_runs" ("id" varchar(36) primary key, "library_id" varchar(36) not null references "resources" ("id") on delete cascade, "trigger" varchar(16) not null, "status" varchar(16) not null, "detail" text not null default '', "created_at" varchar(32) not null)`,
     `CREATE INDEX IF NOT EXISTS "knowledge_runs_library" on "knowledge_runs" ("library_id", "created_at")`,
     `CREATE TABLE IF NOT EXISTS "knowledge_bots" ("library_id" varchar(36) primary key references "resources" ("id") on delete cascade, "title" varchar(200) not null default '', "published" integer not null default 0, "updated_at" varchar(32) not null)`,
@@ -441,11 +449,27 @@ async function ensureKnowledgeSchema(db: Kysely<any>) {
   }
 }
 
+async function ensureKnowledgeStudio(db: Kysely<any>) {
+  for (const statement of [
+    `CREATE TABLE IF NOT EXISTS knowledge_checkpoints (task_id varchar(36) primary key, detail text not null default '{}', attempts integer not null default 0, available_at varchar(32) not null)`,
+    `CREATE TABLE IF NOT EXISTS knowledge_source_observations (library_id varchar(36) not null, source_id varchar(36) not null, fingerprint text not null, updated_at varchar(32) not null, PRIMARY KEY(library_id,source_id))`,
+    `CREATE TABLE IF NOT EXISTS knowledge_conversations (id varchar(36) primary key, scope_id varchar(36) not null, kind varchar(16) not null, owner_id varchar(36) not null, title text not null, summary text not null default '', state varchar(16) not null default 'idle', created_at varchar(32) not null, updated_at varchar(32) not null)`,
+    `CREATE INDEX IF NOT EXISTS knowledge_conversation_scope ON knowledge_conversations(scope_id,kind)`,
+    `CREATE TABLE IF NOT EXISTS knowledge_messages (id varchar(36) primary key, conversation_id varchar(36) not null references knowledge_conversations(id) on delete cascade, role varchar(16) not null, author_id varchar(36), trigger varchar(16) not null, content text not null, detail text not null default '{}', created_at varchar(32) not null)`,
+    `CREATE INDEX IF NOT EXISTS knowledge_message_thread ON knowledge_messages(conversation_id,created_at)`,
+    `CREATE TABLE IF NOT EXISTS knowledge_tasks (id varchar(36) primary key, conversation_id varchar(36) not null references knowledge_conversations(id) on delete cascade, actor_id varchar(36) not null, status varchar(16) not null, error text not null default '', created_at varchar(32) not null, updated_at varchar(32) not null)`,
+    `CREATE TABLE IF NOT EXISTS knowledge_cases (id varchar(36) primary key, bot_id varchar(36) not null, message_id varchar(36) not null, user_id varchar(36) not null, judgment varchar(16) not null, reason text not null, snapshot text not null, status varchar(16) not null default 'open', created_at varchar(32) not null, UNIQUE(message_id,user_id))`,
+    `CREATE TABLE IF NOT EXISTS knowledge_source_actions (id varchar(36) primary key, library_id varchar(36) not null, source_key text not null, actor_id varchar(36) not null, action varchar(32) not null, detail text not null, created_at varchar(32) not null)`,
+    `CREATE TABLE IF NOT EXISTS knowledge_publications (library_id varchar(36) primary key, revision integer not null, fingerprint text not null, documents text not null, status varchar(16) not null, error text not null, updated_at varchar(32) not null)`,
+  ]) await sql.raw(statement).execute(db);
+}
+
 export async function createSchema(db: Kysely<any>) {
   if ((await db.introspection.getTables()).length > 0) {
     await ensureFileSchema(db);
     await ensureSearchSchema(db);
     await ensureKnowledgeSchema(db);
+    await ensureKnowledgeStudio(db);
     await ensureResourceSchema(db);
     await ensureSiteSettingsSchema(db);
     await ensureUserSchema(db);
@@ -464,6 +488,7 @@ export async function createSchema(db: Kysely<any>) {
   await ensureFileSchema(db);
   await ensureSearchSchema(db);
   await ensureKnowledgeSchema(db);
+    await ensureKnowledgeStudio(db);
   await ensureResourceSchema(db);
   await ensureSiteSettingsSchema(db);
   await ensureUserSchema(db);

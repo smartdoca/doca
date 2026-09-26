@@ -305,76 +305,76 @@ function utf16BeHex(text: string) {
   return Buffer.from(bytes).toString("hex").toUpperCase();
 }
 
-function wrapPdfLine(line: string) {
-  const parts: string[] = [];
-  let current = "";
-  for (const ch of line) {
-    current += ch;
-    if (current.length >= 32) {
-      parts.push(current);
-      current = "";
-    }
-  }
-  if (current || !parts.length) parts.push(current);
-  return parts;
-}
-
 function pdfDocument(content: string) {
-  const lines = paragraphs(content).flatMap(wrapPdfLine).slice(0, 2000);
-  const pages: string[][] = [];
-  for (let i = 0; i < lines.length; i += 40)
-    pages.push(lines.slice(i, i + 40));
-  if (!pages.length) pages.push([""]);
-  const objects: string[] = [];
-  const add = (body: string) => {
-    objects.push(body);
-    return objects.length;
+  const pages: string[][] = [[]];
+  let y = 790;
+  const page = () => pages[pages.length - 1]!;
+  const ensure = (height: number) => {
+    if (height > 700) fail(400, "PDF单行内容过长，请拆分表格单元格或段落");
+    if (y - height < 55) { pages.push([]); y = 790; }
+    if (pages.length > 200) fail(400, "PDF超过200页，请拆分文件");
   };
+  const plain = (text: string) => inlineRuns(text).map(run => run.text).join("");
+  // A conservative full-em bound also handles CJK without depending on host fonts.
+  const wrap = (text: string, width: number, size: number) => {
+    const chars = [...text]; const length = Math.max(1, Math.floor(width / size));
+    const lines: string[] = [];
+    for (let i = 0; i < chars.length; i += length) lines.push(chars.slice(i,i+length).join(""));
+    return lines.length ? lines : [""];
+  };
+  const draw = (text: string, x: number, baseline: number, size: number) => {
+    page().push(`BT /F1 ${size} Tf 1 0 0 1 ${x} ${baseline} Tm <${utf16BeHex(text).slice(4)}> Tj ET`);
+  };
+  const lines = paragraphs(content);
+  for (let i = 0; i < lines.length;) {
+    const line = lines[i++]!;
+    if (!line.trim()) { y -= 8; continue; }
+    if (line.trim().startsWith("|")) {
+      const rows = [line];
+      while (i < lines.length && lines[i]!.trim().startsWith("|")) rows.push(lines[i++]!);
+      const values = rows.filter(row => !/^\s*\|[\s:|-]+\|\s*$/.test(row)).map(splitCells);
+      const columns = Math.max(...values.map(row => row.length));
+      if (columns > 12) fail(400,"PDF表格超过12列，请拆分表格");
+      const width = 475 / columns;
+      for (const [rowIndex,row] of values.entries()) {
+        const cells = Array.from({length:columns},(_,n) => wrap(plain(row[n] ?? ""),width-14,10));
+        const height = Math.max(...cells.map(cell => cell.length))*15+16;
+        ensure(height);
+        if (rowIndex === 0) page().push(`q 0.93 0.95 0.98 rg 60 ${y-height} 475 ${height} re f Q`);
+        for (let col = 0; col < columns; col++) {
+          page().push(`q 0.7 G 0.5 w ${60+col*width} ${y-height} ${width} ${height} re S Q`);
+          cells[col]!.forEach((text,n) => draw(text,67+col*width,y-18-n*15,10));
+        }
+        y -= height;
+      }
+      y -= 12; continue;
+    }
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
+    const size = heading ? Math.max(13,21-heading[1]!.length*2) : 11;
+    const value = plain(heading ? heading[2]! : line.replace(/^\s*[-*]\s+/,'• '));
+    for (const row of wrap(value,475,size)) { ensure(size+10); draw(row,60,y-size,size); y-=size+10; }
+    if (heading) y-=4;
+  }
+  const objects: string[] = [];
+  const add = (value: string) => (objects.push(value),objects.length);
+  add("<< /Type /Catalog /Pages 2 0 R >>"); add("placeholder");
+  // Type0 requires a descendant CID font; omitting it produces a blank PDF in real viewers.
+  add("<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light /Encoding /UniGB-UCS2-H /DescendantFonts [4 0 R] >>");
+  add("<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light /CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 4 >> /FontDescriptor 5 0 R /DW 1000 >>");
+  add("<< /Type /FontDescriptor /FontName /STSong-Light /Flags 6 /FontBBox [-25 -254 1000 880] /ItalicAngle 0 /Ascent 880 /Descent -120 /CapHeight 880 /StemV 80 >>");
   const pageIds: number[] = [];
-  const contentIds: number[] = [];
-  const fontId = 3;
-  add("<< /Type /Catalog /Pages 2 0 R >>");
-  add("placeholder");
-  add(
-    "<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light /Encoding /UniGB-UCS2-H >>",
-  );
-  for (const page of pages) {
-    const stream = [
-      "BT",
-      "/F1 12 Tf",
-      "16 TL",
-      "72 760 Td",
-      ...page.map((line, index) => {
-        const cmd = `<${utf16BeHex(line)}> Tj`;
-        return index ? `T* ${cmd}` : cmd;
-      }),
-      "ET",
-    ].join("\n");
-    contentIds.push(
-      add(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`),
-    );
+  for (const commands of pages) {
+    const stream = commands.join("\n");
+    const streamId = add(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`);
+    pageIds.push(add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents ${streamId} 0 R /Resources << /Font << /F1 3 0 R >> >> >>`));
   }
-  for (let i = 0; i < pages.length; i++)
-    pageIds.push(
-      add(
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentIds[i]} 0 R /Resources << /Font << /F1 ${fontId} 0 R >> >> >>`,
-      ),
-    );
-  objects[1] =
-    `<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] >>`;
-  const chunks = ["%PDF-1.4\n"];
-  const offsets = [0];
-  for (let i = 0; i < objects.length; i++) {
-    offsets.push(Buffer.byteLength(chunks.join("")));
-    chunks.push(`${i + 1} 0 obj\n${objects[i]}\nendobj\n`);
-  }
+  objects[1] = `<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] >>`;
+  const chunks = ["%PDF-1.4\n"]; const offsets = [0];
+  for (const [i,object] of objects.entries()) { offsets.push(Buffer.byteLength(chunks.join(""))); chunks.push(`${i+1} 0 obj\n${object}\nendobj\n`); }
   const startxref = Buffer.byteLength(chunks.join(""));
-  chunks.push(`xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`);
-  for (let i = 1; i <= objects.length; i++)
-    chunks.push(`${String(offsets[i]).padStart(10, "0")} 00000 n \n`);
-  chunks.push(
-    `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startxref}\n%%EOF\n`,
-  );
+  chunks.push(`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`);
+  offsets.slice(1).forEach(offset => chunks.push(`${String(offset).padStart(10,"0")} 00000 n \n`));
+  chunks.push(`trailer << /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${startxref}\n%%EOF\n`);
   return Buffer.from(chunks.join(""));
 }
 

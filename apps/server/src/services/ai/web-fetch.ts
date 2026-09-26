@@ -68,7 +68,9 @@ function makeTransport(kind: "page" | "file"): PageTransport {
                 : "text/html, text/plain, text/markdown, application/json;q=0.8",
             "Accept-Encoding": "identity",
             "User-Agent":
-              kind === "file" ? "Doca-FileDownloader/1.0" : "Doca-LinkReader/1.0",
+              kind === "file"
+                ? "Doca-FileDownloader/1.0"
+                : "Doca-LinkReader/1.0",
           },
         },
         (res) => {
@@ -85,7 +87,11 @@ function makeTransport(kind: "page" | "file"): PageTransport {
           }
           const announced = Number(res.headers["content-length"]);
           if (Number.isFinite(announced) && announced > limit) {
-            resolve({ status: 413, headers: res.headers, body: Buffer.alloc(0) });
+            resolve({
+              status: 413,
+              headers: res.headers,
+              body: Buffer.alloc(0),
+            });
             res.destroy();
             return;
           }
@@ -95,7 +101,9 @@ function makeTransport(kind: "page" | "file"): PageTransport {
             bytes += part.length;
             if (bytes > limit)
               res.destroy(
-                new Error(kind === "file" ? "file too large" : "page too large"),
+                new Error(
+                  kind === "file" ? "file too large" : "page too large",
+                ),
               );
             else parts.push(part);
           });
@@ -125,7 +133,7 @@ export function extractWebText(html: string, base: string) {
   let title = "",
     titleDepth = 0,
     skip = 0;
-  const stack: { skip: boolean; title: boolean; main: boolean }[] = [];
+  const stack: { skip: boolean; title: boolean; main: boolean; obsolete: boolean }[] = [];
   let mainDepth = 0;
   const all: string[] = [],
     main: string[] = [],
@@ -151,10 +159,13 @@ export function extractWebText(html: string, base: string) {
         const isTitle = name === "title",
           isMain =
             name === "main" || name === "article" || attrs.role === "main";
-        stack.push({ skip: hidden, title: isTitle, main: isMain });
+        const obsolete = /^(del|s|strike)$/.test(name) ||
+          /text-decoration(?:-line)?\s*:[^;]*line-through/i.test(attrs.style ?? "");
+        stack.push({ skip: hidden, title: isTitle, main: isMain, obsolete });
         if (hidden) skip++;
         if (isTitle) titleDepth++;
         if (isMain) mainDepth++;
+        if (obsolete) add(" [已删除或废弃的原文：");
         if (blocks.test(name)) add("\n");
         if (name === "a" && attrs.href && !skip) {
           try {
@@ -183,6 +194,7 @@ export function extractWebText(html: string, base: string) {
           anchor = undefined;
         }
         const state = stack.pop();
+        if (state?.obsolete) add("（不作为现行结论）] ");
         if (state?.skip) skip--;
         if (state?.title) titleDepth--;
         if (state?.main) mainDepth--;
@@ -373,11 +385,13 @@ async function fetchBuiltinWebPage(
 
 function downloadFilename(url: URL, headers: PageResponse["headers"]) {
   const disposition = String(headers["content-disposition"] ?? "");
-  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+  const encoded = /filename\*\s*=\s*UTF-8'[^']*'([^;]+)/i.exec(
+    disposition,
+  )?.[1];
   const quoted = /filename="?([^";]+)"?/i.exec(disposition)?.[1];
   let name = "";
   try {
-    name = decodeURIComponent(encoded || quoted || "");
+    name = encoded ? decodeURIComponent(encoded.trim()) : quoted || "";
   } catch {
     name = quoted || "";
   }
@@ -389,6 +403,7 @@ function downloadFilename(url: URL, headers: PageResponse["headers"]) {
     }
   }
   name = name.replace(/[\x00-\x1f\x7f/\\]/g, "_").trim();
+  if (/^\.+$/.test(name)) name = "download";
   return (name || url.hostname || "download").slice(0, 255);
 }
 
@@ -424,7 +439,11 @@ export async function fetchWebFile(
   };
 }
 
-function externalEndpoint(baseUrl: string | undefined, fallback: string, path: string) {
+function externalEndpoint(
+  baseUrl: string | undefined,
+  fallback: string,
+  path: string,
+) {
   const base = (baseUrl || fallback).replace(/\/+$/, "");
   return base.endsWith(path) ? base : `${base}${path}`;
 }
@@ -445,10 +464,13 @@ function markdownPage(markdown: string, sourceUrl: string, title?: string) {
     .trim();
   const heading = /^#\s+(.+)$/m.exec(markdown)?.[1]?.trim();
   const links: { title: string; url: string }[] = [];
-  for (const match of markdown.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g)) {
+  for (const match of markdown.matchAll(
+    /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+  )) {
     try {
       const url = publicWebUrl(match[2]!).href;
-      if (links.length < 50) links.push({ title: match[1]!.slice(0, 200), url });
+      if (links.length < 50)
+        links.push({ title: match[1]!.slice(0, 200), url });
     } catch {
       /* Ignore malformed provider links. */
     }
@@ -476,6 +498,7 @@ async function fetchExternalWebPage(
     AbortSignal.timeout(60000),
     ...(signal ? [signal] : []),
   ]);
+  abort.throwIfAborted();
   let endpoint = "";
   let init: RequestInit;
   if (config.provider === "jina") {
@@ -490,13 +513,23 @@ async function fetchExternalWebPage(
       },
     };
   } else if (config.provider === "firecrawl") {
+    let cancelWait: (() => void) | undefined;
     try {
-      const result = await firecrawlFactory({
-        apiKey: config.apiKey?.trim() || "",
-        apiUrl: firecrawlApiUrl(config.baseUrl),
-        timeoutMs: 60000,
-        maxRetries: 2,
-      }).scrape(sourceUrl, { formats: ["markdown"], timeout: 60000 });
+      const result = await Promise.race([
+        firecrawlFactory({
+          apiKey: config.apiKey?.trim() || "",
+          apiUrl: firecrawlApiUrl(config.baseUrl),
+          timeoutMs: 60000,
+          maxRetries: 2,
+        }).scrape(sourceUrl, { formats: ["markdown"], timeout: 60000 }),
+        new Promise<never>((_, reject) => {
+          const onAbort = () => reject(abort.reason);
+          cancelWait = () => abort.removeEventListener("abort", onAbort);
+          abort.addEventListener("abort", onAbort, { once: true });
+          if (abort.aborted) onAbort();
+        }),
+      ]);
+      abort.throwIfAborted();
       return markdownPage(
         String((result as any).markdown ?? ""),
         sourceUrl,
@@ -506,9 +539,15 @@ async function fetchExternalWebPage(
       signal?.throwIfAborted();
       if (error instanceof AppError) throw error;
       fail(502, "Firecrawl 网页读取失败，请检查服务地址、密钥和服务状态");
+    } finally {
+      cancelWait?.();
     }
   } else {
-    endpoint = externalEndpoint(config.baseUrl, "https://api.tavily.com", "/extract");
+    endpoint = externalEndpoint(
+      config.baseUrl,
+      "https://api.tavily.com",
+      "/extract",
+    );
     init = {
       method: "POST",
       headers: {
@@ -555,7 +594,10 @@ async function fetchExternalWebPage(
       fail(502, "网页读取服务返回了无效结果");
     }
     const result = body.results?.[0];
-    return markdownPage(String(result?.raw_content ?? result?.rawContent ?? ""), sourceUrl);
+    return markdownPage(
+      String(result?.raw_content ?? result?.rawContent ?? ""),
+      sourceUrl,
+    );
   } catch (error) {
     signal?.throwIfAborted();
     if (error instanceof AppError) throw error;

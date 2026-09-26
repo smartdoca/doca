@@ -336,6 +336,10 @@ it("serves published knowledge to bot members without granting library content o
   const bot = await request("POST", "/knowledge/assistants", { title: "Protocol bot", expectedRevision: 0, libraryIds: [library.json().id], memberIds: [bob.id], enabled: true });
   expect(bot.statusCode, bot.body).toBe(200);
   const bobCookie = await login("bob");
+  // Reviewing an entry creates the document; bot retrieval uses an explicitly
+  // published snapshot, so scheduler timing must not determine this test.
+  const publication = await request("POST", `${root}/publication`, {});
+  expect(publication.statusCode, publication.body).toBe(200);
   const search = await request("POST", `/knowledge/assistants/${bot.json().id}/search`, {query: "Protocol"}, bobCookie);
   expect(search.statusCode, search.body).toBe(200);
   expect(search.json().items).toHaveLength(1);

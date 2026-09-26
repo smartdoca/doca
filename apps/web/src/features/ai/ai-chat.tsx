@@ -478,10 +478,12 @@ function usePanelWidth() {
 
 export function AIDocumentLayout({
   children,
+  disabled = false,
   format,
   surface,
 }: {
   children: ReactNode;
+  disabled?: boolean;
   format?: string;
   surface?: "document" | "files";
 }) {
@@ -491,7 +493,7 @@ export function AIDocumentLayout({
   const panel = usePanelWidth();
   const filesSurface = surface === "files";
   const enabled =
-    !!ai?.userId &&
+    !disabled && !!ai?.userId &&
     (filesSurface ||
       (!!ai.resource &&
         (ai.resource.kind === "document" || ai.resource.kind === "library")));

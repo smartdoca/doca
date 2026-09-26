@@ -22,6 +22,31 @@ let app: Awaited<ReturnType<typeof createApp>>,
 let a: Record<string, string>, b: Record<string, string>, requests: any[];
 const origin = "http://localhost:39301",
   password = "isolated-attachments-password";
+function pdfFixture(jpeg?: Buffer) {
+  const content = deflateSync(Buffer.from(
+    "BT /F1 12 Tf 10 100 Td (Before image - this valid PDF contains readable attachment text.) Tj ET" +
+    (jpeg ? "\nq 32 0 0 32 10 20 cm /Im1 Do Q" : ""),
+  ));
+  const stream = (data: Buffer, extra: string) => Buffer.concat([
+    Buffer.from(`<< /Length ${data.length} ${extra} >>\nstream\n`), data, Buffer.from("\nendstream"),
+  ]);
+  const objects = [
+    Buffer.from("<< /Type /Catalog /Pages 2 0 R >>"),
+    Buffer.from("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+    Buffer.from(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 500 150] /Resources << /Font << /F1 5 0 R >> ${jpeg ? "/XObject << /Im1 6 0 R >>" : ""} >> /Contents 4 0 R >>`),
+    stream(content, "/Filter /FlateDecode"),
+    Buffer.from("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+    ...(jpeg ? [stream(jpeg, "/Type /XObject /Subtype /Image /Width 8 /Height 8 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode")] : []),
+  ];
+  const chunks = [Buffer.from("%PDF-1.4\n")], offsets = [0];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(chunks.reduce((length, chunk) => length + chunk.length, 0));
+    chunks.push(Buffer.from(`${index + 1} 0 obj\n`), object, Buffer.from("\nendobj\n"));
+  }
+  const xref = chunks.reduce((length, chunk) => length + chunk.length, 0);
+  chunks.push(Buffer.from(`xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.slice(1).map(offset => `${String(offset).padStart(10, "0")} 00000 n \n`).join("")}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`));
+  return Buffer.concat(chunks);
+}
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "doca-ai-attachments-"));
   db = await openTestDatabase({ driver: "sqlite", path: ":memory:" });
@@ -175,7 +200,7 @@ it("keeps uploaded files private, reads text in the agent and restores attachmen
   await wait(sid);
   expect(JSON.stringify(requests)).toContain("ATTACHMENT_PRIVATE_MARKER");
 });
-it("preserves original image bytes for vision models and rejects incompatible models before starting a job", async () => {
+it("preserves original downloads, sends normalized images to vision models and rejects incompatible models", async () => {
   const png = await sharp({
     create: { width: 12, height: 12, channels: 3, background: "#8764c0" },
   })
@@ -190,7 +215,7 @@ it("preserves original image bytes for vision models and rejects incompatible mo
   const sid = await session();
   await send(sid, [id]);
   expect((await wait(sid)).jobs[0].status).toBe("completed");
-  expect(JSON.stringify(requests)).toContain("data:image/png;base64,");
+  expect(JSON.stringify(requests)).toContain("data:image/jpeg;base64,");
   const config = (
     await app.inject({ url: "/api/v1/admin/ai", headers: a })
   ).json().config;
@@ -273,7 +298,7 @@ it("rejects unsupported and spoofed files and duplicate or missing attachment ID
   expect((await send(sid, [file.id, file.id])).statusCode).toBe(400);
   expect((await send(sid, [randomUUID()])).statusCode).toBe(404);
   const pdf = (
-    await upload("report.pdf", Buffer.from("%PDF-1.7\nfixture"))
+    await upload("report.pdf", pdfFixture())
   ).json();
   expect(pdf.extractStatus).toBe("pending");
   let extract = { status: "pending" };
@@ -297,23 +322,7 @@ it("sends extracted PDF images to vision models in document order", async () => 
   })
     .jpeg()
     .toBuffer();
-  const payload = Buffer.from("BT /F1 12 Tf 10 100 Td (Before image) Tj ET");
-  const compressed = deflateSync(payload);
-  const pdf = Buffer.concat([
-    Buffer.from(
-      "%PDF-1.1\n1 0 obj<< /Length " +
-        compressed.length +
-        " /Filter /FlateDecode >>\nstream\n",
-    ),
-    compressed,
-    Buffer.from(
-      "\nendstream\nendobj\n2 0 obj<< /Length " +
-        jpeg.length +
-        " /Filter /DCTDecode >>\nstream\n",
-    ),
-    jpeg,
-    Buffer.from("\nendstream\nendobj\n"),
-  ]);
+  const pdf = pdfFixture(jpeg);
   const uploaded = await upload("slides.pdf", pdf);
   expect(uploaded.statusCode, uploaded.body).toBe(201);
   const id = uploaded.json().id;

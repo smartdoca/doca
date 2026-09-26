@@ -967,3 +967,9 @@
     grid-template-columns: minmax(165px, 2fr) 90px 100px auto;
   }
 }
+
+.quick-actions.library-quick-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; }
+.quick-actions.library-quick-actions > button { width:auto; min-width:0; max-width:none; }
+.quick-actions.library-quick-actions > button > span:nth-child(2) { min-width:0; }
+.quick-actions.library-quick-actions strong,.quick-actions.library-quick-actions small { white-space:normal; overflow-wrap:anywhere; }
+@media(max-width:1000px) { .quick-actions.library-quick-actions { grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); } }

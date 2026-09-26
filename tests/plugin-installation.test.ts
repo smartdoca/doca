@@ -18,7 +18,7 @@ async function fixture(options: { range?: string; server?: string } = {}) {
   await writeFile(join(pkg, "package.json"), JSON.stringify({ name: "@example/demo", version: "1.0.0", type: "module", doca: { manifest: "./manifest.json", server: options.server ?? "./server.js", web: { directory: "./web", entry: "./index.js" } } }));
   await writeFile(join(pkg, "manifest.json"), JSON.stringify(manifest));
   await writeFile(join(pkg, "web/index.js"), "export default ({React}) => ({manifest: {pluginId: 'example.demo', version: '1.0.0', targets: ['web']}});");
-  await writeFile(join(pkg, "server.js"), `export default () => ({ manifest: ${JSON.stringify(manifest)}, async mount(ctx) { const http = ctx.inject({id: 'http.v1'}); await ctx.effectAsync(() => http.register('example.demo', [{method:'GET',path:'/me',async handle(req) {const profile = await ctx.inject({id:'users.v1'}).get(req,req.principal.id); const folders = await ctx.inject({id:'files.v1'}).folders.list({principalId:req.principal.id,signal:req.signal},{parentId:null}); return {profile,folders}}},{method:'GET',path:'/callback',auth:'external',verify(req) { return req.query.state === 'valid' }, handle(req,res) {res.header('Set-Cookie','demo=ok; HttpOnly; SameSite=Lax'); res.redirect(http.callbackUrl('example.demo','/me'));}},{method:'POST',path:'/hook',auth:'external',verify(req) {return req.headers['x-signature'] === 'test-signature' && new TextDecoder().decode(req.rawBody) === '{\"event\":1}'}, handle(req,res) {res.status(202); return {received:true, anonymous:req.principal===null}}}])); } });`);
+  await writeFile(join(pkg, "server.js"), `export default () => ({ manifest: ${JSON.stringify(manifest)}, async mount(ctx) { const http = ctx.inject({id: 'http.v1'}); await ctx.effectAsync(() => http.register('example.demo', [{method:'POST',path:'/large',bodyLimit:2097152,handle(req){return {length:req.rawBody.length}}},{method:'GET',path:'/me',async handle(req) {const profile = await ctx.inject({id:'users.v1'}).get(req,req.principal.id); const folders = await ctx.inject({id:'files.v1'}).folders.list({principalId:req.principal.id,signal:req.signal},{parentId:null}); return {profile,folders}}},{method:'GET',path:'/callback',auth:'external',verify(req) { return req.query.state === 'valid' }, handle(req,res) {res.header('Set-Cookie','demo=ok; HttpOnly; SameSite=Lax'); res.redirect(http.callbackUrl('example.demo','/me'));}},{method:'POST',path:'/hook',auth:'external',verify(req) {return req.headers['x-signature'] === 'test-signature' && new TextDecoder().decode(req.rawBody) === '{\"event\":1}'}, handle(req,res) {res.status(202); return {received:true, anonymous:req.principal===null}}}])); } });`);
   return { root, pkg };
 }
 it("discovers only direct packages and validates their static manifests before importing", async () => {
@@ -53,6 +53,8 @@ it("mounts an independently installed JS plugin, serves only its Web root and re
       expect(result.json()).toMatchObject({ profile: { id: user.id, login: "plugin-owner", profile: {} }, folders: { items: [] } });
       expect(result.body).not.toContain("password_hash");
     }
+    const large = await app.inject({method:"POST",url:"/api/v1/plugins/example.demo/large",headers:{...headers,origin:"http://127.0.0.1:39130",cookie,"content-type":"text/plain"},payload:"a".repeat(1500000)});
+    expect(large.statusCode,large.body).toBe(200);expect(large.json().length).toBe(1500000);
     const callback = await app.inject({ url: "/api/v1/plugins/example.demo/callback?state=valid", headers });
     expect(callback.statusCode).toBe(303);
     expect(callback.headers.location).toBe("http://127.0.0.1:39130/api/v1/plugins/example.demo/me");
@@ -68,4 +70,21 @@ it("mounts an independently installed JS plugin, serves only its Web root and re
     expect(asset.headers["content-type"]).toContain("javascript");
     expect((await app.inject({ url: "/api/v1/plugin-assets/example.demo/1.0.0/server.js", headers })).statusCode).toBe(404);
   } finally { await app.close(); await db.destroy(); }
+});
+
+it("uses the configured plugin directory and falls back for empty environment values", async () => {
+  const { pluginDirectory } = await import("@server/plugins/installation.js");
+  const { resolve } = await import("node:path");
+  const oldPlugins = process.env.DOCA_PLUGINS_DIR, oldData = process.env.DOCA_DATA_DIR;
+  try {
+    process.env.DOCA_PLUGINS_DIR = "  ./external-plugins  ";
+    expect(pluginDirectory()).toBe(resolve("external-plugins"));
+    process.env.DOCA_PLUGINS_DIR = "  "; process.env.DOCA_DATA_DIR = "./custom-data";
+    expect(pluginDirectory()).toBe(resolve("custom-data/plugins"));
+    delete process.env.DOCA_PLUGINS_DIR; delete process.env.DOCA_DATA_DIR;
+    expect(pluginDirectory()).toBe(resolve("data/plugins"));
+  } finally {
+    if (oldPlugins === undefined) delete process.env.DOCA_PLUGINS_DIR; else process.env.DOCA_PLUGINS_DIR = oldPlugins;
+    if (oldData === undefined) delete process.env.DOCA_DATA_DIR; else process.env.DOCA_DATA_DIR = oldData;
+  }
 });

@@ -22,6 +22,8 @@ it("rechecks binding authorization and never changes the original file ACL", asy
     await files.uploads.complete(context, { uploadId: upload.id });
     const file = await files.files.create(context, { uploadId: upload.id, folderId: null, name: "attachment.txt" });
     const binding = await files.bindings.bind(context, { fileId: file.id, owner: { ownerPlugin: "example.mail", ownerType: "mailbox", ownerId: "inbox", role: "attachment" } });
+    const parallel = await Promise.all([1,2,3].map(() => files.bindings.bind(context,{fileId:file.id,owner:{ownerPlugin:"example.mail",ownerType:"mailbox",ownerId:"other",role:"attachment"}})));
+    expect(new Set(parallel.map(row=>row.id)).size).toBe(1);
     const request = { principalId: reader.id };
     await expect(files.content.read!(request, { fileId: file.id })).rejects.toMatchObject({ status: 404 });
     await expect(files.content.read!(request, { fileId: file.id, bindingId: binding.id })).rejects.toMatchObject({ status: 404 });

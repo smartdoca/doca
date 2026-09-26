@@ -1,8 +1,9 @@
+import { publishPluginNotification, withdrawPluginNotification, pluginNotificationTarget } from "@core/modules/interactions/plugin-notifications.js";
 import { filesServiceToken, stableId } from "@doca/plugin-sdk/files";
 import { Readable } from "node:stream";
 import { randomUUID } from "node:crypto";
 import {
-  eventsServiceToken, httpServiceToken, permissionsServiceToken, policiesServiceToken, usersServiceToken,
+  notificationsServiceToken, eventsServiceToken, httpServiceToken, permissionsServiceToken, policiesServiceToken, usersServiceToken,
   type PluginPrincipal, type PluginRequestContext, type PluginHttpResponse,
 } from "@doca/plugin-sdk/platform";
 import type { PluginLifecycleContext } from "@doca/plugin-sdk";
@@ -40,6 +41,24 @@ export async function providePlatform(context: PluginLifecycleContext, runtime: 
     reply.type(result.file.mime).header("Content-Disposition", `${request.query.download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(result.file.name)}`);
     return reply.send(Readable.from(result.body));
   });
+  context.provide(notificationsServiceToken, {
+    async publish(pluginId, input) {
+      const result = await publishPluginNotification(db, pluginId, input);
+      await runtime.realtime.notificationsChanged(input.recipientId);
+      return result;
+    },
+    async withdraw(pluginId, input) {
+      await withdrawPluginNotification(db, pluginId, input);
+      await runtime.realtime.notificationsChanged(input.recipientId);
+    },
+  });
+  api.get<{ Params: { id: string } }>("/api/v1/notifications/:id/open", async (request, reply) => {
+    const user = runtime.auth(request);
+    await activeActor(db, user);
+    const path = await pluginNotificationTarget(db, user.id, request.params.id);
+    await db.updateTable("notifications").set({ read_at: new Date().toISOString() }).where("id", "=", request.params.id).where("user_id", "=", user.id).execute();
+    return reply.header("Cache-Control", "no-store").redirect(`/#${path}`, 303);
+  });
   context.provide(eventsServiceToken, {
     async read(after, limit = 100) {
       if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 500) fail(400, "Invalid event cursor or limit");
@@ -49,6 +68,9 @@ export async function providePlatform(context: PluginLifecycleContext, runtime: 
     },
   });
   context.provide(usersServiceToken, {
+    async status(id) {
+      return await db.selectFrom("users").select(["id", "status"]).where("id", "=", id).executeTakeFirst() ?? null;
+    },
     async get(request, id) {
       const caller = await verify(request);
       if (caller.id !== id && !caller.admin) fail(403, "User profile access denied");
@@ -94,7 +116,10 @@ export async function providePlatform(context: PluginLifecycleContext, runtime: 
     callbackUrl(pluginId, path) { return new URL(routePath(pluginId, path), runtime.origin).href; },
     async register(pluginId, routes) {
       let enabled = true;
-      for (const route of routes) routePath(pluginId, route.path);
+      for (const route of routes) {
+        routePath(pluginId, route.path);
+        if (route.bodyLimit !== undefined && (!Number.isSafeInteger(route.bodyLimit) || route.bodyLimit < 1 || route.bodyLimit > 32 * 1024 * 1024)) throw new Error("Plugin body limit must be between 1 byte and 32 MiB");
+      }
       await api.register(async child => {
         const bodies = new WeakMap<object, Buffer>();
         child.removeAllContentTypeParsers();
@@ -105,7 +130,7 @@ export async function providePlatform(context: PluginLifecycleContext, runtime: 
           catch { done(Object.assign(new Error("Invalid JSON body"), { statusCode: 400 })); }
         });
         for (const route of routes) child.route({
-          method: route.method, url: routePath(pluginId, route.path), schema: route.schema,
+          method: route.method, url: routePath(pluginId, route.path), schema: route.schema, bodyLimit: route.bodyLimit ?? 1024 * 1024,
           config: { docaPluginExternal: route.auth === "external" },
           async handler(request, reply) {
             if (!enabled) fail(503, "Plugin unavailable");

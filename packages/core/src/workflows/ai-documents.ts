@@ -23,6 +23,7 @@ import {
 import {
   EditorController,
   readDocument,
+  replaceMatches,
   resolveAnchor as resolvePptAnchor,
 } from "@eppt/editor/core";
 import { projectExlsxWorkbook } from "@online-office/univer-sheet/model";
@@ -531,9 +532,19 @@ export async function editAIDocument(
             for (const key of op.unset ?? []) delete next[key];
             validateRichNode(next);
           }
-          if (op.type === "text")
-            l.runtime.editText(op.blockId, op.index, op.deleteCount, op.text);
-          else if (op.type === "link") {
+          if (op.type === "text") {
+            try {
+              l.runtime.editText(op.blockId, op.index, op.deleteCount, op.text);
+            } catch (error) {
+              if (error instanceof Error && error.message === "Invalid text range") {
+                const entry = [...Node.nodes({ children: l.runtime.getValue() } as Node)]
+                  .find(([node]) => (node as any).id === op.blockId);
+                const length = entry ? Node.string(entry[0]).length : null;
+                fail(400, `文字范围越界：blockId=${op.blockId}，index=${op.index}，deleteCount=${op.deleteCount}，当前块文字长度（UTF-16）=${length ?? "未知"}。请按 blockId 读取完整正文后定位；整块替换须 index=0、deleteCount=实际长度，不要猜测。本批次未保存。`);
+              }
+              throw error;
+            }
+          } else if (op.type === "link") {
             assertLinkUrl(op.url);
             const before = l.runtime.getValue(),
               editor = createEditor();
@@ -790,8 +801,11 @@ export async function editAIDocument(
             else if (op.type === "insert")
               controller.insert(op.slideId, op.element);
             else if (op.type === "add") controller.add(op.slideId, op.kind);
-            else if (op.type === "patch")
+            else if (op.type === "patch") {
+              if ("paragraphs" in op.patch)
+                fail(400, '幻灯片文字不能用 patch.paragraphs 修改。请先读取该页完整正文，再用 {type:"replaceText",slideId,id,query:"原段落文字",text:"替换文字"}；多段分别替换。样式用 formatText/paragraphFormat。');
               controller.patch(op.slideId, op.id, op.patch);
+            }
             else if (op.type === "remove")
               controller.remove(op.slideId, op.ids);
             else if (op.type === "moveSlide")
@@ -802,8 +816,14 @@ export async function editAIDocument(
               controller.align(op.slideId, op.ids, op.axis);
             else if (op.type === "table")
               controller.tableCommand(op.slideId, op.id, op.command);
-            else if (op.type === "replaceText")
-              controller.replaceAll(op.query, op.text);
+            else if (op.type === "replaceText") {
+              const matches = controller.find(op.query).filter((match) =>
+                (!op.slideId || match.anchor.slideId === op.slideId) &&
+                (!op.id || match.anchor.elementId === op.id));
+              if (!matches.length)
+                fail(400, "目标范围内找不到原文，未保存任何修改。请按 slideId 读取完整正文；query 必须是单段内的实际文字，不能拼接大纲预览或跨段落。");
+              replaceMatches(doc, matches, op.text);
+            }
             else if (op.type === "formatText")
               controller.formatText(op.slideId, op.ids, op.marks);
             else if (op.type === "paragraphFormat")

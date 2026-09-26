@@ -97,6 +97,7 @@ export function plainText(value: unknown): string {
       ? String((n._mention as { name?: string }).name ?? "")
       : n.text;
   if (n.type === "mention") return String(n.name ?? "");
+  if(n.type === "flowchart" && Array.isArray(n.nodes)) return n.nodes.map((node:any)=>String(node.label??"")).join("\n");
   if (typeof n.type === "string" && n.type.startsWith("custom:"))
     return String(n.label ?? "");
   return [

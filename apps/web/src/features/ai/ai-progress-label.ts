@@ -88,6 +88,7 @@ const toolKeys = {
   knowledge_review: "knowledge.toolReview",
   file_search: "ai.progress.tool.fileSearch",
   file_browse: "ai.progress.tool.fileBrowse",
+  file_read: "ai.progress.tool.fileRead",
   file_manage: "ai.progress.tool.fileManage",
   file_folder_manage: "ai.progress.tool.fileFolderManage",
   file_download: "ai.progress.tool.fileDownload",

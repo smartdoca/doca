@@ -74,10 +74,12 @@ function compactEditingGuide(format: string, skillId?: string) {
   const ops = commands[format as keyof typeof commands] ?? [];
   const extra =
     format === "rich_text"
-      ? "原生图用 insertBlock type:\"flowchart\" 或 mindmap，不要编造 node/graphic。单元格图片用 setCellContent，children 直接是 {type:\"image\",path:\"资产ID\",children:[{text:\"\"}]}，不要套 paragraph，不要写 assetId。"
+      ? "删除块用 {type:\"deleteBlock\",blockId}，不要用 remove。替换文字用 text，index/deleteCount 必须来自完整区域读取，不能猜长度。原生图用 insertBlock type:\"flowchart\" 或 mindmap，不要编造 node/graphic。单元格图片用 setCellContent，children 直接是 {type:\"image\",path:\"资产ID\",children:[{text:\"\"}]}，不要套 paragraph，不要写 assetId。"
       : format === "spreadsheet"
         ? "cells 必须带 sheetId。用 sheetOrder[0]；写 Sheet1 也会解析。常量只写 v，公式只写 f，不要写 f:null。"
-        : "";
+        : format === "presentation"
+          ? '删除元素用 {type:"remove",slideId,ids:[元素ID]}；样式用 {type:"formatText",slideId,ids:[元素ID],marks:{color:"#2563eb"}}；背景用 {type:"slideProperty",slideId,field:"background",value:"#ffffff"}。改正文用 {type:"replaceText",slideId,id,query:"原段落准确文字",text:"新文字"}；query 不跨段落。禁止 patch.paragraphs，SDK 不支持；省略 slideId/id 会全稿替换。不要用 blockId、elementId 或 params 代替 ids/marks。'
+          : "";
   return `editTool=${format}_edit。可用命令：${ops.join("、")}。${extra}完整手册 load_skill id=${skillId ?? format}。`.trim();
 }
 
@@ -146,6 +148,7 @@ export function documentReadCapabilities(
     nativeDiagrams: caps.nativeDiagrams,
     loadSkill: caps.loadSkill,
     note: caps.note,
+    editingGuide: caps.editingGuide,
     spreadsheetHint:
       format === "spreadsheet" ? spreadsheetReadHint(value as any) : undefined,
   };

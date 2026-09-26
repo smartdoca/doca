@@ -19,6 +19,8 @@ services:
       DOCA_SQLITE_PATH: /data/doca.db
       DOCA_AI_SQLITE_PATH: /data/ai.db
       DOCA_UPLOAD_DIR: /data/uploads
+      DOCA_DATA_DIR: /data
+      DOCA_PLUGINS_DIR: "${DOCA_PLUGINS_DIR:-/data/plugins}"
     ports:
       - "127.0.0.1:39120:39120"
     volumes:

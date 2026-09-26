@@ -1,3 +1,4 @@
+import { KnowledgeChat } from "@web/features/knowledge/knowledge-chat.js";
 import { KnowledgeAssistants } from "@web/features/knowledge/knowledge-assistants.js";
 import type { MessageKey } from "@doca/i18n";
 import { AIProvider } from "@web/features/ai/ai-context.js";
@@ -43,7 +44,7 @@ import { Select } from "@web/shared/components/select.js";
 import { realtime } from "@web/features/documents/realtime.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
 import { setCurrentUserId } from "@web/shared/components/user-mention.js";
-import React, { lazy, Suspense, useEffect, useState, useRef } from "react";
+import React, { lazy, Suspense, useEffect, useState, useRef, useMemo } from "react";
 import {
   BookOpen,
   Sparkles,
@@ -65,6 +66,8 @@ import {
   Home,
   PanelLeft,
   UserRound,
+  BookOpenCheck,
+  Bot,
   Network,
   MessageSquare,
 } from "lucide-react";
@@ -139,10 +142,6 @@ const titleKeys: Record<string, MessageKey> = {
   all: "nav.recent",
   trash: "nav.trash",
 };
-const pluginNavigation = webPluginRegistry.navigation.list();
-const pluginNavigationByScope = new Map(
-  pluginNavigation.map((item) => [item.scope, item]),
-);
 const errorText = (e: unknown, fallback: string) => {
   if (!(e instanceof Error)) return fallback;
   const code =
@@ -169,6 +168,12 @@ type ShareInvitation = {
   role: string;
 };
 export function App() {
+  // Installed bundles finish loading before mount, after this module is imported.
+  const pluginNavigation = useMemo(() => webPluginRegistry.navigation.list(), []);
+  const pluginNavigationByScope = useMemo(
+    () => new Map(pluginNavigation.map((item) => [item.scope, item])),
+    [pluginNavigation],
+  );
   const { locale, t, reloadLocale } = useI18n();
   const [navigationCollapsed, setNavigationCollapsed] = useNavigationCollapse("doca.navigation.collapsed");
   const [adminNavigationCollapsed, setAdminNavigationCollapsed] = useNavigationCollapse("doca.admin-navigation.collapsed");
@@ -807,6 +812,8 @@ export function App() {
       />
     );
   const user = bootstrap.user;
+  const embeddedBot = /^\/knowledge\/embed\/([a-f0-9-]{36})$/.exec(location.pathname)?.[1];
+  if(user && embeddedBot) return <main className="knowledge-embedded"><KnowledgeChat scopeId={embeddedBot} kind="answer" /></main>;
   const displayName = user?.display_name || user?.public_id || user?.id || "用户";
   if (user && (adminPage || accountPage || preferencesPage))
     return (
@@ -960,14 +967,14 @@ export function App() {
                 className={librarySystemPage ? "active" : ""}
                 href={librarySystemUrl(currentLibraryId)}
               >
-                <Network size={18} />
+                <BookOpenCheck size={18} />
                 {t("nav.librarySystem")}
               </a>
               <a
                 className={libraryQaPage ? "active" : ""}
                 href={libraryQaUrl(currentLibraryId)}
               >
-                <MessageSquare size={18} />
+                <Bot size={18} />
                 {t("nav.libraryQa")}
               </a>
             </nav>
@@ -999,7 +1006,7 @@ export function App() {
                   order: item.order ?? 0,
                   path: item.path,
                 })),
-                { key: "knowledge-assistants", label: "knowledge.assistants", plugin: false as const, Icon: Sparkles, order: 25, path: "/knowledge-assistants" },
+
                 { key: "ai", label: "nav.assistant", plugin: false as const, Icon: Sparkles, order: 20, path: "/ai" },
                 { key: "notes", label: "nav.notes", plugin: false as const, Icon: Feather, order: 30, path: "/notes" },
                 { key: "trash", label: "nav.trash", plugin: false as const, Icon: Trash2, order: 80, path: "/trash" },
@@ -1076,6 +1083,7 @@ export function App() {
                 <ArrowLeft size={19} />
               </button>
             )}
+            {(librarySystemPage || libraryQaPage || (!resourceId && scope === "knowledge-assistants")) && <div className="files-topbar-title knowledge-topbar-title">{librarySystemPage ? <BookOpenCheck size={20}/> : <Bot size={20}/>}<h1>{t(librarySystemPage ? "nav.librarySystem" : "knowledge.assistants")}</h1></div>}
             {!resourceId && scope === "ai" && <div id="ai-header-slot" />}
 
             {!resourceId && scope === "notes" && user && (
@@ -1237,6 +1245,7 @@ export function App() {
           </div>
         </header>
         <AIDocumentLayout
+          disabled={librarySystemPage || libraryQaPage || scope === "knowledge-assistants"}
           format={detail?.resource.kind === "document" ? detail.resource.format : undefined}
           surface={
             !resourceId && user && (scope === "files" || (scope === "shared-files" && !!sharedFolderId))
@@ -1253,6 +1262,7 @@ export function App() {
           }
         >
           {user && <SubscribeLibraryHost />}
+
           {!resourceId && user && unavailablePluginRoute ? (
             <section className="empty">
               <p>{t("shell.pluginUnavailable")}</p>
@@ -1264,7 +1274,7 @@ export function App() {
             renderedPluginRoute !== undefined ? (
             renderedPluginRoute
           ) : !resourceId && scope === "knowledge-assistants" && user ? (
-            <KnowledgeAssistants />
+            <KnowledgeAssistants libraryId={new URLSearchParams(hash.split("?")[1]).get("library") || undefined} />
           ) : !resourceId && scope === "ai" ? (
             <AIChat full />
           ) : !resourceId && scope === "notes" && user ? (
@@ -1803,6 +1813,9 @@ function Notifications() {
         created_at: string;
         actor_id: string | null;
         actorName: string | null;
+        href?: string;
+        description?: string;
+        pluginId?: string;
         grantedPermission?: { role?: string; includeDescendants?: boolean };
         title: string;
         comment_id: string | null;
@@ -1836,7 +1849,8 @@ function Notifications() {
       if (m.type === "notifications.changed" || m.type === "connected")
         void load().catch(() => {});
     });
-    return unsubscribe;
+    const timer = setInterval(() => { void load().catch(() => {}); }, 30000);
+    return () => { unsubscribe(); clearInterval(timer); };
   }, []);
   return (
     <div className="notifications" ref={panelRef}>
@@ -1875,7 +1889,7 @@ function Notifications() {
           {error && <Feedback message={error} tone="error" />}
           {!data.items.length && <p>{t("shell.noNotifications")}</p>}
           {data.items.map((n) => {
-            const baseDescription =
+            const baseDescription = n.description ??
               (
                 {
                   "comment.created": t("notify.comment.created"),
@@ -1906,11 +1920,11 @@ function Notifications() {
             } as Record<string, string>)[grantedRole ?? ""] ?? grantedRole;
             const description = grantedRole ? `${baseDescription} · ${roleLabel}（${n.grantedPermission?.includeDescendants ? t("role.scope.descendants") : t("role.scope.node")}）` : baseDescription;
             const documentTitle = n.title || (n.ticket_id ? t("shell.ticket") : t("shell.unnamed"));
-            const href = n.ticket_id
+            const href = n.href ?? (n.ticket_id
               ? `#/tickets/${n.ticket_id}`
               : n.type === "resource.invited" || n.type.startsWith("access.")
                 ? "#/tickets"
-                : `#/r/${n.resource_id}${n.comment_id ? `?comment=${encodeURIComponent(n.comment_id)}` : ""}`;
+                : `#/r/${n.resource_id}${n.comment_id ? `?comment=${encodeURIComponent(n.comment_id)}` : ""}`);
             return (
               <div
                 key={n.id}
@@ -1927,7 +1941,7 @@ function Notifications() {
                   </span>
                 </div>
                 <small title={n.created_at}>{relativeTime(n.created_at)}</small>
-                {(n.ticket_id || n.resource_id) && (
+                {(n.href || n.ticket_id || n.resource_id) && (
                   <a
                     href={href}
                     onClick={() => {

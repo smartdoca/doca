@@ -201,3 +201,9 @@
 .knowledge-run-history { margin:16px 0 24px; padding:12px 16px; border:1px solid #e8ebf0; border-radius:8px; background:#fafbfc; }
 .knowledge-run-history > summary { cursor:pointer; font-size:13px; font-weight:500; color:#646a73; }
 .knowledge-run-history .library-system-links { max-height:320px; overflow:auto; }
+
+.knowledge-topbar-title h1 { margin:0; font-size:18px; font-weight:600; line-height:1.4; }
+.knowledge-curation-settings { border:0; padding:0; margin:20px 0; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:20px; }
+.knowledge-curation-settings .kc-publication { border:1px solid var(--border,#e6e8ec); border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:14px; }
+.knowledge-curation-settings label { display:flex; flex-direction:column; gap:8px; }
+.knowledge-curation-settings select { width:100%; }

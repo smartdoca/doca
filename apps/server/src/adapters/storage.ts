@@ -9,7 +9,8 @@ import {
   AbortMultipartUploadCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/cloudfront-signer";
-import { mkdir, open, unlink } from "node:fs/promises";
+import { mkdir, open, unlink, rename, readdir } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -288,9 +289,21 @@ export function createStorage(runtime: StorageRuntime) {
       data: Buffer,
       mime: string,
       filename: string,
+      reservedReplay = false,
     ) {
       validateObjectKey(key);
-      if (c.provider === "local")
+      if (c.provider === "local" && reservedReplay) {
+        // Only the durable operation owner may replace this key, after checking
+        // the immutable content fingerprint. Readers never see partial bytes.
+        const target = path(key);
+        await mkdir(dirname(target), { recursive: true, mode: 0o700 });
+        const temporary = `${target}.pending-${randomUUID()}`;
+        try {
+          const handle = await open(temporary, "wx", 0o600);
+          try { await handle.writeFile(data); await handle.sync(); } finally { await handle.close(); }
+          await rename(temporary, target);
+        } finally { await unlink(temporary).catch(() => {}); }
+      } else if (c.provider === "local")
         await putStream(
           c,
           key,
@@ -326,6 +339,15 @@ export function createStorage(runtime: StorageRuntime) {
       } finally {
         stream.destroy();
       }
+    },
+    /** Called with the durable operation lock held; never scan unrelated directories. */
+    async removeReservedTemporaries(c: StorageConfig, key: string) {
+      if (c.provider !== "local") return;
+      const target = path(key);
+      const prefix = target.slice(target.lastIndexOf("/") + 1) + ".pending-";
+      const names = await readdir(dirname(target)).catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return []; throw error; });
+      for (const name of names)
+        if (name.startsWith(prefix) && /^[a-f0-9-]{36}$/.test(name.slice(prefix.length))) await unlink(resolve(dirname(target), name));
     },
     async remove(c: StorageConfig, key: string) {
       validateObjectKey(key);

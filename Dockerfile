@@ -37,6 +37,7 @@ ENV NODE_ENV=production \
     DOCA_HOST=0.0.0.0 \
     DOCA_PORT=39120 \
     DOCA_DATABASE=sqlite \
+    DOCA_DATA_DIR=/data \
     DOCA_SQLITE_PATH=/data/doca.db \
     DOCA_UPLOAD_DIR=/data/uploads
 

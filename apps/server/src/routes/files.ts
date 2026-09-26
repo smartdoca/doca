@@ -216,10 +216,13 @@ export function registerFiles(
         ];
       } else {
         const extract = await waitFileExtract(db, objectId, runtime, 30000);
+        if (extract.status !== "ready") throw new Error(extract.error || "文件仍在解析，请稍后重试");
         const images =
           extract.status === "ready"
             ? await readExtractImages(db, objectId, extract.parts, runtime)
             : [];
+        if (images.length && !modelConfig.vision && !extract.markdown.trim())
+          throw new Error("此文件需要图片理解模型，尚未识别页面内容");
         const text =
           extract.markdown ||
           (row.mime.startsWith("text/")

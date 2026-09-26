@@ -910,3 +910,13 @@ it("filters low semantic scores, reranks close matches using source terms, and c
   expect((await get("/test-search?mode=ai&q=编辑器")).json().total).toBe(0);
   expect(writes()).toHaveLength(count);
 });
+
+it("reconstructs replica credentials from host bindings instead of copying redacted Meilisearch secrets",async()=>{
+  await save();remoteStatus="succeeded";await get();
+  const expected=remote.knowledge_v1.apiKey;
+  remote.knowledge_v1={...remote.knowledge_v1,apiKey:"********",url:"https://untrusted.example/embeddings"};
+  await searchService.answerIndex.prepare([{id:"qa_fixture",documentId:randomUUID(),title:"DNS",heading:"Cache",text:"TTL",version:1}]);
+  const replica=writes().find(x=>x.path.includes("knowledge_answers"));
+  expect(replica?.body.knowledge_v1.apiKey).toBe(expected);
+  expect(replica?.body.knowledge_v1.url).not.toContain("untrusted.example");
+});

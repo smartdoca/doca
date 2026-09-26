@@ -55,7 +55,8 @@ function clipParts(parts: ExtractedPart[]): ExtractedPart[] {
   for (const part of parts) {
     if (part.type === "text") {
       if (text >= MAX_TEXT) continue;
-      const next = clip(part.text);
+      const remaining = MAX_TEXT - text;
+      const next = part.text.length > remaining ? part.text.slice(0, remaining) + "\n[附件文字超过上限，后文已截断]" : part.text;
       text += next.length;
       out.push({ type: "text", text: next });
     } else if (images < MAX_IMAGES && sniffImage(part.data)) {

@@ -39,6 +39,21 @@ const createRichDoc = () =>
     format: "rich_text",
   });
 
+it("reports actual text length for invalid edits and preserves the saved document", async () => {
+  const doc = await createRichDoc();
+  const before = await readAIDocument(db, { actor: owner }, doc.id);
+  const block = (before.value as any[])[0];
+  const length = block.children.map((n: any) => n.text ?? "").join("").length;
+  await expect(editAIDocument(db, { actor: owner }, doc.id,
+    { seq: before.seq, epochId: before.epochId! },
+    [{ type: "text", blockId: block.id, index: 0, deleteCount: length + 100, text: "不应保存" }],
+    randomUUID(),
+  )).rejects.toThrow(`当前块文字长度（UTF-16）=${length}`);
+  const after = await readAIDocument(db, { actor: owner }, doc.id);
+  expect(after.value).toEqual(before.value);
+  expect(after.seq).toBe(before.seq);
+});
+
 it("rich_text append converts markdown link syntax into native link inlines", async () => {
   const doc = await createRichDoc();
   const read = await readAIDocument(db, { actor: owner }, doc.id);
@@ -487,4 +502,27 @@ it("presentation text leaf link property persists", async () => {
   const after = await readAIDocument(db, { actor: owner }, doc.id);
   const text = JSON.stringify((after.value as any).slides[slideId].elements);
   expect(text).toContain('"link":"https://doca.example.com"');
+});
+
+it("scopes PPT text replacement to the requested element and rejects no-op writes", async () => {
+  const doc = await createContent(db).create(owner, {title:"PPT范围",kind:"document",format:"presentation"});
+  const read = await readAIDocument(db, {actor:owner}, doc.id);
+  const slideId = (read.value as any).slideOrder[0];
+  const element = (id:string) => ({ id, type:"text", transform:{x:1,y:1,width:4000000,height:800000,rotation:0},
+    paragraphs:[{type:"paragraph",children:[{text:"原文相同",bold:true,color:"#2563eb"}]}] });
+  const created = await editAIDocument(db,{actor:owner},doc.id,{seq:read.seq,epochId:read.epochId!},
+    ["target","untouched"].map(id=>({type:"insert",slideId,element:element(id)})),randomUUID());
+  const saved = await editAIDocument(db,{actor:owner},doc.id,created,
+    [{type:"replaceText",slideId,id:"target",query:"原文相同",text:"已修正"}],randomUUID());
+  const after = await readAIDocument(db,{actor:owner},doc.id);
+  const elements = (after.value as any).slides[slideId].elements;
+  expect(elements.target.paragraphs[0].children[0]).toMatchObject({text:"已修正",bold:true,color:"#2563eb"});
+  expect(elements.untouched.paragraphs[0].children[0].text).toBe("原文相同");
+  await expect(editAIDocument(db,{actor:owner},doc.id,saved,
+    [{type:"replaceText",slideId,id:"target",query:"不存在",text:"不得保存"}],randomUUID())).rejects.toThrow("找不到原文");
+  await expect(editAIDocument(db,{actor:owner},doc.id,saved,
+    [{type:"patch",slideId,id:"target",patch:{paragraphs:[]}}],randomUUID())).rejects.toThrow("不能用 patch.paragraphs");
+  const final = await readAIDocument(db,{actor:owner},doc.id);
+  expect(final.seq).toBe(after.seq);
+  expect(final.value).toEqual(after.value);
 });

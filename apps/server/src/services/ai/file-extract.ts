@@ -22,6 +22,7 @@ export type FileExtract = {
   markdown: string;
 };
 
+const PARSER_VERSION = 2;
 const running = new Set<string>();
 const activeByDatabase = new WeakMap<DB, Set<Promise<void>>>();
 
@@ -74,7 +75,8 @@ export async function loadFileExtract(
   if (!row) return null;
   const parts = parseResult(row.result);
   return {
-    status: row.status === "ready" || row.status === "failed" ? row.status : "pending",
+    status: row.status === "ready" && JSON.parse(row.result || "{}").parserVersion !== PARSER_VERSION
+      ? "pending" : row.status === "ready" || row.status === "failed" ? row.status : "pending",
     error: row.error ?? undefined,
     parts,
     markdown: markdownOf(parts),
@@ -149,10 +151,6 @@ async function runExtract(
       await markExtract(db, objectId, "failed", "{}", "文件不存在");
       return;
     }
-    if (object.mime.startsWith("image/")) {
-      await markExtract(db, objectId, "ready", JSON.stringify({ parts: [] }));
-      return;
-    }
     const item = await db
       .selectFrom("file_items")
       .select("name")
@@ -168,7 +166,9 @@ async function runExtract(
     const storage = createStorage(runtime);
     const body = await storage.read(config, object.object_key);
     const filename = item?.name || object.object_key;
-    const raw = await extractFilePartsAsync(filename, Buffer.from(body));
+    const raw = object.mime.startsWith("image/")
+      ? [{type:"image" as const, mime:object.mime, filename, data:Buffer.from(body)}]
+      : await extractFilePartsAsync(filename, Buffer.from(body));
     const parts: StoredExtractPart[] = [];
     let index = 0;
     for (const part of raw) {
@@ -178,7 +178,7 @@ async function runExtract(
       }
       const jpeg = await normalizeImage(part.data);
       if (!jpeg) continue;
-      const recipe = `img-${index++}`;
+      const recipe = `v${PARSER_VERSION}-img-${index++}`;
       const id = randomUUID();
       const key = derivativeKey(object.id, object.mime, recipe, `${id}.jpg`);
       await storage.put(config, key, jpeg, "image/jpeg", part.filename);
@@ -216,7 +216,7 @@ async function runExtract(
       db,
       objectId,
       "ready",
-      JSON.stringify({ parts }),
+      JSON.stringify({ parserVersion: PARSER_VERSION, parts }),
     );
   } catch (error) {
     await markExtract(

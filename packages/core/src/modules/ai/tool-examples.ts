@@ -84,6 +84,7 @@ export const TOOL_EXAMPLES: Record<string, Record<string, unknown>[]> = {
   ],
   knowledge_search: [{ query: "项目计划", mode: "auto", offset: 0 }],
   document_exists: [{ ids: [SAMPLE.doc] }],
+  file_read: [{ fileId: SAMPLE.file, offset: 0, limit: 12000 }],
   file_browse: [{ folderId: "root" }, { fileId: SAMPLE.file }],
   file_search: [{ query: "预算表格", folderId: "root", limit: 20 }],
   file_manage: [
@@ -328,6 +329,17 @@ export const TOOL_EXAMPLES: Record<string, Record<string, unknown>[]> = {
     },
   ],
   presentation_edit: [
+    {
+      ...editBase,
+      operations: [
+        { type: "formatText", slideId: "已读取的页面ID", ids: ["已读取的文字元素ID"], marks: { color: "#2563eb", fontSize: 32 } },
+        { type: "slideProperty", slideId: "已读取的页面ID", field: "background", value: "#ffffff" },
+      ],
+    },
+    {
+      ...editBase,
+      operations: [{ type: "remove", slideId: "已读取的页面ID", ids: ["用户要求移除的元素ID"] }],
+    },
     {
       ...editBase,
       operations: [{ type: "addSlide" }],

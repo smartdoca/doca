@@ -1,5 +1,5 @@
 import { authorizeFileFolder, authorizeFileItem } from "../access/file-access.js";
-import { mainInstruction, knowledgeManagementView, knowledgeRunHistory, knowledgeSourceLinkVisible, sourceAvailable, maintainKnowledgeSource } from "./system.js";
+import { saveKnowledgeInstruction, saveKnowledgeSettings, knowledgeInstructions, mainInstruction, knowledgeManagementView, knowledgeRunHistory, knowledgeSourceLinkVisible, sourceAvailable, sourceActor, maintainKnowledgeSource } from "./system.js";
 import { randomUUID } from "node:crypto";
 import type { DB } from "@db/index.js";
 import type { Actor } from "../identity/passwords.js";
@@ -7,7 +7,7 @@ import { authorize } from "../access/queries.js";
 import { fail } from "../../shared/errors.js";
 
 
-export type SubscriptionKind = "document" | "file" | "folder" | "url";
+export type SubscriptionKind = "document" | "library" | "file" | "folder" | "url";
 export type KnowledgeDocumentCreator = (
   actor: Actor,
   input: {
@@ -20,7 +20,7 @@ export type KnowledgeDocumentCreator = (
   },
 ) => Promise<{ id: string }>;
 
-const kinds = new Set<SubscriptionKind>(["document", "file", "folder", "url"]);
+const kinds = new Set<SubscriptionKind>(["document", "library", "file", "folder", "url"]);
 
 export function subscriptionKind(value: string): SubscriptionKind {
   if (kinds.has(value as SubscriptionKind)) return value as SubscriptionKind;
@@ -37,10 +37,11 @@ export async function listKnowledgeSubscriptions(db: DB, actor: Actor, libraryId
   const creators = creatorIds.length ? await db.selectFrom("users").select(["id", "display_name", "public_id"]).where("id", "in", creatorIds).execute() : [];
   const items = [];
   for (const row of rows) {
-    const available = await sourceAvailable(db, actor, row);
+    const owner = await sourceActor(db, row);
+    const available = !!owner && await sourceAvailable(db, owner, row);
     const visible = await knowledgeSourceLinkVisible(db, actor, row, true);
     const status = row.status === "detached" ? "detached" : !available ? "missing" : row.status === "pending" ? await pendingStatus(db, row) : await subscriptionStatus(db, row);
-    if (options.refreshStatus !== false && status !== row.status && row.creator_id === actor.id) {
+    if (options.refreshStatus !== false && status !== row.status) {
       await db.updateTable("knowledge_subscriptions").set({ status }).where("id", "=", row.id).execute();
     }
     const node = row.node_id
@@ -51,13 +52,14 @@ export async function listKnowledgeSubscriptions(db: DB, actor: Actor, libraryId
     const policy = view.settings.sourcePolicies[row.id];
     items.push({
       id: row.id,
+      groupId: row.group_id ?? null,
       creator: { id: row.creator_id, displayName: creator?.display_name || creator?.public_id || "" },
       guideConfigured: !!guide?.revision,
       guidePreview: (guide?.markdown ?? "").replace(/^#+\s*/gm, "").slice(0, 180),
       weightHint: (guide?.markdown ?? "").split("\n").filter(line => /权重|weight/i.test(line) && !/^#/.test(line)).slice(0, 2).join(" ").slice(0, 150),
-      safety: { redactContacts: view.settings.redactContacts || !!policy?.redactContacts, hiddenTerms: (policy?.redactedTerms.length ?? 0) + view.settings.redactedTerms.length, excluded: view.settings.excludedSourceIds.includes(row.id), linkAccess: policy?.linkAccess ?? (visible ? "public" : "follow"), editable: row.creator_id === actor.id },
-      canEdit: row.creator_id === actor.id,
-      canDelete: row.creator_id === actor.id || library.owner_id === actor.id,
+      safety: { redactContacts: view.settings.redactContacts || !!policy?.redactContacts, hiddenTerms: (policy?.redactedTerms.length ?? 0) + view.settings.redactedTerms.length, excluded: view.settings.excludedSourceIds.includes(row.id), linkAccess: policy?.linkAccess ?? (visible ? "public" : "follow"), editable: true },
+      canEdit: true,
+      canDelete: true,
       sourceKind: row.source_kind,
       sourceId: visible ? row.source_id : "",
       url: visible ? row.url : "",
@@ -85,19 +87,43 @@ export async function listKnowledgeSubscriptions(db: DB, actor: Actor, libraryId
       detail: run.detail,
       createdAt: run.created_at,
     })),
+    groups: await db.selectFrom("knowledge_source_groups").selectAll().where("library_id", "=", libraryId).orderBy("created_at").execute(),
     items,
   };
 }
+
+type SubscribedSource = Awaited<ReturnType<typeof publicSubscription>> & { included:number; groupId?:string; members?:SubscribedSource[] };
 
 export async function subscribeKnowledgeSource(
   db: DB,
   actor: Actor,
   libraryId: string,
-  input: { sourceKind: SubscriptionKind; sourceId?: string; url?: string },
-) {
+  input: { sourceKind: SubscriptionKind; sourceId?: string; url?: string; sourceIds?: string[]; urls?: string[]; title?: string; guide?: string },
+): Promise<SubscribedSource> {
   await authorize(db, actor, libraryId, 4);
   const library = await db.selectFrom("resources").select(["id", "kind"]).where("id", "=", libraryId).where("deleted_at", "is", null).executeTakeFirst();
   if (!library || library.kind !== "library") fail(404, "知识库不存在");
+  if(input.sourceKind === "url" && (await knowledgeInstructions(db,actor,libraryId)).settings.sourceScope === "internal") fail(403,"本库仅使用内部来源，请先由管理员明确允许网络来源");
+  if (input.sourceIds || input.urls) {
+    if (input.sourceKind === "url" ? !!input.sourceIds?.length || !!input.sourceId : !!input.urls?.length || !!input.url) fail(400, "每条来源只能包含一种类型");
+    const targets = [...new Set(input.sourceKind === "url" ? (input.urls ?? []).map(normalizeSubscriptionUrl) : input.sourceIds ?? [])];
+    if (!targets.length || targets.length > 500) fail(400, "请选择 1 至 500 项同类来源");
+    // Validate the entire selection before any writes; a failed item cannot leave a partial group.
+    for (const target of targets) await readSource(db, actor, libraryId, { sourceKind: input.sourceKind, ...(input.sourceKind === "url" ? {url:target} : {sourceId:target}) });
+    const persist = async (tx: DB) => {
+      const members = [];
+      for (const target of targets) members.push(await subscribeKnowledgeSource(tx, actor, libraryId, {sourceKind:input.sourceKind,...(input.sourceKind === "url" ? {url:target} : {sourceId:target})}));
+      const existing = await tx.selectFrom("knowledge_subscriptions").select(["id","group_id"]).where("id","in",members.map(x=>x.id)).execute();
+      if (existing.some(x=>x.group_id)) fail(409,"部分内容已属于其他来源，请编辑原来源，避免重复绑定");
+      const id = randomUUID();
+      await tx.insertInto("knowledge_source_groups").values({id,library_id:libraryId,title:input.title?.trim().slice(0,200) || `${input.sourceKind} · ${targets.length}`,source_kind:input.sourceKind,created_at:new Date().toISOString()}).execute();
+      await tx.updateTable("knowledge_subscriptions").set({group_id:id}).where("id","in",members.map(x=>x.id)).execute();
+      if(input.guide)await updateKnowledgeSourceGroup(tx,actor,libraryId,id,{guide:input.guide});
+      return {...members[0]!, groupId:id, members, included:0};
+    };
+    return db.isTransaction ? persist(db) : db.transaction().execute(persist);
+  }
+  if (input.sourceKind === "url" ? !!input.sourceId : !!input.url) fail(400,"每条来源只能包含一种类型");
   const source = await readSource(db, actor, libraryId, input);
   const existing = await db.selectFrom("knowledge_subscriptions").selectAll()
     .where("library_id", "=", libraryId)
@@ -155,7 +181,7 @@ export async function dismissKnowledgeSubscription(db: DB, actor: Actor, library
   if (!row) fail(404, "连线不存在");
   const source = await db.selectFrom("knowledge_subscriptions").select("creator_id").where("id", "=", row.id).executeTakeFirstOrThrow();
   const library = await db.selectFrom("resources").select("owner_id").where("id", "=", libraryId).executeTakeFirstOrThrow();
-  if (source.creator_id !== actor.id && library.owner_id !== actor.id) fail(403, "只有来源创建者或知识库所有者可以删除来源");
+
   if (row.status !== "pending") fail(400, "只有等待确认的连线可以不加入");
   await db.deleteFrom("knowledge_subscriptions").where("id", "=", row.id).execute();
   return { ok: true };
@@ -502,7 +528,7 @@ async function pendingStatus(db: DB, row: { source_kind: string; source_id: stri
 
 async function sourceTitle(db: DB, row: { source_kind: string; source_id: string; url: string }) {
   if (row.url) return row.url;
-  if (row.source_kind === "document") {
+  if (row.source_kind === "document" || row.source_kind === "library") {
     const resource = await db.selectFrom("resources").select("title").where("id", "=", row.source_id).executeTakeFirst();
     return resource?.title ?? "";
   }
@@ -519,7 +545,7 @@ async function sourceTitle(db: DB, row: { source_kind: string; source_id: string
 
 async function subscriptionStatus(db: DB, row: { source_kind: string; source_id: string; url: string; source_version: string; status: string }) {
   if (row.source_kind === "url") return row.status === "missing" ? "missing" : "active";
-  if (row.source_kind === "document") {
+  if (row.source_kind === "document" || row.source_kind === "library") {
     const resource = await db.selectFrom("resources").select(["version", "deleted_at"]).where("id", "=", row.source_id).executeTakeFirst();
     if (!resource || resource.deleted_at) return "missing";
     return String(resource.version) === row.source_version ? "active" : "stale";
@@ -544,9 +570,10 @@ async function readSource(db: DB, actor: Actor, libraryId: string, input: { sour
   }
   const sourceId = input.sourceId ?? "";
   if (!/^[0-9a-f-]{36}$/i.test(sourceId)) fail(400, "来源不存在");
-  if (input.sourceKind === "document") {
+  if (input.sourceKind === "document" || input.sourceKind === "library") {
     const resource = await authorize(db, actor, sourceId, 1);
-    if (resource.resource.kind !== "document") fail(400, "只能订阅一篇文档");
+    if (resource.resource.kind !== input.sourceKind) fail(400, "来源类型与所选内容不符");
+    if (sourceId === libraryId) fail(400, "不能将当前知识库作为自身来源");
     if (resource.resource.library_id === libraryId) fail(400, "这篇已经在这个知识库里");
     const state = await db.selectFrom("document_states").select("text").where("resource_id", "=", sourceId).executeTakeFirst();
     const text = (state?.text ?? "").trim();
@@ -609,4 +636,44 @@ function normalizeSubscriptionUrl(value: string) {
 
 function urlHost(value: string) {
   try { return new URL(value).hostname; } catch { return value; }
+}
+
+export async function updateKnowledgeSourceGroup(db: DB, actor: Actor, libraryId: string, groupId: string, input: {title?:string; guide?:string; sourceIds?:string[]; urls?:string[]}) {
+  await authorize(db,actor,libraryId,4);
+  const group=await db.selectFrom("knowledge_source_groups").selectAll().where("id","=",groupId).where("library_id","=",libraryId).executeTakeFirst();
+  if(!group)fail(404,"来源组不存在");
+  if(group.source_kind==="url" ? !!input.sourceIds : !!input.urls)fail(400,"不能更改来源组类型或混入其他类型");
+  const targets=group.source_kind==="url"?input.urls:input.sourceIds;
+  const persist=async(tx:DB)=>{
+    if(input.title!==undefined) {
+      if(!input.title.trim())fail(400,"来源名称不能为空");
+      await tx.updateTable("knowledge_source_groups").set({title:input.title.trim().slice(0,200)}).where("id","=",groupId).execute();
+    }
+    const config=JSON.parse(group.config??"{}");
+    if(input.guide!==undefined){config.guide=input.guide;await tx.updateTable("knowledge_source_groups").set({config:JSON.stringify(config)}).where("id","=",groupId).execute();}
+    const previousIds=new Set((await tx.selectFrom("knowledge_subscriptions").select("id").where("group_id","=",groupId).where("status","!=","detached").execute()).map(x=>x.id));
+    if(targets) {
+      const unique=[...new Set(targets)];
+      if(!unique.length||unique.length>500)fail(400,"请选择 1 至 500 项同类来源");
+      const ids:string[]=[];
+      for(const target of unique) {
+        const member=await subscribeKnowledgeSource(tx,actor,libraryId,{sourceKind:subscriptionKind(group.source_kind),...(group.source_kind==="url"?{url:target}:{sourceId:target})});
+        const current=await tx.selectFrom("knowledge_subscriptions").select("group_id").where("id","=",member.id).executeTakeFirstOrThrow();
+        if(current.group_id&&current.group_id!==groupId)fail(409,"内容已属于其他来源组");
+        ids.push(member.id);
+      }
+      // Keep provenance for published documents after removal; detached entries no longer ingest.
+      await tx.updateTable("knowledge_subscriptions").set({status:"detached"}).where("group_id","=",groupId).where("id","not in",ids).execute();
+      await tx.updateTable("knowledge_subscriptions").set({group_id:groupId}).where("id","in",ids).execute();
+    }
+    const members=await tx.selectFrom("knowledge_subscriptions").select("id").where("group_id","=",groupId).where("status","!=","detached").execute();
+    for(const member of members)if(input.guide!==undefined||!previousIds.has(member.id)) {
+      let guide=config.guide??"";
+      if(config.priority)guide+=`\n\n管理员优先级：${config.priority.weight??50}。范围：${config.priority.scope??"此来源主题"}。依据：${config.priority.reason}`;
+      {const bundle=await knowledgeInstructions(tx,actor,libraryId),path=`sources/${member.id}/SOURCE.md`;await saveKnowledgeInstruction(tx,actor,libraryId,{path,expectedRevision:bundle.files.find(x=>x.path===path)?.revision??0,markdown:guide});}
+    }
+    if(config.paused){const bundle=await knowledgeInstructions(tx,actor,libraryId);await saveKnowledgeSettings(tx,actor,libraryId,bundle.settingsRevision,{...bundle.settings,excludedSourceIds:[...new Set([...bundle.settings.excludedSourceIds,...members.map(x=>x.id)])]});}
+    return {id:groupId};
+  };
+  return db.isTransaction?persist(db):db.transaction().execute(persist);
 }

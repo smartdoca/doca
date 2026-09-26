@@ -1,3 +1,5 @@
+import { knowledgeSourceMembers } from "./source-members.js";
+import { knowledgeDocumentSnapshot } from "./document-snapshot.js";
 import {
   authorizeFileFolder,
   authorizeFileItem,
@@ -115,8 +117,11 @@ export const knowledgeSettingsSchema = z
     modelId: z.string().max(64).default(""),
     maxDocumentDepth: z.number().int().min(1).max(8).default(3),
     autoPublishWeighted: z.boolean().default(false),
+    publicationMode: z.enum(["automatic", "manual"]).default("automatic"),
+    sourceScope: z.enum(["internal", "web"]).default("web"),
+    automationPolicy: z.enum(["safe", "draft"]).default("safe"),
     sourcePolicies: z.record(z.string().uuid(), sourcePolicySchema).default({}),
-    excludedSourceIds: z.array(z.string().uuid()).max(200).default([]),
+    excludedSourceIds: z.array(z.string().uuid()).max(5000).default([]),
     redactedTerms: z
       .array(z.string().trim().min(1).max(200))
       .max(100)
@@ -127,6 +132,9 @@ export const knowledgeSettingsSchema = z
 export type KnowledgeSettings = z.infer<typeof knowledgeSettingsSchema>;
 /** Assistant patches preserve omitted settings, including source-local safety rules. */
 export const knowledgeSettingsPatchSchema = z.object({
+  publicationMode: knowledgeSettingsSchema.shape.publicationMode.removeDefault().optional(),
+  sourceScope: knowledgeSettingsSchema.shape.sourceScope.removeDefault().optional(),
+  automationPolicy: knowledgeSettingsSchema.shape.automationPolicy.removeDefault().optional(),
   modelId: knowledgeSettingsSchema.shape.modelId.removeDefault().optional(),
   maxDocumentDepth: knowledgeSettingsSchema.shape.maxDocumentDepth.removeDefault().optional(),
   autoPublishWeighted: knowledgeSettingsSchema.shape.autoPublishWeighted.removeDefault().optional(),
@@ -192,10 +200,10 @@ export async function maintainKnowledgeSource(
     .where("id", "=", id)
     .executeTakeFirst();
   if (!source) fail(404, "来源不存在");
-  if (source.creator_id !== actor.id) fail(403, "只有来源创建者可以修改来源");
+
   return source;
 }
-async function sourceActor(db: DB, source: Schema["knowledge_subscriptions"]) {
+export async function sourceActor(db: DB, source: Schema["knowledge_subscriptions"]) {
   if (!source.creator_id) return null;
   const actor = await db
     .selectFrom("users")
@@ -297,10 +305,10 @@ export async function knowledgeInstructions(
   const sourceLabels: Record<string, string> = {};
   for (const source of subscriptions) {
     if (!(await knowledgeSourceLinkVisible(db, actor, source, true))) continue;
-    if (source.source_kind === "document")
-      sourceLabels[source.id] = (
-        await authorize(db, actor, source.source_id, 1)
-      ).resource.title;
+    if (source.source_kind === "document" || source.source_kind === "library") {
+      const reader = await sourceActor(db,source);
+      if(reader) try { sourceLabels[source.id] = (await authorize(db,reader,source.source_id,1)).resource.title; } catch {}
+    }
     else if (source.source_kind === "file" || source.source_kind === "folder") {
       const row = await db
         .selectFrom(
@@ -317,7 +325,7 @@ export async function knowledgeInstructions(
   const files = [...latest.values()].filter(file => !file.path.startsWith("sources/") || sourceIds.has(file.path.split("/")[1]!)).sort((a, b) =>
     a.path.localeCompare(b.path),
   );
-  if (files.reduce((n, f) => n + f.markdown.length, 0) > 120000)
+  if ([...new Set(files.map(f=>f.markdown))].reduce((n, markdown) => n + markdown.length, 0) > 120000)
     fail(413, "整理指引过长，请精简后重试");
   const settings = await db
     .selectFrom("knowledge_settings")
@@ -336,9 +344,8 @@ export async function knowledgeInstructions(
         source.id,
         {
           kind: source.source_kind,
-          canEdit: source.creator_id === actor.id,
-          canDelete:
-            source.creator_id === actor.id || library.owner_id === actor.id,
+          canEdit: true,
+          canDelete: true,
         },
       ]),
     ),
@@ -355,7 +362,7 @@ export async function knowledgeManagementView(
   libraryId: string,
 ) {
   const bundle = await knowledgeInstructions(db, actor, libraryId);
-  await projectPublishedKnowledge(db, actor, libraryId);
+
   const visibleSettings = await hideRestrictedKnowledgeLinks(
     db,
     actor,
@@ -513,7 +520,6 @@ export async function saveKnowledgeSettings(
           .selectFrom("knowledge_subscriptions")
           .select("id")
           .where("library_id", "=", libraryId)
-          .where("creator_id", "=", actor.id)
           .execute()
       ).map((source) => source.id),
     );
@@ -626,6 +632,7 @@ export async function knowledgeEntries(
     libraryId,
     knowledgeSettingsSchema.parse(row ? JSON.parse(row.config) : {}),
   );
+  const live = new Map((await knowledgeDocumentSnapshot(db, libraryId)).map(doc => [doc.id, doc]));
   return (
     await db
       .selectFrom("knowledge_entries")
@@ -635,6 +642,8 @@ export async function knowledgeEntries(
       .orderBy("updated_at", "desc")
       .execute()
   ).map((entry) => {
+    const doc = entry.status === "published" ? live.get(JSON.parse(entry.review_state).nodeId) : undefined;
+    if (doc) entry = { ...entry, title: doc.title, markdown: doc.markdown };
     const effective = effectiveKnowledgeSettings(
       settings,
       refsOf(entry).map((ref) => ref.subscriptionId),
@@ -800,6 +809,7 @@ export async function saveHumanKnowledge(
   actor: Actor,
   libraryId: string,
   raw: z.input<typeof entryInput>,
+  provenance: "human" | "ai" = "human",
 ) {
   const input = entryInput.parse(raw);
   return transact(db, async (tx) => {
@@ -838,7 +848,7 @@ export async function saveHumanKnowledge(
         ),
       ),
       origin:
-        current && current.origin !== "human_authored"
+        provenance === "ai" ? "ai_synthesized" : current && current.origin !== "human_authored"
           ? "human_revised"
           : "human_authored",
       status: "draft",
@@ -861,12 +871,17 @@ export async function saveHumanKnowledge(
       input.path ?? state.path ?? [],
       bundle.settings.maxDocumentDepth,
     );
-    state.humanChange = {
+    if (current) {
+      const nodeId = JSON.parse(current.review_state).nodeId;
+      if (nodeId) state.baseDocumentSeq = (await tx.selectFrom("document_states").select("seq").where("resource_id", "=", nodeId).executeTakeFirst())?.seq;
+    }
+    if(provenance === "human") state.humanChange = {
       id: randomUUID(),
       authorId: actor.id,
       createdAt: now,
       change: humanDelta(current?.markdown ?? "", entry.markdown),
     };
+    else delete state.humanChange;
     entry.review_state = JSON.stringify(state);
     if (current && !replacing) {
       const saved = await tx
@@ -940,6 +955,7 @@ export async function projectKnowledgeEntry(
     nodeId?: string;
     figures?: unknown;
     projectedHash?: string;
+    projectedSeq?: number;
   };
   const path = (state.path ?? []).filter((segment) => segment.trim());
   let parentId: string | null = null;
@@ -1042,6 +1058,7 @@ export async function projectKnowledgeEntry(
   }
   state.nodeId = nodeId;
   state.projectedHash = contentHash;
+  state.projectedSeq = (await tx.selectFrom("document_states").select("seq").where("resource_id", "=", nodeId).executeTakeFirst())?.seq;
   await tx
     .updateTable("knowledge_entries")
     .set({ review_state: JSON.stringify(state) })
@@ -1109,6 +1126,11 @@ export async function reviewKnowledgeEntry(
         .executeTakeFirst();
       if (!original) fail(409, "原知识已变化，请核对后重新发布");
       const originalState = JSON.parse(original.review_state);
+      if (originalState.nodeId) {
+        const live = await tx.selectFrom("document_states").select("seq").where("resource_id", "=", originalState.nodeId).executeTakeFirst();
+        if (live && live.seq !== (state.baseDocumentSeq ?? originalState.projectedSeq ?? 0))
+          fail(409, "文档已有人工修改，请重新读取文档并生成修订建议");
+      }
       if (!state.nodeId && typeof originalState.nodeId === "string")
         state.nodeId = originalState.nodeId;
       const archived = {
@@ -1181,7 +1203,7 @@ export async function sourceAvailable(
   try {
     if (row.status === "detached") return false;
     if (row.source_kind === "url") return row.status !== "missing";
-    if (row.source_kind === "document") {
+    if (row.source_kind === "document" || row.source_kind === "library") {
       await authorize(db, actor, row.source_id, 1);
       return true;
     }
@@ -1207,7 +1229,9 @@ export async function knowledgeSourceLinkVisible(
   source: Schema["knowledge_subscriptions"],
   managing = false,
 ) {
-  if (managing && source.creator_id === actor.id) return true;
+  if (managing) {
+    try { await maintainKnowledge(db, actor, source.library_id); return true; } catch {}
+  }
   if (!(await sourceAvailable(db, actor, source))) return false;
   if (source.source_kind !== "url") return true;
   const settings = await db
@@ -1350,8 +1374,7 @@ export async function detachKnowledgeSource(
     .where("library_id", "=", libraryId)
     .executeTakeFirst();
   if (!source) fail(404, "来源不存在");
-  if (source.creator_id !== actor.id && library.owner_id !== actor.id)
-    fail(403, "只有来源创建者或知识库所有者可以删除来源");
+
   const result = await db
     .updateTable("knowledge_subscriptions")
     .set({ status: "detached" })
@@ -1567,6 +1590,9 @@ export async function executeKnowledgeCuration(
     const readGuards: ((connection: DB) => Promise<void>)[] = [];
     const skipped: { id: string; reason: string }[] = [];
     for (const source of subscriptions) {
+      if(bundle.settings.sourceScope === "internal" && source.source_kind === "url") {
+        skipped.push({id:source.id,reason:"internal_sources_only"});continue;
+      }
       const actor = await sourceActor(db, source);
       if (!actor) {
         skipped.push({ id: source.id, reason: "creator_unavailable" });
@@ -1601,36 +1627,19 @@ export async function executeKnowledgeCuration(
       let title = "",
         text = "",
         version = "";
-      if (source.source_kind === "document") {
+      if (source.source_kind === "document" || source.source_kind === "library") {
         const access = await authorize(db, actor, source.source_id, 1);
-        const state = await db
-          .selectFrom("document_states")
-          .select(["text", "seq"])
-          .where("resource_id", "=", source.source_id)
-          .executeTakeFirst();
-        title = access.resource.title;
-        text = state?.text ?? "";
-        version = String(state?.seq ?? access.resource.version);
-        const expectedVersion = version;
-        readGuards.push(async (connection) => {
-          const freshAccess = await authorize(
-            connection,
-            actor,
-            source.source_id,
-            1,
-          );
-          const freshState = await connection
-            .selectFrom("document_states")
-            .select("seq")
-            .where("resource_id", "=", source.source_id)
-            .executeTakeFirst();
-          if (
-            String(freshState?.seq ?? freshAccess.resource.version) !==
-              expectedVersion ||
-            freshAccess.resource.title !== title
-          )
-            fail(409, "来源内容已变化，请重新整理");
-        });
+        const members=await knowledgeSourceMembers(db,actor,source,[...denied]);
+        const read=async(connection:DB)=>{
+          const current=await knowledgeSourceMembers(connection,actor,source,[...denied]);
+          const parts=[];
+          for(const member of current){const state=await connection.selectFrom("document_states").select("text").where("resource_id","=",member.id).executeTakeFirst();parts.push(`# ${member.title}\n${state?.text??""}`);}
+          return {members:current,text:parts.join("\n\n")};
+        };
+        const snapshot=await read(db);
+        title=access.resource.title;text=snapshot.text;version=hash(snapshot);
+        const expectedVersion=version;
+        readGuards.push(async(connection)=>{await authorize(connection,actor,source.source_id,1);if(hash(await read(connection))!==expectedVersion)fail(409,"来源内容或范围已变化，请重新整理");});
       } else if (source.source_kind === "file") {
         const file = await db
           .selectFrom("file_items")
@@ -1794,8 +1803,11 @@ export async function executeKnowledgeCuration(
       .selectAll()
       .where("library_id", "=", run.library_id)
       .execute();
-    if (existing.reduce((n, e) => n + e.markdown.length, 0) > 120000)
-      fail(413, "现有知识过长，请拆分知识库后整理");
+    const currentDocuments = new Map((await knowledgeDocumentSnapshot(db, run.library_id)).map(doc => [doc.id, doc]));
+    for (const entry of existing) {
+      const doc = entry.status === "published" ? currentDocuments.get(JSON.parse(entry.review_state).nodeId) : undefined;
+      if (doc) { entry.markdown = doc.markdown; entry.title = doc.title; }
+    }
     const humanChanges = await knowledgeHumanChanges(db, actor, run.library_id);
     if (JSON.stringify(humanChanges).length > 120000)
       fail(413, "人工修订记录过长，请拆分知识库");
@@ -1872,7 +1884,7 @@ export async function executeKnowledgeCuration(
             return {
               id: entry.id,
               title: sanitizeKnowledge(entry.title, policy),
-              markdown: sanitizeKnowledge(entry.markdown, policy),
+              markdown: sanitizeKnowledge(refsOf(entry).some(ref => ref.subscriptionId === material.subscriptionId) || entry.origin.startsWith("human") ? entry.markdown : "[目录条目，未加载全文；修改前请通过整理助手读取当前文档]", policy),
               origin: entry.origin,
               status: entry.status,
               sourceIds: refsOf(entry).map((ref) => ref.subscriptionId),
@@ -2017,6 +2029,7 @@ export async function executeKnowledgeCuration(
               ? {
                   replaces: replacement.id,
                   replacesRevision: replacement.revision,
+                  baseDocumentSeq: currentDocuments.get(JSON.parse(replacement.review_state).nodeId)?.seq,
                 }
               : {}),
           }),
@@ -2059,7 +2072,7 @@ export async function executeKnowledgeCuration(
           (row) => row.id === material.subscriptionId,
         )!;
         let sourceVersion = material.version;
-        if (source.source_kind === "document") {
+        if (source.source_kind === "document" || source.source_kind === "library") {
           sourceVersion = String(
             (
               await tx

@@ -10,6 +10,15 @@ import {
 import { taskStateHint } from "../apps/server/src/services/ai/context-budget.js";
 
 const sheetId = "11111111-1111-4111-8111-111111111111";
+it("reports full UTF-16 text length even when a rich-text preview is clipped", () => {
+  const value = [{ id: "p", type: "paragraph", children: [
+    { text: "正文".repeat(80) },
+    { type: "link", children: [{ text: "📄链接" }] },
+  ] }];
+  const outline = documentOutline("rich_text", value) as any;
+  expect(outline.blocks[0].textLength).toBe(164);
+  expect(outline.blocks[0].preview.length).toBeLessThan(164);
+});
 const spreadsheet = {
   sheetOrder: [sheetId],
   sheets: {

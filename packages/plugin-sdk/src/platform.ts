@@ -28,6 +28,8 @@ export interface DirectoryUser {
   readonly avatar_asset_id: string | null;
 }
 export interface UsersServiceV1 {
+  /** Trusted server task revalidation; does not grant access to business resources. */
+  status(id: string): Promise<{ readonly id: string; readonly status: string } | null>;
   get(context: PluginRequestContext, id: string): Promise<PluginUser | null>;
   /** Trusted server-only inventory for initial reconciliation; never expose directly to browsers. */
   list(input?: { after?: string; limit?: number }): Promise<{ items: readonly PluginUser[]; cursor: string | null }>;
@@ -77,6 +79,8 @@ export type PluginExternalRequest = Omit<PluginHttpRequest, "principal"> & { rea
 interface PluginRouteBase {
   readonly method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   readonly path: string;
+  /** Defaults to 1 MiB. Trusted plugins may explicitly request up to 32 MiB. */
+  readonly bodyLimit?: number;
   readonly schema?: { readonly body?: JsonObject; readonly querystring?: JsonObject; readonly params?: JsonObject };
 }
 export type PluginRoute = PluginRouteBase & ({
@@ -120,3 +124,18 @@ export interface EventsServiceV1 {
   read(after: number, limit?: number): Promise<readonly PluginIntegrationEvent[]>;
 }
 export const eventsServiceToken = defineService<EventsServiceV1>("events.v1");
+
+export interface PluginNotificationInput {
+  readonly recipientId: string;
+  readonly key: string;
+  readonly title: string;
+  readonly body: string;
+  /** Local application route, e.g. /mail/inbox?message=123. No origin or hash. */
+  readonly path: string;
+  readonly resource: { readonly type: string; readonly id: string };
+}
+export interface NotificationsServiceV1 {
+  publish(pluginId: string, input: PluginNotificationInput): Promise<{ id: string }>;
+  withdraw(pluginId: string, input: { recipientId: string; key: string }): Promise<void>;
+}
+export const notificationsServiceToken = defineService<NotificationsServiceV1>("notifications.v1");

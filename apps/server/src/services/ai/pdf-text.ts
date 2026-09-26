@@ -168,45 +168,45 @@ export function extractPdfMarkdown(body: Buffer) {
   return pdfTextOf(extractPdfParts(body));
 }
 
-async function extractPdfWithPdfjs(body: Buffer) {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs").catch(() =>
-    import("pdfjs-dist"),
-  );
+/** Shared parser for attachments, folder indexing and file_read. Never interpret compressed bytes as text. */
+export async function extractPdfPartsRich(body: Buffer): Promise<PdfPart[]> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const { dirname, join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const root = dirname(fileURLToPath(import.meta.resolve("pdfjs-dist/package.json")));
   const doc = await pdfjs.getDocument({
-    data: new Uint8Array(body),
-    useSystemFonts: true,
+    data: new Uint8Array(body), useSystemFonts: true,
+    cMapUrl: join(root, "cmaps/"), cMapPacked: true,
+    standardFontDataUrl: join(root, "standard_fonts/"),
   }).promise;
+  const parts: PdfPart[] = [];
+  let rendered = 0;
   try {
-    const pages: string[] = [];
     const count = Math.min(doc.numPages, 50);
     for (let i = 1; i <= count; i++) {
       const page = await doc.getPage(i);
       const content = await page.getTextContent();
-      const text = content.items
-        .map((item) => ("str" in item ? item.str : ""))
-        .join(" ")
-        .replace(/[ \t]+/g, " ")
-        .trim();
-      if (text) pages.push(text);
+      const text = content.items.map((item) => "str" in item
+        ? item.str + (item.hasEOL ? "\n" : " ") : "").join("").trim();
+      parts.push({type:"text", text:`## 第 ${i} 页\n${text}`});
+      const ops = await page.getOperatorList();
+      const hasImage = ops.fnArray.some(op => [pdfjs.OPS.paintImageXObject, pdfjs.OPS.paintInlineImageXObject].includes(op));
+      if ((text.length < 40 || hasImage) && rendered < 16) {
+        const base = page.getViewport({scale:1});
+        const viewport = page.getViewport({scale:Math.min(2,1600/Math.max(base.width,base.height))});
+        const factory = doc.canvasFactory as any;
+        const target = factory.create(Math.ceil(viewport.width),Math.ceil(viewport.height));
+        try {
+          await page.render({canvasContext:target.context,canvas:target.canvas,viewport}).promise;
+          parts.push({type:"image",mime:"image/png",filename:`page-${i}.png`,data:Buffer.from(target.canvas.toBuffer("image/png"))});
+          rendered++;
+        } finally { factory.destroy(target); }
+      } else if (text.length < 40 || hasImage) {
+        parts.push({type:"text",text:"[页面图像超过16页上限，此页视觉内容未识别]"});
+      }
+      page.cleanup();
     }
-    return pages.join("\n\n").trim();
-  } finally {
-    await doc.destroy();
-  }
-}
-
-export async function extractPdfPartsRich(body: Buffer): Promise<PdfPart[]> {
-  const parts = extractPdfParts(body);
-  const text = pdfTextOf(parts);
-  if (text.length >= 40 && !text.startsWith("未能从该 PDF")) return parts;
-  try {
-    const better = await extractPdfWithPdfjs(body);
-    if (!better) return parts;
-    return [
-      { type: "text", text: better },
-      ...parts.filter((part) => part.type === "image"),
-    ];
-  } catch {
+    if (doc.numPages > count) parts.push({type:"text",text:`[共${doc.numPages}页，仅解析前${count}页，后文未识别]`});
     return parts;
-  }
+  } finally { await doc.destroy(); }
 }

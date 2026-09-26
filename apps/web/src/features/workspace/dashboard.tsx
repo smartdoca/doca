@@ -6,6 +6,7 @@ import { DocumentAuthor } from "@web/features/documents/document-author.js";
 import { useEffect, useState } from "react";
 import {
   BookOpen,
+  Bot,
   FileText,
   Table2,
   Presentation,
@@ -292,7 +293,7 @@ export function Dashboard({
           />
         ))}
       {!trash && (
-        <div className="quick-actions">
+        <div className={`quick-actions${libraries ? " library-quick-actions" : ""}`}>
           <button
             onClick={() => create(libraries ? "library" : "document")}
           >
@@ -325,6 +326,7 @@ export function Dashboard({
             </span>
             <ArrowUpRight size={17} />
           </button>
+          {libraries && <button onClick={() => { location.hash = "/knowledge-assistants"; }}><span className="quick-icon"><Bot size={23}/></span><span><strong>{t("studio.bots")}</strong><small>{t("home.knowledgeBotsHint")}</small></span><ArrowUpRight size={17}/></button>}
         </div>
       )}
       <div className="dashboard-controls">

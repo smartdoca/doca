@@ -33,6 +33,10 @@ export async function storeUserFile(
     mime: string;
     body: Buffer;
     storage?: StorageRuntime;
+    /** Reserved by the durable plugin operation before writing bytes. */
+    preparedObject?: { id: string; profileId: string };
+    beforeCreate?: (tx: DB) => Promise<Schema["file_items"] | undefined>;
+    afterCreate?: (tx: DB, row: Schema["file_items"]) => Promise<void>;
   },
 ) {
   if (!input.storage) fail(503, "文件存储未配置");
@@ -46,7 +50,7 @@ export async function storeUserFile(
   const profile = await db
     .selectFrom("storage_profiles")
     .selectAll()
-    .where("active", "=", 1)
+    .where(input.preparedObject ? "id" : "active", "=", input.preparedObject?.profileId ?? 1)
     .executeTakeFirstOrThrow();
   const config = {
     ...storageDefaults,
@@ -67,9 +71,9 @@ export async function storeUserFile(
   try {
     let candidate = await findExisting(db);
     if (!candidate) {
-      const id = randomUUID();
+      const id = input.preparedObject?.id ?? randomUUID();
       const key = objectKey(id, mime);
-      await storage.put(config, key, input.body, mime, filename);
+      await storage.put(config, key, input.body, mime, filename, !!input.preparedObject);
       stored = { config, key };
       candidate = {
         id,
@@ -88,6 +92,11 @@ export async function storeUserFile(
     }
     const result = await transact(db, async (tx) => {
       await lockAIUser(tx, input.actorId);
+      const replay = await input.beforeCreate?.(tx);
+      if (replay) {
+        const object = await tx.selectFrom("file_storage_objects").selectAll().where("id", "=", replay.storage_object_id).executeTakeFirstOrThrow();
+        return { row: replay, object };
+      }
       await requireCapability(tx, input.actorId, "assets.upload");
       await checkStorage(tx, input.ownerId, size);
       let object = await findExisting(tx);
@@ -115,13 +124,14 @@ export async function storeUserFile(
         delete_batch: null,
       };
       await tx.insertInto("file_items").values(row).execute();
+      await input.afterCreate?.(tx, row);
       await enqueueProjection(tx, "search-file", row.id, { fileId: row.id });
       return { row, object };
     });
     committedKey = result.object.object_key;
     return result.row;
   } finally {
-    if (stored && committedKey !== stored.key)
+    if (stored && committedKey !== stored.key && !input.preparedObject)
       await storage.remove(stored.config, stored.key).catch(() => undefined);
   }
 }
