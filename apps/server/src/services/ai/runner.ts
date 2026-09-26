@@ -1,3 +1,4 @@
+import { createToolFailureGuard } from "./tool-failure-guard.js";
 import { recognizeStoredFile } from "./file-recognition.js";
 import { recoveredDocumentArtifacts } from "./checkpoint.js";
 import { createKnowledgeStudio } from "./knowledge-studio.js";
@@ -770,6 +771,8 @@ export function createAIRunner(
       }
       await publish(true);
     };
+    const repeatedToolFailure = createToolFailureGuard();
+    const toolArguments = new Map<string, unknown>();
     let awaitingApproval = false;
     let awaitingChoice = !!progress.questions?.length;
     const skipApprovals = input.skipApprovals ?? {};
@@ -2225,7 +2228,7 @@ export function createAIRunner(
               row.id,
             );
             const path = `${preferred.path} / ${row.name}`;
-            if (files.length < 8 && href) {
+            if (files.length < 8 && href && !/(?:生成|制作|创建|导出|下载)/.test(input.text)) {
               await recordFileDelivery({
                 id: row.id,
                 name: row.name,
@@ -3746,6 +3749,7 @@ export function createAIRunner(
               progress.reasoning + chunk.payload.text
             ).slice(-128000);
           } else if (chunk.type === "tool-call") {
+            toolArguments.set(chunk.payload.toolCallId, chunk.payload.args);
             progress.phase = "using_tool";
             progress.phaseData = { toolName: chunk.payload.toolName };
             addSystemEvent(
@@ -3785,6 +3789,11 @@ export function createAIRunner(
                   event.code = "access_requested";
                   event.data = {};
                 }
+              if (event.kind === "tool" && repeatedToolFailure(
+                String(event.data?.toolName ?? "tool"),
+                toolArguments.get(chunk.payload.toolCallId), event.status === "error",
+              )) fail(422, `工具 ${event.data?.toolName ?? ""} 连续三次以相同参数失败，已停止重复调用。已保存成果保留，请调整要求或模型后继续。`);
+              toolArguments.delete(chunk.payload.toolCallId);
               if (event.status === "error") {
                 if (event.kind === "tool")
                   event.detailCode = "tool_failed_recovering";

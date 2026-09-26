@@ -437,3 +437,44 @@ it("lets only admins edit official skills and applies enabled scenario instructi
   expect(JSON.stringify(requests)).not.toContain("ADMIN_SKILL_MARKER");
   expect(JSON.stringify(requests)).not.toContain("NEVER_DISABLED_SKILL");
 });
+
+it("shares real PDF parsing across attachments and stored-file reading, and invalidates old gibberish caches", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { prepareFileRecognition, recognizeStoredFile } = await import("../apps/server/src/services/ai/file-recognition.js");
+  const { storageObjectIdForAsset, loadFileExtract } = await import("../apps/server/src/services/ai/file-extract.js");
+  const runtime = { ...storageRuntime(), root };
+  const uploaded = await upload("text.pdf", await readFile(new URL("./fixtures/ai-recognition/text.pdf", import.meta.url)));
+  expect(uploaded.statusCode, uploaded.body).toBe(201);
+  const asset = await db.selectFrom("assets").selectAll().where("id", "=", uploaded.json().id).executeTakeFirstOrThrow();
+  const objectId = await storageObjectIdForAsset(db, asset);
+  const prepared = await prepareFileRecognition(db, {objectId, storage:runtime});
+  expect(prepared.extract.markdown).toContain("RIVER-2709");
+  expect(prepared.extract.markdown).toContain("林青");
+  expect(prepared.images).toHaveLength(0);
+  await db.updateTable("file_extracts").set({status:"ready",result:JSON.stringify({parts:[{type:"text",text:"CORRUPT_COMPRESSED_BYTES"}]})}).where("storage_object_id","=",objectId).execute();
+  expect(await loadFileExtract(db,objectId)).toMatchObject({status:"pending",markdown:"",parts:[]});
+  const result = await recognizeStoredFile(db,{objectId,filename:"text.pdf",userId:asset.owner_id,storage:runtime});
+  expect(result).toMatchObject({status:"ready",strategy:"native-text",imageCount:0});
+  expect(result.text).toContain("RIVER-2709");
+  expect(result.text).not.toContain("CORRUPT");
+  expect(requests).toHaveLength(0);
+});
+
+it("renders scanned PDFs and reports partial recognition when vision is unavailable or disabled", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { prepareFileRecognition, recognizeStoredFile } = await import("../apps/server/src/services/ai/file-recognition.js");
+  const { storageObjectIdForAsset } = await import("../apps/server/src/services/ai/file-extract.js");
+  const uploaded = await upload("scan.pdf", await readFile(new URL("./fixtures/ai-recognition/scan.pdf", import.meta.url)));
+  const asset = await db.selectFrom("assets").selectAll().where("id","=",uploaded.json().id).executeTakeFirstOrThrow();
+  const input = {objectId:await storageObjectIdForAsset(db,asset),filename:"scan.pdf",userId:asset.owner_id,storage:{...storageRuntime(),root}};
+  const prepared = await prepareFileRecognition(db,input);
+  expect(prepared.images).toHaveLength(1);
+  expect((await sharp(prepared.images[0]!.data).metadata()).width).toBeGreaterThan(500);
+  const result = await recognizeStoredFile(db,input,prepared);
+  expect(result).toMatchObject({status:"partial",imageCount:1});
+  expect(result.warning).toContain("图片理解模型");
+  const off = await recognizeStoredFile(db,{...input,visualPolicy:"off"},prepared);
+  expect(off.status).toBe("partial");
+  expect(off.warning).toContain("图像识别已关闭");
+  expect(requests).toHaveLength(0);
+});

@@ -4,7 +4,7 @@ import sharp from "sharp";
 import { unzipSync, zipSync, strToU8 } from "fflate";
 import { relevantSkillFormats } from "@core/modules/ai/skills.js";
 import { extractAttachmentText } from "../apps/server/src/services/ai/attachments.js";
-import { extractFileParts } from "../apps/server/src/services/ai/extract-content.js";
+import { extractFileParts, extractFilePartsAsync } from "../apps/server/src/services/ai/extract-content.js";
 import {
   createExportFile,
   parseTable,
@@ -23,7 +23,7 @@ it("loads editing skills only when the request actually needs them", () => {
   ).toBe(true);
 });
 
-it("creates Word, Markdown, Excel and PDF files from report text", () => {
+it("creates Word, Markdown, Excel and PDF files from report text", async () => {
   expect(withExportExtension("调研报告", "pdf")).toBe("调研报告.pdf");
   expect(withExportExtension("notes.TXT", "markdown")).toBe("notes.md");
   const markdown = createExportFile("markdown", { content: "# 结论\n已完成" });
@@ -58,8 +58,8 @@ it("creates Word, Markdown, Excel and PDF files from report text", () => {
   expect(sheet).toContain("1200");
   const pdf = createExportFile("pdf", { content: "调研结论" });
   expect(pdf.body.subarray(0, 5).toString()).toBe("%PDF-");
-  expect(pdf.body.toString("latin1")).toMatch(/FEFF/);
-  expect(extractAttachmentText("report.pdf", pdf.body)).toContain("调研结论");
+  const pdfParts = await extractFilePartsAsync("report.pdf", pdf.body);
+  expect(pdfParts.filter(part => part.type === "text").map(part => part.text).join("\n")).toContain("调研结论");
   expect(
     extractAttachmentText("blank.pdf", Buffer.from("%PDF-1.7\nfixture")),
   ).toContain("未能从该 PDF");

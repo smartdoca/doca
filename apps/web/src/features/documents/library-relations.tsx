@@ -51,7 +51,7 @@ type SystemPayload = {
   runs: RunItem[];
 };
 
-type Tab = "knowledge" | "sources" | "triggers" | "settings";
+type Tab = "knowledge" | "sources" | "triggers" | "settings" | "instructions";
 type Schedule = "off" | "daily" | "weekly";
 
 const runStatusKeys = { queued: "knowledge.status.queued", running: "knowledge.status.running", awaiting_review: "knowledge.status.review", failed: "knowledge.status.failed", partial: "knowledge.status.partial", succeeded: "knowledge.status.succeeded", canceled: "knowledge.status.canceled" } as const;
@@ -100,7 +100,7 @@ export function LibrarySystemPage({
   const [busy, setBusy] = useState(false);
   const canMaintain = roleRank(resource.role) >= 4;
   const statusKeys = { pending: "library.status.pending", active: "library.status.active", stale: "library.status.stale", missing: "library.status.missing" } as const;
-  const tabKeys = { settings: "studio.settingsTab", knowledge: "knowledge.workspace", structure: "library.relations.tab.structure", preset: "library.relations.tab.preset", sources: "library.relations.tab.sources", triggers: "library.relations.tab.triggers" } as const;
+  const tabKeys = { instructions: "knowledge.instructions", settings: "studio.settingsTab", knowledge: "knowledge.workspace", structure: "library.relations.tab.structure", preset: "library.relations.tab.preset", sources: "library.relations.tab.sources", triggers: "library.relations.tab.triggers" } as const;
   const scheduleKeys = { off: "knowledge.manualOnly", daily: "library.trigger.daily", weekly: "library.trigger.weekly" } as const;
   const sources = webPluginRegistry.knowledgeSources.list();
 
@@ -145,11 +145,11 @@ export function LibrarySystemPage({
   }
 
   return (
-    <section className="library-system">
+    <section className="library-system knowledge-full-width">
       {error && <Feedback tone="error" message={error} />}
       {notice && <p className="library-system-notice">{notice}</p>}
       <div className="library-system-tabs" role="tablist">
-        {(["knowledge", "sources", "triggers", "settings"] as const).map((id) => (
+        {(["knowledge", "sources", "instructions", "triggers", "settings"] as const).map((id) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>
             {t(tabKeys[id])}
           </button>
@@ -160,12 +160,9 @@ export function LibrarySystemPage({
         <p>{t("library.curated.body")}</p></div>
         {canMaintain && <button type="button" className="knowledge-weights-button" onClick={() => setEditor({ mode: "weights" })}><Scale size={16} />{t("knowledge.weightsAndConflicts")}</button>}
       </header>
-      <div className="library-system-switch">
-        <div><strong>{t("library.relations.switch")}</strong><small>{t("library.relations.switchHint")}</small></div>
-        <button className="knowledge-toggle" type="button" role="switch" aria-checked={curated} aria-label={t("library.relations.switch")} disabled={!canMaintain || busy} onClick={() => void run(async () => { await api(`/knowledge/libraries/${resource.id}/curation`, "POST", { enabled: !curated }); })}><span /></button>
-      </div>
-      <KnowledgeCurationSettings scopeId={resource.id}/></>}
-      <div hidden={tab !== "knowledge"}>{canMaintain ? <><KnowledgeChat key={`${resource.id}:${refreshVersion}`} scopeId={resource.id} kind="curation" /><details className="knowledge-advanced"><summary>{t("studio.advanced")}</summary><KnowledgeWorkspace libraryId={resource.id} initialPath={instructionPath} enabled={curated} active={tab === "knowledge"} refreshVersion={refreshVersion}/></details></> : <p>{t("knowledge.manageOnly")}</p>}</div>
+      {canMaintain && <><KnowledgeCurationSettings scopeId={resource.id}/><KnowledgeWorkspace surface="settings" libraryId={resource.id} enabled={curated} active={tab === "settings"} refreshVersion={refreshVersion}/></>}</>}
+      {canMaintain && <div hidden={tab !== "instructions"}><KnowledgeWorkspace surface="instructions" libraryId={resource.id} initialPath={instructionPath} enabled={curated} active={tab === "instructions"} refreshVersion={refreshVersion}/></div>}
+      <div hidden={tab !== "knowledge"}>{canMaintain ? <><KnowledgeChat key={`${resource.id}:${refreshVersion}`} scopeId={resource.id} kind="curation" /></> : <p>{t("knowledge.manageOnly")}</p>}</div>
       {tab === "sources" && (
         <section className="knowledge-sources-panel">
           <div className="knowledge-section-heading"><div><h3>{t("knowledge.sourceSubscriptions")}</h3><p>{t("knowledge.sourceCardsHint")}</p></div>{canMaintain && <button className="primary" type="button" onClick={() => setPicker(true)}><Plus size={16} />{t("knowledge.addSource")}</button>}</div>
@@ -282,5 +279,11 @@ export function SourcePicker({libraryId,locale,busy,bind,initial}:{libraryId:str
 
 export function LibraryQaPage({ detail }: { detail: Detail; changed: () => Promise<void> }) {
   const {t}=useI18n();
-  return <section className="library-system"><p>{t("studio.qaGuide")}</p><a className="primary" href={`#/knowledge-assistants?library=${detail.resource.id}`}>{t("studio.manageBots")}</a></section>;
+  return <section className="library-system knowledge-full-width"><p>{t("studio.qaGuide")}</p><a className="primary" href={`#/knowledge-assistants?library=${detail.resource.id}`}>{t("studio.manageBots")}</a></section>;
+}
+
+export function KnowledgeCurationToggle({detail,changed}:{detail:Detail;changed:()=>Promise<void>}) {
+ const {t}=useI18n();const [busy,setBusy]=useState(false),[error,setError]=useState("");
+ const enabled=Number(detail.resource.ai_curated)===1;
+ return <span className="knowledge-heading-toggle"><button type="button" className="knowledge-toggle" role="switch" aria-label={t("library.relations.switch")} aria-checked={enabled} title={t("library.relations.switchHint")} disabled={busy||roleRank(detail.resource.role)<4} onClick={async()=>{setBusy(true);setError("");try{await api(`/knowledge/libraries/${detail.resource.id}/curation`,"POST",{enabled:!enabled});await changed();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}}><span/></button>{error&&<small role="alert">{error}</small>}</span>;
 }

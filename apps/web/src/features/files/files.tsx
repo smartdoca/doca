@@ -320,7 +320,11 @@ function FileInfoPanel({
         ? t("fileManager.recognizing")
         : file.storage.ai_status === "skipped"
           ? t("fileManager.notConfigured")
-          : (file.storage.ai_status ?? t("fileManager.notRecognized")),
+          : file.storage.ai_status === "failed"
+            ? t("fileManager.recognitionFailed")
+            : file.storage.ai_status === "ready"
+              ? t("fileManager.recognized")
+              : t("fileManager.notRecognized"),
     ],
     ...(file.storage.ai_model
       ? [[t("recognition.model"), file.storage.ai_model] as [string, string]]
@@ -361,6 +365,9 @@ function FileInfoPanel({
         </dl>
         <section className="file-info-description">
           <h3>{t("fileManager.description")}</h3>
+          {file.storage.ai_status === "failed" && file.storage.ai_description && (
+            <p role="status">{t("fileManager.previousDescription")}</p>
+          )}
           <p>
             {file.ai_description_override ||
               file.storage.ai_description ||

@@ -1,3 +1,4 @@
+import { KnowledgeCurationToggle } from "@web/features/documents/library-relations.js";
 import { KnowledgeChat } from "@web/features/knowledge/knowledge-chat.js";
 import { KnowledgeAssistants } from "@web/features/knowledge/knowledge-assistants.js";
 import type { MessageKey } from "@doca/i18n";
@@ -1083,7 +1084,7 @@ export function App() {
                 <ArrowLeft size={19} />
               </button>
             )}
-            {(librarySystemPage || libraryQaPage || (!resourceId && scope === "knowledge-assistants")) && <div className="files-topbar-title knowledge-topbar-title">{librarySystemPage ? <BookOpenCheck size={20}/> : <Bot size={20}/>}<h1>{t(librarySystemPage ? "nav.librarySystem" : "knowledge.assistants")}</h1></div>}
+            {(librarySystemPage || libraryQaPage || (!resourceId && scope === "knowledge-assistants")) && <div className="files-topbar-title knowledge-topbar-title">{librarySystemPage ? <BookOpenCheck size={20}/> : <Bot size={20}/>}<h1>{t(librarySystemPage ? "nav.librarySystem" : "knowledge.assistants")}</h1>{librarySystemPage && detail && <KnowledgeCurationToggle detail={detail} changed={reload}/>}</div>}
             {!resourceId && scope === "ai" && <div id="ai-header-slot" />}
 
             {!resourceId && scope === "notes" && user && (

@@ -157,3 +157,7 @@
   font-weight: 500;
 }
 .knowledge-workspace pre { white-space: pre-wrap; }
+
+.library-system .knowledge-instructions-panel > form { margin:0; padding:12px 0; gap:12px; }
+.library-system .knowledge-instructions-panel > form > label { margin:0; padding:0; min-height:34px; }
+.library-system .knowledge-instructions-panel .library-system-actions { margin:0; padding:0; }

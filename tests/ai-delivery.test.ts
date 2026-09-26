@@ -389,3 +389,10 @@ it("distinguishes moving a file into a folder from moving the folder", () => {
     unverifiedFolderDelivery("已把资料文件夹移到归档目录。", false)?.verdict,
   ).toBe("revise");
 });
+
+
+it("does not invent an image requirement from successful document tool receipts", () => {
+  expect(unverifiedImageDelivery("文档内容已核对，工具返回保存成功回执。", false)).toBeNull();
+  expect(unverifiedImageDelivery("最近一次标题修改的工具调用返回成功，文档已保存。", false)).toBeNull();
+  expect(unverifiedImageDelivery("图片生成工具返回成功。", false)?.verdict).toBe("revise");
+});

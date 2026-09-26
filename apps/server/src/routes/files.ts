@@ -17,7 +17,6 @@ import {
 import { sendFileContent } from "../services/file-content.js";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Type } from "@sinclair/typebox";
-import { Agent } from "@mastra/core/agent";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { authorize } from "@core/modules/access/queries.js";
 import { canChangeMemberRole, type Role } from "@core/modules/access/roles.js";
@@ -40,10 +39,8 @@ import { releaseDocumentFileIfUnused } from "@core/modules/documents/live-media.
 import {
   beginFileExtract,
   loadFileExtract,
-  readExtractImages,
-  waitFileExtract,
 } from "../services/ai/file-extract.js";
-import { meteredModel } from "../services/ai/model.js";
+import { recognizeStoredFile } from "../services/ai/file-recognition.js";
 import type { DB, Schema } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import {
@@ -177,114 +174,18 @@ export function registerFiles(
         .set({ ai_status: "processing", ai_model: config.modelId })
         .where("id", "=", objectId)
         .execute();
-      const profile = await db
-        .selectFrom("storage_profiles")
-        .selectAll()
-        .where("id", "=", row.profile_id)
-        .executeTakeFirstOrThrow();
-      const data = await storage.read(configOf(profile), row.object_key);
       const modelConfig = (await aiConfig(db)).models.find(
         (item) => item.id === config.modelId && item.enabled && !item.embedding,
       );
       if (!modelConfig) throw new Error("识别模型不可用");
-      const model = await meteredModel(db, userId, config.modelId, null);
-      const agent = new Agent({
-        id: "file-recognizer",
-        name: "文件识别助手",
-        model,
-        instructions:
-          "你负责为文件生成用于搜索和 RAG 的简洁中文描述。只输出事实性描述，不输出标题、Markdown 或推测。包含文件主题、关键内容、实体、时间、地点和适合的检索关键词；无法读取时说明原因。",
+      const recognition = await recognizeStoredFile(db, {
+        objectId, filename: row.file_name || row.object_key, userId,
+        model: modelConfig, storage: runtime, purpose: "index",
+        visualPolicy: row.mime.startsWith("image/") || config.ocrEnabled ? "auto" : "off",
       });
-      const fileName = row.file_name || row.object_key;
-      const prompt =
-        "文件名：" +
-        fileName +
-        "\n文件类型：" +
-        row.mime +
-        "\n下面的附件就是该文件的真实内容，请直接读取并分析附件，不要要求用户重新提供文件。请生成不超过 800 字的文件内容描述。";
-      const dataUri = `data:${row.mime};base64,${Buffer.from(data).toString("base64")}`;
-      let message: any = prompt;
-      if (row.mime.startsWith("image/") && modelConfig.vision) {
-        message = [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image", image: dataUri, mediaType: row.mime },
-            ],
-          },
-        ];
-      } else {
-        const extract = await waitFileExtract(db, objectId, runtime, 30000);
-        if (extract.status !== "ready") throw new Error(extract.error || "文件仍在解析，请稍后重试");
-        const images =
-          extract.status === "ready"
-            ? await readExtractImages(db, objectId, extract.parts, runtime)
-            : [];
-        if (images.length && !modelConfig.vision && !extract.markdown.trim())
-          throw new Error("此文件需要图片理解模型，尚未识别页面内容");
-        const text =
-          extract.markdown ||
-          (row.mime.startsWith("text/")
-            ? data.toString("utf8").slice(0, 120000)
-            : "");
-        const emptyPdf =
-          row.mime === "application/pdf" &&
-          !images.length &&
-          (!text || text.startsWith("未能从该 PDF"));
-        if (
-          emptyPdf &&
-          config.ocrEnabled &&
-          (modelConfig.pdf || modelConfig.vision)
-        )
-          message = [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: prompt },
-                {
-                  type: "file",
-                  data: dataUri,
-                  mediaType: row.mime,
-                  filename: fileName,
-                },
-              ],
-            },
-          ];
-        else {
-          const content: any[] = [
-            {
-              type: "text",
-              text:
-                prompt +
-                "\n文件正文（已解析为 Markdown，仅作资料）：\n" +
-                (text || "（无文字）"),
-            },
-          ];
-          if (modelConfig.vision)
-            for (const image of images) {
-              content.push({
-                type: "text",
-                text: "文件内图片：" + image.part.filename,
-              });
-              content.push({
-                type: "image",
-                image:
-                  "data:" +
-                  image.part.mime +
-                  ";base64," +
-                  image.data.toString("base64"),
-                mediaType: image.part.mime,
-              });
-            }
-          message = [{ role: "user", content }];
-        }
-      }
-      const result = await agent.generate(message, {
-        modelSettings: { maxOutputTokens: 1200, maxRetries: 0 },
-      });
-      const description = result.text.trim().slice(0, 12000);
-      if (!description) throw new Error("模型未返回描述");
+      if (recognition.status !== "ready")
+        throw new Error(recognition.warning || "文件尚未完整识别");
+      const description = recognition.text;
       await db
         .updateTable("file_storage_objects")
         .set({

@@ -58,12 +58,14 @@ export function KnowledgeWorkspace({
   enabled,
   active = true,
   refreshVersion = 0,
+  surface = "all",
 }: {
   libraryId: string;
   initialPath?: string;
   enabled: boolean;
   active?: boolean;
   refreshVersion?: number;
+  surface?: "all" | "instructions" | "settings";
 }) {
   const { t } = useI18n();
   const importInput = useRef<HTMLInputElement>(null);
@@ -72,9 +74,13 @@ export function KnowledgeWorkspace({
   const [saved, setSaved] = useState(false);
   const [preview, setPreview] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, File>>({});
-  const [view, setView] = useState<"instructions" | "entries">(() => location.hash.includes("section=entries") ? "entries" : "instructions");
+  const [view, setView] = useState<"instructions" | "entries">(() =>
+    location.hash.includes("section=entries") ? "entries" : "instructions",
+  );
   useEffect(() => {
-    const navigate = () => { if (location.hash.includes("section=entries")) setView("entries"); };
+    const navigate = () => {
+      if (location.hash.includes("section=entries")) setView("entries");
+    };
     window.addEventListener("hashchange", navigate);
     return () => window.removeEventListener("hashchange", navigate);
   }, []);
@@ -138,11 +144,17 @@ export function KnowledgeWorkspace({
       .then((result) => {
         if (disposed) return;
         setData(result);
-        setSettings(previous => JSON.stringify(previous) === JSON.stringify(data?.settings) ? result.settings : previous);
-        setFile(previous => {
-          const old = data?.files.find(item => item.path === previous.path);
-          const next = result.files.find(item => item.path === previous.path);
-          return old && next && previous.markdown === old.markdown ? next : previous;
+        setSettings((previous) =>
+          JSON.stringify(previous) === JSON.stringify(data?.settings)
+            ? result.settings
+            : previous,
+        );
+        setFile((previous) => {
+          const old = data?.files.find((item) => item.path === previous.path);
+          const next = result.files.find((item) => item.path === previous.path);
+          return old && next && previous.markdown === old.markdown
+            ? next
+            : previous;
         });
         if (initialPath !== path) {
           setDrafts((current) => ({ ...current, [file.path]: file }));
@@ -244,6 +256,398 @@ export function KnowledgeWorkspace({
     partial: "knowledge.status.partial",
     succeeded: "knowledge.status.succeeded",
   } as const;
+  const guideEditor = (
+    <>
+      <h3>{t("knowledge.instructions")}</h3>
+      <p>{t("knowledge.instructionsHint")}</p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void work(async () => {
+            const saved = await api<File>(`${root}/instructions`, "POST", {
+              path: file.path,
+              markdown: file.markdown,
+              expectedRevision: file.revision,
+            });
+            setFile(saved);
+            setDrafts((current) => {
+              const next = { ...current };
+              delete next[file.path];
+              return next;
+            });
+          });
+        }}
+      >
+        <label>
+          {t("knowledge.instructionFile")}
+          <Select
+            value={path}
+            disabled={busy}
+            onChange={(e) => {
+              setDrafts({ ...drafts, [file.path]: file });
+              setPath(e.target.value);
+              setFile(
+                drafts[e.target.value] ||
+                  data!.files.find((f) => f.path === e.target.value)!,
+              );
+            }}
+          >
+            {data?.files.map((f) => (
+              <option key={f.path} value={f.path}>
+                {f.path === "KNOWLEDGE.md"
+                  ? t("knowledge.mainGuide")
+                  : f.path.startsWith("sources/")
+                    ? data.sourceLabels[f.path.split("/")[1]!] ||
+                      t("knowledge.sourceGuide")
+                    : f.path.slice(7, -3)}
+              </option>
+            ))}
+            {[...new Set([...Object.keys(drafts), path])]
+              .filter((p) => !data?.files.some((f) => f.path === p))
+              .map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+          </Select>
+        </label>
+        <div className="library-system-actions">
+          <button
+            type="button"
+            aria-pressed={!preview}
+            onClick={() => setPreview(false)}
+          >
+            {t("knowledge.write")}
+          </button>
+          <button
+            type="button"
+            aria-pressed={preview}
+            onClick={() => setPreview(true)}
+          >
+            {t("knowledge.preview")}
+          </button>
+        </div>
+        {selectedSource && (
+          <p>
+            {t(
+              readOnlySource
+                ? "knowledge.sourceCreatorOnly"
+                : "knowledge.sourceCreatorHint",
+            )}
+          </p>
+        )}
+        {preview ? (
+          <Preview value={file.markdown} />
+        ) : (
+          <textarea
+            aria-label={t("knowledge.instructions")}
+            value={file.markdown}
+            onChange={(e) => {
+              setSaved(false);
+              setFile({ ...file, markdown: e.target.value });
+            }}
+            readOnly={readOnlySource}
+            rows={15}
+          />
+        )}
+        <div className="library-system-actions">
+          <button disabled={busy || readOnlySource || !data} type="submit">
+            {t("knowledge.save")}
+          </button>
+          <input
+            ref={importInput}
+            type="file"
+            accept=".md,.markdown,text/markdown,text/plain"
+            hidden
+            onChange={(event) => {
+              const imported = event.target.files?.[0];
+              event.target.value = "";
+              if (!imported) return;
+              if (imported.size > 160000) {
+                setError(t("knowledge.importTooLarge"));
+                return;
+              }
+              void imported
+                .text()
+                .then((markdown) => {
+                  if (markdown.length > 40000) {
+                    setError(t("knowledge.importTooLarge"));
+                    return;
+                  }
+                  setFile({ ...file, markdown });
+                  setSaved(false);
+                  setPreview(false);
+                })
+                .catch((error) => setError(error.message));
+            }}
+          />
+          <button
+            type="button"
+            disabled={busy || readOnlySource}
+            onClick={() => importInput.current?.click()}
+          >
+            {t("knowledge.import")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const url = URL.createObjectURL(
+                new Blob([file.markdown], { type: "text/markdown" }),
+              );
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = path.split("/").pop()!;
+              link.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            {t("knowledge.download")}
+          </button>
+        </div>
+      </form>
+      <form
+        className="library-system-actions"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!/^[a-zA-Z0-9_-]+$/.test(guideName)) return;
+          const next = `guides/${guideName}.md`;
+          setDrafts((current) => ({ ...current, [file.path]: file }));
+          setPath(next);
+          setFile(
+            drafts[next] ||
+              data?.files.find((f) => f.path === next) || {
+                path: next,
+                revision: 0,
+                markdown: "",
+              },
+          );
+          setGuideName("");
+        }}
+      >
+        <input
+          value={guideName}
+          pattern="[a-zA-Z0-9_-]+"
+          placeholder={t("knowledge.guideName")}
+          aria-label={t("knowledge.guideName")}
+          onChange={(e) => setGuideName(e.target.value)}
+        />
+        <button disabled={!guideName || busy}>{t("knowledge.addGuide")}</button>
+      </form>
+    </>
+  );
+  const runtimeEditor = (
+    <details open={path.startsWith("sources/")}>
+      <summary>{t("knowledge.runtime")}</summary>
+      <p>{t("knowledge.safetyHint")}</p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void work(() =>
+            api(`${root}/settings`, "POST", {
+              expectedRevision: data?.settingsRevision ?? 0,
+              settings: {
+                ...settings,
+                redactedTerms: settings.redactedTerms
+                  .map((x) => x.trim())
+                  .filter(Boolean),
+                sourcePolicies: Object.fromEntries(
+                  Object.entries(settings.sourcePolicies).map(
+                    ([id, policy]) => [
+                      id,
+                      {
+                        ...policy,
+                        redactedTerms: policy.redactedTerms
+                          .map((x) => x.trim())
+                          .filter(Boolean),
+                      },
+                    ],
+                  ),
+                ),
+              },
+            }),
+          );
+        }}
+      >
+        <label>
+          {t("knowledge.model")}
+          <Select
+            value={settings.modelId}
+            onChange={(e) =>
+              setSettings({ ...settings, modelId: e.target.value })
+            }
+          >
+            <option value="">{t("knowledge.defaultModel")}</option>
+            {models.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={settings.redactContacts}
+            onChange={(e) =>
+              setSettings({
+                ...settings,
+                redactContacts: e.target.checked,
+              })
+            }
+          />
+          {t("knowledge.redactContacts")}
+        </label>
+        <label>
+          {t("knowledge.redactedTerms")}
+          <textarea
+            value={settings.redactedTerms.join("\n")}
+            onChange={(e) =>
+              setSettings({
+                ...settings,
+                redactedTerms: e.target.value.split("\n"),
+              })
+            }
+          />
+        </label>
+        <label>
+          {t("knowledge.maxDepth")}
+          <input
+            type="number"
+            min={1}
+            max={8}
+            value={settings.maxDocumentDepth}
+            onChange={(event) =>
+              setSettings({
+                ...settings,
+                maxDocumentDepth: Number(event.target.value),
+              })
+            }
+          />
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={settings.autoPublishWeighted}
+            onChange={(event) =>
+              setSettings({
+                ...settings,
+                autoPublishWeighted: event.target.checked,
+              })
+            }
+          />
+          {t("knowledge.autoWeighted")}
+        </label>
+        <small>{t("knowledge.autoWeightedHint")}</small>
+        <fieldset>
+          <legend>{t("knowledge.sourceSafety")}</legend>
+          {data?.files
+            .filter((f) => f.path.startsWith("sources/"))
+            .map((f) => {
+              const id = f.path.split("/")[1]!;
+              const policy = settings.sourcePolicies[id] || {
+                redactedTerms: [],
+                redactContacts: false,
+                excludedResourceIds: [],
+              };
+              const updatePolicy = (patch: Partial<SourcePolicy>) =>
+                setSettings({
+                  ...settings,
+                  sourcePolicies: {
+                    ...settings.sourcePolicies,
+                    [id]: { ...policy, ...patch },
+                  },
+                });
+              return (
+                <details key={id} open={path === `sources/${id}/SOURCE.md`}>
+                  <summary>
+                    {data.sourceLabels[id] || t("knowledge.sourceGuide")}
+                  </summary>
+                  <fieldset disabled={!data.sourcePermissions[id]?.canEdit}>
+                    {data.sourcePermissions[id]?.kind === "url" && (
+                      <label>
+                        {t("knowledge.linkAccess")}
+                        <Select
+                          value={policy.linkAccess ?? "public"}
+                          onChange={(event) =>
+                            updatePolicy({
+                              linkAccess: event.target
+                                .value as SourcePolicy["linkAccess"],
+                            })
+                          }
+                        >
+                          <option value="public">
+                            {t("knowledge.linkPublic")}
+                          </option>
+                          <option value="follow">
+                            {t("knowledge.linkFollow")}
+                          </option>
+                          <option value="closed">
+                            {t("knowledge.linkClosed")}
+                          </option>
+                        </Select>
+                        <small>{t("knowledge.linkAccessHint")}</small>
+                      </label>
+                    )}
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={settings.excludedSourceIds.includes(id)}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            excludedSourceIds: e.target.checked
+                              ? [...settings.excludedSourceIds, id]
+                              : settings.excludedSourceIds.filter(
+                                  (x) => x !== id,
+                                ),
+                          })
+                        }
+                      />
+                      {t("knowledge.excludeSource")}
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={
+                          policy.redactContacts || settings.redactContacts
+                        }
+                        disabled={settings.redactContacts}
+                        onChange={(e) =>
+                          updatePolicy({
+                            redactContacts: e.target.checked,
+                          })
+                        }
+                      />
+                      {t("knowledge.redactContacts")}
+                    </label>
+                    <label>
+                      {t("knowledge.redactedTerms")}
+                      <textarea
+                        value={policy.redactedTerms.join("\n")}
+                        onChange={(e) =>
+                          updatePolicy({
+                            redactedTerms: e.target.value.split("\n"),
+                          })
+                        }
+                      />
+                    </label>
+                  </fieldset>
+                </details>
+              );
+            })}
+        </fieldset>
+        <button disabled={busy}>{t("knowledge.save")}</button>
+      </form>
+    </details>
+  );
+  if (surface !== "all")
+    return (
+      <section className={`knowledge-workspace knowledge-${surface}-panel`}>
+        {error && <Feedback tone="error" message={error} />}
+        {saved && <Feedback tone="success" message={t("knowledge.saved")} />}
+        {surface === "instructions" ? guideEditor : runtimeEditor}
+      </section>
+    );
   return (
     <section className="knowledge-workspace">
       {error && <Feedback tone="error" message={error} />}
@@ -282,388 +686,8 @@ export function KnowledgeWorkspace({
       </div>
       {view === "instructions" && (
         <>
-          <h3>{t("knowledge.instructions")}</h3>
-          <p>{t("knowledge.instructionsHint")}</p>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void work(async () => {
-                const saved = await api<File>(`${root}/instructions`, "POST", {
-                  path: file.path,
-                  markdown: file.markdown,
-                  expectedRevision: file.revision,
-                });
-                setFile(saved);
-                setDrafts((current) => {
-                  const next = { ...current };
-                  delete next[file.path];
-                  return next;
-                });
-              });
-            }}
-          >
-            <label>
-              {t("knowledge.instructionFile")}
-              <Select
-                value={path}
-                disabled={busy}
-                onChange={(e) => {
-                  setDrafts({ ...drafts, [file.path]: file });
-                  setPath(e.target.value);
-                  setFile(
-                    drafts[e.target.value] ||
-                      data!.files.find((f) => f.path === e.target.value)!,
-                  );
-                }}
-              >
-                {data?.files.map((f) => (
-                  <option key={f.path} value={f.path}>
-                    {f.path === "KNOWLEDGE.md"
-                      ? t("knowledge.mainGuide")
-                      : f.path.startsWith("sources/")
-                        ? data.sourceLabels[f.path.split("/")[1]!] ||
-                          t("knowledge.sourceGuide")
-                        : f.path.slice(7, -3)}
-                  </option>
-                ))}
-                {[...new Set([...Object.keys(drafts), path])]
-                  .filter((p) => !data?.files.some((f) => f.path === p))
-                  .map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-              </Select>
-            </label>
-            <div className="library-system-actions">
-              <button
-                type="button"
-                aria-pressed={!preview}
-                onClick={() => setPreview(false)}
-              >
-                {t("knowledge.write")}
-              </button>
-              <button
-                type="button"
-                aria-pressed={preview}
-                onClick={() => setPreview(true)}
-              >
-                {t("knowledge.preview")}
-              </button>
-            </div>
-            {selectedSource && (
-              <p>
-                {t(
-                  readOnlySource
-                    ? "knowledge.sourceCreatorOnly"
-                    : "knowledge.sourceCreatorHint",
-                )}
-              </p>
-            )}
-            {preview ? (
-              <Preview value={file.markdown} />
-            ) : (
-              <textarea
-                aria-label={t("knowledge.instructions")}
-                value={file.markdown}
-                onChange={(e) => {
-                  setSaved(false);
-                  setFile({ ...file, markdown: e.target.value });
-                }}
-                readOnly={readOnlySource}
-                rows={15}
-              />
-            )}
-            <div className="library-system-actions">
-              <button disabled={busy || readOnlySource || !data} type="submit">
-                {t("knowledge.save")}
-              </button>
-              <input
-                ref={importInput}
-                type="file"
-                accept=".md,.markdown,text/markdown,text/plain"
-                hidden
-                onChange={(event) => {
-                  const imported = event.target.files?.[0];
-                  event.target.value = "";
-                  if (!imported) return;
-                  if (imported.size > 160000) {
-                    setError(t("knowledge.importTooLarge"));
-                    return;
-                  }
-                  void imported
-                    .text()
-                    .then((markdown) => {
-                      if (markdown.length > 40000) {
-                        setError(t("knowledge.importTooLarge"));
-                        return;
-                      }
-                      setFile({ ...file, markdown });
-                      setSaved(false);
-                      setPreview(false);
-                    })
-                    .catch((error) => setError(error.message));
-                }}
-              />
-              <button
-                type="button"
-                disabled={busy || readOnlySource}
-                onClick={() => importInput.current?.click()}
-              >
-                {t("knowledge.import")}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const url = URL.createObjectURL(
-                    new Blob([file.markdown], { type: "text/markdown" }),
-                  );
-                  const link = document.createElement("a");
-                  link.href = url;
-                  link.download = path.split("/").pop()!;
-                  link.click();
-                  URL.revokeObjectURL(url);
-                }}
-              >
-                {t("knowledge.download")}
-              </button>
-            </div>
-          </form>
-          <form
-            className="library-system-actions"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!/^[a-zA-Z0-9_-]+$/.test(guideName)) return;
-              const next = `guides/${guideName}.md`;
-              setDrafts((current) => ({ ...current, [file.path]: file }));
-              setPath(next);
-              setFile(
-                drafts[next] ||
-                  data?.files.find((f) => f.path === next) || {
-                    path: next,
-                    revision: 0,
-                    markdown: "",
-                  },
-              );
-              setGuideName("");
-            }}
-          >
-            <input
-              value={guideName}
-              pattern="[a-zA-Z0-9_-]+"
-              placeholder={t("knowledge.guideName")}
-              aria-label={t("knowledge.guideName")}
-              onChange={(e) => setGuideName(e.target.value)}
-            />
-            <button disabled={!guideName || busy}>
-              {t("knowledge.addGuide")}
-            </button>
-          </form>
-          <details open={path.startsWith("sources/")}>
-            <summary>{t("knowledge.runtime")}</summary>
-            <p>{t("knowledge.safetyHint")}</p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void work(() =>
-                  api(`${root}/settings`, "POST", {
-                    expectedRevision: data?.settingsRevision ?? 0,
-                    settings: {
-                      ...settings,
-                      redactedTerms: settings.redactedTerms
-                        .map((x) => x.trim())
-                        .filter(Boolean),
-                      sourcePolicies: Object.fromEntries(
-                        Object.entries(settings.sourcePolicies).map(
-                          ([id, policy]) => [
-                            id,
-                            {
-                              ...policy,
-                              redactedTerms: policy.redactedTerms
-                                .map((x) => x.trim())
-                                .filter(Boolean),
-                            },
-                          ],
-                        ),
-                      ),
-                    },
-                  }),
-                );
-              }}
-            >
-              <label>
-                {t("knowledge.model")}
-                <Select
-                  value={settings.modelId}
-                  onChange={(e) =>
-                    setSettings({ ...settings, modelId: e.target.value })
-                  }
-                >
-                  <option value="">{t("knowledge.defaultModel")}</option>
-                  {models.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.redactContacts}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      redactContacts: e.target.checked,
-                    })
-                  }
-                />
-                {t("knowledge.redactContacts")}
-              </label>
-              <label>
-                {t("knowledge.redactedTerms")}
-                <textarea
-                  value={settings.redactedTerms.join("\n")}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      redactedTerms: e.target.value.split("\n"),
-                    })
-                  }
-                />
-              </label>
-              <label>
-                {t("knowledge.maxDepth")}
-                <input
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={settings.maxDocumentDepth}
-                  onChange={(event) =>
-                    setSettings({
-                      ...settings,
-                      maxDocumentDepth: Number(event.target.value),
-                    })
-                  }
-                />
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.autoPublishWeighted}
-                  onChange={(event) =>
-                    setSettings({
-                      ...settings,
-                      autoPublishWeighted: event.target.checked,
-                    })
-                  }
-                />
-                {t("knowledge.autoWeighted")}
-              </label>
-              <small>{t("knowledge.autoWeightedHint")}</small>
-              <fieldset>
-                <legend>{t("knowledge.sourceSafety")}</legend>
-                {data?.files
-                  .filter((f) => f.path.startsWith("sources/"))
-                  .map((f) => {
-                    const id = f.path.split("/")[1]!;
-                    const policy = settings.sourcePolicies[id] || {
-                      redactedTerms: [],
-                      redactContacts: false,
-                      excludedResourceIds: [],
-                    };
-                    const updatePolicy = (patch: Partial<SourcePolicy>) =>
-                      setSettings({
-                        ...settings,
-                        sourcePolicies: {
-                          ...settings.sourcePolicies,
-                          [id]: { ...policy, ...patch },
-                        },
-                      });
-                    return (
-                      <details key={id} open={path === `sources/${id}/SOURCE.md`}>
-                        <summary>
-                          {data.sourceLabels[id] || t("knowledge.sourceGuide")}
-                        </summary>
-                        <fieldset
-                          disabled={!data.sourcePermissions[id]?.canEdit}
-                        >
-                          {data.sourcePermissions[id]?.kind === "url" && (
-                            <label>
-                              {t("knowledge.linkAccess")}
-                              <Select
-                                value={policy.linkAccess ?? "public"}
-                                onChange={(event) =>
-                                  updatePolicy({
-                                    linkAccess: event.target
-                                      .value as SourcePolicy["linkAccess"],
-                                  })
-                                }
-                              >
-                                <option value="public">
-                                  {t("knowledge.linkPublic")}
-                                </option>
-                                <option value="follow">
-                                  {t("knowledge.linkFollow")}
-                                </option>
-                                <option value="closed">
-                                  {t("knowledge.linkClosed")}
-                                </option>
-                              </Select>
-                              <small>{t("knowledge.linkAccessHint")}</small>
-                            </label>
-                          )}
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={settings.excludedSourceIds.includes(id)}
-                              onChange={(e) =>
-                                setSettings({
-                                  ...settings,
-                                  excludedSourceIds: e.target.checked
-                                    ? [...settings.excludedSourceIds, id]
-                                    : settings.excludedSourceIds.filter(
-                                        (x) => x !== id,
-                                      ),
-                                })
-                              }
-                            />
-                            {t("knowledge.excludeSource")}
-                          </label>
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={
-                                policy.redactContacts || settings.redactContacts
-                              }
-                              disabled={settings.redactContacts}
-                              onChange={(e) =>
-                                updatePolicy({
-                                  redactContacts: e.target.checked,
-                                })
-                              }
-                            />
-                            {t("knowledge.redactContacts")}
-                          </label>
-                          <label>
-                            {t("knowledge.redactedTerms")}
-                            <textarea
-                              value={policy.redactedTerms.join("\n")}
-                              onChange={(e) =>
-                                updatePolicy({
-                                  redactedTerms: e.target.value.split("\n"),
-                                })
-                              }
-                            />
-                          </label>
-                        </fieldset>
-                      </details>
-                    );
-                  })}
-              </fieldset>
-              <button disabled={busy}>{t("knowledge.save")}</button>
-            </form>
-          </details>
+          {guideEditor}
+          {runtimeEditor}
         </>
       )}
       <h3>{t("knowledge.curation")}</h3>
@@ -719,71 +743,78 @@ export function KnowledgeWorkspace({
           </li>
         ))}
       </ul>
-      <details className="knowledge-run-history" open={data?.runs.some(run => run.status === "queued" || run.status === "running")}>
-      <summary>{t("knowledge.recentRuns")}</summary>
-      <ul className="library-system-links">
-        {data?.runs
-          .filter((r) => r.status !== "done")
-          .map((run) => {
-            let detail: {
-              notes?: string;
-              error?: string;
-              skipped?: { id: string; reason: string }[];
-            } = {};
-            try {
-              detail = JSON.parse(run.detail);
-            } catch {
-              /* empty legacy detail */
-            }
-            return (
-              <li key={run.id}>
-                <strong>
-                  {t(
-                    statusKeys[run.status as keyof typeof statusKeys] ||
-                      "knowledge.status.review",
+      <details
+        className="knowledge-run-history"
+        open={data?.runs.some(
+          (run) => run.status === "queued" || run.status === "running",
+        )}
+      >
+        <summary>{t("knowledge.recentRuns")}</summary>
+        <ul className="library-system-links">
+          {data?.runs
+            .filter((r) => r.status !== "done")
+            .map((run) => {
+              let detail: {
+                notes?: string;
+                error?: string;
+                skipped?: { id: string; reason: string }[];
+              } = {};
+              try {
+                detail = JSON.parse(run.detail);
+              } catch {
+                /* empty legacy detail */
+              }
+              return (
+                <li key={run.id}>
+                  <strong>
+                    {t(
+                      statusKeys[run.status as keyof typeof statusKeys] ||
+                        "knowledge.status.review",
+                    )}
+                  </strong>
+                  <small>{new Date(run.created_at).toLocaleString()}</small>
+                  {["queued", "running"].includes(run.status) && (
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        void work(() =>
+                          api(`${root}/runs/${run.id}/cancel`, "POST"),
+                        )
+                      }
+                    >
+                      {t("knowledge.cancelRun")}
+                    </button>
                   )}
-                </strong>
-                <small>{new Date(run.created_at).toLocaleString()}</small>
-                {["queued", "running"].includes(run.status) && (
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void work(() =>
-                        api(`${root}/runs/${run.id}/cancel`, "POST"),
-                      )
-                    }
-                  >
-                    {t("knowledge.cancelRun")}
-                  </button>
-                )}
-                {detail.error && (
-                  <p className="knowledge-run-error" role="status">
-                    {detail.error}
-                  </p>
-                )}
-                {detail.notes && <p>{detail.notes}</p>}
-                {!!detail.skipped?.length && (
-                  <details>
-                    <summary>
-                      {t("knowledge.skipped", { count: detail.skipped.length })}
-                    </summary>
-                    {detail.skipped.map((item, index) => (
-                      <p key={`${item.id}-${index}`}>
-                        {data.sourceLabels[item.id] ||
-                          t("knowledge.sourceGuide")}{" "}
-                        ·{" "}
-                        {t(
-                          skipKeys[item.reason as keyof typeof skipKeys] ||
-                            "knowledge.skip.unavailable",
-                        )}
-                      </p>
-                    ))}
-                  </details>
-                )}
-              </li>
-            );
-          })}
-      </ul>
+                  {detail.error && (
+                    <p className="knowledge-run-error" role="status">
+                      {detail.error}
+                    </p>
+                  )}
+                  {detail.notes && <p>{detail.notes}</p>}
+                  {!!detail.skipped?.length && (
+                    <details>
+                      <summary>
+                        {t("knowledge.skipped", {
+                          count: detail.skipped.length,
+                        })}
+                      </summary>
+                      {detail.skipped.map((item, index) => (
+                        <p key={`${item.id}-${index}`}>
+                          {data.sourceLabels[item.id] ||
+                            t("knowledge.sourceGuide")}{" "}
+                          ·{" "}
+                          {t(
+                            skipKeys[item.reason as keyof typeof skipKeys] ||
+                              "knowledge.skip.unavailable",
+                          )}
+                        </p>
+                      ))}
+                    </details>
+                  )}
+                </li>
+              );
+            })}
+        </ul>
       </details>
       {!!data?.reviews.length && (
         <>

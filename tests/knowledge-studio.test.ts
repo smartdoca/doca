@@ -5,6 +5,7 @@ import type { DB } from "@db/index.js";
 import type { Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import {
+  createScheduledKnowledgeConversation,
   createKnowledgeConversation,
   sendKnowledgeMessage,
   conversationAccess,
@@ -333,4 +334,49 @@ it("writes useful parent guides without renaming the category and rejects stale 
       markdown: "Overview ".repeat(30),
     }),
   ).rejects.toMatchObject({ status: 409 });
+});
+
+it("creates a new timestamped conversation per scheduled occurrence", async () => {
+  const first = await createScheduledKnowledgeConversation(
+    db,
+    alice,
+    library,
+    new Date("2026-09-27T01:02:03Z"),
+  );
+  const second = await createScheduledKnowledgeConversation(
+    db,
+    alice,
+    library,
+    new Date("2026-09-28T01:02:03Z"),
+  );
+  expect(first.id).not.toBe(second.id);
+  expect(first.title).toBe("2026-09-27 01:02:03 UTC");
+  const tasks = await db
+    .selectFrom("knowledge_tasks")
+    .selectAll()
+    .where("conversation_id", "in", [first.id, second.id])
+    .execute();
+  expect(tasks).toHaveLength(2);
+  const messages = await db
+    .selectFrom("knowledge_messages")
+    .selectAll()
+    .where("conversation_id", "in", [first.id, second.id])
+    .execute();
+  expect(
+    messages.every((x) => x.trigger === "schedule" && x.author_id === alice.id),
+  ).toBe(true);
+});
+
+it("does not schedule another conversation while the current interval is already represented", async () => {
+  const { sweepKnowledgeSchedules } =
+    await import("@core/modules/knowledge/subscriptions.js");
+  await db
+    .updateTable("resources")
+    .set({ ai_curated: 1, knowledge_schedule: "daily" })
+    .where("id", "=", library)
+    .execute();
+  await createScheduledKnowledgeConversation(db, alice, library);
+  const dispatch = vi.fn();
+  await sweepKnowledgeSchedules(db, dispatch);
+  expect(dispatch).not.toHaveBeenCalled();
 });

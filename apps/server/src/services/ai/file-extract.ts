@@ -45,7 +45,10 @@ function parseResult(raw: string): StoredExtractPart[] {
 
 function markdownOf(parts: StoredExtractPart[]) {
   return parts
-    .filter((part): part is StoredExtractPart & { type: "text" } => part.type === "text")
+    .filter(
+      (part): part is StoredExtractPart & { type: "text" } =>
+        part.type === "text",
+    )
     .map((part) => part.text)
     .join("\n")
     .trim();
@@ -74,12 +77,20 @@ export async function loadFileExtract(
     .executeTakeFirst();
   if (!row) return null;
   const parts = parseResult(row.result);
+  let version: unknown;
+  try {
+    version = JSON.parse(row.result || "{}").parserVersion;
+  } catch {}
+  const stale = row.status === "ready" && version !== PARSER_VERSION;
   return {
-    status: row.status === "ready" && JSON.parse(row.result || "{}").parserVersion !== PARSER_VERSION
-      ? "pending" : row.status === "ready" || row.status === "failed" ? row.status : "pending",
+    status: stale
+      ? "pending"
+      : row.status === "ready" || row.status === "failed"
+        ? row.status
+        : "pending",
     error: row.error ?? undefined,
-    parts,
-    markdown: markdownOf(parts),
+    parts: stale ? [] : parts,
+    markdown: stale ? "" : markdownOf(parts),
   };
 }
 
@@ -131,11 +142,7 @@ async function normalizeImage(data: Buffer) {
   }
 }
 
-async function runExtract(
-  db: DB,
-  objectId: string,
-  runtime: StorageRuntime,
-) {
+async function runExtract(db: DB, objectId: string, runtime: StorageRuntime) {
   if (running.has(objectId)) return;
   running.add(objectId);
   try {
@@ -167,7 +174,14 @@ async function runExtract(
     const body = await storage.read(config, object.object_key);
     const filename = item?.name || object.object_key;
     const raw = object.mime.startsWith("image/")
-      ? [{type:"image" as const, mime:object.mime, filename, data:Buffer.from(body)}]
+      ? [
+          {
+            type: "image" as const,
+            mime: object.mime,
+            filename,
+            data: Buffer.from(body),
+          },
+        ]
       : await extractFilePartsAsync(filename, Buffer.from(body));
     const parts: StoredExtractPart[] = [];
     let index = 0;
@@ -177,7 +191,13 @@ async function runExtract(
         continue;
       }
       const jpeg = await normalizeImage(part.data);
-      if (!jpeg) continue;
+      if (!jpeg) {
+        parts.push({
+          type: "text",
+          text: `[图片 ${part.filename} 解码失败，未识别]`,
+        });
+        continue;
+      }
       const recipe = `v${PARSER_VERSION}-img-${index++}`;
       const id = randomUUID();
       const key = derivativeKey(object.id, object.mime, recipe, `${id}.jpg`);
@@ -293,8 +313,10 @@ export async function readExtractImages(
     .executeTakeFirstOrThrow();
   const storage = createStorage(runtime);
   const config = profileConfig(profile);
-  const images: { part: StoredExtractPart & { type: "image" }; data: Buffer }[] =
-    [];
+  const images: {
+    part: StoredExtractPart & { type: "image" };
+    data: Buffer;
+  }[] = [];
   for (const part of parts) {
     if (part.type !== "image") continue;
     const row = await db

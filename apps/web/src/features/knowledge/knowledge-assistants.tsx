@@ -123,7 +123,7 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
   }
   const bot = bots.find((b) => b.id === selected);
   return (
-    <section className="library-system knowledge-assistants">
+    <section className="library-system knowledge-assistants knowledge-full-width">
       <header>
         <a href="#/libraries">{t("studio.documents")}</a>
         <p>{t("knowledge.assistantsHint")}</p>

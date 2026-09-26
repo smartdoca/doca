@@ -169,10 +169,8 @@ it("configures Meilisearch only as admin, indexes documents, filters stale/priva
       imageRecognitionAvailable: false,
       reconcile_interval_hours: 6,
     });
-    const writesBefore = calls.filter(
-      (c) =>
-        c.path === "/indexes/doca/documents" || c.path.endsWith("/settings"),
-    ).length;
+    // Background projection updates may continue; a full rebuild reconfigures indexes.
+    const writesBefore = calls.filter((c) => c.path.endsWith("/settings")).length;
     const preferences = {
       enabled: true,
       endpoint: "http://127.0.0.1:7700",
@@ -207,10 +205,7 @@ it("configures Meilisearch only as admin, indexes documents, filters stale/priva
       indexing: false,
     });
     expect(
-      calls.filter(
-        (c) =>
-          c.path === "/indexes/doca/documents" || c.path.endsWith("/settings"),
-      ).length,
+      calls.filter((c) => c.path.endsWith("/settings")).length,
     ).toBe(writesBefore);
     expect(
       await db
