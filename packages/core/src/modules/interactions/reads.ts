@@ -1,6 +1,11 @@
-import type { Transaction } from "kysely";
+import { sql, type Transaction } from "kysely";
 import type { DB, Schema } from "../../../../db/src/index.js";
 import { transact } from "../../../../db/src/transactions.js";
+import {
+  cursorFingerprint,
+  decodePageCursor,
+  encodePageCursor,
+} from "../../shared/cursor.js";
 import { authorize } from "../access/queries.js";
 import { documentContentStats } from "../documents/content-stats.js";
 import { type Actor } from "../identity/passwords.js";
@@ -19,33 +24,55 @@ export function createInteractionReads(db: DB) {
     });
   }
   return {
-    async likes(actor: Actor | null, id: string, offset = 0) {
+    async likes(actor: Actor | null, id: string, offset = 0, cursor?: string) {
       await access(db, actor, id);
-      const base = db
+      let base = db
         .selectFrom("reactions as r")
         .innerJoin("users as u", "u.id", "r.user_id")
         .where("r.resource_id", "=", id)
         .where("r.kind", "=", "like");
-      const total = Number(
-        (
-          await base
-            .select((eb) => eb.fn.countAll().as("n"))
-            .executeTakeFirstOrThrow()
-        ).n,
-      );
+      const fingerprint = cursorFingerprint({ kind: "likes", id });
+      if (cursor) {
+        const c = decodePageCursor(cursor, fingerprint);
+        base = base.where(
+          sql<boolean>`(u.display_name > ${c.value} or (u.display_name = ${c.value} and u.id > ${c.id}))`,
+        );
+      }
+      const total = cursor
+        ? null
+        : Number(
+            (
+              await base
+                .select((eb) => eb.fn.countAll().as("n"))
+                .executeTakeFirstOrThrow()
+            ).n,
+          );
+      const rows = await base
+        .select(["u.id", "u.display_name"])
+        .orderBy("u.display_name")
+        .orderBy("u.id")
+        .offset(cursor ? 0 : offset)
+        .limit(101)
+        .execute();
+      const items = rows.slice(0, 100);
+      const last = items.at(-1);
       return {
         total,
-        items: await base
-          .select(["u.id", "u.display_name"])
-          .orderBy("u.display_name")
-          .orderBy("u.id")
-          .offset(offset)
-          .limit(100)
-          .execute(),
-        nextOffset: offset + 100 < total ? offset + 100 : null,
+        items,
+        nextOffset: rows.length > 100 ? offset + 100 : null,
+        nextCursor:
+          rows.length > 100 && last
+            ? encodePageCursor(fingerprint, last.display_name, last.id)
+            : null,
       };
     },
-    async info(actor: Actor | null, id: string, tab: string, offset = 0) {
+    async info(
+      actor: Actor | null,
+      id: string,
+      tab: string,
+      offset = 0,
+      cursor?: string,
+    ) {
       const r = await access(db, actor, id, tab === "stats" ? 1 : 4);
       if (tab === "stats") {
         const count = async (
@@ -75,33 +102,48 @@ export function createInteractionReads(db: DB) {
           comments: await count("comments"),
         };
       }
+      const fingerprint = cursorFingerprint({ kind: "document-info", id, tab });
+      const c = cursor ? decodePageCursor(cursor, fingerprint) : null;
+      let visitQuery = db
+        .selectFrom("visit_events as e")
+        .innerJoin("users as u", "u.id", "e.user_id")
+        .selectAll("e")
+        .select(["u.id as userId", "u.display_name as name"])
+        .where("e.resource_id", "=", id);
+      let auditQuery = db
+        .selectFrom("audit_events as e")
+        .innerJoin("users as u", "u.id", "e.actor_id")
+        .selectAll("e")
+        .select(["u.id as userId", "u.display_name as name"])
+        .where("e.resource_id", "=", id);
+      if (c) {
+        const after = sql<boolean>`(e.created_at < ${c.value} or (e.created_at = ${c.value} and e.id < ${c.id}))`;
+        visitQuery = visitQuery.where(after);
+        auditQuery = auditQuery.where(after);
+      }
       const rows =
         tab === "visits"
-          ? await db
-              .selectFrom("visit_events as e")
-              .innerJoin("users as u", "u.id", "e.user_id")
-              .selectAll("e")
-              .select(["u.id as userId", "u.display_name as name"])
-              .where("e.resource_id", "=", id)
+          ? await visitQuery
               .orderBy("e.created_at", "desc")
               .orderBy("e.id", "desc")
-              .offset(offset)
+              .offset(cursor ? 0 : offset)
               .limit(101)
               .execute()
-          : await db
-              .selectFrom("audit_events as e")
-              .innerJoin("users as u", "u.id", "e.actor_id")
-              .selectAll("e")
-              .select(["u.id as userId", "u.display_name as name"])
-              .where("e.resource_id", "=", id)
+          : await auditQuery
               .orderBy("e.created_at", "desc")
               .orderBy("e.id", "desc")
-              .offset(offset)
+              .offset(cursor ? 0 : offset)
               .limit(101)
               .execute();
+      const items = rows.slice(0, 100);
+      const last = items.at(-1);
       return {
-        items: rows.slice(0, 100),
+        items,
         nextOffset: rows.length > 100 ? offset + 100 : null,
+        nextCursor:
+          rows.length > 100 && last
+            ? encodePageCursor(fingerprint, last.created_at, last.id)
+            : null,
       };
     },
   };

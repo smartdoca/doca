@@ -35,7 +35,11 @@ import {
   topicMatchTerms,
 } from "@core/modules/discovery/search-excerpts.js";
 import { aiConfig } from "@core/modules/ai/config.js";
-import { enqueueProjection } from "@core/modules/automation/jobs.js";
+import {
+  enqueueProjection,
+  enqueueProjectionOnce,
+  processProjections,
+} from "@core/modules/automation/jobs.js";
 import { enqueueKnowledge } from "@core/modules/knowledge/service.js";
 import { releaseDocumentFileIfUnused } from "@core/modules/documents/live-media.js";
 import {
@@ -134,7 +138,6 @@ export function registerFiles(
   ) => Promise<string[] | null>,
 ) {
   const storage = createStorage(runtime);
-  const recognitionRunning = new Set<string>();
   const enqueueFileSearch = (tx: DB, fileId: string) =>
     Promise.all([
       enqueueProjection(tx, "search-file", fileId, { fileId }),
@@ -142,8 +145,6 @@ export function registerFiles(
     ]);
 
   async function recognizeObject(objectId: string, userId: string) {
-    if (recognitionRunning.has(objectId)) return;
-    recognitionRunning.add(objectId);
     try {
       const row = await db
         .selectFrom("file_storage_objects as o")
@@ -212,8 +213,6 @@ export function registerFiles(
         .where("id", "=", objectId)
         .execute()
         .catch(() => {});
-    } finally {
-      recognitionRunning.delete(objectId);
     }
   }
 
@@ -224,23 +223,38 @@ export function registerFiles(
         .set({ ai_status: "pending" })
         .where("id", "=", objectId)
         .execute();
-      void recognizeObject(objectId, userId);
+      await enqueueProjectionOnce(db, "file-recognition", objectId, {
+        objectId,
+        userId,
+      });
     }
   }
   let recognitionStopped = false;
   const recognitionTimer = setInterval(() => {
     if (recognitionStopped) return;
-    void db
-      .selectFrom("file_storage_objects as o")
-      .innerJoin("file_items as f", "f.storage_object_id", "o.id")
-      .select(["o.id", "f.owner_id"])
-      .where("o.ai_status", "=", "pending")
-      .where("f.deleted_at", "is", null)
-      .limit(8)
-      .execute()
-      .then((rows) =>
-        Promise.all(rows.map((row) => recognizeObject(row.id, row.owner_id))),
-      )
+    void (async () => {
+      const rows = await db
+        .selectFrom("file_storage_objects as o")
+        .innerJoin("file_items as f", "f.storage_object_id", "o.id")
+        .select(["o.id", "f.owner_id"])
+        .where("o.ai_status", "=", "pending")
+        .where("f.deleted_at", "is", null)
+        .limit(8)
+        .execute();
+      for (const row of rows)
+        await enqueueProjectionOnce(db, "file-recognition", row.id, {
+          objectId: row.id,
+          userId: row.owner_id,
+        });
+      await processProjections(
+        db,
+        "file-recognition",
+        (payload) =>
+          recognizeObject(String(payload.objectId), String(payload.userId)),
+        2,
+        5 * 60_000,
+      );
+    })()
       .catch(() => {});
   }, 1500);
   recognitionTimer.unref();

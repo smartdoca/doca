@@ -52,7 +52,8 @@ export async function ticketNotice(
       path: `#/tickets/${t.id}`,
     });
     if (type === "access.requested" || type === "access.approved" || type === "access.rejected")
-      queueMobilePush({
+      await queueMobilePush(db, {
+        id,
         userId,
         title: type === "access.requested" ? "新的访问申请" : "访问申请已更新",
         body: type === "access.requested" ? "有人申请访问你的文档" : "你的访问申请有了结果",

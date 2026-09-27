@@ -1,5 +1,6 @@
 import type { DB } from "../../../../db/src/index.js";
 import { fail } from "../../shared/errors.js";
+import { cursorFingerprint, encodePageCursor } from "../../shared/cursor.js";
 import { permission } from "../access/policy.js";
 import { accessContext } from "../access/queries.js";
 import {
@@ -162,6 +163,14 @@ export function createResourceReads(
             lastEditor?.display_name || lastEditor?.public_id || lastEditor?.login || null,
           lastEditedAt: r.last_edited_at ?? null,
           commentsNextOffset: comments.length > 200 ? 200 : null,
+          commentsNextCursor:
+            comments.length > 200 && comments[199]
+              ? encodePageCursor(
+                  cursorFingerprint({ kind: "comments", id }),
+                  comments[199].created_at,
+                  comments[199].id,
+                )
+              : null,
           comments: comments.slice(0, 200).map(({ public_id, login, ...c }) => ({
             ...c,
             display_name: c.display_name || public_id || login,

@@ -352,8 +352,9 @@ export function CreatePopover({
 }
 type People = {
   items: { id: string; display_name: string }[];
-  total: number;
+  total: number | null;
   nextOffset: number | null;
+  nextCursor?: string | null;
 };
 export function LikePeople({ detail }: { detail: Detail }) {
   const { t } = useI18n();
@@ -382,31 +383,36 @@ export function LikePeople({ detail }: { detail: Detail }) {
     <>
       <button
         className="like-people"
-        aria-label={t("doc.likePeopleAll", { count: page.total })}
+        aria-label={t("doc.likePeopleAll", { count: page.total ?? page.items.length })}
         onClick={() => setOpen(true)}
-        disabled={!page.total}
+        disabled={page.total === 0}
       >
         {page.items.slice(0, 8).map((u) => (
           <UserBadge key={u.id} id={u.id} name={u.display_name} avatarOnly />
         ))}
-        {page.total > 8 && <span className="avatar-more">…</span>}
+        {(page.total ?? page.items.length) > 8 && <span className="avatar-more">…</span>}
       </button>
       {open && (
-        <Dialog title={t("doc.likePeople", { count: page.total })} close={() => setOpen(false)}>
+        <Dialog title={t("doc.likePeople", { count: page.total ?? page.items.length })} close={() => setOpen(false)}>
           <div className="people-list">
             {page.items.map((u) => (
               <UserBadge key={u.id} id={u.id} name={u.display_name} />
             ))}
           </div>
-          {page.nextOffset !== null && (
+          {(page.nextCursor != null || page.nextOffset !== null) && (
             <button
               onClick={() =>
                 void api<People>(
-                  `/resources/${detail.resource.id}/likes?offset=${page.nextOffset}`,
+                  `/resources/${detail.resource.id}/likes?${
+                    page.nextCursor
+                      ? "cursor=" + encodeURIComponent(page.nextCursor)
+                      : "offset=" + page.nextOffset
+                  }`,
                 )
                   .then((p) =>
                     setPage((old) => ({
                       ...p,
+                      total: p.total ?? old.total,
                       items: [...old.items, ...p.items],
                     })),
                   )
@@ -680,14 +686,15 @@ function DocumentRecords({
             </article>
           ))}
           {data?.items?.length === 0 && <p className="empty">{t("record.empty")}</p>}
-          {data?.nextOffset != null && (
+          {(data?.nextCursor != null || data?.nextOffset != null) && (
             <button
               onClick={() =>
                 void api<any>(
                   path +
                     (path.includes("?") ? "&" : "?") +
-                    "offset=" +
-                    data.nextOffset,
+                    (data.nextCursor
+                      ? "cursor=" + encodeURIComponent(data.nextCursor)
+                      : "offset=" + data.nextOffset),
                 )
                   .then((p) =>
                     setData((old: any) => ({

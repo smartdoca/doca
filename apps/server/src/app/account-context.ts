@@ -12,7 +12,7 @@ export type AccountContext = {
   admin: (r: FastifyRequest) => Actor;
   sessionToken: (r: FastifyRequest) => string | null;
   cookie: (s: string) => string;
-  limit: (key: string, max?: number) => void;
+  limit: (key: string, max?: number) => Promise<void>;
 };
 export function readCookie(req: FastifyRequest, name: string) {
   const v = req.headers.cookie

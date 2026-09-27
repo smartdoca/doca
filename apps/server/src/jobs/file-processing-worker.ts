@@ -10,6 +10,7 @@ import {
 } from "../adapters/storage.js";
 import { derivativeKey, filePolicy } from "../services/storage-policy.js";
 import { cleanupTemporaryUploads } from "../services/upload-stream.js";
+import { processFileExtract } from "../services/ai/file-extract.js";
 
 const recipe = "thumbnail-v1";
 export function createFileProcessingWorker(db: DB, runtime: StorageRuntime) {
@@ -21,7 +22,7 @@ export function createFileProcessingWorker(db: DB, runtime: StorageRuntime) {
         await cleanupTemporaryUploads(runtime.root);
         lastCleanup = Date.now();
       }
-      return processProjections(
+      const thumbnails = await processProjections(
         db,
         "file-thumbnail",
         async (payload) => {
@@ -107,6 +108,15 @@ export function createFileProcessingWorker(db: DB, runtime: StorageRuntime) {
         },
         2,
       );
+      const extracts = await processProjections(
+        db,
+        "file-extract",
+        (payload) =>
+          processFileExtract(db, String(payload.objectId), runtime),
+        2,
+        5 * 60_000,
+      );
+      return thumbnails + extracts;
     },
   };
 }

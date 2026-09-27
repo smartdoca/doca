@@ -1245,7 +1245,8 @@ function RichDocument({
               </button>
             )}
             {visibleThreads >= roots.length &&
-              detail.commentsNextOffset != null && (
+              (detail.commentsNextCursor != null ||
+                detail.commentsNextOffset != null) && (
                 <button
                   className="comments-load-more"
                   disabled={busy}

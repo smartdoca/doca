@@ -286,7 +286,8 @@ export async function notify(
           path,
         });
         if (type === "comment.created" || type === "comment.mentioned")
-          queueMobilePush({
+          await queueMobilePush(db, {
+            id: notificationId,
             userId: u.id,
             title: type === "comment.mentioned" ? "有人在评论中提到你" : "新评论",
             body: r.title,

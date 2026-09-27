@@ -283,17 +283,17 @@ export function SearchPanel({
     setLibraryError("");
     void (async () => {
       const all: Resource[] = [];
-      let offset: number | null = 0;
-      while (offset !== null) {
+      let cursor: string | undefined;
+      do {
         const p: Page = await api(
-          "/resources?scope=libraries&offset=" + offset,
+          "/resources?scope=libraries" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""),
           "GET",
           undefined,
           c.signal,
         );
         all.push(...p.items);
-        offset = p.nextOffset;
-      }
+        cursor = p.nextCursor ?? undefined;
+      } while (cursor);
       if (!c.signal.aborted) setLibraries(all);
     })()
       .catch((e) => {
@@ -352,14 +352,17 @@ export function SearchPanel({
     };
   }, [aiSearch, waitingForAiQuery, contentMode, query, searchAttempt, fileParams.toString()]);
   async function more() {
-    if (data.nextOffset === null) return;
+    if (data.nextCursor == null && data.nextOffset === null) return;
     setLoading(true);
     try {
+      const page = data.nextCursor
+        ? "&cursor=" + encodeURIComponent(data.nextCursor)
+        : "&offset=" + data.nextOffset;
       const p = await api<SearchPage>(
-        "/search/documents?" + query + "&offset=" + data.nextOffset,
+        "/search/documents?" + query + page,
       );
       if (currentQuery.current === query)
-        setData((old) => ({ ...p, items: [...old.items, ...p.items] }));
+        setData((old) => ({ ...p, total: p.total ?? old.total, items: [...old.items, ...p.items] }));
     } catch (e) {
       if (currentQuery.current === query) setError((e as Error).message);
     } finally {
@@ -660,7 +663,7 @@ export function SearchPanel({
                   : t("search.empty")}
               </p>
             )}
-            {data.nextOffset !== null && (
+            {(data.nextCursor != null || data.nextOffset !== null) && (
               <button
                 className="load-more"
                 disabled={loading}

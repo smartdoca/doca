@@ -514,7 +514,8 @@ export function RegionComments({
                 {t("comment.more")}
               </button>
             )}
-            {detail.commentsNextOffset != null && (
+            {(detail.commentsNextCursor != null ||
+              detail.commentsNextOffset != null) && (
               <button disabled={busy} onClick={() => void loadMoreComments?.()}>
                 {t("comment.moreLater")}
               </button>

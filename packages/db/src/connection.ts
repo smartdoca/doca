@@ -3,14 +3,17 @@ import { Kysely, PostgresDialect, SqliteDialect } from "kysely";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { Pool } from "pg";
-import { createSchema } from "./create-schema.js";
+import { createSchema, validateSchema } from "./create-schema.js";
 import type { Schema } from "./schema.js";
 import { registerDriver } from "./transactions.js";
 
 export type DatabaseConfig =
   | { driver: "sqlite"; path: string }
-  | { driver: "postgres"; url: string; schema?: string };
-export async function openDatabase(config: DatabaseConfig) {
+  | { driver: "postgres"; url: string; schema?: string; poolMax?: number };
+export async function openDatabase(
+  config: DatabaseConfig,
+  options: { schema?: "migrate" | "validate" } = {},
+) {
   let dialect;
   if (config.driver === "sqlite") {
     if (config.path !== ":memory:")
@@ -23,12 +26,13 @@ export async function openDatabase(config: DatabaseConfig) {
     dialect = new SqliteDialect({ database: sqlite });
   } else
     dialect = new PostgresDialect({
-      pool: new Pool({ connectionString: config.url, max: 10 }),
+      pool: new Pool({ connectionString: config.url, max: config.poolMax ?? 10 }),
     });
   const db = new Kysely<Schema>({ dialect });
   registerDriver(db, config.driver);
   try {
-    await createSchema(db);
+    if ((options.schema ?? "migrate") === "migrate") await createSchema(db);
+    else await validateSchema(db);
   } catch (error) {
     await db.destroy();
     throw error;

@@ -28,6 +28,7 @@ export function DocumentTree({
 }) {
   const { t } = useI18n();
   const [items, setItems] = useState<Resource[]>([]),
+    [truncated, setTruncated] = useState(false),
     [menu, setMenu] = useState<{ resource: Resource; trigger: HTMLElement } | null>(null),
     [trash, setTrash] = useState<Resource | null>(null),
     [localRefresh, setLocalRefresh] = useState(0),
@@ -65,19 +66,22 @@ export function DocumentTree({
     const controller = new AbortController();
     void (async () => {
       const all: Resource[] = [];
-      let offset: number | null = 0;
-      while (offset !== null) {
+      let wasTruncated = false;
+      let cursor: string | undefined;
+      do {
         const p: Page = await api<Page>(
-          `/resources?scope=${libraryId ? "all" : "mine"}&offset=${offset}${libraryId ? "&libraryId=" + libraryId + "&tree=true" : ""}`,
+          `/resources?scope=${libraryId ? "all" : "mine"}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}${libraryId ? "&libraryId=" + libraryId + "&tree=true" : ""}`,
           "GET",
           undefined,
           controller.signal,
         );
         all.push(...p.items);
-        offset = p.nextOffset;
-      }
+        wasTruncated ||= !!p.truncated;
+        cursor = p.nextCursor ?? undefined;
+      } while (cursor);
       if (!controller.signal.aborted) {
         setItems(all);
+        setTruncated(wasTruncated);
         setError("");
       }
     })().catch((e) => {
@@ -87,6 +91,7 @@ export function DocumentTree({
   }, [refresh, localRefresh, userId, libraryId]);
   useEffect(() => {
     setItems([]);
+    setTruncated(false);
     setDragged(null);
     setDrop(null);
   }, [libraryId, userId]);
@@ -288,6 +293,9 @@ export function DocumentTree({
       {menu && <TreeDocumentMenu key={menu.resource.id} {...menu} close={() => setMenu(null)} changed={() => { setLocalRefresh(n => n + 1); changed?.(); }} remove={() => setTrash(menu.resource)} />}
       {trash && <ResourceActionDialog resource={trash} action="trash" close={() => setTrash(null)} saved={() => { setLocalRefresh(n => n + 1); changed?.(); if (selected === trash.id) location.hash = "/home"; }} />}
       {error && <Feedback message={error} tone="error" />}
+      {truncated && (
+        <Feedback message={t("tree.tooLarge")} tone="warning" />
+      )}
       {knowledgeEnabled && libraryId && <a className="tree-link" href={`#/r/${libraryId}?view=system&section=entries`}>{t("knowledge.openEntries")}</a>}
       {roots.map((r) => node(r))}
       {!items.length && !error && !knowledgeEnabled && (

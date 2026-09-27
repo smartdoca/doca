@@ -87,7 +87,8 @@ export function accessibleQuery(
 ) {
   return sql<boolean>`exists(select 1 from resources authorized where authorized.id = ${id}
     ${trash ? sql`` : sql`and authorized.deleted_at is null and not exists(select 1 from resources l where l.id = authorized.library_id and l.deleted_at is not null)`}
-    and ${roleQuery(sql.ref("authorized.id"), actor, includePublic)} >= ${minimum})`;
+    and (${actor ? sql`authorized.owner_id = ${actor.id} or` : sql``}
+      ${roleQuery(sql.ref("authorized.id"), actor, includePublic)} >= ${minimum}))`;
 }
 
 export async function activeActor(

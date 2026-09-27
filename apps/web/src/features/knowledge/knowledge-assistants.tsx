@@ -109,13 +109,13 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
     if (mode === "manage")
       await work(async () => {
         const all: Library[] = [];
-        let offset: number | null = 0;
+        let cursor: string | undefined;
         do {
-          const page: { items: Library[]; nextOffset: number | null } =
-            await api(`/resources?scope=all&kind=library&offset=${offset}`);
+          const page: { items: Library[]; nextCursor?: string | null } =
+            await api(`/resources?scope=all&kind=library${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
           all.push(...page.items);
-          offset = page.nextOffset;
-        } while (offset !== null && offset !== undefined);
+          cursor = page.nextCursor ?? undefined;
+        } while (cursor);
         setLibraries(all.filter((x) => roleRank(x.role) >= 4));
         setKeys(
           (

@@ -30,6 +30,7 @@ export function registerKnowledgeBotAccess(
   db: DB,
   auth: (req: FastifyRequest) => Actor,
   studio: ReturnType<typeof createKnowledgeStudio>,
+  consumeRateLimit?: (key: string, max: number, windowMs: number) => Promise<boolean>,
 ) {
   const root = "/api/v1/knowledge/assistants";
   async function manage(actor: Actor, id: string) {
@@ -232,20 +233,26 @@ export function registerKnowledgeBotAccess(
   const external = {
     config: { docaPluginExternal: true } as FastifyContextConfig,
   };
-  const rate = new Map<string, { count: number; until: number }>();
-  function limit(req: FastifyRequest, kind: string, max: number) {
+  const localRate = new Map<string, { count: number; until: number }>();
+  async function limit(req: FastifyRequest, kind: string, max: number) {
+    const key = `knowledge:${kind}:${req.ip}`;
+    if (consumeRateLimit) {
+      if (!(await consumeRateLimit(key, max, 60_000)))
+        fail(429, "请求过于频繁，请稍后再试");
+      return;
+    }
     const now = Date.now();
-    for (const [key, value] of rate) if (value.until < now) rate.delete(key);
-    const id = kind + ":" + req.ip,
-      value = rate.get(id) ?? { count: 0, until: now + 60000 };
+    for (const [id, value] of localRate)
+      if (value.until < now) localRate.delete(id);
+    const value = localRate.get(key) ?? { count: 0, until: now + 60_000 };
     if (++value.count > max) fail(429, "请求过于频繁，请稍后再试");
-    rate.set(id, value);
+    localRate.set(key, value);
   }
   api.post<{ Params: { id: string } }>(
     `${root}/:id/public-session`,
     external,
     async (req) => {
-      limit(req, "public-session", 20);
+      await limit(req, "public-session", 20);
       const { channel } = z
         .object({ channel: z.enum(["web", "embed"]).default("web") })
         .parse(req.body ?? {});
@@ -329,7 +336,7 @@ export function registerKnowledgeBotAccess(
     `${root}/:id/api/ask`,
     external,
     async (req) => {
-      limit(req, "ask", 30);
+      await limit(req, "ask", 30);
       const ctx = await credential(req, req.params.id, "api"),
         body = z
           .object({

@@ -59,6 +59,7 @@ export function registerAssets(
   actor: (r: FastifyRequest) => Actor | null,
   admin: (r: FastifyRequest) => Actor,
   runtime: StorageRuntime,
+  limit?: (key: string, max?: number) => Promise<void>,
 ) {
   const storage = createStorage(runtime);
   const decode = (p: Schema["storage_profiles"]) =>
@@ -179,7 +180,6 @@ export function registerAssets(
   );
   let concurrent = 0;
   const uploads = new WeakSet<FastifyRequest>();
-  const attempts = new Map<string, { count: number; expires: number }>();
   api.addHook("onResponse", async (req) => {
     if (uploads.delete(req)) concurrent--;
   });
@@ -195,18 +195,8 @@ export function registerAssets(
     {
       bodyLimit: uploadLimits.asset,
       onRequest: async (req) => {
-        const a = auth(req),
-          now = Date.now();
-        for (const [key, value] of attempts)
-          if (value.expires <= now) attempts.delete(key);
-        const attempt = attempts.get(a.id) ?? {
-          count: 0,
-          expires: now + 600000,
-        };
-        if (attempts.size >= 10000 && !attempts.has(a.id))
-          fail(429, "上传繁忙");
-        attempts.set(a.id, attempt);
-        if (++attempt.count > 60) fail(429, "上传过于频繁，请稍后重试");
+        const a = auth(req);
+        await limit?.(`upload:${a.id}`, 60);
         if (concurrent >= 4) fail(429, "上传繁忙，请稍后重试");
         concurrent++;
         uploads.add(req);

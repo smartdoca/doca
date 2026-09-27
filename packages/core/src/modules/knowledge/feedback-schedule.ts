@@ -59,6 +59,9 @@ export async function sweepKnowledgeFeedbackSchedules(
         library.id,
         now,
         "feedback",
+        `${schedule}:${Math.floor(
+          now.getTime() / ((schedule === "weekly" ? 7 : 1) * 86400000),
+        )}`,
       );
     } catch {
       /* One inaccessible library must not stop other scheduled work. */

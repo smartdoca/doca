@@ -84,7 +84,7 @@ export function registerTickets(
     },
     async (req) => {
       const actor = ctx.authenticated(req);
-      ctx.limit(`ticket:${actor.id}`, 60);
+      await ctx.limit(`ticket:${actor.id}`, 60);
       return tickets.act(
         actor,
         req.params.id,

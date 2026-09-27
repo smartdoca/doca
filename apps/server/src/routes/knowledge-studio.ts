@@ -47,9 +47,10 @@ export function registerKnowledgeStudio(
   auth: (req: FastifyRequest) => Actor,
   index?: AnswerIndex,
   notify?: (id: string) => Promise<void>,
+  consumeRateLimit?: (key: string, max: number, windowMs: number) => Promise<boolean>,
 ) {
   const studio = createKnowledgeStudio(db, index, notify);
-  registerKnowledgeBotAccess(api, db, auth, studio);
+  registerKnowledgeBotAccess(api, db, auth, studio, consumeRateLimit);
   registerCurationWorkspace(api, db, auth);
   const root = "/api/v1/knowledge";
   api.get<{ Querystring: { scopeId: string; kind: "curation" | "answer" } }>(

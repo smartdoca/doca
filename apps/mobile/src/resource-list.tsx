@@ -1,5 +1,5 @@
 import { FlashList } from "@shopify/flash-list";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { RefreshControl, View } from "react-native";
 import { List } from "react-native-paper";
@@ -27,22 +27,38 @@ export function ResourceList({
   const router = useRouter();
   const { session } = useAuth();
   const queryText = new URLSearchParams(params).toString();
-  const query = useQuery({
+  type ResourcePage = {
+    items: Resource[];
+    nextCursor?: string | null;
+    nextOffset: number | null;
+  };
+  const query = useInfiniteQuery({
     queryKey: ["resources", session?.origin, queryText],
     enabled: !!session,
-    queryFn: () => api<{ items: Resource[] }>(`/resources?${queryText}`),
+    initialPageParam: "",
+    queryFn: ({ pageParam }) =>
+      api<ResourcePage>(
+        `/resources?${queryText}${pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ""}`,
+      ),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
   const pull = usePull(() => query.refetch());
   if (query.isLoading) return <LoadingState />;
   if (query.isError) {
     return <EmptyState title={query.error instanceof Error ? query.error.message : "加载失败"} />;
   }
+  const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
     <FlashList
-      data={query.data?.items ?? []}
+      data={items}
       estimatedItemSize={84}
       contentContainerStyle={{ paddingBottom: 24 }}
+      onEndReachedThreshold={0.6}
+      onEndReached={() => {
+        if (query.hasNextPage && !query.isFetchingNextPage)
+          void query.fetchNextPage();
+      }}
       refreshControl={
         <RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} />
       }

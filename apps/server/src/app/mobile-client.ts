@@ -4,10 +4,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { toString as renderQr } from "qrcode";
 import { identityPolicy } from "@core/modules/identity/accounts.js";
 import { recordLogin, tokenHash } from "@core/modules/identity/passwords.js";
-import {
-  setMobilePushHandler,
-  type MobilePush,
-} from "@core/modules/mobile/push.js";
+import type { MobilePush } from "@core/modules/mobile/push.js";
+import { processProjections } from "@core/modules/automation/jobs.js";
 import { fail } from "@core/shared/errors.js";
 import type { DB } from "@db/index.js";
 
@@ -50,10 +48,26 @@ export function mobileSession<T extends object>(
 }
 
 export function startMobilePush(db: DB) {
-  setMobilePushHandler((event) => {
-    void deliverMobilePush(db, event);
-  });
-  return () => setMobilePushHandler(null);
+  let active: Promise<unknown> | undefined;
+  const pump = () => {
+    if (active) return;
+    active = processProjections(
+      db,
+      "mobile-push",
+      (payload) => deliverMobilePush(db, payload as MobilePush),
+      10,
+      60_000,
+    ).finally(() => {
+      active = undefined;
+    });
+  };
+  const timer = setInterval(pump, 1000);
+  timer.unref();
+  pump();
+  return async () => {
+    clearInterval(timer);
+    await active;
+  };
 }
 
 async function deliverMobilePush(db: DB, event: MobilePush) {
@@ -63,7 +77,7 @@ async function deliverMobilePush(db: DB, event: MobilePush) {
     .where("user_id", "=", event.userId)
     .execute();
   if (!devices.length) return;
-  await fetch("https://exp.host/--/api/v2/push/send", {
+  const response = await fetch("https://exp.host/--/api/v2/push/send", {
     method: "POST",
     headers: {
       accept: "application/json",
@@ -78,7 +92,8 @@ async function deliverMobilePush(db: DB, event: MobilePush) {
         sound: "default",
       })),
     ),
-  }).catch(() => undefined);
+  });
+  if (!response.ok) throw new Error(`Mobile push failed (${response.status})`);
 }
 
 export function registerMobileClient(
@@ -86,11 +101,11 @@ export function registerMobileClient(
   db: DB,
   authenticated: (req: FastifyRequest) => { id: string },
   cookie: (token: string, maxAge?: number) => string,
-  limit: (key: string, max?: number) => void,
+  limit: (key: string, max?: number) => Promise<void>,
 ) {
   api.post("/api/v1/auth/webview-ticket", async (req) => {
     const actor = authenticated(req);
-    limit(`webview:${actor.id}`, 30);
+    await limit(`webview:${actor.id}`, 30);
     const ticket = randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 60_000).toISOString();
     await db
@@ -122,7 +137,7 @@ export function registerMobileClient(
       },
     },
     async (req, reply) => {
-      limit(`webview-redeem:${req.ip}`, 30);
+      await limit(`webview-redeem:${req.ip}`, 30);
       const row = await db
         .selectFrom("webview_tickets")
         .selectAll()
@@ -233,7 +248,7 @@ export function registerMobileClient(
 
   api.post("/api/v1/auth/qr", async (req) => {
     await requireQrLogin(db);
-    limit(`qr:${req.ip}`, 10);
+    await limit(`qr:${req.ip}`, 10);
     const pageOrigin = req.headers.origin;
     if (
       typeof pageOrigin !== "string" ||
@@ -270,7 +285,7 @@ export function registerMobileClient(
     "/api/v1/auth/qr/:code",
     async (req, reply) => {
       await requireQrLogin(db);
-      limit(`qr-poll:${req.ip}`, 90);
+      await limit(`qr-poll:${req.ip}`, 90);
       return claimQrLogin(
         db,
         req.params.code,
@@ -286,7 +301,7 @@ export function registerMobileClient(
     async (req) => {
       await requireQrLogin(db);
       const actor = authenticated(req);
-      limit(`qr-confirm:${actor.id}`, 20);
+      await limit(`qr-confirm:${actor.id}`, 20);
       const row = await loadQrLogin(db, req.params.code);
       if (row.user_id && row.user_id !== actor.id)
         fail(409, "这个二维码已由其他账号确认");

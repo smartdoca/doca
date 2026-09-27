@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { DB } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import type { Actor } from "../identity/passwords.js";
@@ -283,6 +283,7 @@ export async function createScheduledKnowledgeConversation(
   libraryId: string,
   triggeredAt = new Date(),
   purpose: "sources" | "feedback" = "sources",
+  occurrenceKey = triggeredAt.toISOString().slice(0, 10),
 ) {
   return transact(db, async (tx) => {
     const timestamp = triggeredAt.toISOString();
@@ -298,9 +299,21 @@ export async function createScheduledKnowledgeConversation(
       actor,
       conversation.id,
       purpose === "feedback" ? "处理本库尚未解决的问答反馈：先读取反馈并分类根因，按需修订知识或整理规则，验证当前知识下的回答。无法自动解决的决策登记人工待办后继续其他案例。" : "检查来源变化和质量，整理需要更新的知识，遵守本库来源范围和人工操作，按需推荐符合范围的高质量来源。",
-      randomUUID(),
+      scheduledKnowledgeOccurrenceId(libraryId, purpose, occurrenceKey),
       purpose === "feedback" ? "feedback_schedule" : "schedule",
     );
     return conversation;
   });
+}
+
+export function scheduledKnowledgeOccurrenceId(
+  libraryId: string,
+  purpose: "sources" | "feedback",
+  occurrenceKey: string,
+) {
+  const hex = createHash("sha256")
+    .update(JSON.stringify([libraryId, purpose, occurrenceKey]))
+    .digest("hex")
+    .slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20)}`;
 }

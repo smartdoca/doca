@@ -8,14 +8,22 @@ export async function registerStaticRoutes(
   api: FastifyInstance,
   db: DB,
   staticDirectory?: string,
+  realtimeReady: () => boolean = () => true,
 ) {
   api.get("/api/openapi.json", { schema: { hide: true } }, async () =>
     api.swagger(),
   );
-  api.get("/health", { schema: { hide: true } }, async () => {
+  api.get("/live", { schema: { hide: true } }, async () => ({
+    status: "ok",
+    version: "0.1.0",
+  }));
+  const ready = async () => {
     await db.selectFrom("settings").select("id").executeTakeFirstOrThrow();
+    if (!realtimeReady()) fail(503, "实时集群尚未就绪");
     return { status: "ok", version: "0.1.0" };
-  });
+  };
+  api.get("/ready", { schema: { hide: true } }, ready);
+  api.get("/health", { schema: { hide: true } }, ready);
 
   if (!staticDirectory) return;
   const directory = await realpath(staticDirectory);

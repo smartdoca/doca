@@ -225,20 +225,19 @@ async function scopedDocuments(
 ) {
   const content = createContent(db);
   const items: Awaited<ReturnType<typeof content.list>>["items"] = [];
-  let offset = 0;
+  let cursor: string | undefined;
   do {
     const page = await content.list(actor, {
       ...scoped,
       q: undefined,
-      cursor: undefined,
-      offset,
+      cursor,
+      offset: undefined,
       kind: "document",
       matchedIds: [...ids],
     });
     items.push(...page.items);
-    if (page.nextOffset === null) break;
-    offset = page.nextOffset;
-  } while (items.length < ids.length);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor && items.length < ids.length);
   return items;
 }
 

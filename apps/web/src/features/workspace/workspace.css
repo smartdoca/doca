@@ -469,6 +469,19 @@
   border-bottom: 1px solid #eef0f3;
   padding: 0 8px;
   font-size: 12px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 66px;
+}
+.document-time-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 18px 8px 8px;
+  border-bottom: 1px solid #e6e9ed;
+  background: var(--surface, #fff);
+  color: #747b87;
+  font-size: 12px;
+  font-weight: 650;
 }
 .document-table-row:hover {
   background: #f9faff;

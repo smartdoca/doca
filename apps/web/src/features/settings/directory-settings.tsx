@@ -36,7 +36,8 @@ const { t } = useI18n();
     revision: number;
   } | null>(null);
   const [users, setUsers] = useState<Member[]>([]),
-    [next, setNext] = useState<number | null>(null);
+    [next, setNext] = useState<number | null>(null),
+    [nextCursor, setNextCursor] = useState<string | null>(null);
   const [q, setQ] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -49,7 +50,11 @@ const { t } = useI18n();
     const c = new AbortController();
     setError("");
     const timer = setTimeout(() => {
-      void api<{ items: Member[]; nextOffset: number | null }>(
+      void api<{
+        items: Member[];
+        nextOffset: number | null;
+        nextCursor?: string | null;
+      }>(
         "/admin/users" + (q.trim() ? "?q=" + encodeURIComponent(q.trim()) : ""),
         "GET",
         undefined,
@@ -58,6 +63,7 @@ const { t } = useI18n();
         .then((d) => {
           setUsers(d.items);
           setNext(d.nextOffset);
+          setNextCursor(d.nextCursor ?? null);
         })
         .catch((e) => {
           if (e.name !== "AbortError") setError(e.message);
@@ -157,7 +163,7 @@ const { t } = useI18n();
             </Select>
           </div>
         ))}
-        {next !== null && (
+        {(nextCursor !== null || next !== null) && (
           <button
             disabled={busy}
             onClick={() =>
@@ -165,11 +171,17 @@ const { t } = useI18n();
                 const d = await api<{
                   items: Member[];
                   nextOffset: number | null;
+                  nextCursor?: string | null;
                 }>(
-                  `/admin/users?offset=${next}${q.trim() ? "&q=" + encodeURIComponent(q.trim()) : ""}`,
+                  `/admin/users?${
+                    nextCursor
+                      ? "cursor=" + encodeURIComponent(nextCursor)
+                      : "offset=" + next
+                  }${q.trim() ? "&q=" + encodeURIComponent(q.trim()) : ""}`,
                 );
                 setUsers((v) => [...v, ...d.items]);
                 setNext(d.nextOffset);
+                setNextCursor(d.nextCursor ?? null);
               })
             }
           >{t("common.more")}</button>

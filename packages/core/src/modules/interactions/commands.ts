@@ -6,6 +6,11 @@ import { sql } from "kysely";
 import { randomUUID } from "node:crypto";
 import type { DB } from "../../../../db/src/index.js";
 import { fail } from "../../shared/errors.js";
+import {
+  cursorFingerprint,
+  decodePageCursor,
+  encodePageCursor,
+} from "../../shared/cursor.js";
 import { permission } from "../access/policy.js";
 import { restoreDocument } from "../collaboration/documents.js";
 import {
@@ -75,7 +80,13 @@ export function createInteractions(
         return { ok: true };
       });
     },
-    commentPage(actor: Actor | null, id: string, offset = 0, target?: string) {
+    commentPage(
+      actor: Actor | null,
+      id: string,
+      offset = 0,
+      target?: string,
+      cursor?: string,
+    ) {
       return run(actor, [id], async (ctx) => {
         const resource = get(ctx, id, "read_content");
         let q = ctx.tx
@@ -94,19 +105,32 @@ export function createInteractions(
           if (!c) fail(404, "评论不存在");
           q = q.where("c.id", "in", [c.id, c.parent_id ?? c.id]);
         }
+        const fingerprint = cursorFingerprint({ kind: "comments", id });
+        if (cursor && !target) {
+          const c = decodePageCursor(cursor, fingerprint);
+          q = q.where(
+            sql<boolean>`(c.created_at > ${c.value} or (c.created_at = ${c.value} and c.id > ${c.id}))`,
+          );
+        }
         const rows = await q
           .orderBy("c.created_at")
           .orderBy("c.id")
-          .offset(offset)
+          .offset(cursor ? 0 : offset)
           .limit(201)
           .execute();
+        const items = rows.slice(0, 200);
+        const last = items.at(-1);
         return {
-          items: rows.slice(0, 200).map((c) => ({
+          items: items.map((c) => ({
             ...c,
             body: c.deleted_at ? "" : c.body,
             body_json: c.deleted_at ? null : c.body_json,
           })),
           nextOffset: rows.length > 200 ? offset + 200 : null,
+          nextCursor:
+            rows.length > 200 && last && !target
+              ? encodePageCursor(fingerprint, last.created_at, last.id)
+              : null,
         };
       });
     },

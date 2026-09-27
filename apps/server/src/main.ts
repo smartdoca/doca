@@ -8,7 +8,7 @@ const cfg = config(),
   dev = process.argv.includes("--dev");
 if (dev && process.env.NODE_ENV === "production")
   throw new Error("Development server is disabled in production");
-const db = await openDatabase(cfg.database);
+const db = await openDatabase(cfg.database, { schema: cfg.schemaMode });
 let api: Awaited<ReturnType<typeof createApp>> | undefined,
   web: ViteDevServer | undefined,
   stopping = false;
@@ -23,6 +23,10 @@ try {
   api = await createApp(db, {
     origin: cfg.origin,
     logging: true,
+    redisUrl: cfg.redisUrl,
+    redisPrefix: cfg.redisPrefix,
+    instanceId: cfg.instanceId,
+    trustProxy: cfg.trustProxy,
     ...(!dev ? { staticDirectory: resolve("apps/web/dist") } : {}),
   });
   if (dev)

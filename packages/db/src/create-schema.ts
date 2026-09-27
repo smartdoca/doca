@@ -16,12 +16,16 @@ const schemaStatements = [
   `CREATE INDEX IF NOT EXISTS "document_templates_format" on "document_templates" ("format", "updated_at");`,
   `CREATE TABLE IF NOT EXISTS "comments" ("id" varchar(36) primary key, "resource_id" varchar(36) not null references "resources" ("id"), "author_id" varchar(36) not null references "users" ("id"), "body" text not null, "parent_id" varchar(36) references "comments" ("id"), "resolved" integer not null, "deleted_at" varchar(32), "version" integer not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "anchor" text, "body_json" text);`,
   `CREATE INDEX "comments_resource" on "comments" ("resource_id", "created_at");`,
+  `CREATE INDEX "comments_page" on "comments" ("resource_id", "created_at", "id");`,
   `CREATE TABLE IF NOT EXISTS "reactions" ("resource_id" varchar(36) not null references "resources" ("id"), "user_id" varchar(36) not null references "users" ("id"), "kind" varchar(16) not null, "created_at" varchar(32) not null default '', constraint "reactions_pk" primary key ("resource_id", "user_id", "kind"), constraint "reaction_kind" check (kind in ('like','favorite','pin')));`,
+  `CREATE INDEX "reactions_resource_kind" on "reactions" ("resource_id", "kind", "user_id");`,
   `CREATE TABLE IF NOT EXISTS "notifications" ("id" varchar(36) primary key, "user_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) references "resources" ("id"), "type" varchar(64) not null, "read_at" varchar(32), "created_at" varchar(32) not null, "actor_id" varchar(36), "comment_id" varchar(36), "dedupe_key" varchar(240), "ticket_id" text);`,
   `CREATE INDEX "notifications_user" on "notifications" ("user_id", "created_at");`,
   `CREATE TABLE IF NOT EXISTS "audit_events" ("id" varchar(36) primary key, "actor_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) references "resources" ("id"), "action" varchar(64) not null, "created_at" varchar(32) not null);`,
+  `CREATE INDEX "audit_events_page" on "audit_events" ("resource_id", "created_at" desc, "id" desc);`,
   `CREATE TABLE IF NOT EXISTS "resource_visits" ("user_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) not null references "resources" ("id"), "visited_at" varchar(32) not null, constraint "visits_pk" primary key ("user_id", "resource_id"));`,
   `CREATE INDEX "visits_recent" on "resource_visits" ("user_id", "visited_at");`,
+  `CREATE INDEX "visits_recent_page" on "resource_visits" ("user_id", "visited_at" desc, "resource_id");`,
   `CREATE TABLE IF NOT EXISTS "user_preferences" ("user_id" varchar(36) primary key references "users" ("id"), "avatar" varchar(24) not null, "theme" varchar(16) not null, "density" varchar(16) not null, "default_sort" varchar(24) not null, "sort_order" varchar(4) not null, "version" integer not null);`,
   `CREATE TABLE IF NOT EXISTS "user_presence" ("user_id" varchar(36) primary key references "users" ("id"), "last_seen_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "storage_profiles" ("id" varchar(36) primary key, "provider" varchar(16) not null, "config" text not null, "active" integer not null, "created_at" varchar(32) not null);`,
@@ -36,8 +40,11 @@ const schemaStatements = [
   `CREATE INDEX "auth_flow_expiry" on "auth_flows" ("expires_at");`,
   `CREATE TABLE IF NOT EXISTS "document_versions" ("id" varchar(36) primary key, "resource_id" varchar(36) not null references "resources" ("id"), "seq" integer not null, "checkpoint" text not null, "title" varchar(160) not null, "author_id" varchar(36) not null references "users" ("id"), "created_at" varchar(32) not null, "recovery_json" text);`,
   `CREATE INDEX "document_versions_resource" on "document_versions" ("resource_id", "created_at");`,
+  `CREATE INDEX "document_versions_page" on "document_versions" ("resource_id", "created_at" desc, "id" desc);`,
   `CREATE TABLE IF NOT EXISTS "visit_events" ("id" varchar(36) primary key, "resource_id" varchar(36) not null references "resources" ("id"), "user_id" varchar(36) not null references "users" ("id"), "created_at" varchar(32) not null);`,
   `CREATE INDEX "visit_events_resource" on "visit_events" ("resource_id", "created_at");`,
+  `CREATE INDEX "visit_events_page" on "visit_events" ("resource_id", "created_at" desc, "id" desc);`,
+  `CREATE INDEX "visit_events_latest" on "visit_events" ("user_id", "resource_id", "created_at");`,
   `CREATE UNIQUE INDEX "users_public_id_unique" on "users" ("public_id");`,
   `CREATE UNIQUE INDEX "notification_dedupe" on "notifications" ("dedupe_key");`,
   `CREATE TABLE IF NOT EXISTS "user_card_settings" ("id" varchar(16) primary key, "config" text not null, "revision" integer not null);`,
@@ -291,15 +298,24 @@ async function ensureUserSchema(db: Kysely<any>) {
 }
 
 async function ensureResourceSchema(db: Kysely<any>) {
-  try {
-    await sql
-      .raw(
-        `ALTER TABLE "resources" ADD COLUMN "page_width" varchar(16) default 'a4'`,
-      )
-      .execute(db);
-  } catch (error) {
-    const message = String((error as { message?: string })?.message ?? error);
-    if (!/duplicate column|already exists/i.test(message)) throw error;
+  for (const statement of [
+    `ALTER TABLE "resources" ADD COLUMN "page_width" varchar(16) default 'a4'`,
+    `CREATE INDEX IF NOT EXISTS "visits_recent_page" on "resource_visits" ("user_id", "visited_at" desc, "resource_id")`,
+    `CREATE INDEX IF NOT EXISTS "visit_events_latest" on "visit_events" ("user_id", "resource_id", "created_at")`,
+    `CREATE INDEX IF NOT EXISTS "visit_events_page" on "visit_events" ("resource_id", "created_at" desc, "id" desc)`,
+    `CREATE INDEX IF NOT EXISTS "audit_events_page" on "audit_events" ("resource_id", "created_at" desc, "id" desc)`,
+    `CREATE INDEX IF NOT EXISTS "comments_page" on "comments" ("resource_id", "created_at", "id")`,
+    `CREATE INDEX IF NOT EXISTS "document_versions_page" on "document_versions" ("resource_id", "created_at" desc, "id" desc)`,
+    `CREATE INDEX IF NOT EXISTS "reactions_resource_kind" on "reactions" ("resource_id", "kind", "user_id")`,
+    `CREATE INDEX IF NOT EXISTS "users_created_page" on "users" ("created_at" desc, "id")`,
+    `CREATE INDEX IF NOT EXISTS "users_status_created_page" on "users" ("status", "created_at" desc, "id")`,
+  ]) {
+    try {
+      await sql.raw(statement).execute(db);
+    } catch (error) {
+      const message = String((error as { message?: string })?.message ?? error);
+      if (!/duplicate column|already exists/i.test(message)) throw error;
+    }
   }
 }
 
@@ -472,6 +488,44 @@ async function ensureKnowledgeStudio(db: Kysely<any>) {
 
 }
 
+export const SYSTEM_SCHEMA_VERSION = 1;
+
+async function ensureSystemSchema(db: Kysely<any>) {
+  await sql
+    .raw(
+      `CREATE TABLE IF NOT EXISTS "system_schema" ("id" varchar(16) primary key, "version" integer not null, "updated_at" varchar(32) not null)`,
+    )
+    .execute(db);
+  const now = new Date().toISOString();
+  await db
+    .insertInto("system_schema")
+    .values({ id: "main", version: SYSTEM_SCHEMA_VERSION, updated_at: now })
+    .onConflict((conflict: any) =>
+      conflict.column("id").doUpdateSet({
+        version: SYSTEM_SCHEMA_VERSION,
+        updated_at: now,
+      }),
+    )
+    .execute();
+}
+
+export async function validateSchema(db: Kysely<any>) {
+  const hasSchema = (await db.introspection.getTables()).some(
+    (table) => table.name === "system_schema",
+  );
+  if (!hasSchema)
+    throw new Error("Database schema missing is not supported; run pnpm migrate");
+  const row = await db
+    .selectFrom("system_schema")
+    .select("version")
+    .where("id", "=", "main")
+    .executeTakeFirst();
+  if (row?.version !== SYSTEM_SCHEMA_VERSION)
+    throw new Error(
+      `Database schema ${row?.version ?? "missing"} is not supported; run pnpm migrate`,
+    );
+}
+
 export async function createSchema(db: Kysely<any>) {
   if ((await db.introspection.getTables()).length > 0) {
     await ensureFileSchema(db);
@@ -488,6 +542,7 @@ export async function createSchema(db: Kysely<any>) {
     await ensurePlatformRuntimeSchema(db);
     await ensureMobileSchema(db);
     await seedSystemRows(db);
+    await ensureSystemSchema(db);
     return;
   }
 
@@ -508,6 +563,7 @@ export async function createSchema(db: Kysely<any>) {
   await ensurePlatformRuntimeSchema(db);
   await ensureMobileSchema(db);
   await seedSystemRows(db);
+  await ensureSystemSchema(db);
 }
 
 async function ensureMobileSchema(db: Kysely<any>) {
