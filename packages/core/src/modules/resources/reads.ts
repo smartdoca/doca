@@ -3,14 +3,12 @@ import { fail } from "../../shared/errors.js";
 import { cursorFingerprint, encodePageCursor } from "../../shared/cursor.js";
 import { permission } from "../access/policy.js";
 import { accessContext } from "../access/queries.js";
-import {
-  DOCUMENT_CODECS,
-  b64,
-  restoreDocument,
-} from "../collaboration/documents.js";
+import { b64, restoreDocument } from "../collaboration/documents.js";
 import { restoreMarkdown } from "../documents/codecs/markdown.js";
-import { restoreSurface, DEFAULT_SPREADSHEET_SCHEMA } from "../documents/codecs/surfaces.js";
-import { indexDocumentReferences } from "../documents/references.js";
+import {
+  restoreSurface,
+  DEFAULT_SPREADSHEET_SCHEMA,
+} from "../documents/codecs/surfaces.js";
 import type { Actor } from "../identity/passwords.js";
 import { createResourceRunner, get, project } from "./context.js";
 import { queryResourcePage, type ResourceQuery } from "./queries.js";
@@ -22,30 +20,6 @@ export function createResourceReads(
     references(actor: Actor | null, id: string) {
       return run(actor, [id], async (ctx) => {
         get(ctx, id, "read_content");
-        const state = await ctx.tx
-          .selectFrom("document_states as s")
-          .leftJoin(
-            "document_reference_index as i",
-            "i.resource_id",
-            "s.resource_id",
-          )
-          .select(["s.seq", "i.seq as indexedSeq"])
-          .where("s.resource_id", "=", id)
-          .where("s.codec", "=", DOCUMENT_CODECS.rich_text)
-          .executeTakeFirst();
-        if (state && state.seq !== state.indexedSeq) {
-          const loaded = await restoreDocument(ctx.tx, id);
-          try {
-            await indexDocumentReferences(
-              ctx.tx,
-              id,
-              loaded.runtime.getValue(),
-              state.seq,
-            );
-          } finally {
-            loaded.destroy();
-          }
-        }
         const edges = await ctx.tx
           .selectFrom("document_references")
           .selectAll()
@@ -128,9 +102,9 @@ export function createResourceReads(
                 .executeTakeFirst()
             : null;
         const lastEditor = r.last_editor_id
-              ? await ctx.tx
-                .selectFrom("users")
-                .select(["display_name", "public_id", "login"])
+          ? await ctx.tx
+              .selectFrom("users")
+              .select(["display_name", "public_id", "login"])
               .where("id", "=", r.last_editor_id)
               .executeTakeFirst()
           : null;
@@ -138,7 +112,7 @@ export function createResourceReads(
           resource: {
             ...project(ctx, r),
             entry_state: actor
-              ? ((
+              ? (
                   await ctx.tx
                     .selectFrom("resource_collections")
                     .select("resource_id")
@@ -146,7 +120,9 @@ export function createResourceReads(
                     .where("user_id", "=", actor.id)
                     .where("resource_id", "=", id)
                     .executeTakeFirst()
-                )?.resource_id ? "joined" : null)
+                )?.resource_id
+                ? "joined"
+                : null
               : null,
           },
           ownerName:
@@ -160,7 +136,10 @@ export function createResourceReads(
                 : DEFAULT_SPREADSHEET_SCHEMA
               : undefined,
           lastEditorName:
-            lastEditor?.display_name || lastEditor?.public_id || lastEditor?.login || null,
+            lastEditor?.display_name ||
+            lastEditor?.public_id ||
+            lastEditor?.login ||
+            null,
           lastEditedAt: r.last_edited_at ?? null,
           commentsNextCursor:
             comments.length > 200 && comments[199]
@@ -170,12 +149,14 @@ export function createResourceReads(
                   comments[199].id,
                 )
               : null,
-          comments: comments.slice(0, 200).map(({ public_id, login, ...c }) => ({
-            ...c,
-            display_name: c.display_name || public_id || login,
-            body: c.deleted_at ? "" : c.body,
-            body_json: c.deleted_at ? null : c.body_json,
-          })),
+          comments: comments
+            .slice(0, 200)
+            .map(({ public_id, login, ...c }) => ({
+              ...c,
+              display_name: c.display_name || public_id || login,
+              body: c.deleted_at ? "" : c.body,
+              body_json: c.deleted_at ? null : c.body_json,
+            })),
           likes: reactions.filter((x) => x.kind === "like").length,
           liked: reactions.some(
             (x) => x.kind === "like" && x.user_id === actor?.id,

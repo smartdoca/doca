@@ -1,8 +1,5 @@
 import * as oidc from "openid-client";
-import {
-  claimField,
-  profilePolicy,
-} from "@core/modules/identity/naming.js";
+import { claimField, profilePolicy } from "@core/modules/identity/naming.js";
 import { fail } from "@core/shared/errors.js";
 import type { Schema } from "@db/index.js";
 import { oauthProfile } from "./oauth-profile.js";
@@ -22,10 +19,8 @@ export interface IdentityRuntime {
   fetch?: typeof fetch;
 }
 export const identityRuntime = (): IdentityRuntime => ({
-  credentials: JSON.parse(process.env.DOCA_AUTH_CREDENTIALS || "{}"),
-  allowedOrigins: (process.env.DOCA_AUTH_ALLOWED_ORIGINS || "")
-    .split(",")
-    .filter(Boolean),
+  credentials: {},
+  allowedOrigins: [],
 });
 const builtinOrigins = [
   "https://accounts.google.com",
@@ -46,10 +41,7 @@ export function createIdentityAdapter(runtime: IdentityRuntime) {
       url.password ||
       ![...builtinOrigins, ...runtime.allowedOrigins].includes(url.origin)
     )
-      fail(
-        400,
-        "认证端点必须使用 HTTPS，并加入“服务凭据”的 SSO 允许来源",
-      );
+      fail(400, "认证端点必须使用 HTTPS，并加入“服务凭据”的 SSO 允许来源");
   }
   const safeFetch: typeof fetch = async (input, init) => {
     const url = new URL(
@@ -137,7 +129,7 @@ export function createIdentityAdapter(runtime: IdentityRuntime) {
       if (p.type === "oidc" || p.type === "google") {
         return oidc.buildAuthorizationUrl(await configuration(p), {
           redirect_uri: redirect,
-          ...(verifyAgain ? {prompt:"login",max_age:"0"} : {}),
+          ...(verifyAgain ? { prompt: "login", max_age: "0" } : {}),
           scope:
             "openid profile" +
             (profilePolicy(p.profile_config).fields.email.source

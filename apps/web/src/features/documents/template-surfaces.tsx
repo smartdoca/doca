@@ -2,7 +2,10 @@ import { useI18n } from "@web/shared/i18n.js";
 import { blankTemplateContent } from "@core/modules/templates/content.js";
 import { useEffect, useRef, useState } from "react";
 import { createYDocument, readDocument } from "@eppt/editor/core";
-import { PresentationWorkspace, type PresentationWorkspaceHandle } from "@eppt/editor";
+import {
+  PresentationWorkspace,
+  type PresentationWorkspaceHandle,
+} from "@eppt/editor";
 import { CanvasEditor, type CanvasEditorResources } from "aidcanvas";
 import { CanvasModel, type SceneNode } from "aidcanvas/model";
 import {
@@ -19,9 +22,12 @@ import {
 } from "@online-office/univer-sheet/yjs";
 import { projectExlsxWorkbook } from "@online-office/univer-sheet/model";
 import * as Y from "yjs";
-import { RichTextEditor, type EditorValue, type RichTextEditorHandle } from "slatetsx-kit-editor";
+import {
+  RichTextEditor,
+  type EditorValue,
+  type RichTextEditorHandle,
+} from "slatetsx-kit-editor";
 import { renderKatex } from "slatetsx-kit-editor/katex";
-import { withNativeCanvasView } from "@web/features/documents/canvas-model-view.js";
 import { mentionPlugin } from "@web/features/documents/document-mentions.js";
 import { documentLinkPlugin } from "@web/features/documents/document-link.js";
 import { Feedback } from "@web/shared/components/feedback.js";
@@ -89,16 +95,34 @@ export function TemplateSurface({
   if (format === "rich_text")
     return (
       <RichSurface
-        content={Array.isArray(content) ? (content as EditorValue) : (blankTemplateContent("rich_text") as EditorValue)}
+        content={
+          Array.isArray(content)
+            ? (content as EditorValue)
+            : (blankTemplateContent("rich_text") as EditorValue)
+        }
         readOnly={readOnly}
         onContent={onContent}
       />
     );
   if (format === "spreadsheet")
-    return <SheetSurface content={content} readOnly={readOnly} onContent={onContent} />;
+    return (
+      <SheetSurface
+        content={content}
+        readOnly={readOnly}
+        onContent={onContent}
+      />
+    );
   if (format === "canvas")
-    return <CanvasSurface content={content} readOnly={readOnly} onContent={onContent} />;
-  return <SlideSurface content={content} readOnly={readOnly} onContent={onContent} />;
+    return (
+      <CanvasSurface
+        content={content}
+        readOnly={readOnly}
+        onContent={onContent}
+      />
+    );
+  return (
+    <SlideSurface content={content} readOnly={readOnly} onContent={onContent} />
+  );
 }
 
 function MarkdownSurface({
@@ -175,7 +199,9 @@ function SheetSurface({
   onContent?: (read: () => Promise<unknown>) => void;
 }) {
   const { locale } = useI18n();
-  const [session, setSession] = useState<ExlsxCollaborationSession | null>(null);
+  const [session, setSession] = useState<ExlsxCollaborationSession | null>(
+    null,
+  );
   const [workbookId, setWorkbookId] = useState("template");
   const [error, setError] = useState("");
   useEffect(() => {
@@ -264,20 +290,20 @@ function CanvasSurface({
     };
     let next: CanvasModel;
     try {
-      next = withNativeCanvasView(
-        CanvasModel.initialize(crypto.randomUUID(), {
-          version: 1,
-          name: source.name || "模板",
-          scene: source.scene ?? { children: [] },
-        }),
-      );
+      next = CanvasModel.initialize(crypto.randomUUID(), {
+        version: 1,
+        name: source.name || "模板",
+        scene: source.scene ?? { children: [] },
+      });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "画板模板无法打开");
       return;
     }
     next.setReadOnly(readOnly);
     setModel(next);
-    onContent?.(() => Promise.resolve(JSON.parse(JSON.stringify(next.getValue()))));
+    onContent?.(() =>
+      Promise.resolve(JSON.parse(JSON.stringify(next.getValue()))),
+    );
     return () => {
       next.dispose();
       setModel(null);

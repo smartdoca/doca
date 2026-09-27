@@ -197,9 +197,21 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       .header("Referrer-Policy", "no-referrer")
       .header("X-Frame-Options", "DENY");
     if (/^\/knowledge\/embed\/[a-f0-9-]{36}(?:\?|$)/.test(req.url)) {
-      const origins=(process.env.DOCA_KNOWLEDGE_EMBED_ORIGINS??"").split(",").map(value=>value.trim()).filter(value=>{try{return new URL(value).origin===value&&/^https?:/.test(value);}catch{return false;}});
+      const origins = (process.env.DOCA_KNOWLEDGE_EMBED_ORIGINS ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value) => {
+          try {
+            return new URL(value).origin === value && /^https?:/.test(value);
+          } catch {
+            return false;
+          }
+        });
       reply.removeHeader("X-Frame-Options");
-      reply.header("Content-Security-Policy",`frame-ancestors 'self' ${origins.join(" ")}`);
+      reply.header(
+        "Content-Security-Policy",
+        `frame-ancestors 'self' ${origins.join(" ")}`,
+      );
     }
     if (
       req.raw.rawHeaders
@@ -232,15 +244,20 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         req.url === "/api/v1/mcp" &&
         /^Bearer doca_mcp_[a-f0-9]{64}$/.test(req.headers.authorization ?? "")
       ) &&
-      !(req.routeOptions.config as { docaPluginExternal?: boolean }).docaPluginExternal &&
+      !(req.routeOptions.config as { docaPluginExternal?: boolean })
+        .docaPluginExternal &&
       !bearerUser &&
       !mobileCredential &&
       req.headers.origin !== origin.origin
     )
       fail(403, "来源校验失败");
     const token = bearerUser ? presentedBearer : presentedCookie;
-    const externalPlugin = (req.routeOptions.config as { docaPluginExternal?: boolean }).docaPluginExternal;
-    const user = externalPlugin ? null : bearerUser ?? (token ? await sessionUser(token) : null);
+    const externalPlugin = (
+      req.routeOptions.config as { docaPluginExternal?: boolean }
+    ).docaPluginExternal;
+    const user = externalPlugin
+      ? null
+      : (bearerUser ?? (token ? await sessionUser(token) : null));
     sessionTokens.set(req, user && token ? token : null);
     actors.set(req, user ?? null);
     const accountPath = req.url.split("?")[0]!;
@@ -882,7 +899,12 @@ export async function createApp(db: DB, options: CreateAppOptions) {
           .set({ status: req.body.status })
           .where("id", "=", user.id)
           .execute();
-        if (user.status !== req.body.status) await emitIntegrationEvent(tx, "user.status.changed", { userId: user.id, status: req.body.status, previousStatus: user.status });
+        if (user.status !== req.body.status)
+          await emitIntegrationEvent(tx, "user.status.changed", {
+            userId: user.id,
+            status: req.body.status,
+            previousStatus: user.status,
+          });
         if (req.body.status === "disabled")
           await tx
             .deleteFrom("sessions")
@@ -930,8 +952,8 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     revision: number;
     siteName: string;
     registrationEnabled: boolean;
-    defaultLocale?: string;
-    defaultTimezone?: string;
+    defaultLocale: string;
+    defaultTimezone: string;
   }>(
     "PUT",
     "/admin/settings",
@@ -939,33 +961,23 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     object({
       revision: version,
       siteName: name,
-      defaultLocale: Type.Optional(
-        Type.Union([Type.Literal("zh"), Type.Literal("en")]),
-      ),
-      defaultTimezone: Type.Optional(
-        Type.String({ minLength: 1, maxLength: 100 }),
-      ),
+      defaultLocale: Type.Union([Type.Literal("zh"), Type.Literal("en")]),
+      defaultTimezone: Type.String({ minLength: 1, maxLength: 100 }),
       registrationEnabled: Type.Boolean(),
     }),
     async (req) => {
       admin(req);
-      if (req.body.defaultTimezone) {
-        try {
-          new Intl.DateTimeFormat("en", { timeZone: req.body.defaultTimezone });
-        } catch {
-          fail(400, "时区无效，请选择有效的 IANA 时区");
-        }
+      try {
+        new Intl.DateTimeFormat("en", { timeZone: req.body.defaultTimezone });
+      } catch {
+        fail(400, "时区无效，请选择有效的 IANA 时区");
       }
       const changed = await db
         .updateTable("settings")
         .set({
           site_name: req.body.siteName.trim(),
-          ...(req.body.defaultLocale
-            ? { default_locale: req.body.defaultLocale }
-            : {}),
-          ...(req.body.defaultTimezone
-            ? { default_timezone: req.body.defaultTimezone }
-            : {}),
+          default_locale: req.body.defaultLocale,
+          default_timezone: req.body.defaultTimezone,
           registration: Number(req.body.registrationEnabled),
           revision: req.body.revision + 1,
         })
@@ -1377,8 +1389,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       ),
   );
   route<{
-    body?: string;
-    richBody?: unknown;
+    richBody: unknown;
     parentId: string | null;
     anchor?: string;
   }>(
@@ -1386,8 +1397,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     "/resources/:id/comments",
     "新增全文评论或回复",
     object({
-      body: optional(Type.String({ maxLength: 5000 })),
-      richBody: optional(Type.Unknown()),
+      richBody: Type.Unknown(),
       parentId: nullableId,
       anchor: optional(Type.String({ maxLength: 12000 })),
     }),
@@ -1395,10 +1405,9 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       library.comment(
         a,
         req.params.id!,
-        req.body.body ?? "",
+        req.body.richBody,
         req.body.parentId,
         req.body.anchor,
-        req.body.richBody,
       ),
   );
   route<Parameters<typeof library.updateComment>[3]>(
@@ -1407,7 +1416,6 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     "修改、删除或处理评论",
     object({
       version,
-      body: optional(Type.String({ minLength: 1, maxLength: 5000 })),
       richBody: optional(Type.Unknown()),
       deleted: optional(Type.Boolean()),
       resolved: optional(Type.Boolean()),

@@ -180,16 +180,15 @@ export function createInteractions(
     comment(
       actor: Actor,
       id: string,
-      body: string,
+      richBody: unknown,
       parentId: string | null,
       anchor?: string,
-      richBody?: unknown,
     ) {
       return run(actor, [id], async (ctx) => {
         const r = get(ctx, id, "comment");
         if (r.kind !== "document")
           fail(400, "知识库本身不支持评论，请在具体文档中评论");
-        const rich = await normalizeComment(ctx.tx, actor, id, richBody, body);
+        const rich = await normalizeComment(ctx.tx, actor, id, richBody);
         const text = rich.text;
         let author: string | undefined;
         let storedAnchor: string | null = null;
@@ -353,7 +352,6 @@ export function createInteractions(
       commentId: string,
       input: {
         version: number;
-        body?: string;
         richBody?: unknown;
         deleted?: boolean;
         resolved?: boolean;
@@ -371,8 +369,7 @@ export function createInteractions(
         if (c.version !== input.version) fail(409, "评论已被修改");
         const manager = permission(r, actor, ctx.resources, ctx.grants) >= 4;
         if (
-          ((input.body !== undefined || input.richBody !== undefined) &&
-            c.author_id !== actor.id) ||
+          (input.richBody !== undefined && c.author_id !== actor.id) ||
           ((input.deleted !== undefined || input.resolved !== undefined) &&
             c.author_id !== actor.id &&
             !manager)
@@ -381,13 +378,12 @@ export function createInteractions(
         if (input.resolved !== undefined && c.parent_id)
           fail(400, "只能处理整条评论");
         const rich =
-          input.body !== undefined || input.richBody !== undefined
+          input.richBody !== undefined
             ? await normalizeComment(
                 ctx.tx,
                 actor,
                 id,
                 input.richBody,
-                input.body ?? "",
                 c.body_json,
               )
             : null;

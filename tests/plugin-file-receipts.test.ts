@@ -16,10 +16,6 @@ it("durably replays concurrent creates, rejects conflicts, recovers pending uplo
   const root = await mkdtemp(join(tmpdir(), "doca-file-receipts-"));
   const config = { driver: "sqlite" as const, path: join(root, "test.sqlite") };
   let db = await openTestDatabase(config);
-  // An existing installation must receive the new table too, without resetting data.
-  await db.schema.dropTable("file_operation_receipts").execute();
-  await db.destroy();
-  db = await openTestDatabase(config);
   const storage = {
     root: join(root, "objects"),
     credentials: {},
@@ -229,16 +225,26 @@ it("durably replays concurrent creates, rejects conflicts, recovers pending uplo
         .selectAll()
         .where("operation_key", "=", "fault")
         .executeTakeFirstOrThrow();
-      await db.updateTable("file_operation_receipts").set({ created_at: "2000-01-01T00:00:00.000Z" }).where("operation_key", "=", "fault").execute();
+      await db
+        .updateTable("file_operation_receipts")
+        .set({ created_at: "2000-01-01T00:00:00.000Z" })
+        .where("operation_key", "=", "fault")
+        .execute();
       const path = join(storage.root, pending.object_key!);
       await access(path);
-      await writeFile(path + ".pending-00000000-0000-0000-0000-000000000000", "partial");
+      await writeFile(
+        path + ".pending-00000000-0000-0000-0000-000000000000",
+        "partial",
+      );
       expect(await cleanupFileReceipts(db, storage)).toBeGreaterThan(0);
       await expect(access(path)).rejects.toMatchObject({ code: "ENOENT" });
-      await expect(access(path + ".pending-00000000-0000-0000-0000-000000000000")).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(
+        access(path + ".pending-00000000-0000-0000-0000-000000000000"),
+      ).rejects.toMatchObject({ code: "ENOENT" });
       // Committed content is never reclaimed along with abandoned staging bytes.
       const live = await files.content.read!(context, { fileId: recovered.id });
-      const chunks = []; for await (const chunk of live.body) chunks.push(Buffer.from(chunk));
+      const chunks = [];
+      for await (const chunk of live.body) chunks.push(Buffer.from(chunk));
       expect(Buffer.concat(chunks).toString()).toBe("hello");
       const faultUpload = await files.uploads.begin(context, {
         filename: "fault.txt",

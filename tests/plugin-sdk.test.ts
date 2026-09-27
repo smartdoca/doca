@@ -22,10 +22,7 @@ describe("plugin SDK context", () => {
     ).toEqual(["@doca/plugin-files", "@doca/plugin-mail"]);
     expect(() =>
       defineDocaConfig({
-        plugins: [
-          plugin("@doca/plugin-files"),
-          plugin("@doca/plugin-files"),
-        ],
+        plugins: [plugin("@doca/plugin-files"), plugin("@doca/plugin-files")],
       }),
     ).toThrow(/Duplicate plugin package/);
   });
@@ -44,9 +41,6 @@ describe("plugin SDK context", () => {
           calls.push("effect");
         });
       },
-      migrate() {
-        calls.push("migrate");
-      },
       mount() {
         calls.push("mount");
       },
@@ -60,19 +54,12 @@ describe("plugin SDK context", () => {
     expect(result.phases).toEqual([
       "discover",
       "initialize",
-      "migrate",
       "mount",
       "ready",
       "dispose",
     ]);
     expect(result.disposed).toBe(true);
-    expect(calls).toEqual([
-      "migrate",
-      "mount",
-      "ready",
-      "dispose",
-      "effect",
-    ]);
+    expect(calls).toEqual(["mount", "ready", "dispose", "effect"]);
   });
 
   it("shares one provider registry, rejects ambiguity and supports optional injection", async () => {

@@ -8,7 +8,7 @@ const cfg = config(),
   dev = process.argv.includes("--dev");
 if (dev && process.env.NODE_ENV === "production")
   throw new Error("Development server is disabled in production");
-const db = await openDatabase(cfg.database, { schema: cfg.schemaMode });
+const db = await openDatabase(cfg.database);
 let api: Awaited<ReturnType<typeof createApp>> | undefined,
   web: ViteDevServer | undefined,
   stopping = false;

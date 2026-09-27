@@ -13,13 +13,10 @@ export interface MessagingRuntime {
 }
 /** Build the initial messaging runtime from deployment configuration. */
 export function messagingRuntime(): MessagingRuntime {
-  const endpoint = process.env.DOCA_VERIFICATION_ENDPOINT,
-    key = process.env.DOCA_VERIFICATION_SECRET ?? "";
-  const channels = (process.env.DOCA_VERIFICATION_CHANNELS ?? "").split(",");
   return configuredMessaging({
-    endpoint: endpoint ?? "",
-    secret: key,
-    channels,
+    endpoint: "",
+    secret: "",
+    channels: [],
   });
 }
 export function configuredMessaging(config: {

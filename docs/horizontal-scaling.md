@@ -13,12 +13,12 @@ Doca 保留零额外依赖的单实例模式。SQLite、本地上传目录和进
 | CDN                      | 可选                 | 可选，只负责读取加速，不能替代共享对象存储   |
 | 后台任务                 | 数据库租约           | 同一数据库租约；任一副本可领取，失败可重试   |
 | 移动推送                 | 数据库 outbox        | 同一 outbox 与租约，避免仅存在某个进程内存中 |
-| 建表/升级                | 启动时 `migrate`     | 发布前单独运行一次迁移，副本只 `validate`    |
+| 建表                     | 首次启动创建当前基线 | 首次部署前由一个实例创建空库基线             |
 | 健康检查                 | `/live`、`/ready`    | `/ready` 同时检查数据库和 Redis              |
 
 ## 单实例默认
 
-不设置 `DOCA_REDIS_URL` 时，实时事件、presence 和限流自动使用本机实现；不需要安装 Redis。`DOCA_SCHEMA_MODE` 默认 `migrate`，现有 `pnpm dev`、`pnpm start` 和单容器 Compose 流程保持不变。
+不设置 `DOCA_REDIS_URL` 时，实时事件、presence 和限流自动使用本机实现；不需要安装 Redis。`pnpm dev`、`pnpm start` 和单容器 Compose 首次连接空库时直接创建当前基线，之后只校验结构。
 
 该模式不应启动两个副本。负载均衡器的 WebSocket 粘性会暂时掩盖问题，但通知、权限失效、在线用户和全局限流仍会被分割。
 
@@ -30,7 +30,6 @@ Doca 保留零额外依赖的单实例模式。SQLite、本地上传目录和进
 DOCA_DATABASE=postgres
 DOCA_DATABASE_URL=postgresql://user:password@postgres:5432/doca
 DOCA_DATABASE_POOL_MAX=10
-DOCA_SCHEMA_MODE=validate
 DOCA_REDIS_URL=redis://redis:6379
 DOCA_REDIS_PREFIX=doca-production
 DOCA_TRUST_PROXY=10.0.0.0/8
@@ -40,8 +39,8 @@ DOCA_TRUST_PROXY=10.0.0.0/8
 
 发布顺序：
 
-1. 使用将要发布的镜像和同一数据库连接运行 `pnpm migrate`，且只运行一个迁移任务。
-2. 所有应用副本以 `DOCA_SCHEMA_MODE=validate` 启动。版本不匹配会直接启动失败，不允许多个副本同时尝试建表。
+1. 首次部署使用一个应用实例连接空数据库，创建当前基线并成功启动；不要让多个副本并发初始化空库。
+2. 再启动其余副本。结构不匹配会直接启动失败，不会执行任何升级或改写。
 3. 负载均衡器以 `/ready` 决定是否接收流量，以 `/live` 判断进程是否存活；WebSocket 必须允许升级和正常排空。
 4. 滚动发布先摘除 readiness，再等待 HTTP 请求和 WebSocket 在停止宽限期内关闭。
 
@@ -55,7 +54,7 @@ Redis 一旦配置就是必需依赖：启动连接失败、运行期不可用�
 
 ## 容量与运维卡点
 
-- 数据库连接总量约为“副本数 × `DOCA_DATABASE_POOL_MAX`”，必须小于 PostgreSQL 或连接代理的可用额度，并预留迁移、运维和后台任务连接。
+- 数据库连接总量约为“副本数 × `DOCA_DATABASE_POOL_MAX`”，必须小于 PostgreSQL 或连接代理的可用额度，并预留运维和后台任务连接。
 - 本地磁盘不能用于多主机上传。CDN 只缓存读取结果；源对象仍必须位于 S3 或共享文件系统。历史 `storage_profile` 指向的存储配置必须继续可用。
 - Meilisearch、S3、消息网关等外部服务必须让所有副本看到同一配置和同一数据。凭据存于共享数据库，但网络连通、白名单和密钥仍由部署环境保证。
 - 插件目录必须随镜像只读发布，所有副本安装完全相同的插件版本。不要在滚动发布中修改共享插件目录。

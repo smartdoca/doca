@@ -5,7 +5,7 @@ export interface JsonObject {
 }
 
 export type PluginRuntimePhase =
-  "discover" | "initialize" | "migrate" | "mount" | "ready" | "dispose";
+  "discover" | "initialize" | "mount" | "ready" | "dispose";
 
 export type PluginRuntimeErrorCode =
   | "INVALID_MANIFEST"
@@ -678,9 +678,7 @@ export function validatePluginManifest(input: unknown): PluginManifest {
       );
       if (
         contribution.target !== undefined &&
-        !["server", "web", "mobile"].includes(
-          contribution.target as string,
-        )
+        !["server", "web", "mobile"].includes(contribution.target as string)
       )
         fail(
           "INVALID_MANIFEST",
@@ -693,10 +691,7 @@ export function validatePluginManifest(input: unknown): PluginManifest {
         ...(contribution.target === undefined
           ? {}
           : {
-              target: contribution.target as
-                | "server"
-                | "web"
-                | "mobile",
+              target: contribution.target as "server" | "web" | "mobile",
             }),
       };
     },
@@ -951,10 +946,6 @@ export interface DocaPlugin<Config extends JsonObject = JsonObject> {
   discover?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
   /** Runs on every start, including when the package version has not changed. */
   initialize?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
-  migrate?(
-    context: PluginLifecycleContext<Config>,
-    fromVersion: string | undefined,
-  ): MaybePromise<void>;
   mount?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
   ready?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
   dispose?(context: PluginLifecycleContext<Config>): MaybePromise<void>;

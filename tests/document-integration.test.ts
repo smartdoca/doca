@@ -395,7 +395,7 @@ it("separates invitation access, direct sharing, library discovery and permissio
   }
 });
 
-it("maintains and backfills reference edges from persisted CRDT without changing document sequence", async () => {
+it("maintains reference edges when persisted CRDT changes", async () => {
   const db = await openDatabase({ driver: "sqlite", path: ":memory:" });
   const owner = {
     ...(await createUser(
@@ -440,11 +440,6 @@ it("maintains and backfills reference edges from persisted CRDT without changing
     expect(
       (await s.references(owner, target.id)).incoming.map((x) => x.id),
     ).toEqual([source.id]);
-    await db.deleteFrom("document_references").execute();
-    await db.deleteFrom("document_reference_index").execute();
-    expect(
-      (await s.references(owner, source.id)).outgoing.map((x) => x.id),
-    ).toEqual([target.id]);
     expect((await d.exchange(owner, source.id, {})).seq).toBe(written.seq);
     const before = rt.getValue(),
       after = structuredClone(before);

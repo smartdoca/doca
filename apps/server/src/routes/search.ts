@@ -174,7 +174,13 @@ export async function registerSearch(
   }
   async function latestEmbeddingError(c: Config) {
     try {
-      const batches = await request(c, "/batches?limit=20", "GET", undefined, 2000);
+      const batches = await request(
+        c,
+        "/batches?limit=20",
+        "GET",
+        undefined,
+        2000,
+      );
       const message = batches.results
         ?.map((batch: any) => batch.stats?.embedderRequests?.lastError)
         .find((value: unknown): value is string => !!value);
@@ -343,8 +349,8 @@ export async function registerSearch(
       enabled: boolean;
       endpoint: string;
       indexName: string;
-      imageRecognitionEnabled?: boolean;
-      reconcileIntervalHours?: number;
+      imageRecognitionEnabled: boolean;
+      reconcileIntervalHours: number;
     };
   }>(
     "/api/v1/admin/search",
@@ -356,10 +362,8 @@ export async function registerSearch(
             enabled: Type.Boolean(),
             endpoint: Type.String({ maxLength: 500 }),
             indexName: Type.String({ pattern: "^[a-zA-Z0-9_-]{1,64}$" }),
-            imageRecognitionEnabled: Type.Optional(Type.Boolean()),
-            reconcileIntervalHours: Type.Optional(
-              Type.Integer({ minimum: 1, maximum: 168 }),
-            ),
+            imageRecognitionEnabled: Type.Boolean(),
+            reconcileIntervalHours: Type.Integer({ minimum: 1, maximum: 168 }),
           },
           { additionalProperties: false },
         ),
@@ -398,10 +402,7 @@ export async function registerSearch(
         const lifecycleChanged =
           targetChanged || previous.enabled !== c.enabled;
         if (lifecycleChanged) await embeddings.assertIdle(tx);
-        const imageEnabled =
-          req.body.imageRecognitionEnabled === undefined
-            ? previous.image_recognition_enabled
-            : Number(req.body.imageRecognitionEnabled);
+        const imageEnabled = Number(req.body.imageRecognitionEnabled);
         const generation = previous.generation + Number(lifecycleChanged);
         await tx
           .updateTable("search_settings")
@@ -413,9 +414,7 @@ export async function registerSearch(
             image_policy_version:
               previous.image_policy_version +
               Number(imageEnabled !== previous.image_recognition_enabled),
-            reconcile_interval_hours:
-              req.body.reconcileIntervalHours ??
-              previous.reconcile_interval_hours,
+            reconcile_interval_hours: req.body.reconcileIntervalHours,
           })
           .where("id", "=", "system")
           .execute();
@@ -434,7 +433,6 @@ export async function registerSearch(
           .execute();
         if (lifecycleChanged) await resetSearchReconciliation(tx, generation);
         else if (
-          req.body.reconcileIntervalHours !== undefined &&
           req.body.reconcileIntervalHours !== previous.reconcile_interval_hours
         )
           await tx
@@ -518,7 +516,6 @@ export async function registerSearch(
         }
         lastIndexedAt = new Date().toISOString();
       });
-
     })()
       .catch(() => {})
       .finally(() => {
@@ -542,7 +539,9 @@ export async function registerSearch(
     intent: ReturnType<typeof searchIntent>,
     query: Parameters<typeof content.list>[1],
   ) {
-    const terms = topicMatchTerms(intent.topic).filter((term) => term.length >= 2);
+    const terms = topicMatchTerms(intent.topic).filter(
+      (term) => term.length >= 2,
+    );
     if (!terms.length) return [] as string[];
     let rowsQuery = db
       .selectFrom("file_items as f")
@@ -565,10 +564,14 @@ export async function registerSearch(
     if (intent.media === "image")
       rowsQuery = rowsQuery.where("f.mime", "like", "image/%");
     const rows = await rowsQuery.limit(200).execute();
-    const mediaCache = new Map<string, Promise<{ ids: Set<string> | null; updatedAt: string }>>();
+    const mediaCache = new Map<
+      string,
+      Promise<{ ids: Set<string> | null; updatedAt: string }>
+    >();
     const ids: string[] = [];
     for (const row of rows)
-      if (await releaseDocumentFileIfUnused(db, row.id, mediaCache)) ids.push(row.parent_id);
+      if (await releaseDocumentFileIfUnused(db, row.id, mediaCache))
+        ids.push(row.parent_id);
     const uniqueIds = [...new Set(ids)];
     if (!uniqueIds.length) return [];
     const page = await content.list(actor, {
@@ -583,7 +586,12 @@ export async function registerSearch(
   const knowledgeIndex = {
     async replace(
       removed: string[],
-      docs: Array<{ id: string; title: string; text: string; readerIds: string[] }>,
+      docs: Array<{
+        id: string;
+        title: string;
+        text: string;
+        readerIds: string[];
+      }>,
     ) {
       const c = await config();
       if (!c.enabled) return;
@@ -627,16 +635,37 @@ export async function registerSearch(
     },
   };
   const answerIndex: AnswerIndex = {
-    async mode() { return (await config()).enabled && await embeddings.queryEmbedder() ? "hybrid" : "keyword"; },
+    async mode() {
+      return (await config()).enabled && (await embeddings.queryEmbedder())
+        ? "hybrid"
+        : "keyword";
+    },
     async prepare(chunks) {
       if (!(await config()).enabled) return;
-      const descriptor = {pluginId:"doca.knowledge", sourceId:"answers", schemaVersion:1,renderer:{kind:"knowledge",version:1}};
-      await provider.createIndex("knowledge_answers",descriptor);
-      await provider.upsertProjections("knowledge_answers",chunks.map(chunk=>({id:chunk.id,text:chunk.text,metadata:{title:`${chunk.title} — ${chunk.heading}`}})));
+      const descriptor = {
+        pluginId: "doca.knowledge",
+        sourceId: "answers",
+        schemaVersion: 1,
+        renderer: { kind: "knowledge", version: 1 },
+      };
+      await provider.createIndex("knowledge_answers", descriptor);
+      await provider.upsertProjections(
+        "knowledge_answers",
+        chunks.map((chunk) => ({
+          id: chunk.id,
+          text: chunk.text,
+          metadata: { title: `${chunk.title} — ${chunk.heading}` },
+        })),
+      );
     },
-    async search(ids,query) {
+    async search(ids, query) {
       if (!(await config()).enabled) return null;
-      const hits = await provider.queryIndex("knowledge_answers",{query,candidateIds:ids,semantic:true,limit:16});
+      const hits = await provider.queryIndex("knowledge_answers", {
+        query,
+        candidateIds: ids,
+        semantic: true,
+        limit: 16,
+      });
       return [...hits];
     },
   };
@@ -651,12 +680,7 @@ export async function registerSearch(
       mode: "keyword" | "ai",
     ) {
       const c = await config();
-      if (
-        !c.enabled ||
-        indexing ||
-        !query.trim() ||
-        !fileIds.length
-      )
+      if (!c.enabled || indexing || !query.trim() || !fileIds.length)
         return null;
       try {
         const embedder =
@@ -707,7 +731,12 @@ export async function registerSearch(
         offset?: number;
       },
     ) {
-      if (query.scope === "discover" || query.scope === "collected") return { ...await content.list(actor, query), engine: "database" as const, mode: "keyword" };
+      if (query.scope === "discover" || query.scope === "collected")
+        return {
+          ...(await content.list(actor, query)),
+          engine: "database" as const,
+          mode: "keyword",
+        };
       const c = await config();
       const intent = searchIntent(query.q ?? "");
       const inferredFormat =
@@ -716,9 +745,7 @@ export async function registerSearch(
           : undefined;
       const scoped = {
         ...query,
-        ...(inferredFormat && !query.format
-          ? { format: inferredFormat }
-          : {}),
+        ...(inferredFormat && !query.format ? { format: inferredFormat } : {}),
       };
       const highlight = intent.topic || query.q;
       const empty = (mode: string) => ({
@@ -730,7 +757,11 @@ export async function registerSearch(
       });
       const fallback = async (reason?: string) => {
         if (intent.requireEvidence) {
-          const evidenced = await documentIdsForFileTopic(actor, intent, scoped);
+          const evidenced = await documentIdsForFileTopic(
+            actor,
+            intent,
+            scoped,
+          );
           if (!evidenced.length)
             return empty(query.mode === "ai" ? "ai" : "keyword");
           const page = await content.list(actor, {
@@ -785,7 +816,9 @@ export async function registerSearch(
             ? await documentIdsForFileTopic(actor, intent, scoped)
             : [];
         if (intent.requireEvidence && !fromFiles.length)
-          return empty(embedder ? "ai" : query.mode === "ai" ? "ai" : "keyword");
+          return empty(
+            embedder ? "ai" : query.mode === "ai" ? "ai" : "keyword",
+          );
         if (query.mode === "ai" && !embedder) {
           if (intent.requireEvidence) {
             const page = await content.list(actor, {
@@ -916,8 +949,7 @@ export async function registerSearch(
             .slice(start, start + 100)
             .map(({ searchCoverage, ...r }) => r),
           total: summarized.length,
-          nextOffset:
-            start + 100 < summarized.length ? start + 100 : null,
+          nextOffset: start + 100 < summarized.length ? start + 100 : null,
           engine: "meilisearch",
           mode: embedder ? "ai" : "keyword",
           ...(query.mode === "auto" && !embedder

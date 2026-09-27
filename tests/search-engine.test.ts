@@ -1,10 +1,7 @@
 import { openTestDatabase as openDatabase } from "./database.js";
 import { it, expect } from "vitest";
 import {} from "@db/index.js";
-import {
-  createUser,
-  type Actor,
-} from "@core/modules/identity/passwords.js";
+import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import { createApp } from "../apps/server/src/app/create-app.js";
 
@@ -123,6 +120,8 @@ it("configures Meilisearch only as admin, indexes documents, filters stale/priva
             enabled: true,
             endpoint: "http://169.254.169.254",
             indexName: "doca",
+            imageRecognitionEnabled: false,
+            reconcileIntervalHours: 6,
           },
         })
       ).statusCode,
@@ -137,6 +136,8 @@ it("configures Meilisearch only as admin, indexes documents, filters stale/priva
             enabled: true,
             endpoint: "http://127.0.0.1:7700",
             indexName: "doca",
+            imageRecognitionEnabled: false,
+            reconcileIntervalHours: 6,
           },
         })
       ).statusCode,
@@ -170,7 +171,9 @@ it("configures Meilisearch only as admin, indexes documents, filters stale/priva
       reconcile_interval_hours: 6,
     });
     // Background projection updates may continue; a full rebuild reconfigures indexes.
-    const writesBefore = calls.filter((c) => c.path.endsWith("/settings")).length;
+    const writesBefore = calls.filter((c) =>
+      c.path.endsWith("/settings"),
+    ).length;
     const preferences = {
       enabled: true,
       endpoint: "http://127.0.0.1:7700",
@@ -204,9 +207,9 @@ it("configures Meilisearch only as admin, indexes documents, filters stale/priva
       reconcile_interval_hours: 12,
       indexing: false,
     });
-    expect(
-      calls.filter((c) => c.path.endsWith("/settings")).length,
-    ).toBe(writesBefore);
+    expect(calls.filter((c) => c.path.endsWith("/settings")).length).toBe(
+      writesBefore,
+    );
     expect(
       await db
         .selectFrom("search_settings")
@@ -259,24 +262,6 @@ it("configures Meilisearch only as admin, indexes documents, filters stale/priva
     expect((await settings()).json()).toMatchObject({
       image_recognition_enabled: false,
       image_policy_version: 3,
-    });
-    // Legacy clients omit the new fields; their saves must preserve preferences.
-    const { imageRecognitionEnabled, reconcileIntervalHours, ...legacy } =
-      preferences;
-    expect(
-      (
-        await app.inject({
-          method: "PUT",
-          url: "/api/v1/admin/search",
-          headers: adminHeaders,
-          payload: legacy,
-        })
-      ).statusCode,
-    ).toBe(200);
-    expect((await settings()).json()).toMatchObject({
-      image_recognition_enabled: false,
-      image_policy_version: 3,
-      reconcile_interval_hours: 12,
     });
     broken = true;
     const fallback = await search();

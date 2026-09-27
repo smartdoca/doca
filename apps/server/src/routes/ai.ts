@@ -785,17 +785,42 @@ export async function registerAI(
         .where("user_id", "=", actor.id)
         .where("archived", "=", req.query.archived === "true" ? 1 : 0);
       if (req.query.resourceId) {
-        const target=parse(id,req.query.resourceId);
-        query=query.where("id","in",db.selectFrom("ai_session_resources").select("session_id").where("resource_id","=",target)).orderBy(eb=>eb.selectFrom("ai_session_resources").select(({fn})=>fn.max("touched_at").as("latest")).whereRef("session_id","=","ai_sessions.id").where("resource_id","=",target),"desc");
+        const target = parse(id, req.query.resourceId);
+        query = query
+          .where(
+            "id",
+            "in",
+            db
+              .selectFrom("ai_session_resources")
+              .select("session_id")
+              .where("resource_id", "=", target),
+          )
+          .orderBy(
+            (eb) =>
+              eb
+                .selectFrom("ai_session_resources")
+                .select(({ fn }) => fn.max("touched_at").as("latest"))
+                .whereRef("session_id", "=", "ai_sessions.id")
+                .where("resource_id", "=", target),
+            "desc",
+          );
       }
       const rows = await query
         .orderBy("updated_at", "desc")
         .limit(200)
         .execute();
-      if(req.query.resourceId) {
-        const touches=await db.selectFrom("ai_session_resources").select(["session_id","touched_at"]).where("resource_id","=",req.query.resourceId).execute();
-        const times=new Map(touches.map(row=>[row.session_id,row.touched_at]));
-        rows.sort((a,b)=>(times.get(b.id)??"").localeCompare(times.get(a.id)??""));
+      if (req.query.resourceId) {
+        const touches = await db
+          .selectFrom("ai_session_resources")
+          .select(["session_id", "touched_at"])
+          .where("resource_id", "=", req.query.resourceId)
+          .execute();
+        const times = new Map(
+          touches.map((row) => [row.session_id, row.touched_at]),
+        );
+        rows.sort((a, b) =>
+          (times.get(b.id) ?? "").localeCompare(times.get(a.id) ?? ""),
+        );
       }
       const safe = [];
       const activeJobs = await db
@@ -1004,7 +1029,7 @@ export async function registerAI(
             )
             .execute()
         : [];
-      const resources = await sessionResourceHistory(db,actor.id,s.id);
+      const resources = await sessionResourceHistory(db, actor.id, s.id);
       return {
         session: s,
         resources,
@@ -1333,29 +1358,6 @@ export async function registerAI(
         if (ref.epochId && ref.epochId !== r.epochId)
           fail(409, "引用已失效，请重新选择");
       }
-      // Older conversations predate the explicit mention registry. Recover only
-      // user-supplied references, never documents the model discovered on its own.
-      let historicalMentions: string[] = [];
-      if (s.mentioned_resource_ids === "[]" || !s.mentioned_resource_ids) {
-        const memory = await runner.memory();
-        const history = await memory.memory.recall({
-          threadId: s.id,
-          resourceId: memoryOwner(actor.id),
-          perPage: 24,
-          page: 0,
-          orderBy: { field: "createdAt", direction: "DESC" },
-        });
-        historicalMentions = history.messages
-          .filter((m) => m.role === "user")
-          .flatMap(
-            (m) =>
-              (m.content.metadata?.references ?? []) as {
-                resourceId: string;
-              }[],
-          )
-          .map((r) => r.resourceId)
-          .filter((id) => typeof id === "string");
-      }
       const { id: jobId, modelId, ...input } = body,
         hash = digest({ session: s.id, modelId, input });
       const job = await transact(db, async (tx) => {
@@ -1425,7 +1427,6 @@ export async function registerAI(
             mentioned_resource_ids: JSON.stringify([
               ...new Set([
                 ...JSON.parse(currentSession.mentioned_resource_ids ?? "[]"),
-                ...historicalMentions,
                 ...body.references.map((r) => r.resourceId),
               ]),
             ]),

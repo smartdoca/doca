@@ -13,7 +13,6 @@
     "dev:workspace": "tsx watch apps/server/src/main.ts --dev",
     "start": "tsx apps/server/src/main.ts",
     "bootstrap": "tsx apps/server/src/bootstrap/admin.ts",
-    "migrate": "tsx apps/server/src/bootstrap/migrate.ts",
     "admin:reset-password": "tsx apps/server/src/bootstrap/reset-admin-password.ts",
     "build": "vite build --config apps/web/vite.config.ts",
     "typecheck": "tsc --noEmit",

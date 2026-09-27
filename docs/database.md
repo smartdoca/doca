@@ -4,7 +4,7 @@
 
 运行时授权结构以统一的 `grants` 和 `share_link_revocations` 表为准，设计与权限计算见 [统一授权来源与权限计算方案](superpowers/specs/2026-09-19-unified-authorization-design.md)。
 
-## 工作台新增表（002_workspace）
+## 工作台表
 
 resources 保留 nullable 的 last_editor_id（关联 users.id）和 last_edited_at。创建、独立复制、标题修改和有效正文更新记录实际操作者；读取、无变化的同步和权限调整不改写。记录独立于增量历史，快照清理后仍保留。
 
@@ -75,7 +75,7 @@ resources 保留 nullable 的 last_editor_id（关联 users.id）和 last_edited
 - users.login 唯一。
 - resources(owner_id,deleted_at)、resources(parent_id)、resources(library_id)。
 - 当前：grants(resource_id,user_id,source_type,source_id) 主键；source_type 为 direct、link 或 parent_override，status 为 active 或 disabled。
-- share_links 仍保存 token、角色、有效期和人数上限；share_link_revocations 按(resource_id,share_id)保存一次撤销事件及 revoked_user_ids JSON。旧 share_members、member_exclusions 不再创建为运行时权限表。
+- share_links 保存 token、角色、有效期和人数上限；share_link_revocations 按(resource_id,share_id)保存一次撤销事件及 revoked_user_ids JSON。
 - grants 按(user_id,resource_id,status)和(resource_id,source_type,source_id,status)建立查询索引。
 - comments(resource_id,created_at)。
 - reactions(resource_id,user_id,kind) 主键。
@@ -83,7 +83,7 @@ resources 保留 nullable 的 last_editor_id（关联 users.id）和 last_edited
 
 后续按实际查询负载补充 sessions(user_id/expiry)、grants(user_id)、收藏反向查询、审计时间等索引，避免在未验证查询策略前堆砌索引。
 
-## 存储与升级
+## 存储与初始化
 
 SQLite：开启 foreign_keys、WAL、busy_timeout=5000、synchronous=FULL；默认新数据库 data/v1/doca.db。不能在运行中只复制主 db 文件忽略 WAL 作为可靠备份。
 

@@ -43,15 +43,10 @@ type Credential = {
 export function storageRuntime() {
   return {
     root: resolve(process.env.DOCA_UPLOAD_DIR || "data/v1/uploads"),
-    credentials: JSON.parse(process.env.DOCA_S3_CREDENTIALS || "{}") as Record<
-      string,
-      Credential
-    >,
-    endpointHosts: (process.env.DOCA_STORAGE_ENDPOINT_HOSTS || "")
-      .split(",")
-      .filter(Boolean),
-    cdnKeyPairId: process.env.DOCA_CDN_KEY_PAIR_ID,
-    cdnPrivateKey: process.env.DOCA_CDN_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    credentials: {} as Record<string, Credential>,
+    endpointHosts: [] as string[],
+    cdnKeyPairId: undefined as string | undefined,
+    cdnPrivateKey: undefined as string | undefined,
   };
 }
 export type StorageRuntime = ReturnType<typeof storageRuntime>;
@@ -300,9 +295,16 @@ export function createStorage(runtime: StorageRuntime) {
         const temporary = `${target}.pending-${randomUUID()}`;
         try {
           const handle = await open(temporary, "wx", 0o600);
-          try { await handle.writeFile(data); await handle.sync(); } finally { await handle.close(); }
+          try {
+            await handle.writeFile(data);
+            await handle.sync();
+          } finally {
+            await handle.close();
+          }
           await rename(temporary, target);
-        } finally { await unlink(temporary).catch(() => {}); }
+        } finally {
+          await unlink(temporary).catch(() => {});
+        }
       } else if (c.provider === "local")
         await putStream(
           c,
@@ -345,9 +347,18 @@ export function createStorage(runtime: StorageRuntime) {
       if (c.provider !== "local") return;
       const target = path(key);
       const prefix = target.slice(target.lastIndexOf("/") + 1) + ".pending-";
-      const names = await readdir(dirname(target)).catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return []; throw error; });
+      const names = await readdir(dirname(target)).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return [];
+          throw error;
+        },
+      );
       for (const name of names)
-        if (name.startsWith(prefix) && /^[a-f0-9-]{36}$/.test(name.slice(prefix.length))) await unlink(resolve(dirname(target), name));
+        if (
+          name.startsWith(prefix) &&
+          /^[a-f0-9-]{36}$/.test(name.slice(prefix.length))
+        )
+          await unlink(resolve(dirname(target), name));
     },
     async remove(c: StorageConfig, key: string) {
       validateObjectKey(key);

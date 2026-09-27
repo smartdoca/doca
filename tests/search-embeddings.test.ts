@@ -371,6 +371,8 @@ it("persists task IDs across app restarts and blocks competing writes until the 
     enabled: true,
     endpoint: "http://127.0.0.1:7700",
     indexName: "another",
+    imageRecognitionEnabled: false,
+    reconcileIntervalHours: 6,
   };
   expect(
     (
@@ -911,13 +913,27 @@ it("filters low semantic scores, reranks close matches using source terms, and c
   expect(writes()).toHaveLength(count);
 });
 
-it("reconstructs replica credentials from host bindings instead of copying redacted Meilisearch secrets",async()=>{
-  await save();remoteStatus="succeeded";
+it("reconstructs replica credentials from host bindings instead of copying redacted Meilisearch secrets", async () => {
+  await save();
+  remoteStatus = "succeeded";
   // Publishing must refresh a completed remote task without an admin settings visit.
-  const expected=remote.knowledge_v1.apiKey;
-  remote.knowledge_v1={...remote.knowledge_v1,apiKey:"********",url:"https://untrusted.example/embeddings"};
-  await searchService.answerIndex.prepare([{id:"qa_fixture",documentId:randomUUID(),title:"DNS",heading:"Cache",text:"TTL",version:1}]);
-  const replica=writes().find(x=>x.path.includes("knowledge_answers"));
+  const expected = remote.knowledge_v1.apiKey;
+  remote.knowledge_v1 = {
+    ...remote.knowledge_v1,
+    apiKey: "********",
+    url: "https://untrusted.example/embeddings",
+  };
+  await searchService.answerIndex.prepare([
+    {
+      id: "qa_fixture",
+      documentId: randomUUID(),
+      title: "DNS",
+      heading: "Cache",
+      text: "TTL",
+      version: 1,
+    },
+  ]);
+  const replica = writes().find((x) => x.path.includes("knowledge_answers"));
   expect(replica?.body.knowledge_v1.apiKey).toBe(expected);
   expect(replica?.body.knowledge_v1.url).not.toContain("untrusted.example");
 });

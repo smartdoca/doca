@@ -156,7 +156,7 @@ describe("AIContributionHost", () => {
     expect(Object.isFrozen(catalog.intents[0])).toBe(true);
   });
 
-  it("validates optional namespaces before registration", () => {
+  it("validates namespaces before registration", () => {
     const host = new AIContributionHost();
     expect(() =>
       host.registerDomain({
@@ -166,13 +166,12 @@ describe("AIContributionHost", () => {
     ).toThrow(/must start with "documents\."/);
     expect(host.tools.size).toBe(0);
 
-    const dispose = host.registerDomain({
-      namespace: "legacy",
-      validateNamespace: false,
-      tools: [{ id: "unscoped-tool", execute: () => null }],
-    });
-    expect(host.tools.has("unscoped-tool")).toBe(true);
-    dispose();
+    expect(() =>
+      host.registerDomain({
+        namespace: "invalid namespace",
+        tools: [{ id: "unscoped-tool", execute: () => null }],
+      }),
+    ).toThrow(/valid dot-separated namespace/);
   });
 
   it("routes intents against the supplied host context", async () => {

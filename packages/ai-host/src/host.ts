@@ -28,12 +28,8 @@ import {
 } from "./tools.js";
 
 export interface DomainAIContribution<Context = unknown> {
-  /**
-   * When present, IDs must start with "<namespace>." unless validation is
-   * explicitly disabled for a legacy contribution.
-   */
-  readonly namespace?: string;
-  readonly validateNamespace?: boolean;
+  /** IDs must start with "<namespace>.". */
+  readonly namespace: string;
   readonly intents?: readonly IntentDefinition<Context>[];
   readonly tools?: readonly ToolDefinition<Context>[];
   readonly workflows?: readonly WorkflowDefinition<
@@ -58,11 +54,7 @@ export interface AIContributionSnapshot<Context = unknown> {
 }
 
 export type AIContributionKind =
-  | "acceptance"
-  | "intent"
-  | "skill"
-  | "tool"
-  | "workflow";
+  "acceptance" | "intent" | "skill" | "tool" | "workflow";
 
 export interface AIContributionCatalogEntry {
   readonly id: string;
@@ -134,11 +126,7 @@ function entries<Context>(
 function validateContributionNamespace<Context>(
   contribution: DomainAIContribution<Context>,
 ): void {
-  const shouldValidate =
-    contribution.validateNamespace ??
-    contribution.namespace !== undefined;
-  if (!shouldValidate) return;
-  if (!contribution.namespace || !namespacePattern.test(contribution.namespace)) {
+  if (!namespacePattern.test(contribution.namespace)) {
     throw new ProtocolInvariantError(
       "invalid_contribution_namespace",
       "A validated contribution requires a valid dot-separated namespace",
@@ -179,9 +167,7 @@ export class AIContributionHost<Context = unknown> {
   readonly workflows: EffectRegistry<
     WorkflowDefinition<JsonValue, JsonValue, Context>
   >;
-  readonly acceptance: EffectRegistry<
-    AcceptanceDefinition<JsonValue, Context>
-  >;
+  readonly acceptance: EffectRegistry<AcceptanceDefinition<JsonValue, Context>>;
   readonly skills: EffectRegistry<SkillDefinition<Context>>;
 
   constructor() {
@@ -249,9 +235,7 @@ export class AIContributionHost<Context = unknown> {
         snapshot.workflows.map((entry) => catalogEntry("workflow", entry)),
       ),
       acceptance: Object.freeze(
-        snapshot.acceptance.map((entry) =>
-          catalogEntry("acceptance", entry),
-        ),
+        snapshot.acceptance.map((entry) => catalogEntry("acceptance", entry)),
       ),
       skills: Object.freeze(
         snapshot.skills.map((entry) => catalogEntry("skill", entry)),
@@ -259,10 +243,7 @@ export class AIContributionHost<Context = unknown> {
     });
   }
 
-  routeIntent(
-    request: IntentRequest,
-    context: Context,
-  ): Promise<IntentRoute> {
+  routeIntent(request: IntentRequest, context: Context): Promise<IntentRoute> {
     return routeIntent(this.intents, request, context);
   }
 

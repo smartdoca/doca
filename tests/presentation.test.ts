@@ -16,10 +16,7 @@ import {
 import { importPptx, exportPptx, validatePptxFile } from "@eppt/editor/pptx";
 import { openTestDatabase } from "./database.js";
 import type { DB } from "@db/index.js";
-import {
-  createUser,
-  type Actor,
-} from "@core/modules/identity/passwords.js";
+import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import { createExperience } from "@core/workflows/experience.js";
 import {
@@ -27,6 +24,12 @@ import {
   b64,
   unb64,
 } from "@core/modules/collaboration/documents.js";
+const commentBody = (text: string) => ({
+  version: 1 as const,
+  blocks: [
+    { type: "paragraph" as const, children: [{ type: "text" as const, text }] },
+  ],
+});
 import {
   restoreSurface,
   surfaceAnchor,
@@ -123,18 +126,28 @@ it("PPT section deletion preserves slides through host ACK, reload and one-step 
     const page = readDocument(doc).slideOrder[0]!;
     const section = control.createSection("保留页面", [page])!;
     await docs.exchange(owner, resource.id, {
-      ...envelope, messageId: randomUUID(), update: b64(Y.encodeStateAsUpdate(doc)),
+      ...envelope,
+      messageId: randomUUID(),
+      update: b64(Y.encodeStateAsUpdate(doc)),
     });
     const original = readDocument(doc);
     let writes = 0;
-    doc.on("update", (_bytes, origin) => { if (isLocalContentOrigin(origin)) writes++; });
+    doc.on("update", (_bytes, origin) => {
+      if (isLocalContentOrigin(origin)) writes++;
+    });
     const before = Y.encodeStateVector(doc);
     control.deleteSection(section);
     expect(writes).toBe(1);
     expect(readDocument(doc).slideOrder).toEqual(original.slideOrder);
-    expect(readDocument(doc).slides[page]?.elements).toEqual(original.slides[page]?.elements);
+    expect(readDocument(doc).slides[page]?.elements).toEqual(
+      original.slides[page]?.elements,
+    );
     expect(readDocument(doc).sections?.[section]).toBeUndefined();
-    const message = { ...envelope, messageId: randomUUID(), update: b64(Y.encodeStateAsUpdate(doc, before)) };
+    const message = {
+      ...envelope,
+      messageId: randomUUID(),
+      update: b64(Y.encodeStateAsUpdate(doc, before)),
+    };
     expect((await docs.exchange(owner, resource.id, message)).seq).toBe(2);
     expect((await docs.exchange(owner, resource.id, message)).seq).toBe(2);
     const loaded = await docs.exchange(owner, resource.id, envelope);
@@ -144,11 +157,21 @@ it("PPT section deletion preserves slides through host ACK, reload and one-step 
     control.undo();
     expect(readDocument(doc)).toEqual(original);
     await docs.exchange(owner, resource.id, {
-      ...envelope, messageId: randomUUID(), update: b64(Y.encodeStateAsUpdate(doc, undoBefore)),
+      ...envelope,
+      messageId: randomUUID(),
+      update: b64(Y.encodeStateAsUpdate(doc, undoBefore)),
     });
-    Y.applyUpdate(replica, unb64((await docs.exchange(owner, resource.id, envelope)).update), REMOTE_ORIGIN);
+    Y.applyUpdate(
+      replica,
+      unb64((await docs.exchange(owner, resource.id, envelope)).update),
+      REMOTE_ORIGIN,
+    );
     expect(readDocument(replica)).toEqual(original);
-  } finally { control.dispose(); doc.destroy(); replica.destroy(); }
+  } finally {
+    control.dispose();
+    doc.destroy();
+    replica.destroy();
+  }
 });
 it("PPT v5: malformed sections are rejected without corrupting saved content", async () => {
   const { docs, resource, doc, envelope } = await setup();
@@ -205,10 +228,16 @@ it("PPT: bootstrap, exact ACK, epoch/schema guards, comments, independent copy, 
     expect(await surfaceAnchor(db, r.id, "presentation", anchor)).toEqual(
       anchor,
     );
-    await content.comment(owner, r.id, "comment", null, JSON.stringify(anchor));
-    await expect(content.comment(owner, r.id, "overall", null)).rejects.toThrow(
-      "区域评论",
+    await content.comment(
+      owner,
+      r.id,
+      commentBody("comment"),
+      null,
+      JSON.stringify(anchor),
     );
+    await expect(
+      content.comment(owner, r.id, commentBody("overall"), null),
+    ).rejects.toThrow("区域评论");
     const history = createExperience(db),
       version = await history.snapshot(owner, r.id);
     expect(
@@ -370,7 +399,7 @@ it("PPT: native shape/chart/table commands and slide operations survive server v
     doc.destroy();
   }
 });
-it("PPTX subset imports a new epoch, round trips text/style, export is pure; legacy/JSON files rejected", async () => {
+it("PPTX subset imports a new epoch, round trips text/style, export is pure; unsupported/JSON files rejected", async () => {
   const source = createPresentation();
   const result = await exportPptx(source),
     imported = await importPptx(await result.blob.arrayBuffer());

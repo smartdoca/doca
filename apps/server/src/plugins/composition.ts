@@ -8,7 +8,6 @@ import { AIContributionHost } from "@doca/ai-host";
 import { PluginHost } from "@doca/plugin-host";
 import { definePlugin, type DocaPlugin } from "@doca/plugin-sdk";
 import type { FilesServiceV1 } from "@doca/files-capability";
-import { createPluginMigrationStore } from "@db/index.js";
 import { createFileProcessingWorker } from "../jobs/file-processing-worker.js";
 import { waitForFileExtracts } from "../services/ai/file-extract.js";
 import { registerAI } from "../routes/ai.js";
@@ -33,7 +32,11 @@ import {
   createFileSource,
   createKnowledgeSource,
 } from "../services/search/sources.js";
-import { discoverInstalledPlugins, importInstalledPlugins, pluginDirectory } from "./installation.js";
+import {
+  discoverInstalledPlugins,
+  importInstalledPlugins,
+  pluginDirectory,
+} from "./installation.js";
 import { registerPluginAssets, pluginWebUrl } from "./web-assets.js";
 import { providePlatform } from "./platform.js";
 
@@ -89,8 +92,7 @@ function searchPlugin() {
   let registration: SearchRegistration | undefined;
   const service: SearchRegistrationService = {
     require() {
-      if (!registration)
-        throw new Error("Search registration is not mounted");
+      if (!registration) throw new Error("Search registration is not mounted");
       return registration;
     },
   };
@@ -101,23 +103,87 @@ function searchPlugin() {
       context.provide(searchRegistrationToken, service);
       context.provide(searchServiceToken, {
         register(source) {
-          const contextFor = (ctx: any) => ({ principalId: ctx.kind === "plugin" ? ctx.principalId : null, signal: ctx.signal });
+          const contextFor = (ctx: any) => ({
+            principalId: ctx.kind === "plugin" ? ctx.principalId : null,
+            signal: ctx.signal,
+          });
           const handle = service.require().registerSource({
             descriptor: source.descriptor,
-            prepareQuery: request => request.context.kind !== "plugin" ? null : source.prepareQuery ? source.prepareQuery({ ...request, context: contextFor(request.context) }) : { query: request.query },
-            authorize: request => request.context.kind !== "plugin" ? [] : source.authorize({ ...request, context: contextFor(request.context) }),
-            hydrate: request => request.context.kind !== "plugin" ? [] : source.hydrate({ ...request, context: contextFor(request.context) }),
-            ...(source.projections ? { projections: request => source.projections!({ ...request, context: contextFor(request.context) }) } : {}),
+            prepareQuery: (request) =>
+              request.context.kind !== "plugin"
+                ? null
+                : source.prepareQuery
+                  ? source.prepareQuery({
+                      ...request,
+                      context: contextFor(request.context),
+                    })
+                  : { query: request.query },
+            authorize: (request) =>
+              request.context.kind !== "plugin"
+                ? []
+                : source.authorize({
+                    ...request,
+                    context: contextFor(request.context),
+                  }),
+            hydrate: (request) =>
+              request.context.kind !== "plugin"
+                ? []
+                : source.hydrate({
+                    ...request,
+                    context: contextFor(request.context),
+                  }),
+            ...(source.projections
+              ? {
+                  projections: (request) =>
+                    source.projections!({
+                      ...request,
+                      context: contextFor(request.context),
+                    }),
+                }
+              : {}),
           });
           return () => handle.dispose();
         },
-        upsert(source, projections) { return service.require().searchHost.upsertProjections({ source, projections }); },
-        delete(source, documentIds) { return service.require().searchHost.deleteProjections({ source, documentIds }); },
-        rebuild(source, signal) { return service.require().searchHost.rebuild({ source, signal, context: { kind: "system" } }); },
+        upsert(source, projections) {
+          return service
+            .require()
+            .searchHost.upsertProjections({ source, projections });
+        },
+        delete(source, documentIds) {
+          return service
+            .require()
+            .searchHost.deleteProjections({ source, documentIds });
+        },
+        rebuild(source, signal) {
+          return service
+            .require()
+            .searchHost.rebuild({
+              source,
+              signal,
+              context: { kind: "system" },
+            });
+        },
         async query(request, input) {
           const runtime = context.inject(serverRuntimeToken);
-          await activeActor(runtime.db, { id: request.principal.id, display_name: request.principal.displayName, public_id: request.principal.publicId, admin: Number(request.principal.admin) });
-          return service.require().searchHost.query({ query: input.query, sources: [input.source], offset: input.offset, limit: input.limit, context: { kind: "plugin", principalId: request.principal.id, signal: request.signal } });
+          await activeActor(runtime.db, {
+            id: request.principal.id,
+            display_name: request.principal.displayName,
+            public_id: request.principal.publicId,
+            admin: Number(request.principal.admin),
+          });
+          return service
+            .require()
+            .searchHost.query({
+              query: input.query,
+              sources: [input.source],
+              offset: input.offset,
+              limit: input.limit,
+              context: {
+                kind: "plugin",
+                principalId: request.principal.id,
+                signal: request.signal,
+              },
+            });
         },
       });
       context.provide(searchSourceRegistryToken, {
@@ -130,19 +196,14 @@ function searchPlugin() {
       const runtime = context.inject(serverRuntimeToken);
       await context.effectAsync(async () => {
         const mounted = await mountFastifyAdapter(runtime.api, (api) =>
-          registerSearch(
-            api,
-            runtime.db,
-            runtime.admin,
-            {
-              ...runtime.runtime.search,
-              sources: {
-                documents: false,
-                files: false,
-                knowledge: false,
-              },
+          registerSearch(api, runtime.db, runtime.admin, {
+            ...runtime.runtime.search,
+            sources: {
+              documents: false,
+              files: false,
+              knowledge: false,
             },
-          ),
+          }),
         );
         registration = mounted.value;
         return async () => {
@@ -248,8 +309,12 @@ function filesPlugin(
       const clean = () => {
         if (cleaning || !runtime.runtime.storage) return;
         cleaning = cleanupFileReceipts(runtime.db, runtime.runtime.storage)
-          .catch(error => runtime.api.log.error(error, "File staging cleanup failed"))
-          .finally(() => { cleaning = undefined; });
+          .catch((error) =>
+            runtime.api.log.error(error, "File staging cleanup failed"),
+          )
+          .finally(() => {
+            cleaning = undefined;
+          });
       };
       const cleanupTimer = setInterval(clean, 60 * 60 * 1000);
       cleanupTimer.unref();
@@ -281,9 +346,7 @@ function filesPlugin(
 export async function composeServerPlugins(
   runtime: ServerRuntimeService,
 ): Promise<ServerPluginComposition> {
-  const host = new PluginHost({
-    migrations: createPluginMigrationStore(runtime.db),
-  });
+  const host = new PluginHost();
   const files = createServerFilesCapability(
     runtime.db,
     runtime.runtime.storage,
@@ -295,14 +358,27 @@ export async function composeServerPlugins(
     aiPlugin(files),
     filesPlugin(runtime, files),
   ];
-  const installed = await discoverInstalledPlugins(runtime.options.pluginDirectory ?? pluginDirectory(), { disabled: runtime.options.plugins });
-  plugins.push(...await importInstalledPlugins(installed, plugins.map(p => p.manifest)));
+  const installed = await discoverInstalledPlugins(
+    runtime.options.pluginDirectory ?? pluginDirectory(),
+    { disabled: runtime.options.plugins },
+  );
+  plugins.push(
+    ...(await importInstalledPlugins(
+      installed,
+      plugins.map((p) => p.manifest),
+    )),
+  );
   for (const plugin of plugins) host.register(plugin);
   const descriptors = host.order.map((id) => {
-    const manifest = plugins.find((plugin) => plugin.manifest.id === id)!
-      .manifest;
-    const installedPlugin = installed.find(p => p.manifest.id === id);
-    return { id: manifest.id, version: manifest.version, ...(installedPlugin?.web ? { web: pluginWebUrl(installedPlugin) } : {}) };
+    const manifest = plugins.find(
+      (plugin) => plugin.manifest.id === id,
+    )!.manifest;
+    const installedPlugin = installed.find((p) => p.manifest.id === id);
+    return {
+      id: manifest.id,
+      version: manifest.version,
+      ...(installedPlugin?.web ? { web: pluginWebUrl(installedPlugin) } : {}),
+    };
   });
   await host.start();
   registerPluginAssets(runtime.api, installed);

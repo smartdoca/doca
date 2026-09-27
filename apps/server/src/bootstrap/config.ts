@@ -32,10 +32,6 @@ export function config() {
       poolMax: port(process.env.DOCA_DATABASE_POOL_MAX, 10),
     };
   else throw new Error("Invalid database configuration");
-  const requestedSchemaMode = process.env.DOCA_SCHEMA_MODE ?? "migrate";
-  if (requestedSchemaMode !== "migrate" && requestedSchemaMode !== "validate")
-    throw new Error("DOCA_SCHEMA_MODE must be migrate or validate");
-  const schemaMode: "migrate" | "validate" = requestedSchemaMode;
   return {
     origin: origin.origin,
     database,
@@ -45,7 +41,6 @@ export function config() {
     redisUrl: process.env.DOCA_REDIS_URL?.trim() || undefined,
     redisPrefix: process.env.DOCA_REDIS_PREFIX?.trim() || "doca",
     instanceId: process.env.DOCA_INSTANCE_ID?.trim() || undefined,
-    schemaMode,
     trustProxy: (process.env.DOCA_TRUST_PROXY ?? "")
       .split(",")
       .map((value) => value.trim())

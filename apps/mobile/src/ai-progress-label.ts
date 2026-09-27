@@ -8,17 +8,9 @@ import type {
 
 type Translator = (key: MessageKey, values?: MessageValues) => string;
 
-// Stored history and cached conversations can predate structured display codes.
-// Read old copy only at the presentation boundary; new writes still use codes.
-function legacyLabel(value: object, field: string): string | undefined {
-  const text = (value as Record<string, unknown>)[field];
-  return typeof text === "string" && text.trim() ? text : undefined;
-}
-
 function labelKey(keys: Readonly<Record<string, MessageKey>>, code: string) {
   return Object.hasOwn(keys, code) ? keys[code] : undefined;
 }
-
 
 const eventKeys = {
   checkpoint_resumed: "ai.progress.event.checkpointResumed",
@@ -144,14 +136,14 @@ export function aiEventLabel(event: AIProgressEvent, t: Translator) {
   if (event.code === "tool_call")
     return toolLabel(String(event.data?.toolName ?? "unknown"), t);
   const key = labelKey(eventKeys, event.code);
-  return key ? t(key, event.data) : legacyLabel(event, "text") ?? t("ai.progress.event.generic");
+  return key ? t(key, event.data) : t("ai.progress.event.generic");
 }
 
 export function aiEventDetail(event: AIProgressEvent, t: Translator) {
   if (event.kind === "reasoning" || event.kind === "text") return undefined;
   return event.detailCode === "tool_failed_recovering"
     ? t("ai.progress.detail.toolFailedRecovering", event.detailData)
-    : legacyLabel(event, "detail");
+    : undefined;
 }
 
 function approvalValues(approval: AIApproval, t: Translator): MessageValues {
@@ -167,12 +159,16 @@ function approvalValues(approval: AIApproval, t: Translator): MessageValues {
 
 export function aiApprovalTitle(approval: AIApproval, t: Translator) {
   const key = labelKey(approvalTitleKeys, approval.code);
-  return key ? t(key, approvalValues(approval, t)) : legacyLabel(approval, "title") ?? t("ai.approval.generic.title");
+  return key
+    ? t(key, approvalValues(approval, t))
+    : t("ai.approval.generic.title");
 }
 
 export function aiApprovalDetail(approval: AIApproval, t: Translator) {
   const key = labelKey(approvalDetailKeys, approval.code);
-  return key ? t(key, approvalValues(approval, t)) : legacyLabel(approval, "detail") ?? t("ai.approval.generic.detail");
+  return key
+    ? t(key, approvalValues(approval, t))
+    : t("ai.approval.generic.detail");
 }
 
 export type MobileAIProgressEvent = AIProgressEvent;

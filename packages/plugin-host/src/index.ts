@@ -9,11 +9,7 @@ import {
   type PluginManifest,
   type PluginRuntimePhase,
 } from "@doca/plugin-contracts";
-import {
-  Context,
-  ContributionStore,
-  PluginContext,
-} from "@doca/plugin-sdk";
+import { Context, ContributionStore, PluginContext } from "@doca/plugin-sdk";
 
 export type PluginHostState =
   "idle" | "starting" | "running" | "disposing" | "disposed";
@@ -31,27 +27,9 @@ export class PluginLifecycleError extends Error {
   }
 }
 
-export interface PluginMigrationStore {
-  get(pluginId: string): Promise<string | undefined>;
-  set(pluginId: string, version: string): Promise<void>;
-}
-
-export class MemoryPluginMigrationStore implements PluginMigrationStore {
-  readonly #versions = new Map<string, string>();
-
-  async get(pluginId: string) {
-    return this.#versions.get(pluginId);
-  }
-
-  async set(pluginId: string, version: string) {
-    this.#versions.set(pluginId, version);
-  }
-}
-
 export interface PluginHostOptions {
   readonly context?: Context;
   readonly contributions?: ContributionStore;
-  readonly migrations?: PluginMigrationStore;
   readonly sdkVersion?: string;
 }
 
@@ -146,7 +124,6 @@ export function validatePluginGraph(
 export class PluginHost {
   readonly #root: Context;
   readonly #ownsRoot: boolean;
-  readonly #migrations: PluginMigrationStore;
   readonly #sdkVersion: string;
   readonly #registered = new Map<string, RegisteredPlugin>();
   readonly #activated: RegisteredPlugin[] = [];
@@ -159,7 +136,6 @@ export class PluginHost {
     this.#root = options.context ?? new Context("plugins");
     this.#ownsRoot = !options.context;
     this.contributions = options.contributions ?? new ContributionStore();
-    this.#migrations = options.migrations ?? new MemoryPluginMigrationStore();
     this.#sdkVersion = options.sdkVersion ?? "0.1.0";
   }
 
@@ -270,15 +246,9 @@ export class PluginHost {
       }
       for (const entry of ordered)
         if (entry.plugin.initialize)
-          await this.#invoke(entry, "initialize", () => entry.plugin.initialize!(entry.context!));
-      for (const entry of ordered) {
-        await this.#invoke(entry, "migrate", async () => {
-          const previous = await this.#migrations.get(entry.manifest.id);
-          if (previous === entry.manifest.version) return;
-          await entry.plugin.migrate?.(entry.context!, previous);
-          await this.#migrations.set(entry.manifest.id, entry.manifest.version);
-        });
-      }
+          await this.#invoke(entry, "initialize", () =>
+            entry.plugin.initialize!(entry.context!),
+          );
       for (const entry of ordered)
         if (entry.plugin.mount)
           await this.#invoke(entry, "mount", () =>

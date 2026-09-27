@@ -24,8 +24,6 @@ export interface Resource {
   cover_asset_id?: string | null;
   page_width?: string | null;
   ai_curated?: number;
-  guide_document_id?: string | null;
-  guide_text?: string;
   knowledge_schedule?: string;
   knowledge_preset?: string;
   id: string;
@@ -48,20 +46,23 @@ export interface Resource {
   updated_at: string;
 }
 export interface Schema {
-  system_schema: {
+  schema_baseline: {
     id: string;
-    version: number;
-    updated_at: string;
+    created_at: string;
   };
   file_operation_receipts: {
-    plugin_id: string; user_id: string; operation: string; operation_key: string;
-    request_hash: string; status: "pending" | "completed"; result: string | null;
-    object_id: string | null; profile_id: string | null; object_key: string | null; cleanup_at: string | null; created_at: string;
-  };
-  plugin_migrations: {
     plugin_id: string;
-    version: string;
-    applied_at: string;
+    user_id: string;
+    operation: string;
+    operation_key: string;
+    request_hash: string;
+    status: "pending" | "completed";
+    result: string | null;
+    object_id: string | null;
+    profile_id: string | null;
+    object_key: string | null;
+    cleanup_at: string | null;
+    created_at: string;
   };
   quick_notes: {
     id: string;
@@ -89,7 +90,14 @@ export interface Schema {
     updated_at: string;
   };
 
-  ai_session_resources: { session_id:string; kind:string; resource_id:string; title:string; href:string; touched_at:string };
+  ai_session_resources: {
+    session_id: string;
+    kind: string;
+    resource_id: string;
+    title: string;
+    href: string;
+    touched_at: string;
+  };
   ai_sessions: {
     approved_resource_ids?: string;
     mentioned_resource_ids?: string;
@@ -243,7 +251,12 @@ export interface Schema {
     decided_by?: string | null;
   };
   invitation_history: Schema["access_invitations"] & { id: string };
-  resource_collections: { user_id: string; resource_kind: "document" | "library" | "assistant" | "folder"; resource_id: string; created_at: string };
+  resource_collections: {
+    user_id: string;
+    resource_kind: "document" | "library" | "assistant" | "folder";
+    resource_id: string;
+    created_at: string;
+  };
   resource_entries: {
     user_id: string;
     resource_id: string;
@@ -315,7 +328,6 @@ export interface Schema {
   };
   distribution_settings: { id: string; config: string; revision: number };
   document_references: { source_id: string; target_id: string };
-  document_reference_index: { resource_id: string; seq: number };
   user_card_settings: { id: string; config: string; revision: number };
   share_links: {
     include_descendants?: number;
@@ -553,7 +565,12 @@ export interface Schema {
     updated_at: string;
   };
   folder_publications: { folder_id: string; enabled: number; revision: number };
-  folder_entries: { folder_id: string; user_id: string; state: string; updated_at: string };
+  folder_entries: {
+    folder_id: string;
+    user_id: string;
+    state: string;
+    updated_at: string;
+  };
   file_folders: {
     id: string;
     owner_id: string;
@@ -630,7 +647,13 @@ export interface Schema {
     created_at: string;
     deleted_at: string | null;
   };
-  workspace_activity: { user_id: string; resource_kind: "assistant" | "folder" | "file"; resource_id: string; visited_at: string | null; favorite: number };
+  workspace_activity: {
+    user_id: string;
+    resource_kind: "assistant" | "folder" | "file";
+    resource_id: string;
+    visited_at: string | null;
+    favorite: number;
+  };
   resource_visits: { user_id: string; resource_id: string; visited_at: string };
   user_preferences: {
     avatar_asset_id?: string | null;
@@ -780,41 +803,99 @@ export interface Schema {
   };
   knowledge_conversations: {
     access_key_id?: string | null;
-    id: string; scope_id: string; kind: string; owner_id: string; title: string;
-    summary: string; state: string; archived: number; created_at: string; updated_at: string;
+    id: string;
+    scope_id: string;
+    kind: string;
+    owner_id: string;
+    title: string;
+    summary: string;
+    state: string;
+    archived: number;
+    created_at: string;
+    updated_at: string;
   };
   knowledge_messages: {
-    id: string; conversation_id: string; role: string; author_id: string | null;
-    trigger: string; content: string; detail: string; created_at: string;
+    id: string;
+    conversation_id: string;
+    role: string;
+    author_id: string | null;
+    trigger: string;
+    content: string;
+    detail: string;
+    created_at: string;
   };
   knowledge_tasks: {
-    id: string; conversation_id: string; actor_id: string; status: string;
-    error: string; created_at: string; updated_at: string;
+    id: string;
+    conversation_id: string;
+    actor_id: string;
+    status: string;
+    error: string;
+    created_at: string;
+    updated_at: string;
   };
   knowledge_checkpoints: {
-    task_id:string; detail:string; attempts:number; available_at:string;
+    task_id: string;
+    detail: string;
+    attempts: number;
+    available_at: string;
   };
   knowledge_source_observations: {
-    library_id:string; source_id:string; fingerprint:string; updated_at:string;
+    library_id: string;
+    source_id: string;
+    fingerprint: string;
+    updated_at: string;
   };
   knowledge_cases: {
-    id: string; bot_id: string; message_id: string; user_id: string;
-    judgment: string; reason: string; snapshot: string; status: string; created_at: string;
+    id: string;
+    bot_id: string;
+    message_id: string;
+    user_id: string;
+    judgment: string;
+    reason: string;
+    snapshot: string;
+    status: string;
+    created_at: string;
   };
   knowledge_source_actions: {
-    id: string; library_id: string; source_key: string; actor_id: string;
-    action: string; detail: string; created_at: string;
+    id: string;
+    library_id: string;
+    source_key: string;
+    actor_id: string;
+    action: string;
+    detail: string;
+    created_at: string;
   };
   knowledge_human_tasks: {
-    id:string; library_id:string; conversation_id:string; task_key:string;
-    kind:string; title:string; detail:string; status:string; revision:number;
-    resolution:string; created_at:string; updated_at:string;
+    id: string;
+    library_id: string;
+    conversation_id: string;
+    task_key: string;
+    kind: string;
+    title: string;
+    detail: string;
+    status: string;
+    revision: number;
+    resolution: string;
+    created_at: string;
+    updated_at: string;
   };
   knowledge_publications: {
-    library_id: string; revision: number; fingerprint: string; documents: string;
-    status: string; error: string; updated_at: string;
+    library_id: string;
+    revision: number;
+    fingerprint: string;
+    documents: string;
+    status: string;
+    error: string;
+    updated_at: string;
   };
-  knowledge_source_groups: { config?: string; id: string; library_id: string; title: string; source_kind: string; created_at: string };
+  knowledge_source_groups: {
+    config?: string;
+    id: string;
+    library_id: string;
+    title: string;
+    source_kind: string;
+    created_at: string;
+  };
   knowledge_subscriptions: {
     name?: string;
     group_id?: string | null;
@@ -866,11 +947,41 @@ export interface Schema {
     author_id: string;
     created_at: string;
   };
-  knowledge_assistant_users: { assistant_id: string; user_id: string; accepted: number; visited_at: string | null; integration: string; revision: number; };
+  knowledge_assistant_users: {
+    assistant_id: string;
+    user_id: string;
+    accepted: number;
+    visited_at: string | null;
+    integration: string;
+    revision: number;
+  };
   knowledge_bot_sharing: { bot_id: string; enabled: number };
-  knowledge_bot_share_links: { id:string; bot_id:string; token:string; enabled:number; revoked_at:string|null; expires_at:string|null; max_members:number|null; version:string; created_at:string };
-  knowledge_bot_link_members: { link_id:string; user_id:string; created_at:string };
-  knowledge_bot_keys: { id:string; bot_id:string; creator_id:string; name:string; channel:string; token_hash:string; expires_at:string; created_at:string; };
+  knowledge_bot_share_links: {
+    id: string;
+    bot_id: string;
+    token: string;
+    enabled: number;
+    revoked_at: string | null;
+    expires_at: string | null;
+    max_members: number | null;
+    version: string;
+    created_at: string;
+  };
+  knowledge_bot_link_members: {
+    link_id: string;
+    user_id: string;
+    created_at: string;
+  };
+  knowledge_bot_keys: {
+    id: string;
+    bot_id: string;
+    creator_id: string;
+    name: string;
+    channel: string;
+    token_hash: string;
+    expires_at: string;
+    created_at: string;
+  };
   knowledge_assistants: {
     manager_ids?: string;
     config?: string;

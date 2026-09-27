@@ -147,7 +147,9 @@ export type KnowledgeSettings = z.infer<typeof knowledgeSettingsSchema>;
 /** Assistant patches preserve omitted settings, including source-local safety rules. */
 export const knowledgeSettingsPatchSchema = z
   .object({
-    feedbackSchedule: knowledgeSettingsSchema.shape.feedbackSchedule.removeDefault().optional(),
+    feedbackSchedule: knowledgeSettingsSchema.shape.feedbackSchedule
+      .removeDefault()
+      .optional(),
     publicationMode: knowledgeSettingsSchema.shape.publicationMode
       .removeDefault()
       .optional(),
@@ -323,30 +325,10 @@ export async function knowledgeInstructions(
         revision: row.revision,
       });
   if (!latest.has("KNOWLEDGE.md")) {
-    const old = await db
-      .selectFrom("resources")
-      .select(["guide_text", "guide_document_id", "knowledge_preset"])
-      .where("id", "=", libraryId)
-      .executeTakeFirstOrThrow();
-    const legacy = old.guide_document_id
-      ? await db
-          .selectFrom("document_states")
-          .select("text")
-          .where("resource_id", "=", old.guide_document_id)
-          .executeTakeFirst()
-      : null;
-    let note = "";
-    try {
-      note = JSON.parse(old.knowledge_preset || "{}").note || "";
-    } catch {
-      /* legacy empty preset */
-    }
     latest.set("KNOWLEDGE.md", {
       path: "KNOWLEDGE.md",
       revision: 0,
-      markdown: [old.guide_text || legacy?.text || mainInstruction, note]
-        .filter(Boolean)
-        .join("\n\n"),
+      markdown: mainInstruction,
     });
   }
   const subscriptions = await db
@@ -360,9 +342,7 @@ export async function knowledgeInstructions(
     let note = "";
     try {
       note = JSON.parse(source.preset || "{}").note || "";
-    } catch {
-      /* legacy empty preset */
-    }
+    } catch {}
     latest.set(path, {
       path,
       revision: 0,
@@ -372,7 +352,10 @@ export async function knowledgeInstructions(
   }
   const sourceLabels: Record<string, string> = {};
   for (const source of subscriptions) {
-    if (source.name?.trim()) {sourceLabels[source.id]=source.name;continue;}
+    if (source.name?.trim()) {
+      sourceLabels[source.id] = source.name;
+      continue;
+    }
     if (!(await knowledgeSourceLinkVisible(db, actor, source, true))) continue;
     if (source.source_kind === "document" || source.source_kind === "library") {
       const reader = await sourceActor(db, source);
@@ -1037,7 +1020,6 @@ async function insertKnowledgeDocument(
       share_links_enabled: 0,
       permission_overrides: 0,
       ai_curated: 0,
-      guide_text: "",
       knowledge_schedule: "off",
       knowledge_preset: "",
     })
@@ -1730,9 +1712,7 @@ export async function executeKnowledgeCuration(
         let frequency = "inherit";
         try {
           frequency = JSON.parse(source.preset || "{}").frequency ?? "inherit";
-        } catch {
-          /* legacy */
-        }
+        } catch {}
         if (frequency === "off") continue;
       }
       if (!(await sourceAvailable(db, actor, source))) {
@@ -2448,7 +2428,8 @@ export async function knowledgeAssistantAccess(
     .where("assistant_id", "=", bot.id)
     .where("user_id", "=", actor.id)
     .executeTakeFirst();
-  const linkMember = (await knowledgeLinkMemberships(db, bot.id, actor.id)).length > 0;
+  const linkMember =
+    (await knowledgeLinkMemberships(db, bot.id, actor.id)).length > 0;
   const decision = audienceDecision(await distributionPolicy(db), {
     owner: canManageKnowledgeBot(bot, actor.id),
     granted: JSON.parse(bot.member_ids).includes(actor.id) || linkMember,
@@ -2457,12 +2438,28 @@ export async function knowledgeAssistantAccess(
     interacted: !!state?.visited_at,
     hidden: state?.integration === "disabled",
   });
-  const collected = !!await db.selectFrom("resource_collections").select("resource_id").where("resource_kind","=","assistant").where("resource_id","=",bot.id).where("user_id","=",actor.id).executeTakeFirst();
-  const favorite = !!(await db.selectFrom("workspace_activity").select("favorite").where("resource_kind","=","assistant").where("resource_id","=",bot.id).where("user_id","=",actor.id).executeTakeFirst())?.favorite;
+  const collected = !!(await db
+    .selectFrom("resource_collections")
+    .select("resource_id")
+    .where("resource_kind", "=", "assistant")
+    .where("resource_id", "=", bot.id)
+    .where("user_id", "=", actor.id)
+    .executeTakeFirst());
+  const favorite = !!(
+    await db
+      .selectFrom("workspace_activity")
+      .select("favorite")
+      .where("resource_kind", "=", "assistant")
+      .where("resource_id", "=", bot.id)
+      .where("user_id", "=", actor.id)
+      .executeTakeFirst()
+  )?.favorite;
   return {
     ...decision,
     owned: bot.owner_id === actor.id,
-    collaborating: canManageKnowledgeBot(bot, actor.id) && bot.owner_id !== actor.id || JSON.parse(bot.member_ids).includes(actor.id) && decision.accessible,
+    collaborating:
+      (canManageKnowledgeBot(bot, actor.id) && bot.owner_id !== actor.id) ||
+      (JSON.parse(bot.member_ids).includes(actor.id) && decision.accessible),
     favorite,
     collected,
     interacted: !!state?.visited_at,
@@ -2630,7 +2627,9 @@ export async function listKnowledgeAssistants(
           (JSON.parse(row.member_ids).includes(actor.id) ||
             decisions.get(row.id)!.defaultIncluded ||
             decisions.get(row.id)!.connected ||
-            ((decisions.get(row.id)!.collected || decisions.get(row.id)!.favorite) && decisions.get(row.id)!.accessible) ||
+            ((decisions.get(row.id)!.collected ||
+              decisions.get(row.id)!.favorite) &&
+              decisions.get(row.id)!.accessible) ||
             (decisions.get(row.id)!.accessible &&
               decisions.get(row.id)!.interacted))),
     )

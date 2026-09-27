@@ -27,7 +27,6 @@ export interface Resource {
   cover_asset_id?: string | null;
   page_width?: string | null;
   ai_curated?: number;
-  guide_document_id?: string | null;
   aiCurated?: boolean;
   id: string;
   kind: "document" | "library";
@@ -68,7 +67,7 @@ export interface Preferences {
 }
 export interface Me {
   profileName?: string;
-  fields?:import("@core/modules/identity/field-policy.js").UserFields;
+  fields?: import("@core/modules/identity/field-policy.js").UserFields;
   needsProfile?: boolean;
   editable?: { displayName: boolean; avatar: boolean };
   avatarUrl?: string;
@@ -204,14 +203,23 @@ export type UploadProgress = {
 };
 export async function uploadFile(
   file: File,
-  purpose: "avatar" | "cover" | "attachment" | "comment_image" | "ai_attachment" | "note_attachment",
+  purpose:
+    | "avatar"
+    | "cover"
+    | "attachment"
+    | "comment_image"
+    | "ai_attachment"
+    | "note_attachment",
   resourceId?: string,
   signal?: AbortSignal,
   onProgress?: (progress: UploadProgress) => void,
 ) {
-  const limit = (["attachment", "ai_attachment", "note_attachment"].includes(purpose)
-    ? 20
-    : 5) * 1024 * 1024;
+  const limit =
+    (["attachment", "ai_attachment", "note_attachment"].includes(purpose)
+      ? 20
+      : 5) *
+    1024 *
+    1024;
   if (!file.size || file.size > limit)
     throw new Error(`请选择非空且不超过 ${limit / 1024 / 1024}MB 的文件`);
   const query = new URLSearchParams({
@@ -220,11 +228,16 @@ export async function uploadFile(
     ...(resourceId ? { resourceId } : {}),
   });
   const url = "/api/v1/assets?" + query;
-  const finish = (data: any, status: number, profileRequired?: string | null) => {
+  const finish = (
+    data: any,
+    status: number,
+    profileRequired?: string | null,
+  ) => {
     if (profileRequired === "1")
       window.dispatchEvent(new Event("profile-required"));
     if (status === 401) window.dispatchEvent(new Event("session-expired"));
-    if (status < 200 || status >= 300) throw new Error(data?.message || "上传失败");
+    if (status < 200 || status >= 300)
+      throw new Error(data?.message || "上传失败");
     return data as {
       id: string;
       url: string;
@@ -241,7 +254,11 @@ export async function uploadFile(
       headers: { "Content-Type": "application/octet-stream" },
       body: file,
     });
-    return finish(await res.json(), res.status, res.headers.get("X-Doca-Profile-Required"));
+    return finish(
+      await res.json(),
+      res.status,
+      res.headers.get("X-Doca-Profile-Required"),
+    );
   }
   return await new Promise<{
     id: string;
@@ -272,7 +289,13 @@ export async function uploadFile(
       cleanup();
       try {
         const data = xhr.responseText ? JSON.parse(xhr.responseText) : {};
-        resolve(finish(data, xhr.status, xhr.getResponseHeader("X-Doca-Profile-Required")));
+        resolve(
+          finish(
+            data,
+            xhr.status,
+            xhr.getResponseHeader("X-Doca-Profile-Required"),
+          ),
+        );
       } catch (error) {
         reject(error);
       }

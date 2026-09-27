@@ -3,7 +3,11 @@ import type { Transaction } from "kysely";
 import { randomUUID } from "node:crypto";
 import * as Y from "yjs";
 import type { Schema } from "@db/index.js";
-import { b64, restoreDocument, createDocuments } from "../collaboration/documents.js";
+import {
+  b64,
+  restoreDocument,
+  createDocuments,
+} from "../collaboration/documents.js";
 import { validateRichNode } from "../ai/edit-schema.js";
 import { DocaYjsDocument } from "../documents/codecs/rich-runtime.js";
 import { indexDocumentReferences } from "../documents/references.js";
@@ -145,8 +149,7 @@ export function knowledgePlainText(children: Record<string, unknown>[]) {
     const nodes = block.nodes as { label?: string }[] | undefined;
     for (const node of nodes ?? []) if (node.label) lines.push(node.label);
     const mind = block.mindData as
-      | { nodeData?: { topic?: string; children?: [] } }
-      | undefined;
+      { nodeData?: { topic?: string; children?: [] } } | undefined;
     if (mind?.nodeData) walk(mind.nodeData);
   }
   return lines.join("\n");
@@ -159,22 +162,53 @@ export async function writeKnowledgeRichDocument(
   figures: KnowledgeFigure[] = [],
 ) {
   const converted = await importMarkdown(markdown);
-  const children = [...converted.initialValue, ...knowledgeDocumentChildren("", figures).filter((node:any)=>node.type==="flowchart"||node.type==="mindmap")];
-  const current = await tx.selectFrom("document_states").selectAll().where("resource_id", "=", id).executeTakeFirst();
+  const children = [
+    ...converted.initialValue,
+    ...knowledgeDocumentChildren("", figures).filter(
+      (node: any) => node.type === "flowchart" || node.type === "mindmap",
+    ),
+  ];
+  const current = await tx
+    .selectFrom("document_states")
+    .selectAll()
+    .where("resource_id", "=", id)
+    .executeTakeFirst();
   if (current?.codec === "slate-kit") {
-    const resource = await tx.selectFrom("resources").selectAll().where("id", "=", id).executeTakeFirstOrThrow();
-    const actor = await tx.selectFrom("users").select(["id", "display_name", "admin"]).where("id", "=", resource.owner_id).where("status", "=", "active").executeTakeFirstOrThrow();
-    const baseline = await createDocuments(tx).exchange(actor, id, {protocolVersion:1,codec:"slate-kit",schemaVersion:3});
+    const resource = await tx
+      .selectFrom("resources")
+      .selectAll()
+      .where("id", "=", id)
+      .executeTakeFirstOrThrow();
+    const actor = await tx
+      .selectFrom("users")
+      .select(["id", "display_name", "admin"])
+      .where("id", "=", resource.owner_id)
+      .where("status", "=", "active")
+      .executeTakeFirstOrThrow();
+    const baseline = await createDocuments(tx).exchange(actor, id, {
+      protocolVersion: 1,
+      codec: "slate-kit",
+      schemaVersion: 3,
+    });
     const loaded = await restoreDocument(tx, id);
     try {
       const vector = Y.encodeStateVector(loaded.doc);
-      loaded.runtime.acceptEditorValue(loaded.runtime.getValue(), children as any);
+      loaded.runtime.acceptEditorValue(
+        loaded.runtime.getValue(),
+        children as any,
+      );
       await createDocuments(tx).exchange(actor, id, {
         update: b64(Y.encodeStateAsUpdate(loaded.doc, vector)),
-        expectedSeq: current.seq, epochId: baseline.epochId,
-        codec: "slate-kit", schemaVersion: 3, protocolVersion: 1, messageId: randomUUID(),
+        expectedSeq: current.seq,
+        epochId: baseline.epochId,
+        codec: "slate-kit",
+        schemaVersion: 3,
+        protocolVersion: 1,
+        messageId: randomUUID(),
       });
-    } finally { loaded.destroy(); }
+    } finally {
+      loaded.destroy();
+    }
     return;
   }
   const text = knowledgePlainText(children);
@@ -199,7 +233,10 @@ export async function writeKnowledgeRichDocument(
       .deleteFrom("editor_receipts")
       .where("resource_id", "=", id)
       .execute();
-    await tx.deleteFrom("editor_epochs").where("resource_id", "=", id).execute();
+    await tx
+      .deleteFrom("editor_epochs")
+      .where("resource_id", "=", id)
+      .execute();
     await tx
       .deleteFrom("document_states")
       .where("resource_id", "=", id)
@@ -225,7 +262,7 @@ export async function writeKnowledgeRichDocument(
       })
       .where("id", "=", id)
       .execute();
-    await indexDocumentReferences(tx, id, runtime.getValue(), 0);
+    await indexDocumentReferences(tx, id, runtime.getValue());
   } finally {
     doc.destroy();
   }

@@ -476,32 +476,3 @@ it("allows collecting accessible private folders and bots, keeping collection se
     collectPublicResource(db, reader, "assistant", bot.id, true),
   ).rejects.toMatchObject({ status: 404 });
 });
-
-it("copies only explicit legacy collections once, and does not resurrect removed collections on restart", async () => {
-  const { createSchema } = await import("../packages/db/src/create-schema.js");
-  const manual = await resource("document", "Manual"),
-    invited = await resource("document", "Invitation");
-  for (const [resourceId, source] of [
-    [manual.id, "manual"],
-    [invited.id, "invitation"],
-  ])
-    await db
-      .insertInto("resource_entries")
-      .values({
-        resource_id: resourceId!,
-        user_id: reader.id,
-        state: "joined",
-        source: source!,
-        version: 1,
-        updated_at: new Date().toISOString(),
-      })
-      .execute();
-  await db.schema.dropTable("resource_collections").execute();
-  await createSchema(db);
-  expect(ids(await catalogPage(db, reader, { collected: true }))).toEqual([
-    manual.id,
-  ]);
-  await collectPublicResource(db, reader, "document", manual.id, false);
-  await createSchema(db);
-  expect(ids(await catalogPage(db, reader, { collected: true }))).toEqual([]);
-});

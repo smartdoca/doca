@@ -10,10 +10,7 @@ import {
 } from "@online-office/univer-sheet/yjs";
 import { projectExlsxWorkbook } from "@online-office/univer-sheet/model";
 import { type DB } from "@db/index.js";
-import {
-  createUser,
-  type Actor,
-} from "@core/modules/identity/passwords.js";
+import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import {
   createDocuments,
@@ -28,6 +25,12 @@ import {
 import { createExperience } from "@core/workflows/experience.js";
 import { DocaYjsDocument } from "@core/modules/documents/codecs/rich-runtime.js";
 let db: DB, owner: Actor;
+const commentBody = (text: string) => ({
+  version: 1 as const,
+  blocks: [
+    { type: "paragraph" as const, children: [{ type: "text" as const, text }] },
+  ],
+});
 beforeEach(async () => {
   db = await openDatabase({ driver: "sqlite", path: ":memory:" });
   owner = {
@@ -41,116 +44,295 @@ beforeEach(async () => {
 });
 afterEach(() => db.destroy());
 it("current spreadsheet structure and charts survive host ACK, concurrent edits and comment relocation", async () => {
-  const content = createContent(db), docs = createDocuments(db);
-  const r = await content.create(owner, { kind: "document", format: "spreadsheet", title: "Structure QA" });
-  await db.transaction().execute(tx => provisionSurface(tx, r));
-  const proto = { codec: "exlsx-cell-registers", schemaVersion: 6, protocolVersion: 1 };
+  const content = createContent(db),
+    docs = createDocuments(db);
+  const r = await content.create(owner, {
+    kind: "document",
+    format: "spreadsheet",
+    title: "Structure QA",
+  });
+  await db.transaction().execute((tx) => provisionSurface(tx, r));
+  const proto = {
+    codec: "exlsx-cell-registers",
+    schemaVersion: 6,
+    protocolVersion: 1,
+  };
   const initial = await docs.exchange(owner, r.id, proto);
   const loaded = await restoreSurface(db, r.id, "spreadsheet");
   const sheetId = loaded.baseline!.snapshot.sheetOrder[0]!;
   async function replica(name: string) {
-    const doc = await restoreExlsxDocument({ baseline: loaded.baseline!, update: loaded.update, checkpointSeq: 0 });
-    const session = await createExlsxCollaborationSession({ doc, baseline: loaded.baseline!, sessionId: name });
+    const doc = await restoreExlsxDocument({
+      baseline: loaded.baseline!,
+      update: loaded.update,
+      checkpointSeq: 0,
+    });
+    const session = await createExlsxCollaborationSession({
+      doc,
+      baseline: loaded.baseline!,
+      sessionId: name,
+    });
     const events: any[] = [];
     let edit!: (m: any) => void;
-    session.onLocalTransaction(e => events.push(e));
-    await session.connect({ workbookId: r.id, initialSnapshot: loaded.baseline!.snapshot,
+    session.onLocalTransaction((e) => events.push(e));
+    await session.connect({
+      workbookId: r.id,
+      initialSnapshot: loaded.baseline!.snapshot,
       getSnapshot: () => loaded.baseline!.snapshot,
-      onLocalMutation: (f: any) => { edit = f; return () => {}; },
+      onLocalMutation: (f: any) => {
+        edit = f;
+        return () => {};
+      },
       applyRemoteMutation: async () => {},
     } as any);
-    return { doc, session, events, edit: (value: string) => edit({ id: "sheet.mutation.set-range-values", params: {
-      unitId: r.id, subUnitId: sheetId, cellValue: { 1: { 0: { v: value } } },
-    } }) };
+    return {
+      doc,
+      session,
+      events,
+      edit: (value: string) =>
+        edit({
+          id: "sheet.mutation.set-range-values",
+          params: {
+            unitId: r.id,
+            subUnitId: sheetId,
+            cellValue: { 1: { 0: { v: value } } },
+          },
+        }),
+    };
   }
-  const a = await replica("a"), b = await replica("b");
+  const a = await replica("a"),
+    b = await replica("b");
   expect(loaded.baseline!.schemaVersion).toBe(6);
-  for (const operation of ["freeze", "filter", "sort", "merge", "conditionalFormat", "dataValidation", "formatPainter"] as const) {
-    expect(a.session.capabilities[operation]).toMatchObject({ enabled: true, code: "SUPPORTED" });
+  for (const operation of [
+    "freeze",
+    "filter",
+    "sort",
+    "merge",
+    "conditionalFormat",
+    "dataValidation",
+    "formatPainter",
+  ] as const) {
+    expect(a.session.capabilities[operation]).toMatchObject({
+      enabled: true,
+      code: "SUPPORTED",
+    });
     expect(a.session.capabilities[operation].reason).toBeTruthy();
   }
   let sent = 0;
   const save = async (event: any) => {
-    const message = { ...proto, epochId: initial.epochId, messageId: randomUUID(), update: b64(event.update) };
+    const message = {
+      ...proto,
+      epochId: initial.epochId,
+      messageId: randomUUID(),
+      update: b64(event.update),
+    };
     expect((await docs.exchange(owner, r.id, message)).seq).toBe(++sent);
     expect((await docs.exchange(owner, r.id, message)).seq).toBe(sent);
   };
   try {
-    const range = { sheetId, startRow: 1, endRow: 1, startColumn: 0, endColumn: 0 };
+    const range = {
+      sheetId,
+      startRow: 1,
+      endRow: 1,
+      startColumn: 0,
+      endColumn: 0,
+    };
     const anchor = a.session.captureCellAnchor!(range)!;
-    await a.session.editStructure!({ sheetId, axis: "row", action: "insert", index: 0, count: 1 });
+    await a.session.editStructure!({
+      sheetId,
+      axis: "row",
+      action: "insert",
+      index: 0,
+      count: 1,
+    });
     b.edit("并发编辑保留");
-    await save(a.events[0]); await save(b.events[0]);
-    await a.session.applyUpdate(b.events[0]); await b.session.applyUpdate(a.events[0]);
-    expect(a.events).toHaveLength(1); expect(b.events).toHaveLength(1);
+    await save(a.events[0]);
+    await save(b.events[0]);
+    await a.session.applyUpdate(b.events[0]);
+    await b.session.applyUpdate(a.events[0]);
+    expect(a.events).toHaveLength(1);
+    expect(b.events).toHaveLength(1);
     expect(a.session.resolveCellAnchor!(anchor)?.startRow).toBe(2);
-    expect(await surfaceAnchor(db, r.id, "spreadsheet", anchor)).toEqual(anchor);
-    await content.comment(owner, r.id, "稳定身份评论", null, JSON.stringify(anchor));
-    await a.session.putFloatingObject!({ kind: "chart", type: "column", title: "测试图表",
-      anchor: range, source: { ...range, endRow: 3, endColumn: 1 }, width: 320, height: 200 });
-    await save(a.events.at(-1)); await b.session.applyUpdate(a.events.at(-1));
-    const checkpoint = await restoreSurface(db, r.id, "spreadsheet");
-    const snapshot = await projectExlsxWorkbook({ baseline: checkpoint.baseline!, update: checkpoint.update, checkpointSeq: checkpoint.state.checkpoint_seq });
-    expect(snapshot.sheets[sheetId]!.cellData![2]![0]!.v).toBe("并发编辑保留");
-    expect(snapshot.resources?.some(r => r.name === "EXLSX_FLOATING_OBJECTS")).toBe(true);
-    expect(await projectExlsxWorkbook(b.session.checkpoint(sent))).toEqual(snapshot);
-    await a.session.editStructure!({ sheetId, axis: "row", action: "delete", index: 2, count: 1 });
+    expect(await surfaceAnchor(db, r.id, "spreadsheet", anchor)).toEqual(
+      anchor,
+    );
+    await content.comment(
+      owner,
+      r.id,
+      commentBody("稳定身份评论"),
+      null,
+      JSON.stringify(anchor),
+    );
+    await a.session.putFloatingObject!({
+      kind: "chart",
+      type: "column",
+      title: "测试图表",
+      anchor: range,
+      source: { ...range, endRow: 3, endColumn: 1 },
+      width: 320,
+      height: 200,
+    });
     await save(a.events.at(-1));
-    await expect(surfaceAnchor(db, r.id, "spreadsheet", anchor)).rejects.toThrow("已删除");
+    await b.session.applyUpdate(a.events.at(-1));
+    const checkpoint = await restoreSurface(db, r.id, "spreadsheet");
+    const snapshot = await projectExlsxWorkbook({
+      baseline: checkpoint.baseline!,
+      update: checkpoint.update,
+      checkpointSeq: checkpoint.state.checkpoint_seq,
+    });
+    expect(snapshot.sheets[sheetId]!.cellData![2]![0]!.v).toBe("并发编辑保留");
+    expect(
+      snapshot.resources?.some((r) => r.name === "EXLSX_FLOATING_OBJECTS"),
+    ).toBe(true);
+    expect(await projectExlsxWorkbook(b.session.checkpoint(sent))).toEqual(
+      snapshot,
+    );
+    await a.session.editStructure!({
+      sheetId,
+      axis: "row",
+      action: "delete",
+      index: 2,
+      count: 1,
+    });
+    await save(a.events.at(-1));
+    await expect(
+      surfaceAnchor(db, r.id, "spreadsheet", anchor),
+    ).rejects.toThrow("已删除");
     a.session.setReadOnly(true);
-    await expect(a.session.editStructure!({ sheetId, axis: "column", action: "insert", index: 0, count: 1 })).rejects.toThrow();
-  } finally { a.session.dispose(); b.session.dispose(); a.doc.destroy(); b.doc.destroy(); }
+    await expect(
+      a.session.editStructure!({
+        sheetId,
+        axis: "column",
+        action: "insert",
+        index: 0,
+        count: 1,
+      }),
+    ).rejects.toThrow();
+  } finally {
+    a.session.dispose();
+    b.session.dispose();
+    a.doc.destroy();
+    b.doc.destroy();
+  }
 });
 it("format-painter style-only transactions preserve content through host ACK, undo and reload", async () => {
-  const docs = createDocuments(db), content = createContent(db);
-  const resource = await content.create(owner, { kind: "document", format: "spreadsheet", title: "Painter QA" });
-  await db.transaction().execute(tx => provisionSurface(tx, resource));
-  const protocol = { codec: "exlsx-cell-registers", schemaVersion: 6, protocolVersion: 1 };
+  const docs = createDocuments(db),
+    content = createContent(db);
+  const resource = await content.create(owner, {
+    kind: "document",
+    format: "spreadsheet",
+    title: "Painter QA",
+  });
+  await db.transaction().execute((tx) => provisionSurface(tx, resource));
+  const protocol = {
+    codec: "exlsx-cell-registers",
+    schemaVersion: 6,
+    protocolVersion: 1,
+  };
   const initial = await docs.exchange(owner, resource.id, protocol);
   const loaded = await restoreSurface(db, resource.id, "spreadsheet");
-  const baseline = loaded.baseline!, sheetId = baseline.snapshot.sheetOrder[0]!;
+  const baseline = loaded.baseline!,
+    sheetId = baseline.snapshot.sheetOrder[0]!;
   async function replica(sessionId: string) {
-    const doc = await restoreExlsxDocument({ baseline, update: loaded.update, checkpointSeq: 0 });
-    const session = await createExlsxCollaborationSession({ doc, baseline, sessionId });
+    const doc = await restoreExlsxDocument({
+      baseline,
+      update: loaded.update,
+      checkpointSeq: 0,
+    });
+    const session = await createExlsxCollaborationSession({
+      doc,
+      baseline,
+      sessionId,
+    });
     const events: any[] = [];
     let mutation!: (m: any) => void;
-    session.onLocalTransaction(event => events.push(event));
-    await session.connect({ workbookId: resource.id, initialSnapshot: baseline.snapshot,
+    session.onLocalTransaction((event) => events.push(event));
+    await session.connect({
+      workbookId: resource.id,
+      initialSnapshot: baseline.snapshot,
       getSnapshot: () => baseline.snapshot,
-      onLocalMutation: (listener: any) => { mutation = listener; return () => {}; },
+      onLocalMutation: (listener: any) => {
+        mutation = listener;
+        return () => {};
+      },
       applyRemoteMutation: async () => {},
     } as any);
-    return { doc, session, events, write(cellValue: object) {
-      mutation({ id: "sheet.mutation.set-range-values", params: { unitId: resource.id, subUnitId: sheetId, cellValue } });
-    } };
+    return {
+      doc,
+      session,
+      events,
+      write(cellValue: object) {
+        mutation({
+          id: "sheet.mutation.set-range-values",
+          params: { unitId: resource.id, subUnitId: sheetId, cellValue },
+        });
+      },
+    };
   }
-  const a = await replica("painter-a"), b = await replica("painter-b");
+  const a = await replica("painter-a"),
+    b = await replica("painter-b");
   let seq = 0;
   async function save(event: any) {
-    const message = { ...protocol, epochId: initial.epochId, messageId: randomUUID(), update: b64(event.update) };
+    const message = {
+      ...protocol,
+      epochId: initial.epochId,
+      messageId: randomUUID(),
+      update: b64(event.update),
+    };
     expect((await docs.exchange(owner, resource.id, message)).seq).toBe(++seq);
     expect((await docs.exchange(owner, resource.id, message)).seq).toBe(seq);
   }
   try {
     a.write({ 0: { 0: { v: 12, f: "=1+11" } } });
-    await save(a.events[0]); await b.session.applyUpdate(a.events[0]);
-    const anchor = a.session.captureCellAnchor!({ sheetId, startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 });
+    await save(a.events[0]);
+    await b.session.applyUpdate(a.events[0]);
+    const anchor = a.session.captureCellAnchor!({
+      sheetId,
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 0,
+    });
     const before = a.events.length;
     a.write({ 0: { 0: { s: { bl: 1, bg: { rgb: "#ffee00" } } } } });
     expect(a.events.length).toBe(before + 1);
-    await save(a.events.at(-1)); await b.session.applyUpdate(a.events.at(-1)); await b.session.applyUpdate(a.events.at(-1));
+    await save(a.events.at(-1));
+    await b.session.applyUpdate(a.events.at(-1));
+    await b.session.applyUpdate(a.events.at(-1));
     expect(b.events).toHaveLength(0);
-    expect(await surfaceAnchor(db, resource.id, "spreadsheet", anchor)).toEqual(anchor);
+    expect(await surfaceAnchor(db, resource.id, "spreadsheet", anchor)).toEqual(
+      anchor,
+    );
     const saved = await restoreSurface(db, resource.id, "spreadsheet");
-    const projection = await projectExlsxWorkbook({ baseline: saved.baseline!, update: saved.update, checkpointSeq: saved.state.checkpoint_seq });
-    expect(projection.sheets[sheetId]!.cellData![0]![0]).toMatchObject({ v: 12, f: "=1+11", s: { bl: 1, bg: { rgb: "#ffee00" } } });
-    await a.session.undo(); await save(a.events.at(-1)); await b.session.applyUpdate(a.events.at(-1));
+    const projection = await projectExlsxWorkbook({
+      baseline: saved.baseline!,
+      update: saved.update,
+      checkpointSeq: saved.state.checkpoint_seq,
+    });
+    expect(projection.sheets[sheetId]!.cellData![0]![0]).toMatchObject({
+      v: 12,
+      f: "=1+11",
+      s: { bl: 1, bg: { rgb: "#ffee00" } },
+    });
+    await a.session.undo();
+    await save(a.events.at(-1));
+    await b.session.applyUpdate(a.events.at(-1));
     const undone = await projectExlsxWorkbook(b.session.checkpoint(seq));
-    expect(undone.sheets[sheetId]!.cellData![0]![0]).toMatchObject({ v: 12, f: "=1+11" });
+    expect(undone.sheets[sheetId]!.cellData![0]![0]).toMatchObject({
+      v: 12,
+      f: "=1+11",
+    });
     expect(undone.sheets[sheetId]!.cellData![0]![0]!.s).toBeUndefined();
     a.session.setReadOnly(true);
-    expect(a.session.capabilities.formatPainter).toMatchObject({ enabled: false, code: "READ_ONLY" });
-  } finally { a.session.dispose(); b.session.dispose(); a.doc.destroy(); b.doc.destroy(); }
+    expect(a.session.capabilities.formatPainter).toMatchObject({
+      enabled: false,
+      code: "READ_ONLY",
+    });
+  } finally {
+    a.session.dispose();
+    b.session.dispose();
+    a.doc.destroy();
+    b.doc.destroy();
+  }
 });
 it("new sheets negotiate schema 6 by default with durable ACK and stable record comments", async () => {
   const content = createContent(db),
@@ -314,32 +496,34 @@ it("native sheet mentions retain mixed text and notify once after durable acknow
   try {
     const sheetId = loaded.baseline!.snapshot.sheetOrder[0]!;
     const vector = Y.encodeStateVector(doc);
-    doc.getMap("exlsx:identity-cells").set(JSON.stringify([sheetId, "b:0", "b:0", "content"]), {
-      v: null,
-      f: null,
-      t: null,
-      si: null,
-      p: {
-        id: "mixed",
-        documentStyle: {},
-        body: {
-          dataStream: "前缀 @乙 后缀\r\n",
-          paragraphs: [{ startIndex: 8 }],
-          customRanges: [
-            {
-              startIndex: 3,
-              endIndex: 4,
-              rangeId: "mention-1",
-              rangeType: 5,
-              wholeEntity: true,
-              properties: {
-                exlsxInlineV1: { type: "user", refId: peer.id, label: "@乙" },
+    doc
+      .getMap("exlsx:identity-cells")
+      .set(JSON.stringify([sheetId, "b:0", "b:0", "content"]), {
+        v: null,
+        f: null,
+        t: null,
+        si: null,
+        p: {
+          id: "mixed",
+          documentStyle: {},
+          body: {
+            dataStream: "前缀 @乙 后缀\r\n",
+            paragraphs: [{ startIndex: 8 }],
+            customRanges: [
+              {
+                startIndex: 3,
+                endIndex: 4,
+                rangeId: "mention-1",
+                rangeType: 5,
+                wholeEntity: true,
+                properties: {
+                  exlsxInlineV1: { type: "user", refId: peer.id, label: "@乙" },
+                },
               },
-            },
-          ],
+            ],
+          },
         },
-      },
-    });
+      });
     const message = {
       ...proto,
       epochId: initial.epochId,
@@ -375,13 +559,13 @@ it("native sheet mentions retain mixed text and notify once after durable acknow
     doc.destroy();
   }
 });
-it("old rich encoding is rejected with actionable guidance without rewriting saved bytes", async () => {
+it("unsupported rich encoding is rejected without rewriting saved bytes", async () => {
   const content = createContent(db),
     docs = createDocuments(db);
   const r = await content.create(owner, {
     kind: "document",
     format: "rich_text",
-    title: "legacy fixture",
+    title: "unsupported fixture",
   });
   await docs.exchange(owner, r.id, {
     protocolVersion: 1,
@@ -404,7 +588,7 @@ it("old rich encoding is rejected with actionable guidance without rewriting sav
       codec: "slate-kit",
       schemaVersion: 3,
     }),
-  ).rejects.toThrow("重新连接不会转换格式");
+  ).rejects.toThrow("编码与当前编辑器不匹配");
   expect(
     await db
       .selectFrom("document_states")
@@ -651,13 +835,13 @@ for (const format of ["spreadsheet", "canvas"] as const)
       const c = await content.comment(
         owner,
         r.id,
-        "region",
+        commentBody("region"),
         null,
         JSON.stringify(anchor),
       );
       expect(c.id).toBeTruthy();
       await expect(
-        content.comment(owner, r.id, "overall", null),
+        content.comment(owner, r.id, commentBody("overall"), null),
       ).rejects.toThrow("区域评论");
       expect(await surfaceAnchor(db, r.id, format, anchor)).toEqual(anchor);
       const history = createExperience(db);

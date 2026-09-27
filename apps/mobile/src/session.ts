@@ -1,7 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 
 const indexKey = "doca.mobile.accounts";
-const legacyKey = "doca.mobile.session";
 
 export type Session = {
   origin: string;
@@ -25,16 +24,7 @@ async function readAccount(origin: string) {
 
 async function readIndex(): Promise<Index> {
   const raw = await SecureStore.getItemAsync(indexKey);
-  if (raw) return JSON.parse(raw) as Index;
-  const legacy = await SecureStore.getItemAsync(legacyKey);
-  if (!legacy) return { current: "", origins: [] };
-  const value = JSON.parse(legacy) as Session;
-  if (!value.origin || !value.token) return { current: "", origins: [] };
-  await SecureStore.setItemAsync(accountKey(value.origin), JSON.stringify(value));
-  const next = { current: value.origin, origins: [value.origin] };
-  await SecureStore.setItemAsync(indexKey, JSON.stringify(next));
-  await SecureStore.deleteItemAsync(legacyKey);
-  return next;
+  return raw ? (JSON.parse(raw) as Index) : { current: "", origins: [] };
 }
 
 async function writeIndex(index: Index) {
@@ -49,7 +39,9 @@ export async function loadVault() {
     if (account) accounts.push(account);
   }
   const origins = accounts.map((account) => account.origin);
-  let current = origins.includes(index.current) ? index.current : (origins[0] ?? "");
+  let current = origins.includes(index.current)
+    ? index.current
+    : (origins[0] ?? "");
   if (current !== index.current || origins.length !== index.origins.length)
     await writeIndex({ current, origins });
   return {
@@ -64,8 +56,13 @@ export async function loadSession() {
 
 export async function saveSession(session: Session) {
   const vault = await loadVault();
-  await SecureStore.setItemAsync(accountKey(session.origin), JSON.stringify(session));
-  const origins = vault.accounts.some((account) => account.origin === session.origin)
+  await SecureStore.setItemAsync(
+    accountKey(session.origin),
+    JSON.stringify(session),
+  );
+  const origins = vault.accounts.some(
+    (account) => account.origin === session.origin,
+  )
     ? vault.accounts.map((account) => account.origin)
     : [...vault.accounts.map((account) => account.origin), session.origin];
   await writeIndex({ current: session.origin, origins });
@@ -85,14 +82,23 @@ export async function switchOrigin(origin: string) {
 export async function removeAccount(origin: string) {
   const vault = await loadVault();
   await SecureStore.deleteItemAsync(accountKey(origin));
-  const accounts = vault.accounts.filter((account) => account.origin !== origin);
-  const current = vault.session?.origin === origin ? (accounts[0]?.origin ?? "") : (vault.session?.origin ?? "");
-  await writeIndex({ current, origins: accounts.map((account) => account.origin) });
+  const accounts = vault.accounts.filter(
+    (account) => account.origin !== origin,
+  );
+  const current =
+    vault.session?.origin === origin
+      ? (accounts[0]?.origin ?? "")
+      : (vault.session?.origin ?? "");
+  await writeIndex({
+    current,
+    origins: accounts.map((account) => account.origin),
+  });
   return accounts.find((account) => account.origin === current) ?? null;
 }
 
 export function normalizeOrigin(value: string) {
   const trimmed = value.trim().replace(/\/+$/, "");
-  if (!/^https?:\/\//.test(trimmed)) throw new Error("服务器地址需要以 http:// 或 https:// 开头");
+  if (!/^https?:\/\//.test(trimmed))
+    throw new Error("服务器地址需要以 http:// 或 https:// 开头");
   return trimmed;
 }

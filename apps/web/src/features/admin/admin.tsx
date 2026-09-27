@@ -65,8 +65,7 @@ type Member = {
     icon?: string;
   } | null;
   timedLevelExpiresAt: number | null;
-  loginMethods: string[];
-  loginMethodDetails?: LoginMethodLabel[];
+  loginMethodDetails: LoginMethodLabel[];
   last_login_at?: string | null;
 };
 type OnlineMember = Pick<
@@ -683,17 +682,13 @@ export function Admin({
                         </div>
                         <span
                           className="member-login"
-                          title={(
-                            u.loginMethodDetails?.map((method) =>
-                              loginMethodLabel(method, t),
-                            ) ?? u.loginMethods
-                          ).join(locale === "zh" ? "、" : ", ")}
+                          title={u.loginMethodDetails
+                            .map((method) => loginMethodLabel(method, t))
+                            .join(locale === "zh" ? "、" : ", ")}
                         >
-                          {(
-                            u.loginMethodDetails?.map((method) =>
-                              loginMethodLabel(method, t),
-                            ) ?? u.loginMethods
-                          ).join(locale === "zh" ? "、" : ", ") ||
+                          {u.loginMethodDetails
+                            .map((method) => loginMethodLabel(method, t))
+                            .join(locale === "zh" ? "、" : ", ") ||
                             t("users.noMethods")}
                         </span>
                         <span className="member-role">
