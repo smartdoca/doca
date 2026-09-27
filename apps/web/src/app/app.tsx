@@ -1,4 +1,5 @@
-import { DiscoveryPage, useDiscoveryPolicy } from "@web/features/discovery/discovery.js";
+import { WorkspaceHome } from "@web/features/workspace/home.js";
+import { DiscoveryPage } from "@web/features/discovery/discovery.js";
 import { KnowledgePublicPage } from "@web/features/knowledge/knowledge-public-page.js";
 import { KnowledgeCurationToggle } from "@web/features/documents/library-relations.js";
 import { KnowledgeAssistants } from "@web/features/knowledge/knowledge-assistants.js";
@@ -132,7 +133,9 @@ const QuickNotes = lazy(() => import("@web/features/quick-notes/quick-notes.js")
 const QuickNotesFloat = lazy(() => import("@web/features/quick-notes/quick-notes-float.js").then(m => ({ default: m.QuickNotesFloat })));
 
 const titleKeys: Record<string, MessageKey> = {
-  discover: "discovery.title",
+  home: "workspace.home",
+  documents: "home.title",
+  discover: "workspace.publicResources",
   collected: "discovery.collected",
   todos: "nav.tickets",
   tickets: "nav.tickets",
@@ -167,7 +170,7 @@ type ShareInvitation = {
   pending: true;
   id: string;
   title: string;
-  kind: "document" | "library";
+  kind: "document" | "library" | "assistant";
   role: string;
 };
 export function App() {
@@ -178,7 +181,6 @@ export function App() {
     [pluginNavigation],
   );
   const { locale, t, reloadLocale } = useI18n();
-  const discoveryPolicy = useDiscoveryPolicy();
   const [navigationCollapsed, setNavigationCollapsed] = useNavigationCollapse("doca.navigation.collapsed");
   const [adminNavigationCollapsed, setAdminNavigationCollapsed] = useNavigationCollapse("doca.admin-navigation.collapsed");
   const desktopNavigation = useDesktopNavigation();
@@ -221,7 +223,7 @@ export function App() {
     }
     if (!token || !bootstrap?.user) return;
     let active = true;
-    void api<{ id: string; pending?: false; alreadyHasAccess?: boolean } | ShareInvitation>(
+    void api<{ id: string; kind?: string; pending?: false; alreadyHasAccess?: boolean } | ShareInvitation>(
       "/share/redeem",
       "POST",
       { token, accept: false },
@@ -236,7 +238,7 @@ export function App() {
                 "你已经拥有不低于此链接的权限。是否登记为此分享链接的成员？",
               );
               if (consume) {
-                r = await api<{ id: string }>("/share/redeem", "POST", {
+                r = await api<{ id: string; kind?: string }>("/share/redeem", "POST", {
                   token,
                   accept: true,
                   consume: true,
@@ -244,7 +246,7 @@ export function App() {
               }
             }
             try { sessionStorage.removeItem("doca.pending-share-token"); } catch {}
-            location.hash = "/r/" + r.id;
+            location.hash = r.kind === "assistant" ? "/knowledge-assistants?bot=" + r.id : "/r/" + r.id;
           }
         }
       })
@@ -279,7 +281,7 @@ export function App() {
   async function loadMoreComments() {
     if (
       !detail ||
-      (detail.commentsNextCursor == null && detail.commentsNextOffset == null) ||
+      detail.commentsNextCursor == null ||
       busy
     )
       return;
@@ -287,14 +289,9 @@ export function App() {
     try {
       const page = await api<{
         items: Detail["comments"];
-        nextOffset: number | null;
         nextCursor?: string | null;
       }>(
-        `/resources/${detail.resource.id}/comments?${
-          detail.commentsNextCursor
-            ? "cursor=" + encodeURIComponent(detail.commentsNextCursor)
-            : "offset=" + detail.commentsNextOffset
-        }`,
+        `/resources/${detail.resource.id}/comments?cursor=${encodeURIComponent(detail.commentsNextCursor)}`,
       );
       setDetail((d) =>
         d?.resource.id === detail.resource.id
@@ -305,7 +302,6 @@ export function App() {
                   [...d.comments, ...page.items].map((c) => [c.id, c]),
                 ).values(),
               ],
-              commentsNextOffset: page.nextOffset,
               commentsNextCursor: page.nextCursor,
             }
           : d,
@@ -740,7 +736,7 @@ export function App() {
           <h1 id="share-invitation-title">{t("shell.inviteTitle")}</h1>
           <p>
             {t("shell.inviteBody", {
-              kind: shareInvitation.kind === "library" ? t("shell.inviteKind.library") : t("shell.inviteKind.document"),
+              kind: shareInvitation.kind === "assistant" ? t("nav.libraryQa") : shareInvitation.kind === "library" ? t("shell.inviteKind.library") : t("shell.inviteKind.document"),
               title: shareInvitation.title,
               role: shareInvitation.role,
             })}
@@ -757,14 +753,14 @@ export function App() {
                   setError(t("shell.inviteExpired"));
                   return;
                 }
-                void api<{ id: string }>("/share/redeem", "POST", {
+                void api<{ id: string; kind?: string }>("/share/redeem", "POST", {
                   token,
                   accept: true,
                 })
                   .then((r) => {
                     setShareInvitation(null);
                     try { sessionStorage.removeItem("doca.pending-share-token"); } catch {}
-                    location.hash = "/r/" + r.id;
+                    location.hash = r.kind === "assistant" ? "/knowledge-assistants?bot=" + r.id : "/r/" + r.id;
                   })
                   .catch((e) => setError(e.message));
               }}
@@ -956,13 +952,7 @@ export function App() {
                 <BookOpenCheck size={18} />
                 {t("nav.librarySystem")}
               </a>
-              <a
-                className={libraryQaPage ? "active" : ""}
-                href={libraryQaUrl(currentLibraryId)}
-              >
-                <Bot size={18} />
-                {t("nav.libraryQa")}
-              </a>
+
             </nav>
           )}
           {!currentLibraryId && (
@@ -993,9 +983,10 @@ export function App() {
                   path: item.path,
                 })),
 
-                ...(discoveryPolicy?.publicDiscovery ? [{ key: "discover", label: "discovery.title", plugin: false as const, Icon: Search, order: 61, path: "/discover" }] : []),
+                { key: "home", label: "workspace.home", plugin: false as const, Icon: Home, order: 10, path: "/home" },
+                { key: "discover", label: "workspace.publicResources", plugin: false as const, Icon: Search, order: 75, path: "/discover" },
                 { key: "ai", label: "nav.assistant", plugin: false as const, Icon: Sparkles, order: 20, path: "/ai" },
-                { key: "notes", label: "nav.notes", plugin: false as const, Icon: Feather, order: 30, path: "/notes" },
+                { key: "notes", label: "nav.notes", plugin: false as const, Icon: Feather, order: 70, path: "/notes" },
                 { key: "trash", label: "nav.trash", plugin: false as const, Icon: Trash2, order: 80, path: "/trash" },
               ])
                 .sort((left, right) => left.order - right.order || left.key.localeCompare(right.key))
@@ -1246,7 +1237,7 @@ export function App() {
         <div
           className={
             "main-scroll" +
-            (!resourceId && scope !== "trash" ? " dashboard-scroll-host" : "")
+            (!resourceId && scope === "home" ? " workspace-home-scroll" : !resourceId && scope !== "trash" ? " dashboard-scroll-host" : "")
           }
         >
           {user && <SubscribeLibraryHost />}
@@ -1261,6 +1252,8 @@ export function App() {
             pluginRoute &&
             renderedPluginRoute !== undefined ? (
             renderedPluginRoute
+          ) : !resourceId && scope === "home" && user ? (
+            <WorkspaceHome name={user.display_name} />
           ) : !resourceId && (scope === "discover" || scope === "collected") && user ? (
             <DiscoveryPage key={scope + hash} collected={scope === "collected"} />
           ) : !resourceId && scope === "knowledge-assistants" && user ? (
@@ -1329,7 +1322,7 @@ export function App() {
               <AccessGate key={resourceId} id={resourceId} user={!!user} />
             )
           ) : (
-            <Dashboard
+            <Dashboard key={scope}
               section={scope}
               currentUserId={user?.id}
               refresh={refresh}
@@ -1670,8 +1663,7 @@ function Comments({
         </button>
       )}
       {visibleCount >= detail.comments.length &&
-        (detail.commentsNextCursor != null ||
-          detail.commentsNextOffset != null) && (
+        detail.commentsNextCursor != null && (
           <button
             className="comments-load-more"
             disabled={busy}

@@ -11,6 +11,7 @@ import {
   effectiveKnowledgeBotLibraries,
 } from "@core/modules/knowledge/system.js";
 import {
+  createKnowledgeConversation,
   knowledgeBot,
   visibleKnowledgeAnswers,
   conversationAccess,
@@ -434,4 +435,121 @@ it("persists feedback switching and withdrawal without retaining withdrawn optim
   expect((await app.inject({method:"POST",url,payload:{judgment:null}})).statusCode).toBe(404);
   actor = alice;
   expect(await read()).toBe("useful");
+});
+
+it("marks citations as openable only when the reader can access the source", async () => {
+  const document = await createContent(db).create(alice, {
+    kind: "document",
+    format: "markdown",
+    libraryId: library,
+    title: "DNS handbook",
+  });
+  await db
+    .updateTable("knowledge_assistants")
+    .set({ visibility: "authenticated" })
+    .where("id", "=", bot.id)
+    .execute();
+  const messages = [
+    {
+      role: "assistant",
+      content: "Use the internal resolver.",
+      detail: JSON.stringify({
+        citations: [
+          {
+            id: randomUUID(),
+            documentId: document.id,
+            title: document.title,
+            heading: "Resolver",
+            text: "Internal resolver notes",
+            publication: 1,
+          },
+        ],
+      }),
+    },
+  ];
+  const allowed = await visibleKnowledgeAnswers(
+    db,
+    alice,
+    bot.id,
+    messages,
+  );
+  expect(JSON.parse(allowed[0]!.detail).citations[0].canOpen).toBe(true);
+  const denied = await visibleKnowledgeAnswers(db, bob, bot.id, messages);
+  expect(JSON.parse(denied[0]!.detail).citations[0].canOpen).toBe(false);
+  const publicView = await visibleKnowledgeAnswers(
+    db,
+    alice,
+    bot.id,
+    messages,
+    false,
+  );
+  expect(JSON.parse(publicView[0]!.detail).citations[0].canOpen).toBe(false);
+});
+
+it("archives, restores, and deletes answer and curation conversations in bulk", async () => {
+  const answer = await createKnowledgeConversation(
+    db,
+    alice,
+    bot.id,
+    "answer",
+    "Answer session",
+  );
+  const curation = await createKnowledgeConversation(
+    db,
+    alice,
+    library,
+    "curation",
+    "Curation session",
+  );
+  const batchUrl = "/api/v1/knowledge/conversations/batch";
+  const archived = await app.inject({
+    method: "POST",
+    url: batchUrl,
+    payload: { ids: [answer.id, curation.id], action: "archive" },
+  });
+  expect(archived.statusCode).toBe(200);
+  expect(archived.json().updated).toBe(2);
+  expect(
+    await db
+      .selectFrom("knowledge_conversations")
+      .select(["id", "archived"])
+      .where("id", "in", [answer.id, curation.id])
+      .orderBy("id")
+      .execute(),
+  ).toEqual(
+    [answer, curation]
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((conversation) => ({ id: conversation.id, archived: 1 })),
+  );
+  const restored = await app.inject({
+    method: "PATCH",
+    url: `/api/v1/knowledge/conversations/${answer.id}`,
+    payload: { archived: false },
+  });
+  expect(restored.statusCode).toBe(200);
+  actor = bob;
+  expect(
+    (
+      await app.inject({
+        method: "PATCH",
+        url: `/api/v1/knowledge/conversations/${curation.id}`,
+        payload: { archived: false },
+      })
+    ).statusCode,
+  ).toBeGreaterThanOrEqual(400);
+  actor = alice;
+  const deleted = await app.inject({
+    method: "POST",
+    url: batchUrl,
+    payload: { ids: [answer.id, curation.id], action: "delete" },
+  });
+  expect(deleted.statusCode).toBe(200);
+  expect(deleted.json().deleted).toBe(2);
+  expect(
+    await db
+      .selectFrom("knowledge_conversations")
+      .select("id")
+      .where("id", "in", [answer.id, curation.id])
+      .execute(),
+  ).toEqual([]);
 });

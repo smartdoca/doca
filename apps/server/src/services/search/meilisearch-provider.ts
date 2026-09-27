@@ -437,6 +437,9 @@ export class MeilisearchSearchProvider<
     config: TConnection,
     physical: string,
   ): Promise<void> {
+    // Apply current credentials before settings changes can regenerate vectors.
+    if (physical !== config.index_name)
+      await this.#syncEmbedders(config, physical);
     await this.#options.waitTask(
       config,
       await this.#options.request(
@@ -451,8 +454,6 @@ export class MeilisearchSearchProvider<
         },
       ),
     );
-    if (physical !== config.index_name)
-      await this.#syncEmbedders(config, physical);
   }
 
   async #syncEmbedders(

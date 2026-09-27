@@ -1,3 +1,6 @@
+import { recentActivity, recordActivity, setAssistantFavorite } from "@core/modules/workspace/activity.js";
+import { homeOverview } from "@core/modules/workspace/home.js";
+import { authorizeFileItem } from "@core/modules/access/file-access.js";
 import {
   catalogPage,
   collectPublicResource,
@@ -26,6 +29,10 @@ export function registerDistribution(
   auth: (r: FastifyRequest) => Actor,
   admin: (r: FastifyRequest) => Actor,
 ) {
+  api.get("/api/v1/workspace/overview", req => homeOverview(db, auth(req)));
+  api.get<{Querystring:{kind?:string;publicOnly?:boolean;q?:string;offset?:number}}>("/api/v1/workspace/recent", {schema:{querystring:Type.Object({kind:Type.Optional(Type.Union(["document","library","assistant","folder","file"].map(k=>Type.Literal(k)))),publicOnly:Type.Optional(Type.Boolean()),q:Type.Optional(Type.String({maxLength:200})),offset:Type.Optional(Type.Integer({minimum:0,maximum:1000000}))},{additionalProperties:false})}}, req=>recentActivity(db,auth(req),req.query));
+  api.post<{Params:{id:string}}>("/api/v1/workspace/files/:id/visit",{schema:{params:Type.Object({id:Type.String({format:"uuid"})})}},async req=>{const actor=auth(req);await authorizeFileItem(db,actor,req.params.id);await recordActivity(db,actor.id,"file",req.params.id);return {ok:true};});
+  api.put<{Params:{id:string};Body:{favorite:boolean}}>("/api/v1/workspace/assistants/:id/favorite",{schema:{params:Type.Object({id:Type.String({format:"uuid"})}),body:Type.Object({favorite:Type.Boolean()},{additionalProperties:false})}},req=>setAssistantFavorite(db,auth(req),req.params.id,req.body.favorite));
   const choice = (values: string[]) =>
     Type.Union(values.map((v) => Type.Literal(v)));
   const kindSchema = choice([...publicResourceKinds]);

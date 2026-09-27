@@ -83,9 +83,8 @@ export function createInteractions(
     commentPage(
       actor: Actor | null,
       id: string,
-      offset = 0,
-      target?: string,
       cursor?: string,
+      target?: string,
     ) {
       return run(actor, [id], async (ctx) => {
         const resource = get(ctx, id, "read_content");
@@ -115,7 +114,6 @@ export function createInteractions(
         const rows = await q
           .orderBy("c.created_at")
           .orderBy("c.id")
-          .offset(cursor ? 0 : offset)
           .limit(201)
           .execute();
         const items = rows.slice(0, 200);
@@ -126,7 +124,6 @@ export function createInteractions(
             body: c.deleted_at ? "" : c.body,
             body_json: c.deleted_at ? null : c.body_json,
           })),
-          nextOffset: rows.length > 200 ? offset + 200 : null,
           nextCursor:
             rows.length > 200 && last && !target
               ? encodePageCursor(fingerprint, last.created_at, last.id)

@@ -65,4 +65,15 @@ bash scripts/bootstrap-admin.sh
 - [开发、部署和验收](docs/development.md)
 - [产品设计基线](docs/product-design.md)
 
+## 许可证
+
+Doca 自研代码默认采用 [GNU AGPL v3 only](LICENSE)，并向需要在闭源产品中使用的组织
+提供另行签署的商业许可证。商业使用本身并未被禁止；没有单独商业协议时，应遵守
+AGPL 的对应源码义务。完整说明见 [双许可说明](LICENSING.zh-CN.md)，参与项目见
+[贡献指南](CONTRIBUTING.zh-CN.md)。
+
+Slate 富文本、演示文稿、表格、Markdown、画板等 Doca 自研编辑器也按同一方向
+对外开源并独立发布 npm 包。当前 `vendor/` 历史制品将在对应源码仓库、版本标签和
+npm 发布完成后退出正式依赖链；第三方组件继续遵守其各自许可证。
+
 当前版本从全新数据库基线开始，不提供旧数据库迁移兼容。

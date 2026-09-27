@@ -20,7 +20,7 @@ type Stats = {
   comments: number;
 };
 type RecordRow = { id: string; name?: string; display_name?: string; title?: string; action?: string; created_at: string; is_ai?: boolean };
-type RecordPage = { items: RecordRow[]; nextOffset: number | null };
+type RecordPage = { items: RecordRow[]; nextCursor: string | null };
 type VersionPreview = {
   id: string;
   title?: string;

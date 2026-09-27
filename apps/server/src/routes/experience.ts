@@ -1,3 +1,4 @@
+import { redeemKnowledgeShare } from "@core/modules/knowledge/permissions.js";
 import { Type } from "@sinclair/typebox";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { createDocuments } from "@core/modules/collaboration/documents.js";
@@ -13,17 +14,19 @@ export function registerExperience(
   const service = createExperience(db),
     id = Type.String({ format: "uuid" }),
     params = Type.Object({ id }),
-    query = Type.Object({
-      offset: Type.Optional(Type.Integer({ minimum: 0, maximum: 100000 })),
-      cursor: Type.Optional(Type.String({ maxLength: 2048 })),
-      tab: Type.Optional(
-        Type.Union(["stats", "visits", "audit"].map((x) => Type.Literal(x))),
-      ),
-    });
+    query = Type.Object(
+      {
+        cursor: Type.Optional(Type.String({ maxLength: 2048 })),
+        tab: Type.Optional(
+          Type.Union(["stats", "visits", "audit"].map((x) => Type.Literal(x))),
+        ),
+      },
+      { additionalProperties: false },
+    );
   for (const kind of ["likes", "info", "versions"] as const)
     api.get<{
       Params: { id: string };
-      Querystring: { offset?: number; cursor?: string; tab?: string };
+      Querystring: { cursor?: string; tab?: string };
     }>(
       `/api/v1/resources/:id/${kind}`,
       { schema: { params, querystring: query } },
@@ -33,13 +36,11 @@ export function registerExperience(
               actor(req),
               req.params.id,
               req.query.tab ?? "stats",
-              req.query.offset,
               req.query.cursor,
             )
           : service[kind](
               actor(req),
               req.params.id,
-              req.query.offset,
               req.query.cursor,
             ),
     );
@@ -135,8 +136,8 @@ export function registerExperience(
         ),
       },
     },
-    (req) =>
-      service.redeem(
+    async (req) =>
+      (await redeemKnowledgeShare(db, authenticated(req), req.body.token, req.body.accept ?? true)) ?? service.redeem(
         authenticated(req),
         req.body.token,
         req.body.accept ?? true,

@@ -1,3 +1,4 @@
+import {Select} from "@web/shared/components/select.js";
 import { useEffect, useState } from "react";
 import { Paperclip, BookOpen } from "lucide-react";
 import { api } from "@web/shared/api.js";
@@ -52,16 +53,6 @@ export function CurationInputs({
         <Paperclip size={15} />
         {t("curator.upload")}
       </button>
-      <button
-        type="button"
-        onClick={() => {
-          setError("");
-          setMode("reference");
-        }}
-      >
-        <BookOpen size={15} />
-        {t("curator.reference")}
-      </button>
       {mode && (
         <Dialog
           title={t(mode === "upload" ? "curator.upload" : "curator.reference")}
@@ -97,7 +88,7 @@ export function CurationInputs({
               <p>{t("curator.uploadHint")}</p>
               <label>
                 {t("curator.destination")}
-                <select
+                <Select
                   value={target}
                   onChange={(e) => setTarget(e.target.value)}
                   disabled={busy}
@@ -108,7 +99,7 @@ export function CurationInputs({
                       {folder.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               {!target && (
                 <label>

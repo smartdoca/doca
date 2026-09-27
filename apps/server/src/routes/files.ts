@@ -1,3 +1,5 @@
+import { sql } from "kysely";
+import { recordActivity } from "@core/modules/workspace/activity.js";
 import { folderInSearch } from "@core/modules/discovery/catalog.js";
 import { queryResourcePage } from "@core/modules/resources/queries.js";
 import { authorizeFileFolder as folderAccess, authorizeFileItem } from "@core/modules/access/file-access.js";
@@ -470,6 +472,7 @@ export function registerFiles(
       if (type === "document") await authorize(db, actor, id, 1);
       if (type === "folder") {
         currentFolder = (await folderAccess(db, actor, id, 1)).folder;
+        await recordActivity(db, actor.id, "folder", id);
       }
       let physicalFolders: Schema["file_folders"][] = [];
       if (type === "system" && id === "root") {
@@ -1423,7 +1426,7 @@ export function registerFiles(
     const candidates = await db
       .selectFrom("file_folders")
       .selectAll()
-      .where("parent_id", "=", "shared")
+      .where(eb=>eb.or([eb("parent_id","=","shared"),sql<boolean>`exists(select 1 from resource_collections c where c.resource_kind='folder' and c.resource_id=file_folders.id and c.user_id=${actor.id})`]))
       .where("deleted_at", "is", null)
       .orderBy("updated_at", "desc")
       .execute();
@@ -1432,7 +1435,7 @@ export function registerFiles(
       let access: Awaited<ReturnType<typeof folderAccess>>;
       try {
         access = await folderAccess(db, actor, folder.id, 1);
-        if (!await folderInSearch(db, actor, folder.id)) continue;
+        if (!await folderInSearch(db, actor, folder.id, "personal")) continue;
       } catch {
         continue;
       }
@@ -1448,8 +1451,11 @@ export function registerFiles(
         .where("s.folder_id", "=", folder.id)
         .orderBy("u.display_name")
         .execute();
+      const collected = !!await db.selectFrom("resource_collections").select("resource_id").where("user_id","=",actor.id).where("resource_kind","=","folder").where("resource_id","=",folder.id).executeTakeFirst();
+      const isPublic = !!await db.selectFrom("folder_publications").select("folder_id").where("folder_id","=",folder.id).where("enabled","=",1).executeTakeFirst();
       items.push({
         ...folder,
+        collected, public: isPublic, owned: folder.owner_id === actor.id, collaborating: members.some(m=>m.user_id===actor.id),
         type: "folder",
         virtual: false,
         locked: access.role === "reader",

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { usePermissionPopover } from "./use-permission-popover.js";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   ChevronRight,
@@ -10,7 +11,10 @@ import {
 } from "lucide-react";
 import { api, type Detail } from "@web/shared/api.js";
 import { realtime } from "@web/features/documents/realtime.js";
-import { accessText, type Manager } from "@web/features/documents/access-management.js";
+import {
+  accessText,
+  type Manager,
+} from "@web/features/documents/access-management.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { RequestAccess } from "@web/features/documents/access-tasks.js";
 import { ShareLinkSettings } from "@web/features/documents/sharing.js";
@@ -84,8 +88,16 @@ export function PermissionDialog({
   saved,
   embedded = false,
   authenticated = true,
+  adapter,
 }: {
-  detail: Detail;
+  detail: { resource: Pick<Detail["resource"], "id"> & { kind: string } };
+  adapter?: {
+    basePath: string;
+    roles: string[];
+    publicRoles: string[];
+    requests?: boolean;
+    invitationNote?: boolean;
+  };
   close: () => void;
   saved: () => Promise<void>;
   embedded?: boolean;
@@ -93,6 +105,8 @@ export function PermissionDialog({
 }) {
   const { t } = useI18n();
   const id = detail.resource.id;
+  const basePath = adapter?.basePath ?? `/resources/${id}`;
+  const memberRoles = (owner = false) => adapter?.roles ?? roles(owner);
   const [data, setData] = useState<Overview | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -108,31 +122,9 @@ export function PermissionDialog({
     [invitationMessage, setInvitationMessage] = useState(""),
     [removing, setRemoving] = useState<string | null>(null),
     [sourceMember, setSourceMember] = useState<Member | null>(null);
-  const panel = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (embedded) return;
-    const outside = (event: PointerEvent) => {
-      const target = event.target as Element;
-      if (target.closest("[data-permissions-popup]")) return;
-      const popup = target.closest("[role=listbox]");
-      if (
-        popup &&
-        Array.from(
-          panel.current?.querySelectorAll("[aria-controls]") ?? [],
-        ).some((trigger) => trigger.getAttribute("aria-controls") === popup.id)
-      )
-        return;
-      if (
-        !panel.current?.contains(target) &&
-        !target.closest("[data-permissions-trigger]")
-      )
-        close();
-    };
-    document.addEventListener("pointerdown", outside, true);
-    return () => document.removeEventListener("pointerdown", outside, true);
-  }, [embedded, close]);
+  const panel = usePermissionPopover(close, embedded);
   async function load() {
-    const next = await api<Overview>(`/resources/${id}/permission-overview`);
+    const next = await api<Overview>(`${basePath}/permission-overview`);
     setData(next);
     return next;
   }
@@ -144,7 +136,7 @@ export function PermissionDialog({
     setSourceMember(null);
     setError("");
     const refresh = () =>
-      api<Overview>(`/resources/${id}/permission-overview`).then((next) => {
+      api<Overview>(`${basePath}/permission-overview`).then((next) => {
         if (alive) setData(next);
       });
     void refresh().catch((e) => {
@@ -158,12 +150,6 @@ export function PermissionDialog({
       stop();
     };
   }, [id]);
-  useEffect(() => {
-    if (embedded) return;
-    const previous = document.activeElement as HTMLElement | null;
-    panel.current?.querySelector<HTMLButtonElement>("button")?.focus();
-    return () => previous?.focus();
-  }, [embedded]);
   function navigate(next: keyof typeof pageTitles) {
     setTrail((current) => {
       if (current[current.length - 1] === next) return current;
@@ -196,7 +182,7 @@ export function PermissionDialog({
     setBusy(true);
     setError("");
     try {
-      await api(`/resources/${id}/permission-sources/${sourceMember.id}`, "PUT", {
+      await api(`${basePath}/permission-sources/${sourceMember.id}`, "PUT", {
         revision: data.authzRevision,
         sourceType: source.type,
         sourceId: source.id,
@@ -206,9 +192,15 @@ export function PermissionDialog({
           : {}),
       });
       const next = await load();
-      setSourceMember(next.members.find((member) => member.id === sourceMember.id) ?? null);
+      setSourceMember(
+        next.members.find((member) => member.id === sourceMember.id) ?? null,
+      );
       await saved();
-      setNotice(action === "delete" ? t("permissionsUi.sourceDeleted") : t("permissionsUi.sourceUpdated"));
+      setNotice(
+        action === "delete"
+          ? t("permissionsUi.sourceDeleted")
+          : t("permissionsUi.sourceUpdated"),
+      );
     } catch (e) {
       setError((e as Error).message);
       await load().catch(() => {});
@@ -216,7 +208,11 @@ export function PermissionDialog({
       setBusy(false);
     }
   }
-  async function act(path: string, body: unknown, message = t("common.settingsSaved")) {
+  async function act(
+    path: string,
+    body: unknown,
+    message = t("common.settingsSaved"),
+  ) {
     setBusy(true);
     setError("");
     setNotice("");
@@ -236,7 +232,7 @@ export function PermissionDialog({
   }
   async function settings(change: Record<string, unknown>) {
     if (!data) return;
-    await act(`/resources/${id}/permissions`, {
+    await act(`${basePath}/permissions`, {
       version: data.version,
       ...change,
     });
@@ -248,13 +244,15 @@ export function PermissionDialog({
   ) {
     if (!data) return;
     const next = await act(
-      `/resources/${id}/members/${m.id}`,
+      `${basePath}/members/${m.id}`,
       {
         revision: data.authzRevision,
         role: nextRole,
         includeDescendants: scope,
       },
-      nextRole ? t("permissionsUi.updated") : t("permissionsUi.collaboratorRemoved"),
+      nextRole
+        ? t("permissionsUi.updated")
+        : t("permissionsUi.collaboratorRemoved"),
     );
     if (next) {
       setRemoving(null);
@@ -266,7 +264,9 @@ export function PermissionDialog({
   function origin(field: string) {
     if (!data || data.accessMode !== "inherit") return null;
     return data.inheritedFields.includes(field) ? (
-      <small className="permissions-origin">{t("permissionsUi.inherited")}</small>
+      <small className="permissions-origin">
+        {t("permissionsUi.inherited")}
+      </small>
     ) : (
       <button
         type="button"
@@ -277,7 +277,9 @@ export function PermissionDialog({
           e.stopPropagation();
           void settings({ resetFields: [field] });
         }}
-      >{t("permissionsUi.restoreParent")}</button>
+      >
+        {t("permissionsUi.restoreParent")}
+      </button>
     );
   }
   const inherited = data?.accessMode === "inherit",
@@ -332,7 +334,9 @@ export function PermissionDialog({
                         accessMode: e.target.checked ? "inherit" : "custom",
                       })
                     }
-                  />{t("shell.access.inherit")}</label>
+                  />
+                  {t("shell.access.inherit")}
+                </label>
               )}
               {authenticated && (
                 <a
@@ -371,11 +375,15 @@ export function PermissionDialog({
       </header>
       <div className="permissions-body" aria-busy={busy}>
         {error && <Feedback tone="error" message={error} />}
-        {!data && !error && <p className="permissions-empty">{t("common.loading")}</p>}
+        {!data && !error && (
+          <p className="permissions-empty">{t("common.loading")}</p>
+        )}
         {data && page === "main" && (
           <>
             <section className="permissions-self">
-              <span className="permissions-self-title">{t("permissionsUi.currentUser")}</span>
+              <span className="permissions-self-title">
+                {t("permissionsUi.currentUser")}
+              </span>
               {data.currentUser ? (
                 <UserBadge
                   id={data.currentUser.id}
@@ -388,13 +396,17 @@ export function PermissionDialog({
                 <span>{t("permissionsUi.anonymous")}</span>
               )}
               <span className="permissions-self-role">
-                {accessText(t, data.role) === data.role ? t("role.none") : accessText(t, data.role)}
+                {accessText(t, data.role) === data.role
+                  ? t("role.none")
+                  : accessText(t, data.role)}
               </span>
               {data.rank < 4 && data.effectiveRequestsEnabled && (
                 <button
                   className="permissions-request-button"
                   onClick={() => navigate("request")}
-                >{t("ticket.requestedRole")}</button>
+                >
+                  {t("ticket.requestedRole")}
+                </button>
               )}
             </section>
             {data.rank >= 3 && (
@@ -403,13 +415,13 @@ export function PermissionDialog({
                   type="button"
                   className="permissions-collaborators"
                   disabled={!data.canManage}
-                  aria-label={t("permissionsUi.collaboratorCount", { count: data.members.length })}
+                  aria-label={t("permissionsUi.collaboratorCount", {
+                    count: data.members.length,
+                  })}
                   onClick={() => navigate("members")}
                 >
                   <span>
-                    {data.canManage
-                      ? t("share.invite")
-                      : t("share.members")}
+                    {data.canManage ? t("share.invite") : t("share.members")}
                   </span>
                   <span className="permissions-avatars">
                     {data.members.slice(0, 5).map((m) => (
@@ -429,7 +441,7 @@ export function PermissionDialog({
                     {data.canManage && <ChevronRight size={17} />}
                   </span>
                 </button>
-                {data.canManage  && (
+                {data.canManage && (
                   <button
                     type="button"
                     className="permissions-invite-entry"
@@ -444,6 +456,8 @@ export function PermissionDialog({
             {data.canManage && (
               <ShareLinkSettings
                 id={id}
+                basePath={basePath}
+                allowedRoles={adapter?.publicRoles}
                 changed={load}
                 inheritedEnabled={data.sharingEnabled}
                 inheritanceControl={origin("share_links_enabled")}
@@ -451,7 +465,7 @@ export function PermissionDialog({
             )}
           </>
         )}
-        {data?.canManage && page === "invite"  && (
+        {data?.canManage && page === "invite" && (
           <form
             className="permissions-invite-form"
             onSubmit={async (e) => {
@@ -459,7 +473,7 @@ export function PermissionDialog({
               if (!person || busy) return;
               if (
                 await act(
-                  `/resources/${id}/members/${person.id}`,
+                  `${basePath}/members/${person.id}`,
                   {
                     revision: data.authzRevision,
                     role,
@@ -486,12 +500,14 @@ export function PermissionDialog({
                   select={setPerson}
                 />
               </div>
-              <label>{t("permissionsUi.grant")}<Select
+              <label>
+                {t("permissionsUi.grant")}
+                <Select
                   aria-label={t("permissionsUi.inviteAccess")}
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
                 >
-                  {roles(data.isOwner).map((r) => (
+                  {memberRoles(data.isOwner).map((r) => (
                     <option key={r} value={r}>
                       {accessText(t, r)}
                     </option>
@@ -504,28 +520,40 @@ export function PermissionDialog({
                     type="checkbox"
                     checked={includeDescendants}
                     onChange={(e) => setIncludeDescendants(e.target.checked)}
-                  />{t("role.scope.descendants")}</label>
+                  />
+                  {t("role.scope.descendants")}
+                </label>
               )}
-              <label>
-                <span>{t("permissionsUi.note")}<span className="permissions-optional">{t("permissionsUi.optional")}</span>
-                </span>
-                <textarea
-                  aria-label={t("ticket.inviteNote")}
-                  placeholder={t("permissionsUi.noteHint")}
-                  maxLength={1000}
-                  rows={3}
-                  value={invitationMessage}
-                  onChange={(e) => setInvitationMessage(e.target.value)}
-                />
-              </label>
+              {adapter?.invitationNote !== false && (
+                <label>
+                  <span>
+                    {t("permissionsUi.note")}
+                    <span className="permissions-optional">
+                      {t("permissionsUi.optional")}
+                    </span>
+                  </span>
+                  <textarea
+                    aria-label={t("ticket.inviteNote")}
+                    placeholder={t("permissionsUi.noteHint")}
+                    maxLength={1000}
+                    rows={3}
+                    value={invitationMessage}
+                    onChange={(e) => setInvitationMessage(e.target.value)}
+                  />
+                </label>
+              )}
               <footer>
-                <button type="button" onClick={() => navigate("main")}>{t("common.cancel")}</button>
+                <button type="button" onClick={() => navigate("main")}>
+                  {t("common.cancel")}
+                </button>
                 <button
                   className="primary"
                   type="submit"
                   disabled={!person || busy}
                 >
-                  {busy ? t("permissionsUi.inviting") : t("permissionsUi.sendInvite")}
+                  {busy
+                    ? t("permissionsUi.inviting")
+                    : t("permissionsUi.sendInvite")}
                 </button>
               </footer>
             </fieldset>
@@ -545,7 +573,9 @@ export function PermissionDialog({
                   <UserBadge id={m.id} name={m.display_name} />
                   <small>
                     @{m.public_id}
-                    {m.sources.includes("inherit") ? t("permissionsUi.inheritedSuffix") : ""}
+                    {m.sources.includes("inherit")
+                      ? t("permissionsUi.inheritedSuffix")
+                      : ""}
                   </small>
                 </div>
                 {m.canAdjust ? (
@@ -553,7 +583,9 @@ export function PermissionDialog({
                     <button
                       className="icon permissions-source-button"
                       title={t("permissionsUi.viewSources")}
-                      aria-label={t("permissionsUi.sourcesFor", { name: m.display_name })}
+                      aria-label={t("permissionsUi.sourcesFor", {
+                        name: m.display_name,
+                      })}
                       disabled={busy}
                       onClick={() => {
                         setSourceMember(m);
@@ -563,19 +595,23 @@ export function PermissionDialog({
                       <Info size={15} />
                     </button>
                     <Select
-                      aria-label={t("permissionsUi.accessFor", { name: m.display_name })}
+                      aria-label={t("permissionsUi.accessFor", {
+                        name: m.display_name,
+                      })}
                       value={m.role}
                       disabled={busy}
                       onChange={(e) => void member(m, e.target.value)}
                     >
-                      {roles(data.isOwner).map((r) => (
+                      {memberRoles(data.isOwner).map((r) => (
                         <option key={r} value={r}>
                           {accessText(t, r)}
                         </option>
                       ))}
                     </Select>
                     {m.canAdjust && (
-                      <button disabled={busy} onClick={() => setRemoving(m.id)}>{t("credentials.remove")}</button>
+                      <button disabled={busy} onClick={() => setRemoving(m.id)}>
+                        {t("credentials.remove")}
+                      </button>
                     )}
                   </div>
                 ) : (
@@ -586,7 +622,9 @@ export function PermissionDialog({
                     <button
                       className="icon permissions-source-button"
                       title={t("permissionsUi.viewSources")}
-                      aria-label={t("permissionsUi.sourcesFor", { name: m.display_name })}
+                      aria-label={t("permissionsUi.sourcesFor", {
+                        name: m.display_name,
+                      })}
                       onClick={() => {
                         setSourceMember(m);
                         navigate("sources");
@@ -603,7 +641,9 @@ export function PermissionDialog({
                       checked={m.includeDescendants}
                       disabled={busy}
                       onChange={(e) => void member(m, m.role, e.target.checked)}
-                    />{t("role.scope.descendants")}</label>
+                    />
+                    {t("role.scope.descendants")}
+                  </label>
                 )}
                 {removing === m.id && (
                   <div className="permissions-confirm">
@@ -611,22 +651,33 @@ export function PermissionDialog({
                     <button
                       disabled={busy}
                       onClick={() => void member(m, null)}
-                    >{t("permissionsUi.confirmRemove")}</button>
-                    <button onClick={() => setRemoving(null)}>{t("common.cancel")}</button>
+                    >
+                      {t("permissionsUi.confirmRemove")}
+                    </button>
+                    <button onClick={() => setRemoving(null)}>
+                      {t("common.cancel")}
+                    </button>
                   </div>
                 )}
               </div>
             ))}
             {!data.members.length && (
-              <p className="permissions-empty">{t("permissionsUi.noCollaborators")}</p>
+              <p className="permissions-empty">
+                {t("permissionsUi.noCollaborators")}
+              </p>
             )}
           </>
         )}
         {data && page === "sources" && sourceMember && (
           <section className="permissions-source-list">
             <div className="permissions-source-person">
-              <UserBadge id={sourceMember.id} name={sourceMember.display_name} />
-              <span>{accessText(t, sourceMember.role) ?? sourceMember.role}</span>
+              <UserBadge
+                id={sourceMember.id}
+                name={sourceMember.display_name}
+              />
+              <span>
+                {accessText(t, sourceMember.role) ?? sourceMember.role}
+              </span>
             </div>
             {sourceMember.sourceDetails.map((source, index) => {
               const inherited = source.type === "parent_inherited";
@@ -641,10 +692,17 @@ export function PermissionDialog({
                     ? t("permissionsUi.shareSource", { id: source.id ?? "" })
                     : t("permissionsUi.directGrant");
               return (
-                <div className="permissions-source-card" key={`${source.type}:${source.id ?? index}`}>
+                <div
+                  className="permissions-source-card"
+                  key={`${source.type}:${source.id ?? index}`}
+                >
                   <div className="permissions-source-card-title">
                     <span>{sourceLabel}</span>
-                    <span>{source.status === "disabled" ? t("permissionsUi.disabled") : accessText(t, source.role) ?? source.role}</span>
+                    <span>
+                      {source.status === "disabled"
+                        ? t("permissionsUi.disabled")
+                        : (accessText(t, source.role) ?? source.role)}
+                    </span>
                   </div>
                   <div className="permissions-source-card-meta">
                     {supportsDescendants && source.includeDescendants
@@ -656,14 +714,22 @@ export function PermissionDialog({
                       {source.status !== "disabled" && (
                         <>
                           <Select
-                            aria-label={t("permissionsUi.sourceAccess", { name: sourceLabel })}
+                            aria-label={t("permissionsUi.sourceAccess", {
+                              name: sourceLabel,
+                            })}
                             value={source.role}
-                            disabled={busy}
+                            disabled={
+                              busy || (!!adapter && source.type === "link")
+                            }
                             onChange={(event) =>
-                              void sourceAction(source, "update", event.target.value)
+                              void sourceAction(
+                                source,
+                                "update",
+                                event.target.value,
+                              )
                             }
                           >
-                            {roles(data.isOwner).map((roleName) => (
+                            {memberRoles(data.isOwner).map((roleName) => (
                               <option key={roleName} value={roleName}>
                                 {accessText(t, roleName)}
                               </option>
@@ -683,7 +749,9 @@ export function PermissionDialog({
                                     event.target.checked,
                                   )
                                 }
-                              />{t("permissionsUi.children")}</label>
+                              />
+                              {t("permissionsUi.children")}
+                            </label>
                           )}
                         </>
                       )}
@@ -691,7 +759,9 @@ export function PermissionDialog({
                         disabled={busy}
                         onClick={() => void sourceAction(source, "delete")}
                       >
-                        {parentOverride ? t("permissionsUi.clearOverride") : t("permissionsUi.deleteSource")}
+                        {parentOverride
+                          ? t("permissionsUi.clearOverride")
+                          : t("permissionsUi.deleteSource")}
                       </button>
                     </div>
                   )}
@@ -699,18 +769,32 @@ export function PermissionDialog({
               );
             })}
             {!sourceMember.sourceDetails.length && (
-              <p className="permissions-empty">{t("permissionsUi.noSources")}</p>
+              <p className="permissions-empty">
+                {t("permissionsUi.noSources")}
+              </p>
             )}
           </section>
         )}
         {data?.canManage && page === "settings" && (
           <div className="permissions-settings">
-            {data.publicContainerId && <p>{t("discovery.inherited")} <a href={`#/r/${data.publicContainerId}?view=settings`}>{t("discovery.containerSettings")}</a></p>}
-            {detail.resource.kind === "library" && <p className="subtle">{t("discovery.libraryPublishHelp")}</p>}
+            {data.publicContainerId && (
+              <p>
+                {t("discovery.inherited")}{" "}
+                <a href={`#/r/${data.publicContainerId}?view=settings`}>
+                  {t("discovery.containerSettings")}
+                </a>
+              </p>
+            )}
+            {detail.resource.kind === "library" && (
+              <p className="subtle">{t("discovery.libraryPublishHelp")}</p>
+            )}
             <fieldset className="permissions-form" disabled={busy}>
               <section className="permissions-section">
                 <label className="permissions-switch">
-                  <span>{t("permissionsUi.publicAccess")}{origin("visibility")}</span>
+                  <span>
+                    {t("permissionsUi.publicAccess")}
+                    {origin("visibility")}
+                  </span>
                   <input
                     role="switch"
                     aria-label={t("permissionsUi.publicAccess")}
@@ -740,9 +824,14 @@ export function PermissionDialog({
                               : "authenticated",
                           })
                         }
-                      />{t("permissionsUi.publicWeb")}</label>
+                      />
+                      {t("permissionsUi.publicWeb")}
+                    </label>
                     <div className="permissions-option-row">
-                      <span>{t("permissionsUi.publicPermission")}{origin("public_role")}</span>
+                      <span>
+                        {t("permissionsUi.publicPermission")}
+                        {origin("public_role")}
+                      </span>
                       <Select
                         aria-label={t("permissionsUi.publicPermission")}
                         value={data.publicRole}
@@ -750,7 +839,7 @@ export function PermissionDialog({
                           void settings({ publicRole: e.target.value })
                         }
                       >
-                        {roles().map((r) => (
+                        {(adapter?.publicRoles ?? roles()).map((r) => (
                           <option key={r} value={r}>
                             {accessText(t, r)}
                           </option>
@@ -766,20 +855,25 @@ export function PermissionDialog({
                   </p>
                 )}
               </section>
-              <section className="permissions-section permissions-application">
-                <label className="permissions-switch">
-                  <span>{t("permissionsUi.allowRequests")}{origin("requests_enabled")}</span>
-                  <input
-                    role="switch"
-                    aria-label={t("permissionsUi.allowRequests")}
-                    type="checkbox"
-                    checked={data.effectiveRequestsEnabled}
-                    onChange={(e) =>
-                      void settings({ requestsEnabled: e.target.checked })
-                    }
-                  />
-                </label>
-              </section>
+              {adapter?.requests !== false && (
+                <section className="permissions-section permissions-application">
+                  <label className="permissions-switch">
+                    <span>
+                      {t("permissionsUi.allowRequests")}
+                      {origin("requests_enabled")}
+                    </span>
+                    <input
+                      role="switch"
+                      aria-label={t("permissionsUi.allowRequests")}
+                      type="checkbox"
+                      checked={data.effectiveRequestsEnabled}
+                      onChange={(e) =>
+                        void settings({ requestsEnabled: e.target.checked })
+                      }
+                    />
+                  </label>
+                </section>
+              )}
             </fieldset>
 
             <fieldset className="permissions-form" disabled={busy}>
@@ -793,7 +887,9 @@ export function PermissionDialog({
                       onChange={(e) =>
                         void settings({ historyReaders: e.target.checked })
                       }
-                    />{t("permissionsUi.readerHistory")}{origin("history_readers")}
+                    />
+                    {t("permissionsUi.readerHistory")}
+                    {origin("history_readers")}
                   </label>
                 </section>
               )}

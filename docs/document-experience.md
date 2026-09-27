@@ -35,12 +35,12 @@
 
 | 接口 | 用途 |
 | --- | --- |
-| GET /resources/:id/likes?offset=0 | 点赞人、total、nextOffset |
+| GET /resources/:id/likes?cursor= | 点赞人、首屏 total、nextCursor |
 | GET /resources/:id/share-link | 管理者获取链接配置与当前令牌 |
 | PUT /resources/:id/share-link | `{enabled,role,version}`，返回新的 version 与链接配置 |
 | POST /share/redeem | `{token}`，返回资源 id |
-| GET /resources/:id/info?tab=stats/visits/audit&offset=0 | tab 三选一，统计或分页记录 |
-| GET /resources/:id/versions?offset=0 | 快照元信息及 nextOffset |
+| GET /resources/:id/info?tab=stats/visits/audit&cursor= | tab 三选一，统计或游标分页记录 |
+| GET /resources/:id/versions?cursor= | 快照元信息及 nextCursor |
 | POST /resources/:id/versions | 编辑者保存当前快照 |
 | GET /resources/:id/versions/:versionId | 只读历史正文 |
 

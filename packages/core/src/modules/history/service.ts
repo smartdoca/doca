@@ -45,7 +45,6 @@ export function createHistory(db: DB) {
     async versions(
       actor: Actor | null,
       id: string,
-      offset = 0,
       cursor?: string,
     ) {
       const resource = await access(db, actor, id, "read_history");
@@ -72,7 +71,6 @@ export function createHistory(db: DB) {
       const rows = await query
         .orderBy("v.created_at", "desc")
         .orderBy("v.id", "desc")
-        .offset(cursor ? 0 : offset)
         .limit(101)
         .execute();
       const items = rows.slice(0, 100);
@@ -82,7 +80,6 @@ export function createHistory(db: DB) {
           ...row,
           is_ai: !!recovery_json && JSON.parse(recovery_json).origin === "ai",
         })),
-        nextOffset: rows.length > 100 ? offset + 100 : null,
         nextCursor:
           rows.length > 100 && last
             ? encodePageCursor(fingerprint, last.created_at, last.id)

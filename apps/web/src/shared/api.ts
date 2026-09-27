@@ -49,6 +49,8 @@ export interface Resource {
   created_at: string;
   visited_at?: string | null;
   favorite?: boolean;
+  collected?: boolean;
+  is_public?: boolean;
   pinned?: boolean;
   ownerName?: string;
   libraryName?: string | null;
@@ -93,7 +95,6 @@ export interface Detail {
   resource: Resource;
   ownerName: string;
   comments: Comment[];
-  commentsNextOffset?: number | null;
   commentsNextCursor?: string | null;
   likes: number;
   liked: boolean;
@@ -154,7 +155,6 @@ export interface FilePage {
 export interface Page {
   items: Resource[];
   total: number | null;
-  nextOffset: number | null;
   nextCursor?: string | null;
   truncated?: boolean;
 }

@@ -1,3 +1,4 @@
+import { sessionResourceHistory } from "@core/modules/ai/session-resources.js";
 import { checkQuickNoteIds } from "../services/ai/quick-notes.js";
 import { defaultOfficialSkills } from "@core/modules/ai/skills.js";
 import { checkAttachments } from "../services/ai/attachments.js";
@@ -783,16 +784,19 @@ export async function registerAI(
         .selectAll()
         .where("user_id", "=", actor.id)
         .where("archived", "=", req.query.archived === "true" ? 1 : 0);
-      if (req.query.resourceId)
-        query = query.where(
-          "resource_ids",
-          "like",
-          `%"${parse(id, req.query.resourceId)}"%`,
-        );
+      if (req.query.resourceId) {
+        const target=parse(id,req.query.resourceId);
+        query=query.where("id","in",db.selectFrom("ai_session_resources").select("session_id").where("resource_id","=",target)).orderBy(eb=>eb.selectFrom("ai_session_resources").select(({fn})=>fn.max("touched_at").as("latest")).whereRef("session_id","=","ai_sessions.id").where("resource_id","=",target),"desc");
+      }
       const rows = await query
         .orderBy("updated_at", "desc")
         .limit(200)
         .execute();
+      if(req.query.resourceId) {
+        const touches=await db.selectFrom("ai_session_resources").select(["session_id","touched_at"]).where("resource_id","=",req.query.resourceId).execute();
+        const times=new Map(touches.map(row=>[row.session_id,row.touched_at]));
+        rows.sort((a,b)=>(times.get(b.id)??"").localeCompare(times.get(a.id)??""));
+      }
       const safe = [];
       const activeJobs = await db
         .selectFrom("ai_jobs")
@@ -849,11 +853,6 @@ export async function registerAI(
         if (!latestJobBySession.has(job.session_id))
           latestJobBySession.set(job.session_id, job);
       for (const row of rows) {
-        if (
-          req.query.resourceId &&
-          !JSON.parse(row.resource_ids).includes(req.query.resourceId)
-        )
-          continue;
         try {
           await sessionSources(db, actor.id, row);
           safe.push({
@@ -1005,15 +1004,7 @@ export async function registerAI(
             )
             .execute()
         : [];
-      const linkedIds: string[] = JSON.parse(s.resource_ids);
-      const resources = linkedIds.length
-        ? await db
-            .selectFrom("resources")
-            .select(["id", "title", "format", "kind"])
-            .where("id", "in", linkedIds)
-            .where("deleted_at", "is", null)
-            .execute()
-        : [];
+      const resources = await sessionResourceHistory(db,actor.id,s.id);
       return {
         session: s,
         resources,

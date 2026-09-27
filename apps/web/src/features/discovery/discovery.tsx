@@ -1,3 +1,4 @@
+import { BookmarkPlus, BookmarkCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { useI18n } from "@web/shared/i18n.js";
@@ -30,35 +31,29 @@ export function useDiscoveryPolicy() {
   }, []);
   return policy;
 }
-export function PublicResourceLink({ kind }: { kind: PublicResourceKind }) {
-  const policy = useDiscoveryPolicy();
-  const { t } = useI18n();
-  return policy && policy.publicModes[kind] !== "link" ? (
-    <a className="public-resource-link" href={`#/discover?kind=${kind}`}>
-      {t("discovery.public")}
-    </a>
-  ) : null;
-}
 type Item = {
   id: string;
   title: string;
   kind: PublicResourceKind;
   collected: boolean;
   updated_at: string;
+  href?: string;
 };
 type Page = { items: Item[]; total: number; nextOffset: number | null };
 const resourceHref = (item: Item) =>
-  item.kind === "assistant"
+  item.href ?? (item.kind === "assistant"
     ? `#/knowledge-assistants?bot=${item.id}`
     : item.kind === "folder"
       ? `#/shared-files/${item.id}`
-      : `#/r/${item.id}`;
-export function DiscoveryPage({ collected = false }: { collected?: boolean }) {
+      : `#/r/${item.id}`);
+export function DiscoveryPage({ collected: initialCollected = false }: { collected?: boolean }) {
   const { t } = useI18n();
   const policy = useDiscoveryPolicy();
   const [kind, setKind] = useState(
     new URLSearchParams(location.hash.split("?")[1]).get("kind") ?? "",
   );
+  const [tab, setTab] = useState(initialCollected ? "collected" : "recent");
+  const collected = tab === "collected";
   const [q, setQ] = useState("");
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState<Page | null>(null);
@@ -66,11 +61,11 @@ export function DiscoveryPage({ collected = false }: { collected?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
-  const enabled = !!policy && (collected || policy.publicDiscovery);
+  const enabled = !!policy;
   useEffect(() => {
     setOffset(0);
     setSelected([]);
-  }, [kind, q, collected]);
+  }, [kind, q, tab]);
   useEffect(() => {
     let active = true;
     setPage(null);
@@ -83,7 +78,7 @@ export function DiscoveryPage({ collected = false }: { collected?: boolean }) {
         collected: String(collected),
         ...(kind ? { kind } : {}),
       });
-      void api<Page>(`/discovery/resources?${params}`)
+      void api<Page>(tab === "recent" ? `/workspace/recent?publicOnly=true&q=${encodeURIComponent(q)}&offset=${offset}${kind ? `&kind=${kind}` : ""}` : `/discovery/resources?${params}`)
         .then((p) => {
           if (active) setPage(p);
         })
@@ -95,7 +90,7 @@ export function DiscoveryPage({ collected = false }: { collected?: boolean }) {
       active = false;
       clearTimeout(timer);
     };
-  }, [enabled, policy, kind, q, offset, collected, revision]);
+  }, [enabled, policy, kind, q, offset, tab, revision]);
   async function update(items: Item[], collect: boolean) {
     setBusy(true);
     setError("");
@@ -119,19 +114,15 @@ export function DiscoveryPage({ collected = false }: { collected?: boolean }) {
     <section className="discovery-page">
       <header>
         <div>
-          <h1>{t(collected ? "discovery.collected" : "discovery.title")}</h1>
+          <h1>{t("workspace.publicResources")}</h1>
           <p className="subtle">
-            {t(collected ? "discovery.collectedHelp" : "discovery.help")}
+            {t("workspace.publicHelp")}
           </p>
         </div>
-        <a href={collected ? "#/discover" : "#/collected"}>
-          {!collected
-            ? t("discovery.collected")
-            : policy.publicDiscovery
-              ? t("discovery.title")
-              : ""}
-        </a>
       </header>
+      <div className="home-tabs resource-filter-tabs" role="tablist">
+        {([['recent','workspace.browsed'],...(policy.publicDiscovery ? [['discover','discovery.title']] : []),['collected','workspace.saved']] as const).map(([key,label])=><button key={key} role="tab" aria-selected={tab===key} className={tab===key?'active':''} onClick={()=>{setTab(key);setKind("");}}>{t(label as Parameters<typeof t>[0])}</button>)}
+      </div>
       <div className="discovery-controls">
         <Select
           aria-label={t("discovery.type")}
@@ -140,7 +131,7 @@ export function DiscoveryPage({ collected = false }: { collected?: boolean }) {
         >
           <option value="">{t("discovery.all")}</option>
           {publicResourceKinds
-            .filter((k) => collected || policy.publicModes[k] !== "link")
+            .filter((k) => tab !== "discover" || policy.publicModes[k] !== "link")
             .map((k) => (
               <option key={k} value={k}>
                 {t(`discovery.kind.${k}`)}
@@ -199,10 +190,14 @@ export function DiscoveryPage({ collected = false }: { collected?: boolean }) {
               </small>
             </div>
             <button
+              className="collection-action"
+              aria-label={t(item.collected ? "discovery.remove" : "discovery.collect")}
+              title={t(item.collected ? "discovery.remove" : "discovery.collect")}
+              aria-pressed={item.collected}
               disabled={busy}
               onClick={() => void update([item], !item.collected)}
             >
-              {t(item.collected ? "discovery.remove" : "discovery.collect")}
+              {item.collected ? <BookmarkCheck size={17}/> : <BookmarkPlus size={17}/>}
             </button>
           </li>
         ))}
@@ -215,7 +210,7 @@ export function DiscoveryPage({ collected = false }: { collected?: boolean }) {
           >
             {t("discovery.previous")}
           </button>
-          <span>{page.total}</span>
+          <span>{page.total ?? ""}</span>
           <button
             disabled={page.nextOffset === null}
             onClick={() => setOffset(page.nextOffset!)}
@@ -225,48 +220,5 @@ export function DiscoveryPage({ collected = false }: { collected?: boolean }) {
         </footer>
       )}
     </section>
-  );
-}
-
-export function FolderCollectButton({ id }: { id: string }) {
-  const { t } = useI18n();
-  const [collected, setCollected] = useState<boolean | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    let active = true;
-    setCollected(null);
-    void api<{ collected: boolean }>(`/files/folders/${id}/publication`)
-      .then((p) => {
-        if (active) setCollected(p.collected);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [id]);
-  return collected === null ? null : (
-    <>
-      <button
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            await api(`/discovery/entries/folder/${id}`, "PUT", {
-              collected: !collected,
-            });
-            setCollected(!collected);
-            setError("");
-          } catch (e) {
-            setError((e as Error).message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        {t(collected ? "discovery.remove" : "discovery.collect")}
-      </button>
-      <Feedback tone="error" message={error} />
-    </>
   );
 }

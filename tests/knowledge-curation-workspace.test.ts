@@ -306,6 +306,18 @@ it("lets the AI create and close tasks only inside the current curation library"
  const studio=createKnowledgeStudio(db);
  const task:any=await studio.executeTool(alice,library,'human_task',{key:'reader',title:'Choose audience',reason:'Choose the level',options:['Student','Engineer']},db,false,conversation.id);
  expect(task.status).toBe('open');
- await studio.executeTool(alice,library,'resolve_human_task',{id:task.id,revision:task.revision,reason:'Scope clarified'},db,false,conversation.id);
+ await expect(studio.executeTool(alice,library,'resolve_human_task',{id:task.id,revision:task.revision,reason:'Scope clarified'},db,false,conversation.id)).rejects.toThrow('缺少关闭待办的实际依据');
+ await closeHumanTask(db,alice,library,task.id,task.revision,'Administrator chose Engineer');
  expect(await reconcileHumanTasks(db,alice,library)).toHaveLength(0);
+});
+
+it("rejects fabricated checkpoints and accepts only the current source fingerprint", async () => {
+  const document = await createContent(db).create(alice, {kind:"document",format:"markdown",title:"Checkpoint source",markdown:"Authoritative value: 8097"});
+  const source = await subscribeKnowledgeSource(db,alice,library,{sourceKind:"document",sourceId:document.id,title:"Checkpoint"});
+  const studio=createKnowledgeStudio(db);
+  await expect(studio.executeTool(alice,library,"source_processed",{sourceId:source.id,fingerprint:"completed:20260927",note:"done"})).rejects.toMatchObject({status:409});
+  expect(await db.selectFrom("knowledge_source_observations").selectAll().execute()).toEqual([]);
+  const scan=await studio.executeTool(alice,library,"scan_sources",{}) as any;
+  await studio.executeTool(alice,library,"source_processed",{sourceId:source.id,fingerprint:scan.changed[0].fingerprint,note:"verified"});
+  expect(await studio.executeTool(alice,library,"scan_sources",{})).toMatchObject({unchanged:1,changed:[]});
 });

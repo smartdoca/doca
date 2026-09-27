@@ -89,6 +89,7 @@ export interface Schema {
     updated_at: string;
   };
 
+  ai_session_resources: { session_id:string; kind:string; resource_id:string; title:string; href:string; touched_at:string };
   ai_sessions: {
     approved_resource_ids?: string;
     mentioned_resource_ids?: string;
@@ -629,6 +630,7 @@ export interface Schema {
     created_at: string;
     deleted_at: string | null;
   };
+  workspace_activity: { user_id: string; resource_kind: "assistant" | "folder" | "file"; resource_id: string; visited_at: string | null; favorite: number };
   resource_visits: { user_id: string; resource_id: string; visited_at: string };
   user_preferences: {
     avatar_asset_id?: string | null;
@@ -779,7 +781,7 @@ export interface Schema {
   knowledge_conversations: {
     access_key_id?: string | null;
     id: string; scope_id: string; kind: string; owner_id: string; title: string;
-    summary: string; state: string; created_at: string; updated_at: string;
+    summary: string; state: string; archived: number; created_at: string; updated_at: string;
   };
   knowledge_messages: {
     id: string; conversation_id: string; role: string; author_id: string | null;
@@ -865,6 +867,9 @@ export interface Schema {
     created_at: string;
   };
   knowledge_assistant_users: { assistant_id: string; user_id: string; accepted: number; visited_at: string | null; integration: string; revision: number; };
+  knowledge_bot_sharing: { bot_id: string; enabled: number };
+  knowledge_bot_share_links: { id:string; bot_id:string; token:string; enabled:number; revoked_at:string|null; expires_at:string|null; max_members:number|null; version:string; created_at:string };
+  knowledge_bot_link_members: { link_id:string; user_id:string; created_at:string };
   knowledge_bot_keys: { id:string; bot_id:string; creator_id:string; name:string; channel:string; token_hash:string; expires_at:string; created_at:string; };
   knowledge_assistants: {
     manager_ids?: string;

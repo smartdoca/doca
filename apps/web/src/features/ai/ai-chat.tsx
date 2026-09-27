@@ -1,3 +1,4 @@
+import { KnowledgeConnections } from "@web/features/knowledge/knowledge-connections.js";
 import { htmlLang } from "@doca/i18n";
 import { AIChoiceCard } from "@web/features/ai/ai-choice-card.js";
 import {
@@ -53,6 +54,7 @@ import {
   WandSparkles,
   Folder,
   FolderOpen,
+  Bot,
   File as FileIcon,
   Settings,
   MessageSquare,
@@ -94,12 +96,10 @@ import {
   Bubble,
   Conversations,
   FileCard,
-  Prompts,
   Sender,
   Sources,
   Think,
   ThoughtChain,
-  Welcome,
 } from "@ant-design/x";
 import type {
   BubbleItemType,
@@ -144,6 +144,11 @@ import { referenceTextParts } from "@web/features/ai/ai-reference-text.js";
 import { SearchPanel } from "@web/features/search/search.js";
 import { AIQuestionNav } from "@web/features/ai/ai-question-nav.js";
 import { AIPendingQueue } from "@web/features/ai/ai-pending-queue.js";
+import {
+  AssistantIdentity,
+  AssistantWelcome,
+  assistantProfileClass,
+} from "@web/features/ai/assistant-profile.js";
 import {
   DRAFT_QUEUE_KEY,
   INITIAL_RENDER_QUESTIONS,
@@ -354,7 +359,13 @@ function insertComposerPlainText(sender: SenderRef | null, text: string) {
 
 type Conversation = {
   session: Session;
-  resources?: { id: string; title: string; format: string; kind: string }[];
+  resources?: {
+    id: string;
+    title: string;
+    format: string;
+    kind: string;
+    href?: string;
+  }[];
   messages: {
     id: string;
     role: string;
@@ -493,7 +504,8 @@ export function AIDocumentLayout({
   const panel = usePanelWidth();
   const filesSurface = surface === "files";
   const enabled =
-    !disabled && !!ai?.userId &&
+    !disabled &&
+    !!ai?.userId &&
     (filesSurface ||
       (!!ai.resource &&
         (ai.resource.kind === "document" || ai.resource.kind === "library")));
@@ -952,7 +964,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
       delete: false,
       modify: false,
     }),
-    [allScope, setAllScope] = useState(full || ai.resource?.kind === "library"),
     [list, setList] = useState(full),
     [batch, setBatch] = useState(false),
     [selected, setSelected] = useState<string[]>([]),
@@ -1500,7 +1511,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       notes: ai.noteReferences,
       createdAt: new Date().toISOString(),
       modelId: model,
-      scope: allScope ? "all" : "document",
+      scope: "all",
       currentResourceId: ai.resource?.id,
       currentFolder: ai.fileContext
         ? { type: ai.fileContext.type, id: ai.fileContext.id }
@@ -1610,7 +1621,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
         attachments: attachments.map((f) => f.id),
         ...(targets.length ? { files: targets } : {}),
         modelId: model,
-        scope: allScope ? "all" : "document",
+        scope: "all",
         currentResourceId: ai.resource?.id,
         currentFolder: ai.fileContext
           ? { type: ai.fileContext.type, id: ai.fileContext.id }
@@ -2192,7 +2203,9 @@ export function AIChat({ full = false }: { full?: boolean }) {
             .map((event): BubbleItemType => ({
               key: `${j.id}-${event.id}`,
               className:
-                event.kind === "text" ? "ai-response-bubble" : "ai-step-bubble",
+                event.kind === "text"
+                  ? "ai-step-bubble ai-event-text-bubble"
+                  : "ai-step-bubble",
               role: "ai",
               variant: "borderless",
               placement: "start",
@@ -2326,19 +2339,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
                     )}
                   </>
                 ),
-              footer:
-                event.kind === "text" &&
-                (!active || event.status !== "loading") ? (
-                  <Actions
-                    items={[
-                      {
-                        key: "copy",
-                        label: t("common.copy"),
-                        actionRender: <Actions.Copy text={event.text} />,
-                      },
-                    ]}
-                  />
-                ) : undefined,
             }));
           const showSummary =
             !eventItems.length ||
@@ -2677,53 +2677,36 @@ export function AIChat({ full = false }: { full?: boolean }) {
           body: { width: "100%" },
         },
         content: (
-          <div className="ai-welcome">
-            <Welcome
-              variant="borderless"
-              icon={<Sparkles size={32} />}
-              title={
-                surface === "full"
-                  ? t("chat.welcome")
-                  : surface === "library"
-                    ? t("knowledge.assistantWelcome")
-                    : surface === "folder"
-                      ? t("chat.folderWelcome", {
-                          name: ai.fileContext?.name ?? t("trash.folder"),
-                        })
-                      : t("chat.documentWelcome")
-              }
-              description={
-                surface === "full"
-                  ? t("chat.welcomeHelp")
-                  : surface === "library"
-                    ? t("knowledge.assistantHelp")
-                    : surface === "folder"
-                      ? t("chat.folderWelcomeHelp")
-                      : t("chat.documentWelcomeHelp")
-              }
-              styles={{
-                root: {
-                  flexDirection: "column",
-                  textAlign: "center",
-                  alignItems: "center",
-                  padding: 0,
-                },
-                title: { fontSize: full ? 28 : 21 },
-                icon: { color: "#8064b1" },
-              }}
-            />
-            <Prompts
-              className="ai-official-prompts"
-              items={suggestions}
-              vertical={!full}
-              wrap={full}
-              styles={{ item: { flex: full ? "1 1 40%" : undefined } }}
-              onItemClick={({ data }) => {
-                replaceComposerText(String(data.description));
-                senderRef.current?.focus();
-              }}
-            />
-          </div>
+          <AssistantWelcome
+            profile="personal"
+            title={
+              surface === "full"
+                ? t("chat.welcome")
+                : surface === "library"
+                  ? t("knowledge.assistantWelcome")
+                  : surface === "folder"
+                    ? t("chat.folderWelcome", {
+                        name: ai.fileContext?.name ?? t("trash.folder"),
+                      })
+                    : t("chat.documentWelcome")
+            }
+            description={
+              surface === "full"
+                ? t("chat.welcomeHelp")
+                : surface === "library"
+                  ? t("knowledge.assistantHelp")
+                  : surface === "folder"
+                    ? t("chat.folderWelcomeHelp")
+                    : t("chat.documentWelcomeHelp")
+            }
+            items={suggestions}
+            vertical={!full}
+            large={full}
+            onSelect={(item) => {
+              replaceComposerText(String(item.description));
+              senderRef.current?.focus();
+            }}
+          />
         ),
       });
     threadCache.current = {
@@ -2753,7 +2736,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
     >
       {modalContext}
       <section
-        className={`ai-chat ${full ? "ai-chat-full" : ""} ${list ? "ai-history-open" : ""} ${composerDrop ? "is-file-drop" : ""}`}
+        className={`ai-chat ${assistantProfileClass("personal")} ${full ? "ai-chat-full" : ""} ${list ? "ai-history-open" : ""} ${composerDrop ? "is-file-drop" : ""}`}
         aria-label={t("nav.assistant")}
         // Embedded editors listen on window. Let Sender handle input first,
         // then keep typing, deletion and history shortcuts inside this chat.
@@ -2767,100 +2750,50 @@ export function AIChat({ full = false }: { full?: boolean }) {
         onDropCapture={onExplorerDrop}
       >
         <AIChatHeader full={full}>
-          {!full && (
-            <>
-              <Sparkles size={19} />
-              <strong>{t("nav.assistant")}</strong>
-            </>
-          )}
+          <AssistantIdentity
+            profile="personal"
+            title={t("nav.assistant")}
+            memoryLabel={t(
+              options?.preferences.memory_enabled
+                ? "assistant.memory.personalOn"
+                : "assistant.memory.personalOff",
+            )}
+            compact
+          />
           {!full && <span className="ai-flex" />}
-          {full &&
-            !!conversation?.resources?.length &&
-            (conversation.resources.length === 1 ? (
+          {!!conversation?.resources?.length && (
+            <Popover
+              trigger="click"
+              placement="bottomLeft"
+              content={
+                <div className="ai-resource-history">
+                  {conversation.resources.map((r) => (
+                    <Button
+                      key={`${r.kind}:${r.id}`}
+                      type="text"
+                      onClick={() =>
+                        r.href
+                          ? (location.hash = r.href.replace(/^.*#/, ""))
+                          : openDocument(r.id)
+                      }
+                    >
+                      <FileText size={15} />
+                      <span>{r.title}</span>
+                    </Button>
+                  ))}
+                </div>
+              }
+            >
               <Button
                 type="text"
                 size="small"
-                aria-label={t("chat.relatedDocuments")}
-                title={conversation.resources[0]!.title}
-                onClick={() => openDocument(conversation.resources![0]!.id)}
-                style={{
-                  width: "auto",
-                  minWidth: 0,
-                  maxWidth: 240,
-                  overflow: "hidden",
-                  display: "inline-flex",
-                  gap: 6,
-                }}
+                aria-label={t("chat.operatedResources")}
+                title={t("chat.operatedResources")}
               >
-                <FileText size={16} />
-                <span
-                  style={{
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {conversation.resources[0]!.title}
-                </span>
+                <FolderOpen size={17} />
               </Button>
-            ) : (
-              <Popover
-                trigger="click"
-                placement="bottomLeft"
-                content={
-                  <div
-                    style={{ maxWidth: 340, maxHeight: 300, overflowY: "auto" }}
-                  >
-                    {conversation.resources.map((r) => (
-                      <div key={r.id}>
-                        <Button
-                          type="text"
-                          onClick={() => openDocument(r.id)}
-                          style={{ maxWidth: "100%" }}
-                        >
-                          <FileText size={15} />
-                          <span
-                            style={{
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {r.title}
-                          </span>
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                }
-              >
-                <Button
-                  type="text"
-                  size="small"
-                  aria-label={t("chat.relatedDocuments")}
-                  style={{
-                    width: "auto",
-                    minWidth: 0,
-                    maxWidth: 240,
-                    overflow: "hidden",
-                    display: "inline-flex",
-                    gap: 6,
-                  }}
-                >
-                  <FileText size={16} />
-                  <span
-                    style={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {t("chat.relatedCount", {
-                      count: conversation.resources.length,
-                    })}
-                  </span>
-                </Button>
-              </Popover>
-            ))}
+            </Popover>
+          )}
           <button
             title={t("chat.sessionList")}
             aria-label={t("chat.sessionList")}
@@ -2906,25 +2839,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
             </>
           )}
         </AIChatHeader>
-        {!full && !!conversation?.resources?.length && (
-          <div
-            className="ai-associated-documents"
-            aria-label={t("chat.relatedDocuments")}
-          >
-            {conversation.resources.map((r) => (
-              <Button
-                key={r.id}
-                type="text"
-                size="small"
-                title={r.title}
-                onClick={() => openDocument(r.id)}
-              >
-                <FileText size={14} />
-                <span>{r.title}</span>
-              </Button>
-            ))}
-          </div>
-        )}
         <div className="ai-chat-body">
           {list && (
             <nav
@@ -3521,32 +3435,22 @@ export function AIChat({ full = false }: { full?: boolean }) {
                         {full && t("chat.approvals")}
                       </Button>
                     </Popover>
-                    {
-                      <Popover
-                        trigger="click"
-                        placement="topLeft"
-                        content={
-                          <Checkbox
-                            checked={allScope}
-                            onChange={(e) => setAllScope(e.target.checked)}
-                          >
-                            {t("chat.crossDocument")}
-                          </Checkbox>
-                        }
+                    <Popover
+                      trigger="click"
+                      placement="topLeft"
+                      destroyOnHidden
+                      content={<KnowledgeConnections compact />}
+                    >
+                      <Button
+                        type="text"
+                        size="small"
+                        aria-label={t("chat.answerSources")}
+                        title={t("chat.answerSources")}
                       >
-                        <Button
-                          type="text"
-                          title={
-                            allScope
-                              ? t("chat.crossDocumentScope")
-                              : t("chat.currentDocumentScope")
-                          }
-                          aria-label={t("chat.scope")}
-                        >
-                          <FolderOpen size={16} />
-                        </Button>
-                      </Popover>
-                    }
+                        <Bot size={16} />
+                        {full && t("chat.answerSources")}
+                      </Button>
+                    </Popover>
                     <span className="ai-flex" />
                     <Select
                       aria-label={t("chat.selectModel")}

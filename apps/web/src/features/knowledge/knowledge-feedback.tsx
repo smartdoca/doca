@@ -1,3 +1,5 @@
+import { ThumbsUp, ThumbsDown, ChevronRight, Bot, Clock3 } from "lucide-react";
+import { Select } from "@web/shared/components/select.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { useI18n } from "@web/shared/i18n.js";
@@ -84,9 +86,10 @@ export function KnowledgeFeedback({
           {t("curator.analyzeFeedback")}
         </button>
       </div>
-      <label>
+      <label className="curator-feedback-schedule">
+        <Clock3 size={16} />
         {t("curator.feedbackSchedule")}{" "}
-        <select
+        <Select
           value={schedule}
           disabled={busy}
           onChange={(e) => {
@@ -110,32 +113,45 @@ export function KnowledgeFeedback({
               )}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       {error && <p role="alert">{error}</p>}
       <div className="curator-feedback-list">
         {items.map((item) => (
           <button
-            className="kc-task-card"
+            className="curator-feedback-row"
             type="button"
             key={item.id}
             onClick={() => setSelected(item)}
           >
-            <strong>
-              {item.botTitle} ·{" "}
-              {t(
-                item.judgment === "useful"
-                  ? "studio.useful"
-                  : "studio.unhelpful",
+            <span className={`curator-feedback-vote ${item.judgment}`}>
+              {item.judgment === "useful" ? (
+                <ThumbsUp size={18} />
+              ) : (
+                <ThumbsDown size={18} />
               )}
-            </strong>
-            <span>
-              {item.snapshot.messages?.filter((m) => m.role === "user").at(-1)
-                ?.content ||
-                item.snapshot.question ||
-                item.reason}
             </span>
+            <div className="curator-feedback-content">
+              <div className="curator-feedback-meta">
+                <Bot size={14} />
+                <strong>{item.botTitle}</strong>
+                <span>
+                  {t(
+                    item.judgment === "useful"
+                      ? "studio.useful"
+                      : "studio.unhelpful",
+                  )}
+                </span>
+              </div>
+              <span>
+                {item.snapshot.messages?.filter((m) => m.role === "user").at(-1)
+                  ?.content ||
+                  item.snapshot.question ||
+                  item.reason}
+              </span>
+            </div>
             <small>{new Date(item.created_at).toLocaleString(locale)}</small>
+            <ChevronRight size={16} />
           </button>
         ))}
       </div>

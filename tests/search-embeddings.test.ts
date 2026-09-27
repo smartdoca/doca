@@ -912,7 +912,8 @@ it("filters low semantic scores, reranks close matches using source terms, and c
 });
 
 it("reconstructs replica credentials from host bindings instead of copying redacted Meilisearch secrets",async()=>{
-  await save();remoteStatus="succeeded";await get();
+  await save();remoteStatus="succeeded";
+  // Publishing must refresh a completed remote task without an admin settings visit.
   const expected=remote.knowledge_v1.apiKey;
   remote.knowledge_v1={...remote.knowledge_v1,apiKey:"********",url:"https://untrusted.example/embeddings"};
   await searchService.answerIndex.prepare([{id:"qa_fixture",documentId:randomUUID(),title:"DNS",heading:"Cache",text:"TTL",version:1}]);

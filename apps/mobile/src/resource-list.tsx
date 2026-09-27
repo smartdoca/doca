@@ -30,7 +30,6 @@ export function ResourceList({
   type ResourcePage = {
     items: Resource[];
     nextCursor?: string | null;
-    nextOffset: number | null;
   };
   const query = useInfiniteQuery({
     queryKey: ["resources", session?.origin, queryText],

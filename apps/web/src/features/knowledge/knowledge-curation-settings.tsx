@@ -1,3 +1,4 @@
+import {Select} from "@web/shared/components/select.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { useI18n } from "@web/shared/i18n.js";
@@ -56,7 +57,7 @@ export function KnowledgeCurationSettings({ scopeId }: { scopeId: string }) {
       {error && <p role="alert">{error}</p>}
       <div className="kc-publication">
         <strong>{t("studio.publication")}</strong>
-        <select
+        <Select
           aria-label={t("studio.publication")}
           value={mode}
           onChange={(e) =>
@@ -69,7 +70,7 @@ export function KnowledgeCurationSettings({ scopeId }: { scopeId: string }) {
         >
           <option value="automatic">{t("studio.automatic")}</option>
           <option value="manual">{t("studio.manual")}</option>
-        </select>
+        </Select>
         <small>
           {t(publication?.dirty ? "studio.pending" : "studio.current", {
             version: publication?.revision ?? 0,
@@ -93,17 +94,17 @@ export function KnowledgeCurationSettings({ scopeId }: { scopeId: string }) {
           <strong>{t("studio.automationSettings")}</strong>
           <label>
             {t("studio.sourceScope")}
-            <select
+            <Select
               value={settings.value.sourceScope}
               onChange={(e) => void configure({ sourceScope: e.target.value })}
             >
               <option value="internal">{t("studio.internalOnly")}</option>
               <option value="web">{t("studio.allowWeb")}</option>
-            </select>
+            </Select>
           </label>
           <label>
             {t("studio.automationPolicy")}
-            <select
+            <Select
               value={settings.value.automationPolicy}
               onChange={(e) =>
                 void configure({ automationPolicy: e.target.value })
@@ -111,7 +112,7 @@ export function KnowledgeCurationSettings({ scopeId }: { scopeId: string }) {
             >
               <option value="safe">{t("studio.safeAutomatic")}</option>
               <option value="draft">{t("studio.draftOnly")}</option>
-            </select>
+            </Select>
           </label>
         </div>
       )}

@@ -1,0 +1,97 @@
+.assistant-profile-personal,
+.assistant-profile-knowledge-answer,
+.assistant-profile-knowledge-curation {
+  --assistant-accent: #7859b8;
+  --assistant-accent-strong: #5f429a;
+  --assistant-soft: #f4f0ff;
+  --assistant-soft-border: #ddd3f3;
+}
+
+.assistant-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.assistant-identity-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border: 1px solid var(--assistant-soft-border);
+  border-radius: 12px;
+  color: var(--assistant-accent-strong);
+  background: var(--assistant-soft);
+}
+
+.assistant-identity.is-compact .assistant-identity-mark {
+  width: 30px;
+  height: 30px;
+  flex-basis: 30px;
+  border-radius: 9px;
+}
+
+.assistant-identity-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assistant-identity-copy strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text, #263040);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-identity-copy small {
+  overflow: hidden;
+  color: var(--muted, #747d8d);
+  font-size: 11px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-memory-badge {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  padding: 3px 8px;
+  border: 1px solid var(--assistant-soft-border);
+  border-radius: 999px;
+  color: var(--assistant-accent-strong);
+  background: var(--assistant-soft);
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: nowrap;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.assistant-welcome .ant-welcome-icon {
+  color: var(--assistant-accent);
+}
+
+.assistant-official-prompts .ant-prompts-item:hover {
+  border-color: var(--assistant-soft-border);
+  background: var(--assistant-soft);
+}
+
+@media (max-width: 700px) {
+  .assistant-memory-badge {
+    max-width: 126px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .assistant-identity-copy small {
+    display: none;
+  }
+}

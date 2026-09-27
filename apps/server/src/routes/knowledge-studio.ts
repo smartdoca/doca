@@ -53,13 +53,14 @@ export function registerKnowledgeStudio(
   registerKnowledgeBotAccess(api, db, auth, studio, consumeRateLimit);
   registerCurationWorkspace(api, db, auth);
   const root = "/api/v1/knowledge";
-  api.get<{ Querystring: { scopeId: string; kind: "curation" | "answer" } }>(
+  api.get<{ Querystring: { scopeId: string; kind: "curation" | "answer"; archived?: string } }>(
     `${root}/conversations`,
     async (req) => {
       const query = z
         .object({
           scopeId: z.string().uuid(),
           kind: z.enum(["curation", "answer"]),
+          archived: z.enum(["true", "false"]).optional(),
         })
         .parse(req.query);
       return {
@@ -68,6 +69,7 @@ export function registerKnowledgeStudio(
           auth(req),
           query.scopeId,
           query.kind,
+          query.archived === "true",
         ),
       };
     },
@@ -123,6 +125,82 @@ export function registerKnowledgeStudio(
   api.get<{ Params: { id: string } }>(`${root}/conversations/:id`, (req) =>
     visibleMessages(auth(req), req.params.id),
   );
+  async function manageConversations(
+    actor: Actor,
+    ids: string[],
+    action: "archive" | "restore" | "delete",
+  ) {
+    const unique = [...new Set(ids)];
+    return db.transaction().execute(async (tx) => {
+      const conversations = [];
+      for (const id of unique)
+        conversations.push(await conversationAccess(tx, actor, id));
+      const active = conversations.find((conversation) =>
+        ["queued", "running"].includes(conversation.state),
+      );
+      if (active) fail(409, "请先等待或暂停正在运行的会话");
+      if (action !== "delete") {
+        const result = await tx
+          .updateTable("knowledge_conversations")
+          .set({
+            archived: action === "archive" ? 1 : 0,
+            updated_at: new Date().toISOString(),
+          })
+          .where("id", "in", unique)
+          .executeTakeFirst();
+        return { updated: Number(result.numUpdatedRows ?? 0) };
+      }
+      const tasks = await tx
+          .selectFrom("knowledge_tasks")
+          .select("id")
+          .where("conversation_id", "in", unique)
+          .execute(),
+        messages = await tx
+          .selectFrom("knowledge_messages")
+          .select("id")
+          .where("conversation_id", "in", unique)
+          .execute();
+      if (tasks.length)
+        await tx
+          .deleteFrom("knowledge_checkpoints")
+          .where("task_id", "in", tasks.map((task) => task.id))
+          .execute();
+      if (messages.length)
+        await tx
+          .deleteFrom("knowledge_cases")
+          .where("message_id", "in", messages.map((message) => message.id))
+          .execute();
+      const result = await tx
+        .deleteFrom("knowledge_conversations")
+        .where("id", "in", unique)
+        .executeTakeFirst();
+      return { deleted: Number(result.numDeletedRows ?? 0) };
+    });
+  }
+  api.post(`${root}/conversations/batch`, async (req) => {
+    const body = z
+      .object({
+        ids: z.array(z.string().uuid()).min(1).max(200),
+        action: z.enum(["archive", "restore", "delete"]),
+      })
+      .parse(req.body);
+    return manageConversations(auth(req), body.ids, body.action);
+  });
+  api.patch<{ Params: { id: string } }>(
+    `${root}/conversations/:id`,
+    async (req) => {
+      const body = z.object({ archived: z.boolean() }).parse(req.body);
+      return manageConversations(
+        auth(req),
+        [req.params.id],
+        body.archived ? "archive" : "restore",
+      );
+    },
+  );
+  api.delete<{ Params: { id: string } }>(
+    `${root}/conversations/:id`,
+    (req) => manageConversations(auth(req), [req.params.id], "delete"),
+  );
   api.post<{ Params: { id: string } }>(
     `${root}/conversations/:id/messages`,
     async (req) => {
@@ -136,6 +214,7 @@ export function registerKnowledgeStudio(
         .parse(req.body);
       const actor = auth(req),
         conversation = await conversationAccess(db, actor, req.params.id);
+      if (conversation.archived) fail(409, "请先恢复归档会话");
       if (conversation.kind === "answer") {
         const bot = await knowledgeBot(db, actor, conversation.scope_id);
         if (!knowledgeBotConfig(bot).channels.includes(body.channel))
@@ -479,6 +558,48 @@ export function registerKnowledgeStudio(
     busy = false,
     lastSync = 0;
   const running = new Map<string, Promise<void>>();
+  let synchronization: Promise<void> | undefined;
+  const publicationRetries = new Map<string, { failures: number; nextAt: number }>();
+  const synchronizePublications = async () => {
+    const libraries = await db
+      .selectFrom("resources")
+      .select(["id", "owner_id"])
+      .where("kind", "=", "library")
+      .where("ai_curated", "=", 1)
+      .where("deleted_at", "is", null)
+      .execute();
+    for (const library of libraries) {
+      if ((publicationRetries.get(library.id)?.nextAt ?? 0) > Date.now()) continue;
+      const row = await db
+        .selectFrom("knowledge_settings")
+        .select("config")
+        .where("library_id", "=", library.id)
+        .executeTakeFirst();
+      if (
+        knowledgeSettingsSchema.parse(row ? JSON.parse(row.config) : {})
+          .publicationMode !== "automatic"
+      )
+        continue;
+      const actor = await db
+        .selectFrom("users")
+        .select(["id", "display_name", "admin"])
+        .where("id", "=", library.owner_id)
+        .where("status", "=", "active")
+        .executeTakeFirst();
+      if (actor)
+        try {
+          await publishKnowledgeDocuments(db, actor, library.id, index);
+          publicationRetries.delete(library.id);
+        } catch (error) {
+          const failures = (publicationRetries.get(library.id)?.failures ?? 0) + 1;
+          publicationRetries.set(library.id, { failures, nextAt: Date.now() + Math.min(300000, 30000 * 2 ** Math.min(failures - 1, 4)) });
+          api.log.warn(
+            { libraryId: library.id, error: String(error) },
+            "Knowledge publication pending",
+          );
+        }
+    }
+  };
   const drain = async () => {
     if (stopped || busy) return;
     busy = true;
@@ -549,42 +670,16 @@ export function registerKnowledgeStudio(
           .finally(() => running.delete(task.conversation_id));
         running.set(task.conversation_id, promise);
       }
-      if (Date.now() - lastSync > 5000) {
+      // Index preparation can take minutes; it must never hold the chat queue lock.
+      if (!synchronization && Date.now() - lastSync > 5000) {
         lastSync = Date.now();
-        const libraries = await db
-          .selectFrom("resources")
-          .select(["id", "owner_id"])
-          .where("kind", "=", "library")
-          .where("ai_curated", "=", 1)
-          .where("deleted_at", "is", null)
-          .execute();
-        for (const library of libraries) {
-          const row = await db
-            .selectFrom("knowledge_settings")
-            .select("config")
-            .where("library_id", "=", library.id)
-            .executeTakeFirst();
-          if (
-            knowledgeSettingsSchema.parse(row ? JSON.parse(row.config) : {})
-              .publicationMode !== "automatic"
+        synchronization = synchronizePublications()
+          .catch((error) =>
+            api.log.error(error, "Knowledge publication worker failed"),
           )
-            continue;
-          const actor = await db
-            .selectFrom("users")
-            .select(["id", "display_name", "admin"])
-            .where("id", "=", library.owner_id)
-            .where("status", "=", "active")
-            .executeTakeFirst();
-          if (actor)
-            try {
-              await publishKnowledgeDocuments(db, actor, library.id, index);
-            } catch (error) {
-              api.log.warn(
-                { libraryId: library.id, error: String(error) },
-                "Knowledge publication pending",
-              );
-            }
-        }
+          .finally(() => {
+            synchronization = undefined;
+          });
       }
     } catch (error) {
       api.log.error(error, "Knowledge studio worker failed");
@@ -597,7 +692,10 @@ export function registerKnowledgeStudio(
   api.addHook("preClose", async () => {
     stopped = true;
     clearInterval(timer);
-    await Promise.allSettled(running.values());
+    await Promise.allSettled([
+      ...running.values(),
+      ...(synchronization ? [synchronization] : []),
+    ]);
   });
   return studio;
 }

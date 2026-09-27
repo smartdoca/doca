@@ -208,7 +208,6 @@ export function Admin({
     } | null>(null),
     [settings, setSettings] = useState<Settings | null>(null),
     [users, setUsers] = useState<Member[]>([]),
-    [next, setNext] = useState<number | null>(null),
     [nextCursor, setNextCursor] = useState<string | null>(null),
     [onlineUsers, setOnlineUsers] = useState<OnlineMember[]>([]),
     [onlineNext, setOnlineNext] = useState<number | null>(null),
@@ -304,7 +303,6 @@ export function Admin({
       () =>
         void api<{
           items: Member[];
-          nextOffset: number | null;
           nextCursor?: string | null;
         }>(
           "/admin/users?" +
@@ -318,7 +316,6 @@ export function Admin({
         )
           .then((d) => {
             setUsers(d.items);
-            setNext(d.nextOffset);
             setNextCursor(d.nextCursor ?? null);
           })
           .catch((e) => {
@@ -780,7 +777,7 @@ export function Admin({
                     ))
                   )}
                 </div>
-                {(nextCursor !== null || next !== null) && (
+                {nextCursor !== null && (
                   <button
                     className="load-more"
                     disabled={loading}
@@ -789,20 +786,16 @@ export function Admin({
                       try {
                         const d = await api<{
                           items: Member[];
-                          nextOffset: number | null;
                           nextCursor?: string | null;
                         }>(
                           "/admin/users?" +
                             new URLSearchParams({
-                              ...(nextCursor
-                                ? { cursor: nextCursor }
-                                : { offset: String(next) }),
+                              cursor: nextCursor,
                               ...(q.trim() ? { q: q.trim() } : {}),
                               ...(statusFilter ? { status: statusFilter } : {}),
                             }),
                         );
                         setUsers((old) => [...old, ...d.items]);
-                        setNext(d.nextOffset);
                         setNextCursor(d.nextCursor ?? null);
                       } catch (e) {
                         setError((e as Error).message);

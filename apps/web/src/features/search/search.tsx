@@ -27,6 +27,7 @@ type SearchPage = Omit<Page, "items"> & {
   })[];
   notice?: string;
   mode?: string;
+  nextOffset?: number | null;
 };
 type SearchMatch = { start: number; length: number };
 type FileSearchResult = {
@@ -352,7 +353,7 @@ export function SearchPanel({
     };
   }, [aiSearch, waitingForAiQuery, contentMode, query, searchAttempt, fileParams.toString()]);
   async function more() {
-    if (data.nextCursor == null && data.nextOffset === null) return;
+    if (data.nextCursor == null && data.nextOffset == null) return;
     setLoading(true);
     try {
       const page = data.nextCursor
@@ -663,7 +664,7 @@ export function SearchPanel({
                   : t("search.empty")}
               </p>
             )}
-            {(data.nextCursor != null || data.nextOffset !== null) && (
+            {(data.nextCursor != null || data.nextOffset != null) && (
               <button
                 className="load-more"
                 disabled={loading}

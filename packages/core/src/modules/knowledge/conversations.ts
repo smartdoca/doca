@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { sql } from "kysely";
 import type { DB } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import type { Actor } from "../identity/passwords.js";
@@ -13,6 +14,7 @@ import {
   sanitizeKnowledge,
 } from "./system.js";
 import { fail } from "../../shared/errors.js";
+import { accessibleQuery } from "../access/queries.js";
 
 export async function knowledgeBot(db: DB, actor: Actor, id: string) {
   const active = await db
@@ -69,7 +71,13 @@ export async function conversationAccess(db: DB, actor: Actor, id: string) {
 /** Re-apply current scope and masking to stored answers, including old citation excerpts. */
 export async function visibleKnowledgeAnswers<
   T extends { role: string; content: string; detail: string },
->(db: DB, actor: Actor, botId: string, messages: T[]) {
+>(
+  db: DB,
+  actor: Actor,
+  botId: string,
+  messages: T[],
+  citationLinks = true,
+) {
   const bot = await knowledgeBot(db, actor, botId),
     libraryIds = JSON.parse(bot.library_ids) as string[];
   const policies: ReturnType<typeof effectiveKnowledgeSettings>[] = [];
@@ -96,6 +104,31 @@ export async function visibleKnowledgeAnswers<
             .where("deleted_at", "is", null)
             .execute()
         ).map((x) => x.id)
+      : [],
+  );
+  const citationIds = [
+    ...new Set(
+      messages.flatMap((message) => {
+        try {
+          return (JSON.parse(message.detail).citations ?? [])
+            .map((citation: { documentId?: unknown }) => citation.documentId)
+            .filter((id: unknown): id is string => typeof id === "string");
+        } catch {
+          return [];
+        }
+      }),
+    ),
+  ];
+  const openable = new Set(
+    citationLinks && citationIds.length
+      ? (
+          await db
+            .selectFrom("resources")
+            .select("id")
+            .where("id", "in", citationIds)
+            .where(accessibleQuery(sql.ref("resources.id"), actor, 1))
+            .execute()
+        ).map((resource) => resource.id)
       : [],
   );
   const mask = (text: string) =>
@@ -126,6 +159,7 @@ export async function visibleKnowledgeAnswers<
           ? {
               citations: detail.citations.map((x: any) => ({
                 ...x,
+                canOpen: citationLinks && openable.has(x.documentId),
                 title: mask(x.title),
                 heading: mask(x.heading),
                 text: mask(x.text),
@@ -154,6 +188,7 @@ export async function createKnowledgeConversation(
     title: title.trim().slice(0, 160) || "…",
     summary: "",
     state: "idle",
+    archived: 0,
     created_at: now,
     updated_at: now,
   };
@@ -165,6 +200,7 @@ export async function listKnowledgeConversations(
   actor: Actor,
   scopeId: string,
   kind: "curation" | "answer",
+  archived = false,
 ) {
   if (kind === "curation") await maintainKnowledge(db, actor, scopeId);
   else await knowledgeBot(db, actor, scopeId);
@@ -173,7 +209,8 @@ export async function listKnowledgeConversations(
     .selectAll()
     .where("scope_id", "=", scopeId)
     .where("access_key_id", "is", null)
-    .where("kind", "=", kind);
+    .where("kind", "=", kind)
+    .where("archived", "=", Number(archived));
   if (kind === "answer") query = query.where("owner_id", "=", actor.id);
   return query.orderBy("updated_at", "desc").limit(100).execute();
 }
@@ -217,6 +254,7 @@ export async function sendKnowledgeMessage(
     fail(400, "请输入不超过20000字的消息");
   return transact(db, async (tx) => {
     const conversation = await conversationAccess(tx, actor, id);
+    if (conversation.archived) fail(409, "请先恢复归档会话");
     const duplicate = await tx
       .selectFrom("knowledge_messages")
       .selectAll()

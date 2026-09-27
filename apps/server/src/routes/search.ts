@@ -154,10 +154,10 @@ export async function registerSearch(
       }
       // Meilisearch may expose the useful embedding failure on the batch
       // while the individual document task is still marked as processing.
-      if (task.batchUid !== undefined && Date.now() - lastBatchCheck >= 1000) {
+      if (result.batchUid != null && Date.now() - lastBatchCheck >= 1000) {
         lastBatchCheck = Date.now();
         try {
-          const batch = await request(c, `/batches/${task.batchUid}`);
+          const batch = await request(c, `/batches/${result.batchUid}`);
           const reason = batch.stats?.embedderRequests?.lastError;
           if (typeof reason === "string" && reason.trim())
             throw new Error(`搜索索引任务失败：${reason.trim()}`);
@@ -574,7 +574,6 @@ export async function registerSearch(
     const page = await content.list(actor, {
       ...query,
       q: undefined,
-      offset: 0,
       cursor: undefined,
       kind: "document",
       matchedIds: uniqueIds,
@@ -705,6 +704,7 @@ export async function registerSearch(
       actor: Actor,
       query: Parameters<typeof content.list>[1] & {
         mode?: "keyword" | "ai" | "auto";
+        offset?: number;
       },
     ) {
       if (query.scope === "discover" || query.scope === "collected") return { ...await content.list(actor, query), engine: "database" as const, mode: "keyword" };
@@ -812,7 +812,6 @@ export async function registerSearch(
           const page = await content.list(actor, {
             ...scoped,
             q: undefined,
-            offset: 0,
             cursor,
             kind: "document",
           });

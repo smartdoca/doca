@@ -295,3 +295,112 @@ it.each([true, false])(
     );
   },
 );
+
+it("exposes whether saved documents are actually available to answers", async () => {
+  const studio=createKnowledgeStudio(db);
+  expect(await studio.executeTool(actor,library,"inspect",{})).toMatchObject({answerPublication:{status:"pending",dirty:true}});
+  await publishKnowledgeDocuments(db,actor,library);
+  expect(await studio.executeTool(actor,library,"inspect",{})).toMatchObject({answerPublication:{status:"ready",dirty:false}});
+  await createContent(db).create(actor,{kind:"document",format:"markdown",libraryId:library,title:"New unpublished facts",markdown:"Port 8097"});
+  expect(await studio.executeTool(actor,library,"inspect",{})).toMatchObject({answerPublication:{status:"ready",dirty:true}});
+});
+
+it("exposes empty parent directories so curation can fill their overviews", async () => {
+ const entry=await saveHumanKnowledge(db,actor,library,{expectedRevision:0,title:"Connection",path:["Operations"],markdown:"# Connection\n\nUse port 8097. The idle timeout is 73 seconds. Retry at most four times."});
+ await reviewKnowledgeEntry(db,actor,library,entry.id,entry.revision,"publish");
+ const studio=createKnowledgeStudio(db);const inspected=await studio.executeTool(actor,library,"inspect",{}) as any;
+ expect(inspected.directories).toEqual([expect.objectContaining({title:"Operations",documentId:expect.any(String)})]);
+ const context=await studio.executeTool(actor,library,"overview_context",{documentId:inspected.directories[0].documentId}) as any;
+ expect(context.children).toEqual([expect.objectContaining({title:"Connection",link:expect.stringContaining("#/r/")})]);
+});
+it("keeps the policy and executes status requests when the intent quote is invalid", async () => {
+  const bundle = await knowledgeInstructions(db, actor, library);
+  await saveKnowledgeSettings(db, actor, library, bundle.settingsRevision, {...bundle.settings, sourceScope: "internal"});
+  const run = await task("检查当前开启的数据源，不要重新开启关闭的来源");
+  model.doStream
+    .mockResolvedValueOnce(text(JSON.stringify({mode:"web",quote:"允许网络来源"})))
+    .mockResolvedValueOnce(tool("inspect", {}))
+    .mockResolvedValueOnce(text("已检查，未修改来源"));
+  await createKnowledgeStudio(db).process(run.id);
+  expect((await knowledgeInstructions(db, actor, library)).settings.sourceScope).toBe("internal");
+  const rows = await db.selectFrom("knowledge_messages").selectAll().where("conversation_id","=",run.conversation.id).where("role","=","tool").execute();
+  expect(rows.some(row => JSON.parse(row.detail).name === "inspect")).toBe(true);
+  expect((await db.selectFrom("knowledge_tasks").selectAll().where("id","=",run.id).executeTakeFirstOrThrow()).status).toBe("completed");
+});
+it("completes failed read events instead of leaving a running tool in the UI", async () => {
+  const run = await task("检查来源");
+  model.doStream
+    .mockResolvedValueOnce(text(JSON.stringify({mode:"unchanged",quote:""})))
+    .mockResolvedValueOnce(tool("read_source", {sourceId:randomUUID()}))
+    .mockResolvedValueOnce(text("来源不可用，未修改内容"));
+  await createKnowledgeStudio(db).process(run.id);
+  const rows=await db.selectFrom("knowledge_messages").selectAll().where("conversation_id","=",run.conversation.id).where("role","=","tool").execute();
+  expect(rows).toHaveLength(1);
+  expect(JSON.parse(rows[0]!.detail)).toMatchObject({status:"completed",result:{error:expect.any(String)}});
+});
+it("returns fresh overview context after a conflict and never overwrites it", async () => {
+  const entry=await saveHumanKnowledge(db,actor,library,{expectedRevision:0,title:"Connection",path:["Operations"],markdown:"Use port 8097 and retry four times."});
+  await reviewKnowledgeEntry(db,actor,library,entry.id,entry.revision,"publish");
+  const studio=createKnowledgeStudio(db);
+  const info=await studio.executeTool(actor,library,"inspect",{}) as any;
+  const context=await studio.executeTool(actor,library,"overview_context",{documentId:info.directories[0].documentId}) as any;
+  const input={documentId:context.documentId,expectedSeq:context.expectedSeq,childFingerprint:context.childFingerprint,markdown:"This guide covers the connection chapter. Start by reading Connection for the listening port and retry count. Follow the chapter link for exact operational parameters, and do not infer undocumented retention policies."};
+  const saved=await studio.executeTool(actor,library,"overview",input) as any;
+  expect(saved.context.expectedSeq).toBeGreaterThan(context.expectedSeq);
+  const conflict=await studio.executeTool(actor,library,"overview",{...input,markdown:"Different contents. ".repeat(12)}) as any;
+  expect(conflict.error).toBeTruthy();
+  expect(conflict.context.markdown).toContain("This guide covers");
+  expect(conflict.context.expectedSeq).toBe(saved.context.expectedSeq);
+});
+it("does not classify an unpublished answer failure as missing knowledge", async () => {
+  const bot=await saveKnowledgeAssistant(db,actor,{expectedRevision:0,title:"QA",libraryIds:[library],enabled:true,visibility:"invited",memberIds:[],managerIds:[],channels:["web"]});
+  const caseId=randomUUID();
+  await db.insertInto("knowledge_cases").values({id:caseId,bot_id:bot.id,message_id:randomUUID(),user_id:actor.id,judgment:"unhelpful",reason:"No evidence",snapshot:JSON.stringify({messages:[{role:"user",content:"What port?"}]}),status:"open",created_at:new Date().toISOString()}).execute();
+  const studio=createKnowledgeStudio(db);
+  await expect(studio.executeTool(actor,library,"classify_feedback",{caseId,category:"missing",reason:"No evidence",status:"reviewed"})).rejects.toThrow("问答发布尚未同步");
+  await expect(studio.executeTool(actor,library,"classify_feedback",{caseId,category:"retrieval",reason:"Publication pending",status:"reviewed"})).resolves.toMatchObject({ok:true});
+});
+it("binds overview writes to read context and applies identical writes only once per task", async () => {
+  const entry=await saveHumanKnowledge(db,actor,library,{expectedRevision:0,title:"Connection",path:["Operations"],markdown:"Use port 8097 and retry four times."});
+  await reviewKnowledgeEntry(db,actor,library,entry.id,entry.revision,"publish");
+  const studio=createKnowledgeStudio(db);
+  const info=await studio.executeTool(actor,library,"inspect",{}) as any;
+  const documentId=info.directories[0].documentId;
+  const before=await studio.executeTool(actor,library,"overview_context",{documentId}) as any;
+  const run=await task("Update the overview");
+  const args={documentId,markdown:"This overview introduces Connection, covering the port and retry settings. Read the linked Connection chapter for the supported operational facts. Retention policy is not documented and must not be inferred from this guide."};
+  model.doStream
+    .mockResolvedValueOnce(text(JSON.stringify({mode:"unchanged",quote:""})))
+    .mockResolvedValueOnce(tool("overview_context",{documentId}))
+    .mockResolvedValueOnce(tool("overview",args))
+    .mockResolvedValueOnce(tool("overview",args))
+    .mockResolvedValueOnce(text("Saved"));
+  await studio.process(run.id);
+  const after=await studio.executeTool(actor,library,"overview_context",{documentId}) as any;
+  expect(after.expectedSeq).toBe(before.expectedSeq+1);
+  expect(after.markdown).toContain("This overview introduces");
+});
+it("keeps a missing-information task open when evidence only acknowledges the unknown", async () => {
+  const run=await task("补充边界说明");
+  const studio=createKnowledgeStudio(db);
+  const pending:any=await studio.executeTool(actor,library,"human_task",{key:"retention",title:"补充保留期限",reason:"客户数据保留期限未定",options:[]},db,false,run.conversation.id);
+  const document=await createContent(db).create(actor,{kind:"document",format:"markdown",title:"Policy",markdown:"客户数据保留期限尚未确定，请不要根据本指南推断。"});
+  const source=await subscribeKnowledgeSource(db,actor,library,{sourceKind:"document",sourceId:document.id,title:"Policy"});
+  model.doStream.mockResolvedValueOnce(text('{"satisfied":false}'));
+  await expect(studio.executeTool(actor,library,"resolve_human_task",{id:pending.id,revision:pending.revision,reason:"已写明未知",evidence:{sourceId:source.id,quote:"客户数据保留期限尚未确定"}},db,false,run.conversation.id)).rejects.toThrow("不能证明待办已经解决");
+  expect((await db.selectFrom("knowledge_human_tasks").select("status").where("id","=",pending.id).executeTakeFirstOrThrow()).status).toBe("open");
+});
+it("renders feedback completion from saved classifications instead of contradictory model prose", async () => {
+  const bot=await saveKnowledgeAssistant(db,actor,{expectedRevision:0,title:"QA",libraryIds:[library],enabled:true,visibility:"invited",memberIds:[],managerIds:[],channels:["web"]});
+  const caseId=randomUUID();
+  await db.insertInto("knowledge_cases").values({id:caseId,bot_id:bot.id,message_id:randomUUID(),user_id:actor.id,judgment:"unhelpful",reason:"",snapshot:JSON.stringify({messages:[{role:"user",content:"What port?"}],evidence:{citations:[]}}),status:"open",created_at:new Date().toISOString()}).execute();
+  const run=await task("处理反馈");
+  model.doStream.mockResolvedValueOnce(text('{"mode":"unchanged","quote":""}'))
+    .mockResolvedValueOnce(tool("classify_feedback",{caseId,category:"answer",reason:"Model extraction failure",status:"reviewed"}))
+    .mockResolvedValueOnce(text("已修复知识缺失并关闭所有待办"));
+  await createKnowledgeStudio(db).process(run.id);
+  const answer=await db.selectFrom("knowledge_messages").select("content").where("conversation_id","=",run.conversation.id).where("role","=","assistant").executeTakeFirstOrThrow();
+  expect(answer.content).toContain("检索或发布问题");
+  expect(answer.content).toContain("仍待处理");
+  expect(answer.content).not.toContain("关闭所有待办");
+});
