@@ -1,3 +1,4 @@
+import { PublicResourceLink } from "@web/features/discovery/discovery.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { htmlLang } from "@doca/i18n";
 import { Feedback } from "@web/shared/components/feedback.js";
@@ -326,9 +327,10 @@ export function Dashboard({
             </span>
             <ArrowUpRight size={17} />
           </button>
-          {libraries && <button onClick={() => { location.hash = "/knowledge-assistants"; }}><span className="quick-icon"><Bot size={23}/></span><span><strong>{t("studio.bots")}</strong><small>{t("home.knowledgeBotsHint")}</small></span><ArrowUpRight size={17}/></button>}
+
         </div>
       )}
+      {!trash && <PublicResourceLink kind={libraries ? "library" : "document"} />}
       <div className="dashboard-controls">
         {!libraries && !trash && !mine && (
           <div className="home-tabs" role="tablist" aria-label={t("home.tabs")}>

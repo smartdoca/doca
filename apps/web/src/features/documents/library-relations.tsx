@@ -1,3 +1,5 @@
+import {KnowledgeFeedback} from "@web/features/knowledge/knowledge-feedback.js";
+import {SourcePicker} from "@web/features/knowledge/knowledge-source-picker.js";
 import { KnowledgeCurationSettings } from "@web/features/knowledge/knowledge-curation-settings.js";
 import { KnowledgeChat } from "@web/features/knowledge/knowledge-chat.js";
 import { Plus, FileText, Link2, Folder, Database, UserRound, ShieldCheck, Scale, NotebookPen, Play, Clock3 } from "lucide-react";
@@ -15,6 +17,7 @@ import "./library-system.css";
 
 type SourceGroup = {config?:string;id:string;title:string;source_kind:string};
 type SubscriptionItem = {
+  name: string;
   groupId?:string|null;
   creator: { id: string; displayName: string };
   guideConfigured: boolean;
@@ -51,7 +54,7 @@ type SystemPayload = {
   runs: RunItem[];
 };
 
-type Tab = "knowledge" | "sources" | "triggers" | "settings" | "instructions";
+type Tab = "knowledge" | "sources" | "triggers" | "settings" | "instructions" | "bots" | "feedback";
 type Schedule = "off" | "daily" | "weekly";
 
 const runStatusKeys = { queued: "knowledge.status.queued", running: "knowledge.status.running", awaiting_review: "knowledge.status.review", failed: "knowledge.status.failed", partial: "knowledge.status.partial", succeeded: "knowledge.status.succeeded", canceled: "knowledge.status.canceled" } as const;
@@ -86,6 +89,9 @@ export function LibrarySystemPage({
   const resource = detail.resource;
   const curated = Number(resource.ai_curated) === 1;
   const [tab, setTab] = useState<Tab>("knowledge");
+  const [conversationId,setConversationId]=useState<string>();
+  const [renaming,setRenaming]=useState<SubscriptionItem>();
+  const [sourceName,setSourceName]=useState("");
   const [instructionPath] = useState("KNOWLEDGE.md");
   const [picker, setPicker] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -100,7 +106,7 @@ export function LibrarySystemPage({
   const [busy, setBusy] = useState(false);
   const canMaintain = roleRank(resource.role) >= 4;
   const statusKeys = { pending: "library.status.pending", active: "library.status.active", stale: "library.status.stale", missing: "library.status.missing" } as const;
-  const tabKeys = { instructions: "knowledge.instructions", settings: "studio.settingsTab", knowledge: "knowledge.workspace", structure: "library.relations.tab.structure", preset: "library.relations.tab.preset", sources: "library.relations.tab.sources", triggers: "library.relations.tab.triggers" } as const;
+  const tabKeys = { feedback:"studio.feedback", bots:"studio.bots", instructions: "knowledge.instructions", settings: "studio.settingsTab", knowledge: "curator.tab", structure: "library.relations.tab.structure", preset: "library.relations.tab.preset", sources: "library.relations.tab.sources", triggers: "library.relations.tab.triggers" } as const;
   const scheduleKeys = { off: "knowledge.manualOnly", daily: "library.trigger.daily", weekly: "library.trigger.weekly" } as const;
   const sources = webPluginRegistry.knowledgeSources.list();
 
@@ -126,7 +132,7 @@ export function LibrarySystemPage({
         if ((cause as { name?: string }).name !== "AbortError") setError(cause instanceof Error ? cause.message : t("library.curated.failed"));
       });
     return () => controller.abort();
-  }, [resource.id, curated]);
+  }, [resource.id, curated, tab]);
 
   async function run(work: () => Promise<void>) {
     if (busy) return;
@@ -149,7 +155,7 @@ export function LibrarySystemPage({
       {error && <Feedback tone="error" message={error} />}
       {notice && <p className="library-system-notice">{notice}</p>}
       <div className="library-system-tabs" role="tablist">
-        {(["knowledge", "sources", "instructions", "triggers", "settings"] as const).map((id) => (
+        {(["knowledge", "sources", "instructions", "feedback", "bots", "triggers", "settings"] as const).map((id) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>
             {t(tabKeys[id])}
           </button>
@@ -162,35 +168,38 @@ export function LibrarySystemPage({
       </header>
       {canMaintain && <><KnowledgeCurationSettings scopeId={resource.id}/><KnowledgeWorkspace surface="settings" libraryId={resource.id} enabled={curated} active={tab === "settings"} refreshVersion={refreshVersion}/></>}</>}
       {canMaintain && <div hidden={tab !== "instructions"}><KnowledgeWorkspace surface="instructions" libraryId={resource.id} initialPath={instructionPath} enabled={curated} active={tab === "instructions"} refreshVersion={refreshVersion}/></div>}
-      <div hidden={tab !== "knowledge"}>{canMaintain ? <><KnowledgeChat key={`${resource.id}:${refreshVersion}`} scopeId={resource.id} kind="curation" /></> : <p>{t("knowledge.manageOnly")}</p>}</div>
+      <div hidden={tab !== "knowledge"}>{canMaintain ? <><KnowledgeChat key={`${resource.id}:${refreshVersion}`} scopeId={resource.id} kind="curation" compactHeader initialConversationId={conversationId} /></> : <p>{t("knowledge.manageOnly")}</p>}</div>
+      {tab === "feedback" && <KnowledgeFeedback libraryId={resource.id} openConversation={id=>{setConversationId(id);setTab("knowledge");}}/>}
+      {tab === "bots" && <KnowledgeAssistants libraryId={resource.id}/> }
       {tab === "sources" && (
         <section className="knowledge-sources-panel">
           <div className="knowledge-section-heading"><div><h3>{t("knowledge.sourceSubscriptions")}</h3><p>{t("knowledge.sourceCardsHint")}</p></div>{canMaintain && <button className="primary" type="button" onClick={() => setPicker(true)}><Plus size={16} />{t("knowledge.addSource")}</button>}</div>
           <div className="knowledge-source-grid">
-            {groups.map(group=>{const members=items.filter(x=>x.groupId===group.id&&x.status!=="detached");const paused=members.length>0&&members.every(x=>x.safety.excluded);return <article className="knowledge-source-card" key={group.id}><h4>{group.title}</h4><small>{t((`sourceGroup.kind.${group.source_kind}`) as any)} · {members.length}</small><details><summary>{t("sourceGroup.members",{count:members.length})}</summary><ul>{members.map(member=><li key={member.id}><span>{member.sourceTitle||member.url||member.sourceId}</span> <small>{member.status}</small><button type="button" onClick={()=>setEditor({source:member,mode:"guide"})}>{t("knowledge.sourceGuide")}</button></li>)}</ul></details><div className="knowledge-source-card-actions"><button type="button" onClick={()=>setEditingGroup(group)}>{t("sourceGroup.edit")}</button><button disabled={busy} type="button" onClick={()=>void run(async()=>{await api(`/knowledge/libraries/${resource.id}/source-actions`,"POST",{sourceKey:group.id,action:paused?"resume":"pause",reason:t("studio.manualSourceChange")});})}>{t(paused?"sourceGroup.resume":"sourceGroup.pause")}</button></div></article>;})}
-            {items.filter(item=>!item.groupId).map(item => {
+            {groups.map(group=>{const members=items.filter(x=>x.groupId===group.id&&x.status!=="detached");const paused=JSON.parse(group.config??"{}").paused===true || (members.length>0&&members.every(x=>x.safety.excluded));return <article className="knowledge-source-card" key={group.id}><h4>{group.title}</h4><small>{t((`sourceGroup.kind.${group.source_kind}`) as any)} · {members.length}</small><details><summary>{t("sourceGroup.members",{count:members.length})}</summary><ul>{members.map(member=><li key={member.id}><span>{member.name||member.sourceTitle||member.url||member.sourceId}</span> <button type="button" onClick={()=>setEditor({source:member,mode:"guide"})}>{t("knowledge.sourceGuide")}</button></li>)}</ul></details><div className="knowledge-source-card-actions"><button type="button" onClick={()=>setEditingGroup(group)}>{t("sourceGroup.edit")}</button><label className="curator-source-toggle"><button className="knowledge-toggle" role="switch" aria-label={group.title} aria-checked={!paused} disabled={busy} type="button" onClick={()=>void run(async()=>{await api(`/knowledge/libraries/${resource.id}/source-actions`,"POST",{sourceKey:group.id,action:paused?"resume":"pause",reason:t("studio.manualSourceChange")});})}><span/></button>{t(paused?"curator.disabled":"curator.enabled")}</label></div></article>;})}
+            {items.filter(item=>!item.groupId&&item.status!=="detached").map(item => {
               const source = sources.find(entry => entry.sourceKind === item.sourceKind);
               const kindLabel = source?.labelKey ? pluginMessage(locale, source.labelKey) : item.sourceKind;
               const Icon = item.sourceKind === "url" ? Link2 : item.sourceKind === "folder" ? Folder : item.sourceKind === "document" ? FileText : Database;
-              const title = item.nodeTitle || item.sourceTitle || item.url || kindLabel;
+              const title = item.name || item.nodeTitle || item.sourceTitle || item.url || kindLabel;
               return <article key={item.id} className={`knowledge-source-card ${item.status === "detached" ? "is-detached" : ""}`}>
-                <div className="knowledge-source-card-top"><span className="knowledge-source-icon"><Icon size={19} /></span><span className="knowledge-source-kind">{kindLabel}</span><span className={`knowledge-source-status status-${item.status}`}>{item.status === "detached" ? t("knowledge.unsubscribed") : t(statusKeys[item.status === "stale" || item.status === "missing" || item.status === "pending" ? item.status : "active"])}</span></div>
-                <h4 title={title}>{title}</h4>
+                <div className="knowledge-source-card-top"><span className="knowledge-source-icon"><Icon size={19} /></span><span className="knowledge-source-kind">{kindLabel}</span><label className="curator-source-toggle"><button type="button" className="knowledge-toggle" role="switch" aria-label={title} aria-checked={!item.safety.excluded} disabled={busy} onClick={()=>void run(async()=>{await api(`/knowledge/libraries/${resource.id}/source-actions`,"POST",{sourceKey:item.id,action:item.safety.excluded?"resume":"pause",reason:t("studio.manualSourceChange")});})}><span/></button>{t(item.safety.excluded?"curator.disabled":"curator.enabled")}</label></div>
+                <h4 title={title}>{title}</h4><button type="button" onClick={()=>{setRenaming(item);setSourceName(title);}}>{t("curator.rename")}</button>{item.status==="missing"&&<p role="status">{t("library.status.missing")}</p>}
                 <div className="knowledge-source-creator"><UserRound size={14} /><span>{t("knowledge.sourceCreator")}</span><strong>{item.creator?.displayName || t("knowledge.unknownCreator")}</strong></div>
                 <div className="knowledge-source-summary"><span>{t("knowledge.sourceGuide")}</span><p>{item.guideConfigured ? item.guidePreview : t("knowledge.guideNotConfigured")}</p></div>
                 <div className="knowledge-source-weight"><Scale size={14} /><span>{item.weightHint || t("knowledge.inheritWeights")}</span></div>
                 <div className="knowledge-source-boundaries"><ShieldCheck size={14} /><span>{item.safety?.excluded ? t("knowledge.sourcePaused") : item.safety?.redactContacts ? t("knowledge.contactFilterOn") : t("knowledge.sourceLimits")}</span>{!item.canEdit && <small>{t("knowledge.managedByCreator")}</small>}</div>
                 <div className="knowledge-source-card-actions"><button type="button" onClick={() => setEditor({ source: item, mode: "guide" })}><NotebookPen size={14} />{t("knowledge.sourceGuide")}</button><button type="button" onClick={() => setEditor({ source: item, mode: "weights" })}><Scale size={14} />{t("knowledge.weightsShort")}</button><button type="button" onClick={() => setEditor({ source: item, mode: "safety" })}><ShieldCheck size={14} />{t("knowledge.sourceLimits")}</button></div>
-                {canMaintain && item.canDelete && item.status !== "detached" && <button type="button" className="knowledge-source-detach" disabled={busy} onClick={() => void run(async () => { await api(`/knowledge/libraries/${resource.id}/subscriptions/${item.id}/detach`, "POST"); })}>{t("knowledge.detach")}</button>}
+
               </article>;
             })}
           </div>
           {!items.length && <div className="knowledge-source-empty"><Database size={28} /><strong>{t("library.system.emptySubscriptions")}</strong><p>{t("knowledge.sourceCardsHint")}</p></div>}
         </section>
       )}
+      {renaming&&<Dialog title={t("curator.rename")} close={()=>setRenaming(undefined)}><input aria-label={t("sourceGroup.name")} value={sourceName} onChange={e=>setSourceName(e.target.value)}/><button type="button" disabled={busy||!sourceName.trim()} onClick={()=>void run(async()=>{await api(`/knowledge/libraries/${resource.id}/subscriptions/${renaming.id}/name`,"PATCH",{name:sourceName});setRenaming(undefined);})}>{t("sourceGroup.save")}</button></Dialog>}
       {picker && <Dialog title={t("knowledge.addSource")} close={() => setPicker(false)} className="knowledge-source-picker-dialog"><SourcePicker libraryId={resource.id} locale={locale} busy={busy} bind={(sourceKind, sourceIds, urls, title, guide) => void run(async () => { await api(`/knowledge/libraries/${resource.id}/subscriptions`, "POST", { sourceKind, title, guide, ...(sourceKind==="url"?{urls}:{sourceIds}) }); setPicker(false); setRefreshVersion(value => value + 1); })} /></Dialog>}
       {editingGroup&&<Dialog title={t("sourceGroup.edit")} close={()=>setEditingGroup(undefined)} className="knowledge-source-picker-dialog"><SourcePicker libraryId={resource.id} locale={locale} busy={busy} initial={{guide:JSON.parse(editingGroup.config??"{}").guide??"",sourceKind:editingGroup.source_kind,title:editingGroup.title,sourceIds:items.filter(x=>x.groupId===editingGroup.id&&x.status!=="detached").map(x=>x.sourceId).filter(Boolean),urls:items.filter(x=>x.groupId===editingGroup.id&&x.status!=="detached").map(x=>x.url).filter(Boolean)}} bind={(sourceKind,sourceIds,urls,title,guide)=>void run(async()=>{await api(`/knowledge/libraries/${resource.id}/source-groups/${editingGroup.id}`,"PUT",{title,guide,...(sourceKind==="url"?{urls}:{sourceIds})});setEditingGroup(undefined);setRefreshVersion(x=>x+1);})}/></Dialog>}
-      {editor && <KnowledgeRuleDialog libraryId={resource.id} source={editor.source ? { id: editor.source.id, title: editor.source.sourceTitle || editor.source.url || t("knowledge.sourceGuide"), kind: editor.source.sourceKind, canEdit: editor.source.canEdit } : undefined} mode={editor.mode} close={() => setEditor(undefined)} saved={async () => { await reloadList(); setRefreshVersion(value => value + 1); }} />}
+      {editor && <KnowledgeRuleDialog libraryId={resource.id} source={editor.source ? { id: editor.source.id, title: editor.source.name || editor.source.sourceTitle || editor.source.url || t("knowledge.sourceGuide"), kind: editor.source.sourceKind, canEdit: editor.source.canEdit } : undefined} mode={editor.mode} close={() => setEditor(undefined)} saved={async () => { await reloadList(); setRefreshVersion(value => value + 1); }} />}
       {tab === "triggers" && (
         <section className="knowledge-trigger-panel">
           <div className="knowledge-section-heading"><div><h3>{t("knowledge.curationSchedule")}</h3><p>{t("knowledge.scheduleHint")}</p></div><Clock3 size={20} /></div>
@@ -229,57 +238,9 @@ export function LibrarySystemPage({
   );
 }
 
-export function SourcePicker({libraryId,locale,busy,bind,initial}:{libraryId:string;locale:string;busy:boolean;bind:(sourceKind:string,sourceIds:string[],urls:string[],title:string,guide:string)=>void;initial?:{sourceKind:string;title:string;sourceIds:string[];urls:string[];guide?:string}}) {
-  const {t}=useI18n();
-  const sources=webPluginRegistry.knowledgeSources.list();
-  const [kind,setKind]=useState(initial?.sourceKind??"url"),[name,setName]=useState(initial?.title??"");
-  const [guide,setGuide]=useState(initial?.guide??"");
-  const [selected,setSelected]=useState<string[]>(initial?.sourceIds??[]),[url,setUrl]=useState(initial?.urls.join("\n")??"");
-  const [rows,setRows]=useState<Array<{id:string;label:string;bindable:boolean;enter:boolean}>>([]);
-  const [folder,setFolder]=useState<{type:"system"|"folder";id:string}>({type:"system",id:"root"});
-  const [error,setError]=useState("");
-  const active=sources.find(x=>x.sourceKind===kind);
-  useEffect(()=>{
-    const controller=new AbortController();
-    setError("");setRows([]);
-    const load=async()=>{
-      if(kind==="document"||kind==="library") {
-        const all:typeof rows=[];let offset:number|null=0;
-        do {const page: {items:Array<{id:string;title:string;library_id?:string|null;libraryName?:string}>;nextOffset:number|null}=await api<{items:Array<{id:string;title:string;library_id?:string|null;libraryName?:string}>;nextOffset:number|null}>(`/resources?scope=all&kind=${kind}&offset=${offset}`,"GET",undefined,controller.signal);all.push(...page.items.filter(x=>x.id!==libraryId&&x.library_id!==libraryId).map(x=>({id:x.id,label:[x.libraryName,x.title].filter(Boolean).join(" / "),bindable:true,enter:false})));offset=page.nextOffset;}while(offset!=null&&!controller.signal.aborted);
-        return all;
-      }
-      if(kind==="file"||kind==="folder") {
-        const page=await api<{folders:Array<{id:string;name:string;virtual?:boolean;type:string}>;files:Array<{id:string;name:string}>}>(`/files?parentType=${folder.type}&parentId=${encodeURIComponent(folder.id)}`,"GET",undefined,controller.signal);
-        return [...page.folders.filter(x=>!x.virtual&&x.type==="folder").map(x=>({id:x.id,label:x.name,bindable:kind==="folder",enter:true})),...(kind==="file"?page.files.map(x=>({id:x.id,label:x.name,bindable:true,enter:false})):[])];
-      }
-      return [];
-    };
-    void load().then(x=>{if(!controller.signal.aborted)setRows(x);}).catch(e=>{if(!controller.signal.aborted)setError(e.message);});
-    return ()=>controller.abort();
-  },[kind,folder.id,folder.type,libraryId]);
-  const choices=[...new Set(["url","library","document",...sources.map(x=>x.sourceKind)])];
-  const label=(k:string)=>{const source=sources.find(x=>x.sourceKind===k);return k==="library"?t("sourceGroup.libraries"):source?.labelKey?pluginMessage(locale,source.labelKey):k;};
-  const urls=[...new Set(url.split(/\s+/).map(x=>x.trim()).filter(Boolean))];
-  return <div className="library-source-picker">
-    <p>{t("sourceGroup.hint")}</p>
-    <label>{t("sourceGroup.name")}<input value={name} onChange={e=>setName(e.target.value)} placeholder={t("sourceGroup.nameExample")}/></label>
-    <div className="library-system-tabs">{choices.map(k=><button type="button" key={k} disabled={!!initial&&k!==initial.sourceKind} aria-pressed={kind===k} onClick={()=>{setKind(k);setSelected([]);setUrl("");setFolder({type:"system",id:"root"});}}>{label(k)}</button>)}</div>
-    {error&&<p role="alert">{error}</p>}
-    {kind==="url"?<textarea value={url} onChange={e=>setUrl(e.target.value)} rows={8} aria-label={t("sourceGroup.links")} placeholder={t("sourceGroup.links")}/>:<>
-      {folder.id!=="root"&&<button type="button" onClick={()=>setFolder({type:"system",id:"root"})}>{t("library.relations.back")}</button>}
-      <ul className="library-system-links knowledge-picker-results">{rows.map(row=><li key={row.id}><label>{row.bindable&&<input type="checkbox" checked={selected.includes(row.id)} onChange={e=>setSelected(old=>e.target.checked?[...old,row.id]:old.filter(id=>id!==row.id))}/>} {row.label}</label>{row.enter&&<button type="button" onClick={()=>setFolder({type:"folder",id:row.id})}>{t("library.relations.open")}</button>}</li>)}</ul>
-      {!rows.length&&<p>{t("library.relations.pickEmpty")}</p>}
-      {active&&sourceSelection(active)==="config"&&active.render(undefined,{render:()=>null,bind:target=>{if(target.sourceId)setSelected(old=>[...new Set([...old,target.sourceId!])]);if(target.url)setUrl(old=>old+"\n"+target.url);}})}
-    </>}
-    <label>{t("knowledge.sourceGuide")}<textarea rows={4} value={guide} onChange={e=>setGuide(e.target.value)} placeholder={t("sourceGroup.guideHint")}/></label>
-    <p>{t("sourceGroup.selected",{count:kind==="url"?urls.length:selected.length})}</p>
-    <button type="button" className="primary" disabled={busy||!name.trim()||!(kind==="url"?urls.length:selected.length)} onClick={()=>bind(kind,selected,urls,name,guide)}>{t(initial?"sourceGroup.save":"sourceGroup.create")}</button>
-  </div>;
-}
 
 export function LibraryQaPage({ detail }: { detail: Detail; changed: () => Promise<void> }) {
-  const {t}=useI18n();
-  return <section className="library-system knowledge-full-width"><p>{t("studio.qaGuide")}</p><a className="primary" href={`#/knowledge-assistants?library=${detail.resource.id}`}>{t("studio.manageBots")}</a></section>;
+  return <KnowledgeAssistants libraryId={detail.resource.id}/>;
 }
 
 export function KnowledgeCurationToggle({detail,changed}:{detail:Detail;changed:()=>Promise<void>}) {

@@ -1,3 +1,4 @@
+import { setCollection } from "./collections.js";
 import type { Transaction } from "kysely";
 import type { DB, Schema } from "../../../../db/src/index.js";
 import { authorize } from "../access/queries.js";
@@ -11,7 +12,15 @@ export async function setEntry(
   state: "joined" | "hidden",
   source = "manual",
 ) {
-  await authorize(db, actor, resourceId);
+  const { resource } = await authorize(db, actor, resourceId);
+  if (source === "manual")
+    return setCollection(
+      db,
+      actor.id,
+      resource.kind,
+      resourceId,
+      state === "joined",
+    );
   const old = await db
     .selectFrom("resource_entries")
     .selectAll()

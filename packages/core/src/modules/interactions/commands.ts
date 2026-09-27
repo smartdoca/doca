@@ -8,8 +8,6 @@ import type { DB } from "../../../../db/src/index.js";
 import { fail } from "../../shared/errors.js";
 import { permission } from "../access/policy.js";
 import { restoreDocument } from "../collaboration/documents.js";
-import { distributionPolicy } from "../deployment/policies.js";
-import { setEntry } from "../discovery/entries.js";
 import {
   decodeMarkdownAnchor,
   encodeMarkdownAnchor,
@@ -31,9 +29,7 @@ export function createInteractions(
   return {
     visit(actor: Actor, id: string, stamp = new Date()) {
       return run(actor, [id], async (ctx) => {
-        const resource = get(ctx, id, "read_content");
-        if ((await distributionPolicy(ctx.tx, resource.kind)).autoCollectOpened)
-          await setEntry(ctx.tx, actor, id, "joined", "opened");
+        get(ctx, id, "read_content");
         const lastVisit = await ctx.tx
           .selectFrom("visit_events")
           .select("created_at")

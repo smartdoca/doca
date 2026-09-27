@@ -52,6 +52,7 @@ export async function listKnowledgeSubscriptions(db: DB, actor: Actor, libraryId
     const policy = view.settings.sourcePolicies[row.id];
     items.push({
       id: row.id,
+      name: row.name?.trim() || await sourceTitle(db, row),
       groupId: row.group_id ?? null,
       creator: { id: row.creator_id, displayName: creator?.display_name || creator?.public_id || "" },
       guideConfigured: !!guide?.revision,
@@ -144,6 +145,7 @@ export async function subscribeKnowledgeSource(
   await db.insertInto("knowledge_subscriptions").values({
     id,
     library_id: libraryId,
+    name: input.title?.trim().slice(0,200) || await sourceTitle(db,{source_kind:input.sourceKind,source_id:source.sourceId,url:source.url}),
     creator_id: actor.id,
     source_kind: input.sourceKind,
     source_id: source.sourceId,

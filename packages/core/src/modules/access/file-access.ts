@@ -31,12 +31,22 @@ export async function authorizeFileFolder(
       .where("id", "=", cursor.parent_id)
       .where("deleted_at", "is", null)
       .executeTakeFirst();
-    if (!parent) break;
+    if (!parent) fail(404, "文件夹不存在");
     if (visited.has(parent.id)) fail(409, "文件夹层级存在循环");
     visited.add(parent.id);
     cursor = parent;
   }
-  if (cursor.parent_id !== "shared") fail(404, "文件夹不存在");
+  const published = await tx
+    .selectFrom("folder_publications")
+    .select("folder_id")
+    .where("folder_id", "in", [...visited])
+    .where("enabled", "=", 1)
+    .executeTakeFirst();
+  if (cursor.parent_id !== "shared") {
+    if (published && minimumRole <= 1)
+      return { folder, role: "reader" as const, shareRootId: null };
+    fail(404, "文件夹不存在");
+  }
   const share = await tx
     .selectFrom("file_folder_shares")
     .selectAll()
@@ -44,6 +54,8 @@ export async function authorizeFileFolder(
     .where("user_id", "=", actor.id)
     .executeTakeFirst();
   const level = share?.role === "admin" ? 3 : share?.role === "reader" ? 1 : 0;
+  if (level < minimumRole && published && minimumRole <= 1)
+    return { folder, role: "reader" as const, shareRootId: cursor.id };
   if (level < minimumRole)
     fail(
       minimumRole > 1 ? 403 : 404,

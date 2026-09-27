@@ -32,15 +32,23 @@ sourceScope 为 internal 时，网页读取、网络搜索、网络推荐和链�
 
 全局文档搜索与知识问答使用独立逻辑投影，问答索引使用 Meilisearch 原生向量/混合检索。切换前等待索引任务成功，问答候选限制为所绑定知识库当前发布的分块。副索引配置从 Doca 已绑定模型重新构造凭据，不把 Meilisearch GET 返回的脱敏密钥当作真实密钥复制。
 
+向量设置在索引准备时同步，查询已就绪索引时不再提交设置更新，避免服务重启后的首次问答阻塞在索引队列。附件与追问会先提炼核心检索术语，计算题先检索规则再代入数值。回答缺少有效证据编号时最多自动核对并修正一次，仍无引用则撤回该回答，不无限重试。
+
 删除和收紧脱敏策略即时约束旧发布及历史回答，避免继续展示失效证据。普通文档与问答各有索引，不保存两份可独立修改的知识正文。
 
 ## 独立问答与反馈
 
 问答会话按用户隔离，不使用个人助手的会话或长期记忆。历史压缩只服务本次对话。依据当前生效知识回答并引用，资料不足时明确说明。整理图标使用书本勾选，问答使用机器人，与个人助手区分。
 
-支持完整问答页面、`/knowledge/embed/<botId>`、流式 HTTP 与 MCP；个人助手可将已绑定机器人作为只读检索工具。当前 iframe 复用 Doca 身份认证，并通过 DOCA_KNOWLEDGE_EMBED_ORIGINS 配置允许嵌入的站点；匿名官网访客的独立授权/限流方案尚未实现，不应向网页暴露管理员或 MCP 凭据。
+支持完整问答页面、`/knowledge/embed/<botId>`、流式 HTTP 与 MCP；个人助手可将已绑定机器人作为只读检索工具。iframe 通过 DOCA_KNOWLEDGE_EMBED_ORIGINS 配置允许嵌入的站点。公开机器人支持匿名访客，服务端签发仅限该机器人、24小时有效的访客凭据，按凭据隔离会话；收回公开权限或关闭对应渠道后立即失效。访客入口采用按 IP 的进程内限流，多实例部署应配合网关限流。不应向网页暴露管理员或 MCP 密钥。
 
-HTTP：`POST /api/v1/knowledge/assistants/:id/ask` 返回 conversationId 与 streamUrl，可携带 conversationId 继续追问。SSE：`GET /api/v1/knowledge/conversations/:id/stream`。MCP：`POST /api/v1/knowledge/mcp`，凭据必须授权机器人所绑定的全部知识库，仅开放 search/ask/answer。
+机器人在左侧“知识库问答”列表管理，点击进入聊天，工具栏打开管理面板，右上角“分享与权限”管理公开范围、链接和成员。知识库的“问答机器人”页签列出所有绑定机器人及创建者；关联元信息不授予机器人使用或管理权限。创建者和机器人管理员管理配置，读者只问答。绑定知识库采用多选；每次检索按创建者当前管理权限过滤失效库，保留其他有效库。撤权后历史引用重新检查，生成中的回答也会中止并撤回失效内容。
+
+附件复用 AI 助手的上传与解析能力，需登录且由机器人管理员开启，每条消息最多8个附件、总计25MB。附件仅作为会话上下文，不写入知识库，不成为权威来源。
+
+每个机器人独立开启网页、嵌入、API、MCP。管理面板生成 API/MCP 专用密钥（只在创建时显示原文，数据库只存哈希，默认90天有效，可撤销）。API：`POST /api/v1/knowledge/assistants/:id/api/ask`，请求包含 query 和可选 conversationId，使用 `Authorization: Bearer <key>`；返回会话 ID 和 SSE 地址，后续 GET 使用同一密钥。不同密钥不能读取彼此会话。MCP：`POST /api/v1/knowledge/assistants/:id/mcp`，使用 MCP 专用密钥调用 knowledge_search、knowledge_ask、knowledge_answer。密钥创建者丢失机器人管理权或账号停用后，密钥立即不可用。
+
+已登录内部调用入口仍可用：HTTP：`POST /api/v1/knowledge/assistants/:id/ask` 返回 conversationId 与 streamUrl，可携带 conversationId 继续追问。SSE：`GET /api/v1/knowledge/conversations/:id/stream`。MCP：`POST /api/v1/knowledge/mcp`，凭据必须授权机器人当前有效的全部知识库，仅开放 search/ask/answer。
 
 “有用/没用”反馈不阻塞对话。案例保存问答与证据，管理员可批量分类、生成修订并复测；复测须针对当前发布版本和明确预期。AI 自评是辅助证据，不能替代关键事实的规范核对。
 
@@ -50,5 +58,16 @@ HTTP：`POST /api/v1/knowledge/assistants/:id/ask` 返回 conversationId 与 str
 - `scripts/knowledge-studio-live-acceptance.ts`：真实模型、内部来源边界、定时任务和多轮问答验收，结果记录于 live-acceptance.json。
 - `tests/knowledge-source-groups.test.ts`：分组、类型隔离、递归、范围变更与继承。
 - `tests/knowledge-studio*.test.ts`：共享管理、会话隔离、来源意图、检查点恢复、发布稳定性和人工编辑冲突。
+- `tests/knowledge-bot-management.test.ts`：多库撤权、机器人管理员、分享直达、附件开关、密钥隔离与 MCP。
+- `tests/knowledge-query-readonly.test.ts`：问答查询不触发向量设置更新。
+- `scripts/knowledge-bot-live-acceptance.ts`：多库绑定、真实附件计算及连续追问；输出 `artifacts/network-guide/bot-live-acceptance.json`。
 
 运行真实 demo 会创建或修改上述专用演示知识库，并调用现有模型/搜索服务；自动测试使用隔离数据库，不在用户文档上做协同编辑测试。
+
+### 整理工作区与人工协助
+
+“整理助手”标签直接进入共享会话，不重复展示内部助手标题。输入区支持上传文件及引用来源；上传先通过当前操作者的文件夹编辑权限校验，随后将文件夹登记到当前知识库。来源读取授权只在整理范围内生效，不向其他管理员授予原始资源访问或写入权限。来源有可编辑名称，主要状态为开启/关闭；关闭保留配置但排除后续读取和扫描。
+
+右侧统一展示仍有效的人工待办，包括此前会话中未解决的事项。草稿、来源建议及人工决策使用稳定键去重、版本校验；采用、替换、来源补齐或范围变化后关闭过期待办，保留审计记录。助手在 inspect 中看到尚未关闭的待办，可通过 human_task / resolve_human_task 管理，局部待办不阻塞其他工作。人工处理会追加带操作者身份的会话消息。
+
+问答反馈独立于整理会话，显示机器人名称和反馈时的对话快照，并标记被评价的回答。管理员可以手动启动分析会话，或独立设置关闭/每天/每周的反馈处理周期；每次定时触发新建以触发时间命名的会话。点赞/不赞可以切换和撤销，撤销记录保留审计但不再进入待处理案例。

@@ -174,14 +174,12 @@ it("limits library catalogue to owners and whole-library writers, not public rea
       0,
     );
     await db
-      .insertInto("resource_entries")
+      .insertInto("resource_collections")
       .values({
         resource_id: doc.id,
+        resource_kind: "document",
         user_id: other.id,
-        state: "joined",
-        source: "manual",
-        version: 1,
-        updated_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       })
       .execute();
     expect(

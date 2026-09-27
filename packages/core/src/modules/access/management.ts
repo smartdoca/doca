@@ -51,6 +51,8 @@ export function createAccessManagement(
   async function apply(ctx: Context, actor: Actor, id: string, input: Input) {
     const r = get(ctx, id, "manage_sharing");
     check(r, input.version);
+    if (r.library_id && ctx.resources.some(l => l.id === r.library_id && ["public", "authenticated"].includes(l.visibility)) && input.visibility !== undefined)
+      fail(400, "阅读权限由公开知识库统一管理");
     const supportsDescendants = r.kind === "library" || !!r.library_id;
     const actorOwnsResource = isResourceOwnerLike(r, actor, ctx.resources);
     const mode = input.accessMode ?? r.access_mode;

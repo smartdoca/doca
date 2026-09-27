@@ -21,8 +21,31 @@ export type ContentDistribution = Pick<
   | "autoCollectOpened"
   | "ticketReviewers"
 >;
+export const publicResourceKinds = [
+  "document",
+  "library",
+  "assistant",
+  "folder",
+] as const;
+export type PublicResourceKind = (typeof publicResourceKinds)[number];
+export type PublicMode = "link" | "discover" | "search";
+export function publicMode(
+  policy: Distribution,
+  kind: PublicResourceKind,
+): PublicMode {
+  return (
+    policy.publicModes?.[kind] ??
+    (policy.normalSearch === "accessible" ||
+    (kind === "library" && policy.publicLibraries)
+      ? "search"
+      : policy.publicDiscovery
+        ? "discover"
+        : "link")
+  );
+}
 export type Distribution = typeof distributionDefaults & {
   revision: number;
+  publicModes?: Partial<Record<PublicResourceKind, PublicMode>>;
   resourcePolicies?: Partial<
     Record<"document" | "library", Partial<ContentDistribution>>
   >;

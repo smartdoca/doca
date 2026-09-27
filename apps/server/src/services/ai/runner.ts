@@ -1,3 +1,6 @@
+import { folderInSearch } from "@core/modules/discovery/catalog.js";
+import { authorizeFileFolder } from "@core/modules/access/file-access.js";
+import { queryResourcePage } from "@core/modules/resources/queries.js";
 import { createToolFailureGuard } from "./tool-failure-guard.js";
 import { recognizeStoredFile } from "./file-recognition.js";
 import { recoveredDocumentArtifacts } from "./checkpoint.js";
@@ -987,37 +990,9 @@ export function createAIRunner(
         .where("deleted_at", "is", null)
         .executeTakeFirst();
       if (!folder) return explainMissingFolder(id);
-      if (folder.owner_id === actor.id)
-        return { folder, role: "owner" as const };
-      let cursor = folder;
-      while (cursor.parent_id && cursor.parent_id !== "shared") {
-        const parent = await db
-          .selectFrom("file_folders")
-          .selectAll()
-          .where("id", "=", cursor.parent_id)
-          .where("deleted_at", "is", null)
-          .executeTakeFirst();
-        if (!parent) break;
-        cursor = parent;
-      }
-      if (cursor.parent_id !== "shared") fail(403, "没有访问这个文件夹的权限");
-      const share = await db
-        .selectFrom("file_folder_shares")
-        .selectAll()
-        .where("folder_id", "=", cursor.id)
-        .where("user_id", "=", actor.id)
-        .executeTakeFirst();
-      const level =
-        share?.role === "admin" ? 3 : share?.role === "reader" ? 1 : 0;
-      if (level < minimumRole)
-        fail(
-          403,
-          minimumRole > 1
-            ? "没有管理这个共享文件夹的权限"
-            : "没有访问这个文件夹的权限",
-        );
-      return { folder, role: share!.role };
+      return authorizeFileFolder(db, actor, id, minimumRole);
     }
+
     const recognizedFiles = new Map<string, Awaited<ReturnType<typeof recognizeStoredFile>>>();
     async function aiFileAccess(id: string, minimumRole = 1) {
       const file = await db
@@ -1891,7 +1866,7 @@ export function createAIRunner(
       knowledge_assistant_search: createTool({
         id: "knowledge_assistant_search",
         description:
-          "检索用户在 AI 设置中接入的问答机器人。只返回已发布知识，不能读取其原文或来源；不接入未经允许的公开机器人。查业务知识时与普通文档搜索互补。",
+          "检索用户在 AI 设置中接入或主动收录的问答机器人。只返回已发布知识，不能读取其原文或来源；不接入未经允许的公开机器人。查业务知识时与普通文档搜索互补。",
         inputSchema: z.object({ query: z.string().min(1).max(500) }),
         execute: async ({ query }) => {
           await requireCapability(db, actor.id, "ai.rag");
@@ -1901,7 +1876,7 @@ export function createAIRunner(
               "本轮仅授权指定文档，切换全部可访问内容后才能搜索接入的机器人",
             );
           const studio=createKnowledgeStudio(db,options.answerIndex);
-          const bots=(await listKnowledgeAssistants(db,actor)).filter(bot=>bot.connected);
+          const bots=(await listKnowledgeAssistants(db,actor)).filter(bot=>bot.connected || (bot.collected && bot.accessible));
           const results=[];
           for(const bot of bots) results.push({assistantId:bot.id,assistantTitle:bot.title,...await studio.searchAnswer(actor,bot.id,query)});
           return {results,capability:"knowledge_search_only"};
@@ -2080,6 +2055,8 @@ export function createAIRunner(
             if (!indexedGroups.has(groupOf(row.mime))) continue;
             try {
               await aiFileAccess(row.id);
+              if (row.parent_type === "folder" && !await folderInSearch(db, actor, row.parent_id)) continue;
+              if (row.parent_type === "document" && !(await queryResourcePage(db, actor, {matchedIds:[row.parent_id]})).items.length) continue;
             } catch {
               continue;
             }

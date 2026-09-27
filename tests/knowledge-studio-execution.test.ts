@@ -233,52 +233,65 @@ it("retries transient failures with bounded backoff but does not retry permissio
     await retryKnowledgeTask(db, job.id, new Error("network timeout")),
   ).toBe(false);
 });
-it("streams grounded answers without personal memory and records source evidence", async () => {
-  const draft = await saveHumanKnowledge(db, actor, library, {
-    title: "DNS",
-    markdown: "DNS negative TTL is the minimum of SOA TTL and MINIMUM.",
-    expectedRevision: 0,
-  });
-  await reviewKnowledgeEntry(
-    db,
-    actor,
-    library,
-    draft.id,
-    draft.revision,
-    "publish",
-  );
-  await publishKnowledgeDocuments(db, actor, library);
-  const bot = await saveKnowledgeAssistant(db, actor, {
-    title: "DNS",
-    libraryIds: [library],
-    memberIds: [],
-    enabled: true,
-    expectedRevision: 0,
-  });
-  const conversation = await createKnowledgeConversation(
+it.each([true, false])(
+  "keeps cited answers and withdraws unsupported answers (cited=%s)",
+  async (cited) => {
+    const draft = await saveHumanKnowledge(db, actor, library, {
+      title: "DNS",
+      markdown: "DNS negative TTL is the minimum of SOA TTL and MINIMUM.",
+      expectedRevision: 0,
+    });
+    await reviewKnowledgeEntry(
       db,
       actor,
-      bot.id,
-      "answer",
-      "DNS",
-    ),
-    id = randomUUID();
-  await sendKnowledgeMessage(
-    db,
-    actor,
-    conversation.id,
-    "DNS negative TTL",
-    id,
-  );
-  model.doStream.mockResolvedValueOnce(text("Use the smaller value.[1]"));
-  await createKnowledgeStudio(db).process(id);
-  const message = await db
-    .selectFrom("knowledge_messages")
-    .selectAll()
-    .where("conversation_id", "=", conversation.id)
-    .where("role", "=", "assistant")
-    .executeTakeFirstOrThrow();
-  expect(message.content).toContain("[1]");
-  expect(JSON.parse(message.detail).citations.length).toBeGreaterThan(0);
-  expect(await db.selectFrom("ai_sessions").selectAll().execute()).toEqual([]);
-});
+      library,
+      draft.id,
+      draft.revision,
+      "publish",
+    );
+    await publishKnowledgeDocuments(db, actor, library);
+    const bot = await saveKnowledgeAssistant(db, actor, {
+      title: "DNS",
+      libraryIds: [library],
+      memberIds: [],
+      enabled: true,
+      expectedRevision: 0,
+    });
+    const conversation = await createKnowledgeConversation(
+        db,
+        actor,
+        bot.id,
+        "answer",
+        "DNS",
+      ),
+      id = randomUUID();
+    await sendKnowledgeMessage(
+      db,
+      actor,
+      conversation.id,
+      "DNS negative TTL",
+      id,
+    );
+    model.doStream.mockResolvedValueOnce(
+      text(cited ? "Use the smaller value.[1]" : "An unsupported statement."),
+    );
+    if (!cited)
+      model.doStream.mockResolvedValueOnce(text("Still unsupported."));
+    await createKnowledgeStudio(db).process(id);
+    const message = await db
+      .selectFrom("knowledge_messages")
+      .selectAll()
+      .where("conversation_id", "=", conversation.id)
+      .where("role", "=", "assistant")
+      .executeTakeFirstOrThrow();
+    if (cited) expect(message.content).toContain("[1]");
+    else {
+      expect(message.content).not.toContain("An unsupported statement");
+      expect(JSON.parse(message.detail).evidenceStatus).toBe("insufficient");
+    }
+    expect(JSON.parse(message.detail).citations.length).toBeGreaterThan(0);
+    expect(await db.selectFrom("ai_sessions").selectAll().execute()).toEqual(
+      [],
+    );
+  },
+);

@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Bot,
   FolderOpen,
   Home,
   Users,
@@ -48,9 +49,10 @@ export interface FilePickerRenderContext {
   readonly close: () => void;
   readonly select?: (item: FileItem) => Promise<void> | void;
   readonly accept?: (item: FileItem) => boolean;
-  readonly selectFolder?: (
-    folder: { id: string; name: string },
-  ) => Promise<void> | void;
+  readonly selectFolder?: (folder: {
+    id: string;
+    name: string;
+  }) => Promise<void> | void;
 }
 
 type AppWebPluginTypes = {
@@ -74,6 +76,7 @@ export const BUILTIN_CLIENT_MANIFESTS = {
     navigation: [
       "doca.documents.navigation.home",
       "doca.documents.navigation.libraries",
+      "doca.documents.navigation.knowledge-qa",
     ],
     conversationKinds: ["document"],
   },
@@ -86,10 +89,7 @@ export const BUILTIN_CLIENT_MANIFESTS = {
       "doca.files.route.shared",
       "doca.files.route.shared-folder",
     ],
-    navigation: [
-      "doca.files.navigation.files",
-      "doca.files.navigation.shared",
-    ],
+    navigation: ["doca.files.navigation.files", "doca.files.navigation.shared"],
     conversationKinds: ["file", "folder"],
   },
 } as const satisfies Record<string, ClientPluginManifest>;
@@ -130,6 +130,15 @@ const documentsBundle: WebPluginBundle<AppWebPluginTypes> = {
       labelKey: "doca.documents.nav.libraries",
       icon: BookOpen,
     },
+    {
+      id: "doca.documents.navigation.knowledge-qa",
+      pluginId: "doca.documents",
+      order: 41,
+      scope: "knowledge-assistants",
+      path: "/knowledge-assistants",
+      labelKey: "doca.documents.nav.knowledge-qa",
+      icon: Bot,
+    },
   ],
   searchResults: [
     {
@@ -165,6 +174,7 @@ const documentsBundle: WebPluginBundle<AppWebPluginTypes> = {
         en: {
           "doca.documents.nav.documents": "Documents",
           "doca.documents.nav.libraries": "Libraries",
+          "doca.documents.nav.knowledge-qa": "Knowledge Q&A",
           "doca.documents.search.result": "Document",
           "doca.documents.knowledge.source": "Document source",
           "doca.documents.knowledge.url": "Link",
@@ -172,6 +182,7 @@ const documentsBundle: WebPluginBundle<AppWebPluginTypes> = {
         zh: {
           "doca.documents.nav.documents": "文档",
           "doca.documents.nav.libraries": "知识库",
+          "doca.documents.nav.knowledge-qa": "知识库问答",
           "doca.documents.search.result": "文档",
           "doca.documents.knowledge.source": "文档来源",
           "doca.documents.knowledge.url": "链接",
@@ -189,9 +200,7 @@ const filesBundle: WebPluginBundle<AppWebPluginTypes> = {
       pluginId: "doca.files",
       path: "/files",
       render: (context) => (
-        <FilesExplorer
-          onNavigationChange={context.onFileNavigationChange}
-        />
+        <FilesExplorer onNavigationChange={context.onFileNavigationChange} />
       ),
     },
     {
@@ -341,8 +350,12 @@ export function createBuiltinWebPluginRegistry() {
 
 export function pluginInstalled(pluginId: string) {
   return (
-    webPluginRegistry.routes.list().some((route) => route.pluginId === pluginId) ||
-    webPluginRegistry.navigation.list().some((item) => item.pluginId === pluginId)
+    webPluginRegistry.routes
+      .list()
+      .some((route) => route.pluginId === pluginId) ||
+    webPluginRegistry.navigation
+      .list()
+      .some((item) => item.pluginId === pluginId)
   );
 }
 

@@ -135,13 +135,51 @@ export default function PresentationDocument({
     [error, setError] = useState("");
   const createComment = useRef<() => void>(() => {}),
     pendingAnchor = useRef<CommentAnchor | null>(null);
+  const changePresentation = useCallback(
+    (value: boolean) => {
+      const workspace = root.current?.closest<HTMLElement>(".workspace");
+      if (!value) {
+        setPresenting(false);
+        if (workspace && document.fullscreenElement === workspace)
+          void document.exitFullscreen().catch(() => undefined);
+        return;
+      }
+      if (!workspace?.requestFullscreen) {
+        setError(t("doc.fullscreenUnsupported"));
+        setPresenting(false);
+        return;
+      }
+      if (document.fullscreenElement === workspace) {
+        setError("");
+        setPresenting(true);
+        return;
+      }
+      setError("");
+      void workspace
+        .requestFullscreen()
+        .then(() => setPresenting(true))
+        .catch(() => {
+          setPresenting(false);
+          setError(t("doc.fullscreenUnsupported"));
+        });
+    },
+    [t],
+  );
   useEffect(() => {
     const show = (event: Event) => {
-      if ((event as CustomEvent).detail === id) setPresenting(true);
+      if ((event as CustomEvent).detail === id) changePresentation(true);
     };
     window.addEventListener("doca:presentation", show);
     return () => window.removeEventListener("doca:presentation", show);
-  }, [id]);
+  }, [id, changePresentation]);
+  useEffect(() => {
+    const sync = () => {
+      const workspace = root.current?.closest<HTMLElement>(".workspace");
+      if (document.fullscreenElement !== workspace) setPresenting(false);
+    };
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
   const publish = useCallback(
     (slideId: string, elementIds: string[]) => {
       if (sync.connected)
@@ -304,7 +342,7 @@ export default function PresentationDocument({
               readOnly={!editable}
               resources={resources}
               presentation={presenting}
-              onPresentationChange={setPresenting}
+              onPresentationChange={changePresentation}
               sessionId={sync.presence.self}
               members={members}
               onPresence={publish}

@@ -139,12 +139,13 @@ export function createResourceReads(
             entry_state: actor
               ? ((
                   await ctx.tx
-                    .selectFrom("resource_entries")
-                    .select("state")
+                    .selectFrom("resource_collections")
+                    .select("resource_id")
+                    .where("resource_kind", "=", r.kind)
                     .where("user_id", "=", actor.id)
                     .where("resource_id", "=", id)
                     .executeTakeFirst()
-                )?.state ?? null)
+                )?.resource_id ? "joined" : null)
               : null,
           },
           ownerName:

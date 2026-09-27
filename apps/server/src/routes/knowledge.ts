@@ -29,6 +29,7 @@ import { createContent } from "@core/workflows/resources.js";
 import type { DB } from "@db/index.js";
 import type { StorageRuntime } from "../adapters/storage.js";
 import { waitFileExtract } from "../services/ai/file-extract.js";
+import { sweepKnowledgeFeedbackSchedules } from "@core/modules/knowledge/feedback-schedule.js";
 import { normalizeWebExclude, normalizeWebSites, searchWeb, type WebSearchConstraints } from "../services/ai/web-search.js";
 import { askKnowledgeLibrary, confirmKnowledgeSubscription, dismissKnowledgeSubscription, draftLibraryPresetForActor, draftSourcePresetForActor, getKnowledgeBot, knowledgeSchedule, listKnowledgeSubscriptions, runKnowledgeLibrary, saveKnowledgeBot, saveLibraryGuide, saveLibraryPreset, saveSourcePreset, setKnowledgeSchedule, setLibraryCuration, subscribeKnowledgeSource, updateKnowledgeSourceGroup, subscriptionKind, sweepKnowledgeSchedules } from "@core/modules/knowledge/subscriptions.js";
 
@@ -74,6 +75,7 @@ export function registerKnowledge(
       await sweepKnowledgeSchedules(db, async (actor, id) => {
         return createScheduledKnowledgeConversation(db,actor,id);
       });
+      await sweepKnowledgeFeedbackSchedules(db);
     })
       .catch(() => {})
       .finally(() => {

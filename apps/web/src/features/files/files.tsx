@@ -1,3 +1,4 @@
+import { PublicResourceLink, FolderCollectButton } from "@web/features/discovery/discovery.js";
 import { fileLocationLabel } from "@web/shared/utils/system-labels.js";
 import type { Locale } from "@doca/i18n";
 import {
@@ -2051,6 +2052,8 @@ export function FilesExplorer({
         setContextMenu({ x: event.clientX, y: event.clientY, target: null });
       }}
     >
+      <PublicResourceLink kind="folder" />
+      {location.type === "folder" && <FolderCollectButton id={location.id} />}
       <header className="files-toolbar">
         <div className="files-toolbar-actions">
           <button
@@ -3311,6 +3314,7 @@ export function SharedFoldersPage() {
 
   return (
     <section className="shared-folders-page">
+      <PublicResourceLink kind="folder" />
       <header className="shared-folders-header">
         <div>
           <h2>{t("nav.sharedFiles")}</h2>
@@ -3867,7 +3871,7 @@ function FolderDestinationPicker({
                 ? t("fileManager.copyTo")
                 : t("fileManager.moveTo")}
             </strong>
-            <span>{t("fileManager.destinationHelp")}</span>
+            <span>{t("fileManager.destinationHelp")}</span><p className="subtle">{t("discovery.moveHelp")}</p>
           </div>
           <button className="icon" onClick={close}>
             <X size={18} />

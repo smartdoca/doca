@@ -13,6 +13,11 @@ export function policySource(
   resources: Resource[],
   field: PolicyField,
 ): Resource {
+  if (resource.library_id && field === "visibility") {
+    const library = resources.find(r => r.id === resource.library_id && r.kind === "library");
+    if (library && ["public", "authenticated"].includes(library.visibility))
+      return library;
+  }
   const seen = new Set<string>();
   let current = resource;
   while (

@@ -1,5 +1,6 @@
+import { DiscoveryPage, useDiscoveryPolicy } from "@web/features/discovery/discovery.js";
+import { KnowledgePublicPage } from "@web/features/knowledge/knowledge-public-page.js";
 import { KnowledgeCurationToggle } from "@web/features/documents/library-relations.js";
-import { KnowledgeChat } from "@web/features/knowledge/knowledge-chat.js";
 import { KnowledgeAssistants } from "@web/features/knowledge/knowledge-assistants.js";
 import type { MessageKey } from "@doca/i18n";
 import { AIProvider } from "@web/features/ai/ai-context.js";
@@ -132,6 +133,8 @@ const QuickNotes = lazy(() => import("@web/features/quick-notes/quick-notes.js")
 const QuickNotesFloat = lazy(() => import("@web/features/quick-notes/quick-notes-float.js").then(m => ({ default: m.QuickNotesFloat })));
 
 const titleKeys: Record<string, MessageKey> = {
+  discover: "discovery.title",
+  collected: "discovery.collected",
   todos: "nav.tickets",
   tickets: "nav.tickets",
   ai: "nav.assistant",
@@ -176,6 +179,7 @@ export function App() {
     [pluginNavigation],
   );
   const { locale, t, reloadLocale } = useI18n();
+  const discoveryPolicy = useDiscoveryPolicy();
   const [navigationCollapsed, setNavigationCollapsed] = useNavigationCollapse("doca.navigation.collapsed");
   const [adminNavigationCollapsed, setAdminNavigationCollapsed] = useNavigationCollapse("doca.admin-navigation.collapsed");
   const desktopNavigation = useDesktopNavigation();
@@ -439,6 +443,7 @@ export function App() {
   useEffect(() => {
     if (!bootstrap) return;
     void reloadLocale(bootstrap.defaultLocale, !!bootstrap.user);
+    window.dispatchEvent(new Event("doca-discovery-policy"));
   }, [bootstrap?.user?.id, bootstrap?.defaultLocale, reloadLocale]);
   useEffect(() => {
     if (bootstrap?.siteName)
@@ -736,6 +741,10 @@ export function App() {
         </section>
       </main>
     );
+  const publicBotId = new URLSearchParams(hash.split("?")[1]).get("bot");
+  const embeddedKnowledgeBot = /^\/knowledge\/embed\/([a-f0-9-]{36})$/.exec(location.pathname)?.[1];
+  if(embeddedKnowledgeBot)return <KnowledgePublicPage botId={embeddedKnowledgeBot} channel="embed" authenticated={!!bootstrap.user}/>;
+  if(!bootstrap.user&&scope==="knowledge-assistants"&&publicBotId&&/^[a-f0-9-]{36}$/.test(publicBotId))return <KnowledgePublicPage botId={publicBotId}/>;
   if (!bootstrap.user && !resourceId)
     return (
       <Login
@@ -813,8 +822,7 @@ export function App() {
       />
     );
   const user = bootstrap.user;
-  const embeddedBot = /^\/knowledge\/embed\/([a-f0-9-]{36})$/.exec(location.pathname)?.[1];
-  if(user && embeddedBot) return <main className="knowledge-embedded"><KnowledgeChat scopeId={embeddedBot} kind="answer" /></main>;
+
   const displayName = user?.display_name || user?.public_id || user?.id || "用户";
   if (user && (adminPage || accountPage || preferencesPage))
     return (
@@ -1008,6 +1016,8 @@ export function App() {
                   path: item.path,
                 })),
 
+                ...(discoveryPolicy?.publicDiscovery ? [{ key: "discover", label: "discovery.title", plugin: false as const, Icon: Search, order: 45, path: "/discover" }] : []),
+                { key: "collected", label: "discovery.collected", plugin: false as const, Icon: BookOpenCheck, order: 46, path: "/collected" },
                 { key: "ai", label: "nav.assistant", plugin: false as const, Icon: Sparkles, order: 20, path: "/ai" },
                 { key: "notes", label: "nav.notes", plugin: false as const, Icon: Feather, order: 30, path: "/notes" },
                 { key: "trash", label: "nav.trash", plugin: false as const, Icon: Trash2, order: 80, path: "/trash" },
@@ -1223,6 +1233,7 @@ export function App() {
               )}
             {user ? (
               <div className="global-header-tools">
+                {scope === "knowledge-assistants" && <span id="knowledge-share-slot" />}
                 <TodoIcon />
                 <Notifications />
                 <LocaleSwitch />
@@ -1274,8 +1285,10 @@ export function App() {
             pluginRoute &&
             renderedPluginRoute !== undefined ? (
             renderedPluginRoute
+          ) : !resourceId && (scope === "discover" || scope === "collected") && user ? (
+            <DiscoveryPage key={scope + hash} collected={scope === "collected"} />
           ) : !resourceId && scope === "knowledge-assistants" && user ? (
-            <KnowledgeAssistants libraryId={new URLSearchParams(hash.split("?")[1]).get("library") || undefined} />
+            <KnowledgeAssistants />
           ) : !resourceId && scope === "ai" ? (
             <AIChat full />
           ) : !resourceId && scope === "notes" && user ? (

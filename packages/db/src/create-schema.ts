@@ -419,6 +419,10 @@ async function ensureKnowledgeSchema(db: Kysely<any>) {
     await sql.raw(statement).execute(db);
   try { await sql.raw("ALTER TABLE knowledge_assistants ADD COLUMN visibility varchar(24) not null default 'invited'").execute(db); }
   catch (error) { if (!/duplicate column|already exists/i.test(String(error))) throw error; }
+  for (const column of ["manager_ids text not null default '[]'", "config text not null default '{}'"]) {
+    try { await sql.raw(`ALTER TABLE knowledge_assistants ADD COLUMN ${column}`).execute(db); } catch(error) { if(!/duplicate column|already exists/i.test(String(error))) throw error; }
+  }
+  await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_bot_keys (id varchar(36) primary key, bot_id varchar(36) not null references knowledge_assistants(id) on delete cascade, creator_id varchar(36) not null references users(id), name text not null, channel varchar(16) not null, token_hash varchar(64) not null unique, expires_at varchar(32) not null, created_at varchar(32) not null)").execute(db);
   await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_assistant_users (assistant_id varchar(36) not null references knowledge_assistants(id) on delete cascade, user_id varchar(36) not null references users(id), accepted integer not null default 0, visited_at varchar(32), integration varchar(16) not null default 'default', revision integer not null default 1, primary key (assistant_id, user_id))").execute(db);
   for (const statement of knowledgeSchemaStatements)
     await sql.raw(statement).execute(db);
@@ -454,6 +458,7 @@ async function ensureKnowledgeStudio(db: Kysely<any>) {
     `CREATE TABLE IF NOT EXISTS knowledge_checkpoints (task_id varchar(36) primary key, detail text not null default '{}', attempts integer not null default 0, available_at varchar(32) not null)`,
     `CREATE TABLE IF NOT EXISTS knowledge_source_observations (library_id varchar(36) not null, source_id varchar(36) not null, fingerprint text not null, updated_at varchar(32) not null, PRIMARY KEY(library_id,source_id))`,
     `CREATE TABLE IF NOT EXISTS knowledge_conversations (id varchar(36) primary key, scope_id varchar(36) not null, kind varchar(16) not null, owner_id varchar(36) not null, title text not null, summary text not null default '', state varchar(16) not null default 'idle', created_at varchar(32) not null, updated_at varchar(32) not null)`,
+    `CREATE TABLE IF NOT EXISTS knowledge_human_tasks (id varchar(36) primary key, library_id varchar(36) not null references resources(id) on delete cascade, conversation_id varchar(36) not null references knowledge_conversations(id) on delete cascade, task_key varchar(300) not null, kind varchar(32) not null, title text not null, detail text not null, status varchar(16) not null, revision integer not null, resolution text not null default '', created_at varchar(32) not null, updated_at varchar(32) not null, UNIQUE(library_id,task_key))`,
     `CREATE INDEX IF NOT EXISTS knowledge_conversation_scope ON knowledge_conversations(scope_id,kind)`,
     `CREATE TABLE IF NOT EXISTS knowledge_messages (id varchar(36) primary key, conversation_id varchar(36) not null references knowledge_conversations(id) on delete cascade, role varchar(16) not null, author_id varchar(36), trigger varchar(16) not null, content text not null, detail text not null default '{}', created_at varchar(32) not null)`,
     `CREATE INDEX IF NOT EXISTS knowledge_message_thread ON knowledge_messages(conversation_id,created_at)`,
@@ -462,11 +467,15 @@ async function ensureKnowledgeStudio(db: Kysely<any>) {
     `CREATE TABLE IF NOT EXISTS knowledge_source_actions (id varchar(36) primary key, library_id varchar(36) not null, source_key text not null, actor_id varchar(36) not null, action varchar(32) not null, detail text not null, created_at varchar(32) not null)`,
     `CREATE TABLE IF NOT EXISTS knowledge_publications (library_id varchar(36) primary key, revision integer not null, fingerprint text not null, documents text not null, status varchar(16) not null, error text not null, updated_at varchar(32) not null)`,
   ]) await sql.raw(statement).execute(db);
+  try { await sql.raw("ALTER TABLE knowledge_conversations ADD COLUMN access_key_id varchar(36)").execute(db); } catch(error) { if(!/duplicate column|already exists/i.test(String(error)))throw error; }
+  try { await sql.raw("ALTER TABLE knowledge_subscriptions ADD COLUMN name text not null default ''").execute(db); } catch(error) { if(!/duplicate column|already exists/i.test(String(error)))throw error; }
+
 }
 
 export async function createSchema(db: Kysely<any>) {
   if ((await db.introspection.getTables()).length > 0) {
     await ensureFileSchema(db);
+    await ensureDiscoverySchema(db);
     await ensureSearchSchema(db);
     await ensureKnowledgeSchema(db);
     await ensureKnowledgeStudio(db);
@@ -486,6 +495,7 @@ export async function createSchema(db: Kysely<any>) {
     await sql.raw(statement).execute(db);
 
   await ensureFileSchema(db);
+  await ensureDiscoverySchema(db);
   await ensureSearchSchema(db);
   await ensureKnowledgeSchema(db);
     await ensureKnowledgeStudio(db);
@@ -510,4 +520,19 @@ async function ensureMobileSchema(db: Kysely<any>) {
     `CREATE INDEX IF NOT EXISTS "push_devices_user" on "push_devices" ("user_id")`,
   ])
     await sql.raw(statement).execute(db);
+}
+
+async function ensureDiscoverySchema(db: Kysely<any>) {
+  const hasCollections = (await db.introspection.getTables()).some(table => table.name === "resource_collections");
+  await sql`CREATE TABLE IF NOT EXISTS resource_collections (user_id varchar(36) not null references users(id) on delete cascade, resource_kind varchar(16) not null, resource_id varchar(36) not null, created_at varchar(32) not null, primary key(user_id,resource_kind,resource_id))`.execute(db);
+
+  await sql`CREATE TABLE IF NOT EXISTS folder_publications (folder_id varchar(36) primary key references file_folders(id) on delete cascade, enabled integer not null, revision integer not null)`.execute(db);
+  await sql`CREATE TABLE IF NOT EXISTS folder_entries (folder_id varchar(36) not null references file_folders(id) on delete cascade, user_id varchar(36) not null references users(id) on delete cascade, state varchar(16) not null, updated_at varchar(32) not null, primary key(folder_id, user_id))`.execute(db);
+  if (!hasCollections) {
+    await sql`insert into resource_collections (user_id,resource_kind,resource_id,created_at)
+      select e.user_id,r.kind,e.resource_id,e.updated_at from resource_entries e join resources r on r.id=e.resource_id where e.state='joined' and e.source='manual'`.execute(db);
+    await sql`insert into resource_collections (user_id,resource_kind,resource_id,created_at)
+      select user_id,'folder',folder_id,updated_at from folder_entries where state='joined'`.execute(db);
+  }
+
 }

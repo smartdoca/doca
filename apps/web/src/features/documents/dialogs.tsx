@@ -258,6 +258,7 @@ export function MoveDialog({
             ))}
         </Select>
       </label>
+      <p className="subtle">{t("discovery.moveHelp")}</p>
       {error && <Feedback message={error} tone="error" />}
       <footer>
         <button onClick={close}>{t("common.cancel")}</button>

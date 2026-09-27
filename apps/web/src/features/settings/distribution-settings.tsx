@@ -6,6 +6,9 @@ import { Feedback } from "@web/shared/components/feedback.js";
 import { realtime } from "@web/features/documents/realtime.js";
 import {
   resourceDistribution,
+  publicResourceKinds,
+  publicMode,
+  type PublicMode,
   type Distribution,
   type ContentDistribution,
 } from "@core/modules/deployment/policies.js";
@@ -24,6 +27,7 @@ export function DistributionSettings() {
     setBusy(true);
     try {
       setValue(await api("/admin/distribution", "PUT", { ...value, ...patch }));
+      window.dispatchEvent(new Event("doca-discovery-policy"));
       setError("");
     } catch (e) {
       setError((e as Error).message);
@@ -142,19 +146,6 @@ export function DistributionSettings() {
             <option value="interacted">{t("policy.interacted")}</option>
           </Select>
         </label>
-        {kind === "library" &&
-          toggle(
-            t("policy.showPublic"),
-            t("policy.showPublicHelp"),
-            value?.publicLibraries ?? false,
-            (v) => void save({ publicLibraries: v }),
-          )}
-        {toggle(
-          t("policy.autoCollect"),
-          t("policy.autoCollectHelp"),
-          policy?.autoCollectOpened ?? false,
-          (v) => patch({ autoCollectOpened: v }),
-        )}
         <h4>{t("policy.ticketPeople")}</h4>
         {toggle(
           t("policy.showReviewers"),
@@ -185,18 +176,33 @@ export function DistributionSettings() {
       </div>
       <section className="admin-card admin-form-section">
         <h3>{t("policy.discovery")}</h3>
-        <label className="setting-toggle">
-          <span>
-            <strong>{t("policy.enableDiscovery")}</strong>
-            <small>{t("policy.discoveryHelp")}</small>
-          </span>
-          <input
-            type="checkbox"
-            disabled={!value || busy}
-            checked={value?.publicDiscovery ?? false}
-            onChange={(e) => void save({ publicDiscovery: e.target.checked })}
-          />
-        </label>
+        <p>{t("discovery.policyHelp")}</p>
+        {publicResourceKinds.map((kind) => (
+          <label className="policy-row" key={kind}>
+            <strong>{t(`discovery.kind.${kind}`)}</strong>
+            <Select
+              disabled={!value || busy}
+              value={value ? publicMode(value, kind) : "link"}
+              onChange={(e) =>
+                value &&
+                void save({
+                  publicModes: {
+                    ...Object.fromEntries(
+                      publicResourceKinds.map((k) => [k, publicMode(value, k)]),
+                    ),
+                    [kind]: e.target.value as PublicMode,
+                  },
+                })
+              }
+            >
+              {(["link", "discover", "search"] as const).map((mode) => (
+                <option key={mode} value={mode}>
+                  {t(`discovery.mode.${mode}`)}
+                </option>
+              ))}
+            </Select>
+          </label>
+        ))}
       </section>
       <Feedback message={error} tone="error" />
     </>

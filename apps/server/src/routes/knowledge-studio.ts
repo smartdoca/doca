@@ -1,3 +1,10 @@
+import {registerCurationWorkspace} from "./knowledge-curation-workspace.js";
+import {messageFeedback,recordQuestionFeedback} from "@core/modules/knowledge/question-feedback.js";
+import { registerKnowledgeBotAccess } from "./knowledge-bot-access.js";
+import {
+  checkAttachments,
+  attachmentInfo,
+} from "../services/ai/attachments.js";
 import { retryKnowledgeTask } from "@core/modules/knowledge/recovery.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -23,6 +30,7 @@ import {
 } from "@core/modules/knowledge/publications.js";
 import {
   maintainKnowledge,
+  knowledgeBotConfig,
   knowledgeSettingsSchema,
   saveKnowledgeSettings,
   knowledgeInstructions,
@@ -41,6 +49,8 @@ export function registerKnowledgeStudio(
   notify?: (id: string) => Promise<void>,
 ) {
   const studio = createKnowledgeStudio(db, index, notify);
+  registerKnowledgeBotAccess(api, db, auth, studio);
+  registerCurationWorkspace(api, db, auth);
   const root = "/api/v1/knowledge";
   api.get<{ Querystring: { scopeId: string; kind: "curation" | "answer" } }>(
     `${root}/conversations`,
@@ -103,9 +113,10 @@ export function registerKnowledgeStudio(
         conversation.scope_id,
         messages,
       );
+    const feedback=await messageFeedback(db,actor.id,messages.map(x=>x.id));
     return {
       conversation,
-      messages: messages.map((x) => ({ ...x, detail: JSON.parse(x.detail) })),
+      messages: messages.map((x) => ({ ...x, feedback:feedback[x.id]??null, detail: JSON.parse(x.detail) })),
     };
   }
   api.get<{ Params: { id: string } }>(`${root}/conversations/:id`, (req) =>
@@ -118,14 +129,35 @@ export function registerKnowledgeStudio(
         .object({
           content: z.string().min(1).max(20000),
           requestId: z.string().uuid(),
+          attachments: z.array(z.string().uuid()).max(8).default([]),
+          channel: z.enum(["web", "embed"]).default("web"),
         })
         .parse(req.body);
+      const actor = auth(req),
+        conversation = await conversationAccess(db, actor, req.params.id);
+      if (conversation.kind === "answer") {
+        const bot = await knowledgeBot(db, actor, conversation.scope_id);
+        if (!knowledgeBotConfig(bot).channels.includes(body.channel))
+          fail(403, "网页问答已关闭");
+        if (!JSON.parse(bot.library_ids).length)
+          fail(409, "尚未绑定可用知识库");
+        if (
+          body.attachments.length &&
+          !knowledgeBotConfig(bot).attachmentsEnabled
+        )
+          fail(403, "此机器人未开启附件");
+      } else if (body.attachments.length) fail(400, "此入口不支持整理附件");
+      const attachments = (
+        await checkAttachments(db, actor.id, body.attachments)
+      ).map(attachmentInfo);
       return sendKnowledgeMessage(
         db,
-        auth(req),
+        actor,
         req.params.id,
         body.content,
         body.requestId,
+        "manual",
+        attachments,
       );
     },
   );
@@ -264,57 +296,8 @@ export function registerKnowledgeStudio(
   api.post<{ Params: { id: string } }>(
     `${root}/messages/:id/feedback`,
     async (req) => {
-      const actor = auth(req),
-        body = z
-          .object({
-            judgment: z.enum(["useful", "unhelpful"]),
-            reason: z.string().max(2000).default(""),
-          })
-          .parse(req.body);
-      const message = await db
-        .selectFrom("knowledge_messages")
-        .selectAll()
-        .where("id", "=", req.params.id)
-        .executeTakeFirst();
-      if (!message || message.role !== "assistant") fail(404, "回答不存在");
-      const conversation = await conversationAccess(
-        db,
-        actor,
-        message.conversation_id,
-      );
-      if (conversation.kind !== "answer") fail(400, "只支持问答反馈");
-      const messages = await db
-        .selectFrom("knowledge_messages")
-        .select(["role", "content"])
-        .where("conversation_id", "=", conversation.id)
-        .where("created_at", "<=", message.created_at)
-        .where("role", "in", ["user", "assistant"])
-        .orderBy("created_at", "desc")
-        .limit(5)
-        .execute();
-      const row = {
-        id: randomUUID(),
-        bot_id: conversation.scope_id,
-        message_id: message.id,
-        user_id: actor.id,
-        ...body,
-        snapshot: JSON.stringify({
-          messages: messages.reverse(),
-          evidence: JSON.parse(message.detail),
-        }),
-        status: "open",
-        created_at: new Date().toISOString(),
-      };
-      await db
-        .insertInto("knowledge_cases")
-        .values(row)
-        .onConflict((oc) =>
-          oc
-            .columns(["message_id", "user_id"])
-            .doUpdateSet({ judgment: body.judgment, reason: body.reason }),
-        )
-        .execute();
-      return { ok: true };
+      const body=z.object({judgment:z.enum(["useful","unhelpful"]).nullable(),reason:z.string().max(2000).default("")}).parse(req.body);
+      return recordQuestionFeedback(db,auth(req),req.params.id,body.judgment,body.reason);
     },
   );
   api.post<{ Params: { id: string } }>(
@@ -323,7 +306,11 @@ export function registerKnowledgeStudio(
       const body = z
         .object({ query: z.string().min(1).max(4000) })
         .parse(req.body);
-      return studio.searchAnswer(auth(req), req.params.id, body.query);
+      const actor = auth(req),
+        bot = await knowledgeBot(db, actor, req.params.id);
+      if (!knowledgeBotConfig(bot).channels.includes("api"))
+        fail(403, "API 调用已关闭");
+      return studio.searchAnswer(actor, req.params.id, body.query);
     },
   );
   api.post<{ Params: { id: string } }>(
@@ -332,7 +319,11 @@ export function registerKnowledgeStudio(
       const body = z
         .object({ query: z.string().min(1).max(4000) })
         .parse(req.body);
-      return studio.searchAnswer(auth(req), req.params.id, body.query);
+      const actor = auth(req),
+        bot = await knowledgeBot(db, actor, req.params.id);
+      if (!knowledgeBotConfig(bot).channels.includes("api"))
+        fail(403, "API 调用已关闭");
+      return studio.searchAnswer(actor, req.params.id, body.query);
     },
   );
   async function ask(
@@ -368,7 +359,12 @@ export function registerKnowledgeStudio(
           conversationId: z.string().uuid().optional(),
         })
         .parse(req.body);
-      return ask(auth(req), req.params.id, body.query, body.conversationId);
+      const actor = auth(req),
+        bot = await knowledgeBot(db, actor, req.params.id);
+      if (!knowledgeBotConfig(bot).channels.includes("api"))
+        fail(403, "API 调用已关闭");
+      if (!JSON.parse(bot.library_ids).length) fail(409, "尚未绑定可用知识库");
+      return ask(actor, req.params.id, body.query, body.conversationId);
     },
   );
   api.post(`${root}/mcp`, { bodyLimit: 100000 }, async (req, reply) => {
@@ -393,6 +389,8 @@ export function registerKnowledgeStudio(
     const scope = JSON.parse(key.resource_ids) as string[];
     const check = async (botId: string) => {
       const bot = await knowledgeBot(db, actor, botId);
+      if (!knowledgeBotConfig(bot).channels.includes("mcp"))
+        fail(403, "MCP 调用已关闭");
       if (
         !(JSON.parse(bot.library_ids) as string[]).every((id) =>
           scope.includes(id),

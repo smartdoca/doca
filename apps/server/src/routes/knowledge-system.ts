@@ -310,8 +310,8 @@ export function registerKnowledgeSystem(
     (req) =>
       cancelKnowledgeCuration(db, auth(req), req.params.id, req.params.runId),
   );
-  api.get("/api/v1/knowledge/assistants", async (req) => ({
-    items: await listKnowledgeAssistants(db, auth(req)),
+  api.get<{Querystring:{libraryId?:string}}>("/api/v1/knowledge/assistants", async (req) => ({
+    items: await listKnowledgeAssistants(db, auth(req),req.query.libraryId),
   }));
   api.post<{ Params: { id: string }; Body: { accept?: boolean } }>(
     "/api/v1/knowledge/assistants/:id/visit",
@@ -361,6 +361,9 @@ export function registerKnowledgeSystem(
       title: string;
       libraryIds: string[];
       memberIds: string[];
+      managerIds?:string[];
+      attachmentsEnabled?:boolean;
+      channels?:Array<"web"|"embed"|"api"|"mcp">;
       visibility?: "invited" | "authenticated" | "public";
       enabled: boolean;
     };
@@ -373,7 +376,6 @@ export function registerKnowledgeSystem(
           expectedRevision: Type.Integer({ minimum: 0 }),
           title: Type.String({ minLength: 1, maxLength: 200 }),
           libraryIds: Type.Array(Type.String({ format: "uuid" }), {
-            minItems: 1,
             maxItems: 20,
           }),
           memberIds: Type.Array(Type.String({ format: "uuid" }), {
@@ -386,6 +388,9 @@ export function registerKnowledgeSystem(
               Type.Literal("public"),
             ]),
           ),
+          managerIds:Type.Optional(Type.Array(Type.String({format:"uuid"}),{maxItems:100})),
+          attachmentsEnabled:Type.Optional(Type.Boolean()),
+          channels:Type.Optional(Type.Array(Type.Union([Type.Literal("web"),Type.Literal("embed"),Type.Literal("api"),Type.Literal("mcp")]))),
           enabled: Type.Boolean(),
         }),
       },
