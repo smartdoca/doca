@@ -20,11 +20,11 @@
 - 权限继承沿 `coalesce(parent_id, library_id)` 链；内存版 `packages/core/src/modules/access/policy.ts: namedPermission`，SQL 版 `access/queries.ts: roleQuery`。个人文档一旦没有 `parent_id`，继承链自然终止 —— **继承代码本身不需要改**。
 - 已有接口：`POST /resources/:id/move`（commands.ts:375）、`POST /resources/:id/transfer`（commands.ts:230，已限 owner）、`POST /resources/:id/arrange`（拖拽排序）。
 - 前端：hash 路由，`#/r/:id` 统一打开个人/知识库文档，差异仅在侧边栏模式（main.tsx:774-896）。个人树 = `tree.tsx DocumentTree`；回收站在 `account-menu.tsx:146`；`MoveDialog`/`TransferDialog` 在 `dialogs.tsx`；主页 dashboard 已有新建按钮（dashboard.tsx:206）。
-- 系统尚未上线，个人文档扁平化直接作为当前模型实现，不新增历史数据迁移。
+- 个人文档扁平化直接作为当前模型实现。
 
 ## 后端设计
 
-不保留个人文档扁平化迁移脚本：系统尚未上线，测试数据库直接按新规则创建。知识库文档移回个人时，服务端在同一事务内将受影响子树扁平化，并物化原继承的命名权限与策略字段。
+测试数据库直接按当前规则创建。知识库文档移回个人时，服务端在同一事务内将受影响子树扁平化，并物化原继承的命名权限与策略字段。
 
 ### commands.ts 行为变更
 
