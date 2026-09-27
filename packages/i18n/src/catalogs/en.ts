@@ -227,6 +227,7 @@ export const en = {
   "assistant.memory.personalOn": "Personal memory on",
   "assistant.memory.personalOff": "Personal memory off",
   "assistant.memory.thread": "This conversation only",
+  "assistant.memory.crossSession": "Cross-conversation long-term memory",
   "assistant.memory.library": "Shared library context",
   "studio.bots": "Answer bots",
   "studio.new": "New conversation",

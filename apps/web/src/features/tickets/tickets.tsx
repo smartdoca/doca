@@ -3,6 +3,7 @@ import { ArrowLeft, Check, ClipboardList, Copy } from "lucide-react";
 import { api } from "@web/shared/api.js";
 import { Select } from "@web/shared/components/select.js";
 import { Feedback } from "@web/shared/components/feedback.js";
+import { BackLink } from "@web/shared/components/back-link.js";
 import { realtime } from "@web/features/documents/realtime.js";
 import { TicketStatusFilter } from "@web/features/tickets/ticket-status-filter.js";
 import { useI18n } from "@web/shared/i18n.js";
@@ -255,10 +256,10 @@ export function Tickets({
       {ticketId ? (
         <>
           <div className="ticket-heading">
-            <a href="#/tickets">
+            <BackLink fallback="/tickets">
               <ArrowLeft size={16} />
               {tr("ticket.all")}
-            </a>
+            </BackLink>
             <button
               onClick={() => void load().catch((e) => setError(e.message))}
             >

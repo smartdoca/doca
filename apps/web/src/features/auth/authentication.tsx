@@ -12,6 +12,7 @@ import {
   type RegistrationField,
 } from "@web/features/auth/account-fields.js";
 import { Feedback, type FeedbackTone } from "@web/shared/components/feedback.js";
+import { BackLink } from "@web/shared/components/back-link.js";
 import { useEffect, useState } from "react";
 import {
   CodeXml,
@@ -584,7 +585,7 @@ const { t, locale } = useI18n();
             <button className="primary" disabled={busy}>{t("login.continue")}</button>
           </form>
         )}
-        {!busy && <a href="#/home">{t("shell.backLogin")}</a>}
+        {!busy && <BackLink fallback="/home">{t("shell.backLogin")}</BackLink>}
       </section>
     </main>
   );

@@ -20,6 +20,7 @@ import { api, roleRank } from "@web/shared/api.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
 import { Feedback } from "@web/shared/components/feedback.js";
+import { BackLink } from "@web/shared/components/back-link.js";
 import "@web/features/documents/permissions.css";
 import "./knowledge-bots.css";
 
@@ -255,9 +256,9 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
             )}
           {!chatReady && (
             <div className="kb-detail-toolbar">
-              <a href="#/knowledge-assistants" aria-label={t("bot.back")}>
+              <BackLink fallback="/knowledge-assistants" aria-label={t("bot.back")}>
                 <ArrowLeft size={18} />
-              </a>
+              </BackLink>
               <Bot size={23} />
               <h2 title={bot.title}>{bot.title}</h2>
               {bot.canManage && (
@@ -313,14 +314,14 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
               assistantName={bot.title}
               attachmentsEnabled={bot.config.attachmentsEnabled}
               headerStart={
-                <a
+                <BackLink
                   className="assistant-header-action"
-                  href="#/knowledge-assistants"
+                  fallback="/knowledge-assistants"
                   aria-label={t("bot.back")}
                   title={t("bot.back")}
                 >
                   <ArrowLeft size={17} />
-                </a>
+                </BackLink>
               }
               headerActions={
                 bot.canManage ? (

@@ -159,7 +159,7 @@ export function modelUsageRates(
 export const aiDefaults: AIConfig = {
   display: "alias",
   defaultModel: "",
-  memoryEnabled: false,
+  memoryEnabled: true,
   historyRounds: 6,
   maxSteps: 12,
   models: [],
@@ -200,6 +200,9 @@ function resolveConfig(input: z.infer<typeof aiConfigSchema>): AIConfig {
   });
   return {
     ...input,
+    // Personal memory is a platform capability. Users may opt out in their
+    // own AI preferences, but administrators cannot disable it globally.
+    memoryEnabled: true,
     vendors,
     models,
     officialSkills: refreshOfficialSkills(input.officialSkills),
@@ -404,7 +407,7 @@ export async function aiUser(db: DB, userId: string) {
     .values({
       user_id: userId,
       default_model: null,
-      memory_enabled: 0,
+      memory_enabled: 1,
       memory_revision: 0,
       lock_version: 0,
     })
