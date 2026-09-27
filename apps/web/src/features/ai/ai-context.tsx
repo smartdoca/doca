@@ -89,9 +89,9 @@ export function AIProvider({
   children: ReactNode;
 }) {
   const [open, setOpenState] = useState(() => {
-    const surface = sidePanelSurface(hash);
-    return !!(userId && surface && readSidePanel(userId, surface).open);
-  }),
+      const surface = sidePanelSurface(hash);
+      return !!(userId && surface && readSidePanel(userId, surface).open);
+    }),
     [openUserId, setOpenUserId] = useState(userId),
     [sessionId, setSessionId] = useState<string | null>(() => {
       const carried = sessionFromHash(hash);
@@ -147,9 +147,22 @@ export function AIProvider({
     }
   }
   const setOpen = (next: boolean) => {
+    if (
+      next &&
+      !open &&
+      !sessionFromHash(hash) &&
+      (resource?.id ||
+        (sidePanelSurface(hash) &&
+          fileContext?.type !== "system" &&
+          fileContext?.id))
+    ) {
+      setSessionId(null);
+      resumeAttempt.current = null;
+    }
     setOpenState(next);
     const surface = sidePanelSurface(hash);
-    if (userId && surface) writeSidePanel(userId, surface, { open: next, sessionId });
+    if (userId && surface)
+      writeSidePanel(userId, surface, { open: next, sessionId });
   };
   useEffect(() => {
     if (!userId) return;
@@ -157,6 +170,11 @@ export function AIProvider({
     if (surface) writeSidePanel(userId, surface, { open, sessionId });
   }, [userId, hash, open, sessionId]);
   const seenOperations = useRef(new Set<string>());
+  const activeResourceId =
+    resource?.id ??
+    (sidePanelSurface(hash) && fileContext?.type !== "system"
+      ? fileContext?.id
+      : undefined);
   const previous = useRef<string | undefined>(undefined);
   const sessionSeen = useRef<string | null>(null);
   useEffect(() => {
@@ -170,26 +188,27 @@ export function AIProvider({
   useEffect(() => {
     const carried = sessionFromHash(hash);
     if (carried) {
-      if (sessionSeen.current !== carried && !sidePanelSurface(hash)) setOpen(true);
+      if (sessionSeen.current !== carried && !sidePanelSurface(hash))
+        setOpen(true);
       sessionSeen.current = carried;
       setSessionId(carried);
-    } else if (resource?.id && resource.id !== previous.current) {
+    } else if (activeResourceId && activeResourceId !== previous.current) {
       setSessionId(null);
       setReferences([]);
       setNoteReferences([]);
       resumeAttempt.current = null;
     }
-    previous.current = resource?.id;
-  }, [hash, resource?.id]);
+    previous.current = activeResourceId;
+  }, [hash, activeResourceId]);
   useEffect(() => {
-    if (!open || !userId || !resource?.id || sessionId) return;
-    const key = `${userId}:${resource.id}`;
+    if (!open || !userId || !activeResourceId || sessionId) return;
+    const key = `${userId}:${activeResourceId}`;
     if (resumeAttempt.current === key) return;
     resumeAttempt.current = key;
     let active = true;
     setRestoring(true);
     void api<{ id: string; restricted?: boolean }[]>(
-      `/ai/sessions?resourceId=${encodeURIComponent(resource.id)}`,
+      `/ai/sessions?resourceId=${encodeURIComponent(activeResourceId)}`,
     )
       .then((rows) => {
         const last = rows.find((row) => !row.restricted);
@@ -205,7 +224,7 @@ export function AIProvider({
       active = false;
       setRestoring(false);
     };
-  }, [open, userId, resource?.id, sessionId]);
+  }, [open, userId, activeResourceId, sessionId]);
   const add = (provided?: unknown) => {
     if (!userId || !resource) return;
     try {
@@ -389,7 +408,7 @@ export function useAIBridge(id: string, bridge: Bridge) {
   return ai;
 }
 export function AIReferenceButton({ anchor }: { anchor?: unknown }) {
-const { t } = useI18n();
+  const { t } = useI18n();
 
   const ai = useAI();
   if (!ai?.userId) return null;

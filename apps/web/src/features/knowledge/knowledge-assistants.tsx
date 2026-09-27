@@ -1,8 +1,11 @@
-import { PublicResourceLink } from "@web/features/discovery/discovery.js";
+import { KnowledgePermissionPanel } from "./knowledge-permissions.js";
+import { Select } from "@web/shared/components/select.js";
+import { CollectionAction } from "@web/features/discovery/collection-action.js";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Bot,
+  Star,
   Plus,
   Settings,
   ShieldCheck,
@@ -15,12 +18,16 @@ import { Select as MultiSelect } from "antd";
 import { KnowledgeChat } from "./knowledge-chat.js";
 import { api, roleRank } from "@web/shared/api.js";
 import { useI18n } from "@web/shared/i18n.js";
-import { Dialog, PersonPicker } from "@web/features/documents/dialogs.js";
+import { Dialog } from "@web/features/documents/dialogs.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import "@web/features/documents/permissions.css";
 import "./knowledge-bots.css";
 
-type BotInfo = {
+export type BotInfo = {
+  owned?: boolean;
+  collaborating?: boolean;
+  favorite?: boolean;
+  collected?: boolean;
   id: string;
   title: string;
   revision: number;
@@ -50,6 +57,7 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
   }, []);
   const params = new URLSearchParams(route.split("?")[1]),
     selected = libraryId ? null : params.get("bot");
+  const [listTab,setListTab] = useState("all");
   const [items, setItems] = useState<BotInfo[]>([]),
     [bot, setBot] = useState<BotInfo>(),
     [error, setError] = useState(""),
@@ -112,7 +120,9 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
         let cursor: string | undefined;
         do {
           const page: { items: Library[]; nextCursor?: string | null } =
-            await api(`/resources?scope=all&kind=library${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+            await api(
+              `/resources?scope=all&kind=library${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+            );
           all.push(...page.items);
           cursor = page.nextCursor ?? undefined;
         } while (cursor);
@@ -167,13 +177,16 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
       setDialog("");
     });
   }
+  const personalItems = items.filter(x=>x.owned||x.collaborating||x.favorite||x.collected||x.invitationPending);
+  const displayed = personalItems.filter(x=>listTab==='all'||listTab==='owned'&&x.owned||listTab==='shared'&&(x.collaborating||x.invitationPending)||listTab==='favorites'&&x.favorite||listTab==='collected'&&x.collected);
   const shareSlot = document.getElementById("knowledge-share-slot");
-  const shareLink = bot
-    ? `${location.origin}/#/knowledge-assistants?bot=${bot.id}`
-    : "";
-  const members = [
-    ...new Set([...(draft?.memberIds ?? []), ...(draft?.managerIds ?? [])]),
-  ];
+  const chatReady = !!(
+    bot &&
+    !bot.invitationPending &&
+    bot.activeLibraryCount &&
+    bot.enabled &&
+    bot.config.channels.includes("web")
+  );
   return (
     <section
       className={`library-system knowledge-full-width knowledge-bots-page ${selected ? "is-bot-detail" : ""}`}
@@ -183,7 +196,8 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
         <p role="status">{t("knowledge.loading")}</p>
       ) : !selected ? (
         <>
-          <div className="kb-list-toolbar"><PublicResourceLink kind="assistant" />
+          <div className="kb-list-toolbar">
+
             <p>{t("bot.listHint")}</p>
             <button
               className="primary"
@@ -194,10 +208,14 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
               {t("bot.create")}
             </button>
           </div>
+          <div className="home-tabs resource-filter-tabs" role="tablist">{([['all','workspace.all'],['owned','workspace.myAssistants'],['shared','workspace.collaborating'],['favorites','workspace.favorites'],['collected','workspace.saved']] as const).map(([key,label])=><button key={key} role="tab" aria-selected={listTab===key} className={listTab===key?'active':''} onClick={()=>setListTab(key)}>{t(label)}</button>)}</div>
           <div className="kb-bot-grid">
-            {items.map((item) => (
+            {displayed.map((item) => (
               <article className="kb-bot-card" key={item.id}>
-                <Bot size={26} />
+                <div className="kb-bot-card-header"><Bot size={26} /><div className="kb-bot-card-actions">
+                {item.accessible && <button className="resource-icon-action" aria-label={t(item.favorite?'workspace.unfavorite':'workspace.favorite')} title={t(item.favorite?'workspace.unfavorite':'workspace.favorite')} aria-pressed={!!item.favorite} disabled={busy} onClick={()=>void work(async()=>{await api(`/workspace/assistants/${item.id}/favorite`,"PUT",{favorite:!item.favorite});await reload();})}><Star size={17} fill={item.favorite?'currentColor':'none'}/></button>}
+                {(item.collected || ['public','authenticated'].includes(item.visibility)) && item.accessible && <CollectionAction id={item.id} kind="assistant" collected={!!item.collected} changed={()=>void reload()} onError={setError}/>}
+                </div></div>
                 <h2>{item.title}</h2>
                 <p>{t("bot.creator", { name: item.creator.displayName })}</p>
                 <small>
@@ -213,7 +231,7 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
               </article>
             ))}
           </div>
-          {!items.length && (
+          {!displayed.length && (
             <div className="kb-empty">
               <Bot size={36} />
               <p>{t("bot.emptyList")}</p>
@@ -226,6 +244,8 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
             createPortal(
               <button
                 className="share-trigger"
+                data-permissions-trigger
+                aria-expanded={dialog === "share"}
                 onClick={() => void open("share")}
               >
                 <ShieldCheck size={16} />
@@ -233,19 +253,21 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
               </button>,
               shareSlot,
             )}
-          <div className="kb-detail-toolbar">
-            <a href="#/knowledge-assistants" aria-label={t("bot.back")}>
-              <ArrowLeft size={18} />
-            </a>
-            <Bot size={23} />
-            <h2>{bot.title}</h2>
-            {bot.canManage && (
-              <button onClick={() => void open("manage")}>
-                <Settings size={16} />
-                {t("bot.manage")}
-              </button>
-            )}
-          </div>
+          {!chatReady && (
+            <div className="kb-detail-toolbar">
+              <a href="#/knowledge-assistants" aria-label={t("bot.back")}>
+                <ArrowLeft size={18} />
+              </a>
+              <Bot size={23} />
+              <h2 title={bot.title}>{bot.title}</h2>
+              {bot.canManage && (
+                <button onClick={() => void open("manage")}>
+                  <Settings size={16} />
+                  {t("bot.manage")}
+                </button>
+              )}
+            </div>
+          )}
           {bot.invitationPending ? (
             <div className="kb-empty">
               <p>{t("bot.invited")}</p>
@@ -288,22 +310,57 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
               scopeId={bot.id}
               kind="answer"
               compactHeader
+              assistantName={bot.title}
               attachmentsEnabled={bot.config.attachmentsEnabled}
+              headerStart={
+                <a
+                  className="assistant-header-action"
+                  href="#/knowledge-assistants"
+                  aria-label={t("bot.back")}
+                  title={t("bot.back")}
+                >
+                  <ArrowLeft size={17} />
+                </a>
+              }
+              headerActions={
+                bot.canManage ? (
+                  <button
+                    className="assistant-header-action"
+                    aria-label={t("bot.manage")}
+                    title={t("bot.manage")}
+                    onClick={() => void open("manage")}
+                  >
+                    <Settings size={16} />
+                  </button>
+                ) : undefined
+              }
             />
           )}
         </>
       ) : null}
-      {dialog && draft && (
+      {dialog === "share" &&
+        bot &&
+        createPortal(
+          <KnowledgePermissionPanel
+            bot={bot}
+            close={() => setDialog("")}
+            saved={async () => {
+              await reload();
+            }}
+          />,
+          document.body,
+        )}
+      {dialog === "manage" && draft && (
         <Dialog
-          title={t(dialog === "share" ? "share.title" : "bot.manage")}
+          title={t("bot.manage")}
           close={() => {
             setDialog("");
             setSecret("");
           }}
-          className={`knowledge-bot-dialog ${dialog === "share" ? "knowledge-bot-permissions" : ""}`}
+          className="knowledge-bot-dialog"
         >
           {error && <Feedback tone="error" message={error} />}
-          {dialog === "manage" ? (
+          {
             <>
               <label>
                 {t("knowledge.botName")}
@@ -407,13 +464,13 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
                     value={keyName}
                     onChange={(e) => setKeyName(e.target.value)}
                   />
-                  <select
+                  <Select
                     value={keyChannel}
                     onChange={(e) => setKeyChannel(e.target.value)}
                   >
                     <option value="api">API</option>
                     <option value="mcp">MCP</option>
-                  </select>
+                  </Select>
                   <button
                     disabled={busy || !keyName.trim()}
                     onClick={() =>
@@ -493,118 +550,7 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
                 </p>
               </details>
             </>
-          ) : (
-            <>
-              <section className="permissions-section">
-                <label>
-                  {t("bot.visibility")}
-                  <select
-                    disabled={!draft.canManage}
-                    value={draft.visibility}
-                    onChange={(e) =>
-                      setDraft({ ...draft, visibility: e.target.value })
-                    }
-                  >
-                    <option value="invited">{t("bot.private")}</option>
-                    <option value="authenticated">
-                      {t("bot.authenticated")}
-                    </option>
-                    <option value="public">{t("bot.public")}</option>
-                  </select>
-                </label>
-                <p>{t("bot.shareHint")}</p>
-                <div className="kb-share-link">
-                  <input readOnly value={shareLink} />
-                  <button
-                    onClick={() =>
-                      void work(async () => {
-                        await navigator.clipboard.writeText(shareLink);
-                        setCopied(true);
-                      })
-                    }
-                  >
-                    <Copy size={15} />
-                    {t(copied ? "bot.copied" : "bot.copyLink")}
-                  </button>
-                </div>
-              </section>
-              {draft.canManage && (
-                <section className="permissions-section">
-                  <h3>{t("share.members")}</h3>
-                  <p>{t("bot.creator", { name: draft.creator.displayName })}</p>
-                  <PersonPicker
-                    select={(person) => {
-                      if (person.id === draft.creator.id) return;
-                      setDraft({
-                        ...draft,
-                        memberIds: [
-                          ...new Set([...(draft.memberIds ?? []), person.id]),
-                        ],
-                        memberNames: {
-                          ...draft.memberNames,
-                          [person.id]: person.display_name,
-                        },
-                      });
-                    }}
-                  />
-                  <ul className="kb-members">
-                    {members.map((id) => (
-                      <li key={id}>
-                        <span>{draft.memberNames?.[id] ?? id}</span>
-                        <select
-                          value={
-                            draft.managerIds?.includes(id)
-                              ? "manager"
-                              : "reader"
-                          }
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              memberIds: [
-                                ...new Set([...(draft.memberIds ?? []), id]),
-                              ],
-                              managerIds:
-                                e.target.value === "manager"
-                                  ? [
-                                      ...new Set([
-                                        ...(draft.managerIds ?? []),
-                                        id,
-                                      ]),
-                                    ]
-                                  : (draft.managerIds ?? []).filter(
-                                      (x) => x !== id,
-                                    ),
-                            })
-                          }
-                        >
-                          <option value="reader">{t("bot.roleReader")}</option>
-                          <option value="manager">
-                            {t("bot.roleManager")}
-                          </option>
-                        </select>
-                        <button
-                          onClick={() =>
-                            setDraft({
-                              ...draft,
-                              memberIds: draft.memberIds?.filter(
-                                (x) => x !== id,
-                              ),
-                              managerIds: draft.managerIds?.filter(
-                                (x) => x !== id,
-                              ),
-                            })
-                          }
-                          aria-label={t("knowledge.removeMember")}
-                        >
-                          ×
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-            </>
-          )}
+          }
           <footer>
             <button onClick={() => setDialog("")}>
               {t("knowledge.close")}

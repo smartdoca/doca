@@ -1,3 +1,4 @@
+import { knowledgeLinkMemberships } from "./link-access.js";
 import { knowledgeSourceMembers } from "./source-members.js";
 import { knowledgeDocumentSnapshot } from "./document-snapshot.js";
 import {
@@ -2447,17 +2448,22 @@ export async function knowledgeAssistantAccess(
     .where("assistant_id", "=", bot.id)
     .where("user_id", "=", actor.id)
     .executeTakeFirst();
+  const linkMember = (await knowledgeLinkMemberships(db, bot.id, actor.id)).length > 0;
   const decision = audienceDecision(await distributionPolicy(db), {
     owner: canManageKnowledgeBot(bot, actor.id),
-    granted: JSON.parse(bot.member_ids).includes(actor.id),
-    accepted: !!state?.accepted,
+    granted: JSON.parse(bot.member_ids).includes(actor.id) || linkMember,
+    accepted: !!state?.accepted || linkMember,
     public: bot.visibility === "public" || bot.visibility === "authenticated",
     interacted: !!state?.visited_at,
     hidden: state?.integration === "disabled",
   });
   const collected = !!await db.selectFrom("resource_collections").select("resource_id").where("resource_kind","=","assistant").where("resource_id","=",bot.id).where("user_id","=",actor.id).executeTakeFirst();
+  const favorite = !!(await db.selectFrom("workspace_activity").select("favorite").where("resource_kind","=","assistant").where("resource_id","=",bot.id).where("user_id","=",actor.id).executeTakeFirst())?.favorite;
   return {
     ...decision,
+    owned: bot.owner_id === actor.id,
+    collaborating: canManageKnowledgeBot(bot, actor.id) && bot.owner_id !== actor.id || JSON.parse(bot.member_ids).includes(actor.id) && decision.accessible,
+    favorite,
     collected,
     interacted: !!state?.visited_at,
     accessible: !!bot.enabled && decision.accessible,
@@ -2624,7 +2630,7 @@ export async function listKnowledgeAssistants(
           (JSON.parse(row.member_ids).includes(actor.id) ||
             decisions.get(row.id)!.defaultIncluded ||
             decisions.get(row.id)!.connected ||
-            (decisions.get(row.id)!.collected && decisions.get(row.id)!.accessible) ||
+            ((decisions.get(row.id)!.collected || decisions.get(row.id)!.favorite) && decisions.get(row.id)!.accessible) ||
             (decisions.get(row.id)!.accessible &&
               decisions.get(row.id)!.interacted))),
     )

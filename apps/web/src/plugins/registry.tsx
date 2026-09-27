@@ -1,3 +1,4 @@
+import { FileText } from "lucide-react";
 import {
   BookOpen,
   Bot,
@@ -100,7 +101,7 @@ const documentsBundle: WebPluginBundle<AppWebPluginTypes> = {
     {
       id: "doca.documents.route.home",
       pluginId: "doca.documents",
-      path: "/home",
+      path: "/documents",
       // The host owns the dashboard shell; this marker delegates its body.
       render: () => undefined,
     },
@@ -115,11 +116,11 @@ const documentsBundle: WebPluginBundle<AppWebPluginTypes> = {
     {
       id: "doca.documents.navigation.home",
       pluginId: "doca.documents",
-      order: 10,
-      scope: "home",
-      path: "/home",
+      order: 30,
+      scope: "documents",
+      path: "/documents",
       labelKey: "doca.documents.nav.documents",
-      icon: Home,
+      icon: FileText,
     },
     {
       id: "doca.documents.navigation.libraries",

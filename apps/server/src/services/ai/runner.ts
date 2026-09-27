@@ -1,3 +1,4 @@
+import { recordSessionResource } from "@core/modules/ai/session-resources.js";
 import { folderInSearch } from "@core/modules/discovery/catalog.js";
 import { authorizeFileFolder } from "@core/modules/access/file-access.js";
 import { queryResourcePage } from "@core/modules/resources/queries.js";
@@ -313,6 +314,9 @@ export function createAIRunner(
     return m;
   }
   async function recordSource(sessionId: string, userId: string, id: string) {
+    const resource=await db.selectFrom("resources").select(["id","kind","title"]).where("id","=",id).executeTakeFirst();
+    if(resource) await recordSessionResource(db,userId,sessionId,{...resource,href:`#/r/${id}`});
+
     await transact(db, async (tx) => {
       await lockAIUser(tx, userId);
       const session = await tx
@@ -731,6 +735,7 @@ export function createAIRunner(
       shared?: boolean;
     }) => {
       if (!folder.href) return;
+      await recordSessionResource(db,actor.id,session.id,{id:folder.id,kind:"folder",title:folder.name,href:folder.href});
       const id = `folder-${folder.id}`;
       const event =
         progress.events!.find((e) => e.id === id) ??
@@ -757,6 +762,7 @@ export function createAIRunner(
       mime?: string;
       local?: boolean;
     }) => {
+      if(!file.local) await recordSessionResource(db,actor.id,session.id,{id:file.id,kind:"file",title:file.name,href:file.href??`#/files?focus=${file.id}`});
       const id = `file-${file.id}`;
       const event =
         progress.events!.find((e) => e.id === id) ??
@@ -1866,7 +1872,7 @@ export function createAIRunner(
       knowledge_assistant_search: createTool({
         id: "knowledge_assistant_search",
         description:
-          "检索用户在 AI 设置中接入或主动收录的问答机器人。只返回已发布知识，不能读取其原文或来源；不接入未经允许的公开机器人。查业务知识时与普通文档搜索互补。",
+          "检索用户在对话输入框中勾选接入的问答机器人。只返回已发布知识，不能读取其原文或来源；不接入未经允许的公开机器人。用户要求只使用加入/绑定的问答来源时必须使用本工具，禁止改用普通文档检索 knowledge_search；未绑定时明确提示，不自行扩大检索范围。",
         inputSchema: z.object({ query: z.string().min(1).max(500) }),
         execute: async ({ query }) => {
           await requireCapability(db, actor.id, "ai.rag");
@@ -1876,17 +1882,21 @@ export function createAIRunner(
               "本轮仅授权指定文档，切换全部可访问内容后才能搜索接入的机器人",
             );
           const studio=createKnowledgeStudio(db,options.answerIndex);
-          const bots=(await listKnowledgeAssistants(db,actor)).filter(bot=>bot.connected || (bot.collected && bot.accessible));
+          const bots=(await listKnowledgeAssistants(db,actor)).filter(bot=>bot.connected && bot.accessible);
           const results=[];
-          for(const bot of bots) results.push({assistantId:bot.id,assistantTitle:bot.title,...await studio.searchAnswer(actor,bot.id,query)});
-          return {results,capability:"knowledge_search_only"};
+          for(const bot of bots) {
+            const answer=await studio.searchAnswer(actor,bot.id,query);
+            await recordSessionResource(db,actor.id,session.id,{id:bot.id,kind:"assistant",title:bot.title,href:`#/knowledge-assistants?bot=${bot.id}`});
+            results.push({assistantId:bot.id,assistantTitle:bot.title,...answer});
+          }
+          return {results,capability:"knowledge_search_only",connectedCount:bots.length,...(!bots.length?{status:"no_connected_sources",message:"当前没有启用的问答来源。请明确告知用户尚未绑定来源，可在输入框的加入问答来源中选择；不要说知识库没有相关内容。"}:{status:"searched"})};
         },
       }),
       knowledge_search: createTool({
         id: "knowledge_search",
         ...withCallExamples(
           "knowledge_search",
-          "按当前用户及本次授权范围检索文档。问的是文档、知识库、表格或「包含某主题的文档」时用这个，不要改去搜文件。默认 auto 优先 AI 语义检索；需完整内容时再 document_read。",
+          "按当前用户及本次授权范围检索文档。用户限定只使用加入的问答来源时不要调用本工具，应调用 knowledge_assistant_search。问的是文档、知识库、表格或「包含某主题的文档」时用这个，不要改去搜文件。默认 auto 优先 AI 语义检索；需完整内容时再 document_read。",
         ),
         inputSchema: z.object({
           query: z.string().min(1).max(500),
@@ -1968,6 +1978,7 @@ export function createAIRunner(
         execute:async ({fileId,offset,limit}) => {
           await requireCapability(db,actor.id,"ai.rag");
           const file=await aiFileAccess(fileId,1);
+          await recordSessionResource(db,actor.id,session.id,{id:file.id,kind:"file",title:file.name,href:`#/files?focus=${file.id}`});
           const key=`${file.id}:${file.version}:${file.storage_object_id}`;
           let result=recognizedFiles.get(key);
           if(!result){
@@ -3351,6 +3362,7 @@ export function createAIRunner(
       !!currentKnowledgeLibrary ||
       /知识库|知识体系|整理指引|knowledge\s*base/i.test(input.text);
     const promptContext = [
+      "问答来源范围：用户明确要求仅使用输入框加入或绑定的问答来源时，只调用 knowledge_assistant_search；不能用 knowledge_search、document_read、file_search 或联网替代。未绑定或无证据时明确说明，不扩大范围。不要将来源未说明的执行方式（例如自动或人工回滚）作为已知事实。",
       ...(knowledgeTask
         ? skills
             .filter((skill) => skill.id === "knowledge")
@@ -3408,7 +3420,7 @@ export function createAIRunner(
             `当前文件夹上下文：${JSON.stringify(currentFolder)}。这是页面隐式上下文，不是引用或附件；需要查看内容时先用文件工具，并优先把 folderId 限定为当前文件夹。`,
           ]
         : []),
-      `当前打开文档：${goneIds.includes(input.currentResourceId ?? "") ? "无" : (input.currentResourceId ?? "无")}。引用：${JSON.stringify(references)}。可操作文档：${JSON.stringify(ctx.allowedResources ?? sources)}。`,
+      `当前打开文档：${goneIds.includes(input.currentResourceId ?? "") ? "无" : (input.currentResourceId ?? "无")}。引用：${JSON.stringify(references)}。历史使用资源（仅记录，不代表授权）：${JSON.stringify(sources)}。`,
       ...(droppedContext ? [droppedContext] : []),
       ...(input.retryOf || checkpoint
         ? [

@@ -180,6 +180,7 @@ export function registerKnowledgeBotAccess(
         .where("conversation_id", "=", conversationId)
         .orderBy("created_at")
         .execute(),
+      false,
     );
     const feedback=await messageFeedback(db,ctx.actor.id,messages.map(x=>x.id));
     return {
@@ -315,6 +316,7 @@ export function registerKnowledgeBotAccess(
           .selectAll()
           .where("scope_id", "=", ctx.bot.id)
           .where("access_key_id", "=", ctx.key.id)
+          .where("archived", "=", 0)
           .orderBy("updated_at", "desc")
           .limit(100)
           .execute(),

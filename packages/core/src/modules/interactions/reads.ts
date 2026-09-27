@@ -24,7 +24,7 @@ export function createInteractionReads(db: DB) {
     });
   }
   return {
-    async likes(actor: Actor | null, id: string, offset = 0, cursor?: string) {
+    async likes(actor: Actor | null, id: string, cursor?: string) {
       await access(db, actor, id);
       let base = db
         .selectFrom("reactions as r")
@@ -51,7 +51,6 @@ export function createInteractionReads(db: DB) {
         .select(["u.id", "u.display_name"])
         .orderBy("u.display_name")
         .orderBy("u.id")
-        .offset(cursor ? 0 : offset)
         .limit(101)
         .execute();
       const items = rows.slice(0, 100);
@@ -59,7 +58,6 @@ export function createInteractionReads(db: DB) {
       return {
         total,
         items,
-        nextOffset: rows.length > 100 ? offset + 100 : null,
         nextCursor:
           rows.length > 100 && last
             ? encodePageCursor(fingerprint, last.display_name, last.id)
@@ -70,7 +68,6 @@ export function createInteractionReads(db: DB) {
       actor: Actor | null,
       id: string,
       tab: string,
-      offset = 0,
       cursor?: string,
     ) {
       const r = await access(db, actor, id, tab === "stats" ? 1 : 4);
@@ -126,20 +123,17 @@ export function createInteractionReads(db: DB) {
           ? await visitQuery
               .orderBy("e.created_at", "desc")
               .orderBy("e.id", "desc")
-              .offset(cursor ? 0 : offset)
               .limit(101)
               .execute()
           : await auditQuery
               .orderBy("e.created_at", "desc")
               .orderBy("e.id", "desc")
-              .offset(cursor ? 0 : offset)
               .limit(101)
               .execute();
       const items = rows.slice(0, 100);
       const last = items.at(-1);
       return {
         items,
-        nextOffset: rows.length > 100 ? offset + 100 : null,
         nextCursor:
           rows.length > 100 && last
             ? encodePageCursor(fingerprint, last.created_at, last.id)

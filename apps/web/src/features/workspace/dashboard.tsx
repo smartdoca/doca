@@ -1,4 +1,4 @@
-import { PublicResourceLink } from "@web/features/discovery/discovery.js";
+import { CollectionAction } from "@web/features/discovery/collection-action.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { htmlLang } from "@doca/i18n";
 import { Feedback } from "@web/shared/components/feedback.js";
@@ -7,6 +7,7 @@ import { DocumentAuthor } from "@web/features/documents/document-author.js";
 import { Fragment, useEffect, useState } from "react";
 import {
   BookOpen,
+  BookOpenCheck,
   Bot,
   FileText,
   Table2,
@@ -41,7 +42,7 @@ import { librarySettingsUrl } from "@web/features/documents/library.js";
 import { listTime } from "@web/shared/utils/list-time.js";
 import { EmptyTrash, FileTrash, TrashPreview } from "@web/features/trash/trash.js";
 
-const empty: Page = { items: [], total: 0, nextOffset: null };
+const empty: Page = { items: [], total: 0, nextCursor: null };
 function recentGroup(value?: string | null) {
   if (!value) return "earlier";
   const visited = new Date(value);
@@ -79,10 +80,10 @@ export function Dashboard({
 }) {
   const { locale, t } = useI18n();
   const date = (value?: string | null) => listTime(value, Date.now(), locale);
-  const [tab, setTab] = useState("recent"),
+  const [tab, setTab] = useState(section === "libraries" ? "libraries" : "recent"),
     [format, setFormat] = useState(""),
     [searchOpen, setSearchOpen] = useState(false),
-    [sort, setSort] = useState("visited_at"),
+    [sort, setSort] = useState(section === "libraries" ? "updated_at" : "visited_at"),
     [order, setOrder] = useState("desc"),
     [data, setData] = useState<Page>(empty),
     [error, setError] = useState(""),
@@ -99,7 +100,7 @@ export function Dashboard({
     trash = section === "trash",
     mine = section === "mine",
     scope = libraries
-      ? "libraries"
+      ? tab
       : trash
         ? "trash"
         : mine
@@ -107,8 +108,7 @@ export function Dashboard({
           : tab === "favorite-libraries"
             ? "favorites"
             : tab;
-  const libraryCards =
-    libraries || (!trash && !mine && tab === "favorite-libraries");
+  const libraryCards = libraries;
   const [loadedQuery, setLoadedQuery] = useState("");
   useEffect(() => {
     if (preferences) {
@@ -196,12 +196,10 @@ export function Dashboard({
     setOperation({ resource: r, action });
   }
   async function more() {
-    if (data.nextCursor == null && data.nextOffset === null) return;
+    if (data.nextCursor == null) return;
     setLoading(true);
     try {
-      const page = data.nextCursor
-        ? "&cursor=" + encodeURIComponent(data.nextCursor)
-        : "&offset=" + data.nextOffset;
+      const page = "&cursor=" + encodeURIComponent(data.nextCursor);
       const p = await api<Page>("/resources?" + query + page);
       setData((old) => ({
         ...p,
@@ -222,7 +220,7 @@ export function Dashboard({
         ? t("home.mine")
         : t("home.title");
   const home = !libraries && !trash && !mine;
-  const hasMore = data.nextCursor != null || data.nextOffset !== null;
+  const hasMore = data.nextCursor != null;
   const tableHeader = (
     <div className="document-table-head">
       <span>{t("home.titleColumn")}</span>
@@ -337,14 +335,14 @@ export function Dashboard({
           </button>
           <button
             onClick={() =>
-              libraries ? (location.hash = "/home") : create("library")
+              libraries ? (location.hash = "/documents") : create("library")
             }
           >
             <span className="quick-icon green">
               <BookOpen size={22} />
             </span>
             <span>
-              <strong>{libraries ? t("home.backWorkspace") : t("home.createLibrary")}</strong>
+              <strong>{libraries ? t("workspace.backDocuments") : t("home.createLibrary")}</strong>
               <small>
                 {libraries
                   ? t("home.backWorkspaceHint")
@@ -356,18 +354,23 @@ export function Dashboard({
 
         </div>
       )}
-      {!trash && <PublicResourceLink kind={libraries ? "library" : "document"} />}
       <div className="dashboard-controls">
-        {!libraries && !trash && !mine && (
+        {!trash && !mine && (
           <div className="home-tabs" role="tablist" aria-label={t("home.tabs")}>
             {(
-              [
+              (libraries ? [
+                ["libraries", "workspace.all"],
+                ["owned", "workspace.myLibraries"],
+                ["shared", "workspace.sharedLibraries"],
+                ["favorites", "workspace.favorites"],
+                ["collected", "workspace.collectedLibraries"],
+              ] : [
                 ["recent", "home.tab.recent"],
                 ["owned", "home.tab.owned"],
-                ["shared", "home.tab.shared"],
-                ["favorites", "home.tab.favorites"],
-                ["favorite-libraries", "home.tab.libraries"],
-              ] as const
+                ["shared", "workspace.collaborating"],
+                ["favorites", "workspace.favorites"],
+                ["collected", "workspace.myCollections"],
+              ]) as [string, Parameters<typeof t>[0]][]
             ).map(([key, label]) => (
               <button
                 key={key}
@@ -483,6 +486,7 @@ export function Dashboard({
                     />
                   )}
                   <BookOpen size={30} />
+                  {Number(r.ai_curated)===1 && <span className="library-curation-badge"><BookOpenCheck size={13}/>{t("curator.cardEnabled")}</span>}
                   <strong>{r.title}</strong>
                   <span>
                     {t("home.libraries")} ·{" "}
@@ -497,6 +501,8 @@ export function Dashboard({
                 </button>
                 <div className="library-card-footer">
                   <small>{t("common.updatedAt", { date: date(r.updated_at) })}</small>
+                  <DocumentReactionButtons resource={r} size={14} onError={setError} />
+                  {(r.is_public || r.collected) && <CollectionAction id={r.id} kind="library" collected={!!r.collected} changed={()=>setLocalRefresh(n=>n+1)} onError={setError}/> }
                   <a
                     className="icon"
                     aria-label={t("home.settingsFor", { title: r.title })}
@@ -527,7 +533,7 @@ export function Dashboard({
                 onClick={(e) => {
                   if (
                     (e.target as HTMLElement).closest(
-                      "button,a,input,select,[role=button]",
+                      "button,a,input,select,summary,details,[role=button]",
                     )
                   )
                     return;
@@ -549,17 +555,14 @@ export function Dashboard({
                   {home && (
                     <span className="table-row-actions">
                       <DocumentReactionButtons resource={r} size={14} onError={setError} />
-                      {r.role === "owner" && (
-                        <HoverTip label={t("common.delete")}>
-                          <button
-                            className="icon is-delete"
-                            aria-label={t("home.deleteNamed", { title: r.title })}
-                            onClick={() => void mutate(r, "trash")}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </HoverTip>
-                      )}
+                      {r.collected && <small className="collection-badge">{t("workspace.saved")}</small>}
+                      <details className="menu">
+                        <summary aria-label={t("workspace.more")}><MoreHorizontal size={16}/></summary>
+                        <div className="menu-items">
+                          {(r.is_public || r.collected) && <CollectionAction id={r.id} kind={r.kind} collected={!!r.collected} changed={()=>setLocalRefresh(n=>n+1)} onError={setError}/>}
+                          {r.role === "owner" && <button onClick={()=>void mutate(r,"trash")}><Trash2 size={14}/>{t("common.delete")}</button>}
+                        </div>
+                      </details>
                     </span>
                   )}
                 </div>

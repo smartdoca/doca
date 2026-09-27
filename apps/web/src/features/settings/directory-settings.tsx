@@ -36,7 +36,6 @@ const { t } = useI18n();
     revision: number;
   } | null>(null);
   const [users, setUsers] = useState<Member[]>([]),
-    [next, setNext] = useState<number | null>(null),
     [nextCursor, setNextCursor] = useState<string | null>(null);
   const [q, setQ] = useState(""),
     [busy, setBusy] = useState(false),
@@ -52,7 +51,6 @@ const { t } = useI18n();
     const timer = setTimeout(() => {
       void api<{
         items: Member[];
-        nextOffset: number | null;
         nextCursor?: string | null;
       }>(
         "/admin/users" + (q.trim() ? "?q=" + encodeURIComponent(q.trim()) : ""),
@@ -62,7 +60,6 @@ const { t } = useI18n();
       )
         .then((d) => {
           setUsers(d.items);
-          setNext(d.nextOffset);
           setNextCursor(d.nextCursor ?? null);
         })
         .catch((e) => {
@@ -163,24 +160,18 @@ const { t } = useI18n();
             </Select>
           </div>
         ))}
-        {(nextCursor !== null || next !== null) && (
+        {nextCursor !== null && (
           <button
             disabled={busy}
             onClick={() =>
               void save(async () => {
                 const d = await api<{
                   items: Member[];
-                  nextOffset: number | null;
                   nextCursor?: string | null;
                 }>(
-                  `/admin/users?${
-                    nextCursor
-                      ? "cursor=" + encodeURIComponent(nextCursor)
-                      : "offset=" + next
-                  }${q.trim() ? "&q=" + encodeURIComponent(q.trim()) : ""}`,
+                  `/admin/users?cursor=${encodeURIComponent(nextCursor)}${q.trim() ? "&q=" + encodeURIComponent(q.trim()) : ""}`,
                 );
                 setUsers((v) => [...v, ...d.items]);
-                setNext(d.nextOffset);
                 setNextCursor(d.nextCursor ?? null);
               })
             }

@@ -674,6 +674,7 @@ export async function registerSearchEmbeddings(
     assertIdle,
     async replicaEmbedders(remote: Record<string,any>) {
       const c=await config(),models=await aiConfig(db);
+      await status(c);
       const bindings=await db.selectFrom("search_embedding_models").selectAll().where("endpoint","=",c.endpoint).where("index_name","=",c.index_name).where("applied","=",1).execute();
       const result:Record<string,unknown>={};
       for(const [name,value] of Object.entries(remote)) {

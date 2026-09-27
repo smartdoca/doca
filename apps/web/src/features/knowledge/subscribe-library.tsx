@@ -1,3 +1,4 @@
+import {Select} from "@web/shared/components/select.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState } from "react";
 import { api, roleRank, type Resource } from "@web/shared/api.js";
@@ -71,9 +72,9 @@ const { t } = useI18n();
         {libraries.length ? (
           <label className="subscribe-library-pick">
             <span>放到哪个知识库</span>
-            <select value={libraryId} onChange={(event) => setLibraryId(event.target.value)}>
+            <Select value={libraryId} onChange={(event) => setLibraryId(event.target.value)}>
               {libraries.map((library) => <option key={library.id} value={library.id}>{library.title}</option>)}
-            </select>
+            </Select>
           </label>
         ) : <p>还没有你能管理的知识库。先新建一个，再把来源收进去。</p>}
         <p>提交后出现在知识体系页。确认加入之后，才写进文档树。</p>

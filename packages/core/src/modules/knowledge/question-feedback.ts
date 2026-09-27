@@ -60,6 +60,7 @@ export async function recordQuestionFeedback(
     actor,
     conversation.scope_id,
     rows.reverse(),
+    false,
   );
   const row = {
     id: randomUUID(),

@@ -167,11 +167,11 @@ it("limits library catalogue to owners and whole-library writers, not public rea
       (await service.list(other, { scope: "libraries" })).items,
     ).toHaveLength(0);
     expect((await service.list(other, { scope: "shared" })).items).toHaveLength(
-      0,
+      1,
     );
     await service.visit(other, doc.id);
     expect((await service.list(other, { scope: "shared" })).items).toHaveLength(
-      0,
+      1,
     );
     await db
       .insertInto("resource_collections")

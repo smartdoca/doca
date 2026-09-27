@@ -1,4 +1,4 @@
-import { PublicResourceLink, FolderCollectButton } from "@web/features/discovery/discovery.js";
+import { CollectionAction } from "@web/features/discovery/collection-action.js";
 import { fileLocationLabel } from "@web/shared/utils/system-labels.js";
 import type { Locale } from "@doca/i18n";
 import {
@@ -104,6 +104,7 @@ type UploadProgress = {
   trail: Location[];
 };
 type SharedFolderSummary = FileFolder & {
+  collected: boolean; public: boolean; owned: boolean; collaborating: boolean;
   owner: { id: string; display_name: string; public_id?: string | null } | null;
   members: Array<{ user_id: string; role: "admin" | "reader"; display_name: string; public_id?: string | null; }>;
   role: "owner" | "admin" | "reader";
@@ -586,6 +587,7 @@ export function FilesExplorer({
     null,
   );
   const [largePreview, setLargePreview] = useState<FileItem | null>(null);
+  useEffect(()=>{if(largePreview)void api(`/workspace/files/${largePreview.id}/visit`,"POST",{}).catch(()=>{});},[largePreview?.id]);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const largePreviewRef = useRef<HTMLElement>(null);
   const [documentPicker, setDocumentPicker] = useState<{
@@ -2052,8 +2054,8 @@ export function FilesExplorer({
         setContextMenu({ x: event.clientX, y: event.clientY, target: null });
       }}
     >
-      <PublicResourceLink kind="folder" />
-      {location.type === "folder" && <FolderCollectButton id={location.id} />}
+
+
       <header className="files-toolbar">
         <div className="files-toolbar-actions">
           <button
@@ -3239,6 +3241,7 @@ export function FilesExplorer({
 }
 
 export function SharedFoldersPage() {
+  const [tab,setTab]=useState("all");
   const { t, locale } = useI18n();
 
   const [items, setItems] = useState<SharedFolderSummary[]>([]);
@@ -3308,13 +3311,14 @@ export function SharedFoldersPage() {
     }
   }
 
+  const displayed = items.filter(x=>tab==='all'||tab==='owned'&&x.owned||tab==='shared'&&x.collaborating||tab==='collected'&&x.collected);
   function openSharedFolder(folder: SharedFolderSummary) {
     window.location.hash = `/shared-files/${folder.id}?name=${encodeURIComponent(folder.name)}`;
   }
 
   return (
     <section className="shared-folders-page">
-      <PublicResourceLink kind="folder" />
+
       <header className="shared-folders-header">
         <div>
           <h2>{t("nav.sharedFiles")}</h2>
@@ -3343,6 +3347,7 @@ export function SharedFoldersPage() {
           </button>
         </div>
       )}
+      <div className="home-tabs resource-filter-tabs" role="tablist">{([['all','workspace.all'],['owned','workspace.sharedByMe'],['shared','workspace.sharedWithMe'],['collected','workspace.collectedFolders']] as const).map(([key,label])=><button key={key} role="tab" aria-selected={tab===key} className={tab===key?'active':''} onClick={()=>setTab(key)}>{t(label)}</button>)}</div>
       <div
         className="shared-folders-table"
         role="table"
@@ -3358,8 +3363,8 @@ export function SharedFoldersPage() {
         {loading ? (
           <p className="empty">{t("fileManager.sharedLoading")}</p>
         ) : (
-          items.map((folder) => (
-            <button
+          displayed.map((folder) => (
+            <div tabIndex={0} onKeyDown={e=>{if(e.target===e.currentTarget&&e.key==='Enter')openSharedFolder(folder)}}
               className="shared-folder-row"
               role="row"
               key={folder.id}
@@ -3369,6 +3374,7 @@ export function SharedFoldersPage() {
               <span className="shared-folder-name">
                 <FolderGlyph />
                 <strong>{folder.name}</strong>
+                {(folder.public||folder.collected) && <CollectionAction id={folder.id} kind="folder" collected={folder.collected} changed={()=>void loadSharedFolders()} onError={setError}/>}
               </span>
               <code title={folder.id}>{folder.id}</code>
               <span className="shared-folder-owner">
@@ -3392,10 +3398,10 @@ export function SharedFoldersPage() {
               <span>
                 {folder.updated_at ? fileDate(folder.updated_at, locale) : "—"}
               </span>
-            </button>
+            </div>
           ))
         )}
-        {!loading && !items.length && (
+        {!loading && !displayed.length && (
           <div className="shared-folders-empty">
             <Share2 size={28} />
             <strong>{t("fileManager.noShared")}</strong>

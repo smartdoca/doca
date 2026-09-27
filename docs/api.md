@@ -14,7 +14,7 @@ Base URL：同源 /api/v1。运行时请求契约：GET /api/openapi.json，根�
 - JSON接口 Content-Type 为 application/json，上传为 application/octet-stream。拒绝未知字段；名称1–160字符且非全空，新密码12–128字符。
 - 通常成功为 HTTP 200，上传成功201，CDN读取302。失败为 {message:string,requestId:string}。
 - 400 参数/约束；401 未登录；403 权限不足或来源错误；404 不存在、无阅读权或已删除；409 版本/状态冲突；421 Host 不符；429 限流；500 未预期错误。
-- UUID 标识资源。offset 分页并非跨请求一致快照，nextOffset=null 表示结束。
+- UUID 标识资源。可增长的业务列表使用不透明 `cursor`；`nextCursor=null` 表示结束。正文分片、外部搜索结果等有界数据可继续使用 offset。
 
 ## 账号与系统
 
@@ -26,7 +26,7 @@ Base URL：同源 /api/v1。运行时请求契约：GET /api/openapi.json，根�
 | POST /auth/logout           | 登录     | 无请求体 → {ok:true}，撤销会话并清Cookie                            |
 | POST /auth/password         | 登录     | {currentPassword,newPassword} → {ok:true}，撤销全部会话             |
 | GET /users/lookup?q=        | 登录     | q至少2字符，名称模糊/完整账号 → {items:[{id,display_name}]}，最多20 |
-| GET /admin/users?q=&offset= | 管理员   | 名称过滤、100条分页 → {items,nextOffset}                            |
+| GET /admin/users?q=&cursor= | 管理员   | 名称过滤、100条游标分页 → {items,nextCursor}                        |
 | POST /admin/users           | 管理员   | {login,password,displayName} → User，只创建普通用户                 |
 | PATCH /admin/users/:id      | 管理员   | {status:"active"或"disabled"} → {ok:true}，不能操作自己/其他管理员  |
 | GET /admin/settings         | 管理员   | {id:"system",site_name,registration:0或1,revision}                  |
@@ -36,7 +36,7 @@ User={id,display_name,admin:boolean}。管理列表另含 login,status,created_a
 
 ## 资源读取
 
-GET /resources（登录）支持 scope=mine/libraries/shared/favorites/all/trash，省略相当于all；q为标题子串，format=rich_text/spreadsheet/presentation；libraryId 限定库内文档；offset=0–100000，每页100。
+GET /resources（登录）支持 scope=mine/libraries/shared/favorites/all/trash，省略相当于all；q为标题子串，format=rich_text/spreadsheet/presentation；libraryId 限定库内文档；cursor 为服务端返回的不透明游标，每页100。
 
 资源列表用于管理与目录读取；q非空时只匹配文档，不搜索知识库名称。产品中的内容搜索统一使用下述文档搜索接口。
 
@@ -51,13 +51,13 @@ GET `/search/documents`（登录），结果固定为文档，知识库永远不
 - `format=rich_text/markdown/spreadsheet/presentation/canvas`；`offset`分页，每页100。
 - `ownerIds`：可重复UUID，最多10人；仅匹配允许当前用户查看所有者信息的文档。
 - `visitedWithinDays`：1–3650天内当前用户浏览过的文档；`likedOnly=true`、`favoritesOnly=true`分别限定当前用户点赞、收藏，所有条件取交集。数据库候选过滤及Meilisearch返回后的复核使用同一组条件。
-- 返回 `{items,total,nextOffset,engine,mode,notice?}`。每项均kind=document，`summary`为当前可阅读正文的命中段落摘要，`summaryMatches`和`titleMatches`为高亮范围（start/length，JavaScript UTF-16索引），额外`inLibrary`表示是否在知识库。独立分享的文档可被检索，但无权阅读所属库时，library_id/libraryName保持null，不能通过指定私有库ID探测其成员关系。
+- 返回 `{items,total,nextCursor?,nextOffset?,engine,mode,notice?}`。数据库结果使用游标，外部搜索引擎的有界排名结果使用 offset。每项均kind=document，`summary`为当前可阅读正文的命中段落摘要，`summaryMatches`和`titleMatches`为高亮范围（start/length，JavaScript UTF-16索引），额外`inLibrary`表示是否在知识库。独立分享的文档可被检索，但无权阅读所属库时，library_id/libraryName保持null，不能通过指定私有库ID探测其成员关系。
 
 知识库多选项来自可访问知识库的管理列表，不是搜索结果。管理列表仍支持正常列出知识库；知识库页面的搜索按钮打开文档搜索并预选“知识库内”。进入某个库后侧栏搜索默认限定当前库，可清空筛选扩大范围。无关键词且无任何筛选时，弹窗展示最近访问文档；筛选后即使关键词为空也会应用用户选择的条件。
 
-响应 {items:Resource[],total,nextOffset}。先鉴权再过滤分页。知道libraryId不等于获得访问权。
+响应 `{items:Resource[],total,nextCursor}`。先鉴权再过滤分页。首屏按需要返回 total，后续页可为 null。知道 libraryId 不等于获得访问权。
 
-GET /resources/:id 返回 {resource,ownerName,lastEditorName,lastEditedAt,comments,grants,likes,liked,favorite}。lastEditorName/lastEditedAt 为真实最近编辑人及时间，无法从历史记录确认时为 null，不以所有者代替。public资源允许匿名；目录列表仍需登录。comments 按创建时间升序、当前最多200条；grants仅管理者和所有者可见。
+GET /resources/:id 返回 `{resource,ownerName,lastEditorName,lastEditedAt,comments,commentsNextCursor,grants,likes,liked,favorite}`。lastEditorName/lastEditedAt 为真实最近编辑人及时间，无法从历史记录确认时为 null，不以所有者代替。public资源允许匿名；目录列表仍需登录。comments 按创建时间升序、每页最多200条；grants仅管理者和所有者可见。
 
 Resource 为 resources 表公开投影，额外 role=reader/commenter/editor/manager/owner。无权访问的 parent_id/library_id 返回null。请求使用camelCase，当前资源响应使用snake_case。
 

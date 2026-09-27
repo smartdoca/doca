@@ -1,3 +1,4 @@
+import { Checkbox } from "antd";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { useI18n } from "@web/shared/i18n.js";
@@ -12,7 +13,11 @@ type Connection = {
   preference: string;
   preferenceRevision: number;
 };
-export function KnowledgeConnections() {
+export function KnowledgeConnections({
+  compact = false,
+}: {
+  compact?: boolean;
+}) {
   const { t } = useI18n();
   const [items, setItems] = useState<Connection[]>();
   const [error, setError] = useState("");
@@ -36,6 +41,64 @@ export function KnowledgeConnections() {
       setBusy(false);
     }
   }
+  const available = items?.filter((item) => item.accessible) ?? [];
+  const selected = available.filter((item) => item.connected).length;
+  async function selectConnections(targets: Connection[], enabled: boolean) {
+    await act(async () => {
+      const outcomes = await Promise.allSettled(
+        targets.map((item) =>
+          api(`/knowledge/assistants/${item.id}/connection`, "PUT", {
+            integration: enabled ? "enabled" : "disabled",
+            expectedRevision: item.preferenceRevision,
+          }),
+        ),
+      );
+      await load();
+      const failed = outcomes.find((result) => result.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+    });
+  }
+  if (compact)
+    return (
+      <div className="ai-knowledge-sources">
+        <Checkbox
+          disabled={busy || !available.length}
+          checked={!!available.length && selected === available.length}
+          indeterminate={selected > 0 && selected < available.length}
+          onChange={(e) => void selectConnections(available, e.target.checked)}
+        >
+          {t("chat.selectAllAnswers")}
+        </Checkbox>
+        <Feedback message={error} tone="error" />
+        {!items && <p>{t("common.loading")}</p>}
+        {items?.length === 0 && <p>{t("knowledge.botsEmpty")}</p>}
+        {items?.map((item) => (
+          <div key={item.id}>
+            <Checkbox
+              disabled={busy || !item.accessible}
+              checked={item.connected}
+              onChange={(e) => void selectConnections([item], e.target.checked)}
+            >
+              {item.title}
+            </Checkbox>
+            {item.invitationPending && (
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void act(() =>
+                    api(`/knowledge/assistants/${item.id}/visit`, "POST", {
+                      accept: true,
+                    }),
+                  )
+                }
+              >
+                {t("knowledge.acceptInvitation")}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    );
   return (
     <section>
       <p>{t("knowledge.connectionsHint")}</p>

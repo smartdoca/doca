@@ -214,7 +214,7 @@ it("separates invitation access, direct sharing, library discovery and permissio
     ).toEqual([lib.id]);
     expect((await s.detail(member, inherited.id)).resource.role).toBe("editor");
     await s.visit(member, inherited.id);
-    expect((await s.list(member, { scope: "shared" })).items).toHaveLength(0);
+    expect((await s.list(member, { scope: "shared" })).items).toHaveLength(2);
     await db
       .updateTable("distribution_settings")
       .set({ config: JSON.stringify(distributionDefaults) })
@@ -225,9 +225,9 @@ it("separates invitation access, direct sharing, library discovery and permissio
       visibility: "invited",
       grants: [{ userId: member.id, role: "reader" }],
     });
-    expect((await s.list(member, { scope: "shared" })).items).toHaveLength(0);
+    expect((await s.list(member, { scope: "shared" })).items).toHaveLength(2);
     await s.visit(member, doc.id);
-    expect((await s.list(member, { scope: "shared" })).items).toHaveLength(0);
+    expect((await s.list(member, { scope: "shared" })).items).toHaveLength(2);
     const accepted = await app.inject({
       method: "PUT",
       url: `/api/v1/me/entries/${doc.id}`,
@@ -236,8 +236,8 @@ it("separates invitation access, direct sharing, library discovery and permissio
     });
     expect(accepted.statusCode, accepted.body).toBe(200);
     expect(
-      (await s.list(member, { scope: "shared" })).items.map((x) => x.id),
-    ).toEqual([doc.id]);
+      (await s.list(member, { scope: "shared" })).items.map((x) => x.id).sort(),
+    ).toEqual([doc.id, inherited.id].sort());
     const secret = await s.create(owner, {
       kind: "document",
       format: "rich_text",
@@ -388,7 +388,7 @@ it("separates invitation access, direct sharing, library discovery and permissio
     ).toBe(409);
     expect(
       (await s.list(outsider, { scope: "libraries" })).items.map((x) => x.id),
-    ).toEqual([lib.id]);
+    ).toEqual([]);
   } finally {
     await app.close();
     await db.destroy();

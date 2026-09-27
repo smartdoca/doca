@@ -278,8 +278,8 @@ it("retries failed tasks with original inputs, rejects foreign retries, and expo
     expect(
       result.messages.find((m: any) => m.id === retry.json().id).text,
     ).toBe("总结这份文档");
-    expect(result.resources).toEqual([
-      { id: doc.id, title: "关联测试", format: "markdown", kind: "document" },
+    expect(result.resources).toMatchObject([
+      { id: doc.id, title: "关联测试", kind: "document", href: `#/r/${doc.id}` },
     ]);
     const repeated = await request("POST", `/ai/sessions/${sid}/messages`, a, {
       ...retryPayload,

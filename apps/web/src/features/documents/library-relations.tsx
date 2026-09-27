@@ -151,7 +151,7 @@ export function LibrarySystemPage({
   }
 
   return (
-    <section className="library-system knowledge-full-width">
+    <section className={`library-system knowledge-full-width ${tab === "knowledge" ? "is-chat-tab" : ""}`}>
       {error && <Feedback tone="error" message={error} />}
       {notice && <p className="library-system-notice">{notice}</p>}
       <div className="library-system-tabs" role="tablist">
@@ -168,7 +168,7 @@ export function LibrarySystemPage({
       </header>
       {canMaintain && <><KnowledgeCurationSettings scopeId={resource.id}/><KnowledgeWorkspace surface="settings" libraryId={resource.id} enabled={curated} active={tab === "settings"} refreshVersion={refreshVersion}/></>}</>}
       {canMaintain && <div hidden={tab !== "instructions"}><KnowledgeWorkspace surface="instructions" libraryId={resource.id} initialPath={instructionPath} enabled={curated} active={tab === "instructions"} refreshVersion={refreshVersion}/></div>}
-      <div hidden={tab !== "knowledge"}>{canMaintain ? <><KnowledgeChat key={`${resource.id}:${refreshVersion}`} scopeId={resource.id} kind="curation" compactHeader initialConversationId={conversationId} /></> : <p>{t("knowledge.manageOnly")}</p>}</div>
+      <div className="knowledge-chat-tab" hidden={tab !== "knowledge"}>{canMaintain ? <><KnowledgeChat key={`${resource.id}:${refreshVersion}`} scopeId={resource.id} kind="curation" compactHeader initialConversationId={conversationId} /></> : <p>{t("knowledge.manageOnly")}</p>}</div>
       {tab === "feedback" && <KnowledgeFeedback libraryId={resource.id} openConversation={id=>{setConversationId(id);setTab("knowledge");}}/>}
       {tab === "bots" && <KnowledgeAssistants libraryId={resource.id}/> }
       {tab === "sources" && (

@@ -438,6 +438,13 @@ async function ensureKnowledgeSchema(db: Kysely<any>) {
   for (const column of ["manager_ids text not null default '[]'", "config text not null default '{}'"]) {
     try { await sql.raw(`ALTER TABLE knowledge_assistants ADD COLUMN ${column}`).execute(db); } catch(error) { if(!/duplicate column|already exists/i.test(String(error))) throw error; }
   }
+  await sql.raw("CREATE TABLE IF NOT EXISTS ai_session_resources (session_id varchar(36) not null references ai_sessions(id) on delete cascade, kind varchar(32) not null, resource_id varchar(160) not null, title text not null, href text not null, touched_at varchar(32) not null, primary key(session_id,kind,resource_id))").execute(db);
+  await sql.raw("CREATE INDEX IF NOT EXISTS ai_session_resources_recent ON ai_session_resources(resource_id,touched_at desc)").execute(db);
+  await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_bot_sharing (bot_id varchar(36) primary key references knowledge_assistants(id) on delete cascade, enabled integer not null default 0)").execute(db);
+  await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_bot_share_links (id varchar(36) primary key, bot_id varchar(36) not null references knowledge_assistants(id) on delete cascade, token varchar(43) not null unique, enabled integer not null, revoked_at varchar(32), expires_at varchar(32), max_members integer, version varchar(36) not null, created_at varchar(32) not null)").execute(db);
+  await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_bot_link_members (link_id varchar(36) not null references knowledge_bot_share_links(id) on delete cascade, user_id varchar(36) not null references users(id), created_at varchar(32) not null, primary key (link_id,user_id))").execute(db);
+  await sql.raw("CREATE INDEX IF NOT EXISTS knowledge_bot_share_links_bot ON knowledge_bot_share_links (bot_id, created_at)").execute(db);
+  await sql.raw("CREATE INDEX IF NOT EXISTS knowledge_bot_link_members_user ON knowledge_bot_link_members (user_id, link_id)").execute(db);
   await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_bot_keys (id varchar(36) primary key, bot_id varchar(36) not null references knowledge_assistants(id) on delete cascade, creator_id varchar(36) not null references users(id), name text not null, channel varchar(16) not null, token_hash varchar(64) not null unique, expires_at varchar(32) not null, created_at varchar(32) not null)").execute(db);
   await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_assistant_users (assistant_id varchar(36) not null references knowledge_assistants(id) on delete cascade, user_id varchar(36) not null references users(id), accepted integer not null default 0, visited_at varchar(32), integration varchar(16) not null default 'default', revision integer not null default 1, primary key (assistant_id, user_id))").execute(db);
   for (const statement of knowledgeSchemaStatements)
@@ -473,7 +480,7 @@ async function ensureKnowledgeStudio(db: Kysely<any>) {
   for (const statement of [
     `CREATE TABLE IF NOT EXISTS knowledge_checkpoints (task_id varchar(36) primary key, detail text not null default '{}', attempts integer not null default 0, available_at varchar(32) not null)`,
     `CREATE TABLE IF NOT EXISTS knowledge_source_observations (library_id varchar(36) not null, source_id varchar(36) not null, fingerprint text not null, updated_at varchar(32) not null, PRIMARY KEY(library_id,source_id))`,
-    `CREATE TABLE IF NOT EXISTS knowledge_conversations (id varchar(36) primary key, scope_id varchar(36) not null, kind varchar(16) not null, owner_id varchar(36) not null, title text not null, summary text not null default '', state varchar(16) not null default 'idle', created_at varchar(32) not null, updated_at varchar(32) not null)`,
+    `CREATE TABLE IF NOT EXISTS knowledge_conversations (id varchar(36) primary key, scope_id varchar(36) not null, kind varchar(16) not null, owner_id varchar(36) not null, title text not null, summary text not null default '', state varchar(16) not null default 'idle', archived integer not null default 0, created_at varchar(32) not null, updated_at varchar(32) not null)`,
     `CREATE TABLE IF NOT EXISTS knowledge_human_tasks (id varchar(36) primary key, library_id varchar(36) not null references resources(id) on delete cascade, conversation_id varchar(36) not null references knowledge_conversations(id) on delete cascade, task_key varchar(300) not null, kind varchar(32) not null, title text not null, detail text not null, status varchar(16) not null, revision integer not null, resolution text not null default '', created_at varchar(32) not null, updated_at varchar(32) not null, UNIQUE(library_id,task_key))`,
     `CREATE INDEX IF NOT EXISTS knowledge_conversation_scope ON knowledge_conversations(scope_id,kind)`,
     `CREATE TABLE IF NOT EXISTS knowledge_messages (id varchar(36) primary key, conversation_id varchar(36) not null references knowledge_conversations(id) on delete cascade, role varchar(16) not null, author_id varchar(36), trigger varchar(16) not null, content text not null, detail text not null default '{}', created_at varchar(32) not null)`,
@@ -484,6 +491,7 @@ async function ensureKnowledgeStudio(db: Kysely<any>) {
     `CREATE TABLE IF NOT EXISTS knowledge_publications (library_id varchar(36) primary key, revision integer not null, fingerprint text not null, documents text not null, status varchar(16) not null, error text not null, updated_at varchar(32) not null)`,
   ]) await sql.raw(statement).execute(db);
   try { await sql.raw("ALTER TABLE knowledge_conversations ADD COLUMN access_key_id varchar(36)").execute(db); } catch(error) { if(!/duplicate column|already exists/i.test(String(error)))throw error; }
+  try { await sql.raw("ALTER TABLE knowledge_conversations ADD COLUMN archived integer not null default 0").execute(db); } catch(error) { if(!/duplicate column|already exists/i.test(String(error)))throw error; }
   try { await sql.raw("ALTER TABLE knowledge_subscriptions ADD COLUMN name text not null default ''").execute(db); } catch(error) { if(!/duplicate column|already exists/i.test(String(error)))throw error; }
 
 }
@@ -579,6 +587,8 @@ async function ensureMobileSchema(db: Kysely<any>) {
 }
 
 async function ensureDiscoverySchema(db: Kysely<any>) {
+  await sql`CREATE TABLE IF NOT EXISTS workspace_activity (user_id varchar(36) not null references users(id) on delete cascade, resource_kind varchar(16) not null, resource_id varchar(36) not null, visited_at varchar(32), favorite integer not null default 0, primary key(user_id,resource_kind,resource_id))`.execute(db);
+  await sql`CREATE INDEX IF NOT EXISTS workspace_activity_recent_idx ON workspace_activity(user_id,visited_at)`.execute(db);
   const hasCollections = (await db.introspection.getTables()).some(table => table.name === "resource_collections");
   await sql`CREATE TABLE IF NOT EXISTS resource_collections (user_id varchar(36) not null references users(id) on delete cascade, resource_kind varchar(16) not null, resource_id varchar(36) not null, created_at varchar(32) not null, primary key(user_id,resource_kind,resource_id))`.execute(db);
 

@@ -296,7 +296,6 @@ export function DocumentTree({
       {truncated && (
         <Feedback message={t("tree.tooLarge")} tone="warning" />
       )}
-      {knowledgeEnabled && libraryId && <a className="tree-link" href={`#/r/${libraryId}?view=system&section=entries`}>{t("knowledge.openEntries")}</a>}
       {roots.map((r) => node(r))}
       {!items.length && !error && !knowledgeEnabled && (
         <p className="subtle">暂无目录，创建第一篇文档吧</p>

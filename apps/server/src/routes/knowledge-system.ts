@@ -1,3 +1,4 @@
+import { registerKnowledgePermissions } from "./knowledge-permissions.js";
 import { randomUUID } from "node:crypto";
 import { createKnowledgeConversation, sendKnowledgeMessage } from "@core/modules/knowledge/conversations.js";
 import { answerKnowledge } from "../services/ai/knowledge-curation.js";
@@ -40,6 +41,7 @@ export function registerKnowledgeSystem(
   auth: (req: FastifyRequest) => Actor,
   notify?: (id:string)=>Promise<void>,
 ) {
+  registerKnowledgePermissions(api, db, auth);
   const root = "/api/v1/knowledge/libraries/:id";
   const params = Type.Object({ id: Type.String({ format: "uuid" }) });
   api.get<{ Params: { id: string } }>(

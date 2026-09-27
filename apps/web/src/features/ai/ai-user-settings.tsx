@@ -1,4 +1,3 @@
-import { KnowledgeConnections } from "@web/features/knowledge/knowledge-connections.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@web/shared/api.js";
@@ -73,7 +72,6 @@ export function AIUserSettings({
             ["skills", "Skill"],
             ["archived", "已归档会话"],
             ["note", "备忘"],
-            ["knowledge", t("knowledge.connections")],
           ].map(([id, title]) => (
             <button
               key={id}
@@ -90,7 +88,6 @@ export function AIUserSettings({
           ))}
         </nav>
         <Feedback message={error} tone="error" />
-        {tab === "knowledge" && <KnowledgeConnections />}
         {tab === "usage" && data && (
           <>
             <div className="ai-usage-grid">

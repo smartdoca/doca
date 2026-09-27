@@ -1606,11 +1606,11 @@ body.ai-panel-resizing {
 .ai-bubble-list .ant-think {
   margin-bottom: 0;
 }
-.ai-bubble-list .ant-bubble.ai-step-bubble {
+.ai-bubble-list.ai-bubble-list .ant-bubble.ai-step-bubble {
   padding-block: 4px;
   padding-inline-end: 0;
 }
-.ai-step-bubble .ant-bubble-content {
+.ai-bubble-list.ai-bubble-list .ai-step-bubble .ant-bubble-content {
   min-height: 0;
 }
 .ai-bubble-list .ai-step-bubble .ant-thought-chain-node-description,
@@ -1849,7 +1849,11 @@ body.ai-panel-resizing {
   background: #ffffffcc;
   color: #2b4c7e;
 }
-.ai-sources-bubble .ant-bubble-content {
+.ai-bubble-list.ai-bubble-list .ant-bubble.ai-sources-bubble {
+  padding-block: 4px;
+  padding-inline-end: 0;
+}
+.ai-bubble-list.ai-bubble-list .ai-sources-bubble .ant-bubble-content {
   min-height: 0;
 }
 .ai-skip-approvals {
@@ -2076,3 +2080,8 @@ body.ai-panel-resizing {
 
 .ai-answer .x-markdown-light { --font-size: 13px; --td-th-padding: 6px 10px; --margin-block: 0 0 6px; --table-margin: 8px 0; }
 .ai-answer .x-markdown-light .ant-codeHighlighter pre { padding: 10px 12px; }
+.ai-resource-history { display:flex;flex-direction:column;max-width:340px;max-height:320px;overflow:auto;gap:4px }
+.ai-resource-history .ant-btn {justify-content:flex-start;min-height:32px;height:auto;white-space:normal;text-align:left}
+.ai-knowledge-sources {width:300px;max-width:calc(100vw - 48px);max-height:360px;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:8px}
+.ai-knowledge-sources label {display:flex;align-items:center;gap:8px;font-size:13px}
+.ai-knowledge-sources p {font-size:12px;color:var(--muted);margin:0}

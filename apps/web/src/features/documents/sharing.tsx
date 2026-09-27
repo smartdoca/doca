@@ -46,8 +46,12 @@ export function ShareLinkSettings({
   changed,
   inheritanceControl,
   inheritedEnabled,
+  basePath = `/resources/${id}`,
+  allowedRoles = ["reader", "commenter", "editor"],
 }: {
   id: string;
+  basePath?: string;
+  allowedRoles?: string[];
   changed?: () => Promise<unknown>;
   inheritanceControl?: ReactNode;
   inheritedEnabled?: boolean;
@@ -119,7 +123,7 @@ export function ShareLinkSettings({
     setLimitPosition({ top, left });
   }, [limitOpen]);
   async function load() {
-    const r = await api<ShareState>(`/resources/${id}/share-link`);
+    const r = await api<ShareState>(`${basePath}/share-link`);
     setItems(r.items);
     setRevokedItems(r.revokedItems);
     setEnabled(r.sharingEnabled);
@@ -136,7 +140,7 @@ export function ShareLinkSettings({
     setRecordsOpen(false);
     setRecordTab("active");
     setExpandedMembers(null);
-    void api<ShareState>(`/resources/${id}/share-link`)
+    void api<ShareState>(`${basePath}/share-link`)
       .then((r) => {
         if (alive) {
           setItems(r.items);
@@ -148,7 +152,7 @@ export function ShareLinkSettings({
           setIncludeDescendants(
             r.supportsDescendants && (first?.includeDescendants ?? true),
           );
-          setMaxMembers(first?.maxMembers ?? 1);
+          setMaxMembers(first ? first.maxMembers : 1);
           const end = first?.expiresAt ? new Date(first.expiresAt) : null;
           setExpires(
             end
@@ -171,7 +175,7 @@ export function ShareLinkSettings({
     setBusy(true);
     setError("");
     try {
-      await api(`/resources/${id}/share-links/enabled`, "PUT", {
+      await api(`${basePath}/share-links/enabled`, "PUT", {
         enabled: next,
       });
       setAdvanced(false);
@@ -201,7 +205,7 @@ export function ShareLinkSettings({
     setBusy(true);
     setError("");
     try {
-      const l = await api<ShareLink>(`/resources/${id}/share-link`, "PUT", {
+      const l = await api<ShareLink>(`${basePath}/share-link`, "PUT", {
         version: null,
         enabled: true,
         role,
@@ -224,11 +228,11 @@ export function ShareLinkSettings({
     setError("");
     try {
       if (revoke)
-        await api(`/resources/${id}/share-links/${l.id}/revoke`, "POST", {
+        await api(`${basePath}/share-links/${l.id}/revoke`, "POST", {
           version: l.version,
         });
       else
-        await api(`/resources/${id}/share-link`, "PUT", {
+        await api(`${basePath}/share-link`, "PUT", {
           version: l.version,
           enabled: !l.enabled,
           role: l.role,
@@ -267,7 +271,10 @@ export function ShareLinkSettings({
   return (
     <section className="share-settings permissions-section">
       <label className="permissions-switch">
-        <span>{t("sharingUi.linkSharing")}{inheritanceControl}</span>
+        <span>
+          {t("sharingUi.linkSharing")}
+          {inheritanceControl}
+        </span>
         <input
           type="checkbox"
           role="switch"
@@ -300,7 +307,9 @@ export function ShareLinkSettings({
                   limitOpen ? setLimitOpen(false) : openLimitDialog()
                 }
               >
-                {maxMembers === null ? t("sharingUi.unlimited") : t("sharingUi.members", { count: maxMembers })}
+                {maxMembers === null
+                  ? t("sharingUi.unlimited")
+                  : t("sharingUi.members", { count: maxMembers })}
               </button>
               {limitOpen &&
                 createPortal(
@@ -312,57 +321,59 @@ export function ShareLinkSettings({
                     aria-label={t("sharingUi.setLimit")}
                     style={limitPosition}
                   >
-                  <div className="permissions-link-limit-heading">
-                    <span>{t("sharingUi.allowedMembers")}</span>
-                    <small>{t("sharingUi.perLink")}</small>
-                  </div>
-                  <div className="permissions-link-limit-presets">
-                    {[1, 5, 10, 20].map((value) => (
+                    <div className="permissions-link-limit-heading">
+                      <span>{t("sharingUi.allowedMembers")}</span>
+                      <small>{t("sharingUi.perLink")}</small>
+                    </div>
+                    <div className="permissions-link-limit-presets">
+                      {[1, 5, 10, 20].map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={maxMembers === value ? "is-selected" : ""}
+                          onClick={() => applyLimit(value)}
+                        >
+                          {t("sharingUi.members", { count: value })}
+                        </button>
+                      ))}
+                    </div>
+                    <label className="permissions-link-limit-custom">
+                      <span>{t("sharingUi.custom")}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        aria-label={t("sharingUi.customLimit")}
+                        value={draftMaxMembers}
+                        onChange={(e) => {
+                          setDraftMaxMembers(e.target.value);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") applyLimit();
+                        }}
+                      />
+                      <span>{t("sharingUi.memberUnit")}</span>
                       <button
-                        key={value}
                         type="button"
-                        className={
-                          maxMembers === value ? "is-selected" : ""
+                        className="permissions-link-limit-apply"
+                        disabled={
+                          !Number.isInteger(Number(draftMaxMembers)) ||
+                          Number(draftMaxMembers) < 1
                         }
-                        onClick={() => applyLimit(value)}
+                        onClick={() => applyLimit()}
                       >
-                        {t("sharingUi.members", { count: value })}
+                        {t("common.confirm")}
                       </button>
-                    ))}
-                  </div>
-                  <label className="permissions-link-limit-custom">
-                    <span>{t("sharingUi.custom")}</span>
-                    <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      aria-label={t("sharingUi.customLimit")}
-                      value={draftMaxMembers}
-                      onChange={(e) => {
-                        setDraftMaxMembers(e.target.value);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") applyLimit();
-                      }}
-                    />
-                    <span>{t("sharingUi.memberUnit")}</span>
+                    </label>
                     <button
                       type="button"
-                      className="permissions-link-limit-apply"
-                      disabled={
-                        !Number.isInteger(Number(draftMaxMembers)) ||
-                        Number(draftMaxMembers) < 1
-                      }
-                      onClick={() => applyLimit()}
-                    >{t("common.confirm")}</button>
-                  </label>
-                  <button
-                    type="button"
-                    className={`permissions-link-limit-unlimited${
-                      maxMembers === null ? " is-selected" : ""
-                    }`}
-                    onClick={() => applyLimit(null)}
-                  >{t("sharingUi.unlimited")}</button>
+                      className={`permissions-link-limit-unlimited${
+                        maxMembers === null ? " is-selected" : ""
+                      }`}
+                      onClick={() => applyLimit(null)}
+                    >
+                      {t("sharingUi.unlimited")}
+                    </button>
                   </div>,
                   document.body,
                 )}
@@ -376,7 +387,7 @@ export function ShareLinkSettings({
                 setCopied("");
               }}
             >
-              {["reader", "commenter", "editor"].map((r) => (
+              {allowedRoles.map((r) => (
                 <option key={r} value={r}>
                   {accessText(t, r)}
                 </option>
@@ -384,9 +395,7 @@ export function ShareLinkSettings({
             </Select>
             <button
               className="primary"
-              disabled={
-                busy || !ready
-              }
+              disabled={busy || !ready}
               onClick={() => void share()}
             >
               <Copy size={14} />
@@ -404,18 +413,24 @@ export function ShareLinkSettings({
                     setIncludeDescendants(e.target.checked);
                     setCopied("");
                   }}
-                />{t("role.scope.descendants")}</label>
+                />
+                {t("role.scope.descendants")}
+              </label>
             )}
             <button
               className="permissions-text-button"
               aria-expanded={advanced}
               onClick={() => setAdvanced(!advanced)}
-            >{t("sharingUi.linkSettings")}<ChevronDown size={13} />
+            >
+              {t("sharingUi.linkSettings")}
+              <ChevronDown size={13} />
             </button>
           </div>
           {advanced && (
             <div className="permissions-link-settings">
-              <label>{t("sharingUi.newExpiry")}<input
+              <label>
+                {t("sharingUi.newExpiry")}
+                <input
                   type="datetime-local"
                   step="0.001"
                   aria-label={t("sharingUi.expiry")}
@@ -451,7 +466,9 @@ export function ShareLinkSettings({
                         setRecordTab("active");
                         setExpandedMembers(null);
                       }}
-                    >{t("sharingUi.history")}<small>{items.length}</small>
+                    >
+                      {t("sharingUi.history")}
+                      <small>{items.length}</small>
                     </button>
                     <button
                       type="button"
@@ -460,7 +477,9 @@ export function ShareLinkSettings({
                         setRecordTab("revoked");
                         setExpandedMembers(null);
                       }}
-                    >{t("sharingUi.revokedHistory")}<small>{revokedItems.length}</small>
+                    >
+                      {t("sharingUi.revokedHistory")}
+                      <small>{revokedItems.length}</small>
                     </button>
                   </div>
                   {!recordItems.length && (
@@ -492,21 +511,34 @@ export function ShareLinkSettings({
                       <div className="permissions-share-record-meta">
                         <span>{accessText(t, l.role)}</span>
                         <span>
-                          {l.includeDescendants ? t("role.scope.descendants") : t("permissionsUi.currentOnly")}
+                          {l.includeDescendants
+                            ? t("role.scope.descendants")
+                            : t("permissionsUi.currentOnly")}
                         </span>
                         <span>
                           {l.maxMembers === null
                             ? t("sharingUi.unlimited")
-                            : t("sharingUi.limit", { count: l.maxMembers })}{t("sharingUi.acceptedCount", { count: l.memberCount })}
+                            : t("sharingUi.limit", { count: l.maxMembers })}
+                          {t("sharingUi.acceptedCount", {
+                            count: l.memberCount,
+                          })}
                         </span>
                         <span>
                           {l.expiresAt
-                            ? t("sharingUi.expiresAt", { date: new Date(l.expiresAt).toLocaleString(htmlLang(locale)) })
+                            ? t("sharingUi.expiresAt", {
+                                date: new Date(l.expiresAt).toLocaleString(
+                                  htmlLang(locale),
+                                ),
+                              })
                             : t("sharingUi.noExpiry")}
                         </span>
                         {l.revokedAt && (
                           <span>
-                            {t("sharingUi.revokedAt", { date: new Date(l.revokedAt).toLocaleString(htmlLang(locale)) })}
+                            {t("sharingUi.revokedAt", {
+                              date: new Date(l.revokedAt).toLocaleString(
+                                htmlLang(locale),
+                              ),
+                            })}
                           </span>
                         )}
                       </div>
@@ -542,7 +574,9 @@ export function ShareLinkSettings({
                             <ChevronDown size={13} />
                           </button>
                         ) : (
-                          <span className="permissions-share-members-empty">{t("sharingUi.noAccepted")}</span>
+                          <span className="permissions-share-members-empty">
+                            {t("sharingUi.noAccepted")}
+                          </span>
                         )}
                         {expandedMembers === l.id && (
                           <div className="permissions-share-members-list">
@@ -566,22 +600,26 @@ export function ShareLinkSettings({
                           <button
                             disabled={busy || l.expired}
                             onClick={() => void copy(l)}
-                          >{t("sharingUi.copyThis")}</button>
+                          >
+                            {t("sharingUi.copyThis")}
+                          </button>
                         )}
                         <button
-                          disabled={
-                            busy ||
-                            l.expired ||
-                            l.revoked
-                          }
+                          disabled={busy || l.expired || l.revoked}
                           onClick={() => void change(l)}
                         >
-                          {l.revoked ? t("ticket.cancelled") : l.enabled ? t("sharingUi.disable") : t("sharingUi.enable")}
+                          {l.revoked
+                            ? t("ticket.cancelled")
+                            : l.enabled
+                              ? t("sharingUi.disable")
+                              : t("sharingUi.enable")}
                         </button>
                         <button
                           disabled={busy || l.revoked}
                           onClick={() => setConfirm(l.id)}
-                        >{t("sharingUi.revoke")}</button>
+                        >
+                          {t("sharingUi.revoke")}
+                        </button>
                       </footer>
                       {confirm === l.id && (
                         <div className="permissions-confirm">
@@ -589,8 +627,12 @@ export function ShareLinkSettings({
                           <button
                             disabled={busy}
                             onClick={() => void change(l, true)}
-                          >{t("sharingUi.confirmRevoke")}</button>
-                          <button onClick={() => setConfirm("")}>{t("common.cancel")}</button>
+                          >
+                            {t("sharingUi.confirmRevoke")}
+                          </button>
+                          <button onClick={() => setConfirm("")}>
+                            {t("common.cancel")}
+                          </button>
                         </div>
                       )}
                     </article>

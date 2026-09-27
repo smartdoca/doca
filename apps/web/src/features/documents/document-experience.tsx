@@ -353,7 +353,6 @@ export function CreatePopover({
 type People = {
   items: { id: string; display_name: string }[];
   total: number | null;
-  nextOffset: number | null;
   nextCursor?: string | null;
 };
 export function LikePeople({ detail }: { detail: Detail }) {
@@ -361,7 +360,7 @@ export function LikePeople({ detail }: { detail: Detail }) {
   const [page, setPage] = useState<People>({
       items: [],
       total: 0,
-      nextOffset: null,
+      nextCursor: null,
     }),
     [open, setOpen] = useState(false),
     [error, setError] = useState("");
@@ -399,15 +398,11 @@ export function LikePeople({ detail }: { detail: Detail }) {
               <UserBadge key={u.id} id={u.id} name={u.display_name} />
             ))}
           </div>
-          {(page.nextCursor != null || page.nextOffset !== null) && (
+          {page.nextCursor != null && (
             <button
               onClick={() =>
                 void api<People>(
-                  `/resources/${detail.resource.id}/likes?${
-                    page.nextCursor
-                      ? "cursor=" + encodeURIComponent(page.nextCursor)
-                      : "offset=" + page.nextOffset
-                  }`,
+                  `/resources/${detail.resource.id}/likes?cursor=${encodeURIComponent(page.nextCursor!)}`,
                 )
                   .then((p) =>
                     setPage((old) => ({
@@ -476,12 +471,6 @@ export function DocumentMore({
             {t("doc.present")}
           </button>
           {r.kind === "document" && <div id="document-export-slot" />}
-          <button onClick={async () => {
-            try {
-              await api(`/discovery/entries/${r.kind}/${r.id}`, "PUT", { collected: r.entry_state !== "joined" });
-              await entryChanged?.();
-            } catch (e) { setError((e as Error).message); }
-          }}>{t(r.entry_state === "joined" ? "discovery.remove" : "discovery.collect")}</button>
           <button onClick={() => setPanel("stats")}>
             <Info size={16} />
             {t("doc.info")}
@@ -686,15 +675,13 @@ function DocumentRecords({
             </article>
           ))}
           {data?.items?.length === 0 && <p className="empty">{t("record.empty")}</p>}
-          {(data?.nextCursor != null || data?.nextOffset != null) && (
+          {data?.nextCursor != null && (
             <button
               onClick={() =>
                 void api<any>(
                   path +
                     (path.includes("?") ? "&" : "?") +
-                    (data.nextCursor
-                      ? "cursor=" + encodeURIComponent(data.nextCursor)
-                      : "offset=" + data.nextOffset),
+                    "cursor=" + encodeURIComponent(data.nextCursor),
                 )
                   .then((p) =>
                     setData((old: any) => ({

@@ -67,7 +67,7 @@ export function DocumentReactionButtons({
   const favoriteLabel = favorite ? t("doc.unfavorite") : t("doc.favorite");
   return (
     <span className="document-reaction-buttons">
-      <HoverTip label={pinLabel}>
+      {resource.kind !== "library" && <HoverTip label={pinLabel}>
         <button
           type="button"
           className={`icon pin${pinned ? " enabled" : ""}`}
@@ -81,7 +81,7 @@ export function DocumentReactionButtons({
         >
           <Pin size={size} fill={pinned ? "currentColor" : "none"} />
         </button>
-      </HoverTip>
+      </HoverTip>}
       <HoverTip label={favoriteLabel}>
         <button
           type="button"

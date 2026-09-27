@@ -10,7 +10,7 @@ export async function searchConnectedKnowledge(
   query: string,
 ) {
   const bots = (await listKnowledgeAssistants(db, actor)).filter(
-    (bot) => bot.connected || (bot.collected && bot.accessible),
+    (bot) => bot.connected && bot.accessible,
   );
   const results: {
     assistantId: string;

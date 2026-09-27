@@ -462,7 +462,7 @@ it("paginates liker identities and restricts visit and audit records to managers
   expect(page.total).toBe(102);
   expect(page.items).toHaveLength(100);
   expect(
-    (await service.likes(owner, r.id, page.nextOffset!)).items,
+    (await service.likes(owner, r.id, page.nextCursor!)).items,
   ).toHaveLength(2);
 });
 it("requires login and origin protection on share and snapshot HTTP mutations", async () => {
@@ -484,7 +484,7 @@ it("requires login and origin protection on share and snapshot HTTP mutations", 
     expect(csrf.statusCode).toBe(403);
     const invalid = await app.inject({
       method: "GET",
-      url: `/api/v1/resources/${r.id}/likes?offset=-1`,
+      url: `/api/v1/resources/${r.id}/likes?offset=0`,
       headers: { host: "localhost:39130" },
     });
     expect(invalid.statusCode).toBe(400);

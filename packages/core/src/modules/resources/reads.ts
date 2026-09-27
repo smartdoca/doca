@@ -162,7 +162,6 @@ export function createResourceReads(
           lastEditorName:
             lastEditor?.display_name || lastEditor?.public_id || lastEditor?.login || null,
           lastEditedAt: r.last_edited_at ?? null,
-          commentsNextOffset: comments.length > 200 ? 200 : null,
           commentsNextCursor:
             comments.length > 200 && comments[199]
               ? encodePageCursor(

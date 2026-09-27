@@ -231,7 +231,6 @@ async function scopedDocuments(
       ...scoped,
       q: undefined,
       cursor,
-      offset: undefined,
       kind: "document",
       matchedIds: [...ids],
     });

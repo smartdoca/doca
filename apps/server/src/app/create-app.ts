@@ -756,7 +756,6 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   );
   api.get<{
     Querystring: {
-      offset?: number;
       cursor?: string;
       q?: string;
       status?: string;
@@ -768,7 +767,6 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         summary: "分页用户管理",
         tags: ["Administration"],
         querystring: object({
-          offset: optional(Type.Integer({ minimum: 0, maximum: 100000 })),
           cursor: optional(Type.String({ maxLength: 2048 })),
           parentId: optional(id),
           q: optional(name),
@@ -822,13 +820,11 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         .orderBy("created_at", "desc")
         .orderBy("id")
         .limit(101)
-        .offset(req.query.cursor ? 0 : (req.query.offset ?? 0))
         .execute();
       const items = rows.slice(0, 100);
       const last = items.at(-1);
       return {
         items: await adminUserDetails(db, items),
-        nextOffset: rows.length > 100 ? (req.query.offset ?? 0) + 100 : null,
         nextCursor:
           rows.length > 100 && last
             ? encodePageCursor(fingerprint, last.created_at, last.id)
@@ -1055,7 +1051,6 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       kind?: string;
       q?: string;
       libraryId?: string;
-      offset?: number;
       cursor?: string;
       parentId?: string;
       tree?: boolean;
@@ -1104,7 +1099,6 @@ export async function createApp(db: DB, options: CreateAppOptions) {
             Type.Union([Type.Literal("asc"), Type.Literal("desc")]),
           ),
           libraryId: optional(id),
-          offset: optional(Type.Integer({ minimum: 0, maximum: 100000 })),
           cursor: optional(Type.String({ maxLength: 2048 })),
           parentId: optional(id),
           tree: optional(Type.Boolean()),
@@ -1359,26 +1353,27 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   );
   api.get<{
     Params: { id: string };
-    Querystring: { offset?: number; cursor?: string; target?: string };
+    Querystring: { cursor?: string; target?: string };
   }>(
     "/api/v1/resources/:id/comments",
     {
       schema: {
         params: Type.Object({ id: Type.String({ format: "uuid" }) }),
-        querystring: Type.Object({
-          offset: Type.Optional(Type.Integer({ minimum: 0, maximum: 1000000 })),
-          cursor: Type.Optional(Type.String({ maxLength: 2048 })),
-          target: Type.Optional(Type.String({ format: "uuid" })),
-        }),
+        querystring: Type.Object(
+          {
+            cursor: Type.Optional(Type.String({ maxLength: 2048 })),
+            target: Type.Optional(Type.String({ format: "uuid" })),
+          },
+          { additionalProperties: false },
+        ),
       },
     },
     (req) =>
       library.commentPage(
         actor(req),
         req.params.id,
-        req.query.offset,
-        req.query.target,
         req.query.cursor,
+        req.query.target,
       ),
   );
   route<{

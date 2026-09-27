@@ -33,7 +33,6 @@ export type ResourceQuery = {
   likedOnly?: boolean;
   favoritesOnly?: boolean;
   location?: "personal" | "library";
-  offset?: number;
   format?: string;
   sort?: string;
   order?: string;
@@ -49,7 +48,7 @@ export function entryQuery(
   allowGranted = false,
   allowPublic = false,
 ) {
-  return sql<boolean>`(exists(select 1 from resource_collections c where c.resource_id=${id} and c.resource_kind in ('document','library') and c.user_id=${userId}) or exists(select 1 from resources entry where entry.id = ${id}
+  return sql<boolean>`(exists(select 1 from reactions fav where fav.resource_id=${id} and fav.user_id=${userId} and fav.kind='favorite') or exists(select 1 from resource_collections c where c.resource_id=${id} and c.resource_kind in ('document','library') and c.user_id=${userId}) or exists(select 1 from resources entry where entry.id = ${id}
     and not exists(select 1 from resource_entries hidden where hidden.resource_id = entry.id and hidden.user_id = ${userId} and hidden.state = 'hidden')
     and (entry.owner_id = ${userId}
       or exists(select 1 from resource_entries joined where joined.resource_id = entry.id and joined.user_id = ${userId} and joined.state = 'joined' and joined.source not in ('opened','manual'))
@@ -79,7 +78,7 @@ export async function queryResourcePage(
     const enrolled = entryQuery(
       sql.ref("r.id"),
       actor.id,
-      distributionBehavior(policy, "document").includeGranted,
+      true,
     );
     const libraryEnrolled = entryQuery(
       sql.ref("r.library_id"),
@@ -166,8 +165,7 @@ export async function queryResourcePage(
         break;
       case "owned":
         query = query
-          .where("r.owner_id", "=", actor.id)
-          .where("r.kind", "=", "document");
+          .where("r.owner_id", "=", actor.id);
         break;
       case "recent":
         query = query.where("visit.resource_id", "is not", null);
@@ -192,15 +190,14 @@ export async function queryResourcePage(
               sql.ref("r.id"),
               actor.id,
               distributionBehavior(policy, "library").includeGranted,
-              publicMode(policy, "library") === "search",
+              false,
             ),
           );
         break;
       case "shared":
-        query = query
-          .where("r.kind", "=", "document")
+        query = query.where("r.kind", "=", input.kind === "library" ? "library" : "document")
           .where("r.owner_id", "!=", actor.id)
-          .where(enrolled);
+          .where(sql<boolean>`(exists(select 1 from grants g where g.user_id=${actor.id} and g.status='active' and (g.resource_id=r.id or (g.resource_id=r.library_id and g.include_descendants=1))) or exists(select 1 from access_invitations i where i.user_id=${actor.id} and i.state='accepted' and i.resource_id=r.id))`);
         break;
       case "collected":
         query = query.where(
@@ -267,7 +264,6 @@ export async function queryResourcePage(
     const ascending = input.order === "asc";
     const fingerprint = cursorFingerprint({
       ...input,
-      offset: undefined,
       cursor: undefined,
       matchedIds: undefined,
       actor: actor.id,
@@ -290,7 +286,6 @@ export async function queryResourcePage(
         sql<boolean>`(${orderKey} ${ascending ? sql`>` : sql`<`} ${c.value} or (${orderKey} = ${c.value} and r.id > ${c.id}))`,
       );
     }
-    const offset = input.cursor ? 0 : (input.offset ?? 0);
     const rows = await query
       .leftJoin("users as owner", "owner.id", "r.owner_id")
       .selectAll("r")
@@ -299,6 +294,8 @@ export async function queryResourcePage(
           "ownerName",
         ),
         visited.as("visited_at"),
+        sql<number>`exists(select 1 from resource_collections c where c.resource_id=r.id and c.resource_kind=r.kind and c.user_id=${actor.id})`.as("collected"),
+        sql<number>`case when ${policyFieldQuery(sql.ref("r.id"),"visibility")} in ('public','authenticated') then 1 else 0 end`.as("is_public"),
         orderKey.as("cursorValue"),
         sql<number>`exists(select 1 from reactions fav where fav.resource_id = r.id and fav.user_id = ${actor.id} and fav.kind = 'favorite')`.as(
           "favorite",
@@ -309,7 +306,6 @@ export async function queryResourcePage(
       ])
       .orderBy(orderKey, ascending ? "asc" : "desc")
       .orderBy("r.id")
-      .offset(offset)
       .limit(treeMode ? 10001 : 101)
       .execute();
     const ctx = await accessContext(
@@ -354,6 +350,8 @@ export async function queryResourcePage(
           ...projected,
           ...(treeMode ? { parent_id: r.parent_id } : {}),
           ownerName: projected.owner_id ? r.ownerName : "",
+          collected: Number(r.collected) === 1,
+          is_public: Number(r.is_public) === 1,
           favorite: Number(r.favorite) === 1,
           pinned: Number(r.pinned) === 1,
           inLibrary: !!r.library_id,
@@ -363,7 +361,6 @@ export async function queryResourcePage(
         };
       }),
       total,
-      nextOffset: treeMode ? null : rows.length > 100 ? offset + 100 : null,
       nextCursor:
         !treeMode && rows.length > 100 && last
           ? encodePageCursor(fingerprint, String(last.cursorValue), last.id)

@@ -221,10 +221,10 @@ it("discovery, joins, visits and hiding remain independent from authoritative ac
     .execute();
   expect(
     (await content.list(member, { scope: "libraries" })).items.map((r) => r.id),
-  ).toEqual([lib.id]);
+  ).toEqual([]);
   await transact(db, (tx) => setEntry(tx, member, lib.id, "hidden"));
   await content.visit(member, lib.id);
-  expect((await content.list(member, { scope: "libraries" })).items.map(r=>r.id)).toEqual([lib.id]);
+  expect((await content.list(member, { scope: "libraries" })).items.map(r=>r.id)).toEqual([]);
   expect((await content.detail(member, doc.id)).resource.role).toBe("reader");
   expect((await content.list(member, { scope: "personal" })).items).toEqual([]);
   expect(
@@ -345,7 +345,6 @@ it("interaction cursors keep tied rows stable and cannot be reused across resour
   const secondLikes = await experience.likes(
     owner,
     document.id,
-    0,
     firstLikes.nextCursor!,
   );
   expect(firstLikes.total).toBe(102);
@@ -355,7 +354,7 @@ it("interaction cursors keep tied rows stable and cannot be reused across resour
       .size,
   ).toBe(102);
   await expect(
-    experience.likes(owner, other.id, 0, firstLikes.nextCursor!),
+    experience.likes(owner, other.id, firstLikes.nextCursor!),
   ).rejects.toMatchObject({ status: 400 });
 
   await db
@@ -378,7 +377,6 @@ it("interaction cursors keep tied rows stable and cannot be reused across resour
     owner,
     document.id,
     "visits",
-    0,
     firstVisits.nextCursor!,
   );
   expect(firstVisits.items).toHaveLength(100);
@@ -409,7 +407,6 @@ it("interaction cursors keep tied rows stable and cannot be reused across resour
   const secondVersions = await experience.versions(
     owner,
     document.id,
-    0,
     firstVersions.nextCursor!,
   );
   expect(firstVersions.items).toHaveLength(100);
@@ -443,8 +440,6 @@ it("interaction cursors keep tied rows stable and cannot be reused across resour
   const secondComments = await content.commentPage(
     owner,
     document.id,
-    0,
-    undefined,
     firstComments.nextCursor!,
   );
   expect(firstComments.items).toHaveLength(200);

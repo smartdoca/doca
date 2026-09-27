@@ -87,6 +87,7 @@ export function KnowledgePublicPage({
             scopeId={botId}
             kind="answer"
             compactHeader
+            assistantName={value.title}
             channel={channel}
             guestToken={value.token}
             attachmentsEnabled={value.attachmentsEnabled && authenticated}
