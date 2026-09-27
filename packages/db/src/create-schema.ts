@@ -2,12 +2,12 @@ import type { Kysely } from "kysely";
 import { sql } from "kysely";
 
 const schemaStatements = [
+  `CREATE TABLE IF NOT EXISTS "users" ("id" varchar(36) primary key, "login" varchar(160) not null unique, "display_name" varchar(160) not null, "password_hash" text not null, "admin" integer not null, "status" varchar(16) not null, "created_at" varchar(32) not null, "last_login_at" varchar(32), "public_id" varchar(160), "directory_mode" varchar(16), "profile_metadata" text default '{}' not null, "profile_revision" integer default 1 not null);`,
   `CREATE TABLE IF NOT EXISTS "file_operation_receipts" ("plugin_id" varchar(160) not null, "user_id" varchar(36) not null, "operation" varchar(32) not null, "operation_key" varchar(200) not null, "request_hash" varchar(64) not null, "status" varchar(16) not null, "result" text, "object_id" varchar(36), "profile_id" varchar(36), "object_key" text, "cleanup_at" varchar(32), "created_at" varchar(32) not null, primary key ("plugin_id", "user_id", "operation", "operation_key"));`,
   `CREATE TABLE IF NOT EXISTS "user_page_state" ("user_id" varchar(36) not null references "users" ("id") on delete cascade, "key" varchar(160) not null, "value" text not null, "version" integer not null, "updated_at" varchar(32) not null, constraint "user_page_state_pk" primary key ("user_id", "key"), constraint "user_page_state_version" check (version > 0));`,
-  `CREATE TABLE IF NOT EXISTS "users" ("id" varchar(36) primary key, "login" varchar(160) not null unique, "display_name" varchar(160) not null, "password_hash" text not null, "admin" integer not null, "status" varchar(16) not null, "created_at" varchar(32) not null, "last_login_at" varchar(32), "public_id" varchar(160), "directory_mode" varchar(16), "profile_metadata" text default '{}' not null, "profile_revision" integer default 1 not null);`,
   `CREATE TABLE IF NOT EXISTS "sessions" ("id" varchar(64) primary key, "user_id" varchar(36) not null references "users" ("id"), "expires_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "settings" ("id" varchar(16) primary key, "registration" integer not null, "revision" integer not null, "site_name" varchar(160) not null, "registration_review" integer default 0 not null, "sso_registration" varchar(16) default 'closed' not null, "social_registration" varchar(16) default 'closed' not null, "directory_mode" varchar(16) default 'all' not null, "default_locale" varchar(16) default 'zh' not null, "default_timezone" varchar(100) default 'Asia/Shanghai' not null);`,
-  `CREATE TABLE IF NOT EXISTS "resources" ("id" varchar(36) primary key, "kind" varchar(16) not null, "format" varchar(24) not null, "title" varchar(160) not null, "owner_id" varchar(36) not null references "users" ("id"), "library_id" varchar(36) references "resources" ("id"), "parent_id" varchar(36) references "resources" ("id"), "access_mode" varchar(16) not null, "visibility" varchar(16) not null, "version" integer not null, "deleted_at" varchar(32), "delete_batch" varchar(36), "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "last_editor_id" varchar(36) references "users" ("id"), "last_edited_at" varchar(32), "requests_enabled" integer default 0 not null, "tree_order" integer default 0 not null, "authz_revision" integer default 1 not null, "history_readers" integer default 0 not null, "discoverable" integer default 0 not null, "public_role" varchar(16) default 'reader' not null, "content_bytes" bigint default 0 not null, "share_links_enabled" integer default 0 not null, "permission_overrides" integer default 0 not null, "page_width" varchar(16) default 'a4', "ai_curated" integer default 0 not null, "guide_document_id" varchar(36), "guide_text" text not null default '', "knowledge_schedule" varchar(16) not null default 'off', "knowledge_preset" text not null default '', constraint "resource_kind" check (kind in ('document','library')), constraint "resource_access" check (access_mode in ('inherit','custom')), constraint "resource_visibility" check (visibility in ('invited','requestable','authenticated','public')), constraint "resource_version" check (version > 0));`,
+  `CREATE TABLE IF NOT EXISTS "resources" ("id" varchar(36) primary key, "kind" varchar(16) not null, "format" varchar(24) not null, "title" varchar(160) not null, "owner_id" varchar(36) not null references "users" ("id"), "library_id" varchar(36) references "resources" ("id"), "parent_id" varchar(36) references "resources" ("id"), "access_mode" varchar(16) not null, "visibility" varchar(16) not null, "version" integer not null, "deleted_at" varchar(32), "delete_batch" varchar(36), "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "last_editor_id" varchar(36) references "users" ("id"), "last_edited_at" varchar(32), "requests_enabled" integer default 0 not null, "tree_order" integer default 0 not null, "authz_revision" integer default 1 not null, "history_readers" integer default 0 not null, "discoverable" integer default 0 not null, "public_role" varchar(16) default 'reader' not null, "content_bytes" bigint default 0 not null, "share_links_enabled" integer default 0 not null, "permission_overrides" integer default 0 not null, "page_width" varchar(16) default 'a4', "cover_asset_id" varchar(36), "ai_curated" integer default 0 not null, "knowledge_schedule" varchar(16) not null default 'off', "knowledge_preset" text not null default '', constraint "resource_kind" check (kind in ('document','library')), constraint "resource_access" check (access_mode in ('inherit','custom')), constraint "resource_visibility" check (visibility in ('invited','requestable','authenticated','public')), constraint "resource_version" check (version > 0));`,
   `CREATE INDEX "resources_owner" on "resources" ("owner_id", "deleted_at");`,
   `CREATE INDEX "resources_parent" on "resources" ("parent_id");`,
   `CREATE INDEX "resources_library" on "resources" ("library_id");`,
@@ -20,7 +20,6 @@ const schemaStatements = [
   `CREATE INDEX "comments_page" on "comments" ("resource_id", "created_at", "id");`,
   `CREATE TABLE IF NOT EXISTS "reactions" ("resource_id" varchar(36) not null references "resources" ("id"), "user_id" varchar(36) not null references "users" ("id"), "kind" varchar(16) not null, "created_at" varchar(32) not null default '', constraint "reactions_pk" primary key ("resource_id", "user_id", "kind"), constraint "reaction_kind" check (kind in ('like','favorite','pin')));`,
   `CREATE INDEX "reactions_resource_kind" on "reactions" ("resource_id", "kind", "user_id");`,
-  `CREATE INDEX "favorites_by_user" on "reactions" ("user_id", "kind", "resource_id");`,
   `CREATE TABLE IF NOT EXISTS "notifications" ("id" varchar(36) primary key, "user_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) references "resources" ("id"), "type" varchar(64) not null, "read_at" varchar(32), "created_at" varchar(32) not null, "actor_id" varchar(36), "comment_id" varchar(36), "dedupe_key" varchar(240), "ticket_id" text);`,
   `CREATE INDEX "notifications_user" on "notifications" ("user_id", "created_at");`,
   `CREATE TABLE IF NOT EXISTS "plugin_notifications" ("notification_id" varchar(36) primary key references "notifications" ("id") on delete cascade, "plugin_id" varchar(160) not null, "resource_type" varchar(160) not null, "resource_id" text not null, "title" text not null, "body" text not null, "path" text not null, "request_hash" varchar(64) not null, "withdrawn_at" varchar(32));`,
@@ -29,10 +28,10 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS "resource_visits" ("user_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) not null references "resources" ("id"), "visited_at" varchar(32) not null, constraint "visits_pk" primary key ("user_id", "resource_id"));`,
   `CREATE INDEX "visits_recent" on "resource_visits" ("user_id", "visited_at");`,
   `CREATE INDEX "visits_recent_page" on "resource_visits" ("user_id", "visited_at" desc, "resource_id");`,
-  `CREATE TABLE IF NOT EXISTS "user_preferences" ("user_id" varchar(36) primary key references "users" ("id"), "avatar" varchar(24) not null, "theme" varchar(16) not null, "density" varchar(16) not null, "default_sort" varchar(24) not null, "sort_order" varchar(4) not null, "version" integer not null);`,
+  `CREATE TABLE IF NOT EXISTS "user_preferences" ("user_id" varchar(36) primary key references "users" ("id"), "avatar" varchar(24) not null, "theme" varchar(16) not null, "density" varchar(16) not null, "default_sort" varchar(24) not null, "sort_order" varchar(4) not null, "version" integer not null, "avatar_asset_id" varchar(36));`,
   `CREATE TABLE IF NOT EXISTS "user_presence" ("user_id" varchar(36) primary key references "users" ("id"), "last_seen_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "storage_profiles" ("id" varchar(36) primary key, "provider" varchar(16) not null, "config" text not null, "active" integer not null, "created_at" varchar(32) not null);`,
-  `CREATE TABLE IF NOT EXISTS "assets" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) references "resources" ("id"), "purpose" varchar(16) not null, "profile_id" varchar(36) not null references "storage_profiles" ("id"), "object_key" varchar(160) not null, "filename" varchar(255) not null, "mime" varchar(128) not null, "size" integer not null, "created_at" varchar(32) not null, "deleted_at" varchar(32), "uploaded_by" text);`,
+  `CREATE TABLE IF NOT EXISTS "assets" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) references "resources" ("id"), "purpose" varchar(16) not null, "profile_id" varchar(36) not null references "storage_profiles" ("id"), "object_key" varchar(160) not null, "filename" varchar(255) not null, "mime" varchar(128) not null, "size" integer not null, "created_at" varchar(32) not null, "deleted_at" varchar(32), "uploaded_by" text, "note_id" varchar(36));`,
   `CREATE INDEX "assets_resource" on "assets" ("resource_id", "deleted_at");`,
   `CREATE TABLE IF NOT EXISTS "document_states" ("resource_id" varchar(36) primary key references "resources" ("id"), "codec" varchar(64) not null, "checkpoint" text not null, "checkpoint_seq" integer not null, "seq" integer not null, "text" text not null, "updated_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "document_updates" ("resource_id" varchar(36) not null references "resources" ("id"), "seq" integer not null, "data" text not null, "author_id" varchar(36) not null references "users" ("id"), "created_at" varchar(32) not null, constraint "document_updates_pk" primary key ("resource_id", "seq"));`,
@@ -54,7 +53,6 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS "distribution_settings" ("id" varchar(16) primary key, "config" text not null, "revision" integer not null);`,
   `CREATE TABLE IF NOT EXISTS "document_references" ("source_id" varchar(36) not null references "resources" ("id") on delete cascade, "target_id" varchar(36) not null, constraint "document_reference_pk" primary key ("source_id", "target_id"));`,
   `CREATE INDEX "references_target" on "document_references" ("target_id");`,
-  `CREATE TABLE IF NOT EXISTS "document_reference_index" ("resource_id" varchar(36) primary key references "resources" ("id") on delete cascade, "seq" integer not null);`,
   `CREATE TABLE IF NOT EXISTS "access_requests" ("id" varchar(36) primary key, "resource_id" varchar(36) not null references "resources" ("id") on delete cascade, "user_id" varchar(36) not null references "users" ("id") on delete cascade, "role" varchar(16) not null, "status" varchar(16) not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "decided_by" varchar(36), "message" text default '' not null, "decision_message" text default '' not null, "operation_json" text default '{}' not null);`,
   `CREATE INDEX "requests_user_status" on "access_requests" ("user_id", "status");`,
   `CREATE TABLE IF NOT EXISTS "integration_events" ("id" varchar(36) primary key, "seq" integer not null unique, "type" varchar(80) not null, "payload" text not null, "created_at" varchar(32) not null);`,
@@ -128,9 +126,6 @@ const schemaStatements = [
   `CREATE INDEX "grants_by_user" on "grants" ("user_id", "resource_id", "status");`,
   `CREATE INDEX "grants_by_source" on "grants" ("resource_id", "source_type", "source_id", "status");`,
   `CREATE TABLE IF NOT EXISTS "share_link_revocations" ("resource_id" varchar(36) not null references "resources" ("id") on delete cascade, "share_id" varchar(36) not null references "share_links" ("generation") on delete cascade, "revoked_by" varchar(36), "revoked_at" varchar(32) not null, "revoked_user_ids" text not null, constraint "share_link_revocations_unified_pk" primary key ("resource_id", "share_id"));`,
-  `ALTER TABLE "resources" ADD COLUMN "cover_asset_id" varchar(36) REFERENCES "assets" ("id")`,
-  `ALTER TABLE "user_preferences" ADD COLUMN "avatar_asset_id" varchar(36) REFERENCES "assets" ("id")`,
-  `ALTER TABLE "assets" ADD COLUMN "note_id" varchar(36) REFERENCES "quick_notes" ("id")`,
 ];
 
 // File explorer tables are part of the current database bootstrap. They are
@@ -285,26 +280,63 @@ const knowledgeSystemStatements = [
 async function createKnowledgeSchema(db: Kysely<any>) {
   for (const statement of knowledgeSystemStatements)
     await sql.raw(statement).execute(db);
-  await sql.raw("CREATE TABLE IF NOT EXISTS ai_session_resources (session_id varchar(36) not null references ai_sessions(id) on delete cascade, kind varchar(32) not null, resource_id varchar(160) not null, title text not null, href text not null, touched_at varchar(32) not null, primary key(session_id,kind,resource_id))").execute(db);
-  await sql.raw("CREATE INDEX IF NOT EXISTS ai_session_resources_recent ON ai_session_resources(resource_id,touched_at desc)").execute(db);
-  await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_bot_sharing (bot_id varchar(36) primary key references knowledge_assistants(id) on delete cascade, enabled integer not null default 0)").execute(db);
-  await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_bot_share_links (id varchar(36) primary key, bot_id varchar(36) not null references knowledge_assistants(id) on delete cascade, token varchar(43) not null unique, enabled integer not null, revoked_at varchar(32), expires_at varchar(32), max_members integer, version varchar(36) not null, created_at varchar(32) not null)").execute(db);
-  await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_bot_link_members (link_id varchar(36) not null references knowledge_bot_share_links(id) on delete cascade, user_id varchar(36) not null references users(id), created_at varchar(32) not null, primary key (link_id,user_id))").execute(db);
-  await sql.raw("CREATE INDEX IF NOT EXISTS knowledge_bot_share_links_bot ON knowledge_bot_share_links (bot_id, created_at)").execute(db);
-  await sql.raw("CREATE INDEX IF NOT EXISTS knowledge_bot_link_members_user ON knowledge_bot_link_members (user_id, link_id)").execute(db);
-  await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_bot_keys (id varchar(36) primary key, bot_id varchar(36) not null references knowledge_assistants(id) on delete cascade, creator_id varchar(36) not null references users(id), name text not null, channel varchar(16) not null, token_hash varchar(64) not null unique, expires_at varchar(32) not null, created_at varchar(32) not null)").execute(db);
-  await sql.raw("CREATE TABLE IF NOT EXISTS knowledge_assistant_users (assistant_id varchar(36) not null references knowledge_assistants(id) on delete cascade, user_id varchar(36) not null references users(id), accepted integer not null default 0, visited_at varchar(32), integration varchar(16) not null default 'default', revision integer not null default 1, primary key (assistant_id, user_id))").execute(db);
+  await sql
+    .raw(
+      "CREATE TABLE IF NOT EXISTS ai_session_resources (session_id varchar(36) not null references ai_sessions(id) on delete cascade, kind varchar(32) not null, resource_id varchar(160) not null, title text not null, href text not null, touched_at varchar(32) not null, primary key(session_id,kind,resource_id))",
+    )
+    .execute(db);
+  await sql
+    .raw(
+      "CREATE INDEX IF NOT EXISTS ai_session_resources_recent ON ai_session_resources(resource_id,touched_at desc)",
+    )
+    .execute(db);
+  await sql
+    .raw(
+      "CREATE TABLE IF NOT EXISTS knowledge_bot_sharing (bot_id varchar(36) primary key references knowledge_assistants(id) on delete cascade, enabled integer not null default 0)",
+    )
+    .execute(db);
+  await sql
+    .raw(
+      "CREATE TABLE IF NOT EXISTS knowledge_bot_share_links (id varchar(36) primary key, bot_id varchar(36) not null references knowledge_assistants(id) on delete cascade, token varchar(43) not null unique, enabled integer not null, revoked_at varchar(32), expires_at varchar(32), max_members integer, version varchar(36) not null, created_at varchar(32) not null)",
+    )
+    .execute(db);
+  await sql
+    .raw(
+      "CREATE TABLE IF NOT EXISTS knowledge_bot_link_members (link_id varchar(36) not null references knowledge_bot_share_links(id) on delete cascade, user_id varchar(36) not null references users(id), created_at varchar(32) not null, primary key (link_id,user_id))",
+    )
+    .execute(db);
+  await sql
+    .raw(
+      "CREATE INDEX IF NOT EXISTS knowledge_bot_share_links_bot ON knowledge_bot_share_links (bot_id, created_at)",
+    )
+    .execute(db);
+  await sql
+    .raw(
+      "CREATE INDEX IF NOT EXISTS knowledge_bot_link_members_user ON knowledge_bot_link_members (user_id, link_id)",
+    )
+    .execute(db);
+  await sql
+    .raw(
+      "CREATE TABLE IF NOT EXISTS knowledge_bot_keys (id varchar(36) primary key, bot_id varchar(36) not null references knowledge_assistants(id) on delete cascade, creator_id varchar(36) not null references users(id), name text not null, channel varchar(16) not null, token_hash varchar(64) not null unique, expires_at varchar(32) not null, created_at varchar(32) not null)",
+    )
+    .execute(db);
+  await sql
+    .raw(
+      "CREATE TABLE IF NOT EXISTS knowledge_assistant_users (assistant_id varchar(36) not null references knowledge_assistants(id) on delete cascade, user_id varchar(36) not null references users(id), accepted integer not null default 0, visited_at varchar(32), integration varchar(16) not null default 'default', revision integer not null default 1, primary key (assistant_id, user_id))",
+    )
+    .execute(db);
   for (const statement of knowledgeSchemaStatements)
     await sql.raw(statement).execute(db);
   for (const statement of [
+    `CREATE TABLE IF NOT EXISTS knowledge_source_groups (id varchar(36) primary key, library_id varchar(36) not null references resources(id) on delete cascade, title text not null, source_kind varchar(16) not null, config text not null default '{}', created_at varchar(32) not null)`,
     `CREATE TABLE IF NOT EXISTS "knowledge_subscriptions" ("id" varchar(36) primary key, "library_id" varchar(36) not null references "resources" ("id") on delete cascade, "source_kind" varchar(16) not null, "source_id" varchar(36) not null default '', "url" text not null default '', "node_id" varchar(36) references "resources" ("id") on delete set null, "source_version" varchar(64) not null default '', "status" varchar(16) not null default 'active', "creator_id" varchar(36) not null default '', "preset" text not null default '', "group_id" varchar(36) references "knowledge_source_groups" ("id") on delete set null, "name" text not null default '', "created_at" varchar(32) not null, constraint "knowledge_subscription_source" unique ("library_id", "source_kind", "source_id", "url"))`,
     `CREATE INDEX IF NOT EXISTS "knowledge_subscriptions_library" on "knowledge_subscriptions" ("library_id")`,
-    `CREATE TABLE IF NOT EXISTS knowledge_source_groups (id varchar(36) primary key, library_id varchar(36) not null references resources(id) on delete cascade, title text not null, source_kind varchar(16) not null, config text not null default '{}', created_at varchar(32) not null)`,
     `CREATE TABLE IF NOT EXISTS "knowledge_runs" ("id" varchar(36) primary key, "library_id" varchar(36) not null references "resources" ("id") on delete cascade, "trigger" varchar(16) not null, "status" varchar(16) not null, "detail" text not null default '', "created_at" varchar(32) not null)`,
     `CREATE INDEX IF NOT EXISTS "knowledge_runs_library" on "knowledge_runs" ("library_id", "created_at")`,
     `CREATE TABLE IF NOT EXISTS "knowledge_bots" ("library_id" varchar(36) primary key references "resources" ("id") on delete cascade, "title" varchar(200) not null default '', "published" integer not null default 0, "updated_at" varchar(32) not null)`,
     `CREATE TABLE IF NOT EXISTS "knowledge_directories" ("library_id" varchar(36) not null references "resources" ("id") on delete cascade, "path" varchar(800) not null, "resource_id" varchar(36) not null references "resources" ("id") on delete cascade, primary key ("library_id", "path"))`,
-  ]) await sql.raw(statement).execute(db);
+  ])
+    await sql.raw(statement).execute(db);
 }
 
 async function createKnowledgeStudioSchema(db: Kysely<any>) {
@@ -320,88 +352,64 @@ async function createKnowledgeStudioSchema(db: Kysely<any>) {
     `CREATE TABLE IF NOT EXISTS knowledge_cases (id varchar(36) primary key, bot_id varchar(36) not null, message_id varchar(36) not null, user_id varchar(36) not null, judgment varchar(16) not null, reason text not null, snapshot text not null, status varchar(16) not null default 'open', created_at varchar(32) not null, UNIQUE(message_id,user_id))`,
     `CREATE TABLE IF NOT EXISTS knowledge_source_actions (id varchar(36) primary key, library_id varchar(36) not null, source_key text not null, actor_id varchar(36) not null, action varchar(32) not null, detail text not null, created_at varchar(32) not null)`,
     `CREATE TABLE IF NOT EXISTS knowledge_publications (library_id varchar(36) primary key, revision integer not null, fingerprint text not null, documents text not null, status varchar(16) not null, error text not null, updated_at varchar(32) not null)`,
-  ]) await sql.raw(statement).execute(db);
+  ])
+    await sql.raw(statement).execute(db);
 }
 
-export const SYSTEM_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_BASELINE = "doca-2026-09-27";
 
-async function ensureSystemSchema(db: Kysely<any>) {
+async function createSystemSchema(db: Kysely<any>) {
   await sql
     .raw(
-      `CREATE TABLE IF NOT EXISTS "system_schema" ("id" varchar(16) primary key, "version" integer not null, "updated_at" varchar(32) not null)`,
+      `CREATE TABLE IF NOT EXISTS "schema_baseline" ("id" varchar(64) primary key, "created_at" varchar(32) not null)`,
     )
     .execute(db);
   const now = new Date().toISOString();
   await db
-    .insertInto("system_schema")
-    .values({ id: "main", version: SYSTEM_SCHEMA_VERSION, updated_at: now })
-    .onConflict((conflict: any) =>
-      conflict.column("id").doUpdateSet({
-        version: SYSTEM_SCHEMA_VERSION,
-        updated_at: now,
-      }),
-    )
+    .insertInto("schema_baseline")
+    .values({ id: CURRENT_SCHEMA_BASELINE, created_at: now })
     .execute();
 }
 
 export async function validateSchema(db: Kysely<any>) {
   const hasSchema = (await db.introspection.getTables()).some(
-    (table) => table.name === "system_schema",
+    (table) => table.name === "schema_baseline",
   );
   if (!hasSchema)
-    throw new Error("Database schema missing is not supported; run pnpm migrate");
-  const row = await db
-    .selectFrom("system_schema")
-    .select("version")
-    .where("id", "=", "main")
-    .executeTakeFirst();
-  if (row?.version !== SYSTEM_SCHEMA_VERSION)
     throw new Error(
-      `Database schema ${row?.version ?? "missing"} is not supported; run pnpm migrate`,
+      "Database is not a current Doca baseline; create a new database",
+    );
+  const row = await db
+    .selectFrom("schema_baseline")
+    .select("id")
+    .where("id", "=", CURRENT_SCHEMA_BASELINE)
+    .executeTakeFirst();
+  if (!row)
+    throw new Error(
+      "Database baseline is not supported; create a new database",
     );
 }
 
 export async function createSchema(db: Kysely<any>) {
   if ((await db.introspection.getTables()).length > 0) {
-    await ensureFileSchema(db);
-    await ensureDiscoverySchema(db);
-    await ensureSearchSchema(db);
-    await ensureKnowledgeSchema(db);
-    await ensureKnowledgeStudio(db);
-    await ensureResourceSchema(db);
-    await ensureSiteSettingsSchema(db);
-    await ensureUserSchema(db);
-    await ensureReactionSchema(db);
-    await ensureTemplateSchema(db);
-    await ensureAINoteSchema(db);
-    await ensurePlatformRuntimeSchema(db);
-    await ensureMobileSchema(db);
-    await seedSystemRows(db);
-    await ensureSystemSchema(db);
+    await validateSchema(db);
     return;
   }
 
   for (const statement of schemaStatements)
     await sql.raw(statement).execute(db);
 
-  await ensureFileSchema(db);
-  await ensureDiscoverySchema(db);
-  await ensureSearchSchema(db);
-  await ensureKnowledgeSchema(db);
-    await ensureKnowledgeStudio(db);
-  await ensureResourceSchema(db);
-  await ensureSiteSettingsSchema(db);
-  await ensureUserSchema(db);
-  await ensureReactionSchema(db);
-  await ensureTemplateSchema(db);
-  await ensureAINoteSchema(db);
-  await ensurePlatformRuntimeSchema(db);
-  await ensureMobileSchema(db);
+  await createFileSchema(db);
+  await createDiscoverySchema(db);
+  await createSearchSchema(db);
+  await createKnowledgeSchema(db);
+  await createKnowledgeStudioSchema(db);
+  await createMobileSchema(db);
   await seedSystemRows(db);
-  await ensureSystemSchema(db);
+  await createSystemSchema(db);
 }
 
-async function ensureMobileSchema(db: Kysely<any>) {
+async function createMobileSchema(db: Kysely<any>) {
   for (const statement of [
     `CREATE TABLE IF NOT EXISTS "webview_tickets" ("id" varchar(64) primary key, "user_id" varchar(36) not null references "users" ("id") on delete cascade, "expires_at" varchar(32) not null)`,
     `CREATE INDEX IF NOT EXISTS "webview_tickets_expiry" on "webview_tickets" ("expires_at")`,
@@ -413,19 +421,21 @@ async function ensureMobileSchema(db: Kysely<any>) {
     await sql.raw(statement).execute(db);
 }
 
-async function ensureDiscoverySchema(db: Kysely<any>) {
-  await sql`CREATE TABLE IF NOT EXISTS workspace_activity (user_id varchar(36) not null references users(id) on delete cascade, resource_kind varchar(16) not null, resource_id varchar(36) not null, visited_at varchar(32), favorite integer not null default 0, primary key(user_id,resource_kind,resource_id))`.execute(db);
-  await sql`CREATE INDEX IF NOT EXISTS workspace_activity_recent_idx ON workspace_activity(user_id,visited_at)`.execute(db);
-  const hasCollections = (await db.introspection.getTables()).some(table => table.name === "resource_collections");
-  await sql`CREATE TABLE IF NOT EXISTS resource_collections (user_id varchar(36) not null references users(id) on delete cascade, resource_kind varchar(16) not null, resource_id varchar(36) not null, created_at varchar(32) not null, primary key(user_id,resource_kind,resource_id))`.execute(db);
+async function createDiscoverySchema(db: Kysely<any>) {
+  await sql`CREATE TABLE IF NOT EXISTS workspace_activity (user_id varchar(36) not null references users(id) on delete cascade, resource_kind varchar(16) not null, resource_id varchar(36) not null, visited_at varchar(32), favorite integer not null default 0, primary key(user_id,resource_kind,resource_id))`.execute(
+    db,
+  );
+  await sql`CREATE INDEX IF NOT EXISTS workspace_activity_recent_idx ON workspace_activity(user_id,visited_at)`.execute(
+    db,
+  );
+  await sql`CREATE TABLE IF NOT EXISTS resource_collections (user_id varchar(36) not null references users(id) on delete cascade, resource_kind varchar(16) not null, resource_id varchar(36) not null, created_at varchar(32) not null, primary key(user_id,resource_kind,resource_id))`.execute(
+    db,
+  );
 
-  await sql`CREATE TABLE IF NOT EXISTS folder_publications (folder_id varchar(36) primary key references file_folders(id) on delete cascade, enabled integer not null, revision integer not null)`.execute(db);
-  await sql`CREATE TABLE IF NOT EXISTS folder_entries (folder_id varchar(36) not null references file_folders(id) on delete cascade, user_id varchar(36) not null references users(id) on delete cascade, state varchar(16) not null, updated_at varchar(32) not null, primary key(folder_id, user_id))`.execute(db);
-  if (!hasCollections) {
-    await sql`insert into resource_collections (user_id,resource_kind,resource_id,created_at)
-      select e.user_id,r.kind,e.resource_id,e.updated_at from resource_entries e join resources r on r.id=e.resource_id where e.state='joined' and e.source='manual'`.execute(db);
-    await sql`insert into resource_collections (user_id,resource_kind,resource_id,created_at)
-      select user_id,'folder',folder_id,updated_at from folder_entries where state='joined'`.execute(db);
-  }
-
+  await sql`CREATE TABLE IF NOT EXISTS folder_publications (folder_id varchar(36) primary key references file_folders(id) on delete cascade, enabled integer not null, revision integer not null)`.execute(
+    db,
+  );
+  await sql`CREATE TABLE IF NOT EXISTS folder_entries (folder_id varchar(36) not null references file_folders(id) on delete cascade, user_id varchar(36) not null references users(id) on delete cascade, state varchar(16) not null, updated_at varchar(32) not null, primary key(folder_id, user_id))`.execute(
+    db,
+  );
 }

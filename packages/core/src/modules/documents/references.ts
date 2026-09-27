@@ -32,7 +32,6 @@ export async function indexDocumentReferences(
   tx: DB | Transaction<Schema>,
   id: string,
   value: unknown,
-  seq?: number,
 ) {
   await tx
     .deleteFrom("document_references")
@@ -45,11 +44,5 @@ export async function indexDocumentReferences(
     await tx
       .insertInto("document_references")
       .values(ids.map((target) => ({ source_id: id, target_id: target })))
-      .execute();
-  if (seq !== undefined)
-    await tx
-      .insertInto("document_reference_index")
-      .values({ resource_id: id, seq })
-      .onConflict((oc) => oc.column("resource_id").doUpdateSet({ seq }))
       .execute();
 }

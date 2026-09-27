@@ -12,8 +12,18 @@ import {
   Trash2,
   RotateCcw,
 } from "lucide-react";
-import { api, assetUrl, uploadFile, type Comment, type FileItem, type User } from "@web/shared/api.js";
-import { FileSourceDialog, FolderFilePicker } from "@web/features/files/files.js";
+import {
+  api,
+  assetUrl,
+  uploadFile,
+  type Comment,
+  type FileItem,
+  type User,
+} from "@web/shared/api.js";
+import {
+  FileSourceDialog,
+  FolderFilePicker,
+} from "@web/features/files/files.js";
 import type {
   CommentBody,
   CommentInline,
@@ -51,18 +61,15 @@ export const mentionHandle = (u: MentionUser) => {
 export function parsedComment(
   c: Pick<Comment, "body" | "body_json">,
 ): CommentBody {
-  try {
-    const b = JSON.parse(c.body_json ?? "null");
-    if (b?.version === 1 && Array.isArray(b.blocks)) return b;
-  } catch {}
-  return {
-    version: 1,
-    blocks: [{ type: "paragraph", children: [{ type: "text", text: c.body }] }],
-  };
+  const body = JSON.parse(c.body_json ?? "null");
+  if (body?.version !== 1 || !Array.isArray(body.blocks))
+    throw new Error("评论结构无效");
+  return body;
 }
 export function CommentContent({ comment }: { comment: Comment }) {
   const { t } = useI18n();
-  if (comment.deleted_at) return <p className="subtle">{t("comment.deleted")}</p>;
+  if (comment.deleted_at)
+    return <p className="subtle">{t("comment.deleted")}</p>;
   return (
     <div className="rich-comment-body">
       {parsedComment(comment).blocks.map((b, i) =>
@@ -410,8 +417,37 @@ export function CommentComposer({
             }
           }}
         />
-        {folderPicker && <FolderFilePicker accept={(item) => item.mime.startsWith("image/")} close={() => setFolderPicker(false)} select={async (item: FileItem) => { const response = await fetch(`/api/v1/files/items/${item.id}/content`); if (!response.ok) throw new Error(t("comment.imageFailed")); const uploaded = await uploadFile(new File([await response.blob()], item.name, { type: item.mime }), "comment_image", resourceId); setImages((value) => [...value, { type: "image", assetId: uploaded.id, alt: uploaded.filename }]); }} />}
-        {sourcePicker && <FileSourceDialog title={t("comment.addImage")} close={() => setSourcePicker(false)} chooseDoca={() => setFolderPicker(true)} chooseLocal={() => file.current?.click()} />}
+        {folderPicker && (
+          <FolderFilePicker
+            accept={(item) => item.mime.startsWith("image/")}
+            close={() => setFolderPicker(false)}
+            select={async (item: FileItem) => {
+              const response = await fetch(
+                `/api/v1/files/items/${item.id}/content`,
+              );
+              if (!response.ok) throw new Error(t("comment.imageFailed"));
+              const uploaded = await uploadFile(
+                new File([await response.blob()], item.name, {
+                  type: item.mime,
+                }),
+                "comment_image",
+                resourceId,
+              );
+              setImages((value) => [
+                ...value,
+                { type: "image", assetId: uploaded.id, alt: uploaded.filename },
+              ]);
+            }}
+          />
+        )}
+        {sourcePicker && (
+          <FileSourceDialog
+            title={t("comment.addImage")}
+            close={() => setSourcePicker(false)}
+            chooseDoca={() => setFolderPicker(true)}
+            chooseLocal={() => file.current?.click()}
+          />
+        )}
         <span className="grow" />
         {close && (
           <button
@@ -458,17 +494,27 @@ export function CommentMessage({
       <div className="grow">
         <div className="comment-byline">
           <strong>{c.display_name}</strong>
-          <time title={c.created_at}>{relativeTime(c.created_at, Date.now(), t)}</time>
+          <time title={c.created_at}>
+            {relativeTime(c.created_at, Date.now(), t)}
+          </time>
           <span className="comment-icon-actions">
             {user && !c.deleted_at && rank >= 2 && (
               <>
                 {reply && !c.resolved && (
-                  <button title={t("comment.reply")} aria-label={t("comment.reply")} onClick={reply}>
+                  <button
+                    title={t("comment.reply")}
+                    aria-label={t("comment.reply")}
+                    onClick={reply}
+                  >
                     <Reply size={15} />
                   </button>
                 )}
                 {c.author_id === user.id && (
-                  <button title={t("comment.edit")} aria-label={t("comment.edit")} onClick={edit}>
+                  <button
+                    title={t("comment.edit")}
+                    aria-label={t("comment.edit")}
+                    onClick={edit}
+                  >
                     <Pencil size={14} />
                   </button>
                 )}
@@ -483,8 +529,16 @@ export function CommentMessage({
                     </button>
                     {!c.parent_id && (
                       <button
-                        title={c.resolved ? t("comment.reopen") : t("comment.resolve")}
-                        aria-label={c.resolved ? t("comment.reopen") : t("comment.resolve")}
+                        title={
+                          c.resolved
+                            ? t("comment.reopen")
+                            : t("comment.resolve")
+                        }
+                        aria-label={
+                          c.resolved
+                            ? t("comment.reopen")
+                            : t("comment.resolve")
+                        }
                         onClick={() => act({ resolved: !c.resolved })}
                       >
                         {c.resolved ? (

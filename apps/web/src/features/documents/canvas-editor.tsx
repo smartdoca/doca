@@ -16,7 +16,6 @@ import {
   type CanvasEditorResources,
 } from "aidcanvas";
 import { CanvasModel } from "aidcanvas/model";
-import { withNativeCanvasView } from "@web/features/documents/canvas-model-view.js";
 import {
   api,
   assetUrl,
@@ -26,22 +25,26 @@ import {
   type User,
 } from "@web/shared/api.js";
 import { realtime } from "@web/features/documents/realtime.js";
-import { useSurfaceSync, type SurfaceFactory } from "@web/features/documents/surface-sync.js";
-import { RegionComments, type RegionController } from "@web/features/comments/region-comments.js";
+import {
+  useSurfaceSync,
+  type SurfaceFactory,
+} from "@web/features/documents/surface-sync.js";
+import {
+  RegionComments,
+  type RegionController,
+} from "@web/features/comments/region-comments.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { ModelFind } from "@web/features/search/model-find.js";
 import { EditorRecoveryBoundary } from "@web/features/documents/editor-recovery-boundary.js";
 import "aidcanvas/style.css";
 import "@web/features/documents/surface.css";
 const factory: SurfaceFactory<CanvasModel> = async (b) => {
-  const value = withNativeCanvasView(
-    CanvasModel.restore({
-      codec: "aidcanvas-yjs",
-      schemaVersion: 1,
-      epochId: b.epochId,
-      update: b.update,
-    }),
-  );
+  const value = CanvasModel.restore({
+    codec: "aidcanvas-yjs",
+    schemaVersion: 1,
+    epochId: b.epochId,
+    update: b.update,
+  });
   return {
     value,
     vector: () => value.stateVector(),

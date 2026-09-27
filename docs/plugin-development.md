@@ -89,16 +89,16 @@ export default () =>
 
 ## 当前公共服务
 
-| 导入入口            | 服务                    | 用途                                         |
-| ------------------- | ----------------------- | -------------------------------------------- |
-| plugin-sdk/files    | filesServiceToken       | 文件夹、文件、上传、内容、绑定及访问授权     |
-| plugin-sdk/platform | usersServiceToken       | 当前授权用户资料、统一用户搜索               |
-| plugin-sdk/platform | permissionsServiceToken | 注册业务资源鉴权及用户关系来源               |
-| plugin-sdk/platform | httpServiceToken        | 已认证、独立命名空间的后端路由               |
-| plugin-sdk/platform | policiesServiceToken    | 创建、存储、分享、转移及 AI 调用前的业务准入 |
-| plugin-sdk/platform | eventsServiceToken      | 读取持久事件流，包括 ai.usage.recorded       |
-| plugin-sdk/platform | notificationsServiceToken | 幂等发布、撤回通知及受权站内跳转 |
-| plugin-sdk/ai       | aiServiceToken          | 注册带 JSON Schema 的 AI 工具和 skill 手册   |
+| 导入入口            | 服务                      | 用途                                         |
+| ------------------- | ------------------------- | -------------------------------------------- |
+| plugin-sdk/files    | filesServiceToken         | 文件夹、文件、上传、内容、绑定及访问授权     |
+| plugin-sdk/platform | usersServiceToken         | 当前授权用户资料、统一用户搜索               |
+| plugin-sdk/platform | permissionsServiceToken   | 注册业务资源鉴权及用户关系来源               |
+| plugin-sdk/platform | httpServiceToken          | 已认证、独立命名空间的后端路由               |
+| plugin-sdk/platform | policiesServiceToken      | 创建、存储、分享、转移及 AI 调用前的业务准入 |
+| plugin-sdk/platform | eventsServiceToken        | 读取持久事件流，包括 ai.usage.recorded       |
+| plugin-sdk/platform | notificationsServiceToken | 幂等发布、撤回通知及受权站内跳转             |
+| plugin-sdk/ai       | aiServiceToken            | 注册带 JSON Schema 的 AI 工具和 skill 手册   |
 
 注册 ID 必须以插件 ID 加点开头。路由 namespace 必须等于插件 ID。这些公共注册自动归属插件生命周期，关闭或启动失败时回收；自建定时器、连接仍用 context.effect/effectAsync 回收。关闭不删除持久数据。
 
@@ -108,7 +108,7 @@ AI 工具通过 `aiServiceToken.registerTool` 注册，包含 id、description�
 
 Doca 不内置会员、货币价格、积分或业务额度。模型管理中的输入/输出速率和每张图片 Token 只负责把厂商原始用量统一折算为 Token，不是最终售价。用量记录区分未确认调用与实际指标；`ai.usage.recorded` 在结算事务内写入持久事件，顶层 `metrics` 是已折算用量，`provider.metrics` 保留厂商原始事实。插件通过 events.read(cursor, limit) 拉取，持久保存消费位置并按事件 ID 幂等处理。策略 check 可以拒绝调用；跨插件预留、失败补偿和资金一致性尚未提供完整事务协议，不能将一次 check 当作完整计费实现。
 
-插件自管独立数据库、凭证、业务任务和 outbox。宿主不提供 data.v1/data.v2。使用 initialize/migrate/mount/ready/dispose 初始化和清理，迁移锁与版本由插件自行持久保存。
+插件自管独立数据库、凭证、业务任务和 outbox。宿主不提供 data.v1/data.v2。使用 initialize/mount/ready/dispose 初始化和清理。数据库必须按插件当前基线新建；结构不匹配时拒绝启动。
 
 ## Web
 

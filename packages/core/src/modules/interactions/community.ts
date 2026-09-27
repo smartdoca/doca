@@ -127,15 +127,9 @@ export async function normalizeComment(
   actor: Actor,
   resourceId: string,
   input: unknown,
-  fallback: string,
-  old?: string | null,
+  current?: string | null,
 ) {
-  const value: any = input ?? {
-    version: 1,
-    blocks: [
-      { type: "paragraph", children: [{ type: "text", text: fallback }] },
-    ],
-  };
+  const value: any = input;
   if (
     value?.version !== 1 ||
     !Array.isArray(value.blocks) ||
@@ -211,7 +205,7 @@ export async function normalizeComment(
   if (!text) fail(400, "评论不能为空");
   let previous = new Set<string>();
   try {
-    previous = mentionIds(JSON.parse(old ?? "null"));
+    previous = mentionIds(JSON.parse(current ?? "null"));
   } catch {}
   const mentions = mentionIds(body);
   await validateNewMentions(db, actor, mentions, previous);
@@ -289,7 +283,8 @@ export async function notify(
           await queueMobilePush(db, {
             id: notificationId,
             userId: u.id,
-            title: type === "comment.mentioned" ? "有人在评论中提到你" : "新评论",
+            title:
+              type === "comment.mentioned" ? "有人在评论中提到你" : "新评论",
             body: r.title,
             path,
           });
@@ -330,22 +325,40 @@ export async function notificationPage(db: DB, actor: Actor, offset: number) {
     items.map((n) => n.resource_id),
   );
   const projected = [];
-  const pluginRows = await db.selectFrom("plugin_notifications as p").innerJoin("notifications as n", "n.id", "p.notification_id").selectAll("p").select(["n.read_at", "n.id"]).where("n.user_id", "=", actor.id).where("p.withdrawn_at", "is", null).execute();
-  const visiblePluginRows = new Map<string, typeof pluginRows[number]>();
+  const pluginRows = await db
+    .selectFrom("plugin_notifications as p")
+    .innerJoin("notifications as n", "n.id", "p.notification_id")
+    .selectAll("p")
+    .select(["n.read_at", "n.id"])
+    .where("n.user_id", "=", actor.id)
+    .where("p.withdrawn_at", "is", null)
+    .execute();
+  const visiblePluginRows = new Map<string, (typeof pluginRows)[number]>();
   // Permissions are live, including when calculating unread counts. Fail closed.
   for (let start = 0; start < pluginRows.length; start += 50) {
-    await Promise.all(pluginRows.slice(start, start + 50).map(async row => {
-      if (await pluginNotificationVisible(db, actor.id, row)) visiblePluginRows.set(row.id, row);
-    }));
+    await Promise.all(
+      pluginRows.slice(start, start + 50).map(async (row) => {
+        if (await pluginNotificationVisible(db, actor.id, row))
+          visiblePluginRows.set(row.id, row);
+      }),
+    );
   }
   for (const { canRead, ...n } of items.slice(0, 50)) {
     if (n.type === "plugin.notification") {
       const detail = visiblePluginRows.get(n.id);
-      if (detail) projected.push({ ...n, title: detail.title, description: detail.body, pluginId: detail.plugin_id, href: `/api/v1/notifications/${n.id}/open` });
+      if (detail)
+        projected.push({
+          ...n,
+          title: detail.title,
+          description: detail.body,
+          pluginId: detail.plugin_id,
+          href: `/api/v1/notifications/${n.id}/open`,
+        });
       continue;
     }
     const r = ctx.resources.find((r) => r.id === n.resource_id);
-    let grantedPermission: { role?: string; includeDescendants?: boolean } | undefined;
+    let grantedPermission:
+      { role?: string; includeDescendants?: boolean } | undefined;
     let show =
       r && (await managementVisible(db, actor, r, ctx.resources, ctx.grants));
     if (n.ticket_id) {
@@ -354,15 +367,23 @@ export async function notificationPage(db: DB, actor: Actor, offset: number) {
         .select(["user_id", "hidden_for_user_id", "kind", "operation_json"])
         .where("id", "=", n.ticket_id)
         .executeTakeFirst();
-      if (ticket && ["access.approved", "invitation.accepted"].includes(n.type)) {
+      if (
+        ticket &&
+        ["access.approved", "invitation.accepted"].includes(n.type)
+      ) {
         const operation = JSON.parse(ticket.operation_json ?? "{}");
-        grantedPermission = { role: operation.role, includeDescendants: operation.includeDescendants };
+        grantedPermission = {
+          role: operation.role,
+          includeDescendants: operation.includeDescendants,
+        };
       }
       if (ticket)
         show =
           actor.id !== ticket.user_id ||
           (ticket.hidden_for_user_id !== actor.id &&
-            (await distributionPolicy(db,r?.kind)).ticketReviewers[ticket.kind]);
+            (await distributionPolicy(db, r?.kind)).ticketReviewers[
+              ticket.kind
+            ]);
     }
     const sensitive =
       n.type.startsWith("access.") ||
@@ -384,7 +405,9 @@ export async function notificationPage(db: DB, actor: Actor, offset: number) {
   }
   return {
     items: projected,
-    unread: Number(count.count) + [...visiblePluginRows.values()].filter(row => !row.read_at).length,
+    unread:
+      Number(count.count) +
+      [...visiblePluginRows.values()].filter((row) => !row.read_at).length,
     nextOffset: items.length > 50 ? offset + 50 : null,
   };
 }

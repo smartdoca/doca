@@ -11,10 +11,7 @@ import {
   resolveMarkdownTextAnchor,
 } from "exmd-collaborative-editor";
 import { type DB } from "@db/index.js";
-import {
-  createUser,
-  type Actor,
-} from "@core/modules/identity/passwords.js";
+import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import {
   createDocuments,
@@ -34,6 +31,12 @@ import {
   decodeMarkdownAnchor,
 } from "@core/modules/documents/codecs/markdown-anchor.js";
 let db: DB, owner: Actor;
+const commentBody = (text: string) => ({
+  version: 1 as const,
+  blocks: [
+    { type: "paragraph" as const, children: [{ type: "text" as const, text }] },
+  ],
+});
 beforeEach(async () => {
   db = await openDatabase({ driver: "sqlite", path: ":memory:" });
   owner = {
@@ -59,7 +62,7 @@ it("stores canonical v2 comments, excludes boundary insertions and rejects delet
     const c = await x.content.comment(
       owner,
       x.resource.id,
-      "comment",
+      commentBody("comment"),
       null,
       JSON.stringify(wire),
     );
@@ -76,7 +79,7 @@ it("stores canonical v2 comments, excludes boundary insertions and rejects delet
       x.content.comment(
         owner,
         x.resource.id,
-        "bad",
+        commentBody("bad"),
         null,
         JSON.stringify({ ...wire, epochId: randomUUID() }),
       ),
@@ -85,7 +88,7 @@ it("stores canonical v2 comments, excludes boundary insertions and rejects delet
       x.content.comment(
         owner,
         x.resource.id,
-        "bad",
+        commentBody("bad"),
         null,
         JSON.stringify({ ...wire, start: { bytes: { 0: 1 } } }),
       ),
@@ -111,7 +114,7 @@ it("stores canonical v2 comments, excludes boundary insertions and rejects delet
       x.content.comment(
         owner,
         x.resource.id,
-        "orphan",
+        commentBody("orphan"),
         null,
         JSON.stringify(saved),
       ),
@@ -411,7 +414,17 @@ it("rejects an oversized collaboration update atomically, preserves receipt iden
   const { fail } = await import("@core/shared/errors.js");
   const x = await setup();
   let limit = 5;
-  pluginServices(db).policies.set("test.document-size", { id: "test.document-size", async check(input) { if (input.action === "documents.resize" && Number(input.facts.next) > Number(input.facts.previous) && Number(input.facts.next) > limit) fail(413, "Document limit"); } });
+  pluginServices(db).policies.set("test.document-size", {
+    id: "test.document-size",
+    async check(input) {
+      if (
+        input.action === "documents.resize" &&
+        Number(input.facts.next) > Number(input.facts.previous) &&
+        Number(input.facts.next) > limit
+      )
+        fail(413, "Document limit");
+    },
+  });
   const update = x.edit(x.a, (t) => t.insert(0, "123456789")),
     messageId = randomUUID();
   await expect(x.submit(update, messageId)).rejects.toMatchObject({

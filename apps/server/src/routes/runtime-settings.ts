@@ -88,11 +88,8 @@ export async function registerRuntimeSettings(
     (saved ? configuredMessaging(saved.messaging) : messagingRuntime());
   const search: SearchRuntime = overrides.search ??
     saved?.search ?? {
-      apiKey: process.env.MEILI_API_KEY,
-      allowedOrigins: (
-        process.env.MEILI_ALLOWED_ORIGINS ??
-        "http://127.0.0.1:7700,http://localhost:7700"
-      ).split(","),
+      apiKey: "",
+      allowedOrigins: ["http://127.0.0.1:7700", "http://localhost:7700"],
     };
   const seed = {
     identity: {
@@ -111,7 +108,7 @@ export async function registerRuntimeSettings(
       cdnPrivateKey: storage.cdnPrivateKey ?? "",
     },
     messaging: {
-      endpoint: process.env.DOCA_VERIFICATION_ENDPOINT ?? "",
+      endpoint: "",
       secret: messaging.secret,
       channels: [
         messaging.phoneReady ? "phone" : "",

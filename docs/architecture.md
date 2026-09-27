@@ -18,7 +18,7 @@
     ▼
 apps/server — Host/Origin 校验、登录、请求校验、HTTP 路由、静态文件
     ▼
-PluginHost — discover、migration、mount、ready、逆序 dispose
+PluginHost — discover、initialize、mount、ready、逆序 dispose
     ├── AIHost / SearchHost（贯穿服务）
     ├── plugin-files（files.v1 基础能力）
     ├── plugin-documents（documents.v1 / KnowledgeSource 聚合）

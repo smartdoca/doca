@@ -121,7 +121,6 @@ async function erasePurgedResources(ctx: Context, actor: Actor, ids: string[]) {
       "document_states",
       "access_invitations",
       "access_requests",
-      "document_reference_index",
       "document_references",
     ] as const) {
       if (table === "document_references")
@@ -785,9 +784,14 @@ export function createResourceCommands(
           if (r.deleted_at) fail(409, "已删除");
           const targets = descendants(ctx, r).filter((x) => !x.deleted_at);
           if (
-            targets.some((x) => !canRemoveResource(x, actor, ctx.resources, ctx.grants))
+            targets.some(
+              (x) => !canRemoveResource(x, actor, ctx.resources, ctx.grants),
+            )
           )
-            fail(403, "需要拥有文档或管理其所属知识库，请先处理无权删除的子文档");
+            fail(
+              403,
+              "需要拥有文档或管理其所属知识库，请先处理无权删除的子文档",
+            );
           const batch = randomUUID();
           for (const x of targets)
             await update(ctx, x, {

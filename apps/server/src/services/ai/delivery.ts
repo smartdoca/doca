@@ -366,7 +366,7 @@ export function unverifiedFolderDelivery(
   };
 }
 
-// These legacy names are not the editor's native code-block type. Expose IDs so
+// These aliases are not the editor's native code-block type. Expose IDs so
 // acceptance can fail with concrete evidence rather than trusting an answer.
 export function invalidCodeBlocks(value: unknown): string[] {
   const ids: string[] = [];

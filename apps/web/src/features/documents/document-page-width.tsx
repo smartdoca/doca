@@ -32,14 +32,10 @@ export function useDocumentPageWidth(
     parseDocumentPageWidth(resource.page_width ?? null),
   );
   const version = useRef(resource.version);
-  const migrated = useRef(false);
   useEffect(() => {
     setMode(parseDocumentPageWidth(resource.page_width ?? null));
     version.current = resource.version;
   }, [resource.id, resource.page_width, resource.version]);
-  useEffect(() => {
-    migrated.current = false;
-  }, [resource.id]);
   const change = (value: DocumentPageWidth) => {
     if (!canEdit || value === mode) return;
     const previous = mode;
@@ -56,30 +52,6 @@ export function useDocumentPageWidth(
       })
       .catch(() => setMode(previous));
   };
-  useEffect(() => {
-    if (migrated.current || !canEdit) return;
-    migrated.current = true;
-    let stored: DocumentPageWidth | null = null;
-    try {
-      for (const key of Object.keys(localStorage)) {
-        if (
-          !key.startsWith("doca:page-width:") ||
-          !key.endsWith(`:${resource.id}`)
-        )
-          continue;
-        stored = parseDocumentPageWidth(localStorage.getItem(key));
-        localStorage.removeItem(key);
-      }
-    } catch {
-      return;
-    }
-    if (
-      stored &&
-      stored !== "a4" &&
-      parseDocumentPageWidth(resource.page_width ?? null) === "a4"
-    )
-      change(stored);
-  }, [canEdit, resource.id]);
   return [mode, change] as const;
 }
 
@@ -105,9 +77,7 @@ export function DocumentPageWidthMenu({
       panelLabel={t("doc.contentWidth")}
       icon={<Columns2 size={16} />}
     >
-      {(
-        (["a4", "a3", "fluid"] as const)
-      ).map((value) => (
+      {(["a4", "a3", "fluid"] as const).map((value) => (
         <button
           key={value}
           aria-pressed={mode === value}
@@ -127,7 +97,5 @@ export function DocumentPageWidthMenu({
 }
 
 export function canEditPageWidth(resource: Resource) {
-  return (
-    resource.format === "rich_text" && roleRank(resource.role) >= 3
-  );
+  return resource.format === "rich_text" && roleRank(resource.role) >= 3;
 }

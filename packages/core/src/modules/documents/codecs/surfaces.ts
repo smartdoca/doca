@@ -90,7 +90,7 @@ export async function restoreSurface(
       (JSON.parse(epoch.baseline) as ExlsxBaseline).schemaVersion !==
         DEFAULT_SPREADSHEET_SCHEMA)
   )
-    fail(409, "此文档使用旧版表格结构，请新建文档");
+    fail(409, "此文档表格结构与当前编辑器不匹配，请新建文档");
   const updates = await tx
     .selectFrom("document_updates")
     .select("data")

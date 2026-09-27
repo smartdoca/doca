@@ -59,7 +59,7 @@ describe("durable projection job adapter", () => {
     expect(await host.runOnce()).toMatchObject({ state: "idle" });
   });
 
-  it("records missing plugin ownership and preserves legacy projection APIs", async () => {
+  it("records missing plugin ownership and processes core projection jobs", async () => {
     const now = "2026-09-25T00:00:00.000Z";
     await enqueueRuntimeJob(db, {
       id: "missing-plugin-job",
@@ -85,10 +85,10 @@ describe("durable projection job adapter", () => {
         .executeTakeFirst(),
     ).toEqual({ status: "blocked-plugin-missing" });
 
-    await enqueueProjection(db, "legacy-test", "one", { value: 1 });
+    await enqueueProjection(db, "core-test", "one", { value: 1 });
     const seen: unknown[] = [];
     expect(
-      await processProjections(db, "legacy-test", async (payload) => {
+      await processProjections(db, "core-test", async (payload) => {
         seen.push(payload.value);
       }),
     ).toBe(1);

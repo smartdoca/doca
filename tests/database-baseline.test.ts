@@ -1,3 +1,4 @@
+import Sqlite from "better-sqlite3";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,8 +14,8 @@ afterEach(async () => {
   );
 });
 
-describe("database schema startup modes", () => {
-  it("migrates once and lets application replicas validate", async () => {
+describe("database baseline", () => {
+  it("creates the current schema once and reopens it without mutation", async () => {
     const directory = await mkdtemp(join(tmpdir(), "doca-schema-"));
     directories.push(directory);
     const config = {
@@ -22,26 +23,26 @@ describe("database schema startup modes", () => {
       path: join(directory, "doca.db"),
     };
 
-    const migration = await openDatabase(config, { schema: "migrate" });
-    await migration.destroy();
+    const first = await openDatabase(config);
+    await first.destroy();
 
-    const replica = await openDatabase(config, { schema: "validate" });
+    const reopened = await openDatabase(config);
     await expect(
-      replica.selectFrom("settings").select("id").executeTakeFirst(),
+      reopened.selectFrom("settings").select("id").executeTakeFirst(),
     ).resolves.toBeTruthy();
-    await replica.destroy();
+    await reopened.destroy();
   });
 
-  it("rejects a replica before the migration job has run", async () => {
+  it("rejects any non-Doca database instead of altering it", async () => {
     const directory = await mkdtemp(join(tmpdir(), "doca-schema-"));
     directories.push(directory);
-    const config = {
-      driver: "sqlite" as const,
-      path: join(directory, "doca.db"),
-    };
+    const path = join(directory, "doca.db");
+    const foreign = new Sqlite(path);
+    foreign.exec("create table old_data (id text primary key)");
+    foreign.close();
 
-    await expect(openDatabase(config, { schema: "validate" })).rejects.toThrow(
-      "run pnpm migrate",
+    await expect(openDatabase({ driver: "sqlite", path })).rejects.toThrow(
+      "create a new database",
     );
   });
 });

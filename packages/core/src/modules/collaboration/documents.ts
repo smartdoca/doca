@@ -97,7 +97,8 @@ export function plainText(value: unknown): string {
       ? String((n._mention as { name?: string }).name ?? "")
       : n.text;
   if (n.type === "mention") return String(n.name ?? "");
-  if(n.type === "flowchart" && Array.isArray(n.nodes)) return n.nodes.map((node:any)=>String(node.label??"")).join("\n");
+  if (n.type === "flowchart" && Array.isArray(n.nodes))
+    return n.nodes.map((node: any) => String(node.label ?? "")).join("\n");
   if (typeof n.type === "string" && n.type.startsWith("custom:"))
     return String(n.label ?? "");
   return [
@@ -145,10 +146,7 @@ export async function restoreDocument(
   try {
     if (state) {
       if (state.codec !== DOCUMENT_CODECS.rich_text)
-        fail(
-          409,
-          "此文档使用旧版编辑器格式，当前版本无法打开。原内容已保留；重新连接不会转换格式，请新建文档，或由管理员另行处理旧数据。",
-        );
+        fail(409, "此文档编码与当前编辑器不匹配，请新建文档。");
       applyUpdate(doc, unb64(state.checkpoint, 16 * 1024 * 1024));
       for (const update of await tx
         .selectFrom("document_updates")
@@ -318,7 +316,7 @@ export function createDocuments(db: DB) {
               await enqueueKnowledge(tx, "document", id);
               if (!actor || rank < 3) fail(403, "当前文档为只读");
               const value = runtime.getValue();
-              await indexDocumentReferences(tx, id, value, seq + 1);
+              await indexDocumentReferences(tx, id, value);
               await detachUnreferencedDocumentFiles(
                 tx,
                 id,

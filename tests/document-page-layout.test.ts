@@ -5,9 +5,9 @@ import {
 } from "../apps/web/src/features/documents/document-page-layout.js";
 
 describe("document paper width layout", () => {
-  it("defaults to A4 and rejects obsolete preferences", () => {
+  it("defaults to A4 and rejects invalid preferences", () => {
     expect(parseDocumentPageWidth(null)).toBe("a4");
-    expect(parseDocumentPageWidth("legacy")).toBe("a4");
+    expect(parseDocumentPageWidth("invalid")).toBe("a4");
     expect(parseDocumentPageWidth("a3")).toBe("a3");
     expect(parseDocumentPageWidth("fluid")).toBe("fluid");
   });

@@ -7,11 +7,6 @@ import {
   readAIDocument,
   editAIDocument,
 } from "../packages/core/src/workflows/ai-documents.js";
-import { CanvasModel } from "aidcanvas/model";
-import {
-  restoreSurface,
-  exchangeSurface,
-} from "../packages/core/src/modules/documents/codecs/surfaces.js";
 import type { DB } from "../packages/db/src/index.js";
 import type { Actor } from "../packages/core/src/modules/identity/passwords.js";
 import type { StorageRuntime } from "../apps/server/src/adapters/storage.js";
@@ -62,46 +57,7 @@ export async function seedNativeElements(
         storage,
       );
     const read = await readAIDocument(db, { actor }, doc.id);
-    if (doc.format === "canvas") {
-      // Exercise an already-saved, nameless element as well as new AI elements.
-      const loaded = await restoreSurface(db, doc.id, "canvas");
-      const model = CanvasModel.restore({
-        codec: "aidcanvas-yjs",
-        schemaVersion: 1,
-        epochId: loaded.epochId,
-        update: loaded.update,
-      });
-      const first = model.getValue().scene.children![0]!;
-      model.add({ ...first, id: "legacy-image", name: "", x: 500, y: 40 });
-      model.add({
-        id: "legacy-text",
-        tag: "Text",
-        x: 40,
-        y: 350,
-        text: "旧 AI 文字",
-        fontSize: 24,
-      });
-      model.add({
-        id: "legacy-rect",
-        tag: "Rect",
-        x: 500,
-        y: 350,
-        width: 200,
-        height: 100,
-        fill: "#eeccaa",
-      });
-      await db.transaction().execute((tx) =>
-        exchangeSurface(tx, actor, read.resource, 4, {
-          protocolVersion: 1,
-          codec: "aidcanvas-yjs",
-          schemaVersion: 1,
-          epochId: loaded.epochId,
-          messageId: randomUUID(),
-          update: Buffer.from(model.checkpoint().update).toString("base64"),
-        }),
-      );
-      model.dispose();
-    } else if (doc.format === "rich_text") {
+    if (doc.format === "rich_text") {
       await editAIDocument(
         db,
         { actor },

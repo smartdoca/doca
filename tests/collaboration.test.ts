@@ -19,6 +19,12 @@ import {
 import { createApp } from "../apps/server/src/app/create-app.js";
 import type { WebSocket } from "ws";
 import { Element } from "slate";
+const commentBody = (text: string) => ({
+  version: 1 as const,
+  blocks: [
+    { type: "paragraph" as const, children: [{ type: "text" as const, text }] },
+  ],
+});
 function blockId(runtime: YjsDocument) {
   const block = runtime.getValue()[1]!;
   if (!Element.isElement(block)) throw new Error("Expected block");
@@ -197,18 +203,26 @@ it("rejects reader writes, missing access, invalid payloads and reinitialization
   }
 });
 it("preserves new font marks through host ACK, peer projection, reload and independent copy", async () => {
-  const r = await resource(), a = await replica(r.id), b = await replica(r.id);
+  const r = await resource(),
+    a = await replica(r.id),
+    b = await replica(r.id);
   try {
-    await documents.exchange(owner, r.id, { update: b64(a.runtime.editText(blockId(a.runtime), 0, 0, "字体验收")) });
-    const before = a.runtime.getValue(), after = structuredClone(before);
+    await documents.exchange(owner, r.id, {
+      update: b64(a.runtime.editText(blockId(a.runtime), 0, 0, "字体验收")),
+    });
+    const before = a.runtime.getValue(),
+      after = structuredClone(before);
     const family = '"Songti SC", SimSun, "Times New Roman", serif';
     const leaf = (after[1] as any).children[0];
     leaf.fontFamily = family;
     const updates: Uint8Array[] = [];
-    const stop = a.runtime.onLocalUpdate(bytes => updates.push(bytes));
+    const stop = a.runtime.onLocalUpdate((bytes) => updates.push(bytes));
     a.runtime.acceptEditorValue(before, after);
     expect(updates).toHaveLength(1);
-    const message = { messageId: crypto.randomUUID(), update: b64(updates[0]!) };
+    const message = {
+      messageId: crypto.randomUUID(),
+      update: b64(updates[0]!),
+    };
     const ack = await documents.exchange(owner, r.id, message);
     expect((await documents.exchange(owner, r.id, message)).seq).toBe(ack.seq);
     let echoes = 0;
@@ -220,11 +234,22 @@ it("preserves new font marks through host ACK, peer projection, reload and indep
     const copied = await content.copy(owner, r.id);
     const copy = await restoreDocument(db, copied.id);
     try {
-      expect((loaded.runtime.getValue()[1] as any).children[0].fontFamily).toBe(family);
-      expect((copy.runtime.getValue()[1] as any).children[0].fontFamily).toBe(family);
-    } finally { loaded.destroy(); copy.destroy(); }
-    stop(); stopPeer();
-  } finally { a.destroy(); b.destroy(); }
+      expect((loaded.runtime.getValue()[1] as any).children[0].fontFamily).toBe(
+        family,
+      );
+      expect((copy.runtime.getValue()[1] as any).children[0].fontFamily).toBe(
+        family,
+      );
+    } finally {
+      loaded.destroy();
+      copy.destroy();
+    }
+    stop();
+    stopPeer();
+  } finally {
+    a.destroy();
+    b.destroy();
+  }
 });
 it("anchors comments to Yjs text and copies document content as an independent identity", async () => {
   const r = await resource();
@@ -238,7 +263,7 @@ it("anchors comments to Yjs text and copies document content as an independent i
     await content.comment(
       owner,
       r.id,
-      "选区评论",
+      commentBody("选区评论"),
       null,
       JSON.stringify({
         ...anchor,
@@ -497,7 +522,18 @@ it("serves authenticated WebSocket collaboration, pushes notifications, counts u
       method: "POST",
       url: `/api/v1/resources/${r.id}/comments`,
       headers,
-      payload: { body: "通知测试", parentId: null },
+      payload: {
+        richBody: {
+          version: 1,
+          blocks: [
+            {
+              type: "paragraph",
+              children: [{ type: "text", text: "通知测试" }],
+            },
+          ],
+        },
+        parentId: null,
+      },
     });
     await notice;
     const sheet = await content.create(owner, {
@@ -585,126 +621,127 @@ it("serves authenticated WebSocket collaboration, pushes notifications, counts u
 });
 
 const redisIt = process.env.DOCA_TEST_REDIS_URL ? it : it.skip;
-redisIt("fans out document updates and presence across two server instances", async () => {
-  const origin = "http://localhost:39130";
-  const prefix = `doca-collaboration-${crypto.randomUUID()}`;
-  const left = await createApp(db, {
-    origin,
-    redisUrl: process.env.DOCA_TEST_REDIS_URL,
-    redisPrefix: prefix,
-    instanceId: "left",
-  });
-  const right = await createApp(db, {
-    origin,
-    redisUrl: process.env.DOCA_TEST_REDIS_URL,
-    redisPrefix: prefix,
-    instanceId: "right",
-  });
-  const sockets: WebSocket[] = [];
-  try {
-    const login = await left.inject({
-      method: "POST",
-      url: "/api/v1/auth/login",
-      headers: { host: "localhost:39130", origin },
-      payload: { login: "owner", password: "test-password-2026" },
+redisIt(
+  "fans out document updates and presence across two server instances",
+  async () => {
+    const origin = "http://localhost:39130";
+    const prefix = `doca-collaboration-${crypto.randomUUID()}`;
+    const left = await createApp(db, {
+      origin,
+      redisUrl: process.env.DOCA_TEST_REDIS_URL,
+      redisPrefix: prefix,
+      instanceId: "left",
     });
-    const cookie = String(login.headers["set-cookie"]).split(";")[0]!;
-    const r = await resource();
-    const headers = { host: "localhost:39130", origin, cookie };
-    const rawHeaders = Object.entries(headers).flat();
-    const a = await left.injectWS("/api/v1/ws", { headers, rawHeaders });
-    const b = await right.injectWS("/api/v1/ws", { headers, rawHeaders });
-    sockets.push(a, b);
-    const next = (
-      ws: WebSocket,
-      type: string,
-      matches: (message: any) => boolean = () => true,
-    ) =>
-      new Promise<any>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          ws.off("message", receive);
-          reject(new Error(`Waiting for cross-instance ${type}`));
-        }, 4000);
-        const receive = (raw: unknown) => {
-          const message = JSON.parse(String(raw));
-          if (message.type !== type || !matches(message)) return;
-          clearTimeout(timer);
-          ws.off("message", receive);
-          resolve(message);
-        };
-        ws.on("message", receive);
-      });
-    const joinedA = next(a, "sync-response");
-    a.send(
-      JSON.stringify({
-        type: "join",
-        id: "join-left",
-        room: r.id,
-        protocolVersion: 1,
-        codec: "slate-kit",
-        schemaVersion: 3,
-      }),
-    );
-    const initial = await joinedA;
-    const joinedB = next(b, "sync-response");
-    b.send(
-      JSON.stringify({
-        type: "join",
-        id: "join-right",
-        room: r.id,
-        protocolVersion: 1,
-        codec: "slate-kit",
-        schemaVersion: 3,
-      }),
-    );
-    await joinedB;
-    const doc = new Doc();
-    const runtime = new YjsDocument(doc);
+    const right = await createApp(db, {
+      origin,
+      redisUrl: process.env.DOCA_TEST_REDIS_URL,
+      redisPrefix: prefix,
+      instanceId: "right",
+    });
+    const sockets: WebSocket[] = [];
     try {
-      applyUpdate(doc, unb64(initial.update));
-      const peerUpdate = next(b, "update", (message) => message.seq === 1);
-      const ack = next(a, "ack", (message) => message.id === "cross-update");
+      const login = await left.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        headers: { host: "localhost:39130", origin },
+        payload: { login: "owner", password: "test-password-2026" },
+      });
+      const cookie = String(login.headers["set-cookie"]).split(";")[0]!;
+      const r = await resource();
+      const headers = { host: "localhost:39130", origin, cookie };
+      const rawHeaders = Object.entries(headers).flat();
+      const a = await left.injectWS("/api/v1/ws", { headers, rawHeaders });
+      const b = await right.injectWS("/api/v1/ws", { headers, rawHeaders });
+      sockets.push(a, b);
+      const next = (
+        ws: WebSocket,
+        type: string,
+        matches: (message: any) => boolean = () => true,
+      ) =>
+        new Promise<any>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            ws.off("message", receive);
+            reject(new Error(`Waiting for cross-instance ${type}`));
+          }, 4000);
+          const receive = (raw: unknown) => {
+            const message = JSON.parse(String(raw));
+            if (message.type !== type || !matches(message)) return;
+            clearTimeout(timer);
+            ws.off("message", receive);
+            resolve(message);
+          };
+          ws.on("message", receive);
+        });
+      const joinedA = next(a, "sync-response");
       a.send(
         JSON.stringify({
-          type: "update",
-          id: "cross-update",
+          type: "join",
+          id: "join-left",
           room: r.id,
-          epochId: initial.epochId,
           protocolVersion: 1,
           codec: "slate-kit",
           schemaVersion: 3,
-          update: b64(
-            runtime.editText(blockId(runtime), 0, 0, "cross-instance"),
-          ),
         }),
       );
-      expect((await ack).seq).toBe(1);
-      expect((await peerUpdate).seq).toBe(1);
-      const cursor = next(
-        b,
-        "cursors",
-        (message) => message.sessions?.some((item: any) => item.userId === owner.id),
-      );
-      const anchor = runtime.createCommentAnchor(blockId(runtime), 0, 0);
-      a.send(
+      const initial = await joinedA;
+      const joinedB = next(b, "sync-response");
+      b.send(
         JSON.stringify({
-          type: "cursor",
-          id: "cross-cursor",
+          type: "join",
+          id: "join-right",
           room: r.id,
-          epochId: initial.epochId,
-          selection: {
-            anchor: { blockId: anchor.blockId, position: b64(anchor.start) },
-            focus: { blockId: anchor.blockId, position: b64(anchor.end) },
-          },
+          protocolVersion: 1,
+          codec: "slate-kit",
+          schemaVersion: 3,
         }),
       );
-      expect((await cursor).sessions).toHaveLength(1);
+      await joinedB;
+      const doc = new Doc();
+      const runtime = new YjsDocument(doc);
+      try {
+        applyUpdate(doc, unb64(initial.update));
+        const peerUpdate = next(b, "update", (message) => message.seq === 1);
+        const ack = next(a, "ack", (message) => message.id === "cross-update");
+        a.send(
+          JSON.stringify({
+            type: "update",
+            id: "cross-update",
+            room: r.id,
+            epochId: initial.epochId,
+            protocolVersion: 1,
+            codec: "slate-kit",
+            schemaVersion: 3,
+            update: b64(
+              runtime.editText(blockId(runtime), 0, 0, "cross-instance"),
+            ),
+          }),
+        );
+        expect((await ack).seq).toBe(1);
+        expect((await peerUpdate).seq).toBe(1);
+        const cursor = next(b, "cursors", (message) =>
+          message.sessions?.some((item: any) => item.userId === owner.id),
+        );
+        const anchor = runtime.createCommentAnchor(blockId(runtime), 0, 0);
+        a.send(
+          JSON.stringify({
+            type: "cursor",
+            id: "cross-cursor",
+            room: r.id,
+            epochId: initial.epochId,
+            selection: {
+              anchor: { blockId: anchor.blockId, position: b64(anchor.start) },
+              focus: { blockId: anchor.blockId, position: b64(anchor.end) },
+            },
+          }),
+        );
+        expect((await cursor).sessions).toHaveLength(1);
+      } finally {
+        runtime.destroy();
+        doc.destroy();
+      }
     } finally {
-      runtime.destroy();
-      doc.destroy();
+      for (const socket of sockets) socket.close();
+      await Promise.all([left.close(), right.close()]);
     }
-  } finally {
-    for (const socket of sockets) socket.close();
-    await Promise.all([left.close(), right.close()]);
-  }
-});
+  },
+);

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  MemoryPluginMigrationStore,
   PluginHost,
   PluginLifecycleError,
   validatePluginGraph,
@@ -98,9 +97,6 @@ describe("plugin host lifecycle", () => {
     const commands = defineContributionPoint<{ execute(): string }>(
       "doca.commands",
     );
-    const migrations = new MemoryPluginMigrationStore();
-    await migrations.set("doca.core", "0.8.0");
-
     const core = definePlugin({
       manifest: manifest("doca.core"),
       discover(context) {
@@ -109,9 +105,6 @@ describe("plugin host lifecycle", () => {
         context.effect(() => () => {
           calls.push("core:discover-clean");
         });
-      },
-      async migrate(_context, previous) {
-        calls.push(`core:migrate:${previous}`);
       },
       mount(context) {
         calls.push("core:mount");
@@ -141,9 +134,6 @@ describe("plugin host lifecycle", () => {
           calls.push("feature:discover-clean");
         });
       },
-      migrate(_context, previous) {
-        calls.push(`feature:migrate:${previous}`);
-      },
       mount(context) {
         calls.push("feature:mount");
         context.effect(() => () => {
@@ -158,15 +148,13 @@ describe("plugin host lifecycle", () => {
       },
     });
 
-    const host = new PluginHost({ migrations });
+    const host = new PluginHost();
     host.register(feature).register(core);
     await host.start();
     expect(host.state).toBe("running");
     expect(calls).toEqual([
       "core:discover",
       "feature:discover",
-      "core:migrate:0.8.0",
-      "feature:migrate:undefined",
       "core:mount",
       "feature:mount",
       "core:ready",
@@ -178,7 +166,7 @@ describe("plugin host lifecycle", () => {
 
     await host.dispose();
     expect(host.state).toBe("disposed");
-    expect(calls.slice(8)).toEqual([
+    expect(calls.slice(6)).toEqual([
       "feature:dispose",
       "feature:mount-clean",
       "feature:discover-clean",

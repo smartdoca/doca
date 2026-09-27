@@ -1,8 +1,4 @@
-import {
-  Context,
-  ContributionStore,
-  PluginContext,
-} from "./index.js";
+import { Context, ContributionStore, PluginContext } from "./index.js";
 import {
   validatePluginConfig,
   validatePluginManifest,
@@ -15,7 +11,6 @@ import {
 
 export interface PluginContractHarnessOptions {
   readonly config?: JsonObject;
-  readonly previousVersion?: string;
   readonly services?: readonly {
     readonly token: ServiceToken<any>;
     readonly value: any;
@@ -69,8 +64,6 @@ export async function runPluginContractHarness<
       context.inject(token);
     phases.push("initialize");
     await plugin.initialize?.(context);
-    phases.push("migrate");
-    await plugin.migrate?.(context, options.previousVersion);
     phases.push("mount");
     await plugin.mount?.(context);
     phases.push("ready");

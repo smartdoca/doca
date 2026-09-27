@@ -65,16 +65,6 @@ export async function adminUserDetails<T extends { id: string }>(
           .filter((i) => i.user_id === user.id)
           .map((i) => ({ kind: "provider", name: i.name })),
       ],
-      loginMethods: [
-        ...(row.password_hash ? ["账号密码"] : []),
-        ...contacts
-          .filter((c) => c.user_id === user.id && c.kind === "phone")
-          .map(() => "手机验证码"),
-        ...contacts
-          .filter((c) => c.user_id === user.id && c.kind === "email")
-          .map(() => "邮箱验证码"),
-        ...identities.filter((i) => i.user_id === user.id).map((i) => i.name),
-      ],
       contacts: contacts
         .filter((c) => c.user_id === user.id)
         .map(({ kind, value }) => ({ kind, value })),

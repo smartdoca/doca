@@ -2,10 +2,7 @@ import { openTestDatabase as openDatabase } from "./database.js";
 import { publishIntegrationEvents } from "@core/modules/automation/events.js";
 import { beforeEach, afterEach, it, expect } from "vitest";
 import { type DB } from "@db/index.js";
-import {
-  createUser,
-  type Actor,
-} from "@core/modules/identity/passwords.js";
+import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import { createDocuments } from "./editor-client.js";
 import { listTime } from "../apps/web/src/shared/utils/list-time.js";
@@ -13,6 +10,12 @@ let db: DB,
   owner: Actor,
   guest: Actor,
   content: ReturnType<typeof createContent>;
+const commentBody = (text: string) => ({
+  version: 1 as const,
+  blocks: [
+    { type: "paragraph" as const, children: [{ type: "text" as const, text }] },
+  ],
+});
 beforeEach(async () => {
   db = await openDatabase({ driver: "sqlite", path: ":memory:" });
   owner = {
@@ -87,7 +90,7 @@ it("purges a complete library subtree and related rows but preserves unrelated f
   const keep = await make("Keep");
   await createDocuments(db).exchange(owner, doc.id, {});
   await content.visit(owner, doc.id);
-  await content.comment(owner, doc.id, "comment", null);
+  await content.comment(owner, doc.id, commentBody("comment"), null);
   await content.reaction(owner, doc.id, "like", true);
   await content.trash(owner, lib.id, lib.version);
   const preview = await content.trashPreview(owner, lib.id);
@@ -159,7 +162,9 @@ it("purges one trashed root together with already trashed descendants", async ()
   )!;
   const result = await content.purgeDeleted(owner, root.id, root.version);
   expect(result.count).toBe(2);
-  expect(await db.selectFrom("resources").selectAll().execute()).toHaveLength(0);
+  expect(await db.selectFrom("resources").selectAll().execute()).toHaveLength(
+    0,
+  );
   expect(
     await db
       .selectFrom("quick_note_compilations")
@@ -191,7 +196,9 @@ it("refuses to purge a trashed parent that still has a live child", async () => 
   await expect(
     content.purgeDeleted(owner, root.id, root.version),
   ).rejects.toThrow("子文档");
-  expect(await db.selectFrom("resources").selectAll().execute()).toHaveLength(2);
+  expect(await db.selectFrom("resources").selectAll().execute()).toHaveLength(
+    2,
+  );
 });
 it("rejects unauthorized, duplicate, active, stale or restored purge targets atomically", async () => {
   const a = await make("A"),

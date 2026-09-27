@@ -103,8 +103,7 @@ export function DocumentFind({
         for (const leaf of Array.from(
           h.querySelectorAll<HTMLElement>("[data-slate-string]"),
         )) {
-          if (leaf.closest(".atomic-inline-anchor, .legacy-mention-anchor"))
-            continue;
+          if (leaf.closest(".atomic-inline-anchor")) continue;
           const block =
             leaf.closest<HTMLElement>('[data-slate-node="element"]') ?? leaf;
           const walker = document.createTreeWalker(leaf, NodeFilter.SHOW_TEXT);

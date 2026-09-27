@@ -43,21 +43,18 @@ export async function enqueueProjection(
       max_attempts: 5,
     })
     .onConflict((oc) =>
-      oc
-        .column("id")
-        .doUpdateSet((eb) => ({
-          payload: JSON.stringify(payload),
-          revision: eb("projection_jobs.revision", "+", 1),
-          attempts: 0,
-          available_at,
-          last_error: null,
-          status: "queued",
-          plugin_id: null,
-          max_attempts: 5,
-        })),
+      oc.column("id").doUpdateSet((eb) => ({
+        payload: JSON.stringify(payload),
+        revision: eb("projection_jobs.revision", "+", 1),
+        attempts: 0,
+        available_at,
+        last_error: null,
+        status: "queued",
+        plugin_id: null,
+        max_attempts: 5,
+      })),
     )
     .execute();
-
 }
 
 /** Enqueue one durable occurrence without resetting an active lease or retry. */
@@ -187,7 +184,7 @@ export interface RuntimeJobInput {
   readonly availableAt?: string;
 }
 
-/** Adds a plugin-owned job without changing the legacy projection API. */
+/** Adds a plugin-owned job to the shared durable queue. */
 export async function enqueueRuntimeJob(db: DB, input: RuntimeJobInput) {
   if (!input.id) throw new TypeError("Job id must not be empty");
   if (!input.kind) throw new TypeError("Job kind must not be empty");
@@ -238,8 +235,7 @@ function leaseRevision(job: LeasedJob): number {
 }
 
 /**
- * Adapts the existing durable projection queue to the job host's leasing
- * boundary. Legacy enqueueProjection/processProjections callers remain valid.
+ * Exposes the durable projection queue through the job host's leasing boundary.
  */
 export function createProjectionJobSchedulerAdapter(
   db: DB,

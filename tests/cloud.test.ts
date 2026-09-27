@@ -146,7 +146,12 @@ describe("cloud baseline", () => {
     expect(
       (
         await request("POST", `/resources/${r.id}/comments`, "", {
-          body: "no",
+          richBody: {
+            version: 1,
+            blocks: [
+              { type: "paragraph", children: [{ type: "text", text: "no" }] },
+            ],
+          },
           parentId: null,
         })
       ).statusCode,
@@ -326,7 +331,12 @@ describe("cloud baseline", () => {
     const r = await create();
     await acl(r.id, [{ userId: bobId, role: "commenter" }]);
     const comment = await request("POST", `/resources/${r.id}/comments`, bob, {
-      body: "有帮助",
+      richBody: {
+        version: 1,
+        blocks: [
+          { type: "paragraph", children: [{ type: "text", text: "有帮助" }] },
+        ],
+      },
       parentId: null,
     });
     expect(comment.statusCode, comment.body).toBe(200);
@@ -347,7 +357,18 @@ describe("cloud baseline", () => {
           "PATCH",
           `/resources/${r.id}/comments/${comments[0].id}`,
           alice,
-          { version: 1, body: "替别人改" },
+          {
+            version: 1,
+            richBody: {
+              version: 1,
+              blocks: [
+                {
+                  type: "paragraph",
+                  children: [{ type: "text", text: "替别人改" }],
+                },
+              ],
+            },
+          },
         )
       ).statusCode,
     ).toBe(403);
@@ -357,7 +378,18 @@ describe("cloud baseline", () => {
           "PATCH",
           `/resources/${r.id}/comments/${comments[0].id}`,
           bob,
-          { version: 1, body: "更新" },
+          {
+            version: 1,
+            richBody: {
+              version: 1,
+              blocks: [
+                {
+                  type: "paragraph",
+                  children: [{ type: "text", text: "更新" }],
+                },
+              ],
+            },
+          },
         )
       ).statusCode,
     ).toBe(200);
@@ -433,6 +465,8 @@ describe("cloud baseline", () => {
           revision: settings.revision,
           siteName: "Test",
           registrationEnabled: true,
+          defaultLocale: settings.default_locale,
+          defaultTimezone: settings.default_timezone,
         })
       ).statusCode,
     ).toBe(200);
@@ -500,22 +534,6 @@ describe("cloud baseline", () => {
       (await request("PUT", "/admin/settings", adminCookie, payload))
         .statusCode,
     ).toBe(409);
-    // Older clients can still update existing fields without resetting defaults.
-    expect(
-      (
-        await request("PUT", "/admin/settings", adminCookie, {
-          revision: initial.revision + 1,
-          siteName: "Renamed",
-          registrationEnabled: false,
-        })
-      ).statusCode,
-    ).toBe(200);
-    expect(
-      (await request("GET", "/admin/settings", adminCookie)).json(),
-    ).toMatchObject({
-      default_locale: "en",
-      default_timezone: "America/Los_Angeles",
-    });
   });
   it("allows an existing short test password without weakening new password rules", async () => {
     await db
@@ -688,9 +706,9 @@ describe("cloud baseline", () => {
     await create();
     await create(alice, { kind: "library" });
     expect((await request("GET", "/admin/stats", alice)).statusCode).toBe(403);
-    expect((await request("GET", "/admin/online-users", alice)).statusCode).toBe(
-      403,
-    );
+    expect(
+      (await request("GET", "/admin/online-users", alice)).statusCode,
+    ).toBe(403);
     expect(
       (await request("GET", "/admin/stats", adminCookie)).json(),
     ).toMatchObject({ documents: 1, libraries: 1, users: 3, online: 0 });

@@ -761,9 +761,7 @@ export function KnowledgeWorkspace({
               } = {};
               try {
                 detail = JSON.parse(run.detail);
-              } catch {
-                /* empty legacy detail */
-              }
+              } catch {}
               return (
                 <li key={run.id}>
                   <strong>

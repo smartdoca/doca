@@ -2,10 +2,7 @@ import { openTestDatabase as openDatabase } from "./database.js";
 import { beforeEach, afterEach, it, expect } from "vitest";
 import { randomUUID } from "node:crypto";
 import { type DB } from "@db/index.js";
-import {
-  createUser,
-  type Actor,
-} from "@core/modules/identity/passwords.js";
+import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import { createDocuments, b64, unb64 } from "./editor-client.js";
 import {
@@ -177,20 +174,13 @@ it("cannot bypass directory restrictions by posting arbitrary user IDs for permi
   });
   await grant(r.id, [bob]); // Existing grants remain editable.
   await expect(
-    content.comment(owner, r.id, "", null, undefined, rich(bob)),
+    content.comment(owner, r.id, rich(bob), null),
   ).rejects.toMatchObject({ status: 403 });
 });
 it("stores structured comments, canonicalizes mentions, and only notifies recipients with access", async () => {
   const r = await resource();
   await grant(r.id);
-  await content.comment(
-    owner,
-    r.id,
-    "",
-    null,
-    undefined,
-    rich(bob, outsider, owner),
-  );
+  await content.comment(owner, r.id, rich(bob, outsider, owner), null);
   const [c] = (await content.detail(owner, r.id)).comments;
   expect(JSON.parse(c!.body_json!).blocks[0].children[1]).toMatchObject({
     label: "Bob",
@@ -218,7 +208,7 @@ it("stores structured comments, canonicalizes mentions, and only notifies recipi
 it("notifies owner once when mentioned in a comment, deduplicates repeated reactions, and hides revoked notifications", async () => {
   const r = await resource();
   await grant(r.id);
-  await content.comment(bob, r.id, "", null, undefined, rich(owner));
+  await content.comment(bob, r.id, rich(owner), null);
   expect(
     (await notificationPage(db, owner, 0)).items.map((n) => n.type),
   ).toEqual(["comment.mentioned"]);
@@ -236,7 +226,7 @@ it("notifies owner once when mentioned in a comment, deduplicates repeated react
     nextOffset: null,
   });
 });
-it("validates comment images against their resource and image purpose; retains plain comment compatibility", async () => {
+it("validates comment images against their resource and image purpose", async () => {
   const r = await resource(),
     other = await resource(),
     assetId = randomUUID();
@@ -279,10 +269,6 @@ it("validates comment images against their resource and image purpose; retains p
   await expect(
     normalizeComment(db, owner, r.id, image, ""),
   ).rejects.toMatchObject({ status: 400 });
-  await content.comment(owner, r.id, "legacy plain text", null);
-  expect((await content.detail(owner, r.id)).comments[0]!.body).toBe(
-    "legacy plain text",
-  );
 });
 it("document mentions notify once per new mention node after durable updates, including a second mention of the same user", async () => {
   const r = await resource();
@@ -393,14 +379,7 @@ it("HTTP directory policy requires admin, lookup follows policy, and read receip
     expect((await notificationPage(db, bob, 0)).unread).toBe(1);
     await request("POST", "/notifications/read", bc, { ids: [n.id] });
     expect((await notificationPage(db, bob, 0)).unread).toBe(0);
-    await content.comment(
-      owner,
-      r.id,
-      "another notification",
-      null,
-      undefined,
-      rich(bob),
-    );
+    await content.comment(owner, r.id, rich(bob), null);
     await content.reaction(bob, r.id, "like", true);
     expect((await notificationPage(db, bob, 0)).unread).toBe(1);
     expect((await notificationPage(db, owner, 0)).unread).toBe(1);
@@ -421,9 +400,9 @@ it("pins documents without notifying the owner and drops them when unpinned", as
     title: "Later",
   });
   const library = await resource("library");
-  await expect(content.reaction(owner, library.id, "pin", true)).rejects.toThrow(
-    /只能置顶文档/,
-  );
+  await expect(
+    content.reaction(owner, library.id, "pin", true),
+  ).rejects.toThrow(/只能置顶文档/);
   await grant(first.id);
   await content.reaction(owner, first.id, "pin", true);
   await content.reaction(bob, first.id, "favorite", true);
@@ -437,7 +416,9 @@ it("pins documents without notifying the owner and drops them when unpinned", as
   expect(pinned.items.map((item) => item.id)).toEqual([first.id]);
   expect(pinned.items[0]).toMatchObject({ pinned: true, favorite: true });
   expect((await content.detail(bob, first.id)).pinned).toBe(true);
-  const types = (await notificationPage(db, owner, 0)).items.map((item) => item.type);
+  const types = (await notificationPage(db, owner, 0)).items.map(
+    (item) => item.type,
+  );
   expect(types).toContain("favorite.added");
   expect(types).not.toContain("pin.added");
   await content.reaction(bob, first.id, "pin", false);

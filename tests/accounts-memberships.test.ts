@@ -573,12 +573,18 @@ it("disabling a contact field used for password login triggers the full login-me
 it("lets an administrator replace a lost password and end existing sessions", async () => {
   const next = "replacement-password";
   expect(
-    (await req("POST", `/admin/users/${userId}/password`, user, { password: next }))
-      .statusCode,
+    (
+      await req("POST", `/admin/users/${userId}/password`, user, {
+        password: next,
+      })
+    ).statusCode,
   ).toBe(403);
   expect(
-    (await req("POST", `/admin/users/${userId}/password`, admin, { password: "short" }))
-      .statusCode,
+    (
+      await req("POST", `/admin/users/${userId}/password`, admin, {
+        password: "short",
+      })
+    ).statusCode,
   ).toBe(400);
   const reset = await req("POST", `/admin/users/${userId}/password`, admin, {
     password: next,
@@ -586,7 +592,8 @@ it("lets an administrator replace a lost password and end existing sessions", as
   expect(reset.statusCode, reset.body).toBe(200);
   expect((await req("GET", "/me", user)).statusCode).toBe(401);
   expect(
-    (await req("POST", "/auth/login", "", { login: "alice", password })).statusCode,
+    (await req("POST", "/auth/login", "", { login: "alice", password }))
+      .statusCode,
   ).toBe(401);
   const login = await req("POST", "/auth/login", "", {
     login: "alice",
@@ -645,7 +652,7 @@ it("admin user creation follows required profile fields and corrections can repl
   expect(row.login).toBe("new-account");
   expect(row.public_id).toBe(row.login);
   expect(row).not.toHaveProperty("baseLevel");
-  expect(row.loginMethods).toContain("账号密码");
+  expect(row.loginMethodDetails).toContainEqual({ kind: "password" });
   expect(Date.parse(row.last_login_at)).toBeGreaterThan(0);
   profile = (await req("GET", `/admin/users/${id}/account`, admin)).json();
   const cleared = await req("PUT", `/admin/users/${id}/account`, admin, {

@@ -195,7 +195,7 @@ export async function storeNewMarkdown(
         updated_at: now,
       })
       .execute();
-    await indexDocumentReferences(tx, id, markdownReferenceNodes(text), 0);
+    await indexDocumentReferences(tx, id, markdownReferenceNodes(text));
   } finally {
     doc.destroy();
   }
@@ -372,7 +372,6 @@ export async function exchangeMarkdown(
             tx,
             id,
             markdownReferenceNodes(content),
-            seq,
           );
           if (checkpoint) {
             checkpointSeq = seq;

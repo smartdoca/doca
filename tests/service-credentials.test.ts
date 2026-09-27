@@ -207,39 +207,3 @@ it("rotates verification gateway credentials live and refreshes another running 
     await other.close();
   }
 });
-
-it("imports legacy secrets only before database configuration exists", async () => {
-  await app.close();
-  await db
-    .deleteFrom("account_settings")
-    .where("id", "=", "service-credentials")
-    .execute();
-  const previous = process.env.DOCA_AUTH_CREDENTIALS;
-  try {
-    process.env.DOCA_AUTH_CREDENTIALS = JSON.stringify({
-      legacy: "legacy-client-secret",
-    });
-    app = await createApp(db, { origin });
-    const c = await read();
-    expect(c.config.identity.credentials.legacy).toBeNull();
-    c.config.identity.credentials.legacy = "database-client-secret";
-    expect(
-      (await request("PUT", "/admin/service-credentials", admin, c)).statusCode,
-    ).toBe(200);
-    await app.close();
-    process.env.DOCA_AUTH_CREDENTIALS = "invalid old environment JSON";
-    app = await createApp(db, { origin });
-    expect((await read()).config.identity.credentials.legacy).toBeNull();
-    const row = await db
-      .selectFrom("account_settings")
-      .select("config")
-      .where("id", "=", "service-credentials")
-      .executeTakeFirstOrThrow();
-    expect(JSON.parse(row.config).identity.credentials.legacy).toBe(
-      "database-client-secret",
-    );
-  } finally {
-    if (previous === undefined) delete process.env.DOCA_AUTH_CREDENTIALS;
-    else process.env.DOCA_AUTH_CREDENTIALS = previous;
-  }
-});

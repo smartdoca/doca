@@ -15,6 +15,12 @@ import {} from "@db/index.js";
 import { createUser } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import { createApp } from "../apps/server/src/app/create-app.js";
+const commentBody = (text: string) => ({
+  version: 1 as const,
+  blocks: [
+    { type: "paragraph" as const, children: [{ type: "text" as const, text }] },
+  ],
+});
 
 it("encodes user-card variables and rejects executable, credentialed and protocol-relative URLs", () => {
   expect(
@@ -209,7 +215,7 @@ it("limits library catalogue to owners and whole-library writers, not public rea
       ),
     ).toEqual([lib.id]);
     await expect(
-      service.comment(owner, lib.id, "no comments", null),
+      service.comment(owner, lib.id, commentBody("no comments"), null),
     ).rejects.toThrow("知识库本身不支持评论");
   } finally {
     await db.destroy();

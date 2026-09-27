@@ -4,7 +4,7 @@
 
 当前基线同时支持 SQLite / PostgreSQL：
 
-- `users.public_id`：独立于内部 UUID 的唯一用户标识，创建时归一化为小写，3–160 位，允许英文字母、数字和 `._@+-`。已有用户以 login 回填；数据库唯一索引约束。注册和管理员创建可指定 `publicId`，省略则使用 login。创建后不随昵称变化。
+- `users.public_id`：独立于内部 UUID 的唯一用户标识，创建时归一化为小写，3–160 位，允许英文字母、数字和 `._@+-`。数据库唯一索引约束。注册和管理员创建可指定 `publicId`，省略则使用 login。创建后不随昵称变化。
 - SSO 使用已验证身份中的 preferred_username（OIDC）、login（GitHub），否则使用 subject。若无效或本站已占用，则生成身份源命名空间下的标识。绝不因同名、同邮箱、同 public_id 合并账号；认证关联仍由 provider + subject 唯一确定。绑定新登录方式不修改原用户标识。
 - `users.directory_mode`：可空，空表示跟随站点 `settings.directory_mode`。
 - `comments.body_json`：版本化富评论 JSON；`body` 保留派生纯文本以兼容旧接口。旧纯字符串评论继续可读。

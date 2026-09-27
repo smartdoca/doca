@@ -214,7 +214,7 @@ Potential seams: navigation items, settings sections, document header actions,
 editor toolbar commands, and route surfaces. The shell must retain one owner for
 route precedence, authentication redirects, accessibility, locale, and layout.
 
-## Migration gates
+## Extraction gates
 
 A capability can move behind a plugin contribution only when:
 
@@ -225,10 +225,10 @@ A capability can move behind a plugin contribution only when:
    providers, or UI registrations behind;
 4. plugin dependency and required-service failures occur before serving
    traffic;
-5. durable plugin migration state is configured when the capability persists
-   plugin-owned data;
+5. plugin-owned data starts from the current empty database baseline and a
+   mismatched schema prevents startup;
 6. application bootstrap still owns security and authorization policy;
-7. rollback to the first-party registration path is possible during migration.
+7. the extracted contribution completely replaces the first-party registration.
 
 The plugin foundation tests cover contracts, graph ordering, lifecycle,
 injection, contribution collisions, dispatch, and cleanup. They do not count as

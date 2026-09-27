@@ -79,7 +79,7 @@
 富文本再提供 onFormatStateChange / queryFormatState：
 marks、blockType、alignment、canUndo、canRedo。固定和悬浮工具栏使用同一个状态源，不用 DOM 猜格式。本轮通过现有 onChange 和 query 接口更新固定工具栏。
 
-组件与平台必须约定 transaction origin：local、remote、bootstrap、migration。只有 local 被当作用户写入。禁止在 remote apply 的过程中重新包装命令生成新的 operationId。
+组件与平台必须约定 transaction origin：local、remote、bootstrap。只有 local 被当作用户写入。禁止在 remote apply 的过程中重新包装命令生成新的 operationId。
 
 ## 6. 在线选区
 
