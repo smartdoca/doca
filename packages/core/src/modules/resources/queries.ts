@@ -1,9 +1,13 @@
 import { distributionBehavior } from "../access/distribution-behavior.js";
 import { policyFieldQuery } from "../access/queries.js";
 import { sql } from "kysely";
-import { createHash } from "node:crypto";
 import type { DB } from "../../../../db/src/index.js";
 import { readSnapshot } from "../../../../db/src/transactions.js";
+import {
+  cursorFingerprint,
+  decodePageCursor,
+  encodePageCursor,
+} from "../../shared/cursor.js";
 import { fail } from "../../shared/errors.js";
 import {
   accessContext,
@@ -70,9 +74,7 @@ export async function queryResourcePage(
       if ((await authorize(tx, actor, id)).resource.kind !== "library")
         fail(400, "知识库筛选条件无效");
     if (input.parentId) await authorize(tx, actor, input.parentId);
-    const visited = sql<
-      string | null
-    >`(select v.visited_at from resource_visits v where v.resource_id = r.id and v.user_id = ${actor.id})`;
+    const visited = sql<string | null>`visit.visited_at`;
     const pinStamp = sql<string>`coalesce((select pin.created_at from reactions pin where pin.resource_id = r.id and pin.user_id = ${actor.id} and pin.kind = 'pin'), '')`;
     const enrolled = entryQuery(
       sql.ref("r.id"),
@@ -86,7 +88,13 @@ export async function queryResourcePage(
       input.scope !== "personal" && publicMode(policy, "library") === "search",
     );
     const treeMode = !!input.includeAncestors && libraryIds.length > 0;
-    let query = tx.selectFrom("resources as r");
+    let query = tx
+      .selectFrom("resources as r")
+      .leftJoin("resource_visits as visit", (join) =>
+        join
+          .onRef("visit.resource_id", "=", "r.id")
+          .on("visit.user_id", "=", actor.id),
+      );
     if (!treeMode)
       query = query.where(
         accessibleQuery(
@@ -162,7 +170,7 @@ export async function queryResourcePage(
           .where("r.kind", "=", "document");
         break;
       case "recent":
-        query = query.where(sql<boolean>`${visited} is not null`);
+        query = query.where("visit.resource_id", "is not", null);
         break;
       case "favorites":
         query = query.where(
@@ -257,39 +265,30 @@ export async function queryResourcePage(
           ? sql<string>`coalesce(${visited}, '')`
           : sql.ref(key === "created_at" ? "r.created_at" : "r.updated_at");
     const ascending = input.order === "asc";
-    const fingerprint = createHash("sha256")
-      .update(
-        JSON.stringify({
-          ...input,
-          offset: undefined,
-          cursor: undefined,
-          matchedIds: undefined,
-          actor: actor.id,
-        }),
-      )
-      .digest("hex");
-    let total = Number(
-      (
-        await query
-          .select((eb) => eb.fn.countAll().as("n"))
-          .executeTakeFirstOrThrow()
-      ).n,
-    );
+    const fingerprint = cursorFingerprint({
+      ...input,
+      offset: undefined,
+      cursor: undefined,
+      matchedIds: undefined,
+      actor: actor.id,
+    });
+    // Cursor pages do not need to repeat the expensive exact count. The recent
+    // view is intentionally count-free because ordered retrieval is much cheaper
+    // than evaluating permissions across the user's complete visit history.
+    let total: number | null = null;
+    if (!input.cursor && input.scope !== "recent")
+      total = Number(
+        (
+          await query
+            .select((eb) => eb.fn.countAll().as("n"))
+            .executeTakeFirstOrThrow()
+        ).n,
+      );
     if (input.cursor) {
-      try {
-        const c = JSON.parse(Buffer.from(input.cursor, "base64url").toString());
-        if (
-          c.fingerprint !== fingerprint ||
-          typeof c.value !== "string" ||
-          typeof c.id !== "string"
-        )
-          throw Error();
-        query = query.where(
-          sql<boolean>`(${orderKey} ${ascending ? sql`>` : sql`<`} ${c.value} or (${orderKey} = ${c.value} and r.id > ${c.id}))`,
-        );
-      } catch {
-        fail(400, "分页游标无效，请重新查询");
-      }
+      const c = decodePageCursor(input.cursor, fingerprint);
+      query = query.where(
+        sql<boolean>`(${orderKey} ${ascending ? sql`>` : sql`<`} ${c.value} or (${orderKey} = ${c.value} and r.id > ${c.id}))`,
+      );
     }
     const offset = input.cursor ? 0 : (input.offset ?? 0);
     const rows = await query
@@ -311,7 +310,7 @@ export async function queryResourcePage(
       .orderBy(orderKey, ascending ? "asc" : "desc")
       .orderBy("r.id")
       .offset(offset)
-      .limit(treeMode ? 10000 : 101)
+      .limit(treeMode ? 10001 : 101)
       .execute();
     const ctx = await accessContext(
       tx,
@@ -320,12 +319,13 @@ export async function queryResourcePage(
     );
     let page = rows.slice(0, 100);
     if (treeMode) {
+      const treeRows = rows.slice(0, 10000);
       const included = new Set(
-        rows
+        treeRows
           .filter((r) => permission(r, actor, ctx.resources, ctx.grants) > 0)
           .map((r) => r.id),
       );
-      for (const row of rows) {
+      for (const row of treeRows) {
         if (!included.has(row.id)) continue;
         let parent = row.parent_id;
         const seen = new Set<string>();
@@ -333,11 +333,11 @@ export async function queryResourcePage(
           seen.add(parent);
           included.add(parent);
           parent =
-            rows.find((candidate) => candidate.id === parent)?.parent_id ??
+            treeRows.find((candidate) => candidate.id === parent)?.parent_id ??
             null;
         }
       }
-      page = rows.filter((r) => included.has(r.id));
+      page = treeRows.filter((r) => included.has(r.id));
       total = page.length;
     }
     const last = page.at(-1);
@@ -365,15 +365,10 @@ export async function queryResourcePage(
       total,
       nextOffset: treeMode ? null : rows.length > 100 ? offset + 100 : null,
       nextCursor:
-        rows.length > 100 && last
-          ? Buffer.from(
-              JSON.stringify({
-                fingerprint,
-                value: last.cursorValue,
-                id: last.id,
-              }),
-            ).toString("base64url")
+        !treeMode && rows.length > 100 && last
+          ? encodePageCursor(fingerprint, String(last.cursorValue), last.id)
           : null,
+      truncated: treeMode && rows.length > 10000,
     };
   });
 }

@@ -15,6 +15,7 @@ export function registerExperience(
     params = Type.Object({ id }),
     query = Type.Object({
       offset: Type.Optional(Type.Integer({ minimum: 0, maximum: 100000 })),
+      cursor: Type.Optional(Type.String({ maxLength: 2048 })),
       tab: Type.Optional(
         Type.Union(["stats", "visits", "audit"].map((x) => Type.Literal(x))),
       ),
@@ -22,7 +23,7 @@ export function registerExperience(
   for (const kind of ["likes", "info", "versions"] as const)
     api.get<{
       Params: { id: string };
-      Querystring: { offset?: number; tab?: string };
+      Querystring: { offset?: number; cursor?: string; tab?: string };
     }>(
       `/api/v1/resources/:id/${kind}`,
       { schema: { params, querystring: query } },
@@ -33,8 +34,14 @@ export function registerExperience(
               req.params.id,
               req.query.tab ?? "stats",
               req.query.offset,
+              req.query.cursor,
             )
-          : service[kind](actor(req), req.params.id, req.query.offset),
+          : service[kind](
+              actor(req),
+              req.params.id,
+              req.query.offset,
+              req.query.cursor,
+            ),
     );
   api.get<{ Params: { id: string } }>(
     "/api/v1/resources/:id/share-link",

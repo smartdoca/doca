@@ -64,7 +64,7 @@ export function registerIdentity(
     admin: (r: FastifyRequest) => Actor;
     sessionToken: (r: FastifyRequest) => string | null;
     cookie: (s: string) => string;
-    limit: (key: string, max?: number) => void;
+    limit: (key: string, max?: number) => Promise<void>;
     loginMethodRuntime?: { phoneReady: boolean; emailReady: boolean };
   },
   runtime: IdentityRuntime = identityRuntime(),
@@ -435,7 +435,7 @@ export function registerIdentity(
     { schema: { body: object({ password: str(128) }) } },
     async (req) => {
       const a = ctx.authenticated(req);
-      ctx.limit(`reauth:${req.ip}`);
+      await ctx.limit(`reauth:${req.ip}`);
       await passwordAllowed(db);
       await allowSecurityMethod(db, "password");
       const user = await db
@@ -539,7 +539,7 @@ export function registerIdentity(
       },
     },
     async (req) => {
-      ctx.limit(`setup-password:${req.ip}`, 5);
+      await ctx.limit(`setup-password:${req.ip}`, 5);
       await passwordAllowed(db);
       await recent(req);
       const hash = await hashPassword(req.body.password);
@@ -582,7 +582,7 @@ export function registerIdentity(
       },
     },
     async (req, reply) => {
-      ctx.limit(`oauth:${req.ip}`, 20);
+      await ctx.limit(`oauth:${req.ip}`, 20);
       const a =
         req.body.intent === "security"
           ? ctx.authenticated(req)
@@ -649,7 +649,7 @@ export function registerIdentity(
     async (req, reply) => {
       // Never log callback URLs, provider tokens, codes, or provider response bodies.
       try {
-        ctx.limit(`oauth-callback:${req.ip}`, 30);
+        await ctx.limit(`oauth-callback:${req.ip}`, 30);
         const url = new URL(req.url, ctx.origin),
           state = url.searchParams.get("state") ?? "";
         if (!/^[a-f0-9]{64}$/.test(state)) fail(400, "授权状态无效");

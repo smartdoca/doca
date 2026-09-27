@@ -144,6 +144,7 @@
 }
 .dashboard-home .document-table-row {
   height: 54px;
+  contain-intrinsic-size: auto 54px;
 }
 .dashboard-home .table-title {
   gap: 9px;

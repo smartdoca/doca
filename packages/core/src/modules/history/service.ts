@@ -1,10 +1,15 @@
 import { requireCapability } from "../access/operation-policy.js";
-import type { Transaction } from "kysely";
+import { sql, type Transaction } from "kysely";
 import { randomUUID } from "node:crypto";
 import { applyUpdate, Doc, encodeStateAsUpdate } from "slatetsx-kit-editor/yjs";
 import type { DB, Schema } from "../../../../db/src/index.js";
 import { transact } from "../../../../db/src/transactions.js";
 import { fail } from "../../shared/errors.js";
+import {
+  cursorFingerprint,
+  decodePageCursor,
+  encodePageCursor,
+} from "../../shared/cursor.js";
 import type { Action } from "../access/policy.js";
 import { authorize } from "../access/queries.js";
 import { recordAudit as audit } from "../audit/events.js";
@@ -37,9 +42,14 @@ export function createHistory(db: DB) {
     });
   }
   return {
-    async versions(actor: Actor | null, id: string, offset = 0) {
+    async versions(
+      actor: Actor | null,
+      id: string,
+      offset = 0,
+      cursor?: string,
+    ) {
       const resource = await access(db, actor, id, "read_history");
-      const rows = await db
+      let query = db
         .selectFrom("document_versions as v")
         .innerJoin("users as u", "u.id", "v.author_id")
         .select([
@@ -51,18 +61,32 @@ export function createHistory(db: DB) {
           "v.recovery_json",
           "u.display_name",
         ])
-        .where("v.resource_id", "=", id)
+        .where("v.resource_id", "=", id);
+      const fingerprint = cursorFingerprint({ kind: "versions", id });
+      if (cursor) {
+        const c = decodePageCursor(cursor, fingerprint);
+        query = query.where(
+          sql<boolean>`(v.created_at < ${c.value} or (v.created_at = ${c.value} and v.id < ${c.id}))`,
+        );
+      }
+      const rows = await query
         .orderBy("v.created_at", "desc")
         .orderBy("v.id", "desc")
-        .offset(offset)
+        .offset(cursor ? 0 : offset)
         .limit(101)
         .execute();
+      const items = rows.slice(0, 100);
+      const last = items.at(-1);
       return {
-        items: rows.slice(0, 100).map(({ recovery_json, ...row }) => ({
+        items: items.map(({ recovery_json, ...row }) => ({
           ...row,
           is_ai: !!recovery_json && JSON.parse(recovery_json).origin === "ai",
         })),
         nextOffset: rows.length > 100 ? offset + 100 : null,
+        nextCursor:
+          rows.length > 100 && last
+            ? encodePageCursor(fingerprint, last.created_at, last.id)
+            : null,
       };
     },
     async snapshot(actor: Actor, id: string) {

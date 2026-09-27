@@ -101,16 +101,16 @@ export function EmptyTrash({ done }: { done: () => void }) {
     setError("");
     try {
       const all: Resource[] = [];
-      let offset: number | null = 0;
+      let cursor: string | undefined;
       do {
         const page: Page = await api(
-          `/resources?scope=trash&sort=created_at&order=asc&offset=${offset}`,
+          `/resources?scope=trash&sort=created_at&order=asc${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
         );
         all.push(...page.items);
-        offset = page.nextOffset;
+        cursor = page.nextCursor ?? undefined;
         if (all.length > 1000)
           throw Error(t("trash.tooMany"));
-      } while (offset !== null);
+      } while (cursor);
       setTargets(all);
     } catch (e) {
       setError((e as Error).message);

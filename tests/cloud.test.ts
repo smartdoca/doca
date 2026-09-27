@@ -568,7 +568,7 @@ describe("cloud baseline", () => {
       second = await create(alice, { format: "spreadsheet" });
     expect(
       (await request("GET", "/resources?scope=recent", alice)).json().total,
-    ).toBe(0);
+    ).toBeNull();
     await request("POST", `/resources/${first.id}/visit`, alice);
     expect(
       (await request("GET", "/resources?scope=recent", alice))
@@ -581,12 +581,12 @@ describe("cloud baseline", () => {
     await acl(first.id, [{ userId: bobId, role: "reader" }]);
     await request("POST", `/resources/${first.id}/visit`, bob);
     expect(
-      (await request("GET", "/resources?scope=recent", bob)).json().total,
-    ).toBe(1);
+      (await request("GET", "/resources?scope=recent", bob)).json().items,
+    ).toHaveLength(1);
     await acl(first.id);
     expect(
-      (await request("GET", "/resources?scope=recent", bob)).json().total,
-    ).toBe(0);
+      (await request("GET", "/resources?scope=recent", bob)).json().items,
+    ).toHaveLength(0);
     await db
       .updateTable("resources")
       .set({
@@ -1130,7 +1130,7 @@ describe("uploads and storage", () => {
       const list = (
         await request("GET", "/resources?kind=document&scope=" + scope, alice)
       ).json();
-      expect(list.total).toBe(1);
+      expect(list.total).toBe(scope === "recent" ? null : 1);
       expect(list.items[0].id).toBe(doc.id);
     }
   });

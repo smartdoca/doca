@@ -583,3 +583,128 @@ it("serves authenticated WebSocket collaboration, pushes notifications, counts u
     await app.close();
   }
 });
+
+const redisIt = process.env.DOCA_TEST_REDIS_URL ? it : it.skip;
+redisIt("fans out document updates and presence across two server instances", async () => {
+  const origin = "http://localhost:39130";
+  const prefix = `doca-collaboration-${crypto.randomUUID()}`;
+  const left = await createApp(db, {
+    origin,
+    redisUrl: process.env.DOCA_TEST_REDIS_URL,
+    redisPrefix: prefix,
+    instanceId: "left",
+  });
+  const right = await createApp(db, {
+    origin,
+    redisUrl: process.env.DOCA_TEST_REDIS_URL,
+    redisPrefix: prefix,
+    instanceId: "right",
+  });
+  const sockets: WebSocket[] = [];
+  try {
+    const login = await left.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      headers: { host: "localhost:39130", origin },
+      payload: { login: "owner", password: "test-password-2026" },
+    });
+    const cookie = String(login.headers["set-cookie"]).split(";")[0]!;
+    const r = await resource();
+    const headers = { host: "localhost:39130", origin, cookie };
+    const rawHeaders = Object.entries(headers).flat();
+    const a = await left.injectWS("/api/v1/ws", { headers, rawHeaders });
+    const b = await right.injectWS("/api/v1/ws", { headers, rawHeaders });
+    sockets.push(a, b);
+    const next = (
+      ws: WebSocket,
+      type: string,
+      matches: (message: any) => boolean = () => true,
+    ) =>
+      new Promise<any>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          ws.off("message", receive);
+          reject(new Error(`Waiting for cross-instance ${type}`));
+        }, 4000);
+        const receive = (raw: unknown) => {
+          const message = JSON.parse(String(raw));
+          if (message.type !== type || !matches(message)) return;
+          clearTimeout(timer);
+          ws.off("message", receive);
+          resolve(message);
+        };
+        ws.on("message", receive);
+      });
+    const joinedA = next(a, "sync-response");
+    a.send(
+      JSON.stringify({
+        type: "join",
+        id: "join-left",
+        room: r.id,
+        protocolVersion: 1,
+        codec: "slate-kit",
+        schemaVersion: 3,
+      }),
+    );
+    const initial = await joinedA;
+    const joinedB = next(b, "sync-response");
+    b.send(
+      JSON.stringify({
+        type: "join",
+        id: "join-right",
+        room: r.id,
+        protocolVersion: 1,
+        codec: "slate-kit",
+        schemaVersion: 3,
+      }),
+    );
+    await joinedB;
+    const doc = new Doc();
+    const runtime = new YjsDocument(doc);
+    try {
+      applyUpdate(doc, unb64(initial.update));
+      const peerUpdate = next(b, "update", (message) => message.seq === 1);
+      const ack = next(a, "ack", (message) => message.id === "cross-update");
+      a.send(
+        JSON.stringify({
+          type: "update",
+          id: "cross-update",
+          room: r.id,
+          epochId: initial.epochId,
+          protocolVersion: 1,
+          codec: "slate-kit",
+          schemaVersion: 3,
+          update: b64(
+            runtime.editText(blockId(runtime), 0, 0, "cross-instance"),
+          ),
+        }),
+      );
+      expect((await ack).seq).toBe(1);
+      expect((await peerUpdate).seq).toBe(1);
+      const cursor = next(
+        b,
+        "cursors",
+        (message) => message.sessions?.some((item: any) => item.userId === owner.id),
+      );
+      const anchor = runtime.createCommentAnchor(blockId(runtime), 0, 0);
+      a.send(
+        JSON.stringify({
+          type: "cursor",
+          id: "cross-cursor",
+          room: r.id,
+          epochId: initial.epochId,
+          selection: {
+            anchor: { blockId: anchor.blockId, position: b64(anchor.start) },
+            focus: { blockId: anchor.blockId, position: b64(anchor.end) },
+          },
+        }),
+      );
+      expect((await cursor).sessions).toHaveLength(1);
+    } finally {
+      runtime.destroy();
+      doc.destroy();
+    }
+  } finally {
+    for (const socket of sockets) socket.close();
+    await Promise.all([left.close(), right.close()]);
+  }
+});

@@ -4,7 +4,7 @@ import { htmlLang } from "@doca/i18n";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { Select } from "@web/shared/components/select.js";
 import { DocumentAuthor } from "@web/features/documents/document-author.js";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   BookOpen,
   Bot,
@@ -42,6 +42,26 @@ import { listTime } from "@web/shared/utils/list-time.js";
 import { EmptyTrash, FileTrash, TrashPreview } from "@web/features/trash/trash.js";
 
 const empty: Page = { items: [], total: 0, nextOffset: null };
+function recentGroup(value?: string | null) {
+  if (!value) return "earlier";
+  const visited = new Date(value);
+  if (Number.isNaN(visited.getTime())) return "earlier";
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const day = new Date(
+    visited.getFullYear(),
+    visited.getMonth(),
+    visited.getDate(),
+  );
+  const difference = Math.round(
+    (today.getTime() - day.getTime()) / 86_400_000,
+  );
+  if (difference <= 0) return "today";
+  if (difference === 1) return "yesterday";
+  if (difference <= 7) return "last7Days";
+  if (difference <= 30) return "last30Days";
+  return "earlier";
+}
 export function Dashboard({
   section,
   refresh,
@@ -139,7 +159,7 @@ export function Dashboard({
         if (drop && present)
           return {
             ...old,
-            total: Math.max(0, old.total - 1),
+            total: old.total === null ? null : Math.max(0, old.total - 1),
             items: old.items.filter((item) => item.id !== change.id),
           };
         if (
@@ -149,7 +169,7 @@ export function Dashboard({
         )
           return {
             ...old,
-            total: old.total + 1,
+            total: old.total === null ? null : old.total + 1,
             items: [{ ...change.resource } as Resource, ...old.items],
           };
         return {
@@ -176,13 +196,18 @@ export function Dashboard({
     setOperation({ resource: r, action });
   }
   async function more() {
-    if (data.nextOffset === null) return;
+    if (data.nextCursor == null && data.nextOffset === null) return;
     setLoading(true);
     try {
-      const p = await api<Page>(
-        "/resources?" + query + "&offset=" + data.nextOffset,
-      );
-      setData((old) => ({ ...p, items: [...old.items, ...p.items] }));
+      const page = data.nextCursor
+        ? "&cursor=" + encodeURIComponent(data.nextCursor)
+        : "&offset=" + data.nextOffset;
+      const p = await api<Page>("/resources?" + query + page);
+      setData((old) => ({
+        ...p,
+        total: p.total ?? old.total,
+        items: [...old.items, ...p.items],
+      }));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -197,6 +222,7 @@ export function Dashboard({
         ? t("home.mine")
         : t("home.title");
   const home = !libraries && !trash && !mine;
+  const hasMore = data.nextCursor != null || data.nextOffset !== null;
   const tableHeader = (
     <div className="document-table-head">
       <span>{t("home.titleColumn")}</span>
@@ -364,7 +390,13 @@ export function Dashboard({
               {t("home.allLibraries")} <small>{data.total}</small>
             </h2>
           ) : (
-            <span className="subtle">{t("home.itemCount", { count: data.total })}</span>
+            <span className="subtle">
+              {data.total === null
+                ? t(hasMore ? "home.loadedMore" : "home.loadedCount", {
+                    count: data.items.length,
+                  })
+                : t("home.itemCount", { count: data.total })}
+            </span>
           )}
           <div className="grow" />
           {trash && (
@@ -479,10 +511,19 @@ export function Dashboard({
         ) : (
           <div className="document-table">
             {!home && tableHeader}
-            {data.items.map((r) => (
-              <div
+            {data.items.map((r, index) => {
+              const group = recentGroup(r.visited_at);
+              const previous = recentGroup(data.items[index - 1]?.visited_at);
+              const grouped = scope === "recent" && sort === "visited_at";
+              return (
+                <Fragment key={r.id}>
+                  {grouped && (index === 0 || group !== previous) && (
+                    <div className="document-time-group">
+                      {t(`home.recent.${group}` as Parameters<typeof t>[0])}
+                    </div>
+                  )}
+                  <div
                 className="document-table-row"
-                key={r.id}
                 onClick={(e) => {
                   if (
                     (e.target as HTMLElement).closest(
@@ -596,11 +637,13 @@ export function Dashboard({
                     <ArrowUpRight size={16} />
                   </button>
                 )}
-              </div>
-            ))}
+                  </div>
+                </Fragment>
+              );
+            })}
           </div>
         )}
-        {data.nextOffset !== null && (
+        {hasMore && (
           <button
             className="load-more"
             disabled={loading}

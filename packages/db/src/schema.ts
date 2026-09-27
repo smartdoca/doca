@@ -48,6 +48,11 @@ export interface Resource {
   updated_at: string;
 }
 export interface Schema {
+  system_schema: {
+    id: string;
+    version: number;
+    updated_at: string;
+  };
   file_operation_receipts: {
     plugin_id: string; user_id: string; operation: string; operation_key: string;
     request_hash: string; status: "pending" | "completed"; result: string | null;

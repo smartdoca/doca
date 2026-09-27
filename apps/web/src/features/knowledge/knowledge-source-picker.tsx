@@ -75,7 +75,7 @@ export function SourcePicker({
     const load = async () => {
       if (kind === "document" || kind === "library") {
         const all: typeof rows = [];
-        let offset: number | null = 0;
+        let cursor: string | undefined;
         do {
           const page: {
             items: Array<{
@@ -84,7 +84,7 @@ export function SourcePicker({
               library_id?: string | null;
               libraryName?: string;
             }>;
-            nextOffset: number | null;
+            nextCursor?: string | null;
           } = await api<{
             items: Array<{
               id: string;
@@ -92,9 +92,9 @@ export function SourcePicker({
               library_id?: string | null;
               libraryName?: string;
             }>;
-            nextOffset: number | null;
+            nextCursor?: string | null;
           }>(
-            `/resources?scope=all&kind=${kind}&offset=${offset}`,
+            `/resources?scope=all&kind=${kind}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
             "GET",
             undefined,
             controller.signal,
@@ -109,8 +109,8 @@ export function SourcePicker({
                 enter: false,
               })),
           );
-          offset = page.nextOffset;
-        } while (offset != null && !controller.signal.aborted);
+          cursor = page.nextCursor ?? undefined;
+        } while (cursor && !controller.signal.aborted);
         return all;
       }
       if (kind === "file" || kind === "folder") {

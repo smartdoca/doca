@@ -504,7 +504,9 @@
 .workspace:fullscreen .editor-outline,
 .workspace:fullscreen .content-comments,
 .workspace:fullscreen .editor-panel-toggle,
-.workspace:fullscreen .discussion {
+.workspace:fullscreen .discussion,
+.workspace:fullscreen .ai-document-trigger,
+.workspace:fullscreen .ai-document-panel {
   display: none;
 }
 .workspace:fullscreen .editor-columns {

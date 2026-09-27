@@ -32,17 +32,17 @@ export function LibraryLanding({
     const c = new AbortController();
     void (async () => {
       const all: Resource[] = [];
-      let offset: number | null = 0;
-      while (offset !== null) {
+      let cursor: string | undefined;
+      do {
         const page: Page = await api<Page>(
-          `/resources?scope=all&kind=document&libraryId=${resource.id}&offset=${offset}`,
+          `/resources?scope=all&kind=document&libraryId=${resource.id}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
           "GET",
           undefined,
           c.signal,
         );
         all.push(...page.items);
-        offset = page.nextOffset;
-      }
+        cursor = page.nextCursor ?? undefined;
+      } while (cursor);
       const ids = new Set(all.map((r) => r.id));
       const first = all
         .filter((r) => !r.parent_id || !ids.has(r.parent_id))

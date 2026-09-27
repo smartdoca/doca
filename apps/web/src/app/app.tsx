@@ -60,7 +60,6 @@ import {
   Bell,
   MoreHorizontal,
   ShieldCheck,
-  ChevronRight,
   ThumbsUp,
   LogOut,
   FolderOpen,
@@ -200,9 +199,6 @@ export function App() {
         ? route
         : "home";
     }),
-    [q, setQ] = useState(""),
-    [format, setFormat] = useState(""),
-    [page, setPage] = useState<Page>({ items: [], total: 0, nextOffset: null }),
     [detail, setDetail] = useState<Detail | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -281,14 +277,24 @@ export function App() {
     } catch { return t("nav.sharedFiles"); }
   })();
   async function loadMoreComments() {
-    if (!detail || detail.commentsNextOffset == null || busy) return;
+    if (
+      !detail ||
+      (detail.commentsNextCursor == null && detail.commentsNextOffset == null) ||
+      busy
+    )
+      return;
     setBusy(true);
     try {
       const page = await api<{
         items: Detail["comments"];
         nextOffset: number | null;
+        nextCursor?: string | null;
       }>(
-        `/resources/${detail.resource.id}/comments?offset=${detail.commentsNextOffset}`,
+        `/resources/${detail.resource.id}/comments?${
+          detail.commentsNextCursor
+            ? "cursor=" + encodeURIComponent(detail.commentsNextCursor)
+            : "offset=" + detail.commentsNextOffset
+        }`,
       );
       setDetail((d) =>
         d?.resource.id === detail.resource.id
@@ -300,6 +306,7 @@ export function App() {
                 ).values(),
               ],
               commentsNextOffset: page.nextOffset,
+              commentsNextCursor: page.nextCursor,
             }
           : d,
       );
@@ -486,8 +493,6 @@ export function App() {
       .catch(() => {});
     return () => c.abort();
   }, [containingLibraryId, refresh]);
-  const selectedLibrary =
-    detail?.resource.kind === "library" ? detail.resource.id : null;
   const reload = async () => {
     setRefresh((n) => n + 1);
   };
@@ -599,32 +604,6 @@ export function App() {
       });
     return () => controller.abort();
   }, [resourceId, refresh, bootstrap?.user?.id, targetComment]);
-  useEffect(() => {
-    if (!bootstrap?.user || !selectedLibrary) return;
-    const controller = new AbortController();
-    const timer = setTimeout(() => {
-      const params = new URLSearchParams({
-        scope: selectedLibrary ? "all" : scope,
-        q,
-        ...(format ? { format } : {}),
-        ...(selectedLibrary ? { libraryId: selectedLibrary } : {}),
-      });
-      void api<Page>(
-        `/resources?${params}`,
-        "GET",
-        undefined,
-        controller.signal,
-      )
-        .then(setPage)
-        .catch((e) => {
-          if (e.name !== "AbortError") setError(e.message);
-        });
-    }, 180);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [scope, q, format, selectedLibrary, refresh, bootstrap?.user?.id]);
   async function act(fn: () => Promise<unknown>) {
     setBusy(true);
     setError("");
@@ -640,8 +619,6 @@ export function App() {
   function navigate(next: string, path = `/${next}`) {
     location.hash = path;
     setScope(next);
-    setQ("");
-    setFormat("");
   }
   function create(kind: "document" | "library", parent?: Resource) {
     setCreation({
@@ -660,10 +637,10 @@ export function App() {
   async function prepareMove() {
     await act(async () => {
       const rows: Resource[] = [];
-      let offset: number | null = 0;
-      while (offset !== null) {
+      let cursor: string | undefined;
+      do {
         const p: Page = await api<Page>(
-          `/resources?scope=all&offset=${offset}`,
+          `/resources?scope=all${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
         );
         rows.push(
           ...p.items.filter(
@@ -673,8 +650,8 @@ export function App() {
                 (x.kind === "document" && !!x.library_id)),
           ),
         );
-        offset = p.nextOffset;
-      }
+        cursor = p.nextCursor ?? undefined;
+      } while (cursor);
       setTargets(rows);
       setModal("move");
     });
@@ -1016,8 +993,7 @@ export function App() {
                   path: item.path,
                 })),
 
-                ...(discoveryPolicy?.publicDiscovery ? [{ key: "discover", label: "discovery.title", plugin: false as const, Icon: Search, order: 45, path: "/discover" }] : []),
-                { key: "collected", label: "discovery.collected", plugin: false as const, Icon: BookOpenCheck, order: 46, path: "/collected" },
+                ...(discoveryPolicy?.publicDiscovery ? [{ key: "discover", label: "discovery.title", plugin: false as const, Icon: Search, order: 61, path: "/discover" }] : []),
                 { key: "ai", label: "nav.assistant", plugin: false as const, Icon: Sparkles, order: 20, path: "/ai" },
                 { key: "notes", label: "nav.notes", plugin: false as const, Icon: Feather, order: 30, path: "/notes" },
                 { key: "trash", label: "nav.trash", plugin: false as const, Icon: Trash2, order: 80, path: "/trash" },
@@ -1542,96 +1518,6 @@ export function App() {
     </AIProvider>
     </DocumentModeContext.Provider>
   );
-  async function loadMore() {
-    if (page.nextOffset === null) return;
-    try {
-      const params = new URLSearchParams({
-        scope: selectedLibrary ? "all" : scope,
-        q,
-        offset: String(page.nextOffset),
-        ...(format ? { format } : {}),
-        ...(selectedLibrary ? { libraryId: selectedLibrary } : {}),
-      });
-      const d = await api<Page>(`/resources?${params}`);
-      setPage({ ...d, items: [...page.items, ...d.items] });
-    } catch (e) {
-      setError(errorText(e, t("common.failed")));
-    }
-  }
-}
-function ResourceList({
-  page,
-  open,
-  restore,
-  loadMore,
-}: {
-  page: Page;
-  open: (id: string) => void;
-  restore: (r: Resource) => void;
-  loadMore: () => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="resource-list">
-      {!page.items.length ? (
-        <div className="empty">
-          <FolderOpen size={40} />
-          <h3>{t("shell.emptyList")}</h3>
-          <p>{t("shell.emptyListHint")}</p>
-        </div>
-      ) : (
-        <>
-          <div className="list-header">
-            <span>{t("shell.name")}</span>
-            <span>{t("shell.access")}</span>
-            <span>{t("shell.updated")}</span>
-            <span />
-          </div>
-          {page.items.map((r) => (
-            <div className="resource-row" key={r.id}>
-              <button
-                className="resource-name"
-                disabled={!!r.deleted_at}
-                onClick={() => open(r.id)}
-              >
-                <FileIcon r={r} />
-                <span>
-                  {r.title}
-                  {r.kind === "library" && <small>{t("shell.kind.library")}</small>}
-                </span>
-              </button>
-              <span className="tag">
-                {r.access_mode === "inherit"
-                  ? t("shell.access.inherit")
-                  : r.visibility === "public"
-                    ? t("shell.access.public")
-                    : r.visibility === "authenticated"
-                      ? t("shell.access.signedIn")
-                      : t("shell.access.invited")}
-              </span>
-              <time>{new Date(r.updated_at).toLocaleDateString()}</time>
-              {r.deleted_at ? (
-                <button onClick={() => restore(r)}>{t("common.restore")}</button>
-              ) : (
-                <button
-                  className="icon"
-                  aria-label={t("home.openNamed", { title: r.title })}
-                  onClick={() => open(r.id)}
-                >
-                  <ChevronRight size={16} />
-                </button>
-              )}
-            </div>
-          ))}
-          {page.nextOffset !== null && (
-            <button className="load-more" onClick={loadMore}>
-              {t("common.more")}
-            </button>
-          )}
-        </>
-      )}
-    </div>
-  );
 }
 function Login({
   bootstrap,
@@ -1784,7 +1670,8 @@ function Comments({
         </button>
       )}
       {visibleCount >= detail.comments.length &&
-        detail.commentsNextOffset != null && (
+        (detail.commentsNextCursor != null ||
+          detail.commentsNextOffset != null) && (
           <button
             className="comments-load-more"
             disabled={busy}

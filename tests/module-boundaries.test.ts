@@ -285,12 +285,175 @@ it("pagination is stable for tied timestamps, binds its scope, and filters befor
   expect(new Set([...first.items, ...second.items].map((r) => r.id)).size).toBe(
     102,
   );
+  await db
+    .insertInto("resource_visits")
+    .values(
+      [...first.items, ...second.items].map((resource) => ({
+        user_id: owner.id,
+        resource_id: resource.id,
+        visited_at: now,
+      })),
+    )
+    .execute();
+  const recentFirst = await content.list(owner, { scope: "recent" });
+  expect(recentFirst.items).toHaveLength(100);
+  expect(recentFirst.total).toBeNull();
+  const recentSecond = await content.list(owner, {
+    scope: "recent",
+    cursor: recentFirst.nextCursor!,
+  });
+  expect(recentSecond.items).toHaveLength(2);
+  expect(
+    new Set([...recentFirst.items, ...recentSecond.items].map((r) => r.id))
+      .size,
+  ).toBe(102);
   await expect(
     content.list(member, { scope: "owned", cursor: first.nextCursor! }),
   ).rejects.toMatchObject({ status: 400 });
   await expect(
     content.list(owner, { scope: "recent", cursor: first.nextCursor! }),
   ).rejects.toMatchObject({ status: 400 });
+});
+it("interaction cursors keep tied rows stable and cannot be reused across resources", async () => {
+  const document = await create();
+  const other = await create();
+  const stamp = new Date().toISOString();
+  const extraUsers = Array.from({ length: 102 }, (_, index) => ({
+    id: `10000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+    login: `cursor-user-${index}`,
+    public_id: `cursor-user-${index}`,
+    display_name: "Same name",
+    status: "active" as const,
+    admin: 0,
+    password_hash: "",
+    created_at: stamp,
+  }));
+  await db.insertInto("users").values(extraUsers).execute();
+  await db
+    .insertInto("reactions")
+    .values(
+      extraUsers.map((user) => ({
+        resource_id: document.id,
+        user_id: user.id,
+        kind: "like" as const,
+        created_at: stamp,
+      })),
+    )
+    .execute();
+  const experience = createExperience(db);
+  const firstLikes = await experience.likes(owner, document.id);
+  const secondLikes = await experience.likes(
+    owner,
+    document.id,
+    0,
+    firstLikes.nextCursor!,
+  );
+  expect(firstLikes.total).toBe(102);
+  expect(secondLikes.total).toBeNull();
+  expect(
+    new Set([...firstLikes.items, ...secondLikes.items].map((item) => item.id))
+      .size,
+  ).toBe(102);
+  await expect(
+    experience.likes(owner, other.id, 0, firstLikes.nextCursor!),
+  ).rejects.toMatchObject({ status: 400 });
+
+  await db
+    .insertInto("visit_events")
+    .values(
+      Array.from({ length: 102 }, (_, index) => ({
+        id: `30000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        resource_id: document.id,
+        user_id: owner.id,
+        created_at: stamp,
+      })),
+    )
+    .execute();
+  const firstVisits = await experience.info(
+    owner,
+    document.id,
+    "visits",
+  );
+  const secondVisits = await experience.info(
+    owner,
+    document.id,
+    "visits",
+    0,
+    firstVisits.nextCursor!,
+  );
+  expect(firstVisits.items).toHaveLength(100);
+  expect(secondVisits.items).toHaveLength(2);
+  expect(
+    new Set(
+      [...firstVisits.items!, ...secondVisits.items!].map((item) => item.id),
+    )
+      .size,
+  ).toBe(102);
+
+  await db
+    .insertInto("document_versions")
+    .values(
+      Array.from({ length: 102 }, (_, index) => ({
+        id: `40000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        resource_id: document.id,
+        seq: index,
+        checkpoint: "",
+        title: `Version ${index}`,
+        author_id: owner.id,
+        created_at: stamp,
+        recovery_json: null,
+      })),
+    )
+    .execute();
+  const firstVersions = await experience.versions(owner, document.id);
+  const secondVersions = await experience.versions(
+    owner,
+    document.id,
+    0,
+    firstVersions.nextCursor!,
+  );
+  expect(firstVersions.items).toHaveLength(100);
+  expect(secondVersions.items).toHaveLength(2);
+  expect(
+    new Set(
+      [...firstVersions.items, ...secondVersions.items].map((item) => item.id),
+    ).size,
+  ).toBe(102);
+
+  await db
+    .insertInto("comments")
+    .values(
+      Array.from({ length: 202 }, (_, index) => ({
+        id: `20000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        resource_id: document.id,
+        author_id: owner.id,
+        body: `Comment ${index}`,
+        body_json: null,
+        parent_id: null,
+        resolved: 0,
+        deleted_at: null,
+        version: 1,
+        created_at: stamp,
+        updated_at: stamp,
+        anchor: null,
+      })),
+    )
+    .execute();
+  const firstComments = await content.commentPage(owner, document.id);
+  const secondComments = await content.commentPage(
+    owner,
+    document.id,
+    0,
+    undefined,
+    firstComments.nextCursor!,
+  );
+  expect(firstComments.items).toHaveLength(200);
+  expect(secondComments.items).toHaveLength(2);
+  expect(
+    new Set(
+      [...firstComments.items, ...secondComments.items].map((item) => item.id),
+    ).size,
+  ).toBe(202);
 });
 it("coalesced projections retain newer work during delivery, retry failures and publish committed events once", async () => {
   await transact(db, (tx) =>

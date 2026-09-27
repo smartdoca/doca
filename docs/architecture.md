@@ -125,4 +125,6 @@ SSO 两个方向分开：当前外部身份关联唯一键为 provider_id+subjec
 
 正文协同走 WebSocket，元数据仍走 HTTP。服务端校验更新、鉴权、广播、持久化与生成恢复状态；不同编辑器的解析/锚点由对应包提供。元数据 version 不充当 Yjs state vector 。相关实现位于 `apps/server/src/services/realtime/gateway.ts`、`apps/server/src/routes/search.ts`、`apps/web/src/features/documents/document-editor.tsx`，详见 [协同与搜索实现](collaboration.md)。
 
+默认部署仍是无 Redis 的单进程：实时广播、在线状态和限流保存在本进程。配置 Redis 后，同一套接口切换到跨实例事件总线、在线状态与全局限流；文档更新仍以数据库提交和持久化回执为准，不把 Redis 当正文存储。多实例还必须使用 PostgreSQL 和共享对象存储，迁移与副本启动分离，详见[水平扩展部署](horizontal-scaling.md)。
+
 未来 Hook 使用与业务事务同提交的 outbox，签名、重试、幂等和投递审计；外呼地址必须防 SSRF。不直接在业务事务内执行网络回调。

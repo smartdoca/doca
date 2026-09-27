@@ -19,6 +19,12 @@ import { PPT_SCHEMA } from "@core/modules/documents/codecs/presentation.js";
 import type { Actor } from "@core/modules/identity/passwords.js";
 import { AppError, fail } from "@core/shared/errors.js";
 import type { DB } from "@db/index.js";
+import type {
+  RealtimeCluster,
+  RealtimeClusterEvent,
+  RealtimeConnection,
+  LocalRealtimeClusterEvent,
+} from "./cluster.js";
 
 type Client = {
   queue: Promise<void>;
@@ -39,6 +45,7 @@ export async function registerRealtime(
   db: DB,
   origin: string,
   authenticate: (req: FastifyRequest) => Promise<Actor | null>,
+  cluster: RealtimeCluster,
 ) {
   await api.register(websocket, {
     options: { maxPayload: 1500000, perMessageDeflate: false },
@@ -65,15 +72,17 @@ export async function registerRealtime(
     "#5366ad",
   ];
   let colorIndex = 0;
+  let connectionSnapshot: RealtimeConnection[] = [];
+  const refreshConnections = async () => {
+    connectionSnapshot = await cluster.connections();
+    return connectionSnapshot;
+  };
   const onlineUsers = () => [
-    ...new Set(
-      [...clients]
-        .filter((c) => c.ws.readyState === 1 && c.user)
-        .map((c) => c.user!.id),
-    ),
+    ...new Set(connectionSnapshot.map((connection) => connection.userId)),
   ];
   const online = () => onlineUsers().length;
-  function statistics() {
+  async function statistics() {
+    await refreshConnections();
     for (const c of clients)
       if (c.user?.admin) send(c, { type: "stats", online: online() });
   }
@@ -84,6 +93,26 @@ export async function registerRealtime(
     }
     if (c.ws.readyState === 1) c.ws.send(JSON.stringify(data));
   };
+  const connection = (c: Client) =>
+    c.user
+      ? {
+          connectionId: c.connectionId,
+          userId: c.user.id,
+          name: c.user.display_name,
+          color: c.color,
+          ...(c.room ? { room: c.room } : {}),
+          selection: c.cursor,
+        }
+      : null;
+  async function saveConnection(c: Client) {
+    const value = connection(c);
+    if (value) await cluster.upsert(value);
+  }
+  const clusterEvent = (event: LocalRealtimeClusterEvent) =>
+    cluster.publish({
+      ...event,
+      originInstanceId: cluster.instanceId,
+    } as RealtimeClusterEvent);
   async function valid(c: Client) {
     const user = await authenticate(c.req);
     if (c.user && !user) {
@@ -99,44 +128,107 @@ export async function registerRealtime(
         return false;
       }
     }
+    if (user) await saveConnection(c);
     return c.ws.readyState === 1;
   }
+  async function roomAccess(c: Client, room: string) {
+    if (c.room !== room || !(await valid(c)) || !c.user) return null;
+    try {
+      return await documentAccess(db, c.user, room);
+    } catch (error) {
+      if (!(error instanceof AppError) || ![403, 404].includes(error.status))
+        throw error;
+      c.room = undefined;
+      c.cursor = null;
+      await saveConnection(c);
+      send(c, {
+        type: "error",
+        operation: "access",
+        room,
+        status: error.status,
+        message: error.message,
+      });
+      return null;
+    }
+  }
+  async function authorizedConnections(room: string, rank: number) {
+    const connections = (await refreshConnections()).filter(
+      (item) => item.room === room,
+    );
+    const access = new Map<string, Promise<boolean>>();
+    for (const item of connections)
+      if (!access.has(item.userId))
+        access.set(
+          item.userId,
+          documentAccess(
+            db,
+            { id: item.userId, display_name: item.name, admin: 0 },
+            room,
+            rank,
+          )
+            .then(() => true)
+            .catch((error) => {
+              if (error instanceof AppError && [403, 404].includes(error.status))
+                return false;
+              throw error;
+            }),
+        );
+    const allowed = new Set(
+      (
+        await Promise.all(
+          [...access].map(async ([userId, check]) => [
+            userId,
+            await check,
+          ] as const),
+        )
+      )
+        .filter(([, permitted]) => permitted)
+        .map(([userId]) => userId),
+    );
+    return connections.filter((item) => allowed.has(item.userId));
+  }
   async function presence(room: string) {
+    const connections = await authorizedConnections(room, 1);
     const members = new Map<string, { id: string; display_name: string }>();
-    for (const c of clients)
-      if (c.room === room && c.ws.readyState === 1 && c.user)
-        members.set(c.user.id, {
-          id: c.user.id,
-          display_name: c.user.display_name,
+    for (const item of connections)
+      if (item.room === room)
+        members.set(item.userId, {
+          id: item.userId,
+          display_name: item.name,
         });
     for (const c of clients)
-      if (c.room === room && (await valid(c)))
+      if (await roomAccess(c, room))
         send(c, { type: "presence", room, users: [...members.values()] });
     await cursors(room);
   }
   async function cursors(room: string) {
-    const members = [];
+    const members = (await authorizedConnections(room, 3))
+      .filter((item) => item.selection)
+      .map((item) => ({
+        connectionId: item.connectionId,
+        userId: item.userId,
+        name: item.name,
+        color: item.color,
+        selection: item.selection,
+      }));
     for (const c of clients) {
-      if (c.room !== room || !(await valid(c))) continue;
-      const access = await documentAccess(db, c.user, room);
-      if (access.rank < 3) c.cursor = null;
-      if (c.user && c.cursor)
-        members.push({
-          connectionId: c.connectionId,
-          userId: c.user.id,
-          name: c.user.display_name,
-          color: c.color,
-          selection: c.cursor,
-        });
-    }
-    for (const c of clients)
-      if (c.room === room && c.ws.readyState === 1)
+      const access = await roomAccess(c, room);
+      if (access) {
+        if (access.rank < 3 && c.cursor) {
+          c.cursor = null;
+          await saveConnection(c);
+        }
         send(c, {
           type: "cursors",
           room,
           self: c.connectionId,
-          sessions: members.filter((m) => m.connectionId !== c.connectionId),
+          sessions:
+            access.rank < 3
+              ? []
+              : members.filter((m) => m.connectionId !== c.connectionId),
         });
+      }
+    }
   }
   function cursorPoint(value: unknown) {
     if (!value || typeof value !== "object") fail(400, "光标位置无效");
@@ -169,6 +261,126 @@ export async function registerRealtime(
       fail(400, "光标位置无效");
     return { blockId: p.blockId, position: p.position };
   }
+  async function refreshDocument(room: string) {
+    await inRoom(room, async () => {
+      for (const c of clients) {
+        if (!(await roomAccess(c, room))) continue;
+        const r = await db
+          .selectFrom("resources")
+          .select("format")
+          .where("id", "=", room)
+          .executeTakeFirst();
+        if (!r) continue;
+        const epoch = await db
+          .selectFrom("editor_epochs")
+          .select("baseline")
+          .where("resource_id", "=", room)
+          .executeTakeFirst();
+        const codec =
+          r.format === "markdown"
+            ? "markdown-ytext"
+            : r.format === "rich_text"
+              ? "slate-kit"
+              : surfaceCodec(r.format);
+        const schemaVersion =
+          r.format === "rich_text"
+            ? 3
+            : r.format === "presentation"
+              ? PPT_SCHEMA
+              : r.format === "spreadsheet"
+                ? JSON.parse(epoch?.baseline ?? "{}").schemaVersion
+                : 1;
+        const state = await documents.exchange(c.user, room, {
+          codec,
+          schemaVersion,
+          protocolVersion: 1,
+        });
+        // A pull response with an empty vector preserves identities and is not an ACK.
+        send(c, { type: "sync-response", room, ...state });
+        send(c, { type: "document.changed", room });
+      }
+    });
+  }
+  async function handleClusterEvent(event: RealtimeClusterEvent) {
+    if (closed) return;
+    if (event.type === "cluster.resynced") {
+      await refreshConnections();
+      const rooms = [
+        ...new Set(
+          [...clients].map((client) => client.room).filter(Boolean) as string[],
+        ),
+      ];
+      for (const room of rooms) {
+        await refreshDocument(room);
+        await presence(room);
+      }
+      for (const c of clients)
+        if (c.user && (await valid(c))) {
+          send(c, { type: "notifications.changed" });
+          send(c, { type: "policy.changed" });
+        }
+      await statistics();
+      return;
+    }
+    if (event.type === "document.update") {
+      for (const c of clients)
+        if (
+          c.connectionId !== event.excludeConnectionId &&
+          c.room === event.room &&
+          (await roomAccess(c, event.room))
+        )
+          send(c, event.message);
+      return;
+    }
+    if (event.type === "document.refresh") {
+      await refreshDocument(event.room);
+      return;
+    }
+    if (event.type === "presence.changed") {
+      for (const room of new Set(event.rooms)) await presence(room);
+      return;
+    }
+    if (event.type === "connections.changed") {
+      await statistics();
+      return;
+    }
+    if (event.type === "notifications.changed") {
+      const users = event.userIds ? new Set(event.userIds) : null;
+      for (const c of clients)
+        if (c.user && (!users || users.has(c.user.id)) && (await valid(c)))
+          send(c, { type: "notifications.changed" });
+      return;
+    }
+    if (event.type === "policy.changed") {
+      for (const c of clients)
+        if (c.user && (await valid(c))) {
+          send(c, { type: "notifications.changed" });
+          send(c, { type: "policy.changed" });
+        }
+      return;
+    }
+    const rooms = new Set(event.rooms);
+    const users = new Set(event.userIds);
+    for (const c of clients)
+      if (
+        c.user &&
+        (users.has(c.user.id) || (c.room && rooms.has(c.room))) &&
+        (await valid(c))
+      )
+        send(c, { type: "notifications.changed" });
+    for (const c of clients) {
+      const room = c.room;
+      if (room && rooms.has(room) && (await roomAccess(c, room)))
+        send(c, { type: "document.changed", room });
+    }
+    for (const room of rooms) await presence(room);
+  }
+  const unsubscribe = cluster.subscribe((event) =>
+    handleClusterEvent(event).catch((error) =>
+      api.log.error(error, "Realtime cluster event failed"),
+    ),
+  );
+  await refreshConnections();
   api.get(
     "/api/v1/ws",
     {
@@ -196,19 +408,29 @@ export async function registerRealtime(
         since: Date.now(),
       };
       clients.add(c);
-      const ready = authenticate(req).then((user) => {
+      const ready = authenticate(req).then(async (user) => {
         c.user = user;
+        await saveConnection(c);
         send(c, { type: "ready" });
-        statistics();
+        await clusterEvent({ type: "connections.changed" });
       });
       ws.on("pong", () => {
         c.alive = true;
       });
       ws.on("error", () => {});
       ws.on("close", () => {
-        void c.queue.finally(() => clients.delete(c));
-        statistics();
-        if (c.room && !closed) void presence(c.room).catch(() => {});
+        const previous = c.room;
+        void c.queue.finally(async () => {
+          clients.delete(c);
+          await cluster.remove(c.connectionId).catch(() => {});
+          if (closed) return;
+          await clusterEvent({ type: "connections.changed" }).catch(() => {});
+          if (previous)
+            await clusterEvent({
+              type: "presence.changed",
+              rooms: [previous],
+            }).catch(() => {});
+        });
       });
       ws.on("message", (raw) => {
         if (Date.now() - c.since > 10000) {
@@ -237,7 +459,12 @@ export async function registerRealtime(
                   const previous = c.room;
                   c.room = undefined;
                   c.cursor = null;
-                  if (previous) await presence(previous);
+                  await saveConnection(c);
+                  if (previous)
+                    await clusterEvent({
+                      type: "presence.changed",
+                      rooms: [previous],
+                    });
                   return;
                 }
                 if (
@@ -332,7 +559,11 @@ export async function registerRealtime(
                                 focus: cursorPoint(s?.focus),
                               };
                   }
-                  await cursors(m.room);
+                  await saveConnection(c);
+                  await clusterEvent({
+                    type: "presence.changed",
+                    rooms: [m.room],
+                  });
                   return;
                 }
                 const previous = c.room;
@@ -385,14 +616,19 @@ export async function registerRealtime(
                   c.room = m.room;
                   c.cursor = null;
                   const used = new Set(
-                    [...clients]
-                      .filter((x) => x !== c && x.room === m.room)
+                    (await refreshConnections())
+                      .filter(
+                        (x) =>
+                          x.connectionId !== c.connectionId &&
+                          x.room === m.room,
+                      )
                       .map((x) => x.color),
                   );
                   if (used.has(c.color))
                     c.color =
                       colors.find((color) => !used.has(color)) ??
                       `hsl(${(colorIndex++ * 137.508) % 360} 65% 40%)`;
+                  await saveConnection(c);
                 }
                 if (m.type === "update") {
                   // Database commit precedes both acknowledgement and fan-out.
@@ -412,31 +648,28 @@ export async function registerRealtime(
                     metadata: result.metadata,
                   });
                   if (result.notificationsChanged)
-                    for (const recipient of clients)
-                      if (recipient.user && (await valid(recipient)))
-                        send(recipient, { type: "notifications.changed" });
+                    await clusterEvent({ type: "notifications.changed" });
                   if (result.changed)
-                    for (const other of clients)
-                      if (
-                        other !== c &&
-                        other.room === m.room &&
-                        (await valid(other))
-                      )
-                        send(other, {
-                          type: "update",
-                          room: m.room,
-                          update: m.update,
-                          seq: result.seq,
-                          ...("epochId" in result
-                            ? {
-                                epochId: result.epochId,
-                                codec: result.codec,
-                                schemaVersion: result.schemaVersion,
-                                protocolVersion: result.protocolVersion,
-                              }
-                            : {}),
-                          metadata: result.metadata,
-                        });
+                    await clusterEvent({
+                      type: "document.update",
+                      room: m.room,
+                      excludeConnectionId: c.connectionId,
+                      message: {
+                        type: "update",
+                        room: m.room,
+                        update: m.update,
+                        seq: result.seq,
+                        ...("epochId" in result
+                          ? {
+                              epochId: result.epochId,
+                              codec: result.codec,
+                              schemaVersion: result.schemaVersion,
+                              protocolVersion: result.protocolVersion,
+                            }
+                          : {}),
+                        metadata: result.metadata,
+                      },
+                    });
                 } else
                   send(c, {
                     type: "sync-response",
@@ -445,8 +678,13 @@ export async function registerRealtime(
                     ...result,
                   });
                 if (m.type === "join") {
-                  if (previous && previous !== c.room) await presence(previous);
-                  await presence(m.room);
+                  await clusterEvent({
+                    type: "presence.changed",
+                    rooms: [
+                      ...(previous && previous !== c.room ? [previous] : []),
+                      m.room,
+                    ],
+                  });
                 }
               } catch (e) {
                 send(c, {
@@ -485,11 +723,7 @@ export async function registerRealtime(
       return;
     if (req.url.includes("heartbeat")) return;
     if (req.url.includes("/admin/distribution")) {
-      for (const c of clients)
-        if (c.user && (await valid(c))) {
-          send(c, { type: "notifications.changed" });
-          send(c, { type: "policy.changed" });
-        }
+      await clusterEvent({ type: "policy.changed" });
       return;
     }
     const caller = await authenticate(req);
@@ -552,7 +786,9 @@ export async function registerRealtime(
     ) {
       const rooms = [
         ...new Set(
-          [...clients].map((c) => c.room).filter((id): id is string => !!id),
+          (await refreshConnections())
+            .map((connection) => connection.room)
+            .filter((id): id is string => !!id),
         ),
       ];
       const ancestors = await loadResources(db, rooms);
@@ -571,17 +807,11 @@ export async function registerRealtime(
         }
       }
     }
-    for (const c of clients)
-      if (
-        c.user &&
-        (recipients.has(c.user.id) || (c.room && affectedRooms.has(c.room))) &&
-        (await valid(c))
-      )
-        send(c, { type: "notifications.changed" });
-    for (const c of clients)
-      if (c.room && affectedRooms.has(c.room) && (await valid(c)))
-        send(c, { type: "document.changed", room: c.room });
-    for (const affectedRoom of affectedRooms) await cursors(affectedRoom);
+    await clusterEvent({
+      type: "rooms.changed",
+      rooms: [...affectedRooms],
+      userIds: [...recipients],
+    });
   });
   const timer = setInterval(() => {
     for (const c of clients) {
@@ -598,53 +828,36 @@ export async function registerRealtime(
   api.addHook("preClose", async () => {
     closed = true;
     clearInterval(timer);
+    unsubscribe();
+    const rooms = [...new Set([...clients].flatMap((c) => (c.room ? [c.room] : [])))];
+    await Promise.all(
+      [...clients].map((c) => cluster.remove(c.connectionId).catch(() => {})),
+    );
+    await clusterEvent({ type: "connections.changed" }).catch(() => {});
+    if (rooms.length)
+      await clusterEvent({ type: "presence.changed", rooms }).catch(() => {});
     for (const c of clients) c.ws.close(1001, "服务重启");
     await Promise.all([...clients].map((c) => c.queue));
   });
   return {
     async notificationsChanged(userId: string) {
-      for (const client of clients)
-        if (client.user?.id === userId && await valid(client)) send(client, { type: "notifications.changed" });
+      await clusterEvent({
+        type: "notifications.changed",
+        userIds: [userId],
+      });
     },
     async enforceAccess() {
-      for (const c of clients) await valid(c);
+      const rooms = [
+        ...new Set(
+          (await refreshConnections())
+            .map((item) => item.room)
+            .filter((room): room is string => !!room),
+        ),
+      ];
+      await clusterEvent({ type: "rooms.changed", rooms, userIds: [] });
     },
     async documentChanged(room: string) {
-      await inRoom(room, async () => {
-        for (const c of clients) {
-          if (c.room !== room || !(await valid(c))) continue;
-          const r = await db
-            .selectFrom("resources")
-            .select("format")
-            .where("id", "=", room)
-            .executeTakeFirst();
-          if (!r) continue;
-          const epoch = await db
-            .selectFrom("editor_epochs")
-            .select("baseline")
-            .where("resource_id", "=", room)
-            .executeTakeFirst();
-          const codec =
-            r.format === "markdown"
-              ? "markdown-ytext"
-              : r.format === "rich_text"
-                ? "slate-kit"
-                : surfaceCodec(r.format);
-          const schemaVersion =
-            r.format === "rich_text"
-              ? 3
-              : r.format === "presentation"
-                ? PPT_SCHEMA
-                : r.format === "spreadsheet"
-                  ? JSON.parse(epoch?.baseline ?? "{}").schemaVersion
-                  : 1;
-          const protocol = { codec, schemaVersion, protocolVersion: 1 };
-          const state = await documents.exchange(c.user, room, protocol);
-          // A pull response with an empty vector preserves identities and does not create an ACK.
-          send(c, { type: "sync-response", room, ...state });
-          send(c, { type: "document.changed", room });
-        }
-      });
+      await clusterEvent({ type: "document.refresh", room });
     },
     online: () => onlineUsers().length,
     onlineUsers,

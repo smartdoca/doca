@@ -25,6 +25,11 @@ export interface ServerRuntimeService {
   readonly runtime: Awaited<ReturnType<typeof registerRuntimeSettings>>;
   readonly options: CreateAppOptions;
   readonly realtime: Awaited<ReturnType<typeof registerRealtime>>;
+  readonly consumeRateLimit: (
+    key: string,
+    max: number,
+    windowMs: number,
+  ) => Promise<boolean>;
 }
 
 export const serverRuntimeToken = defineService<ServerRuntimeService>(

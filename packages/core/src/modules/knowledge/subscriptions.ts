@@ -380,7 +380,7 @@ export async function runKnowledgeLibrary(db: DB, actor: Actor, libraryId: strin
   return { id, trigger, status: "done", createdAt: now, ...counts };
 }
 
-export async function sweepKnowledgeSchedules(db: DB, curate?: (actor: Actor, id: string) => Promise<unknown>) {
+export async function sweepKnowledgeSchedules(db: DB, curate?: (actor: Actor, id: string, occurrenceKey: string) => Promise<unknown>) {
   const libraries = await db.selectFrom("resources")
     .select(["id", "owner_id", "knowledge_schedule"])
     .where("kind", "=", "library")
@@ -403,7 +403,12 @@ export async function sweepKnowledgeSchedules(db: DB, curate?: (actor: Actor, id
       if (scheduled && Date.now() - Date.parse(scheduled.created_at) < wait) continue;
       const owner = await db.selectFrom("users").select(["id", "display_name", "admin"]).where("id", "=", library.owner_id).executeTakeFirst();
       if (!owner) continue;
-      if (curate) await curate(owner, library.id);
+      if (curate)
+        await curate(
+          owner,
+          library.id,
+          `${library.knowledge_schedule}:${Math.floor(Date.now() / wait)}`,
+        );
       else await runKnowledgeLibrary(db, owner, library.id, "schedule");
     } catch {
       continue;

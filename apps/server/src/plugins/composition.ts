@@ -175,6 +175,7 @@ function documentsPlugin(
           answerIndex: registration.answerIndex,
           notify: runtime.realtime.documentChanged,
           storage: runtime.runtime.storage,
+          consumeRateLimit: runtime.consumeRateLimit,
         }),
       );
       return mounted.dispose;

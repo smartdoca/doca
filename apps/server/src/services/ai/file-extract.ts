@@ -10,6 +10,10 @@ import {
 } from "../../adapters/storage.js";
 import { derivativeKey } from "../storage-policy.js";
 import { extractFilePartsAsync } from "./extract-content.js";
+import {
+  enqueueProjectionOnce,
+  processProjections,
+} from "@core/modules/automation/jobs.js";
 
 export type StoredExtractPart =
   | { type: "text"; text: string }
@@ -23,7 +27,6 @@ export type FileExtract = {
 };
 
 const PARSER_VERSION = 2;
-const running = new Set<string>();
 const activeByDatabase = new WeakMap<DB, Set<Promise<void>>>();
 
 function profileConfig(profile: Schema["storage_profiles"]): StorageConfig {
@@ -142,9 +145,11 @@ async function normalizeImage(data: Buffer) {
   }
 }
 
-async function runExtract(db: DB, objectId: string, runtime: StorageRuntime) {
-  if (running.has(objectId)) return;
-  running.add(objectId);
+export async function processFileExtract(
+  db: DB,
+  objectId: string,
+  runtime: StorageRuntime,
+) {
   try {
     const current = await loadFileExtract(db, objectId);
     if (current?.status === "ready") return;
@@ -246,8 +251,6 @@ async function runExtract(db: DB, objectId: string, runtime: StorageRuntime) {
       "{}",
       error instanceof Error ? error.message : "解析失败",
     );
-  } finally {
-    running.delete(objectId);
   }
 }
 
@@ -258,7 +261,23 @@ export function beginFileExtract(
 ) {
   const active = activeByDatabase.get(db) ?? new Set<Promise<void>>();
   activeByDatabase.set(db, active);
-  const task = runExtract(db, objectId, runtime)
+  const task = (async () => {
+    const current = await loadFileExtract(db, objectId);
+    if (current?.status === "ready") return;
+    await enqueueProjectionOnce(
+      db,
+      "file-extract",
+      `${objectId}:v${PARSER_VERSION}`,
+      { objectId },
+    );
+    await processProjections(
+      db,
+      "file-extract",
+      (payload) => processFileExtract(db, String(payload.objectId), runtime),
+      1,
+      5 * 60_000,
+    );
+  })()
     .catch(() => undefined)
     .finally(() => {
       active.delete(task);

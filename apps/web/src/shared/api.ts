@@ -94,6 +94,7 @@ export interface Detail {
   ownerName: string;
   comments: Comment[];
   commentsNextOffset?: number | null;
+  commentsNextCursor?: string | null;
   likes: number;
   liked: boolean;
   favorite: boolean;
@@ -152,8 +153,10 @@ export interface FilePage {
 }
 export interface Page {
   items: Resource[];
-  total: number;
+  total: number | null;
   nextOffset: number | null;
+  nextCursor?: string | null;
+  truncated?: boolean;
 }
 let lastAccount: string | null | undefined;
 export async function api<T>(

@@ -32,6 +32,7 @@ import { accountBinding, readCookie } from "./account-context.js";
 import swagger from "@fastify/swagger";
 import { Type, type TSchema } from "@sinclair/typebox";
 import Fastify, { type FastifyRequest, type HTTPMethods } from "fastify";
+import { sql } from "kysely";
 import { randomBytes, randomUUID } from "node:crypto";
 import { authorize } from "@core/modules/access/queries.js";
 import {
@@ -49,6 +50,11 @@ import {
 } from "@core/modules/interactions/community.js";
 import { createVisitBuffer } from "@core/modules/interactions/visits.js";
 import { AppError, fail } from "@core/shared/errors.js";
+import {
+  cursorFingerprint,
+  decodePageCursor,
+  encodePageCursor,
+} from "@core/shared/cursor.js";
 import { createContent } from "@core/workflows/resources.js";
 import type { DB } from "@db/index.js";
 import { transact } from "@db/transactions.js";
@@ -66,6 +72,7 @@ import { registerProfiles } from "../routes/profiles.js";
 import { registerStaticRoutes } from "../routes/static.js";
 import { registerTickets } from "../routes/tickets.js";
 import { registerRealtime } from "../services/realtime/gateway.js";
+import { createRealtimeCluster } from "../services/realtime/cluster.js";
 import { composeServerPlugins } from "../plugins/composition.js";
 
 export interface CreateAppOptions {
@@ -79,6 +86,10 @@ export interface CreateAppOptions {
   ai?: Parameters<typeof registerAI>[4];
   pluginDirectory?: string;
   plugins?: Readonly<Record<string, boolean | undefined>>;
+  redisUrl?: string;
+  redisPrefix?: string;
+  instanceId?: string;
+  trustProxy?: string[];
 }
 
 export async function createApp(db: DB, options: CreateAppOptions) {
@@ -102,7 +113,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
           }
         : false,
       bodyLimit: 65536,
-      trustProxy: false,
+      trustProxy: options.trustProxy?.length ? options.trustProxy : false,
       ajv: { customOptions: { removeAdditional: false } },
     });
   await api.register(swagger, {
@@ -122,6 +133,11 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       },
     },
   });
+  const realtimeCluster = await createRealtimeCluster({
+    redisUrl: options.redisUrl,
+    prefix: options.redisPrefix,
+    instanceId: options.instanceId,
+  });
   const actors = new WeakMap<FastifyRequest, Actor | null>(),
     library = createContent(db);
   const visits = createVisitBuffer((actor, id, stamp) =>
@@ -134,17 +150,9 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     const actor = actors.get(req);
     if (req.method === "GET" && actor) await visits.flush(actor.id);
   });
-  const attempts = new Map<string, { count: number; expires: number }>();
-  function limit(key: string, max = 15) {
-    const now = Date.now();
-    for (const [k, v] of attempts) if (v.expires <= now) attempts.delete(k);
-    let v = attempts.get(key);
-    if (!v) {
-      if (attempts.size >= 10000) fail(429, "请求繁忙");
-      v = { count: 0, expires: now + 600000 };
-      attempts.set(key, v);
-    }
-    if (++v.count > max) fail(429, "请求过于频繁，请稍后再试");
+  async function limit(key: string, max = 15) {
+    if (!(await realtimeCluster.consumeRateLimit(key, max, 600_000)))
+      fail(429, "请求过于频繁，请稍后再试");
   }
   function cookie(token: string, maxAge = 28800) {
     return `doca_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${origin.protocol === "https:" ? "; Secure" : ""}`;
@@ -353,7 +361,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   );
   const stopMobilePush = startMobilePush(db);
   api.addHook("preClose", async () => {
-    stopMobilePush();
+    await stopMobilePush();
   });
   registerMobileClient(api, db, authenticated, cookie, limit);
   registerIdentity(
@@ -404,7 +412,9 @@ export async function createApp(db: DB, options: CreateAppOptions) {
           .executeTakeFirst()) ?? null
       );
     },
+    realtimeCluster,
   );
+  api.addHook("preClose", async () => realtimeCluster.close());
   registerWorkspace(api, db, authenticated, admin, realtime.onlineUsers);
   registerPageState(api, db, authenticated);
   const pluginComposition = await composeServerPlugins({
@@ -416,6 +426,8 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     runtime,
     options,
     realtime,
+    consumeRateLimit: (key, max, windowMs) =>
+      realtimeCluster.consumeRateLimit(key, max, windowMs),
   });
   // Fastify routes are immutable after mounting, so the host is intentionally
   // disposed only from application close (or startup rollback below).
@@ -423,7 +435,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   const search = pluginComposition.search;
   registerQuickNotes(api, db, authenticated, options.ai?.fetch);
   registerProfiles(api, db, authenticated);
-  registerAssets(api, db, authenticated, actor, admin, runtime.storage);
+  registerAssets(api, db, authenticated, actor, admin, runtime.storage, limit);
   const id = Type.String({ format: "uuid" }),
     nullableId = Type.Union([id, Type.Null()]),
     version = Type.Integer({ minimum: 1 }),
@@ -541,7 +553,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       },
     },
     async (req, reply) => {
-      limit(`login:${req.ip}`);
+      await limit(`login:${req.ip}`);
       await passwordAllowed(db);
       const identifier = await passwordIdentity(db, req.body.login);
       const user = identifier
@@ -624,7 +636,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       },
     },
     async (req, reply) => {
-      limit(`register:${req.ip}`, 5);
+      await limit(`register:${req.ip}`, 5);
       const result = await transact(db, async (tx) => {
         const proofs = await contactProofs(
           tx,
@@ -703,7 +715,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       newPassword: password,
     }),
     async (req, a) => {
-      limit(`password:${a.id}`, 5);
+      await limit(`password:${a.id}`, 5);
       await passwordAllowed(db);
       const user = await db
         .selectFrom("users")
@@ -742,7 +754,14 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       return { items: await visibleUsers(db, authenticated(req), req.query.q) };
     },
   );
-  api.get<{ Querystring: { offset?: number; q?: string; status?: string } }>(
+  api.get<{
+    Querystring: {
+      offset?: number;
+      cursor?: string;
+      q?: string;
+      status?: string;
+    };
+  }>(
     "/api/v1/admin/users",
     {
       schema: {
@@ -788,15 +807,32 @@ export async function createApp(db: DB, options: CreateAppOptions) {
             eb("public_id", "like", `%${req.query.q}%`),
           ]),
         );
-      const items = await query
+      const fingerprint = cursorFingerprint({
+        kind: "admin-users",
+        q: req.query.q ?? "",
+        status: req.query.status ?? "",
+      });
+      if (req.query.cursor) {
+        const cursor = decodePageCursor(req.query.cursor, fingerprint);
+        query = query.where(
+          sql<boolean>`(created_at < ${cursor.value} or (created_at = ${cursor.value} and id > ${cursor.id}))`,
+        );
+      }
+      const rows = await query
         .orderBy("created_at", "desc")
         .orderBy("id")
         .limit(101)
-        .offset(req.query.offset ?? 0)
+        .offset(req.query.cursor ? 0 : (req.query.offset ?? 0))
         .execute();
+      const items = rows.slice(0, 100);
+      const last = items.at(-1);
       return {
-        items: await adminUserDetails(db, items.slice(0, 100)),
-        nextOffset: items.length > 100 ? (req.query.offset ?? 0) + 100 : null,
+        items: await adminUserDetails(db, items),
+        nextOffset: rows.length > 100 ? (req.query.offset ?? 0) + 100 : null,
+        nextCursor:
+          rows.length > 100 && last
+            ? encodePageCursor(fingerprint, last.created_at, last.id)
+            : null,
       };
     },
   );
@@ -821,7 +857,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     }),
     async (req) => {
       const a = admin(req);
-      limit(`create:${a.id}`, 20);
+      await limit(`create:${a.id}`, 20);
       const user = await createAdminUser(db, a, req.body);
       return user;
     },
@@ -877,7 +913,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     object({ password }),
     async (req) => {
       const a = admin(req);
-      limit(`password-reset:${a.id}`, 20);
+      await limit(`password-reset:${a.id}`, 20);
       await resetUserPassword(db, a, req.params.id!, req.body.password);
       return { ok: true };
     },
@@ -1323,7 +1359,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   );
   api.get<{
     Params: { id: string };
-    Querystring: { offset?: number; target?: string };
+    Querystring: { offset?: number; cursor?: string; target?: string };
   }>(
     "/api/v1/resources/:id/comments",
     {
@@ -1331,6 +1367,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         params: Type.Object({ id: Type.String({ format: "uuid" }) }),
         querystring: Type.Object({
           offset: Type.Optional(Type.Integer({ minimum: 0, maximum: 1000000 })),
+          cursor: Type.Optional(Type.String({ maxLength: 2048 })),
           target: Type.Optional(Type.String({ format: "uuid" })),
         }),
       },
@@ -1341,6 +1378,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         req.params.id,
         req.query.offset,
         req.query.target,
+        req.query.cursor,
       ),
   );
   route<{
@@ -1430,7 +1468,9 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       return { ok: true };
     },
   );
-  await registerStaticRoutes(api, db, options.staticDirectory);
+  await registerStaticRoutes(api, db, options.staticDirectory, () =>
+    realtimeCluster.isReady(),
+  );
   try {
     await api.ready();
   } catch (error) {

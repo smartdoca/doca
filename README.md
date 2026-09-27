@@ -58,6 +58,7 @@ bash scripts/bootstrap-admin.sh
 
 - [插件 SDK、核心边界与业务拆分目标](docs/plugin-sdk-contract.md)；[插件开发规范](docs/plugin-development.md)；[当前插件架构](docs/plugin-architecture.md)
 - [整体前后端架构与开发边界](docs/architecture.md)
+- [单实例与水平扩展部署](docs/horizontal-scaling.md)
 - [编辑器、协同、内容评论与搜索](docs/collaboration.md)
 - [数据库结构](docs/database.md)
 - [接口文档](docs/api.md)；运行时请求契约 /api/openapi.json

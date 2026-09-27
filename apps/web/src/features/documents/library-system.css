@@ -219,3 +219,66 @@
 .knowledge-full-width > .library-system-tabs { justify-content:flex-start; overflow-x:auto; flex-wrap:nowrap; }
 .knowledge-full-width > .library-system-tabs button { flex-shrink:0; }
 .knowledge-heading-toggle .knowledge-toggle { display:inline-flex; align-items:center; cursor:pointer; }
+
+/* Source controls keep their intrinsic size instead of stretching with card actions. */
+.library-system .knowledge-source-group-actions {
+  align-items: center;
+  gap: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #eef0f4;
+}
+.library-system .knowledge-source-group-actions .knowledge-source-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 1 auto;
+  gap: 7px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid #e3e7ee;
+  border-radius: 7px;
+  color: #526078;
+  background: #f8fafc;
+}
+.library-system .knowledge-source-group-actions .knowledge-source-edit:hover {
+  color: #3370ff;
+  border-color: #c6d6fc;
+  background: #f0f5ff;
+}
+.library-system .curator-source-toggle {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  color: #788292;
+  font-size: 12px;
+}
+.library-system .curator-source-toggle .knowledge-toggle {
+  display: inline-block;
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #c4cad3;
+  cursor: pointer;
+}
+.library-system .curator-source-toggle .knowledge-toggle > span {
+  position: absolute;
+  display: block;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  transform: translateX(0);
+  box-shadow: 0 1px 2px #0002;
+}
+.library-system .curator-source-toggle .knowledge-toggle[aria-checked="true"] { background: #3370ff; }
+.library-system .curator-source-toggle .knowledge-toggle[aria-checked="true"] > span { transform: translateX(14px); }
+.library-system .curator-source-toggle .knowledge-toggle:focus-visible,
+.library-system .knowledge-source-edit:focus-visible { outline: 2px solid #3370ff; outline-offset: 3px; }
+.library-system .curator-source-toggle .knowledge-toggle:disabled { cursor: wait; opacity: .55; }

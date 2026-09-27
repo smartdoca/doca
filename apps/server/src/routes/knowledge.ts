@@ -37,10 +37,10 @@ export function registerKnowledge(
   api: FastifyInstance,
   db: DB,
   auth: (req: FastifyRequest) => Actor,
-  options: { indexer?: KnowledgeIndexer; storage?: StorageRuntime; answerIndex?: AnswerIndex; notify?: (id:string)=>Promise<void> } = {},
+  options: { indexer?: KnowledgeIndexer; storage?: StorageRuntime; answerIndex?: AnswerIndex; notify?: (id:string)=>Promise<void>; consumeRateLimit?: (key: string, max: number, windowMs: number) => Promise<boolean> } = {},
 ) {
   registerKnowledgeSystem(api, db, auth, options.notify);
-  registerKnowledgeStudio(api, db, auth, options.answerIndex, options.notify);
+  registerKnowledgeStudio(api, db, auth, options.answerIndex, options.notify, options.consumeRateLimit);
   const content = createContent(db);
   let stopped = false;
   let processing: Promise<void> | null = null;
@@ -72,8 +72,15 @@ export function registerKnowledge(
       }
       if (Date.now() - lastSweep < 60_000) return;
       lastSweep = Date.now();
-      await sweepKnowledgeSchedules(db, async (actor, id) => {
-        return createScheduledKnowledgeConversation(db,actor,id);
+      await sweepKnowledgeSchedules(db, async (actor, id, occurrenceKey) => {
+        return createScheduledKnowledgeConversation(
+          db,
+          actor,
+          id,
+          new Date(),
+          "sources",
+          occurrenceKey,
+        );
       });
       await sweepKnowledgeFeedbackSchedules(db);
     })

@@ -59,6 +59,32 @@ export async function enqueueProjection(
     .execute();
 
 }
+
+/** Enqueue one durable occurrence without resetting an active lease or retry. */
+export async function enqueueProjectionOnce(
+  db: DB,
+  kind: string,
+  key: string,
+  payload: Record<string, unknown>,
+  delayMs = 0,
+) {
+  await db
+    .insertInto("projection_jobs")
+    .values({
+      id: `${kind}:${key}`,
+      kind,
+      payload: JSON.stringify(payload),
+      revision: 1,
+      attempts: 0,
+      available_at: new Date(Date.now() + delayMs).toISOString(),
+      last_error: null,
+      status: "queued",
+      plugin_id: null,
+      max_attempts: 5,
+    })
+    .onConflict((conflict) => conflict.column("id").doNothing())
+    .execute();
+}
 export async function processProjections(
   db: DB,
   kind: string,
