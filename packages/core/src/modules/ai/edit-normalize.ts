@@ -210,10 +210,6 @@ function normalizeMediaNode(node: unknown): unknown {
   const next = { ...(node as Record<string, unknown>) };
   if (typeof next.text === "string" && next.type === undefined) return next;
   if (mediaTypes.has(String(next.type))) {
-    if (typeof next.path !== "string" && typeof next.assetId === "string")
-      next.path = next.assetId;
-    delete next.assetId;
-    delete next.resourceId;
     if (!Array.isArray(next.children) || next.children.length === 0)
       next.children = [{ text: "" }];
   }
@@ -222,36 +218,12 @@ function normalizeMediaNode(node: unknown): unknown {
   return next;
 }
 
-function cellChildren(children: unknown[]) {
-  return children.flatMap((child) => {
-    const node = normalizeMediaNode(child) as {
-      type?: string;
-      children?: unknown[];
-    };
-    if (
-      node?.type === "paragraph" &&
-      Array.isArray(node.children) &&
-      node.children.length > 0 &&
-      node.children.every((item) =>
-        mediaTypes.has(
-          String((item as { type?: string } | null)?.type ?? ""),
-        ),
-      )
-    )
-      return node.children;
-    return [node];
-  });
-}
-
 function richTextOperation(op: Record<string, unknown>) {
-  const block = op.block as { type?: string } | undefined;
   let next = op;
-  if (op.type === "insertBlock" && block?.type === "codeBlock")
-    next = { ...op, block: { ...block, type: "code-block" } };
   if (next.type === "insertBlock" && next.block && typeof next.block === "object")
     next = { ...next, block: normalizeMediaNode(next.block) as Record<string, unknown> };
   if (next.type === "setCellContent" && Array.isArray(next.children))
-    next = { ...next, children: cellChildren(next.children) };
+    next = { ...next, children: next.children.map(normalizeMediaNode) };
   return next;
 }
 

@@ -11,6 +11,7 @@ import {
 import { cellSelection } from "@core/modules/documents/codecs/cell-presence.js";
 import { markdownSelection } from "@core/modules/documents/codecs/markdown.js";
 import {
+  DEFAULT_SPREADSHEET_SCHEMA,
   restoreSurface,
   surfaceAnchor,
   surfaceCodec,
@@ -271,11 +272,6 @@ export async function registerRealtime(
           .where("id", "=", room)
           .executeTakeFirst();
         if (!r) continue;
-        const epoch = await db
-          .selectFrom("editor_epochs")
-          .select("baseline")
-          .where("resource_id", "=", room)
-          .executeTakeFirst();
         const codec =
           r.format === "markdown"
             ? "markdown-ytext"
@@ -288,7 +284,7 @@ export async function registerRealtime(
             : r.format === "presentation"
               ? PPT_SCHEMA
               : r.format === "spreadsheet"
-                ? JSON.parse(epoch?.baseline ?? "{}").schemaVersion
+                ? DEFAULT_SPREADSHEET_SCHEMA
                 : 1;
         const state = await documents.exchange(c.user, room, {
           codec,
@@ -586,10 +582,6 @@ export async function registerRealtime(
                             : undefined,
                         messageId: m.id,
                         update: String(m.update),
-                        checkpointId:
-                          typeof m.checkpointId === "string"
-                            ? m.checkpointId
-                            : undefined,
                       }
                     : {
                         epochId:
@@ -606,10 +598,6 @@ export async function registerRealtime(
                             : undefined,
                         vector:
                           typeof m.vector === "string" ? m.vector : undefined,
-                        checkpointId:
-                          typeof m.checkpointId === "string"
-                            ? m.checkpointId
-                            : undefined,
                       },
                 );
                 if (m.type === "join") {

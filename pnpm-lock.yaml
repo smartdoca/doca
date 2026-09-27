@@ -109,8 +109,8 @@ importers:
         specifier: workspace:*
         version: link:packages/search-host
       '@eppt/editor':
-        specifier: file:vendor/eppt-editor-0.3.0-alpha.1-d4d2631fccd4.tgz
-        version: file:vendor/eppt-editor-0.3.0-alpha.1-d4d2631fccd4.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: file:vendor/eppt-editor-0.3.0-alpha.1-db017d02d3d0.tgz
+        version: file:vendor/eppt-editor-0.3.0-alpha.1-db017d02d3d0.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@fastify/swagger':
         specifier: ^9.8.1
         version: 9.8.1(supports-color@8.1.1)
@@ -151,8 +151,8 @@ importers:
         specifier: 1.30.0
         version: 1.30.0(supports-color@8.1.1)(zod@4.6.4)
       '@online-office/univer-sheet':
-        specifier: file:vendor/online-office-univer-sheet-0.2.0-rc.16-d48ab0b71a5e.tgz
-        version: file:vendor/online-office-univer-sheet-0.2.0-rc.16-d48ab0b71a5e.tgz(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: file:vendor/online-office-univer-sheet-0.2.0-rc.16-c3224ad15496.tgz
+        version: file:vendor/online-office-univer-sheet-0.2.0-rc.16-c3224ad15496.tgz(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@open-file-viewer/core':
         specifier: 0.1.47
         version: 0.1.47(@mlightcad/cad-simple-viewer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@mlightcad/three-renderer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0))(lodash-es@4.17.21)(three@0.172.0))(@mlightcad/data-model@1.14.12)(@mlightcad/libredwg-web@0.7.14)(lodash-es@4.17.21)(pdfjs-dist@5.7.284)
@@ -163,8 +163,8 @@ importers:
         specifier: ^0.34.52
         version: 0.34.52
       aidcanvas:
-        specifier: file:vendor/aidcanvas-0.4.1-d8369bbd0e5c.tgz
-        version: file:vendor/aidcanvas-0.4.1-d8369bbd0e5c.tgz(@leafer-in/interface@2.1.0(@leafer-ui/interface@2.1.0)(@leafer/interface@2.1.0))(@leafer-ui/core@2.1.0)(@leafer-ui/draw@2.1.0)(@leafer-ui/interface@2.1.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: file:vendor/aidcanvas-0.4.1-b61bfd50ec2e.tgz
+        version: file:vendor/aidcanvas-0.4.1-b61bfd50ec2e.tgz(@leafer-in/interface@2.1.0(@leafer-ui/interface@2.1.0)(@leafer/interface@2.1.0))(@leafer-ui/core@2.1.0)(@leafer-ui/draw@2.1.0)(@leafer-ui/interface@2.1.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       antd:
         specifier: ^6.6.3
         version: 6.6.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -175,8 +175,8 @@ importers:
         specifier: ^17.4.2
         version: 17.4.2
       exmd-collaborative-editor:
-        specifier: file:vendor/exmd-collaborative-editor-0.4.2-2dd09320cab1.tgz
-        version: file:vendor/exmd-collaborative-editor-0.4.2-2dd09320cab1.tgz(@babel/runtime@8.0.5)(@codemirror/autocomplete@6.20.3)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.2)(@codemirror/theme-one-dark@6.1.3)(@types/react@19.2.18)(codemirror@6.0.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)(yjs@13.6.32)
+        specifier: file:vendor/exmd-collaborative-editor-0.4.2-3d3240f8e88f.tgz
+        version: file:vendor/exmd-collaborative-editor-0.4.2-3d3240f8e88f.tgz(@babel/runtime@8.0.5)(@codemirror/autocomplete@6.20.3)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.2)(@codemirror/theme-one-dark@6.1.3)(@types/react@19.2.18)(codemirror@6.0.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)(yjs@13.6.32)
       fast-xml-parser:
         specifier: ^5.11.1
         version: 5.11.1
@@ -259,8 +259,8 @@ importers:
         specifier: 0.118.2
         version: 0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1)
       slatetsx-kit-editor:
-        specifier: file:vendor/slatetsx-kit-editor-0.4.9-86c014f2fc80.tgz
-        version: file:vendor/slatetsx-kit-editor-0.4.9-86c014f2fc80.tgz(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1)
+        specifier: file:vendor/slatetsx-kit-editor-0.4.9-629bbd289ae0.tgz
+        version: file:vendor/slatetsx-kit-editor-0.4.9-629bbd289ae0.tgz(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1)
       three:
         specifier: 0.172.0
         version: 0.172.0
@@ -1538,8 +1538,8 @@ packages:
   '@emotion/unitless@0.7.5':
     resolution: {integrity: sha512-OWORNpfjMsSSUBVrRBVGECkhWcULOAJz9ZW8uK9qgxD+87M7jHRcvh/A96XXNhXTLmKcoYSQtBEX7lHMO7YRwg==}
 
-  '@eppt/editor@file:vendor/eppt-editor-0.3.0-alpha.1-d4d2631fccd4.tgz':
-    resolution: {integrity: sha512-2ngjmLyCDx3yjfRcNpRnM/2F9UpVL+s8oJsrlT+8mE2bnOZ4z+RncD4E3Gce7C4tOeqvGBHuHQRkNYxKbiOHjg==, tarball: file:vendor/eppt-editor-0.3.0-alpha.1-d4d2631fccd4.tgz}
+  '@eppt/editor@file:vendor/eppt-editor-0.3.0-alpha.1-db017d02d3d0.tgz':
+    resolution: {integrity: sha512-8z6ywxIzHH0b7eGVj/TWLSjbgUraEcbimbIrImq1gbgy3xR4hg0hp27sZUoLkRiLRy4NM0VP3zGYiVkOv15jEg==, tarball: file:vendor/eppt-editor-0.3.0-alpha.1-db017d02d3d0.tgz}
     version: 0.3.0-alpha.1
     peerDependencies:
       react: '>=18'
@@ -2727,8 +2727,8 @@ packages:
   '@nodable/entities@3.0.0':
     resolution: {integrity: sha512-8L9xFeTYKhm49xfIypoe2W5wV1m/3Z58kT+7kR9A8OyFxcPduI4VmxaUMQyKYrRjUoLLSXv6EKKID5Tvj9cUVw==}
 
-  '@online-office/univer-sheet@file:vendor/online-office-univer-sheet-0.2.0-rc.16-d48ab0b71a5e.tgz':
-    resolution: {integrity: sha512-inPOd4pERMHQPqVK+8I2upNQxWED5tbRJmICDyeRqZ31FL+F4tS/zH3Y7+TIwMof3AgamLx7G3ecuPwaGB/S4Q==, tarball: file:vendor/online-office-univer-sheet-0.2.0-rc.16-d48ab0b71a5e.tgz}
+  '@online-office/univer-sheet@file:vendor/online-office-univer-sheet-0.2.0-rc.16-c3224ad15496.tgz':
+    resolution: {integrity: sha512-IyPl0dn0Cay0Xi3xIBukGd5DhVBF6tBa+V0gZXdAKxg5ZX5qNQrRNY97iw0vEmeslL4szGFSz5DqdaxrBD8zQA==, tarball: file:vendor/online-office-univer-sheet-0.2.0-rc.16-c3224ad15496.tgz}
     version: 0.2.0-rc.16
     peerDependencies:
       react: '>=18'
@@ -4716,8 +4716,8 @@ packages:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
 
-  aidcanvas@file:vendor/aidcanvas-0.4.1-d8369bbd0e5c.tgz:
-    resolution: {integrity: sha512-wpIXTsUJDmMMhNv6QcS/xsijRI8rNlH2KMXaxb27oSNgSSF/+qVivJFyzHtalU0upS5KgWA+J012qyb9HC/9Yw==, tarball: file:vendor/aidcanvas-0.4.1-d8369bbd0e5c.tgz}
+  aidcanvas@file:vendor/aidcanvas-0.4.1-b61bfd50ec2e.tgz:
+    resolution: {integrity: sha512-jO1RPEgPN1LcD/0WSDI/8k9wf8tRaztrXDai716ctcVlqoDUjnSHqXwg8By+Xdac0gDHff+BfQIPR6Hj5MjRlw==, tarball: file:vendor/aidcanvas-0.4.1-b61bfd50ec2e.tgz}
     version: 0.4.1
     engines: {node: '>=20', yarn: '>=1.22'}
     peerDependencies:
@@ -5890,8 +5890,8 @@ packages:
     resolution: {integrity: sha512-9Be3ZoN4LmYR90tUoVu2te2BsbzHfhJyfEiAVfz7N5/zv+jduIfLrV2xdQXOHbaD6KgpGdO9PRPM1Y4Q9QkPkA==}
     engines: {node: ^18.19.0 || >=20.5.0}
 
-  exmd-collaborative-editor@file:vendor/exmd-collaborative-editor-0.4.2-2dd09320cab1.tgz:
-    resolution: {integrity: sha512-WjnutqEUoF+sO0ceNLyuIBqV5yVLhGpFr0zIFXyflGwON1yAMPy6YBZZFWBf9mWr9kwFbATfP4Sni8rzb+wvUw==, tarball: file:vendor/exmd-collaborative-editor-0.4.2-2dd09320cab1.tgz}
+  exmd-collaborative-editor@file:vendor/exmd-collaborative-editor-0.4.2-3d3240f8e88f.tgz:
+    resolution: {integrity: sha512-CH2LkNpl9AMFgO39wRAz41jrGNgU3o+KkBEx/0+9rMdHihA6JkWrxI4BGg4LOSlgK7IBUtXrb0wnxkP0sREgng==, tarball: file:vendor/exmd-collaborative-editor-0.4.2-3d3240f8e88f.tgz}
     version: 0.4.2
     peerDependencies:
       react: '>=18.2.0'
@@ -8694,8 +8694,8 @@ packages:
   slate@0.118.1:
     resolution: {integrity: sha512-6H1DNgnSwAFhq/pIgf+tLvjNzH912M5XrKKhP9Frmbds2zFXdSJ6L/uFNyVKxQIkPzGWPD0m+wdDfmEuGFH5Tg==}
 
-  slatetsx-kit-editor@file:vendor/slatetsx-kit-editor-0.4.9-86c014f2fc80.tgz:
-    resolution: {integrity: sha512-4UNahKUyj0ppNKeoRYFW7D43KYdVmdTu8aAFhxVC379FRn3e+nvkSwk4A/em23xLauvU/yZ5IlBz7G5gvNRltg==, tarball: file:vendor/slatetsx-kit-editor-0.4.9-86c014f2fc80.tgz}
+  slatetsx-kit-editor@file:vendor/slatetsx-kit-editor-0.4.9-629bbd289ae0.tgz:
+    resolution: {integrity: sha512-zO2kUu7AyTIJ0Ue+dQKXzbz2yVvBB1N8ENEFsuyg3wuvd4MBt1aAj78mvkdQ9Yudyii96rJy9KmmcpY8wnMIJQ==, tarball: file:vendor/slatetsx-kit-editor-0.4.9-629bbd289ae0.tgz}
     version: 0.4.9
     peerDependencies:
       katex: ^0.18.7
@@ -10956,7 +10956,7 @@ snapshots:
 
   '@emotion/unitless@0.7.5': {}
 
-  '@eppt/editor@file:vendor/eppt-editor-0.3.0-alpha.1-d4d2631fccd4.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@eppt/editor@file:vendor/eppt-editor-0.3.0-alpha.1-db017d02d3d0.tgz(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@antv/g-svg': 2.1.1
       '@antv/g2': 5.4.8
@@ -12400,7 +12400,7 @@ snapshots:
 
   '@nodable/entities@3.0.0': {}
 
-  '@online-office/univer-sheet@file:vendor/online-office-univer-sheet-0.2.0-rc.16-d48ab0b71a5e.tgz(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@online-office/univer-sheet@file:vendor/online-office-univer-sheet-0.2.0-rc.16-c3224ad15496.tgz(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@antv/g2': 5.4.8
       '@univerjs/core': 0.25.1(react@19.2.8)(rxjs@7.8.2)
@@ -12427,8 +12427,6 @@ snapshots:
       react-dom: 19.2.8(react@19.2.8)
       rxjs: 7.8.2
       saxes: 5.0.1
-      y-indexeddb: 9.0.12(yjs@13.6.32)
-      y-protocols: 1.0.7(yjs@13.6.32)
       yjs: 13.6.32
     transitivePeerDependencies:
       - '@types/react'
@@ -15493,7 +15491,7 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  aidcanvas@file:vendor/aidcanvas-0.4.1-d8369bbd0e5c.tgz(@leafer-in/interface@2.1.0(@leafer-ui/interface@2.1.0)(@leafer/interface@2.1.0))(@leafer-ui/core@2.1.0)(@leafer-ui/draw@2.1.0)(@leafer-ui/interface@2.1.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  aidcanvas@file:vendor/aidcanvas-0.4.1-b61bfd50ec2e.tgz(@leafer-in/interface@2.1.0(@leafer-ui/interface@2.1.0)(@leafer/interface@2.1.0))(@leafer-ui/core@2.1.0)(@leafer-ui/draw@2.1.0)(@leafer-ui/interface@2.1.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
       '@icon-park/react': 1.4.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@leafer-in/arrow': 2.1.0(@leafer-in/interface@2.1.0(@leafer-ui/interface@2.1.0)(@leafer/interface@2.1.0))(@leafer-ui/draw@2.1.0)(@leafer-ui/interface@2.1.0)
@@ -16843,7 +16841,7 @@ snapshots:
       strip-final-newline: 4.0.0
       yoctocolors: 2.2.0
 
-  exmd-collaborative-editor@file:vendor/exmd-collaborative-editor-0.4.2-2dd09320cab1.tgz(@babel/runtime@8.0.5)(@codemirror/autocomplete@6.20.3)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.2)(@codemirror/theme-one-dark@6.1.3)(@types/react@19.2.18)(codemirror@6.0.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)(yjs@13.6.32):
+  exmd-collaborative-editor@file:vendor/exmd-collaborative-editor-0.4.2-3d3240f8e88f.tgz(@babel/runtime@8.0.5)(@codemirror/autocomplete@6.20.3)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.2)(@codemirror/theme-one-dark@6.1.3)(@types/react@19.2.18)(codemirror@6.0.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)(yjs@13.6.32):
     dependencies:
       '@codemirror/commands': 6.11.0
       '@codemirror/lang-markdown': 6.5.2
@@ -20358,7 +20356,7 @@ snapshots:
       immer: 10.2.0
       tiny-warning: 1.0.3
 
-  slatetsx-kit-editor@file:vendor/slatetsx-kit-editor-0.4.9-86c014f2fc80.tgz(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1):
+  slatetsx-kit-editor@file:vendor/slatetsx-kit-editor-0.4.9-629bbd289ae0.tgz(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1):
     dependencies:
       '@antv/x6': 2.19.2
       '@antv/x6-plugin-clipboard': 2.1.6(@antv/x6@2.19.2)

@@ -80,10 +80,7 @@ export async function restoreSurface(
     .where("resource_id", "=", id)
     .executeTakeFirst();
   if (!state || !epoch || state.codec !== surfaceCodec(format))
-    fail(
-      409,
-      "此文档使用旧编码或尚未初始化；原数据保留，请新建文档使用新版编辑器",
-    );
+    fail(409, "文档未按当前编辑器编码初始化");
   if (
     format === "spreadsheet" &&
     (!epoch.baseline ||
@@ -166,7 +163,6 @@ export async function provisionSurface(
             },
           } as any),
       epochId,
-      { schemaVersion: DEFAULT_SPREADSHEET_SCHEMA },
     );
     baseline = bundle.baseline;
     update = bundle.update;

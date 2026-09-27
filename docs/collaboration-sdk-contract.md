@@ -18,7 +18,7 @@
 | 历史版本 ID                    | 用户查看/回滚的业务快照                | 不等于每个网络更新                              |
 | state vector                   | 同步差异摘要                           | 不是完整保存确认，尤其不覆盖删除集合的确认语义  |
 
-当前各格式协同使用 epochId 表示谱系；定期保存 Yjs checkpoint 不改变 epoch。旧命令式表格适配已移除，不保留旧 checkpointId 转发层。
+当前各格式协同使用 epochId 表示谱系；定期保存 Yjs checkpoint 不改变 epoch。表格只使用当前 Yjs session 与 checkpoint sequence。
 
 ## 2. 平台与组件边界
 

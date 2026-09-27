@@ -20,8 +20,8 @@ export function useSurfaceSync<T>(
   userId: string | undefined,
   codec: string,
   factory: SurfaceFactory<T>,
-  changed?: () => void,
-  schemaVersion = 1,
+  changed: (() => void) | undefined,
+  schemaVersion: number,
 ) {
   const changeRef = useRef(changed);
   changeRef.current = changed;

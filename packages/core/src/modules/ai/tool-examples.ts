@@ -214,7 +214,8 @@ export const TOOL_EXAMPLES: Record<string, Record<string, unknown>[]> = {
           type: "insertBlock",
           block: {
             id: "新唯一ID",
-            type: "heading-two",
+            type: "paragraph",
+            title: "h2",
             children: [{ text: "章节标题" }],
           },
         },

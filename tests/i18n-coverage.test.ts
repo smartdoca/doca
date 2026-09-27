@@ -33,7 +33,7 @@ const covered = [
   "features/documents/document-author.tsx",
   "shared/utils/list-time.ts",
 ];
-it.each(covered)("keeps migrated UI copy out of %s", (file) => {
+it.each(covered)("keeps catalogued UI copy out of %s", (file) => {
   const path = `apps/web/src/${file}`;
   const candidates = scanI18nSource(path, readFileSync(path, "utf8"));
   // Calendar protocol day keys and weekday fixtures use explicit stable zones/locales.

@@ -14,7 +14,6 @@ import {
   type SpreadsheetRuntimeFactory,
 } from "@online-office/univer-sheet";
 import {
-  EXLSX_SCHEMA_VERSION,
   createExlsxBaseline,
   createExlsxCollaborationSession,
   restoreExlsxDocument,
@@ -212,7 +211,6 @@ function SheetSurface({
       const bundle = await createExlsxBaseline(
         structuredClone(source) as never,
         crypto.randomUUID(),
-        { schemaVersion: EXLSX_SCHEMA_VERSION },
       );
       const doc = await restoreExlsxDocument({
         baseline: bundle.baseline,

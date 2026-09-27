@@ -28,7 +28,7 @@ pnpm check
 ```
 
 Tests must use isolated databases, documents, plugin directories, and accounts.
-Never run collaboration or migration tests against user data.
+Never run collaboration tests against user data.
 
 ## Change expectations
 

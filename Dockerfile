@@ -14,11 +14,11 @@ RUN apt-get -o Acquire::Retries=5 update \
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY vendor ./vendor
-RUN test -f vendor/eppt-editor-0.3.0-alpha.1-5b6cc25660ca.tgz \
-    && test -f vendor/online-office-univer-sheet-0.2.0-rc.15-a82c0d180779.tgz \
-    && test -f vendor/aidcanvas-0.4.1-ebf7d8848977.tgz \
-    && test -f vendor/exmd-collaborative-editor-0.4.2-c92c0ac78baf.tgz \
-    && test -f vendor/slatetsx-kit-editor-0.4.1-91a49985bf15.tgz
+RUN test -f vendor/eppt-editor-0.3.0-alpha.1-db017d02d3d0.tgz \
+    && test -f vendor/online-office-univer-sheet-0.2.0-rc.16-c3224ad15496.tgz \
+    && test -f vendor/aidcanvas-0.4.1-b61bfd50ec2e.tgz \
+    && test -f vendor/exmd-collaborative-editor-0.4.2-3d3240f8e88f.tgz \
+    && test -f vendor/slatetsx-kit-editor-0.4.9-629bbd289ae0.tgz
 # Keep dev dependencies: the current server entry point imports vite and uses tsx.
 RUN pnpm install --frozen-lockfile \
     --fetch-retries=5 \

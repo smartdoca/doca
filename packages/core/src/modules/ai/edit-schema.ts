@@ -21,16 +21,6 @@ const op = (type: string, fields: z.ZodRawShape = {}) =>
   z.strictObject({ type: z.literal(type), ...fields });
 export const richBlockTypes = [
   "paragraph",
-  "heading-one",
-  "heading-two",
-  "heading-three",
-  "heading-four",
-  "heading-five",
-  "block-quote",
-  "bulleted-list",
-  "numbered-list",
-  "list-item",
-  "todo",
   "code-block",
   "formula",
   "divider",
@@ -419,7 +409,6 @@ export function editToolSchema(format: DocumentFormat) {
 }
 const fields: Record<string, string[]> = {
   paragraph: ["title", "list", "checked", "quote", "indentation", "listOrder"],
-  todo: ["checked"],
   "code-block": ["language", "code"],
   formula: ["source"],
   image: ["path", "alt", "width", "caption", "showCaption", "displayStyle"],

@@ -97,7 +97,7 @@ export default function SheetDocument({
       "exlsx-cell-registers",
       factory,
       changed,
-      detail.editorSchemaVersion ?? EXLSX_SCHEMA_VERSION,
+      EXLSX_SCHEMA_VERSION,
     );
   const createComment = useRef<() => void>(() => {});
   const rank = Math.min(roleRank(detail.resource.role), sync.rank);

@@ -5,10 +5,7 @@ import { permission } from "../access/policy.js";
 import { accessContext } from "../access/queries.js";
 import { b64, restoreDocument } from "../collaboration/documents.js";
 import { restoreMarkdown } from "../documents/codecs/markdown.js";
-import {
-  restoreSurface,
-  DEFAULT_SPREADSHEET_SCHEMA,
-} from "../documents/codecs/surfaces.js";
+import { restoreSurface } from "../documents/codecs/surfaces.js";
 import type { Actor } from "../identity/passwords.js";
 import { createResourceRunner, get, project } from "./context.js";
 import { queryResourcePage, type ResourceQuery } from "./queries.js";
@@ -93,14 +90,6 @@ export function createResourceReads(
           .where("id", "=", r.owner_id)
           .executeTakeFirstOrThrow();
         const role = permission(r, actor, ctx.resources, ctx.grants);
-        const editorEpoch =
-          r.format === "spreadsheet"
-            ? await ctx.tx
-                .selectFrom("editor_epochs")
-                .select("baseline")
-                .where("resource_id", "=", id)
-                .executeTakeFirst()
-            : null;
         const lastEditor = r.last_editor_id
           ? await ctx.tx
               .selectFrom("users")
@@ -129,12 +118,6 @@ export function createResourceReads(
             ctx.managerInfoVisible || role >= 4
               ? owner.display_name || owner.public_id || owner.login
               : "",
-          editorSchemaVersion:
-            r.format === "spreadsheet"
-              ? editorEpoch?.baseline
-                ? JSON.parse(editorEpoch.baseline).schemaVersion
-                : DEFAULT_SPREADSHEET_SCHEMA
-              : undefined,
           lastEditorName:
             lastEditor?.display_name ||
             lastEditor?.public_id ||

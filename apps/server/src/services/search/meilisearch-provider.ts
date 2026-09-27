@@ -63,8 +63,8 @@ function copyDescriptor(
 /**
  * Meilisearch has atomic index swaps but no aliases. Stable active indexes
  * emulate aliases while versioned indexes retain the previous contents after
- * a swap. The configured index name remains the active document index for
- * backwards-compatible administration and embedding configuration.
+ * a swap. The configured index name remains the active document index so
+ * administration and embedding configuration address the same index.
  */
 export class MeilisearchSearchProvider<
   TConnection extends MeilisearchConnection,

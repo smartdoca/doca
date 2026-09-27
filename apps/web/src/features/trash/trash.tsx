@@ -1,13 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useI18n } from "@web/shared/i18n.js";
 import type { EditorValue } from "slatetsx-kit-editor";
-import type { WorkbookSnapshot } from "@online-office/univer-sheet";
 import { FileText, Folder, RotateCcw, Trash2 } from "lucide-react";
 import { api, type Page, type Resource } from "@web/shared/api.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 const TextPreview = lazy(() => import("@web/features/documents/version-preview.js"));
-const SheetPreview = lazy(() => import("@web/features/trash/trash-sheet-preview.js"));
 const MarkdownPreview = lazy(() => import("@web/features/documents/markdown-preview.js"));
 const SurfacePreview = lazy(() => import("@web/features/documents/surface-preview.js"));
 type Preview = {
@@ -16,11 +14,6 @@ type Preview = {
   markdown?: string;
   surface?: import("@web/features/documents/surface-preview.js").SurfacePreviewData;
   children?: { id: string; title: string }[];
-  sheet?: {
-    snapshot: WorkbookSnapshot;
-    checkpointId: string;
-    update: string;
-  } | null;
 };
 export function TrashPreview({
   resource,
@@ -63,8 +56,6 @@ export function TrashPreview({
             <MarkdownPreview value={data.markdown} trash />
           ) : data?.value ? (
             <TextPreview key={id} value={data.value} trash />
-          ) : data?.sheet ? (
-            <SheetPreview key={id} id={id} sheet={data.sheet} />
           ) : data?.children ? (
             <div className="trash-library-children">
               {data.children.length ? (

@@ -342,7 +342,6 @@ it("new sheets negotiate schema 6 by default with durable ACK and stable record 
     format: "spreadsheet",
     title: "rc8 isolated",
   });
-  expect((await content.detail(owner, r.id)).editorSchemaVersion).toBe(6);
   const proto = {
     protocolVersion: 1,
     codec: "exlsx-cell-registers",

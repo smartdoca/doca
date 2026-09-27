@@ -26,7 +26,7 @@ const value: Descendant[] = [
     type: "paragraph",
     children: [{ text: "Hello " }, { text: "world", bold: true }],
   },
-  { id: "b", type: "heading-two", children: [{ text: "Second line" }] },
+  { id: "b", type: "paragraph", title: "h2", children: [{ text: "Second line" }] },
   { id: "empty", type: "paragraph", children: [{ text: "" }] },
   { id: "c", type: "paragraph", children: [{ text: "Last paragraph" }] },
 ];
