@@ -16,7 +16,7 @@ Subpackage developers and Doca host developers maintain this contract together: 
 ## Core constraints
 
 - Unify transport, authentication, durable ACK, outbox and reconnect behavior. Keep format-specific data models behind codec adapters; never convert a workbook into a text CRDT just for uniformity.
-- Separate protocolVersion, codec/schemaVersion, epochId, seq, checkpointSeq, resource.version and business history IDs. A package field named checkpointId means epoch, not a periodic checkpoint counter.
+- Separate protocolVersion, codec/schemaVersion, epochId, seq, checkpointSeq, resource.version and business history IDs. Epoch identity is always carried as `epochId`.
 - Initialize from a server-authoritative, atomically paired baseline and Yjs state, then mount one stable editor instance. Props, readonly, selection, save state and resize must not rebuild the document or mutate shared state.
 - Only local content transactions enter the outbox. Remote/bootstrap/presence/focus/scroll changes must not generate writes or operation IDs. Do not introduce a second autosave transport.
 - ACK only after database commit. Keep original bytes and message ID until the matching ACK; a sync response is not an ACK. Never infer dirty state from a nonempty vector diff: an already synchronized deletion set can still be returned.
@@ -30,7 +30,7 @@ Subpackage developers and Doca host developers maintain this contract together: 
 
 Read the new package's integration documentation and compare exported APIs/schema with the currently installed build. Build/pack and install the actual updated artifact; when versions are reused, use a new hash-qualified filename and lockfile entry to avoid stale caches. Keep the previous artifact and a rollback route. Do not modify upstream source just to force host compatibility without task authorization.
 
-Adapt host bindings, codec validation and compatibility negotiation together. If a schema migration is needed, document baseline/epoch handling before changing stored data. Verify existing data restoration, not only new blank documents. Declare upstream gaps explicitly rather than silently approximating them.
+Adapt host bindings, codec validation and exact current-schema negotiation together. This project accepts only the current empty-database/document baseline; schema changes replace that baseline and do not add migration paths. Declare upstream gaps explicitly rather than silently approximating them.
 
 ## Verification
 

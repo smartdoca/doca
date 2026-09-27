@@ -131,18 +131,18 @@ it("keeps sheetId and cells on the advertised tool schema", async () => {
   });
 });
 
-it("normalizes canvas tags and rich-text code blocks", () => {
+it("normalizes canvas tags and keeps canonical rich-text code blocks", () => {
   const [canvas] = normalizeEditOperations("canvas", [
     { type: "add", element: { id: "n1", tag: "rect", x: 0, y: 0 } },
   ]);
   expect(canvas!.element).toMatchObject({ tag: "Rect" });
   const [code] = normalizeEditOperations("rich_text", [
-    { type: "insertBlock", block: { id: "c1", type: "codeBlock", code: "x" } },
+    { type: "insertBlock", block: { id: "c1", type: "code-block", code: "x", children: [{ text: "" }] } },
   ]);
   expect(code!.block).toMatchObject({ type: "code-block" });
 });
 
-it("accepts image cells written with assetId or wrapped in a paragraph", () => {
+it("keeps canonical image cells", () => {
   const tableId = "d800d841-c1f3-4ffa-b690-55bde37dc416";
   const border = "020c271d-e108-43cd-921c-42c6b8efd82f";
   const husky = "1385f180-f8b0-4f65-ba2e-72a327f0a192";
@@ -151,19 +151,13 @@ it("accepts image cells written with assetId or wrapped in a paragraph", () => {
       type: "setCellContent",
       tableId,
       cellId: "b7a56b16-3a0b-4ba0-b89c-62db1289636f",
-      children: [{ id: "img-border-collie", type: "image", assetId: border }],
+      children: [{ id: "img-border-collie", type: "image", path: border }],
     },
     {
       type: "setCellContent",
       tableId,
       cellId: "fc19d3f4-78bb-4f7c-ba1d-e4ca0e45cf00",
-      children: [
-        {
-          id: "cell-paragraph-1",
-          type: "paragraph",
-          children: [{ id: "img-husky", type: "image", assetId: husky }],
-        },
-      ],
+      children: [{ id: "img-husky", type: "image", path: husky }],
     },
   ]);
   expect(direct!.children).toEqual([

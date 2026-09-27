@@ -19,11 +19,11 @@ export function decodeMarkdownAnchor(
 ): MarkdownTextAnchor {
   if (
     !input ||
-    input.kind !== "markdown-text-range-v2" ||
+    input.kind !== "markdown-text-range" ||
     typeof input.epochId !== "string" ||
     (epochId && input.epochId !== epochId)
   )
-    throw Error("Markdown 评论版本不匹配");
+    throw Error("Markdown 评论格式不匹配");
   const bytes = (value: unknown) => {
     if (
       !Array.isArray(value) ||

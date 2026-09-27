@@ -78,7 +78,7 @@ export default function CanvasDocument({
   const aiRef = useRef(ai);
   aiRef.current = ai;
   const id = detail.resource.id,
-    sync = useSurfaceSync(id, user?.id, "aidcanvas-yjs", factory, changed);
+    sync = useSurfaceSync(id, user?.id, "aidcanvas-yjs", factory, changed, 1);
   const [renderFailed, setRenderFailed] = useState(false);
   const rank = Math.min(roleRank(detail.resource.role), sync.rank);
   const reading = useDocumentReadOnly(sync.binding ? rank >= 3 : undefined);
@@ -333,7 +333,6 @@ export default function CanvasDocument({
           render={() => (
             <CanvasEditor
               locale={locale}
-              showLayers={false}
               selectionActions={selectionActions}
               model={model}
               hostManaged

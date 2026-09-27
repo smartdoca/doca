@@ -70,7 +70,7 @@
   - move 知识库→个人：非 owner manager → 403；owner → 成功且转私有（custom+invited）；
   - transfer 个人文档给非协作者 → 400；给协作者 → 200；知识库文档 transfer 不受影响。
 - 修复受影响的现有测试：grep `parentId` 的个人树用法（permission-inheritance / permissions-v2 / tree-order / trash / experience 等），继承场景一律改为在知识库内构造；纯个人层级场景删除或改写。
-- 迁移测试不做自动化（测试库建库即跑完全部迁移，无旧数据），用一次性脚本在临时 sqlite 上验证物化逻辑。
+- 测试库直接从当前空库基线创建，不加载旧数据或运行升级脚本。
 
 ## 文档更新
 

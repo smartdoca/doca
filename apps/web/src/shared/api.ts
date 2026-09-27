@@ -88,7 +88,6 @@ export interface Comment {
   deleted_at: string | null;
 }
 export interface Detail {
-  editorSchemaVersion?: number;
   lastEditorName: string | null;
   lastEditedAt: string | null;
   resource: Resource;

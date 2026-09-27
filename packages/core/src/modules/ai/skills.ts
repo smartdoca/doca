@@ -27,7 +27,7 @@ Markdown：
 - 标题层级、列表、任务清单、引用、代码、Markdown表格用原生文本语法。流程图代码只在用户接受文本图示且渲染器支持时使用；可编辑画板需求交给画板文档。
 
 富文本：
-- 追加普通段落：{type:"append",text:"第一段\\n第二段"}，必须提供text。append 只放普通段落，不要把 # 标题、- 列表、| 表格或 \`\`\` 代码原文写进去。标题用 insertBlock，type 为 heading-one 到 heading-five；列表用 bulleted-list 或 numbered-list，里面放 list-item；表格用 insertTable。如果 text 里仍出现这些 Markdown 记号，服务端会转成原生块，不要把转写后的原文留给用户。
+- 追加普通段落：{type:"append",text:"第一段\\n第二段"}，必须提供text。append 只放普通段落，不要把 # 标题、- 列表、| 表格或 \`\`\` 代码原文写进去。标题用 insertBlock 创建 paragraph，并设置 title 为 h1 到 h5；列表使用 paragraph 的 list 属性（ul、ol 或 checkbox）；表格用 insertTable。如果 text 里仍出现这些 Markdown 记号，服务端会转成原生块，不要把转写后的原文留给用户。
 - 改块内文字：{type:"text",blockId,index,deleteCount,text}；index是该块内文字偏移。
 - 局部样式：{type:"formatText",blockId,index,length,style:{bold:true,color:"#2563eb"},unset:["italic"]}。支持bold/italic/underline/strikethrough/code/fontSize/fontFamily/color/backgroundColor。不要跨原子卡片操作。
 - 超链接：{type:"link",blockId,index,length,url}给块内已读取的文字区间加或改链接，index/length是该块内文字偏移，url只接受http(s)、mailto、tel或站内地址；新段落中的链接用insertBlock，children写成[{text:"前缀"},{id:"新ID",type:"link",url:"https://…",children:[{text:"链接文字"}]},{text:"后缀"}]；append正文里的[文字](url)语法会转成原生链接。不要把链接写成formatText样式，不要整段重建已有文字。

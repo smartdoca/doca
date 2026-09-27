@@ -13,7 +13,7 @@
 
 ## 2. 授权记录模型
 
-目标表可命名为 `permission_records`（也可以在迁移阶段演进现有 `grants`），一行表示一个文档用户的一种授权来源：
+当前 `grants` 表的一行表示一个文档用户的一种授权来源：
 
 | 字段 | 说明 |
 | --- | --- |
@@ -35,7 +35,7 @@
 - `link` 按 `source_id` 区分，同一链接同一用户最多一条；不同链接可以有多条。
 - `disabled` 记录不能产生权限，但必须参与继承阻断判断。
 
-`share_links` 继续保存 token、角色、有效期、人数上限、启停状态和 generation/share ID。它是链接定义，不是用户授权表。`share_members` 在迁移完成后不再作为权限事实表。
+`share_links` 保存 token、角色、有效期、人数上限、启停状态和 generation/share ID。它是链接定义，不是用户授权表；当前基线不包含 `share_members` 权限事实表。
 
 ## 3. 权限计算
 

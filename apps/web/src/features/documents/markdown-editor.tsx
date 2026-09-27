@@ -717,7 +717,6 @@ export default function MarkdownDocument({
             resources={resources}
             title={detail.resource.title}
             onChange={contentChanged}
-            onDownload={download}
             height="100%"
           />
         </div>

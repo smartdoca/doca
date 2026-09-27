@@ -39,7 +39,8 @@ it("defaults document reads to an outline with stable IDs instead of native JSON
   const blocks = [
     {
       id: "title",
-      type: "heading-one",
+      type: "paragraph",
+      title: "h1",
       children: [{ text: "项目计划正文会很长".repeat(20) }],
     },
     {
@@ -69,7 +70,7 @@ it("defaults document reads to an outline with stable IDs instead of native JSON
   expect(result.outline).toMatchObject({
     blockCount: 2,
     blocks: [
-      { id: "title", type: "heading-one" },
+      { id: "title", type: "paragraph", title: "h1" },
       { id: "table", type: "table", rows: [{ id: "row-1", cells: [{ id: "cell-1" }] }] },
     ],
   });

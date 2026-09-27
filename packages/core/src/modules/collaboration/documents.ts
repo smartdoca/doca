@@ -49,14 +49,7 @@ export function setDocumentTitle(runtime: YjsDocument, title: string) {
   if (
     first &&
     "type" in first &&
-    [
-      "paragraph",
-      "heading-one",
-      "heading-two",
-      "heading-three",
-      "heading-four",
-      "heading-five",
-    ].includes(first.type)
+    first.type === "paragraph"
   )
     runtime.editText(
       first.id,
@@ -192,7 +185,6 @@ export function createDocuments(db: DB) {
         update?: string;
         restoreVersion?: string;
         expectedSeq?: number;
-        checkpointId?: string;
         epochId?: string;
         codec?: string;
         schemaVersion?: number;
