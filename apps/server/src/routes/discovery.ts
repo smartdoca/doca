@@ -1,9 +1,17 @@
+import {
+  catalogPage,
+  collectPublicResource,
+} from "@core/modules/discovery/catalog.js";
+import { authorizeFileFolder } from "@core/modules/access/file-access.js";
+import { checkPublication } from "@core/modules/access/operation-policy.js";
 import { listInvitations } from "@core/modules/access/invitation-queries.js";
 import { Type } from "@sinclair/typebox";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { respondInvitation } from "@core/modules/access/invitations.js";
 import {
   distributionPolicy,
+  publicMode,
+  publicResourceKinds,
   type Distribution,
 } from "@core/modules/deployment/policies.js";
 import { setEntry } from "@core/modules/discovery/entries.js";
@@ -20,11 +28,145 @@ export function registerDistribution(
 ) {
   const choice = (values: string[]) =>
     Type.Union(values.map((v) => Type.Literal(v)));
+  const kindSchema = choice([...publicResourceKinds]);
+  api.get<{
+    Querystring: {
+      kind?: (typeof publicResourceKinds)[number];
+      collected?: boolean;
+      q?: string;
+      offset?: number;
+    };
+  }>(
+    "/api/v1/discovery/resources",
+    {
+      schema: {
+        querystring: Type.Object(
+          {
+            kind: Type.Optional(kindSchema),
+            collected: Type.Optional(Type.Boolean()),
+            q: Type.Optional(Type.String({ maxLength: 200 })),
+            offset: Type.Optional(
+              Type.Integer({ minimum: 0, maximum: 1000000 }),
+            ),
+          },
+          { additionalProperties: false },
+        ),
+      },
+    },
+    (req) => catalogPage(db, auth(req), req.query),
+  );
+  api.put<{
+    Params: { kind: (typeof publicResourceKinds)[number]; id: string };
+    Body: { collected: boolean };
+  }>(
+    "/api/v1/discovery/entries/:kind/:id",
+    {
+      schema: {
+        params: Type.Object({
+          kind: kindSchema,
+          id: Type.String({ format: "uuid" }),
+        }),
+        body: Type.Object(
+          { collected: Type.Boolean() },
+          { additionalProperties: false },
+        ),
+      },
+    },
+    (req) =>
+      collectPublicResource(
+        db,
+        auth(req),
+        req.params.kind,
+        req.params.id,
+        req.body.collected,
+      ),
+  );
+  api.get<{ Params: { id: string } }>(
+    "/api/v1/files/folders/:id/publication",
+    {
+      schema: { params: Type.Object({ id: Type.String({ format: "uuid" }) }) },
+    },
+    async (req) => {
+      await authorizeFileFolder(db, auth(req), req.params.id);
+      const row = await db
+        .selectFrom("folder_publications")
+        .selectAll()
+        .where("folder_id", "=", req.params.id)
+        .executeTakeFirst();
+      const entry = await db
+        .selectFrom("resource_collections")
+        .select("resource_id")
+        .where("resource_kind", "=", "folder")
+        .where("resource_id", "=", req.params.id)
+        .where("user_id", "=", auth(req).id)
+        .executeTakeFirst();
+      return {
+        enabled: !!row?.enabled,
+        revision: row?.revision ?? 0,
+        collected: !!entry,
+      };
+    },
+  );
+  api.put<{
+    Params: { id: string };
+    Body: { enabled: boolean; revision: number };
+  }>(
+    "/api/v1/files/folders/:id/publication",
+    {
+      schema: {
+        params: Type.Object({ id: Type.String({ format: "uuid" }) }),
+        body: Type.Object(
+          { enabled: Type.Boolean(), revision: Type.Integer({ minimum: 0 }) },
+          { additionalProperties: false },
+        ),
+      },
+    },
+    (req) =>
+      transact(db, async (tx) => {
+        const actor = auth(req);
+        const { folder } = await authorizeFileFolder(
+          tx,
+          actor,
+          req.params.id,
+          3,
+        );
+        if (req.body.enabled)
+          await checkPublication(
+            tx,
+            actor.id,
+            folder.owner_id,
+            "authenticated",
+          );
+        const old = await tx
+          .selectFrom("folder_publications")
+          .selectAll()
+          .where("folder_id", "=", folder.id)
+          .executeTakeFirst();
+        if ((old?.revision ?? 0) !== req.body.revision)
+          fail(409, "设置已变化，请刷新");
+        const row = {
+          folder_id: folder.id,
+          enabled: Number(req.body.enabled),
+          revision: req.body.revision + 1,
+        };
+        await tx
+          .insertInto("folder_publications")
+          .values(row)
+          .onConflict((oc) => oc.column("folder_id").doUpdateSet(row))
+          .execute();
+        return { enabled: !!row.enabled, revision: row.revision };
+      }),
+  );
   api.get("/api/v1/discovery/policy", async (req) => {
     auth(req);
     const policy = await distributionPolicy(db);
     return {
-      publicDiscovery: policy.publicDiscovery,
+      publicDiscovery: publicResourceKinds.some(
+        (kind) => publicMode(policy, kind) !== "link",
+      ),
+      publicModes: Object.fromEntries(
+        publicResourceKinds.map((kind) => [kind, publicMode(policy, kind)]),
+      ),
       normalSearch: policy.normalSearch,
     };
   });
@@ -38,6 +180,17 @@ export function registerDistribution(
       schema: {
         body: Type.Object(
           {
+            publicModes: Type.Optional(
+              Type.Object(
+                Object.fromEntries(
+                  publicResourceKinds.map((kind) => [
+                    kind,
+                    choice(["link", "discover", "search"]),
+                  ]),
+                ),
+                { additionalProperties: false },
+              ),
+            ),
             resourcePolicies: Type.Optional(
               Type.Object(
                 Object.fromEntries(

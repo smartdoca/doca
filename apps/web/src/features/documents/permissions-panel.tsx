@@ -57,6 +57,7 @@ type Overview = {
   historyReaders: boolean;
   sharingEnabled: boolean;
   discoverable: boolean;
+  publicContainerId?: string | null;
   canManage: boolean;
   isOwner: boolean;
   administrators: Manager[];
@@ -704,6 +705,8 @@ export function PermissionDialog({
         )}
         {data?.canManage && page === "settings" && (
           <div className="permissions-settings">
+            {data.publicContainerId && <p>{t("discovery.inherited")} <a href={`#/r/${data.publicContainerId}?view=settings`}>{t("discovery.containerSettings")}</a></p>}
+            {detail.resource.kind === "library" && <p className="subtle">{t("discovery.libraryPublishHelp")}</p>}
             <fieldset className="permissions-form" disabled={busy}>
               <section className="permissions-section">
                 <label className="permissions-switch">
@@ -712,6 +715,7 @@ export function PermissionDialog({
                     role="switch"
                     aria-label={t("permissionsUi.publicAccess")}
                     type="checkbox"
+                    disabled={!!data.publicContainerId}
                     checked={!!isPublic}
                     onChange={(e) =>
                       void settings({
@@ -727,6 +731,7 @@ export function PermissionDialog({
                     <label className="permissions-check">
                       <input
                         type="checkbox"
+                        disabled={!!data.publicContainerId}
                         checked={data.effectiveVisibility === "public"}
                         onChange={(e) =>
                           void settings({
@@ -778,18 +783,7 @@ export function PermissionDialog({
             </fieldset>
 
             <fieldset className="permissions-form" disabled={busy}>
-              <section className="permissions-section">
-                <label className="permissions-check">
-                  <input
-                    type="checkbox"
-                    checked={data.discoverable}
-                    onChange={(e) =>
-                      void settings({ discoverable: e.target.checked })
-                    }
-                  />{t("permissionsUi.discoverable")}{origin("discoverable")}
-                </label>
-                <p className="subtle">{t("permissionsUi.discoveryHelp")}</p>
-              </section>
+              <p className="subtle">{t("discovery.policyManaged")}</p>
               {detail.resource.kind === "document" && (
                 <section className="permissions-section">
                   <label className="permissions-check">

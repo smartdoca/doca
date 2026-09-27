@@ -27,6 +27,7 @@ export function FolderPermissionPanel({ folder, close }: { folder: FileFolder; c
 const { t } = useI18n();
 const labels = { owner: t("search.owner"), admin: t("admin.badge"), reader: t("fileManager.reader") } as const;
 
+  const [publication,setPublication]=useState<{enabled:boolean;revision:number}|null>(null);
   const [page, setPage] = useState<Page>("main");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [link, setLink] = useState<ShareLink | null>(null);
@@ -51,12 +52,14 @@ const labels = { owner: t("search.owner"), admin: t("admin.badge"), reader: t("f
 
   async function load() {
     setError("");
-    const [nextOverview, nextLink] = await Promise.all([
+    const [nextOverview, nextLink, nextPublication] = await Promise.all([
       api<Overview>(`/files/folders/${folder.id}/shares`),
       api<ShareLink>(`/files/folders/${folder.id}/share-link`),
+      api<{enabled:boolean;revision:number}>(`/files/folders/${folder.id}/publication`),
     ]);
     setOverview(nextOverview);
     setLink(nextLink);
+    setPublication(nextPublication);
   }
   useEffect(() => { void load().catch((e) => setError(e.message)); }, [folder.id]);
 
@@ -107,6 +110,7 @@ const labels = { owner: t("search.owner"), admin: t("admin.badge"), reader: t("f
           <button type="button" className="permissions-collaborators" disabled={!overview.canManage} aria-label={t("permissionsUi.collaboratorCount", { count: overview.members.length })} onClick={() => setPage("members")}><span>{t("share.invite")}</span><span className="permissions-avatars">{overview.members.slice(0, 5).map((member) => <UserBadge key={member.user_id} id={member.user_id} name={member.display_name} passive avatarOnly />)}{overview.members.length > 5 && <span className="permissions-more">+{overview.members.length - 5}</span>}{overview.canManage && <ChevronRight size={17} />}</span></button>
           {overview.canManage && <button type="button" className="permissions-invite-entry" onClick={() => setPage("invite")}><Search size={16} /><span>{t("permissionsUi.search")}</span></button>}
         </section>
+        {overview.canManage && publication && <section className="permissions-section"><label className="permissions-switch"><span>{t("discovery.publishFolder")}</span><input type="checkbox" role="switch" disabled={busy} checked={publication.enabled} onChange={async e=>{setBusy(true);try{setPublication(await api(`/files/folders/${folder.id}/publication`,"PUT",{enabled:e.target.checked,revision:publication.revision}));}catch(error){setError((error as Error).message);}finally{setBusy(false);}}}/></label><p className="subtle">{t("discovery.publishHelp")}</p></section>}
         {overview.canManage && link && <section className="permissions-section share-settings folder-share-link-settings">
           <div className="permissions-section-heading"><h3>{t("sharingUi.linkSharing")}</h3><label className="permissions-switch"><input role="switch" type="checkbox" checked={link.enabled} disabled={busy} onChange={(event) => void updateLink({ enabled: event.target.checked })} /></label></div>
           {link.enabled && <><div className="permissions-link-row"><span className="permissions-link-icon"><Link2 size={21} /></span><span className="permissions-link-label"><strong>{t("sharingUi.linkAudience")}</strong><small>{t("sharingUi.joinAfterLogin")}</small></span><Select aria-label={t("sharingUi.permission")} value={link.role} disabled={busy} onChange={(event) => void updateLink({ role: event.target.value as ShareRole })}><option value="reader">{t("role.reader")}</option>{link.isOwner && <option value="admin">{t("role.manager")}</option>}</Select><button className="primary" onClick={() => void copyLink()}><Copy size={16} />{t("sharingUi.copyLink")}</button></div><button className="permissions-text-button" disabled={busy} onClick={() => void updateLink({ rotate: true })}>{t("sharingUi.changeLink")}</button></>}

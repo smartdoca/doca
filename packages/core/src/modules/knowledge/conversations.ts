@@ -4,6 +4,9 @@ import { transact } from "@db/transactions.js";
 import type { Actor } from "../identity/passwords.js";
 import {
   maintainKnowledge,
+  effectiveKnowledgeBotLibraries,
+  knowledgeBotConfig,
+  canManageKnowledgeBot,
   knowledgeAssistantAccess,
   knowledgeSettingsSchema,
   effectiveKnowledgeSettings,
@@ -26,16 +29,10 @@ export async function knowledgeBot(db: DB, actor: Actor, id: string) {
     .executeTakeFirst();
   if (!bot || !(await knowledgeAssistantAccess(db, actor, bot)).accessible)
     fail(404, "问答机器人不可用");
-  const owner = await db
-    .selectFrom("users")
-    .select(["id", "display_name", "admin"])
-    .where("id", "=", bot.owner_id)
-    .where("status", "=", "active")
-    .executeTakeFirst();
-  if (!owner) fail(404, "问答机器人不可用");
-  for (const libraryId of JSON.parse(bot.library_ids) as string[])
-    await maintainKnowledge(db, owner, libraryId);
-  return bot;
+  return {
+    ...bot,
+    library_ids: JSON.stringify(await effectiveKnowledgeBotLibraries(db, bot)),
+  };
 }
 export async function conversationAccess(db: DB, actor: Actor, id: string) {
   const row = await db
@@ -47,7 +44,25 @@ export async function conversationAccess(db: DB, actor: Actor, id: string) {
   if (row.kind === "curation") await maintainKnowledge(db, actor, row.scope_id);
   else {
     if (row.owner_id !== actor.id) fail(404, "会话不存在");
-    await knowledgeBot(db, actor, row.scope_id);
+    const bot = await knowledgeBot(db, actor, row.scope_id);
+    if (row.access_key_id) {
+      const key = await db
+        .selectFrom("knowledge_bot_keys")
+        .selectAll()
+        .where("id", "=", row.access_key_id)
+        .where("bot_id", "=", row.scope_id)
+        .where("expires_at", ">", new Date().toISOString())
+        .executeTakeFirst();
+      if (
+        !key ||
+        !canManageKnowledgeBot(bot, key.creator_id) ||
+        (key.channel.startsWith("public:")
+          ? bot.visibility !== "public" ||
+            !knowledgeBotConfig(bot).channels.includes(key.channel.slice(7))
+          : !knowledgeBotConfig(bot).channels.includes(key.channel))
+      )
+        fail(403, "会话调用权限已撤销");
+    }
   }
   return row;
 }
@@ -157,6 +172,7 @@ export async function listKnowledgeConversations(
     .selectFrom("knowledge_conversations")
     .selectAll()
     .where("scope_id", "=", scopeId)
+    .where("access_key_id", "is", null)
     .where("kind", "=", kind);
   if (kind === "answer") query = query.where("owner_id", "=", actor.id);
   return query.orderBy("updated_at", "desc").limit(100).execute();
@@ -190,6 +206,12 @@ export async function sendKnowledgeMessage(
   content: string,
   requestId: string,
   trigger = "manual",
+  attachments: {
+    id: string;
+    filename: string;
+    mime: string;
+    size: number;
+  }[] = [],
 ) {
   if (!content.trim() || content.length > 20000)
     fail(400, "请输入不超过20000字的消息");
@@ -204,7 +226,9 @@ export async function sendKnowledgeMessage(
       if (
         duplicate.conversation_id !== id ||
         duplicate.author_id !== actor.id ||
-        duplicate.content !== content
+        duplicate.content !== content ||
+        JSON.stringify(JSON.parse(duplicate.detail).attachments ?? []) !==
+          JSON.stringify(attachments)
       )
         fail(409, "请求编号已使用");
       return conversation;
@@ -224,7 +248,7 @@ export async function sendKnowledgeMessage(
         author_id: actor.id,
         trigger,
         content,
-        detail: "{}",
+        detail: JSON.stringify({ attachments }),
         created_at: now,
       })
       .execute();
@@ -258,6 +282,7 @@ export async function createScheduledKnowledgeConversation(
   actor: Actor,
   libraryId: string,
   triggeredAt = new Date(),
+  purpose: "sources" | "feedback" = "sources",
 ) {
   return transact(db, async (tx) => {
     const timestamp = triggeredAt.toISOString();
@@ -272,9 +297,9 @@ export async function createScheduledKnowledgeConversation(
       tx,
       actor,
       conversation.id,
-      "检查来源变化和质量，整理需要更新的知识，遵守本库来源范围和人工操作，按需推荐符合范围的高质量来源。",
+      purpose === "feedback" ? "处理本库尚未解决的问答反馈：先读取反馈并分类根因，按需修订知识或整理规则，验证当前知识下的回答。无法自动解决的决策登记人工待办后继续其他案例。" : "检查来源变化和质量，整理需要更新的知识，遵守本库来源范围和人工操作，按需推荐符合范围的高质量来源。",
       randomUUID(),
-      "schedule",
+      purpose === "feedback" ? "feedback_schedule" : "schedule",
     );
     return conversation;
   });

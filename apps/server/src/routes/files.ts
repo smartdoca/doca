@@ -1,3 +1,5 @@
+import { folderInSearch } from "@core/modules/discovery/catalog.js";
+import { queryResourcePage } from "@core/modules/resources/queries.js";
 import { authorizeFileFolder as folderAccess, authorizeFileItem } from "@core/modules/access/file-access.js";
 import { Readable } from "node:stream";
 import {
@@ -483,8 +485,7 @@ export function registerFiles(
           if (candidate.owner_id === actor.id) physicalFolders.push(candidate);
           else {
             try {
-              await folderAccess(db, actor, candidate.id, 1);
-              physicalFolders.push(candidate);
+              if (await folderInSearch(db, actor, candidate.id)) physicalFolders.push(candidate);
             } catch {}
           }
         }
@@ -743,7 +744,7 @@ export function registerFiles(
       q?: string;
       limit?: number;
       mode?: "keyword" | "ai";
-      scope?: "all" | "owned" | "shared";
+      scope?: "all" | "owned" | "shared" | "personal" | "public";
       location?: "all" | "personal" | "library";
       ownerIds?: string[];
       libraryIds?: string[];
@@ -765,6 +766,8 @@ export function registerFiles(
               Type.Literal("all"),
               Type.Literal("owned"),
               Type.Literal("shared"),
+              Type.Literal("personal"),
+              Type.Literal("public"),
             ]),
           ),
           location: Type.Optional(
@@ -846,6 +849,9 @@ export function registerFiles(
         if (!(await releaseDocumentFileIfUnused(db, row.id, documentMedia))) continue;
         try {
           await readableItem(db, actor, row.id);
+          if (req.query.scope === "public" && row.parent_type !== "folder" && row.parent_type !== "document") continue;
+          if (row.parent_type === "folder" && !await folderInSearch(db, actor, row.parent_id, req.query.scope)) continue;
+          if (row.parent_type === "document" && !(await queryResourcePage(db, actor, {matchedIds:[row.parent_id], scope:req.query.scope})).items.length) continue;
         } catch {
           continue;
         }
@@ -1412,6 +1418,7 @@ export function registerFiles(
       let access: Awaited<ReturnType<typeof folderAccess>>;
       try {
         access = await folderAccess(db, actor, folder.id, 1);
+        if (!await folderInSearch(db, actor, folder.id)) continue;
       } catch {
         continue;
       }

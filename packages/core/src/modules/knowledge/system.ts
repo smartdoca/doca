@@ -31,10 +31,13 @@ function knowledgeFigures(value: unknown): KnowledgeFigure[] {
     if (!figure || (figure.type !== "flowchart" && figure.type !== "mindmap"))
       return [];
     const nodes = Array.isArray(figure.nodes)
-      ? figure.nodes.flatMap((node: { id?: string; label?: string; shape?: string }) =>
-          typeof node?.id === "string" && typeof node.label === "string" && node.label
-            ? [{ id: node.id, label: node.label, shape: node.shape }]
-            : [],
+      ? figure.nodes.flatMap(
+          (node: { id?: string; label?: string; shape?: string }) =>
+            typeof node?.id === "string" &&
+            typeof node.label === "string" &&
+            node.label
+              ? [{ id: node.id, label: node.label, shape: node.shape }]
+              : [],
         )
       : [];
     const edges = Array.isArray(figure.edges)
@@ -55,13 +58,22 @@ const gapStop = new Set(
 /** Topics and questions named in the guide that published knowledge does not yet cover. */
 export function knowledgeOutlineGaps(
   guide: string,
-  entries: { title: string; markdown: string; path?: string[]; status: string }[],
+  entries: {
+    title: string;
+    markdown: string;
+    path?: string[];
+    status: string;
+  }[],
 ) {
   const published = entries.filter((entry) => entry.status === "published");
   const hay = published
-    .map((entry) => `${(entry.path ?? []).join("\n")}\n${entry.title}\n${entry.markdown}`)
+    .map(
+      (entry) =>
+        `${(entry.path ?? []).join("\n")}\n${entry.title}\n${entry.markdown}`,
+    )
     .join("\n");
-  const gaps: { key: string; title: string; path: string[]; detail: string }[] = [];
+  const gaps: { key: string; title: string; path: string[]; detail: string }[] =
+    [];
   const seen = new Set<string>();
   const add = (title: string, detail: string) => {
     const name = title.trim().slice(0, 80);
@@ -120,6 +132,7 @@ export const knowledgeSettingsSchema = z
     publicationMode: z.enum(["automatic", "manual"]).default("automatic"),
     sourceScope: z.enum(["internal", "web"]).default("web"),
     automationPolicy: z.enum(["safe", "draft"]).default("safe"),
+    feedbackSchedule: z.enum(["off", "daily", "weekly"]).default("off"),
     sourcePolicies: z.record(z.string().uuid(), sourcePolicySchema).default({}),
     excludedSourceIds: z.array(z.string().uuid()).max(5000).default([]),
     redactedTerms: z
@@ -131,28 +144,74 @@ export const knowledgeSettingsSchema = z
   .strict();
 export type KnowledgeSettings = z.infer<typeof knowledgeSettingsSchema>;
 /** Assistant patches preserve omitted settings, including source-local safety rules. */
-export const knowledgeSettingsPatchSchema = z.object({
-  publicationMode: knowledgeSettingsSchema.shape.publicationMode.removeDefault().optional(),
-  sourceScope: knowledgeSettingsSchema.shape.sourceScope.removeDefault().optional(),
-  automationPolicy: knowledgeSettingsSchema.shape.automationPolicy.removeDefault().optional(),
-  modelId: knowledgeSettingsSchema.shape.modelId.removeDefault().optional(),
-  maxDocumentDepth: knowledgeSettingsSchema.shape.maxDocumentDepth.removeDefault().optional(),
-  autoPublishWeighted: knowledgeSettingsSchema.shape.autoPublishWeighted.removeDefault().optional(),
-  excludedSourceIds: knowledgeSettingsSchema.shape.excludedSourceIds.removeDefault().optional(),
-  redactedTerms: knowledgeSettingsSchema.shape.redactedTerms.removeDefault().optional(),
-  redactContacts: knowledgeSettingsSchema.shape.redactContacts.removeDefault().optional(),
-  sourcePolicies: z.record(z.string().uuid(), z.object({
-    redactedTerms: sourcePolicySchema.shape.redactedTerms.removeDefault().optional(),
-    redactContacts: sourcePolicySchema.shape.redactContacts.removeDefault().optional(),
-    excludedResourceIds: sourcePolicySchema.shape.excludedResourceIds.removeDefault().optional(),
-    linkAccess: sourcePolicySchema.shape.linkAccess.removeDefault().optional(),
-  }).strict()).optional(),
-}).strict();
-export function mergeKnowledgeSettings(current: KnowledgeSettings, patch: z.infer<typeof knowledgeSettingsPatchSchema>): KnowledgeSettings {
-  return knowledgeSettingsSchema.parse({ ...current, ...patch, sourcePolicies: {
-    ...current.sourcePolicies,
-    ...Object.fromEntries(Object.entries(patch.sourcePolicies ?? {}).map(([id, policy]) => [id, { ...current.sourcePolicies[id], ...policy }])),
-  } });
+export const knowledgeSettingsPatchSchema = z
+  .object({
+    feedbackSchedule: knowledgeSettingsSchema.shape.feedbackSchedule.removeDefault().optional(),
+    publicationMode: knowledgeSettingsSchema.shape.publicationMode
+      .removeDefault()
+      .optional(),
+    sourceScope: knowledgeSettingsSchema.shape.sourceScope
+      .removeDefault()
+      .optional(),
+    automationPolicy: knowledgeSettingsSchema.shape.automationPolicy
+      .removeDefault()
+      .optional(),
+    modelId: knowledgeSettingsSchema.shape.modelId.removeDefault().optional(),
+    maxDocumentDepth: knowledgeSettingsSchema.shape.maxDocumentDepth
+      .removeDefault()
+      .optional(),
+    autoPublishWeighted: knowledgeSettingsSchema.shape.autoPublishWeighted
+      .removeDefault()
+      .optional(),
+    excludedSourceIds: knowledgeSettingsSchema.shape.excludedSourceIds
+      .removeDefault()
+      .optional(),
+    redactedTerms: knowledgeSettingsSchema.shape.redactedTerms
+      .removeDefault()
+      .optional(),
+    redactContacts: knowledgeSettingsSchema.shape.redactContacts
+      .removeDefault()
+      .optional(),
+    sourcePolicies: z
+      .record(
+        z.string().uuid(),
+        z
+          .object({
+            redactedTerms: sourcePolicySchema.shape.redactedTerms
+              .removeDefault()
+              .optional(),
+            redactContacts: sourcePolicySchema.shape.redactContacts
+              .removeDefault()
+              .optional(),
+            excludedResourceIds: sourcePolicySchema.shape.excludedResourceIds
+              .removeDefault()
+              .optional(),
+            linkAccess: sourcePolicySchema.shape.linkAccess
+              .removeDefault()
+              .optional(),
+          })
+          .strict(),
+      )
+      .optional(),
+  })
+  .strict();
+export function mergeKnowledgeSettings(
+  current: KnowledgeSettings,
+  patch: z.infer<typeof knowledgeSettingsPatchSchema>,
+): KnowledgeSettings {
+  return knowledgeSettingsSchema.parse({
+    ...current,
+    ...patch,
+    sourcePolicies: {
+      ...current.sourcePolicies,
+      ...Object.fromEntries(
+        Object.entries(patch.sourcePolicies ?? {}).map(([id, policy]) => [
+          id,
+          { ...current.sourcePolicies[id], ...policy },
+        ]),
+      ),
+    },
+  });
 }
 
 export const instructionInput = z
@@ -180,7 +239,12 @@ export const assistantInput = z
     id: z.string().uuid().optional(),
     expectedRevision: z.number().int().min(0),
     title: z.string().trim().min(1).max(200),
-    libraryIds: z.array(z.string().uuid()).min(1).max(20),
+    libraryIds: z.array(z.string().uuid()).max(20),
+    managerIds: z.array(z.string().uuid()).max(100).default([]),
+    attachmentsEnabled: z.boolean().default(false),
+    channels: z
+      .array(z.enum(["web", "embed", "api", "mcp"]))
+      .default(["web", "embed", "api", "mcp"]),
     memberIds: z.array(z.string().uuid()).max(200),
     enabled: z.boolean(),
   })
@@ -203,7 +267,10 @@ export async function maintainKnowledgeSource(
 
   return source;
 }
-export async function sourceActor(db: DB, source: Schema["knowledge_subscriptions"]) {
+export async function sourceActor(
+  db: DB,
+  source: Schema["knowledge_subscriptions"],
+) {
   if (!source.creator_id) return null;
   const actor = await db
     .selectFrom("users")
@@ -304,12 +371,20 @@ export async function knowledgeInstructions(
   }
   const sourceLabels: Record<string, string> = {};
   for (const source of subscriptions) {
+    if (source.name?.trim()) {sourceLabels[source.id]=source.name;continue;}
     if (!(await knowledgeSourceLinkVisible(db, actor, source, true))) continue;
     if (source.source_kind === "document" || source.source_kind === "library") {
-      const reader = await sourceActor(db,source);
-      if(reader) try { sourceLabels[source.id] = (await authorize(db,reader,source.source_id,1)).resource.title; } catch {}
-    }
-    else if (source.source_kind === "file" || source.source_kind === "folder") {
+      const reader = await sourceActor(db, source);
+      if (reader)
+        try {
+          sourceLabels[source.id] = (
+            await authorize(db, reader, source.source_id, 1)
+          ).resource.title;
+        } catch {}
+    } else if (
+      source.source_kind === "file" ||
+      source.source_kind === "folder"
+    ) {
       const row = await db
         .selectFrom(
           source.source_kind === "file" ? "file_items" : "file_folders",
@@ -321,11 +396,20 @@ export async function knowledgeInstructions(
     } else if (source.source_kind === "url")
       sourceLabels[source.id] = source.url;
   }
-  const sourceIds = new Set(subscriptions.map(source => source.id));
-  const files = [...latest.values()].filter(file => !file.path.startsWith("sources/") || sourceIds.has(file.path.split("/")[1]!)).sort((a, b) =>
-    a.path.localeCompare(b.path),
-  );
-  if ([...new Set(files.map(f=>f.markdown))].reduce((n, markdown) => n + markdown.length, 0) > 120000)
+  const sourceIds = new Set(subscriptions.map((source) => source.id));
+  const files = [...latest.values()]
+    .filter(
+      (file) =>
+        !file.path.startsWith("sources/") ||
+        sourceIds.has(file.path.split("/")[1]!),
+    )
+    .sort((a, b) => a.path.localeCompare(b.path));
+  if (
+    [...new Set(files.map((f) => f.markdown))].reduce(
+      (n, markdown) => n + markdown.length,
+      0,
+    ) > 120000
+  )
     fail(413, "整理指引过长，请精简后重试");
   const settings = await db
     .selectFrom("knowledge_settings")
@@ -632,7 +716,12 @@ export async function knowledgeEntries(
     libraryId,
     knowledgeSettingsSchema.parse(row ? JSON.parse(row.config) : {}),
   );
-  const live = new Map((await knowledgeDocumentSnapshot(db, libraryId)).map(doc => [doc.id, doc]));
+  const live = new Map(
+    (await knowledgeDocumentSnapshot(db, libraryId)).map((doc) => [
+      doc.id,
+      doc,
+    ]),
+  );
   return (
     await db
       .selectFrom("knowledge_entries")
@@ -642,7 +731,10 @@ export async function knowledgeEntries(
       .orderBy("updated_at", "desc")
       .execute()
   ).map((entry) => {
-    const doc = entry.status === "published" ? live.get(JSON.parse(entry.review_state).nodeId) : undefined;
+    const doc =
+      entry.status === "published"
+        ? live.get(JSON.parse(entry.review_state).nodeId)
+        : undefined;
     if (doc) entry = { ...entry, title: doc.title, markdown: doc.markdown };
     const effective = effectiveKnowledgeSettings(
       settings,
@@ -848,9 +940,11 @@ export async function saveHumanKnowledge(
         ),
       ),
       origin:
-        provenance === "ai" ? "ai_synthesized" : current && current.origin !== "human_authored"
-          ? "human_revised"
-          : "human_authored",
+        provenance === "ai"
+          ? "ai_synthesized"
+          : current && current.origin !== "human_authored"
+            ? "human_revised"
+            : "human_authored",
       status: "draft",
       revision: replacing ? 1 : input.expectedRevision + 1,
       source_refs: current?.source_refs ?? "[]",
@@ -873,14 +967,22 @@ export async function saveHumanKnowledge(
     );
     if (current) {
       const nodeId = JSON.parse(current.review_state).nodeId;
-      if (nodeId) state.baseDocumentSeq = (await tx.selectFrom("document_states").select("seq").where("resource_id", "=", nodeId).executeTakeFirst())?.seq;
+      if (nodeId)
+        state.baseDocumentSeq = (
+          await tx
+            .selectFrom("document_states")
+            .select("seq")
+            .where("resource_id", "=", nodeId)
+            .executeTakeFirst()
+        )?.seq;
     }
-    if(provenance === "human") state.humanChange = {
-      id: randomUUID(),
-      authorId: actor.id,
-      createdAt: now,
-      change: humanDelta(current?.markdown ?? "", entry.markdown),
-    };
+    if (provenance === "human")
+      state.humanChange = {
+        id: randomUUID(),
+        authorId: actor.id,
+        createdAt: now,
+        change: humanDelta(current?.markdown ?? "", entry.markdown),
+      };
     else delete state.humanChange;
     entry.review_state = JSON.stringify(state);
     if (current && !replacing) {
@@ -1058,7 +1160,13 @@ export async function projectKnowledgeEntry(
   }
   state.nodeId = nodeId;
   state.projectedHash = contentHash;
-  state.projectedSeq = (await tx.selectFrom("document_states").select("seq").where("resource_id", "=", nodeId).executeTakeFirst())?.seq;
+  state.projectedSeq = (
+    await tx
+      .selectFrom("document_states")
+      .select("seq")
+      .where("resource_id", "=", nodeId)
+      .executeTakeFirst()
+  )?.seq;
   await tx
     .updateTable("knowledge_entries")
     .set({ review_state: JSON.stringify(state) })
@@ -1127,8 +1235,16 @@ export async function reviewKnowledgeEntry(
       if (!original) fail(409, "原知识已变化，请核对后重新发布");
       const originalState = JSON.parse(original.review_state);
       if (originalState.nodeId) {
-        const live = await tx.selectFrom("document_states").select("seq").where("resource_id", "=", originalState.nodeId).executeTakeFirst();
-        if (live && live.seq !== (state.baseDocumentSeq ?? originalState.projectedSeq ?? 0))
+        const live = await tx
+          .selectFrom("document_states")
+          .select("seq")
+          .where("resource_id", "=", originalState.nodeId)
+          .executeTakeFirst();
+        if (
+          live &&
+          live.seq !==
+            (state.baseDocumentSeq ?? originalState.projectedSeq ?? 0)
+        )
           fail(409, "文档已有人工修改，请重新读取文档并生成修订建议");
       }
       if (!state.nodeId && typeof originalState.nodeId === "string")
@@ -1230,7 +1346,10 @@ export async function knowledgeSourceLinkVisible(
   managing = false,
 ) {
   if (managing) {
-    try { await maintainKnowledge(db, actor, source.library_id); return true; } catch {}
+    try {
+      await maintainKnowledge(db, actor, source.library_id);
+      return true;
+    } catch {}
   }
   if (!(await sourceAvailable(db, actor, source))) return false;
   if (source.source_kind !== "url") return true;
@@ -1590,8 +1709,12 @@ export async function executeKnowledgeCuration(
     const readGuards: ((connection: DB) => Promise<void>)[] = [];
     const skipped: { id: string; reason: string }[] = [];
     for (const source of subscriptions) {
-      if(bundle.settings.sourceScope === "internal" && source.source_kind === "url") {
-        skipped.push({id:source.id,reason:"internal_sources_only"});continue;
+      if (
+        bundle.settings.sourceScope === "internal" &&
+        source.source_kind === "url"
+      ) {
+        skipped.push({ id: source.id, reason: "internal_sources_only" });
+        continue;
       }
       const actor = await sourceActor(db, source);
       if (!actor) {
@@ -1627,19 +1750,42 @@ export async function executeKnowledgeCuration(
       let title = "",
         text = "",
         version = "";
-      if (source.source_kind === "document" || source.source_kind === "library") {
+      if (
+        source.source_kind === "document" ||
+        source.source_kind === "library"
+      ) {
         const access = await authorize(db, actor, source.source_id, 1);
-        const members=await knowledgeSourceMembers(db,actor,source,[...denied]);
-        const read=async(connection:DB)=>{
-          const current=await knowledgeSourceMembers(connection,actor,source,[...denied]);
-          const parts=[];
-          for(const member of current){const state=await connection.selectFrom("document_states").select("text").where("resource_id","=",member.id).executeTakeFirst();parts.push(`# ${member.title}\n${state?.text??""}`);}
-          return {members:current,text:parts.join("\n\n")};
+        const members = await knowledgeSourceMembers(db, actor, source, [
+          ...denied,
+        ]);
+        const read = async (connection: DB) => {
+          const current = await knowledgeSourceMembers(
+            connection,
+            actor,
+            source,
+            [...denied],
+          );
+          const parts = [];
+          for (const member of current) {
+            const state = await connection
+              .selectFrom("document_states")
+              .select("text")
+              .where("resource_id", "=", member.id)
+              .executeTakeFirst();
+            parts.push(`# ${member.title}\n${state?.text ?? ""}`);
+          }
+          return { members: current, text: parts.join("\n\n") };
         };
-        const snapshot=await read(db);
-        title=access.resource.title;text=snapshot.text;version=hash(snapshot);
-        const expectedVersion=version;
-        readGuards.push(async(connection)=>{await authorize(connection,actor,source.source_id,1);if(hash(await read(connection))!==expectedVersion)fail(409,"来源内容或范围已变化，请重新整理");});
+        const snapshot = await read(db);
+        title = access.resource.title;
+        text = snapshot.text;
+        version = hash(snapshot);
+        const expectedVersion = version;
+        readGuards.push(async (connection) => {
+          await authorize(connection, actor, source.source_id, 1);
+          if (hash(await read(connection)) !== expectedVersion)
+            fail(409, "来源内容或范围已变化，请重新整理");
+        });
       } else if (source.source_kind === "file") {
         const file = await db
           .selectFrom("file_items")
@@ -1803,10 +1949,21 @@ export async function executeKnowledgeCuration(
       .selectAll()
       .where("library_id", "=", run.library_id)
       .execute();
-    const currentDocuments = new Map((await knowledgeDocumentSnapshot(db, run.library_id)).map(doc => [doc.id, doc]));
+    const currentDocuments = new Map(
+      (await knowledgeDocumentSnapshot(db, run.library_id)).map((doc) => [
+        doc.id,
+        doc,
+      ]),
+    );
     for (const entry of existing) {
-      const doc = entry.status === "published" ? currentDocuments.get(JSON.parse(entry.review_state).nodeId) : undefined;
-      if (doc) { entry.markdown = doc.markdown; entry.title = doc.title; }
+      const doc =
+        entry.status === "published"
+          ? currentDocuments.get(JSON.parse(entry.review_state).nodeId)
+          : undefined;
+      if (doc) {
+        entry.markdown = doc.markdown;
+        entry.title = doc.title;
+      }
     }
     const humanChanges = await knowledgeHumanChanges(db, actor, run.library_id);
     if (JSON.stringify(humanChanges).length > 120000)
@@ -1884,7 +2041,14 @@ export async function executeKnowledgeCuration(
             return {
               id: entry.id,
               title: sanitizeKnowledge(entry.title, policy),
-              markdown: sanitizeKnowledge(refsOf(entry).some(ref => ref.subscriptionId === material.subscriptionId) || entry.origin.startsWith("human") ? entry.markdown : "[目录条目，未加载全文；修改前请通过整理助手读取当前文档]", policy),
+              markdown: sanitizeKnowledge(
+                refsOf(entry).some(
+                  (ref) => ref.subscriptionId === material.subscriptionId,
+                ) || entry.origin.startsWith("human")
+                  ? entry.markdown
+                  : "[目录条目，未加载全文；修改前请通过整理助手读取当前文档]",
+                policy,
+              ),
               origin: entry.origin,
               status: entry.status,
               sourceIds: refsOf(entry).map((ref) => ref.subscriptionId),
@@ -1933,8 +2097,11 @@ export async function executeKnowledgeCuration(
       for (const guard of readGuards) await guard(tx);
       const ids: string[] = [];
       let pendingCount = 0;
-      const entryFingerprint = (title: string, markdown: string, figures: unknown = []) =>
-        hash({ title, markdown, figures: figures ?? [] });
+      const entryFingerprint = (
+        title: string,
+        markdown: string,
+        figures: unknown = [],
+      ) => hash({ title, markdown, figures: figures ?? [] });
       const seen = new Set(
         existing.map((entry) =>
           entryFingerprint(
@@ -1969,17 +2136,20 @@ export async function executeKnowledgeCuration(
         );
         const title = sanitizeKnowledge(proposed.title, outputSettings),
           markdown = sanitizeKnowledge(proposed.markdown, outputSettings);
-        const figures = knowledgeFigures(proposed.figures).map((figure) => ({
-          ...figure,
-          nodes: figure.nodes.map((node) => ({
-            ...node,
-            label: sanitizeKnowledge(node.label, outputSettings),
-          })),
-        })).filter((figure) => figure.nodes.every((node) => node.label));
+        const figures = knowledgeFigures(proposed.figures)
+          .map((figure) => ({
+            ...figure,
+            nodes: figure.nodes.map((node) => ({
+              ...node,
+              label: sanitizeKnowledge(node.label, outputSettings),
+            })),
+          }))
+          .filter((figure) => figure.nodes.every((node) => node.label));
         const fingerprint = entryFingerprint(title, markdown, figures);
         // A reviewed-away historical value may still conflict with a newer human amendment.
         // Suppress existing/rejected candidates, but let an explicit revision reference that history.
-        if ((proposed.replacesId ? revisionSeen : seen).has(fingerprint)) continue;
+        if ((proposed.replacesId ? revisionSeen : seen).has(fingerprint))
+          continue;
         seen.add(fingerprint);
         revisionSeen.add(fingerprint);
         const replacement = proposed.replacesId
@@ -2029,7 +2199,9 @@ export async function executeKnowledgeCuration(
               ? {
                   replaces: replacement.id,
                   replacesRevision: replacement.revision,
-                  baseDocumentSeq: currentDocuments.get(JSON.parse(replacement.review_state).nodeId)?.seq,
+                  baseDocumentSeq: currentDocuments.get(
+                    JSON.parse(replacement.review_state).nodeId,
+                  )?.seq,
                 }
               : {}),
           }),
@@ -2072,7 +2244,10 @@ export async function executeKnowledgeCuration(
           (row) => row.id === material.subscriptionId,
         )!;
         let sourceVersion = material.version;
-        if (source.source_kind === "document" || source.source_kind === "library") {
+        if (
+          source.source_kind === "document" ||
+          source.source_kind === "library"
+        ) {
           sourceVersion = String(
             (
               await tx
@@ -2168,34 +2343,68 @@ export async function saveKnowledgeAssistant(
           .selectFrom("knowledge_assistants")
           .selectAll()
           .where("id", "=", input.id)
-          .where("owner_id", "=", actor.id)
           .executeTakeFirst()
       : null;
+    if (current && !canManageKnowledgeBot(current, actor.id))
+      fail(403, "无权管理此机器人");
     if (input.id && !current) fail(404, "机器人不存在");
     if ((current?.revision ?? 0) !== input.expectedRevision)
       fail(409, "机器人已修改，请刷新");
     const ids = [...new Set(input.libraryIds)];
-    await checkPublication(tx, actor.id, actor.id, input.visibility);
+    await checkPublication(
+      tx,
+      actor.id,
+      current?.owner_id ?? actor.id,
+      input.visibility,
+    );
     await requireCapability(tx, actor.id, "sharing.invite");
-    if (input.memberIds.length) {
+    const allMembers = [...new Set([...input.memberIds, ...input.managerIds])];
+    if (allMembers.length) {
       const users = await tx
         .selectFrom("users")
         .select("id")
-        .where("id", "in", [...new Set(input.memberIds)])
+        .where("id", "in", allMembers)
         .where("status", "=", "active")
         .execute();
-      if (users.length !== new Set(input.memberIds).size)
+      if (users.length !== allMembers.length)
         fail(400, "部分成员不存在或已停用");
     }
-    // Binding and audience changes require explicit management of every affected library.
-    for (const id of new Set([
-      ...ids,
-      ...JSON.parse(current?.library_ids ?? "[]"),
-    ]))
-      await maintainKnowledge(tx, actor, id);
+    // Unchanged revoked bindings remain visible and removable; they cannot be reauthorized silently.
+    const previousIds = JSON.parse(current?.library_ids ?? "[]") as string[];
+    const expandsAudience =
+      !!current &&
+      ({ invited: 0, authenticated: 1, public: 2 }[input.visibility] >
+        { invited: 0, authenticated: 1, public: 2 }[
+          current.visibility as "invited" | "authenticated" | "public"
+        ] ||
+        input.memberIds.some(
+          (id) => !JSON.parse(current.member_ids).includes(id),
+        ) ||
+        input.managerIds.some(
+          (id) => !JSON.parse(current.manager_ids ?? "[]").includes(id),
+        ));
+    for (const id of ids)
+      if (!previousIds.includes(id) || expandsAudience) {
+        await maintainKnowledge(tx, actor, id);
+        if (current && current.owner_id !== actor.id) {
+          const owner = await tx
+            .selectFrom("users")
+            .select(["id", "display_name", "admin"])
+            .where("id", "=", current.owner_id)
+            .where("status", "=", "active")
+            .executeTakeFirst();
+          if (!owner) fail(403, "创建者账号不可用");
+          await maintainKnowledge(tx, owner, id);
+        }
+      }
     const row = {
       id: current?.id ?? randomUUID(),
-      owner_id: actor.id,
+      owner_id: current?.owner_id ?? actor.id,
+      manager_ids: JSON.stringify(input.managerIds),
+      config: JSON.stringify({
+        attachmentsEnabled: input.attachmentsEnabled,
+        channels: [...new Set(input.channels)],
+      }),
       title: input.title,
       revision: input.expectedRevision + 1,
       library_ids: JSON.stringify(ids),
@@ -2239,15 +2448,17 @@ export async function knowledgeAssistantAccess(
     .where("user_id", "=", actor.id)
     .executeTakeFirst();
   const decision = audienceDecision(await distributionPolicy(db), {
-    owner: bot.owner_id === actor.id,
+    owner: canManageKnowledgeBot(bot, actor.id),
     granted: JSON.parse(bot.member_ids).includes(actor.id),
     accepted: !!state?.accepted,
     public: bot.visibility === "public" || bot.visibility === "authenticated",
     interacted: !!state?.visited_at,
     hidden: state?.integration === "disabled",
   });
+  const collected = !!await db.selectFrom("resource_collections").select("resource_id").where("resource_kind","=","assistant").where("resource_id","=",bot.id).where("user_id","=",actor.id).executeTakeFirst();
   return {
     ...decision,
+    collected,
     interacted: !!state?.visited_at,
     accessible: !!bot.enabled && decision.accessible,
     connected:
@@ -2349,7 +2560,22 @@ export async function saveKnowledgeAssistantConnection(
     return row;
   });
 }
-export async function listKnowledgeAssistants(db: DB, actor: Actor) {
+export async function listKnowledgeAssistants(
+  db: DB,
+  actor: Actor,
+  libraryId?: string,
+  directId?: string,
+) {
+  let managesLibrary = false;
+  if (libraryId) {
+    await authorize(db, actor, libraryId, 1);
+    try {
+      await maintainKnowledge(db, actor, libraryId);
+      managesLibrary = true;
+    } catch (error) {
+      if (!(error instanceof AppError) || error.status !== 403) throw error;
+    }
+  }
   await activeActor(db, actor);
   const rows = await db
     .selectFrom("knowledge_assistants")
@@ -2364,8 +2590,14 @@ export async function listKnowledgeAssistants(db: DB, actor: Actor) {
   const memberIds = [
     ...new Set(
       rows
-        .filter((row) => row.owner_id === actor.id)
-        .flatMap((row) => JSON.parse(row.member_ids) as string[]),
+        .filter((row) => canManageKnowledgeBot(row, actor.id))
+        .flatMap(
+          (row) =>
+            [
+              ...JSON.parse(row.member_ids),
+              ...JSON.parse(row.manager_ids ?? "[]"),
+            ] as string[],
+        ),
     ),
   ];
   const members = memberIds.length
@@ -2375,33 +2607,54 @@ export async function listKnowledgeAssistants(db: DB, actor: Actor) {
         .where("id", "in", memberIds)
         .execute()
     : [];
+  const creators = await db
+    .selectFrom("users")
+    .select(["id", "display_name"])
+    .execute();
   return rows
     .filter(
+      (row) => !libraryId || JSON.parse(row.library_ids).includes(libraryId),
+    )
+    .filter(
       (row) =>
-        row.owner_id === actor.id ||
+        managesLibrary ||
+        canManageKnowledgeBot(row, actor.id) ||
+        (row.id === directId && decisions.get(row.id)!.accessible) ||
         (row.enabled &&
           (JSON.parse(row.member_ids).includes(actor.id) ||
             decisions.get(row.id)!.defaultIncluded ||
             decisions.get(row.id)!.connected ||
+            (decisions.get(row.id)!.collected && decisions.get(row.id)!.accessible) ||
             (decisions.get(row.id)!.accessible &&
               decisions.get(row.id)!.interacted))),
     )
     .map((row) => ({
       id: row.id,
+      creator: {
+        id: row.owner_id,
+        displayName:
+          creators.find((x) => x.id === row.owner_id)?.display_name ?? "",
+      },
+      config: knowledgeBotConfig(row),
+      libraryCount: JSON.parse(row.library_ids).length,
       title: row.title,
       revision: row.revision,
       enabled: !!row.enabled,
-      canManage: row.owner_id === actor.id,
+      canManage: canManageKnowledgeBot(row, actor.id),
       visibility: row.visibility || "invited",
       ...decisions.get(row.id)!,
-      ...(row.owner_id === actor.id
+      ...(canManageKnowledgeBot(row, actor.id)
         ? {
             libraryIds: JSON.parse(row.library_ids),
             memberIds: JSON.parse(row.member_ids),
+            managerIds: JSON.parse(row.manager_ids ?? "[]"),
             memberNames: Object.fromEntries(
               members
                 .filter((member) =>
-                  JSON.parse(row.member_ids).includes(member.id),
+                  [
+                    ...JSON.parse(row.member_ids),
+                    ...JSON.parse(row.manager_ids ?? "[]"),
+                  ].includes(member.id),
                 )
                 .map((member) => [member.id, member.display_name]),
             ),
@@ -2415,16 +2668,22 @@ function knowledgeExcerpt(text: string, terms: string[]) {
   const windows = new Map<number, number>();
   for (const term of terms) {
     if (!term) continue;
-    let position = lower.indexOf(term), count = 0;
+    let position = lower.indexOf(term),
+      count = 0;
     while (position >= 0 && count++ < 100) {
       const start = Math.max(0, position - 160);
       const window = lower.slice(start, start + 1200);
-      const score = terms.reduce((value, item) => value + (window.includes(item) ? Math.min(item.length, 40) : 0), 0);
+      const score = terms.reduce(
+        (value, item) =>
+          value + (window.includes(item) ? Math.min(item.length, 40) : 0),
+        0,
+      );
       windows.set(start, score);
       position = lower.indexOf(term, position + term.length);
     }
   }
-  const start = [...windows].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0;
+  const start =
+    [...windows].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0;
   return text.slice(start, start + 1200);
 }
 export async function searchKnowledgeAssistant(
@@ -2538,4 +2797,43 @@ export async function searchKnowledgeAssistant(
     items: items.slice(0, 10),
     tools: ["knowledge_search"],
   };
+}
+
+export function canManageKnowledgeBot(
+  bot: Schema["knowledge_assistants"],
+  userId: string,
+) {
+  return (
+    bot.owner_id === userId ||
+    (JSON.parse(bot.manager_ids ?? "[]") as string[]).includes(userId)
+  );
+}
+export function knowledgeBotConfig(bot: Schema["knowledge_assistants"]) {
+  return {
+    attachmentsEnabled: false,
+    channels: ["web", "embed", "api", "mcp"],
+    ...JSON.parse(bot.config ?? "{}"),
+  } as { attachmentsEnabled: boolean; channels: string[] };
+}
+export async function effectiveKnowledgeBotLibraries(
+  db: DB,
+  bot: Schema["knowledge_assistants"],
+) {
+  const owner = await db
+    .selectFrom("users")
+    .select(["id", "display_name", "admin"])
+    .where("id", "=", bot.owner_id)
+    .where("status", "=", "active")
+    .executeTakeFirst();
+  const ids: string[] = [];
+  if (!owner) return ids;
+  for (const id of JSON.parse(bot.library_ids) as string[])
+    try {
+      await maintainKnowledge(db, owner, id);
+      ids.push(id);
+    } catch (error) {
+      if (!(error instanceof AppError) || ![403, 404].includes(error.status))
+        throw error;
+    }
+  return ids;
 }

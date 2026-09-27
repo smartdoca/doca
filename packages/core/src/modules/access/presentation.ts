@@ -248,6 +248,7 @@ export async function permissionOverview(
         ? "requestable"
         : r.visibility,
     effectiveVisibility: open.visibility,
+    publicContainerId: r.library_id && resources.some(l => l.id === r.library_id && ["public", "authenticated"].includes(l.visibility)) ? r.library_id : null,
     publicRole: open.public_role ?? "reader",
     requestRoles: requestedRoles(r, resources).filter(
       (role) => ranks[role] > rank,

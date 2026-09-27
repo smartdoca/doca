@@ -707,6 +707,7 @@ export async function registerSearch(
         mode?: "keyword" | "ai" | "auto";
       },
     ) {
+      if (query.scope === "discover" || query.scope === "collected") return { ...await content.list(actor, query), engine: "database" as const, mode: "keyword" };
       const c = await config();
       const intent = searchIntent(query.q ?? "");
       const inferredFormat =

@@ -3,6 +3,12 @@
 2026-09-15 实现规则。统一授权来源模型的后续方案记录见
 [统一授权来源与权限计算方案](superpowers/specs/2026-09-19-unified-authorization-design.md)。
 
+## 2026-09-27 公开知识库阅读基线
+
+公开知识库（public / authenticated）统一其所有页面的阅读范围，页面不能通过独立可见性或关闭协作者继承取消这一基线。页面编辑、评论、管理授权仍按原规则计算。此规则优先于下文旧版的逐字段 visibility 覆盖规则；关闭知识库公开后重新使用页面自身及继承规则。列表 SQL 与点查权限共同执行此规则。
+
+按资源类型独立的发现、搜索及主动收录规则见 [公开资源、发现与收录](public-resource-discovery.md)。
+
 ## 2026-09-19 统一授权模型记录
 
 当前实现已将主动授权、链接授权和父权限覆盖/阻断统一保存在 `grants` 表；`share_links` 只保存公共链接定义，撤销记录单独保存在 `share_link_revocations`。数据库基线不创建 `share_members` 和 `member_exclusions`。

@@ -1,6 +1,9 @@
+import { HumanTasks } from "./knowledge-human-tasks.js";
+import { CurationInputs } from "./knowledge-curation-inputs.js";
 import { useEffect, useRef, useState } from "react";
 import {
   BookOpenCheck,
+  Paperclip,
   Bot,
   Send,
   Plus,
@@ -11,7 +14,7 @@ import {
   ArrowUpRight,
   CheckCircle2,
 } from "lucide-react";
-import { api } from "@web/shared/api.js";
+import { api, uploadFile } from "@web/shared/api.js";
 import { useI18n } from "@web/shared/i18n.js";
 import Preview from "@web/features/documents/markdown-preview.js";
 import "./knowledge-chat.css";
@@ -23,6 +26,7 @@ type Conversation = {
   updated_at: string;
 };
 type Message = {
+  feedback?: "useful" | "unhelpful" | null;
   id: string;
   role: string;
   content: string;
@@ -34,6 +38,7 @@ type Message = {
     status?: string;
     args?: unknown;
     result?: unknown;
+    attachments?: Array<{ id: string; filename: string }>;
     citations?: {
       id: string;
       documentId: string;
@@ -46,10 +51,20 @@ type Message = {
 };
 export function KnowledgeChat({
   scopeId,
+  initialConversationId,
   kind,
+  compactHeader = false,
+  attachmentsEnabled = false,
+  guestToken,
+  channel = "web",
 }: {
   scopeId: string;
+  initialConversationId?: string;
   kind: "curation" | "answer";
+  compactHeader?: boolean;
+  attachmentsEnabled?: boolean;
+  guestToken?: string;
+  channel?: "web" | "embed";
 }) {
   const { t, locale } = useI18n(),
     curating = kind === "curation";
@@ -60,53 +75,47 @@ export function KnowledgeChat({
     [text, setText] = useState("");
   const [error, setError] = useState(""),
     [sending, setSending] = useState(false),
-    [feedback, setFeedback] = useState<Record<string, string>>({});
-  const [entries, setEntries] = useState<any[]>([]),
-    [actions, setActions] = useState<any[]>([]),
-    [cases, setCases] = useState<any[]>([]),
-    [sources, setSources] = useState<any[]>([]),
-    [excluded, setExcluded] = useState<string[]>([]);
-  const [panel, setPanel] = useState<"documents" | "sources" | "feedback">(
-    "documents",
-  );
+    [feedback, setFeedback] = useState<Record<string, string | null>>({});
+  const voting = useRef(new Set<string>());
+  const feedbackVersion = useRef(0);
+  const [feedbackPending, setFeedbackPending] = useState<
+    Record<string, boolean>
+  >({});
+  const [attachments, setAttachments] = useState<
+      Array<{ id: string; filename: string }>
+    >([]),
+    [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const tail = useRef<HTMLDivElement>(null),
     nearBottom = useRef(true),
     viewport = useRef<HTMLDivElement>(null);
   const Icon = curating ? BookOpenCheck : Bot;
   const active = state === "queued" || state === "running";
-  async function reloadThreads() {
-    const value = await api<{ items: Conversation[] }>(
-      `/knowledge/conversations?scopeId=${scopeId}&kind=${kind}`,
+  async function guestRequest<T>(path: string, body?: unknown): Promise<T> {
+    const response = await fetch(
+      `/api/v1/knowledge/assistants/${scopeId}/api${path}`,
+      {
+        method: body ? "POST" : "GET",
+        headers: {
+          Authorization: `Bearer ${guestToken}`,
+          "Content-Type": "application/json",
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      },
     );
+    const data = await response.json();
+    if (!response.ok)
+      throw Error(data.message || data.error || String(response.status));
+    return data;
+  }
+  async function reloadThreads() {
+    const value = guestToken
+      ? await guestRequest<{ items: Conversation[] }>("/conversations")
+      : await api<{ items: Conversation[] }>(
+          `/knowledge/conversations?scopeId=${scopeId}&kind=${kind}`,
+        );
     setThreads(value.items);
     return value.items;
-  }
-  async function reloadAssets() {
-    if (!curating) return;
-    const root = `/knowledge/libraries/${scopeId}`;
-    const [system, sourceActions, feedbackCases, subscriptions] =
-      await Promise.all([
-        api<any>(`${root}/system`),
-        api<any>(`${root}/source-actions`),
-        api<any>(`${root}/cases`),
-        api<any>(`${root}/subscriptions`),
-      ]);
-    setEntries(system.entries);
-    setActions(sourceActions.items);
-    setCases(feedbackCases.items);
-    setSources([
-      ...(subscriptions.groups ?? []).map((group: any) => ({
-        ...group,
-        title: group.title,
-        sourceKind: group.source_kind,
-        members: subscriptions.items.filter(
-          (item: any) =>
-            item.groupId === group.id && item.status !== "detached",
-        ),
-      })),
-      ...subscriptions.items.filter((item: any) => !item.groupId),
-    ]);
-    setExcluded(system.settings.excludedSourceIds);
   }
   useEffect(() => {
     let live = true;
@@ -114,32 +123,48 @@ export function KnowledgeChat({
     setMessages([]);
     void reloadThreads()
       .then((items) => {
-        if (live && items[0]) setSelected(items[0].id);
+        if (live) setSelected(initialConversationId || items[0]?.id || "");
       })
       .catch((e) => setError(e.message));
-    void reloadAssets().catch((e) => setError(e.message));
     return () => {
       live = false;
     };
-  }, [scopeId, kind]);
+  }, [scopeId, kind, initialConversationId]);
   useEffect(() => {
     if (!selected) {
       setMessages([]);
       return;
     }
     let live = true;
-    const load = () =>
-      api<{ conversation: Conversation; messages: Message[] }>(
-        `/knowledge/conversations/${selected}`,
+    const load = () => {
+      const version = feedbackVersion.current;
+      return (
+        guestToken
+          ? guestRequest<{ conversation: Conversation; messages: Message[] }>(
+              `/conversations/${selected}`,
+            )
+          : api<{ conversation: Conversation; messages: Message[] }>(
+              `/knowledge/conversations/${selected}`,
+            )
       )
         .then((value) => {
           if (!live) return;
           setMessages(value.messages);
+          if (version === feedbackVersion.current && voting.current.size === 0)
+            setFeedback(
+              Object.fromEntries(
+                value.messages.map((message) => [
+                  message.id,
+                  message.feedback ?? null,
+                ]),
+              ),
+            );
           setState(value.conversation.state);
         })
         .catch((e) => {
           if (live) setError(e.message);
         });
+    };
     void load();
     const timer = setInterval(() => void load(), 1000);
     return () => {
@@ -152,15 +177,26 @@ export function KnowledgeChat({
   }, [messages]);
   useEffect(() => {
     if (!active) {
-      void reloadAssets().catch((e) => setError(e.message));
-      void reloadThreads().catch(() => {});
+        void reloadThreads().catch(() => {});
     }
   }, [state]);
   async function send(content = text) {
-    if (!content.trim() || sending) return;
+    if (!content.trim() || sending || uploading) return;
     setSending(true);
     setError("");
     try {
+      if (guestToken) {
+        const result = await guestRequest<{ conversationId: string }>("/ask", {
+          query: content,
+          conversationId: selected || undefined,
+        });
+        setSelected(result.conversationId);
+        setText("");
+        setState("queued");
+        nearBottom.current = true;
+        await reloadThreads();
+        return;
+      }
       let id = selected;
       if (!id) {
         const thread = await api<Conversation>(
@@ -174,8 +210,11 @@ export function KnowledgeChat({
       await api(`/knowledge/conversations/${id}/messages`, "POST", {
         content,
         requestId: crypto.randomUUID(),
+        attachments: attachments.map((x) => x.id),
+        channel,
       });
       setText("");
+      setAttachments([]);
       setState("queued");
       nearBottom.current = true;
       await reloadThreads();
@@ -185,41 +224,52 @@ export function KnowledgeChat({
       setSending(false);
     }
   }
-  async function work(fn: () => Promise<unknown>) {
-    setError("");
+  async function work(fn:()=>Promise<unknown>){setError("");try{await fn();}catch(e){setError((e as Error).message);}}
+  async function vote(id: string, choice: "useful" | "unhelpful") {
+    if (voting.current.has(id)) return;
+    const judgment = feedback[id] === choice ? null : choice;
+    voting.current.add(id);
+    feedbackVersion.current++;
+    setFeedbackPending((x) => ({ ...x, [id]: true }));
     try {
-      await fn();
-      await reloadAssets();
+      if (guestToken)
+        await guestRequest(
+          `/conversations/${selected}/messages/${id}/feedback`,
+          { judgment },
+        );
+      else
+        await api(`/knowledge/messages/${id}/feedback`, "POST", { judgment });
+      setFeedback((x) => ({ ...x, [id]: judgment }));
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      voting.current.delete(id);
+      feedbackVersion.current++;
+      setFeedbackPending((x) => ({ ...x, [id]: false }));
     }
-  }
-  async function vote(id: string, judgment: string) {
-    await work(async () => {
-      await api(`/knowledge/messages/${id}/feedback`, "POST", { judgment });
-      setFeedback((x) => ({ ...x, [id]: judgment }));
-    });
   }
   const toolLabel = (name: string) => t(`studio.tool.${name}` as any);
   return (
     <section
       className={`knowledge-chat ${curating ? "curation-chat" : "answer-chat"}`}
     >
-      <header className="kc-header">
-        <span className={`kc-emblem ${kind}`}>
-          <Icon size={23} />
-        </span>
-        <div>
-          <h2>{t(curating ? "studio.curator" : "studio.answer")}</h2>
-          <p>{t(curating ? "studio.sharedHint" : "studio.answerHint")}</p>
-        </div>
-        {curating && (
-          <a href={`#/knowledge-assistants?library=${scopeId}`}>
-            <Bot size={16} />
-            {t("studio.bots")}
-          </a>
-        )}
-      </header>
+      {!compactHeader && (
+        <header className="kc-header">
+          <span className={`kc-emblem ${kind}`}>
+            <Icon size={23} />
+          </span>
+          <div>
+            <h2>{t(curating ? "studio.curator" : "studio.answer")}</h2>
+            <p>{t(curating ? "studio.sharedHint" : "studio.answerHint")}</p>
+          </div>
+          {curating && (
+            <a href={`#/r/${scopeId}?view=qa`}>
+              <Bot size={16} />
+              {t("studio.bots")}
+            </a>
+          )}
+        </header>
+      )}
       {error && (
         <div className="kc-error" role="alert">
           {error}
@@ -305,11 +355,16 @@ export function KnowledgeChat({
                 >
                   <div className="kc-author">
                     {message.role === "user"
-                      ? message.trigger === "schedule"
+                      ? message.trigger === "schedule" ||
+                        message.trigger === "feedback_schedule"
                         ? t("studio.schedule")
                         : message.trigger === "system"
                           ? t("studio.system")
-                          : message.authorName || t("studio.admin")
+                          : message.trigger === "public"
+                            ? t("bot.guest")
+                            : message.trigger === "api"
+                              ? "API"
+                              : message.authorName || t("studio.admin")
                       : t(curating ? "studio.curator" : "studio.answer")}
                     <time>
                       {new Date(message.created_at).toLocaleTimeString(locale, {
@@ -330,6 +385,11 @@ export function KnowledgeChat({
                           ))
                     }
                   />
+                  {message.detail.attachments?.map((file) => (
+                    <div className="kc-attachment-history" key={file.id}>
+                      <Paperclip size={13} /> {file.filename}
+                    </div>
+                  ))}
                   {!!message.detail.citations?.length && (
                     <details className="kc-citations">
                       <summary>
@@ -353,6 +413,7 @@ export function KnowledgeChat({
                     message.detail.status === "completed" && (
                       <div className="kc-votes">
                         <button
+                          disabled={feedbackPending[message.id]}
                           aria-label={t("studio.useful")}
                           aria-pressed={feedback[message.id] === "useful"}
                           onClick={() => void vote(message.id, "useful")}
@@ -361,6 +422,7 @@ export function KnowledgeChat({
                           {t("studio.useful")}
                         </button>
                         <button
+                          disabled={feedbackPending[message.id]}
                           aria-label={t("studio.unhelpful")}
                           aria-pressed={feedback[message.id] === "unhelpful"}
                           onClick={() => void vote(message.id, "unhelpful")}
@@ -369,7 +431,9 @@ export function KnowledgeChat({
                           {t("studio.unhelpful")}
                         </button>
                         {feedback[message.id] && (
-                          <small>{t("studio.feedbackSaved")}</small>
+                          <small role="status">
+                            {t("studio.feedbackSaved")}
+                          </small>
                         )}
                       </div>
                     )}
@@ -407,6 +471,79 @@ export function KnowledgeChat({
                 )}
               </div>
             )}
+            {!!attachments.length && (
+              <div className="kc-attachments">
+                {attachments.map((file) => (
+                  <span key={file.id}>
+                    <Paperclip size={13} />
+                    {file.filename}
+                    <button
+                      type="button"
+                      aria-label={t("knowledge.removeMember")}
+                      onClick={() =>
+                        setAttachments(
+                          attachments.filter((x) => x.id !== file.id),
+                        )
+                      }
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {attachmentsEnabled && !curating && !guestToken && (
+              <>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    e.target.value = "";
+                    if (files.length + attachments.length > 8) {
+                      setError(t("chat.attachmentLimit"));
+                      return;
+                    }
+                    setUploading(true);
+                    try {
+                      for (const file of files) {
+                        const asset = await uploadFile(file, "ai_attachment");
+                        setAttachments((current) => [
+                          ...current,
+                          { id: asset.id, filename: file.name },
+                        ]);
+                      }
+                    } catch (error) {
+                      setError((error as Error).message);
+                    } finally {
+                      setUploading(false);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={uploading || active}
+                  onClick={() => fileInput.current?.click()}
+                >
+                  <Paperclip size={15} />
+                  {t(uploading ? "bot.uploading" : "bot.upload")}
+                </button>
+              </>
+            )}
+            {curating && (
+              <CurationInputs
+                libraryId={scopeId}
+                added={(label) =>
+                  setText((old) =>
+                    [old, t("curator.addedSource", { name: label })]
+                      .filter(Boolean)
+                      .join("\n"),
+                  )
+                }
+              />
+            )}
             <div className="kc-input">
               <textarea
                 rows={2}
@@ -432,7 +569,9 @@ export function KnowledgeChat({
               />
               <button
                 className="primary"
-                disabled={sending || !text.trim() || (!curating && active)}
+                disabled={
+                  sending || uploading || !text.trim() || (!curating && active)
+                }
                 aria-label={t("studio.send")}
               >
                 <Send size={18} />
@@ -444,268 +583,7 @@ export function KnowledgeChat({
           </form>
         </div>
         {curating && (
-          <aside className="kc-assets">
-            <nav>
-              {(["documents", "sources", "feedback"] as const).map((id) => (
-                <button
-                  key={id}
-                  aria-pressed={panel === id}
-                  onClick={() => setPanel(id)}
-                >
-                  {t(`studio.${id}`)}
-                </button>
-              ))}
-            </nav>
-            {panel === "documents" && (
-              <div className="kc-results">
-                {entries
-                  .filter((e) => !["deleted", "superseded"].includes(e.status))
-                  .map((entry) => (
-                    <div className="kc-entry" key={entry.id}>
-                      <strong>{entry.title}</strong>
-                      <small>{entry.path.join(" / ")}</small>
-                      {entry.reviewState.nodeId && (
-                        <a href={`#/r/${entry.reviewState.nodeId}`}>
-                          <ArrowUpRight size={13} />
-                          {t("studio.editDocument")}
-                        </a>
-                      )}
-                      {entry.status === "draft" && (
-                        <>
-                          <details>
-                            <summary>{t("studio.reviewDraft")}</summary>
-                            <Preview value={entry.markdown} />
-                          </details>
-                          <button
-                            onClick={() =>
-                              void work(() =>
-                                api(
-                                  `/knowledge/libraries/${scopeId}/entries/${entry.id}/review`,
-                                  "POST",
-                                  {
-                                    expectedRevision: entry.revision,
-                                    action: "publish",
-                                  },
-                                ),
-                              )
-                            }
-                          >
-                            {t("studio.adopt")}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                {!entries.length && <p>{t("studio.noDocuments")}</p>}
-              </div>
-            )}
-            {panel === "sources" && (
-              <div className="kc-results">
-                <p>{t("studio.sourceHint")}</p>
-                {sources
-                  .filter((source) => source.status !== "detached")
-                  .map((source) => (
-                    <div className="kc-entry" key={source.id}>
-                      <strong>
-                        {source.title ||
-                          source.sourceTitle ||
-                          source.nodeTitle ||
-                          source.url ||
-                          source.sourceKind}
-                      </strong>
-                      {source.members && (
-                        <details>
-                          <summary>
-                            {t("sourceGroup.members", {
-                              count: source.members.length,
-                            })}
-                          </summary>
-                          {source.members.map((m: any) => (
-                            <p key={m.id}>
-                              {m.sourceTitle || m.url || m.sourceId} ·{" "}
-                              {m.status}
-                            </p>
-                          ))}
-                        </details>
-                      )}
-                      <div className="kc-source-controls">
-                        <button
-                          onClick={() =>
-                            void work(() =>
-                              api(
-                                `/knowledge/libraries/${scopeId}/source-actions`,
-                                "POST",
-                                {
-                                  sourceKey: source.id,
-                                  action: (
-                                    source.members
-                                      ? source.members.every((m: any) =>
-                                          excluded.includes(m.id),
-                                        )
-                                      : excluded.includes(source.id)
-                                  )
-                                    ? "resume"
-                                    : "pause",
-                                  reason: t("studio.manualSourceChange"),
-                                },
-                              ),
-                            )
-                          }
-                        >
-                          {t(
-                            (
-                              source.members
-                                ? source.members.every((m: any) =>
-                                    excluded.includes(m.id),
-                                  )
-                                : excluded.includes(source.id)
-                            )
-                              ? "studio.resumeSource"
-                              : "studio.pauseSource",
-                          )}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setText(
-                              `${t("studio.prioritizeSource")} ${source.title || source.url || source.id}`,
-                            );
-                          }}
-                        >
-                          {t("studio.setPriority")}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setText(
-                              `${t("studio.editSourceGuide")} ${source.title || source.url || source.id}`,
-                            );
-                          }}
-                        >
-                          {t("studio.editGuide")}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                {actions
-                  .filter(
-                    (action) =>
-                      action.action !== "recommend" ||
-                      !actions.some(
-                        (other) =>
-                          other.source_key === action.source_key &&
-                          other.action === "ignore" &&
-                          other.created_at > action.created_at,
-                      ),
-                  )
-                  .map((action) => {
-                    const detail = JSON.parse(action.detail);
-                    return (
-                      <div className="kc-entry" key={action.id}>
-                        <strong>
-                          {t(`studio.action.${action.action}` as any)}
-                        </strong>
-                        <small>
-                          {sources.find(
-                            (source) => source.id === action.source_key,
-                          )?.title ||
-                            sources.find(
-                              (source) => source.id === action.source_key,
-                            )?.url ||
-                            action.source_key}
-                        </small>
-                        <p>{detail.reason}</p>
-                        {detail.scores && (
-                          <dl>
-                            {Object.entries(detail.scores).map(
-                              ([key, value]) => (
-                                <div key={key}>
-                                  <dt>{t(`studio.score.${key}` as any)}</dt>
-                                  <dd>{String(value)}</dd>
-                                </div>
-                              ),
-                            )}
-                          </dl>
-                        )}
-                        {action.action === "recommend" && (
-                          <div>
-                            <button
-                              onClick={() =>
-                                void send(
-                                  `${t("studio.acceptSource")} ${action.source_key}`,
-                                )
-                              }
-                            >
-                              {t("studio.accept")}
-                            </button>
-                            <button
-                              onClick={() =>
-                                void work(() =>
-                                  api(
-                                    `/knowledge/libraries/${scopeId}/source-actions`,
-                                    "POST",
-                                    {
-                                      sourceKey: action.source_key,
-                                      action: "ignore",
-                                      reason: t("studio.ignoredManually"),
-                                    },
-                                  ),
-                                )
-                              }
-                            >
-                              {t("studio.ignore")}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-            {panel === "feedback" && (
-              <div className="kc-results">
-                <button onClick={() => void send(t("studio.suggestFeedback"))}>
-                  {t("studio.analyzeFeedback")}
-                </button>
-                {cases.map((item) => (
-                  <div className="kc-entry" key={item.id}>
-                    <strong>
-                      {t(
-                        item.judgment === "useful"
-                          ? "studio.useful"
-                          : "studio.unhelpful",
-                      )}
-                    </strong>
-                    <p>
-                      {
-                        JSON.parse(item.snapshot)
-                          .messages?.filter((x: any) => x.role === "user")
-                          .at(-1)?.content
-                      }
-                    </p>
-                    <small>{item.reason}</small>
-                    {JSON.parse(item.snapshot).classification && (
-                      <p>{JSON.parse(item.snapshot).classification.reason}</p>
-                    )}
-                    {JSON.parse(item.snapshot).validation && (
-                      <details>
-                        <summary>
-                          {t(
-                            JSON.parse(item.snapshot).validation.passed
-                              ? "studio.regressionPassed"
-                              : "studio.regressionFailed",
-                          )}
-                        </summary>
-                        <p>{JSON.parse(item.snapshot).validation.reason}</p>
-                        <Preview
-                          value={JSON.parse(item.snapshot).validation.answer}
-                        />
-                      </details>
-                    )}
-                  </div>
-                ))}
-                {!cases.length && <p>{t("studio.noFeedback")}</p>}
-              </div>
-            )}
-          </aside>
+          <HumanTasks libraryId={scopeId} conversationId={selected} />
         )}
       </div>
     </section>

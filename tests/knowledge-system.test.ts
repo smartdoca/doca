@@ -740,6 +740,15 @@ it("connects bots according to common distribution policy and explicit user pref
     0,
   );
   await visitKnowledgeAssistant(db, bob, bot.id);
+  const visited = (await listKnowledgeAssistants(db, bob))[0]!;
+  expect(visited.connected).toBe(false);
+  const {collectPublicResource}=await import("@core/modules/discovery/catalog.js");
+  await collectPublicResource(db,bob,"assistant",bot.id,true);
+  expect((await listKnowledgeAssistants(db,bob))[0]!.connected).toBe(false);
+  expect((await searchConnectedKnowledge(db,bob,"DNS")).results[0]!.items).toHaveLength(1);
+  await collectPublicResource(db,bob,"assistant",bot.id,false);
+  expect((await searchConnectedKnowledge(db,bob,"DNS")).results).toHaveLength(0);
+  await saveKnowledgeAssistantConnection(db, bob, bot.id, "enabled", visited.preferenceRevision);
   const connected = (await listKnowledgeAssistants(db, bob))[0]!;
   expect(connected.connected).toBe(true);
   expect(

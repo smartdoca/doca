@@ -1,0 +1,20 @@
+{
+  "botId": "aca5fcd8-67aa-4256-9d57-6f7f171e80d8",
+  "conversationId": "110fd176-11be-4cc2-8fa7-72f5831a9573",
+  "state": "idle",
+  "messages": [
+    {
+      "role": "user",
+      "content": "根据附件给出的数值和知识库的 DNS 规则，初始负缓存 TTL 和现在剩余时间分别是多少？"
+    },
+    {
+      "role": "assistant",
+      "content": "根据附件资料及DNS规则：\n1. **初始负缓存TTL**：根据规则“负缓存初始TTL = min(SOA记录自身的TTL, SOA.MINIMUM)”[3][2]，附件中SOA记录自身TTL为420秒，SOA MINIMUM字段值为1800秒，因此初始负缓存TTL=min(420,1800)=**420秒**。\n2. **现在剩余时间**：NXDOMAIN已缓存120秒，剩余时间=初始负缓存TTL - 已缓存时间=420 -120=**300秒**。"
+    }
+  ],
+  "followup": {
+    "question": "再过一分钟还剩多少？",
+    "answer": "### 核对后的事实与计算（依据对应证据）\n1. **初始负缓存TTL计算**：负缓存初始TTL规则为「min(SOA记录自身TTL, SOA.MINIMUM)」[1]，结合附件提供的SOA TTL=420秒、SOA MINIMUM=1800秒，计算得初始TTL=min(420,1800)=420秒，符合规则。\n2. **已缓存120秒时剩余时间**：依据DNS负缓存需扣减已缓存时长的规则[1]，计算为420-120=300秒，正确。\n3. **再过1分钟（60秒）后的剩余时间**：继续扣减时长，计算为300-60=240秒，符合规则。\n\n答案：240秒",
+    "passed": true
+  }
+}

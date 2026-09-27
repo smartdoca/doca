@@ -12,7 +12,11 @@ import {
   projectResource,
 } from "../access/queries.js";
 import { permission } from "../access/policy.js";
-import { distributionPolicy, resourceDistribution } from "../deployment/policies.js";
+import {
+  distributionPolicy,
+  resourceDistribution,
+  publicMode,
+} from "../deployment/policies.js";
 import type { Actor } from "../identity/passwords.js";
 export type ResourceQuery = {
   scope?: string;
@@ -41,14 +45,14 @@ export function entryQuery(
   allowGranted = false,
   allowPublic = false,
 ) {
-  return sql<boolean>`exists(select 1 from resources entry where entry.id = ${id}
+  return sql<boolean>`(exists(select 1 from resource_collections c where c.resource_id=${id} and c.resource_kind in ('document','library') and c.user_id=${userId}) or exists(select 1 from resources entry where entry.id = ${id}
     and not exists(select 1 from resource_entries hidden where hidden.resource_id = entry.id and hidden.user_id = ${userId} and hidden.state = 'hidden')
     and (entry.owner_id = ${userId}
-      or exists(select 1 from resource_entries joined where joined.resource_id = entry.id and joined.user_id = ${userId} and joined.state = 'joined')
+      or exists(select 1 from resource_entries joined where joined.resource_id = entry.id and joined.user_id = ${userId} and joined.state = 'joined' and joined.source not in ('opened','manual'))
       or exists(select 1 from access_invitations invitation where invitation.resource_id = entry.id and invitation.user_id = ${userId} and invitation.state = 'accepted')
       ${allowGranted ? sql`or exists(select 1 from grants g where g.resource_id = entry.id and g.user_id = ${userId} and g.status = 'active')` : sql``}
       ${allowPublic ? sql`or (entry.kind = 'library' and entry.access_mode = 'custom' and entry.visibility in ('public', 'authenticated'))` : sql``}
-    ))`;
+    )))`;
 }
 export async function queryResourcePage(
   db: DB,
@@ -79,7 +83,7 @@ export async function queryResourcePage(
       sql.ref("r.library_id"),
       actor.id,
       distributionBehavior(policy, "library").includeGranted,
-      policy.publicLibraries,
+      input.scope !== "personal" && publicMode(policy, "library") === "search",
     );
     const treeMode = !!input.includeAncestors && libraryIds.length > 0;
     let query = tx.selectFrom("resources as r");
@@ -116,15 +120,25 @@ export async function queryResourcePage(
         query = query.where(accessibleQuery(sql.ref("r.id"), actor, 4));
     }
     if (input.visitedWithinDays !== undefined) {
-      if (!Number.isInteger(input.visitedWithinDays) || input.visitedWithinDays < 1 || input.visitedWithinDays > 3650)
+      if (
+        !Number.isInteger(input.visitedWithinDays) ||
+        input.visitedWithinDays < 1 ||
+        input.visitedWithinDays > 3650
+      )
         fail(400, "最近浏览天数需为1到3650的整数");
-      const since = new Date(Date.now() - input.visitedWithinDays * 86400000).toISOString();
+      const since = new Date(
+        Date.now() - input.visitedWithinDays * 86400000,
+      ).toISOString();
       query = query.where(sql<boolean>`${visited} >= ${since}`);
     }
     if (input.likedOnly)
-      query = query.where(sql<boolean>`exists(select 1 from reactions f where f.resource_id = r.id and f.user_id = ${actor.id} and f.kind = 'like')`);
+      query = query.where(
+        sql<boolean>`exists(select 1 from reactions f where f.resource_id = r.id and f.user_id = ${actor.id} and f.kind = 'like')`,
+      );
     if (input.favoritesOnly)
-      query = query.where(sql<boolean>`exists(select 1 from reactions f where f.resource_id = r.id and f.user_id = ${actor.id} and f.kind = 'favorite')`);
+      query = query.where(
+        sql<boolean>`exists(select 1 from reactions f where f.resource_id = r.id and f.user_id = ${actor.id} and f.kind = 'favorite')`,
+      );
     if (input.parentId)
       query = query.where((eb) =>
         eb.or([
@@ -170,7 +184,7 @@ export async function queryResourcePage(
               sql.ref("r.id"),
               actor.id,
               distributionBehavior(policy, "library").includeGranted,
-              policy.publicLibraries,
+              publicMode(policy, "library") === "search",
             ),
           );
         break;
@@ -180,23 +194,39 @@ export async function queryResourcePage(
           .where("r.owner_id", "!=", actor.id)
           .where(enrolled);
         break;
+      case "collected":
+        query = query.where(
+          sql<boolean>`exists(select 1 from resource_collections e where e.resource_id = r.id and e.resource_kind = r.kind and e.user_id = ${actor.id})`,
+        );
+        break;
       case "discover":
-        if (!policy.publicDiscovery) fail(403, "本站未开放公共发现");
         query = query
-          .where(policyFieldQuery(sql.ref("r.id"), "discoverable"), "=", 1)
-          .where(policyFieldQuery(sql.ref("r.id"), "visibility"), "in", ["public", "authenticated"]);
+          .where("r.library_id", "is", null)
+          .where(
+            sql<boolean>`((r.kind = 'document' and ${publicMode(policy, "document") !== "link" ? 1 : 0} = 1) or (r.kind = 'library' and ${publicMode(policy, "library") !== "link" ? 1 : 0} = 1))`,
+          )
+          .where(policyFieldQuery(sql.ref("r.id"), "visibility"), "in", [
+            "public",
+            "authenticated",
+          ]);
         break;
       default:
         // Explicit library/tree navigation already establishes its candidate scope.
         if (
-          !libraryIds.length &&
-          !input.parentId &&
-          input.scope !== "trash" &&
-          distributionBehavior(policy, "document").requireSearchIntersection
-        )
+          input.scope === "personal" ||
+          input.scope === "public" ||
+          (!libraryIds.length && !input.parentId && input.scope !== "trash")
+        ) {
+          const publiclySearchable = sql<boolean>`(${policyFieldQuery(sql.ref("r.id"), "visibility")} in ('public', 'authenticated') and
+            ((r.library_id is not null and ${publicMode(policy, "library") === "search" ? 1 : 0} = 1)
+             or (r.kind = 'library' and ${publicMode(policy, "library") === "search" ? 1 : 0} = 1)
+             or (r.kind = 'document' and r.library_id is null and ${publicMode(policy, "document") === "search" ? 1 : 0} = 1)))`;
           query = query.where(
-            sql<boolean>`(r.owner_id = ${actor.id} or ${enrolled} or ${libraryEnrolled})`,
+            input.scope === "public"
+              ? publiclySearchable
+              : sql<boolean>`(r.owner_id = ${actor.id} or ${enrolled} or ${libraryEnrolled} ${input.scope === "personal" ? sql`` : sql`or ${publiclySearchable}`})`,
           );
+        }
     }
     if (input.matchedIds)
       query = query.where(
@@ -206,15 +236,17 @@ export async function queryResourcePage(
       );
     const text = input.q?.trim().toLowerCase();
     if (text) {
+      if (input.scope !== "discover" && input.scope !== "collected")
+        query = query.where("r.kind", "=", "document");
       const pattern =
         "%" +
         text.replaceAll("!", "!!").replaceAll("%", "!%").replaceAll("_", "!_") +
         "%";
-      query = query
-        .where("r.kind", "=", "document")
-        .where(
-          sql<boolean>`(lower(r.title) like ${pattern} escape '!' or exists(select 1 from document_states s where s.resource_id = r.id and lower(s.text) like ${pattern} escape '!'))`,
-        );
+      query = query.where(
+        input.scope === "discover" || input.scope === "collected"
+          ? sql<boolean>`lower(r.title) like ${pattern} escape '!'`
+          : sql<boolean>`(lower(r.title) like ${pattern} escape '!' or exists(select 1 from document_states s where s.resource_id = r.id and lower(s.text) like ${pattern} escape '!'))`,
+      );
     }
     const key =
       input.sort ?? (input.scope === "recent" ? "visited_at" : "updated_at");
@@ -300,7 +332,9 @@ export async function queryResourcePage(
         while (parent && !seen.has(parent)) {
           seen.add(parent);
           included.add(parent);
-          parent = rows.find((candidate) => candidate.id === parent)?.parent_id ?? null;
+          parent =
+            rows.find((candidate) => candidate.id === parent)?.parent_id ??
+            null;
         }
       }
       page = rows.filter((r) => included.has(r.id));
@@ -314,7 +348,7 @@ export async function queryResourcePage(
           actor,
           ctx.resources,
           ctx.grants,
-          resourceDistribution(policy,r.kind).managerInfoVisible,
+          resourceDistribution(policy, r.kind).managerInfoVisible,
         );
         return {
           ...projected,

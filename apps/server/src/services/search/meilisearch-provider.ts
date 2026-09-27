@@ -298,8 +298,9 @@ export class MeilisearchSearchProvider<
     const embedder = request.semantic
       ? await this.#options.queryEmbedder?.()
       : undefined;
-    if (embedder && physical !== config.index_name)
-      await this.#syncEmbedders(config, physical);
+    // Queries consume an already prepared index. Updating embedder settings here
+    // queues indexing work after every process restart and blocks live answers.
+    // Index creation/publication owns settings synchronization.
     const candidates = request.candidateIds
       ? [...new Set(request.candidateIds)]
       : undefined;

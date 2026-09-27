@@ -89,13 +89,13 @@ it("SQL collection predicates match target authorization across governance, inhe
   });
   const parent = await create(owner, { libraryId: lib.id });
   const privateChild = await create(owner, { parentId: parent.id });
-  await acl(privateChild.id, [{ userId: outsider.id, role: "commenter" }]);
+  await acl(privateChild.id, [{ userId: outsider.id, role: "commenter" }], {visibility:undefined});
   const nested = await create(outsider, { parentId: parent.id }).catch(() =>
     create(owner, { parentId: privateChild.id }),
   );
   const explicit = await create(owner, { parentId: privateChild.id });
   await acl(explicit.id, [{ userId: member.id, role: "reader" }], {
-    accessMode: "inherit",
+    accessMode: "inherit", visibility:undefined,
   });
   const ownChild = await create(member, { libraryId: lib.id });
   await db
@@ -113,9 +113,7 @@ it("SQL collection predicates match target authorization across governance, inhe
   expect((await authorize(db, member, explicit.id)).rank).toBe(3);
   expect((await authorize(db, owner, ownChild.id)).rank).toBe(5);
   expect((await authorize(db, null, parent.id)).rank).toBe(1);
-  await expect(authorize(db, admin, privateChild.id)).rejects.toMatchObject({
-    status: 404,
-  });
+  expect((await authorize(db, admin, privateChild.id)).rank).toBe(1);
   for (const actor of [...users, null]) {
     const all = await db.selectFrom("resources").selectAll().execute();
     const context = await accessContext(
@@ -226,31 +224,27 @@ it("discovery, joins, visits and hiding remain independent from authoritative ac
   ).toEqual([lib.id]);
   await transact(db, (tx) => setEntry(tx, member, lib.id, "hidden"));
   await content.visit(member, lib.id);
-  expect((await content.list(member, { scope: "libraries" })).items).toEqual(
-    [],
-  );
+  expect((await content.list(member, { scope: "libraries" })).items.map(r=>r.id)).toEqual([lib.id]);
   expect((await content.detail(member, doc.id)).resource.role).toBe("reader");
-  expect((await content.list(member, { scope: "all" })).items).toEqual([]);
+  expect((await content.list(member, { scope: "personal" })).items).toEqual([]);
   expect(
     (await content.list(member, { scope: "discover" })).items.map((r) => r.id).sort(),
-  ).toEqual([lib.id, doc.id].sort());
+  ).toEqual([lib.id]);
   await transact(db, (tx) => setEntry(tx, member, lib.id, "joined"));
   expect(
     (await content.list(member, { scope: "all", kind: "document" })).items.map(
       (r) => r.id,
     ),
   ).toEqual([doc.id]);
-  await acl(doc.id, []);
-  expect(
-    (await content.list(member, { scope: "all", kind: "document" })).items,
-  ).toEqual([]);
+  await expect(acl(doc.id, [])).rejects.toMatchObject({status:400});
+  expect((await content.list(member, {scope:"all",kind:"document"})).items.map(r=>r.id)).toEqual([doc.id]);
   await acl(lib.id, []);
   expect((await content.list(member, { scope: "libraries" })).items).toEqual(
     [],
   );
   expect(
     await db
-      .selectFrom("resource_entries")
+      .selectFrom("resource_collections")
       .selectAll()
       .where("user_id", "=", member.id)
       .execute(),

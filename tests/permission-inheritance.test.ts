@@ -170,7 +170,7 @@ it("current-node grants stop inherited users passing through; ownership never by
   await rank(other, 5, owner);
   await rank(other, 5, user);
 });
-it("each setting inherits independently, local changes and resets agree with SQL, disabling removes every parent effect", async () => {
+it("each setting inherits independently, local changes and resets agree with SQL, disabling preserves the public library reading baseline", async () => {
   await settings(parent, {
     visibility: "public",
     publicRole: "editor",
@@ -218,8 +218,8 @@ it("each setting inherits independently, local changes and resets agree with SQL
   await settings(child, { resetFields: ["public_role", "history_readers"] });
   await rank(child, 3);
   await settings(child, { accessMode: "custom" });
-  await rank(child, 0);
-  await rank(child, 0, null);
+  await rank(child, 1);
+  await rank(child, 1, null);
   view = await permissionOverview(db, owner, child.id);
   expect(view).toMatchObject({
     effectiveRequestsEnabled: false,

@@ -449,20 +449,20 @@ export function DocumentMore({
           {r.format === "rich_text" && <div id="document-page-width-slot" />}
           <button
             onClick={() => {
-              if (r.format === "presentation") {
-                window.dispatchEvent(
-                  new CustomEvent("doca:presentation", { detail: r.id }),
-                );
-                return;
-              }
               const workspace =
-                document.querySelector<HTMLElement>(".workspace");
+                document.querySelector<HTMLElement>(".app-shell > .workspace");
               if (!workspace?.requestFullscreen) {
                 setError(t("doc.fullscreenUnsupported"));
                 return;
               }
               void workspace
                 .requestFullscreen()
+                .then(() => {
+                  if (r.format === "presentation")
+                    window.dispatchEvent(
+                      new CustomEvent("doca:presentation", { detail: r.id }),
+                    );
+                })
                 .catch(() => setError(t("doc.fullscreenUnsupported")));
             }}
           >
@@ -470,32 +470,12 @@ export function DocumentMore({
             {t("doc.present")}
           </button>
           {r.kind === "document" && <div id="document-export-slot" />}
-          {r.role !== "owner" && (
-            <>
-              {(["joined", "hidden"] as const).map((state) => (
-                <button
-                  key={state}
-                  disabled={r.entry_state === state}
-                  onClick={async () => {
-                    try {
-                      await api(`/me/entries/${r.id}`, "PUT", { state });
-                      await entryChanged?.();
-                    } catch (e) {
-                      setError((e as Error).message);
-                    }
-                  }}
-                >
-                  {state === "joined"
-                    ? r.entry_state === "joined"
-                      ? t("doc.joined")
-                      : t("doc.join")
-                    : r.entry_state === "hidden"
-                      ? t("doc.hidden")
-                      : t("doc.hide")}
-                </button>
-              ))}
-            </>
-          )}
+          <button onClick={async () => {
+            try {
+              await api(`/discovery/entries/${r.kind}/${r.id}`, "PUT", { collected: r.entry_state !== "joined" });
+              await entryChanged?.();
+            } catch (e) { setError((e as Error).message); }
+          }}>{t(r.entry_state === "joined" ? "discovery.remove" : "discovery.collect")}</button>
           <button onClick={() => setPanel("stats")}>
             <Info size={16} />
             {t("doc.info")}

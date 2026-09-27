@@ -1,4 +1,4 @@
-import type { Distribution } from "../deployment/policies.js";
+import { publicMode, type Distribution } from "../deployment/policies.js";
 
 /** One policy interpretation for resource lists, Q&A discovery and AI connections. */
 export function distributionBehavior(
@@ -10,12 +10,9 @@ export function distributionBehavior(
     includeGranted:
       (kind === "library" ? policy.libraryMembers : policy.sharedDocuments) ===
       "granted",
-    includePublic:
-      kind === "library"
-        ? policy.publicLibraries
-        : policy.normalSearch === "accessible",
-    requireSearchIntersection: policy.normalSearch !== "accessible",
-    publicDiscovery: policy.publicDiscovery,
+    includePublic: publicMode(policy, kind) === "search",
+    requireSearchIntersection: publicMode(policy, kind) !== "search",
+    publicDiscovery: publicMode(policy, kind) !== "link",
   };
 }
 export type AudienceFacts = {
@@ -36,7 +33,6 @@ export function audienceDecision(policy: Distribution, facts: AudienceFacts) {
     !facts.hidden &&
     (facts.owner ||
       facts.accepted ||
-      facts.interacted ||
       (named && behavior.includeGranted) ||
       (facts.public && !behavior.requireSearchIntersection));
   return {

@@ -173,8 +173,8 @@ export function SearchPanel({
   const { t, locale } = useI18n();
   const [publicDiscovery, setPublicDiscovery] = useState(false);
   useEffect(() => {
-    void api<{ publicDiscovery: boolean }>("/discovery/policy")
-      .then((p) => setPublicDiscovery(p.publicDiscovery))
+    void api<{ publicModes: Record<string,string> }>("/discovery/policy")
+      .then((p) => setPublicDiscovery(Object.values(p.publicModes).includes("search")))
       .catch(() => {});
   }, []);
   const [q, setQ] = useState(initialQuery),
@@ -699,11 +699,12 @@ export function SearchPanel({
               onChange={setScope}
               getPopupContainer={searchPopupContainer}
               options={[
-                { value: "all", label: t("search.scopeMine") },
+                { value: "all", label: t("discovery.searchAll") },
+                { value: "personal", label: t("search.scopeMine") },
                 { value: "owned", label: t("search.scopeOwned") },
                 { value: "shared", label: t("search.scopeShared") },
                 ...(publicDiscovery
-                  ? [{ value: "discover", label: t("search.scopeDiscover") }]
+                  ? [{ value: "public", label: t("discovery.searchPublic") }]
                   : []),
               ]}
             />
