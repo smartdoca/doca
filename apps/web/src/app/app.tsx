@@ -13,6 +13,7 @@ import { LocaleSwitch } from "@web/features/account/locale-switch.js";
 import { AccountLogin } from "@web/features/auth/account-login.js";
 import { AccountOnboarding } from "@web/features/auth/account-fields.js";
 import { Feedback } from "@web/shared/components/feedback.js";
+import { BackLink } from "@web/shared/components/back-link.js";
 import {
   createImportedDocument,
   type ImportProgress,
@@ -708,9 +709,9 @@ export function App() {
           <p>
             {t("shell.authFailedBody")}
           </p>
-          <a href={bootstrap.user ? "#/account" : "#/home"}>
+          <BackLink fallback={bootstrap.user ? "/account" : "/home"}>
             {bootstrap.user ? t("shell.backProfile") : t("shell.backLogin")}
-          </a>
+          </BackLink>
         </section>
       </main>
     );
@@ -802,9 +803,9 @@ export function App() {
       <div className={`settings-shell ${adminPage && adminNavigationCollapsed ? "admin-navigation-collapsed" : ""}`}>
         <header className="settings-shell-header">
           {adminPage && <button className="icon" title={adminNavigationCollapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")} aria-label={adminNavigationCollapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")} aria-expanded={!adminNavigationCollapsed} onClick={() => setAdminNavigationCollapsed(!adminNavigationCollapsed)}><PanelLeft size={19} /></button>}
-          <a href="#/home" className="settings-back">
+          <BackLink fallback="/home" className="settings-back">
             <ArrowLeft size={18} /> {t("account.workspace")}
-          </a>
+          </BackLink>
           <div className="global-header-tools">
           <TodoIcon />
           <Notifications />
@@ -896,28 +897,27 @@ export function App() {
           className={`sidebar ${currentLibraryId ? "library-sidebar" : ""}`}
         >
           <div className="library-brand-row">
-            <a
-              href={currentLibraryId ? "#/libraries" : "#/home"}
-              className="brand"
-              title={currentLibraryId ? libraryTitle : bootstrap.siteName}
-            >
-              <span
-                className={
-                  currentLibraryId ? "library-back-arrow" : "brand-symbol"
-                }
+            {currentLibraryId ? (
+              <BackLink
+                fallback="/libraries"
+                className="brand"
+                title={libraryTitle}
               >
-                {currentLibraryId ? (
+                <span className="library-back-arrow">
                   <ArrowLeft size={20} />
-                ) : (
-                  <BookOpen size={22} />
-                )}
-              </span>
-              <span
-                title={currentLibraryId ? libraryTitle : bootstrap.siteName}
+                </span>
+                <span title={libraryTitle}>{libraryTitle}</span>
+              </BackLink>
+            ) : (
+              <a
+                href="#/home"
+                className="brand"
+                title={bootstrap.siteName}
               >
-                {currentLibraryId ? libraryTitle : bootstrap.siteName}
-              </span>
-            </a>
+                <span className="brand-symbol"><BookOpen size={22} /></span>
+                <span title={bootstrap.siteName}>{bootstrap.siteName}</span>
+              </a>
+            )}
             {currentLibraryId && (
               <LibraryFavorite key={currentLibraryId} id={currentLibraryId} />
             )}
@@ -1052,14 +1052,14 @@ export function App() {
               </button>
             )}
             {personalDocumentPage && (
-              <button
+              <BackLink
+                fallback="/documents"
                 className="icon document-back-button"
-                aria-label={t("shell.home")}
-                title={t("shell.home")}
-                onClick={() => { location.hash = "/home"; }}
+                aria-label={t("workspace.backDocuments")}
+                title={t("workspace.backDocuments")}
               >
                 <ArrowLeft size={19} />
-              </button>
+              </BackLink>
             )}
             {(librarySystemPage || libraryQaPage || (!resourceId && scope === "knowledge-assistants")) && <div className="files-topbar-title knowledge-topbar-title">{librarySystemPage ? <BookOpenCheck size={20}/> : <Bot size={20}/>}<h1>{t(librarySystemPage ? "nav.librarySystem" : "knowledge.assistants")}</h1>{librarySystemPage && detail && <KnowledgeCurationToggle detail={detail} changed={reload}/>}</div>}
             {!resourceId && scope === "ai" && <div id="ai-header-slot" />}

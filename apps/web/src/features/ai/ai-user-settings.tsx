@@ -188,7 +188,7 @@ export function AIUserSettings({
                   );
                 }}
               />
-              在对话中使用个人偏好
+              {t("assistant.memory.crossSession")}
             </label>
             {!options?.memoryAvailable && (
               <p>管理员尚未启用长期记忆。历史会话仍正常保存。</p>

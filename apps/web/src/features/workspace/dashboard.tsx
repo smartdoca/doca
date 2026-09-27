@@ -40,6 +40,7 @@ import { Dialog } from "@web/features/documents/dialogs.js";
 import { assetUrl } from "@web/shared/api.js";
 import { librarySettingsUrl } from "@web/features/documents/library.js";
 import { listTime } from "@web/shared/utils/list-time.js";
+import { navigateBackOr } from "@web/shared/utils/back-navigation.js";
 import { EmptyTrash, FileTrash, TrashPreview } from "@web/features/trash/trash.js";
 
 const empty: Page = { items: [], total: 0, nextCursor: null };
@@ -335,7 +336,7 @@ export function Dashboard({
           </button>
           <button
             onClick={() =>
-              libraries ? (location.hash = "/documents") : create("library")
+              libraries ? navigateBackOr("/documents") : create("library")
             }
           >
             <span className="quick-icon green">

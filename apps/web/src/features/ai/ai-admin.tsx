@@ -1239,16 +1239,6 @@ export function AIAdmin() {
               {edit.type === "general" && (
                 <>
                   <label>
-                    <input
-                      type="checkbox"
-                      checked={d.memoryEnabled}
-                      onChange={(e) =>
-                        change({ memoryEnabled: e.target.checked })
-                      }
-                    />
-                    允许用户保存长期偏好
-                  </label>
-                  <label>
                     用户看到的名称
                     <select
                       value={d.display}

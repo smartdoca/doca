@@ -7,6 +7,7 @@ import { api, uuid } from "../../src/api";
 import { useAuth } from "../../src/auth";
 import { colors } from "../../src/chrome";
 import { relativeTime } from "../../src/format";
+import { useI18n } from "../../src/locale";
 
 type Tab = "usage" | "memory" | "skills" | "archived" | "note";
 type Model = { id: string; name: string };
@@ -70,6 +71,7 @@ function formatsOf(value: Skill["formats"]) {
 }
 
 export default function AISettings() {
+  const { t } = useI18n();
   const navigation = useNavigation();
   const router = useRouter();
   const client = useQueryClient();
@@ -247,7 +249,9 @@ export default function AISettings() {
             ))}
           </View>
           <View style={styles.switchRow}>
-            <Text style={styles.rowTitle}>在对话中使用个人偏好</Text>
+            <Text style={styles.rowTitle}>
+              {t("assistant.memory.crossSession")}
+            </Text>
             <Switch
               value={!!options.data?.preferences?.memory_enabled}
               disabled={!options.data?.memoryAvailable || busy}

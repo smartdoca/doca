@@ -2753,11 +2753,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
           <AssistantIdentity
             profile="personal"
             title={t("nav.assistant")}
-            memoryLabel={t(
-              options?.preferences.memory_enabled
-                ? "assistant.memory.personalOn"
-                : "assistant.memory.personalOff",
-            )}
             compact
           />
           {!full && <span className="ai-flex" />}

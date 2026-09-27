@@ -8,6 +8,7 @@ import {
   aiDefaults,
   saveAIConfig,
   aiConfig,
+  aiUser,
   availableModels,
 } from "@core/modules/ai/config.js";
 import {
@@ -59,6 +60,24 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks();
   await db.destroy();
+});
+it("enables personal memory by default while preserving user opt-out", async () => {
+  expect(aiDefaults.memoryEnabled).toBe(true);
+  expect((await aiUser(db, owner.id)).memory_enabled).toBe(1);
+  await db
+    .updateTable("ai_users")
+    .set({ memory_enabled: 0 })
+    .where("user_id", "=", owner.id)
+    .execute();
+  expect((await aiUser(db, owner.id)).memory_enabled).toBe(0);
+
+  const saved = await saveAIConfig(
+    db,
+    { ...aiDefaults, memoryEnabled: false },
+    0,
+  );
+  expect(saved.memoryEnabled).toBe(true);
+  expect((await aiConfig(db)).memoryEnabled).toBe(true);
 });
 async function configured() {
   const c = {

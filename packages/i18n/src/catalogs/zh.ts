@@ -227,6 +227,7 @@ export const zh = {
   "assistant.memory.personalOn": "个人记忆已开启",
   "assistant.memory.personalOff": "个人记忆未开启",
   "assistant.memory.thread": "仅记住当前对话",
+  "assistant.memory.crossSession": "跨会话长期记忆",
   "assistant.memory.library": "共享知识库上下文",
   "studio.bots": "问答机器人",
   "studio.new": "新会话",
