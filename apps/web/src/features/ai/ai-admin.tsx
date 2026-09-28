@@ -110,6 +110,27 @@ function adminNotice(notice: AdminNotice, t: Translator, locale: "zh" | "en") {
 }
 export function AIAdmin() {
   const { t, locale } = useI18n();
+  const providerLabel = (id: string) => {
+    const key = {
+      openai: "aiAdmin.provider.openai",
+      anthropic: "aiAdmin.provider.anthropic",
+      google: "aiAdmin.provider.google",
+      azure: "aiAdmin.provider.azure",
+      deepseek: "aiAdmin.provider.deepseek",
+      qwen: "aiAdmin.provider.qwen",
+      doubao: "aiAdmin.provider.doubao",
+      moonshot: "aiAdmin.provider.moonshot",
+      zhipu: "aiAdmin.provider.zhipu",
+      minimax: "aiAdmin.provider.minimax",
+      mistral: "aiAdmin.provider.mistral",
+      groq: "aiAdmin.provider.groq",
+      openrouter: "aiAdmin.provider.openrouter",
+      siliconflow: "aiAdmin.provider.siliconflow",
+      ollama: "aiAdmin.provider.ollama",
+      compatible: "aiAdmin.provider.compatible",
+    }[id] as MessageKey | undefined;
+    return key ? t(key) : providerPreset(id).name;
+  };
 
   const [config, setConfig] = useState<any>(null),
     [revision, setRevision] = useState(0);
@@ -573,7 +594,7 @@ export function AIAdmin() {
                   <span className={`ai-status ${v.enabled ? "on" : ""}`}>
                     {v.enabled ? t("aiAdmin.enabled") : t("aiAdmin.disabled")}
                   </span>
-                  <small>{providerPreset(v.provider).name}</small>
+                  <small>{providerLabel(v.provider)}</small>
                   <span className="ai-card-url">{v.baseUrl}</span>
                   <span className="ai-muted">
                     {t("aiAdmin.vendorSummary", {
@@ -871,13 +892,13 @@ export function AIAdmin() {
                           apiKey: "",
                           hasKey: false,
                           apiVersion: "",
-                          name: d.name || p.name,
+                          name: d.name || providerLabel(p.id),
                         });
                       }}
                     >
                       {aiProviders.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name}
+                          {providerLabel(p.id)}
                         </option>
                       ))}
                     </select>

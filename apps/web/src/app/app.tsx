@@ -462,9 +462,11 @@ export function App() {
     window.dispatchEvent(new Event("doca-discovery-policy"));
   }, [bootstrap?.user?.id, bootstrap?.defaultLocale, reloadLocale]);
   useEffect(() => {
-    if (bootstrap?.siteName)
-      document.title = t("app.documentTitle", { site: bootstrap.siteName });
-  }, [bootstrap?.siteName, t]);
+    if (!bootstrap?.siteName) return;
+    const siteTitle = t("app.documentTitle", { site: bootstrap.siteName });
+    const resourceTitle = currentDetail?.resource.title.trim() ?? "";
+    document.title = resourceId && resourceTitle ? resourceTitle : siteTitle;
+  }, [bootstrap?.siteName, t, resourceId, currentDetail?.resource.title]);
   useEffect(() => {
     if (!bootstrap?.user) return;
     const beat = () => {
