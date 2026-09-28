@@ -4,7 +4,7 @@ import {
   type XlsxExportResult,
   type XlsxImportResult,
   type XlsxOptions,
-} from "@online-office/univer-sheet/xlsx";
+} from "@smartdoca/sheet/xlsx";
 
 /**
  * 导入预检的默认值是 2 万行、256 列。Excel 最后一行是 1048576，最后一列是 XFD（16384）。

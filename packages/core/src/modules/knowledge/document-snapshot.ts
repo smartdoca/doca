@@ -1,4 +1,4 @@
-import { exportMarkdown } from "slatetsx-kit-editor/conversion";
+import { exportMarkdown } from "@smartdoca/slate/conversion";
 import { createHash } from "node:crypto";
 import type { DB } from "@db/index.js";
 import { restoreDocument } from "../collaboration/documents.js";

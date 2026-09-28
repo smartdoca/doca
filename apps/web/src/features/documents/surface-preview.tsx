@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "@web/shared/i18n.js";
 import * as Y from "yjs";
-import { PresentationWorkspace } from "@eppt/editor";
-import "@eppt/editor/styles.css";
-import { CanvasEditor } from "aidcanvas";
-import { CanvasModel } from "aidcanvas/model";
-import { SpreadsheetEditor } from "@online-office/univer-sheet";
+import { PresentationWorkspace } from "@smartdoca/slides";
+import "@smartdoca/slides/styles.css";
+import { CanvasEditor } from "@smartdoca/canvas";
+import { CanvasModel } from "@smartdoca/canvas/model";
+import { SpreadsheetEditor } from "@smartdoca/sheet";
 import {
   restoreExlsxDocument,
   createExlsxCollaborationSession,
   type ExlsxCollaborationSession,
-} from "@online-office/univer-sheet/yjs";
+} from "@smartdoca/sheet/yjs";
 import { fromBase64 } from "@web/features/documents/realtime.js";
 import { assetUrl } from "@web/shared/api.js";
 import { Feedback } from "@web/shared/components/feedback.js";
-import "aidcanvas/style.css";
-import "@online-office/univer-sheet/style.css";
+import "@smartdoca/canvas/style.css";
+import "@smartdoca/sheet/style.css";
 import "@web/features/documents/surface.css";
 export type SurfacePreviewData = {
   format: string;

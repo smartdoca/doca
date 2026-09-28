@@ -1,4 +1,4 @@
-import { importMarkdown } from "slatetsx-kit-editor/conversion";
+import { importMarkdown } from "@smartdoca/slate/conversion";
 import type { Transaction } from "kysely";
 import { randomUUID } from "node:crypto";
 import * as Y from "yjs";

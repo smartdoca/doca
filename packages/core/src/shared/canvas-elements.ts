@@ -1,4 +1,4 @@
-import type { SceneNode } from "aidcanvas/model";
+import type { SceneNode } from "@smartdoca/canvas/model";
 
 // AidCanvas 0.4.1 uses `tag` for rendering and `name` for its native
 // properties/commands. Both are needed; IDs remain owned by CanvasModel.

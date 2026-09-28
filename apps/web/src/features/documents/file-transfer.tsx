@@ -46,7 +46,7 @@ export const importFormats = {
 } as const;
 export async function readImport(format: Resource["format"], file: File) {
   if (format === "markdown") {
-    const { importMarkdownFile } = await import("exmd-collaborative-editor");
+    const { importMarkdownFile } = await import("@smartdoca/markdown");
     const result = await importMarkdownFile(file);
     if (!result.ok) throw Error(result.error.message);
     reportWarnings(result.warnings);
@@ -268,7 +268,7 @@ export async function createImportedDocument(
       phase: "parsing",
       message: "正在解析演示文稿…",
     });
-    const { importPptx, validatePptxFile } = await import("@eppt/editor/pptx");
+    const { importPptx, validatePptxFile } = await import("@smartdoca/slides/pptx");
     validatePptxFile(file);
     const result = await importPptx(await file.arrayBuffer());
     value = { ...result.document, assets: {} };
@@ -286,7 +286,7 @@ export async function createImportedDocument(
         phase: "parsing",
         message: "正在识别 PDF 内容…",
       });
-      const { importPdfFile } = await import("exmd-collaborative-editor");
+      const { importPdfFile } = await import("@smartdoca/markdown");
       const pdf = await importPdfFile(file, { signal });
       reportProgress(onProgress, {
         phase: "preparing",
@@ -303,9 +303,9 @@ export async function createImportedDocument(
           }),
         });
       }
-      const { importDocument } = await import("slatetsx-kit-editor/conversion");
+      const { importDocument } = await import("@smartdoca/slate/conversion");
       const { createEditorDocument } =
-        await import("slatetsx-kit-editor/headless");
+        await import("@smartdoca/slate/headless");
       const result = await importDocument(pdf.markdown, {
         filename: file.name.replace(/\.pdf$/i, ".md"),
         signal: signal ?? new AbortController().signal,
@@ -327,9 +327,9 @@ export async function createImportedDocument(
       });
       if (!/\.(docx|md|markdown)$/i.test(file.name))
         throw Error("请选择 .docx、Markdown 或 PDF 文件");
-      const { importDocument } = await import("slatetsx-kit-editor/conversion");
+      const { importDocument } = await import("@smartdoca/slate/conversion");
       const { createEditorDocument } =
-        await import("slatetsx-kit-editor/headless");
+        await import("@smartdoca/slate/headless");
       const result = await importDocument(file, {
         filename: file.name,
         resources: {
@@ -352,7 +352,7 @@ export async function createImportedDocument(
     }
   } else if (input.format === "canvas") {
     const { parseCanvasFile, createCanvasImportValue } =
-      await import("aidcanvas/io");
+      await import("@smartdoca/canvas/io");
     const result = await parseCanvasFile(file),
       map: Record<string, string> = {};
     for (const r of result.resources) {
@@ -400,7 +400,7 @@ export async function createImportedDocument(
       phase: "parsing",
       message: "正在识别 PDF 内容…",
     });
-    const { importPdfFile } = await import("exmd-collaborative-editor");
+    const { importPdfFile } = await import("@smartdoca/markdown");
     const pdf = await importPdfFile(file, { signal });
     reportWarnings(pdf.warnings);
     if (!pdf.resources.length) {

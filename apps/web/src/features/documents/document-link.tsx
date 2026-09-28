@@ -5,7 +5,7 @@ import {
   createAtomicInlineExtension,
   type CustomElement,
   type EditorPlugin,
-} from "slatetsx-kit-editor";
+} from "@smartdoca/slate";
 import { api, type Detail } from "@web/shared/api.js";
 import { internalDocumentId } from "@web/features/documents/internal-document-id.js";
 export { internalDocumentId } from "@web/features/documents/internal-document-id.js";

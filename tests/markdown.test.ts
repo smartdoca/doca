@@ -9,7 +9,7 @@ import {
   applyRemoteMarkdownUpdate,
   createMarkdownTextAnchor,
   resolveMarkdownTextAnchor,
-} from "exmd-collaborative-editor";
+} from "@smartdoca/markdown";
 import { type DB } from "@db/index.js";
 import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";

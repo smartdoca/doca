@@ -4,7 +4,7 @@ import { realpathSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 it("canvas plugins register against the same Leafer core as the canvas engine", () => {
   const host = createRequire(import.meta.url);
-  const canvas = createRequire(host.resolve("aidcanvas"));
+  const canvas = createRequire(host.resolve("@smartdoca/canvas"));
   const engine = createRequire(canvas.resolve("leafer-ui"));
   const canonical = realpathSync(engine.resolve("@leafer-ui/core"));
   for (const name of [

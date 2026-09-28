@@ -2,13 +2,13 @@ import { openTestDatabase as openDatabase } from "./database.js";
 import { it, expect, beforeEach, afterEach } from "vitest";
 import * as Y from "yjs";
 import { randomUUID } from "node:crypto";
-import { CanvasModel } from "aidcanvas/model";
+import { CanvasModel } from "@smartdoca/canvas/model";
 import {
   restoreExlsxDocument,
   createExlsxBaseline,
   createExlsxCollaborationSession,
-} from "@online-office/univer-sheet/yjs";
-import { projectExlsxWorkbook } from "@online-office/univer-sheet/model";
+} from "@smartdoca/sheet/yjs";
+import { projectExlsxWorkbook } from "@smartdoca/sheet/model";
 import { type DB } from "@db/index.js";
 import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";

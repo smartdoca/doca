@@ -1,44 +1,44 @@
 import { useI18n } from "@web/shared/i18n.js";
 import { blankTemplateContent } from "@core/modules/templates/content.js";
 import { useEffect, useRef, useState } from "react";
-import { createYDocument, readDocument } from "@eppt/editor/core";
+import { createYDocument, readDocument } from "@smartdoca/slides/core";
 import {
   PresentationWorkspace,
   type PresentationWorkspaceHandle,
-} from "@eppt/editor";
-import { CanvasEditor, type CanvasEditorResources } from "aidcanvas";
-import { CanvasModel, type SceneNode } from "aidcanvas/model";
+} from "@smartdoca/slides";
+import { CanvasEditor, type CanvasEditorResources } from "@smartdoca/canvas";
+import { CanvasModel, type SceneNode } from "@smartdoca/canvas/model";
 import {
   SpreadsheetEditor,
   createDefaultSpreadsheetRuntime,
   type SpreadsheetRuntimeFactory,
-} from "@online-office/univer-sheet";
+} from "@smartdoca/sheet";
 import {
   createExlsxBaseline,
   createExlsxCollaborationSession,
   restoreExlsxDocument,
   type ExlsxCollaborationSession,
-} from "@online-office/univer-sheet/yjs";
-import { projectExlsxWorkbook } from "@online-office/univer-sheet/model";
+} from "@smartdoca/sheet/yjs";
+import { projectExlsxWorkbook } from "@smartdoca/sheet/model";
 import * as Y from "yjs";
 import {
   RichTextEditor,
   type EditorValue,
   type RichTextEditorHandle,
-} from "slatetsx-kit-editor";
-import { renderKatex } from "slatetsx-kit-editor/katex";
+} from "@smartdoca/slate";
+import { renderKatex } from "@smartdoca/slate/katex";
 import { mentionPlugin } from "@web/features/documents/document-mentions.js";
 import { documentLinkPlugin } from "@web/features/documents/document-link.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import type { Resource } from "@web/shared/api.js";
 import VersionPreview from "@web/features/documents/version-preview.js";
 import MarkdownPreview from "@web/features/documents/markdown-preview.js";
-import "slatetsx-kit-editor/style.css";
+import "@smartdoca/slate/style.css";
 import "@web/features/documents/editor.css";
-import "aidcanvas/style.css";
-import "@online-office/univer-sheet/style.css";
-import "@eppt/editor/styles.css";
-import "exmd-collaborative-editor/style.css";
+import "@smartdoca/canvas/style.css";
+import "@smartdoca/sheet/style.css";
+import "@smartdoca/slides/styles.css";
+import "@smartdoca/markdown/style.css";
 import "katex/dist/katex.min.css";
 import "@web/features/documents/markdown.css";
 import "@web/features/documents/surface.css";

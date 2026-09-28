@@ -1,7 +1,10 @@
 import { createUser } from "@core/modules/identity/passwords.js";
 import { openDatabase } from "@db/index.js";
 import { config } from "./config.js";
-const login = process.env.DOCA_BOOTSTRAP_LOGIN,
+const login = process.env.DOCA_BOOTSTRAP_LOGIN?.replace(
+    /^[\s\p{Cf}]+|[\s\p{Cf}]+$/gu,
+    "",
+  ),
   password = process.env.DOCA_BOOTSTRAP_PASSWORD;
 if (!login || !password)
   throw new Error(

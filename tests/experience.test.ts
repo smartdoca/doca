@@ -17,7 +17,7 @@ import {
   applyUpdate,
   encodeStateAsUpdate,
   encodeStateVector,
-} from "slatetsx-kit-editor/yjs";
+} from "@smartdoca/slate/yjs";
 import { createApp } from "../apps/server/src/app/create-app.js";
 import { internalDocumentId } from "../apps/web/src/features/documents/internal-document-id.js";
 let db: DB,

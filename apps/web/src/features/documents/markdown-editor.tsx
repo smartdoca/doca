@@ -31,7 +31,7 @@ import {
   exportMarkdownFile,
   createMarkdownTextAnchor,
   type RemoteMarkdownSelection,
-} from "exmd-collaborative-editor";
+} from "@smartdoca/markdown";
 import {
   api,
   assetUrl,
@@ -55,7 +55,7 @@ import {
   encodeMarkdownAnchor,
 } from "@core/modules/documents/codecs/markdown-anchor.js";
 import "@web/features/documents/surface.css";
-import "exmd-collaborative-editor/style.css";
+import "@smartdoca/markdown/style.css";
 import "katex/dist/katex.min.css";
 import "@web/features/documents/markdown.css";
 
@@ -594,7 +594,7 @@ export default function MarkdownDocument({
   );
   const downloadPdf = useCallback(
     async (markdown: string) => {
-      const { exportPdfFile } = await import("exmd-collaborative-editor");
+      const { exportPdfFile } = await import("@smartdoca/markdown");
       downloadResult(
         await exportPdfFile(markdown, {
           fileName: `${detail.resource.title}.pdf`,

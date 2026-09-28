@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link2, Unlink } from "lucide-react";
 import { Editor, Range, Transforms, type RangeRef } from "slate";
-import type { RichTextEditorHandle } from "slatetsx-kit-editor";
+import type { RichTextEditorHandle } from "@smartdoca/slate";
 import { internalDocumentId } from "@web/features/documents/document-link.js";
 import { api, type Detail } from "@web/shared/api.js";
 export function DocumentLinkControl({

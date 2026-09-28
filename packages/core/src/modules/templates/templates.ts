@@ -1,5 +1,5 @@
 import { checkDocumentSize } from "../access/operation-policy.js";
-import { validateDocument } from "@eppt/editor/core";
+import { validateDocument } from "@smartdoca/slides/core";
 import { randomUUID } from "node:crypto";
 import type { Transaction } from "kysely";
 import { TEMPLATE_FORMATS, type TemplateFormat } from "./content.js";
@@ -9,7 +9,7 @@ export {
   templatePreviewLines,
   type TemplateFormat,
 } from "./content.js";
-import { Doc, encodeStateAsUpdate } from "slatetsx-kit-editor/yjs";
+import { Doc, encodeStateAsUpdate } from "@smartdoca/slate/yjs";
 import type { DB, Resource, Schema } from "../../../../db/src/index.js";
 import { AppError, fail } from "../../shared/errors.js";
 import { b64, plainText } from "../collaboration/documents.js";

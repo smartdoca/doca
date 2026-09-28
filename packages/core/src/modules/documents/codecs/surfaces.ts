@@ -2,21 +2,21 @@ import { checkDocumentSize } from "../../access/operation-policy.js";
 import {
   projectExlsxWorkbook,
   projectExlsxPlainText,
-} from "@online-office/univer-sheet/model";
+} from "@smartdoca/sheet/model";
 import {
   createExlsxBaseline,
   EXLSX_SCHEMA_VERSION,
   createExlsxCollaborationSession,
   restoreExlsxDocument,
   type ExlsxBaseline,
-} from "@online-office/univer-sheet/yjs";
-import { CANVAS_CODEC, CanvasModel } from "aidcanvas/model";
+} from "@smartdoca/sheet/yjs";
+import { CANVAS_CODEC, CanvasModel } from "@smartdoca/canvas/model";
 import {
   createPresentation,
   createYDocument,
   readDocument,
   resolveAnchor,
-} from "@eppt/editor/core";
+} from "@smartdoca/slides/core";
 import {
   validatePresentation,
   validatePresentationUpdate,

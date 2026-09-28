@@ -7,6 +7,12 @@ allowBuilds:
   esbuild: true
   leveldown: false
   protobufjs: false
+minimumReleaseAgeExclude:
+  - '@smartdoca/canvas@0.4.1'
+  - '@smartdoca/markdown@0.4.2'
+  - '@smartdoca/sheet@0.2.0-rc.16'
+  - '@smartdoca/slate@0.4.9'
+  - '@smartdoca/slides@0.3.0-alpha.1'
 overrides:
   yjs: 13.6.32
   # Leafer plugins share a global Creator registry with the canvas engine.

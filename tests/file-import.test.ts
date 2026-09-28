@@ -5,10 +5,10 @@ import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import { restoreDocument } from "@core/modules/collaboration/documents.js";
 import { restoreSurface } from "@core/modules/documents/codecs/surfaces.js";
-import { CanvasModel } from "aidcanvas/model";
-import { projectExlsxWorkbook } from "@online-office/univer-sheet/model";
-import { importDocument } from "slatetsx-kit-editor/conversion";
-import { createEditorDocument } from "slatetsx-kit-editor/headless";
+import { CanvasModel } from "@smartdoca/canvas/model";
+import { projectExlsxWorkbook } from "@smartdoca/sheet/model";
+import { importDocument } from "@smartdoca/slate/conversion";
+import { createEditorDocument } from "@smartdoca/slate/headless";
 import { validateImport } from "@core/modules/documents/import.js";
 let db: DB, owner: Actor;
 beforeEach(async () => {

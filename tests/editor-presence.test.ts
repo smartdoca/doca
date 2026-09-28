@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { createEditor } from "slate";
-import { Doc, YjsDocument } from "slatetsx-kit-editor/yjs";
+import { Doc, YjsDocument } from "@smartdoca/slate/yjs";
 import { blockOffset, slatePoint } from "../apps/web/src/features/documents/editor-presence.js";
 
 it("maps marked leaves, emoji UTF-16 offsets and mention object markers without using visible name length", () => {

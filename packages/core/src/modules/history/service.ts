@@ -1,7 +1,7 @@
 import { requireCapability } from "../access/operation-policy.js";
 import { sql, type Transaction } from "kysely";
 import { randomUUID } from "node:crypto";
-import { applyUpdate, Doc, encodeStateAsUpdate } from "slatetsx-kit-editor/yjs";
+import { applyUpdate, Doc, encodeStateAsUpdate } from "@smartdoca/slate/yjs";
 import type { DB, Schema } from "../../../../db/src/index.js";
 import { transact } from "../../../../db/src/transactions.js";
 import { fail } from "../../shared/errors.js";

@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createEditor, Editor, Element, Transforms } from "slate";
 import { withHistory } from "slate-history";
-import { withRichBlocks } from "slatetsx-kit-editor";
+import { withRichBlocks } from "@smartdoca/slate";
 import {
   Doc,
   applyUpdate,
   createYjsAdapter,
   encodeStateAsUpdate,
   YjsDocument,
-} from "slatetsx-kit-editor/yjs";
+} from "@smartdoca/slate/yjs";
 
 const initialValue = [
   {

@@ -1,8 +1,8 @@
-import { MarkdownPreview } from "exmd-collaborative-editor";
+import { MarkdownPreview } from "@smartdoca/markdown";
 import { useI18n } from "@web/shared/i18n.js";
 import { assetUrl } from "@web/shared/api.js";
 import { platformAssetId } from "@web/shared/utils/asset-path.js";
-import "exmd-collaborative-editor/style.css";
+import "@smartdoca/markdown/style.css";
 import "katex/dist/katex.min.css";
 import "@web/features/documents/markdown.css";
 export default function Preview({

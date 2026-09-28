@@ -14,8 +14,8 @@ import {
   type CanvasAnchorDecoration,
   type CanvasEditorRef,
   type CanvasEditorResources,
-} from "aidcanvas";
-import { CanvasModel } from "aidcanvas/model";
+} from "@smartdoca/canvas";
+import { CanvasModel } from "@smartdoca/canvas/model";
 import {
   api,
   assetUrl,
@@ -36,7 +36,7 @@ import {
 import { Feedback } from "@web/shared/components/feedback.js";
 import { ModelFind } from "@web/features/search/model-find.js";
 import { EditorRecoveryBoundary } from "@web/features/documents/editor-recovery-boundary.js";
-import "aidcanvas/style.css";
+import "@smartdoca/canvas/style.css";
 import "@web/features/documents/surface.css";
 const factory: SurfaceFactory<CanvasModel> = async (b) => {
   const value = CanvasModel.restore({

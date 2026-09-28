@@ -12,8 +12,8 @@ import {
   replaceMatches,
   REMOTE_ORIGIN,
   isLocalContentOrigin,
-} from "@eppt/editor/core";
-import { importPptx, exportPptx, validatePptxFile } from "@eppt/editor/pptx";
+} from "@smartdoca/slides/core";
+import { importPptx, exportPptx, validatePptxFile } from "@smartdoca/slides/pptx";
 import { openTestDatabase } from "./database.js";
 import type { DB } from "@db/index.js";
 import { createUser, type Actor } from "@core/modules/identity/passwords.js";

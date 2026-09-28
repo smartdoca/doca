@@ -9,7 +9,7 @@ import {
   type UploadResult,
   type EditorPlugin,
   type ResourceUploadState,
-} from "slatetsx-kit-editor";
+} from "@smartdoca/slate";
 import {
   Bold,
   Italic,
@@ -31,7 +31,7 @@ import {
   noteContentSchema,
   type NoteContent,
 } from "@core/shared/quick-notes.js";
-import "slatetsx-kit-editor/style.css";
+import "@smartdoca/slate/style.css";
 
 const resourcesForReading: ResourceConfig = {
   resolveUrl: (path) => (/^[a-f0-9-]{36}$/.test(path) ? assetUrl(path) : ""),

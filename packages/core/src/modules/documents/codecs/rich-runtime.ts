@@ -1,7 +1,7 @@
 import {
   YjsDocument as BaseRuntime,
   type YjsInlineCodec,
-} from "slatetsx-kit-editor/yjs";
+} from "@smartdoca/slate/yjs";
 import type { Doc } from "yjs";
 const codec = (type: `custom:${string}`, key: string): YjsInlineCodec => ({
   type,

@@ -7,7 +7,7 @@ import {
   encodeStateAsUpdate,
   encodeStateVector,
   createYjsAdapter,
-} from "slatetsx-kit-editor/yjs";
+} from "@smartdoca/slate/yjs";
 import { DocaYjsDocument } from "@core/modules/documents/codecs/rich-runtime.js";
 import { documentMentions } from "@core/modules/interactions/community.js";
 import { userCardUrl } from "@core/modules/deployment/user-card.js";

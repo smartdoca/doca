@@ -1,4 +1,4 @@
-import { mergeUpdates } from "slatetsx-kit-editor/yjs";
+import { mergeUpdates } from "@smartdoca/slate/yjs";
 export type PendingUpdate = { id: string; update: Uint8Array };
 export type Replica = {
   checkpoint: Uint8Array;

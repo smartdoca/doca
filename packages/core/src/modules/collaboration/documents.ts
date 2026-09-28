@@ -6,7 +6,7 @@ import {
   applyUpdate,
   encodeStateAsUpdate,
   encodeStateVector,
-} from "slatetsx-kit-editor/yjs";
+} from "@smartdoca/slate/yjs";
 import type { DB, Schema } from "../../../../db/src/index.js";
 import { transact } from "../../../../db/src/transactions.js";
 import { fail } from "../../shared/errors.js";

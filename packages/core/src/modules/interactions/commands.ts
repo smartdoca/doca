@@ -1,7 +1,7 @@
 import {
   createMarkdownTextAnchor,
   resolveMarkdownTextAnchor,
-} from "exmd-collaborative-editor";
+} from "@smartdoca/markdown";
 import { sql } from "kysely";
 import { randomUUID } from "node:crypto";
 import type { DB } from "../../../../db/src/index.js";

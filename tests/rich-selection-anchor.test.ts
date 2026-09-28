@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { createEditor, type Descendant, type Range } from "slate";
-import { Doc, encodeStateAsUpdate } from "slatetsx-kit-editor/yjs";
+import { Doc, encodeStateAsUpdate } from "@smartdoca/slate/yjs";
 import { DocaYjsDocument } from "@core/modules/documents/codecs/rich-runtime.js";
 import { captureRichSelection } from "../apps/web/src/features/comments/rich-selection-anchor.js";
 import {

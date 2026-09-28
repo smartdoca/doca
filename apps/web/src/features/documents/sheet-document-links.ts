@@ -4,7 +4,7 @@ import type {
   SpreadsheetEditorHandle,
   SpreadsheetNativeText,
   SpreadsheetTextTarget,
-} from "@online-office/univer-sheet";
+} from "@smartdoca/sheet";
 import { api, type Detail } from "@web/shared/api.js";
 import { internalDocumentId } from "@web/features/documents/internal-document-id.js";
 

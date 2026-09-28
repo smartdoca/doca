@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CANVAS_ELEMENT_PROPERTIES } from "aidcanvas/model";
+import { CANVAS_ELEMENT_PROPERTIES } from "@smartdoca/canvas/model";
 import { fail } from "../../shared/errors.js";
 
 export const documentFormats = [

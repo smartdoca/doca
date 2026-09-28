@@ -6,7 +6,7 @@ import {
   applyUpdate,
   encodeStateAsUpdate,
   encodeStateVector,
-} from "slatetsx-kit-editor/yjs";
+} from "@smartdoca/slate/yjs";
 import { type DB } from "@db/index.js";
 import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";

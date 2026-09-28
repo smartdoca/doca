@@ -6,9 +6,9 @@ import { createContent } from "@core/workflows/resources.js";
 import { restoreDocument } from "@core/modules/collaboration/documents.js";
 import { restoreMarkdown } from "@core/modules/documents/codecs/markdown.js";
 import { restoreSurface } from "@core/modules/documents/codecs/surfaces.js";
-import { readDocument } from "@eppt/editor/core";
-import { CanvasModel } from "aidcanvas/model";
-import { projectExlsxWorkbook } from "@online-office/univer-sheet/model";
+import { readDocument } from "@smartdoca/slides/core";
+import { CanvasModel } from "@smartdoca/canvas/model";
+import { projectExlsxWorkbook } from "@smartdoca/sheet/model";
 import * as Y from "yjs";
 import {
   blankTemplateContent,

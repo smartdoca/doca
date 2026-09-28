@@ -1,6 +1,6 @@
-import { projectExlsxWorkbook } from "@online-office/univer-sheet/model";
-import { readDocument } from "@eppt/editor/core";
-import { CanvasModel } from "aidcanvas/model";
+import { projectExlsxWorkbook } from "@smartdoca/sheet/model";
+import { readDocument } from "@smartdoca/slides/core";
+import { CanvasModel } from "@smartdoca/canvas/model";
 import type { Transaction } from "kysely";
 import * as Y from "yjs";
 import type { DB, Schema } from "../../../../db/src/index.js";

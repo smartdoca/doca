@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import * as Y from "yjs";
-import { createExlsxCollaborationSession, restoreExlsxDocument } from "@online-office/univer-sheet/yjs";
-import { projectExlsxWorkbook } from "@online-office/univer-sheet/model";
+import { createExlsxCollaborationSession, restoreExlsxDocument } from "@smartdoca/sheet/yjs";
+import { projectExlsxWorkbook } from "@smartdoca/sheet/model";
 import { openTestDatabase } from "./database.js";
 import type { DB } from "@db/index.js";
 import { createUser, type Actor } from "@core/modules/identity/passwords.js";

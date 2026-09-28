@@ -1,8 +1,8 @@
 import { useEffect, useState, type RefObject } from "react";
 import { Editor, Element, Node, Path, Text, type Point } from "slate";
 import { ReactEditor } from "slate-react";
-import type { RichTextEditorHandle } from "slatetsx-kit-editor";
-import type { YjsDocument } from "slatetsx-kit-editor/yjs";
+import type { RichTextEditorHandle } from "@smartdoca/slate";
+import type { YjsDocument } from "@smartdoca/slate/yjs";
 import { realtime, toBase64, fromBase64 } from "@web/features/documents/realtime.js";
 
 type TextPosition = { blockId: string; position: string; kind?: "text" };

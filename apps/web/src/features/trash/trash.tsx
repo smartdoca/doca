@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useI18n } from "@web/shared/i18n.js";
-import type { EditorValue } from "slatetsx-kit-editor";
+import type { EditorValue } from "@smartdoca/slate";
 import { FileText, Folder, RotateCcw, Trash2 } from "lucide-react";
 import { api, type Page, type Resource } from "@web/shared/api.js";
 import { Dialog } from "@web/features/documents/dialogs.js";

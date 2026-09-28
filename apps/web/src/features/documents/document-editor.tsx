@@ -17,8 +17,8 @@ import {
   saveToPlatformFolder,
 } from "@web/features/documents/file-transfer.js";
 import { loadPdfFontBytes } from "@web/features/documents/pdf-font.js";
-import { createEditorDocument } from "slatetsx-kit-editor/headless";
-import { renderKatex } from "slatetsx-kit-editor/katex";
+import { createEditorDocument } from "@smartdoca/slate/headless";
+import { renderKatex } from "@smartdoca/slate/katex";
 import { ModelFind } from "@web/features/search/model-find.js";
 import { replaceRichText } from "@web/features/search/rich-text-search.js";
 import {
@@ -42,14 +42,14 @@ import {
   type RichTextEditorHandle,
   type ResourceConfig,
   type DocumentHeading,
-} from "slatetsx-kit-editor";
+} from "@smartdoca/slate";
 import {
   Doc,
   applyUpdate,
   encodeStateVector,
   encodeStateAsUpdate,
   createYjsAdapter,
-} from "slatetsx-kit-editor/yjs";
+} from "@smartdoca/slate/yjs";
 import { MessageSquare, PanelRightClose } from "lucide-react";
 import {
   api,
@@ -75,7 +75,7 @@ import {
   selectedTextRange,
 } from "@web/features/comments/comment-selection.js";
 import type { CommentBody } from "@core/modules/interactions/community.js";
-import "slatetsx-kit-editor/style.css";
+import "@smartdoca/slate/style.css";
 import "@web/features/documents/editor.css";
 import { EditorToolbar } from "@web/features/documents/editor-toolbar.js";
 import { OutlineDrawer } from "@web/features/documents/outline-drawer.js";
@@ -747,7 +747,7 @@ function RichDocument({
                 : "PDF（.pdf）",
           run: async () => {
             const { exportDocument } =
-              await import("slatetsx-kit-editor/conversion");
+              await import("@smartdoca/slate/conversion");
             const signal = new AbortController().signal;
             if (format === "pdf") {
               const markdown = await exportDocument(session.runtime.getValue(), {
@@ -764,7 +764,7 @@ function RichDocument({
               });
               reportWarnings(markdown.warnings);
               const { exportPdfFile } =
-                await import("exmd-collaborative-editor");
+                await import("@smartdoca/markdown");
               const markdownText = await markdown.blob.text();
               downloadResult(
                 await exportPdfFile(markdownText, {
@@ -809,7 +809,7 @@ function RichDocument({
           label: "保存到平台文件夹（Markdown）",
           run: async () => {
             const { exportDocument } =
-              await import("slatetsx-kit-editor/conversion");
+              await import("@smartdoca/slate/conversion");
             const signal = new AbortController().signal;
             const exported = await exportDocument(session.runtime.getValue(), {
               format: "markdown",

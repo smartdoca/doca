@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { useI18n } from "@web/shared/i18n.js";
-import { MarkdownPreview } from "exmd-collaborative-editor";
+import { MarkdownPreview } from "@smartdoca/markdown";
 import type { FileItem } from "@web/shared/api.js";
 import { fileUrl } from "@web/shared/api.js";
 import { isDwgFile } from "./dwg-file.js";
 import { DwgFilePreview } from "./dwg-preview.js";
-import "exmd-collaborative-editor/style.css";
+import "@smartdoca/markdown/style.css";
 import "@web/features/documents/markdown.css";
 
 export type PreviewSource = {
