@@ -1,4 +1,5 @@
-FROM node:24-bookworm-slim AS base
+ARG NODE_IMAGE=node:22-bookworm-slim
+FROM ${NODE_IMAGE} AS base
 
 WORKDIR /app
 RUN npm install --global pnpm@11.25.0
@@ -13,12 +14,6 @@ RUN apt-get -o Acquire::Retries=5 update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY vendor ./vendor
-RUN test -f vendor/eppt-editor-0.3.0-alpha.1-db017d02d3d0.tgz \
-    && test -f vendor/online-office-univer-sheet-0.2.0-rc.16-c3224ad15496.tgz \
-    && test -f vendor/aidcanvas-0.4.1-b61bfd50ec2e.tgz \
-    && test -f vendor/exmd-collaborative-editor-0.4.2-3d3240f8e88f.tgz \
-    && test -f vendor/slatetsx-kit-editor-0.4.9-629bbd289ae0.tgz
 # Keep dev dependencies: the current server entry point imports vite and uses tsx.
 RUN pnpm install --frozen-lockfile \
     --fetch-retries=5 \

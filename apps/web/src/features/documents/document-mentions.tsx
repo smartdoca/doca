@@ -8,7 +8,7 @@ import {
   type CustomElement,
   type EditorPlugin,
   type RichTextEditorHandle,
-} from "slatetsx-kit-editor";
+} from "@smartdoca/slate";
 import { lookupUsers, mentionHandle, mentionLabel, type MentionUser } from "@web/features/comments/rich-comments.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
 import { UserMention } from "@web/shared/components/user-mention.js";

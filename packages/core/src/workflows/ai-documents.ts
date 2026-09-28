@@ -6,9 +6,9 @@ import { createEditor, Editor, Node, Text, Transforms } from "slate";
 import {
   createTableBlock,
   createColumnsBlock,
-} from "slatetsx-kit-editor/headless";
-import { importMarkdown } from "slatetsx-kit-editor/conversion";
-import { CanvasModel } from "aidcanvas/model";
+} from "@smartdoca/slate/headless";
+import { importMarkdown } from "@smartdoca/slate/conversion";
+import { CanvasModel } from "@smartdoca/canvas/model";
 import { nativeCanvasElement } from "../shared/canvas-elements.js";
 import {
   assertLinkUrl,
@@ -25,17 +25,17 @@ import {
   readDocument,
   replaceMatches,
   resolveAnchor as resolvePptAnchor,
-} from "@eppt/editor/core";
-import { projectExlsxWorkbook } from "@online-office/univer-sheet/model";
+} from "@smartdoca/slides/core";
+import { projectExlsxWorkbook } from "@smartdoca/sheet/model";
 import {
   restoreExlsxDocument,
   createExlsxCollaborationSession,
-} from "@online-office/univer-sheet/yjs";
+} from "@smartdoca/sheet/yjs";
 import type {
   CollaborationContext,
   CollaborationMutation,
-} from "@online-office/univer-sheet";
-import { resolveMarkdownTextAnchor } from "exmd-collaborative-editor";
+} from "@smartdoca/sheet";
+import { resolveMarkdownTextAnchor } from "@smartdoca/markdown";
 import type { DB } from "../../../db/src/index.js";
 import { transact } from "../../../db/src/transactions.js";
 import { fail } from "../shared/errors.js";

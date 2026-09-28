@@ -4,13 +4,13 @@ import {
   createExlsxBaseline,
   restoreExlsxDocument,
   createExlsxCollaborationSession,
-} from "@online-office/univer-sheet/yjs";
-import { projectExlsxWorkbook } from "@online-office/univer-sheet/model";
+} from "@smartdoca/sheet/yjs";
+import { projectExlsxWorkbook } from "@smartdoca/sheet/model";
 import type {
   CollaborationContext,
   CollaborationMutation,
   WorkbookSnapshot,
-} from "@online-office/univer-sheet";
+} from "@smartdoca/sheet";
 
 it("installed Excel artifact persists native URL paste without serializing infinite layout dimensions", async () => {
   const snapshot = {

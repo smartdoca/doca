@@ -3,7 +3,7 @@ import {
   readDocument,
   validateDocument,
   type PresentationDocument,
-} from "@eppt/editor/core";
+} from "@smartdoca/slides/core";
 import type { DB } from "../../../../../db/src/index.js";
 import { fail } from "../../../shared/errors.js";
 

@@ -3,8 +3,8 @@ import {
   requireCapability,
 } from "../access/operation-policy.js";
 import type { Transaction } from "kysely";
-import { readEditorDocument } from "slatetsx-kit-editor/headless";
-import { Doc, encodeStateAsUpdate } from "slatetsx-kit-editor/yjs";
+import { readEditorDocument } from "@smartdoca/slate/headless";
+import { Doc, encodeStateAsUpdate } from "@smartdoca/slate/yjs";
 import type { Resource, Schema } from "../../../../db/src/index.js";
 import { fail } from "../../shared/errors.js";
 import { b64, plainText } from "../collaboration/documents.js";

@@ -8,7 +8,7 @@ import {
   PresentationWorkspace,
   type PresentationWorkspaceHandle,
   type PresentationResources,
-} from "@eppt/editor";
+} from "@smartdoca/slides";
 import {
   isLocalContentOrigin,
   REMOTE_ORIGIN,
@@ -19,7 +19,7 @@ import {
   type CommentAnchor,
   type CommentMarker,
   type TextMatch,
-} from "@eppt/editor/core";
+} from "@smartdoca/slides/core";
 import {
   assetUrl,
   uploadFile,
@@ -38,7 +38,7 @@ import {
 import { Feedback } from "@web/shared/components/feedback.js";
 import { ModelFind, type FindHandle } from "@web/features/search/model-find.js";
 import { EditorRecoveryBoundary } from "@web/features/documents/editor-recovery-boundary.js";
-import "@eppt/editor/styles.css";
+import "@smartdoca/slides/styles.css";
 import "@web/features/documents/surface.css";
 
 type Replica = { doc: Y.Doc; epochId: string };
@@ -310,7 +310,7 @@ export default function PresentationDocument({
                 ...readDocument(model.doc),
                 title: detail.resource.title,
               };
-              const { exportPptx } = await import("@eppt/editor/pptx");
+              const { exportPptx } = await import("@smartdoca/slides/pptx");
               downloadResult(
                 await exportPptx(snapshot, async (key) => {
                   const blob = await readAsset(key);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { SpreadsheetInlineActions } from "@online-office/univer-sheet";
+import type { SpreadsheetInlineActions } from "@smartdoca/sheet";
 import { GlobalSearch } from "@web/features/search/search.js";
 
 type Choice = { documentId: string; title: string } | null;

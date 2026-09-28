@@ -5,7 +5,7 @@ import type {
   SpreadsheetEditorHandle,
   SpreadsheetTextTarget,
   SpreadsheetInlineNodeEvent,
-} from "@online-office/univer-sheet";
+} from "@smartdoca/sheet";
 import { lookupUsers, mentionHandle, mentionLabel, type MentionUser } from "@web/features/comments/rich-comments.js";
 import { setUserCardsSuppressed, UserBadge } from "@web/shared/components/user-badge.js";
 

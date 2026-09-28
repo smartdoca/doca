@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { ReactEditor } from "slate-react";
-import type { RichTextEditorHandle } from "slatetsx-kit-editor";
-import type { YjsDocument } from "slatetsx-kit-editor/yjs";
+import type { RichTextEditorHandle } from "@smartdoca/slate";
+import type { YjsDocument } from "@smartdoca/slate/yjs";
 import { slatePoint } from "@web/features/documents/editor-presence.js";
 import { resolveRichAnchor } from "@core/modules/documents/codecs/rich-anchor.js";
 import { commentRailHeight, placeCommentCards } from "@web/features/comments/comment-position.js";

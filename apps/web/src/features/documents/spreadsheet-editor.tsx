@@ -11,13 +11,13 @@ import {
   type ResourceAdapter,
   type SpreadsheetCellSelection,
   type SpreadsheetMenuExtension,
-} from "@online-office/univer-sheet";
+} from "@smartdoca/sheet";
 import {
   restoreExlsxDocument,
   createExlsxCollaborationSession,
   EXLSX_SCHEMA_VERSION,
   type ExlsxCollaborationSession,
-} from "@online-office/univer-sheet/yjs";
+} from "@smartdoca/sheet/yjs";
 import * as Y from "yjs";
 import {
   assetUrl,
@@ -40,7 +40,7 @@ import {
 import { SheetNativeMentions } from "@web/features/documents/sheet-native-mentions.js";
 import { useSheetDocumentLinks } from "@web/features/documents/sheet-document-links.js";
 import { useSheetDocumentPicker } from "@web/features/documents/sheet-document-picker.js";
-import "@online-office/univer-sheet/style.css";
+import "@smartdoca/sheet/style.css";
 import "@web/features/documents/surface.css";
 import { AtSign, Eye, EyeOff, MessageSquare } from "lucide-react";
 const factory: SurfaceFactory<ExlsxCollaborationSession> = async (

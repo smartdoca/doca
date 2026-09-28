@@ -1,4 +1,4 @@
-import type { MarkdownTextAnchor } from "exmd-collaborative-editor";
+import type { MarkdownTextAnchor } from "@smartdoca/markdown";
 /** JSON-safe comment metadata; CRDT bytes are arrays, never numeric-key objects. */
 export function encodeMarkdownAnchor(
   anchor: MarkdownTextAnchor,

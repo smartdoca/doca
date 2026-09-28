@@ -1,5 +1,5 @@
 import { Editor, Element, Node, Path, Range, Text, type Point } from "slate";
-import type { YjsDocument } from "slatetsx-kit-editor/yjs";
+import type { YjsDocument } from "@smartdoca/slate/yjs";
 import {
   combineRichAnchors,
   encodeRichAnchorPart,

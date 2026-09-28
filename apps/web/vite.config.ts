@@ -80,7 +80,7 @@ export default defineConfig({
           postcssPlugin: "doca-scope-markdown-sdk",
           Once(root) {
             const filename = root.source?.input.file ?? "";
-            const scope = filename.includes("exmd-collaborative-editor")
+            const scope = filename.includes("@smartdoca/markdown")
               ? ".doca-markdown"
               : null;
             if (!scope) return;
@@ -114,9 +114,9 @@ export default defineConfig({
       "@db": fileURLToPath(new URL("../../packages/db/src", import.meta.url)),
       "@doca/i18n": fileURLToPath(new URL("../../packages/i18n/src/index.ts", import.meta.url)),
       "@napi-rs/canvas": fileURLToPath(new URL("./src/shared/shims/napi-canvas.ts", import.meta.url)),
-      "@online-office/univer-sheet/style.css": fileURLToPath(
+      "@smartdoca/sheet/style.css": fileURLToPath(
         new URL(
-          "../../node_modules/@online-office/univer-sheet/dist/index.css",
+          "../../node_modules/@smartdoca/sheet/dist/index.css",
           import.meta.url,
         ),
       ),

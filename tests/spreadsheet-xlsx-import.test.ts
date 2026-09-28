@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import { expect, it } from "vitest";
-import { xlsxToSnapshot } from "@online-office/univer-sheet/xlsx";
+import { xlsxToSnapshot } from "@smartdoca/sheet/xlsx";
 import {
   exportSpreadsheetXlsx,
   importSpreadsheetXlsx,

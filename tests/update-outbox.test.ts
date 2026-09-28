@@ -3,7 +3,7 @@ import {
   Doc,
   encodeStateVector,
   encodeStateAsUpdate,
-} from "slatetsx-kit-editor/yjs";
+} from "@smartdoca/slate/yjs";
 import { UpdateOutbox } from "../apps/web/src/features/documents/update-outbox.js";
 import { cellSelection } from "@core/modules/documents/codecs/cell-presence.js";
 

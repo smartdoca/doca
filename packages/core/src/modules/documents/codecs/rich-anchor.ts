@@ -1,4 +1,4 @@
-import type { YjsDocument, CommentAnchor } from "slatetsx-kit-editor/yjs";
+import type { YjsDocument, CommentAnchor } from "@smartdoca/slate/yjs";
 
 export type RichAnchorPart = {
   blockId: string;

@@ -17,7 +17,7 @@ import {
   YjsDocument,
   applyUpdate,
   encodeStateAsUpdate,
-} from "slatetsx-kit-editor/yjs";
+} from "@smartdoca/slate/yjs";
 import { composeComment } from "../apps/web/src/features/comments/comment-body.js";
 let db: DB,
   owner: Actor,

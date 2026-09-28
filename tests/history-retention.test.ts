@@ -5,7 +5,7 @@ import {
   YjsDocument,
   applyUpdate,
   encodeStateAsUpdate,
-} from "slatetsx-kit-editor/yjs";
+} from "@smartdoca/slate/yjs";
 import { openTestDatabase } from "./database.js";
 import type { DB } from "@db/index.js";
 import { transact } from "@db/transactions.js";

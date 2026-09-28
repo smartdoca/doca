@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import type { SpreadsheetNativeText } from "@online-office/univer-sheet";
+import type { SpreadsheetNativeText } from "@smartdoca/sheet";
 import { insertSheetDocumentLink } from "../apps/web/src/features/documents/sheet-document-links.js";
 
 const id = "95c67111-d90b-48df-9502-581a858b51d4";

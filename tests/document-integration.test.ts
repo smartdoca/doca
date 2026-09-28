@@ -18,7 +18,7 @@ import {
   replaceRichText,
 } from "../apps/web/src/features/search/rich-text-search.js";
 
-import { Doc, encodeStateAsUpdate, applyUpdate } from "slatetsx-kit-editor/yjs";
+import { Doc, encodeStateAsUpdate, applyUpdate } from "@smartdoca/slate/yjs";
 import { DocaYjsDocument } from "@core/modules/documents/codecs/rich-runtime.js";
 
 it("finds across formatted leaves, replaces backwards with undo, excluding atomic references", () => {

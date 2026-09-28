@@ -1,4 +1,4 @@
-import type { UploadContext } from "slatetsx-kit-editor";
+import type { UploadContext } from "@smartdoca/slate";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {

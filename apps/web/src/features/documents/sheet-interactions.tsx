@@ -6,7 +6,7 @@ import type {
   SpreadsheetEditorHandle,
   SpreadsheetCellObject,
   SpreadsheetCellRange,
-} from "@online-office/univer-sheet";
+} from "@smartdoca/sheet";
 import { lookupUsers, type MentionUser } from "@web/features/comments/rich-comments.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
 import { UserMention } from "@web/shared/components/user-mention.js";

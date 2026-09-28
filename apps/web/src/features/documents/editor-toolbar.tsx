@@ -1,8 +1,8 @@
 import { Feedback } from "@web/shared/components/feedback.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import type { RichTextEditorHandle, BlockType } from "slatetsx-kit-editor";
-import { FONT_FAMILIES } from "slatetsx-kit-editor";
+import type { RichTextEditorHandle, BlockType } from "@smartdoca/slate";
+import { FONT_FAMILIES } from "@smartdoca/slate";
 import { Editor, Range, Transforms, type Range as SlateRange } from "slate";
 import {
   Undo2,

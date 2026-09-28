@@ -1,6 +1,6 @@
-import { projectExlsxPlainText, projectExlsxWorkbook } from "@online-office/univer-sheet/model";
-import { readDocument } from "@eppt/editor/core";
-import { CanvasModel } from "aidcanvas/model";
+import { projectExlsxPlainText, projectExlsxWorkbook } from "@smartdoca/sheet/model";
+import { readDocument } from "@smartdoca/slides/core";
+import { CanvasModel } from "@smartdoca/canvas/model";
 import type { DB } from "../../../../db/src/index.js";
 import * as Y from "yjs";
 import { restoreDocument } from "../collaboration/documents.js";

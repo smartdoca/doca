@@ -1,8 +1,8 @@
-import { RichTextEditor, type EditorValue } from "slatetsx-kit-editor";
+import { RichTextEditor, type EditorValue } from "@smartdoca/slate";
 import { useI18n } from "@web/shared/i18n.js";
-import { renderKatex } from "slatetsx-kit-editor/katex";
+import { renderKatex } from "@smartdoca/slate/katex";
 import { assetUrl } from "@web/shared/api.js";
-import "slatetsx-kit-editor/style.css";
+import "@smartdoca/slate/style.css";
 import { mentionPlugin } from "@web/features/documents/document-mentions.js";
 import { documentLinkPlugin } from "@web/features/documents/document-link.js";
 const plugins = [mentionPlugin, documentLinkPlugin];
