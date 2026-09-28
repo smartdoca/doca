@@ -317,6 +317,27 @@ it("reports connection categories without leaking provider request details", asy
   expect(budgetError).not.toContain("secret-test-key");
 });
 
+it("retries provider 504s and leaves incompatible workflow failures alone", async () => {
+  const { AppError } = await import("../packages/core/src/shared/errors.js");
+  const { transientModelFailure } = await import(
+    "../apps/server/src/services/ai/providers.js"
+  );
+  expect(
+    transientModelFailure(
+      new AppError(502, "模型厂商服务暂时异常（504），请稍后重试"),
+    ),
+  ).toBe(true);
+  expect(
+    transientModelFailure(new AppError(502, "模型连接超时，请检查网络或稍后重试")),
+  ).toBe(true);
+  expect(
+    transientModelFailure(
+      new AppError(502, "AI 工作流执行失败，模型返回格式或工具调用不兼容，请检查模型配置"),
+    ),
+  ).toBe(false);
+  expect(transientModelFailure(new AppError(400, "不支持的幻灯片命令"))).toBe(false);
+});
+
 it("enables Claude automatic caching without adding flags to compatible vendors", async () => {
   const { promptCacheOptions } =
     await import("../apps/server/src/services/ai/providers.js");

@@ -504,6 +504,38 @@ it("presentation text leaf link property persists", async () => {
   expect(text).toContain('"link":"https://doca.example.com"');
 });
 
+it("saves a presentation text box written in pixels without rotation", async () => {
+  const doc = await createContent(db).create(owner, {
+    title: "PPT",
+    kind: "document",
+    format: "presentation",
+  });
+  const read = await readAIDocument(db, { actor: owner }, doc.id);
+  const slideId = (read.value as any).slideOrder[0];
+  await editAIDocument(
+    db,
+    { actor: owner },
+    doc.id,
+    { seq: read.seq, epochId: read.epochId! },
+    [
+      {
+        type: "insert",
+        slideId,
+        element: {
+          type: "text",
+          text: "项目计划",
+          fontSize: 32,
+          transform: { x: 96, y: 72, width: 480, height: 64 },
+        },
+      },
+    ],
+    randomUUID(),
+  );
+  const after = await readAIDocument(db, { actor: owner }, doc.id);
+  const elements = Object.values((after.value as any).slides[slideId].elements) as any[];
+  expect(elements.some((element) => JSON.stringify(element).includes("项目计划"))).toBe(true);
+});
+
 it("scopes PPT text replacement to the requested element and rejects no-op writes", async () => {
   const doc = await createContent(db).create(owner, {title:"PPT范围",kind:"document",format:"presentation"});
   const read = await readAIDocument(db, {actor:owner}, doc.id);

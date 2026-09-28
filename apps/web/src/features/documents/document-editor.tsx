@@ -931,7 +931,7 @@ function RichDocument({
         navigate={(id) =>
           handle.current?.scrollToBlock(id, {
             behavior: "smooth",
-            block: "center",
+            block: "start",
           })
         }
       />

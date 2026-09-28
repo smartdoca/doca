@@ -23,6 +23,12 @@
   border-radius: 0;
   box-shadow: none;
 }
+/* The editor package reserves 126px for a toolbar inside its own scroller.
+   This host keeps the toolbar above .main-scroll, so that offset leaves the
+   clicked heading far below the visible top. */
+.document-editor-shell .sk-block-frame {
+  scroll-margin-top: 12px;
+}
 .editor-content .sk-editor {
   display: flex;
   flex-direction: column;
