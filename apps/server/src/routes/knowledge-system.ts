@@ -154,6 +154,11 @@ export function registerKnowledgeSystem(
               sourceScope: Type.Optional(Type.Union([Type.Literal("internal"),Type.Literal("web")])),
               automationPolicy: Type.Optional(Type.Union([Type.Literal("safe"),Type.Literal("draft")])),
               publicationMode: Type.Optional(Type.Union([Type.Literal("automatic"),Type.Literal("manual")])),
+              feedbackSchedule: Type.Optional(Type.Union([
+                Type.Literal("off"),
+                Type.Literal("daily"),
+                Type.Literal("weekly"),
+              ])),
               maxDocumentDepth: Type.Optional(
                 Type.Integer({ minimum: 1, maximum: 8 }),
               ),
