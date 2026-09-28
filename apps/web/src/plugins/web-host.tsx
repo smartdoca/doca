@@ -2,7 +2,7 @@ import * as React from "react";
 import { FolderFilePicker } from "@web/features/files/files.js";
 import { notifyFeedback } from "@web/shared/components/feedback.js";
 import { useI18n } from "@web/shared/i18n.js";
-import type { PluginWebHost } from "@doca/plugin-sdk/web";
+import type { PluginWebHost } from "@smartdoca/plugin-sdk/web";
 
 export function createWebHost(pluginId: string): PluginWebHost<typeof React, typeof FolderFilePicker> {
   const apiBase = `/api/v1/plugins/${pluginId}`;

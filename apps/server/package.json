@@ -7,12 +7,12 @@
   "dependencies": {
     "@doca/ai-host": "workspace:*",
     "@doca/documents-capability": "workspace:*",
-    "@doca/files-capability": "workspace:*",
-    "@doca/knowledge-capability": "workspace:*",
+    "@smartdoca/files-capability": "workspace:*",
+    "@smartdoca/knowledge-capability": "workspace:*",
     "@doca/plugin-documents": "workspace:*",
     "@doca/plugin-files": "workspace:*",
     "@doca/plugin-host": "workspace:*",
-    "@doca/plugin-sdk": "workspace:*",
-    "@doca/search-host": "workspace:*"
+    "@smartdoca/plugin-sdk": "workspace:*",
+    "@smartdoca/search-host": "workspace:*"
   }
 }

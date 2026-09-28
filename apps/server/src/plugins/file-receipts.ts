@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { DB, Schema } from "@db/index.js";
-import type { FilesRequestContext } from "@doca/files-capability";
+import type { FilesRequestContext } from "@smartdoca/files-capability";
 import { fail } from "@core/shared/errors.js";
 import { fileOperationScope } from "./file-operation-scope.js";
 export type Receipt = Schema["file_operation_receipts"];

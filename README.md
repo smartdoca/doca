@@ -92,11 +92,11 @@ A plugin package points at a static manifest, compiled server JavaScript, and an
 }
 ```
 
-Depend on `@doca/plugin-sdk` and the public service tokens. Do not import `@server/*`, `@core/*`, `@web/*`, `@db/*`, or other host source. The host injects the implementation at runtime.
+Depend on `@smartdoca/plugin-sdk` and the public service tokens. Do not import `@server/*`, `@core/*`, `@web/*`, `@db/*`, or other host source. The host injects the implementation at runtime.
 
 ```ts
-import { definePlugin } from "@doca/plugin-sdk";
-import { httpServiceToken } from "@doca/plugin-sdk/platform";
+import { definePlugin } from "@smartdoca/plugin-sdk";
+import { httpServiceToken } from "@smartdoca/plugin-sdk/platform";
 import manifest from "../manifest.json" with { type: "json" };
 
 export default () =>

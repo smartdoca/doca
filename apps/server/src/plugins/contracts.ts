@@ -1,6 +1,6 @@
-import { defineService } from "@doca/plugin-sdk";
+import { defineService } from "@smartdoca/plugin-sdk";
 import type { AIContributionHost } from "@doca/ai-host";
-import type { SearchSource } from "@doca/search-host";
+import type { SearchSource } from "@smartdoca/search-host";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Actor } from "@core/modules/identity/passwords.js";
 import type { DB } from "@db/index.js";

@@ -3,7 +3,7 @@ import type {
   DocaPlugin,
   PluginLifecycleContext,
   ServiceToken,
-} from "@doca/plugin-sdk";
+} from "@smartdoca/plugin-sdk";
 
 /** Bind public registration capabilities to the plugin that received them. */
 export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {

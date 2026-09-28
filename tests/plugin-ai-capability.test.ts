@@ -1,10 +1,10 @@
 import { afterEach, expect, it } from "vitest";
 import { AIContributionHost, createToolCall } from "@doca/ai-host";
-import { aiServiceToken, type AIServiceV1 } from "@doca/plugin-sdk/ai";
+import { aiServiceToken, type AIServiceV1 } from "@smartdoca/plugin-sdk/ai";
 import { createUser } from "@core/modules/identity/passwords.js";
 import { pluginServices } from "@core/shared/plugin-services.js";
 import { provideAI } from "@server/plugins/ai-capability.js";
-import type { PluginLifecycleContext } from "@doca/plugin-sdk";
+import type { PluginLifecycleContext } from "@smartdoca/plugin-sdk";
 import type { AIContributionExecutionContext } from "@server/services/ai/runner.js";
 import { openTestDatabase } from "./database.js";
 const databases: Awaited<ReturnType<typeof openTestDatabase>>[] = [];

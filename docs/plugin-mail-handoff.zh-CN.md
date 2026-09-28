@@ -14,7 +14,7 @@ Doca 不提供插件数据库、任意 SQL、键值业务存储或插件凭证�
 
 ## 当前可用的接口
 
-### HTTP：`@doca/plugin-sdk/platform`
+### HTTP：`@smartdoca/plugin-sdk/platform`
 
 `httpServiceToken.register(pluginId, routes)` 的路径为 `/api/v1/plugins/<pluginId>/...`。默认路由仍要求有效用户会话，支持 admin 限制。请求新增 `headers` 和精确 `rawBody: Uint8Array`，请求体默认上限 1 MiB，可按路由指定 bodyLimit，最大 32 MiB。handler 第二个参数支持 `status(code)`、`header(name, value)` 和 `redirect(location, code)`；重定向默认 303。
 
@@ -42,7 +42,7 @@ await http.register(id, [{
 
 以上 oauth/webhook/queue 是插件自己的实现，不是 SDK 导出。外部回调提供者协议字段由插件校验。
 
-### 文件与附件：`@doca/plugin-sdk/files`
+### 文件与附件：`@smartdoca/plugin-sdk/files`
 
 插件通过 files.v1 上传/创建文件并保存 fileId；绑定写入必须拥有原文件写权限。安装插件只能写自己 ownerPlugin 命名空间的绑定。
 
@@ -71,7 +71,7 @@ const receipt = await files.receipts.get(ctx, {
 
 回执不自动过期；pending 可以按原参数重试，completed 返回第一次结果快照。备用对象与中断临时文件已由宿主自动回收，和上传重试互斥并校验对象引用；邮箱侧仍保存自己的操作意图。
 
-### 用户与事件：`@doca/plugin-sdk/platform`
+### 用户与事件：`@smartdoca/plugin-sdk/platform`
 
 `users.list({after?, limit?})` 提供服务端分页校准，limit 默认 100、最大 500，按稳定用户 ID 返回 cursor；包含用户状态、资料和联系方式，不包含认证秘密。仅供可信插件服务器使用，禁止直接转发给浏览器。普通用户查找仍调用 users.search，遵守 all/related/none。
 
@@ -81,19 +81,19 @@ const receipt = await files.receipts.get(ctx, {
 
 用户关系投影保存在插件自己的数据库。registerDirectory 来源声明 schemaVersion: 1；related(principalId, {cursor, limit, signal}) 返回 {items, cursor}，items 是 {userId, relationId, revision}。verify(principalId, candidates, signal) 必须复核当前有效共享，并仅返回仍可见的 userId。每页最多 250 条、单次查询最多 40 页，总超时 2 秒；游标重复、超预算、超时、来源注销均丢弃该来源的候选。业务关系增量投影保存在插件自己的数据库，宿主不保存插件关系表。
 
-### 搜索：`@doca/plugin-sdk/search`
+### 搜索：`@smartdoca/plugin-sdk/search`
 
 `searchServiceToken` 的实际 ID 为 `search.v1`，提供 register、upsert、delete、rebuild、query。descriptor.pluginId 必须等于插件 ID。register 的 disposer 自动归属插件生命周期。查询上下文只包含 principalId 和 signal，不含宿主数据库；候选必须经 source.authorize 后才 hydrate。重建的 principalId 为 null，代表系统索引任务，不代表任意用户读取权限。
 
 插件自行消费业务 outbox，幂等提交投影或删除。rebuild 从 source.projections 全量建立索引；禁用后来源注销，不可继续查询。查询必须通过宿主认可的请求上下文。已有搜索引擎配置需可用。当前接口支持插件自己的检索入口；全局搜索 UI 合并与 AI 自动检索插件来源不是已完成的承诺。
 
-### 知识来源：`@doca/plugin-sdk/knowledge`
+### 知识来源：`@smartdoca/plugin-sdk/knowledge`
 
 公开 knowledgeSourceRegistryToken（knowledge.sources.v1）以及配置、preview、pull、record/cursor 契约；来源 ownerPlugin 必须为本插件，注册随生命周期释放。知识契约包已纳入独立 JS/d.ts 构建，消除跨包源码导入。
 
 注意：当前宿主的通用来源注册不等于知识库自动订阅已经接通。宿主负责插件来源的知识订阅持久模型、pull 调度、订阅游标提交、撤权后的派生索引清理和知识 UI，仍需单独实现验收；插件负责账号、凭证、业务同步及授权事实；邮箱不能据此宣称已支持自动知识同步。
 
-### Web：`@doca/plugin-sdk/web`
+### Web：`@smartdoca/plugin-sdk/web`
 
 浏览器产物仍默认导出 `host => bundle`，React 必须使用 host.React。新增 host.useEnvironment() 获取响应式 locale/theme，host.navigate(path)、toast(message,tone)、confirm(message)、request(path,init) 及 FilePicker 组件。request 限于插件 apiBase，非成功响应抛出含 status/requestId 的错误。返回值应为 JSON（204 返回 null）。FilePicker 在页面里渲染，select 回调接收 file.id；调用方关闭组件。
 

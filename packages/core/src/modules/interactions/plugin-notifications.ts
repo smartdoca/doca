@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { DB, Schema } from "@db/index.js";
 import { transact } from "@db/transactions.js";
-import type { PluginNotificationInput } from "@doca/plugin-sdk/platform";
+import type { PluginNotificationInput } from "@smartdoca/plugin-sdk/platform";
 import { pluginServices } from "../../shared/plugin-services.js";
 import { fail } from "../../shared/errors.js";
 import { emitIntegrationEvent } from "../automation/events.js";

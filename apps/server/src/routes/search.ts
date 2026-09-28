@@ -2,7 +2,7 @@ import type { AnswerIndex } from "@core/modules/knowledge/publications.js";
 import { Type } from "@sinclair/typebox";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { createSearchHost } from "@doca/search-host";
+import { createSearchHost } from "@smartdoca/search-host";
 import { publishIntegrationEvents } from "@core/modules/automation/events.js";
 import { processProjections } from "@core/modules/automation/jobs.js";
 import type { Actor } from "@core/modules/identity/passwords.js";

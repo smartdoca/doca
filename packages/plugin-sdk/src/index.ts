@@ -20,13 +20,13 @@ import {
   type ContributionPoint,
   type ContributionRecord,
   type WaterfallNext,
-} from "@doca/plugin-contracts";
+} from "@smartdoca/plugin-contracts";
 import {
   Context as CordisContext,
   type Fiber as CordisFiber,
 } from "@deepseek-ai/cordis";
 
-export * from "@doca/plugin-contracts";
+export * from "@smartdoca/plugin-contracts";
 
 const contractIdentifier = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 const contributionIdentifier = /^[A-Za-z0-9][A-Za-z0-9:./_-]*$/;

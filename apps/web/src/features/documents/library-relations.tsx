@@ -7,7 +7,7 @@ import { Dialog } from "./dialogs.js";
 import { KnowledgeRuleDialog } from "@web/features/knowledge/knowledge-rule-dialog.js";
 import { KnowledgeWorkspace } from "@web/features/knowledge/knowledge-workspace.js";
 import { KnowledgeAssistants } from "@web/features/knowledge/knowledge-assistants.js";
-import type { KnowledgeSourceSelection } from "@doca/web-plugin-registry";
+import type { KnowledgeSourceSelection } from "@smartdoca/web-plugin-registry";
 import { pluginMessage, webPluginRegistry, type KnowledgeSourceRenderContext } from "@web/plugins/registry.js";
 import { api, roleRank, type Detail } from "@web/shared/api.js";
 import { Feedback } from "@web/shared/components/feedback.js";

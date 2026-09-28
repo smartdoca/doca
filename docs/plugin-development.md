@@ -47,9 +47,9 @@ Only compiled JavaScript is loaded. Transitive dependencies are not scanned. Ins
 Depend on the public contract. Do not import `@server/*`, `@core/*`, `@web/*`, `@db/*`, sibling Doca source, or a global bridge. Service ids are stable across installations. The host injects the implementation.
 
 ```ts
-import { definePlugin } from "@doca/plugin-sdk";
-import { filesServiceToken } from "@doca/plugin-sdk/files";
-import { httpServiceToken, usersServiceToken } from "@doca/plugin-sdk/platform";
+import { definePlugin } from "@smartdoca/plugin-sdk";
+import { filesServiceToken } from "@smartdoca/plugin-sdk/files";
+import { httpServiceToken, usersServiceToken } from "@smartdoca/plugin-sdk/platform";
 import manifest from "../manifest.json" with { type: "json" };
 
 export default () =>
@@ -106,13 +106,13 @@ The plugin owns its database, credentials, business jobs, and outbox. The host d
 
 ## Web
 
-The optional web build default-exports `async host => bundle`. `host` provides React, apiBase, useEnvironment, navigate, toast, confirm, request, and FilePicker. React comes from the host so there is one renderer. Other dependencies are bundled. The host does not resolve bare npm imports. The bundle follows `WebPluginBundle` from `@doca/web-plugin-registry`. `manifest.pluginId` and version match the server. Pages, navigation, admin, and settings contributions are supported.
+The optional web build default-exports `async host => bundle`. `host` provides React, apiBase, useEnvironment, navigate, toast, confirm, request, and FilePicker. React comes from the host so there is one renderer. Other dependencies are bundled. The host does not resolve bare npm imports. The bundle follows `WebPluginBundle` from `@smartdoca/web-plugin-registry`. `manifest.pluginId` and version match the server. Pages, navigation, admin, and settings contributions are supported.
 
 The host serves the declared directory at `/api/v1/plugin-assets/{id}/{version}/` and loads registrations before startup. Load errors are isolated and logged. Server package files are not exposed. Contribution render has an error boundary. A generic tree slot is not finished.
 
 ## Build and verify
 
-In the host repository, `pnpm build:plugin-sdk` builds the SDK, contracts, and file capability JavaScript and `.d.ts`. `pnpm pack` builds a release tarball. `publishConfig` points at `dist`. Consumers depend on the published artifact.
+In the host repository, `pnpm build:plugin-sdk` builds the SDK, contracts, and file capability JavaScript and `.d.ts`. The published packages are `@smartdoca/plugin-sdk` and the contract packages it re-exports. `publishConfig` points at `dist`. Plugin installs depend on those npm artifacts, not on this repository's source.
 
 At least verify a standalone install, startup with no plugins, dependency conflicts, cross-user denial, version conflicts, idempotent calls, revoked relationships, isolation of two host instances, and cleanup on shutdown. Tests use their own database, users, and documents. Interface copy follows [interface languages](i18n.md). Editors follow [editor integration](editor-integration.md) and the [collaboration contract](collaboration-sdk-contract.md).
 

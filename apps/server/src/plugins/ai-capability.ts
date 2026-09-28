@@ -1,5 +1,5 @@
-import { aiServiceToken } from "@doca/plugin-sdk/ai";
-import type { PluginLifecycleContext } from "@doca/plugin-sdk";
+import { aiServiceToken } from "@smartdoca/plugin-sdk/ai";
+import type { PluginLifecycleContext } from "@smartdoca/plugin-sdk";
 import type { AIContributionHost } from "@doca/ai-host";
 import type { AIContributionExecutionContext } from "../services/ai/runner.js";
 import { activeActor } from "@core/modules/access/queries.js";

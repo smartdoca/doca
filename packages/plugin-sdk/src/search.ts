@@ -1,7 +1,7 @@
 import { defineService } from "./index.js";
 import type { PluginRequestContext } from "./platform.js";
-import type { SearchSource, SearchProjection, SearchSourceDescriptor, FederatedSearchResult, SearchRebuildResult } from "@doca/search-host";
-export type * from "@doca/search-host";
+import type { SearchSource, SearchProjection, SearchSourceDescriptor, FederatedSearchResult, SearchRebuildResult } from "@smartdoca/search-host";
+export type * from "@smartdoca/search-host";
 export interface PluginSearchContext { readonly principalId: string | null; readonly signal?: AbortSignal }
 export interface PluginSearchService {
   register(source: SearchSource<PluginSearchContext>): () => void;

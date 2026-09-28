@@ -10,11 +10,11 @@ The plugin owns its database, credentials, business sync cursors, and outbox. Th
 
 ## Interfaces that exist
 
-- HTTP, users, events, and notifications from `@doca/plugin-sdk/platform`.
-- Files and attachments from `@doca/plugin-sdk/files`, including durable idempotent folder and file creation.
-- Search from `@doca/plugin-sdk/search`.
-- Knowledge sources from `@doca/plugin-sdk/knowledge`.
-- Web from `@doca/plugin-sdk/web`.
+- HTTP, users, events, and notifications from `@smartdoca/plugin-sdk/platform`.
+- Files and attachments from `@smartdoca/plugin-sdk/files`, including durable idempotent folder and file creation.
+- Search from `@smartdoca/plugin-sdk/search`.
+- Knowledge sources from `@smartdoca/plugin-sdk/knowledge`.
+- Web from `@smartdoca/plugin-sdk/web`.
 - Native mobile code still ships with the app build. A dynamic WebView is not available.
 
 `notifications.v1` publishes and withdraws idempotently. The plugin registers `notification.read`. The host rechecks permission on publish, display, unread count, and click. A click goes through an authorization endpoint to an in-app path. Background jobs can recheck `users.status(userId)`. These are in-app notifications, not system mail or mobile push. Field limits are in the [development guide](plugin-development.md).

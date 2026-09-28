@@ -6,21 +6,21 @@ import {
   type MaybePromise,
   type PluginLifecycleContext,
   type ServiceToken,
-} from "@doca/plugin-sdk";
+} from "@smartdoca/plugin-sdk";
 import {
   DOCUMENTS_SERVICE_ID,
   defineDocumentsServiceV1,
   type DocumentsServiceV1,
 } from "@doca/documents-capability";
-import { FILES_SERVICE_ID, type FilesServiceV1 } from "@doca/files-capability";
+import { FILES_SERVICE_ID, type FilesServiceV1 } from "@smartdoca/files-capability";
 import {
   KNOWLEDGE_SOURCE_REGISTRY_SERVICE_ID,
   createKnowledgeSourceEffectRegistry,
   type KnowledgeSourceEffect,
   type KnowledgeSourceRegistryV1,
-} from "@doca/knowledge-capability";
+} from "@smartdoca/knowledge-capability";
 import type { AIContributionHost, DomainAIContribution } from "@doca/ai-host";
-import type { SearchSource } from "@doca/search-host";
+import type { SearchSource } from "@smartdoca/search-host";
 import { documentsAIContribution } from "./ai.js";
 import { createDocumentsKnowledgeSource } from "./knowledge.js";
 import {

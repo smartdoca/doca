@@ -2,7 +2,7 @@ import {
   MobilePluginRegistry,
   type ClientPluginManifest,
   type MobilePluginBundle,
-} from "@doca/web-plugin-registry";
+} from "@smartdoca/web-plugin-registry";
 
 type AppMobilePluginTypes = {
   readonly View: never;

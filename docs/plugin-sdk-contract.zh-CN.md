@@ -54,7 +54,7 @@ Doca 保留文档产品核心和通用平台服务；独立业务通过安装目
 
 ## 4. 公共 SDK 与生命周期
 
-现有 `@doca/plugin-sdk`、`@doca/files-capability`、`@doca/documents-capability` 等作为公共契约的基础。契约包必须能独立打包、发布和安装，禁止 `../../other-package/src` 形式的跨包导入。消费者不依赖 Provider 实现包；服务 token 与类型放在对应公共契约的导出中。
+现有 `@smartdoca/plugin-sdk`、`@smartdoca/files-capability`、`@doca/documents-capability` 等作为公共契约的基础。契约包必须能独立打包、发布和安装，禁止 `../../other-package/src` 形式的跨包导入。消费者不依赖 Provider 实现包；服务 token 与类型放在对应公共契约的导出中。
 
 生命周期保持：
 

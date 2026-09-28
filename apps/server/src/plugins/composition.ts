@@ -1,13 +1,13 @@
 import { cleanupFileReceipts } from "./file-receipt-cleanup.js";
-import { searchServiceToken } from "@doca/plugin-sdk/search";
+import { searchServiceToken } from "@smartdoca/plugin-sdk/search";
 import { activeActor } from "@core/modules/access/queries.js";
 import { provideAI } from "./ai-capability.js";
 import { createDocumentsPlugin } from "@doca/plugin-documents";
 import { createFilesPlugin } from "@doca/plugin-files";
 import { AIContributionHost } from "@doca/ai-host";
 import { PluginHost } from "@doca/plugin-host";
-import { definePlugin, type DocaPlugin } from "@doca/plugin-sdk";
-import type { FilesServiceV1 } from "@doca/files-capability";
+import { definePlugin, type DocaPlugin } from "@smartdoca/plugin-sdk";
+import type { FilesServiceV1 } from "@smartdoca/files-capability";
 import { createFileProcessingWorker } from "../jobs/file-processing-worker.js";
 import { waitForFileExtracts } from "../services/ai/file-extract.js";
 import { registerAI } from "../routes/ai.js";

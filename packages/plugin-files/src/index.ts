@@ -6,19 +6,19 @@ import {
   type MaybePromise,
   type PluginLifecycleContext,
   type ServiceToken,
-} from "@doca/plugin-sdk";
+} from "@smartdoca/plugin-sdk";
 import {
   FILES_SERVICE_ID,
   defineFilesServiceV1,
   type FilesServiceV1,
-} from "@doca/files-capability";
+} from "@smartdoca/files-capability";
 import {
   KNOWLEDGE_SOURCE_REGISTRY_SERVICE_ID,
   type KnowledgeSourceEffect,
   type KnowledgeSourceRegistryV1,
-} from "@doca/knowledge-capability";
+} from "@smartdoca/knowledge-capability";
 import type { AIContributionHost, DomainAIContribution } from "@doca/ai-host";
-import type { SearchSource } from "@doca/search-host";
+import type { SearchSource } from "@smartdoca/search-host";
 import { filesAIContribution } from "./ai.js";
 import { createFilesKnowledgeSource } from "./knowledge.js";
 import {
@@ -30,8 +30,8 @@ import {
 export * from "./manifest.js";
 export * from "./knowledge.js";
 
-import { filesServiceToken } from "@doca/plugin-sdk/files";
-export { filesServiceToken } from "@doca/plugin-sdk/files";
+import { filesServiceToken } from "@smartdoca/plugin-sdk/files";
+export { filesServiceToken } from "@smartdoca/plugin-sdk/files";
 export const filesKnowledgeSourceRegistryToken =
   defineService<KnowledgeSourceRegistryV1>(
     KNOWLEDGE_SOURCE_REGISTRY_SERVICE_ID,
