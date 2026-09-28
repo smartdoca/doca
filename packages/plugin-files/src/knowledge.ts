@@ -1,8 +1,8 @@
-import { stableId, type FilesServiceV1 } from "@doca/files-capability";
+import { stableId, type FilesServiceV1 } from "@smartdoca/files-capability";
 import {
   createValidatedKnowledgeSourceEffect,
   type KnowledgeSourceEffect,
-} from "@doca/knowledge-capability";
+} from "@smartdoca/knowledge-capability";
 
 export interface FilesKnowledgeSourceConfig {
   readonly folderId: string | null;

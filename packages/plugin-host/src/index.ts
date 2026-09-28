@@ -8,8 +8,8 @@ import {
   type PluginLifecycleContext,
   type PluginManifest,
   type PluginRuntimePhase,
-} from "@doca/plugin-contracts";
-import { Context, ContributionStore, PluginContext } from "@doca/plugin-sdk";
+} from "@smartdoca/plugin-contracts";
+import { Context, ContributionStore, PluginContext } from "@smartdoca/plugin-sdk";
 
 export type PluginHostState =
   "idle" | "starting" | "running" | "disposing" | "disposed";

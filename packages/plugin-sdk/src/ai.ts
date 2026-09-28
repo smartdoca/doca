@@ -1,5 +1,5 @@
 import { defineService } from "./index.js";
-import type { JsonObject, JsonValue } from "@doca/plugin-contracts";
+import type { JsonObject, JsonValue } from "@smartdoca/plugin-contracts";
 import type { PluginRequestContext } from "./platform.js";
 export interface PluginAIToolContext extends PluginRequestContext {
   readonly sessionId: string;

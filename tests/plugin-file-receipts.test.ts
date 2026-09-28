@@ -8,9 +8,9 @@ import { createUser } from "@core/modules/identity/passwords.js";
 import { pluginServices } from "@core/shared/plugin-services.js";
 import { createServerFilesCapability } from "@server/plugins/files-capability-adapter.js";
 import { scopeInstalledPlugin } from "@server/plugins/scope.js";
-import { definePlugin } from "@doca/plugin-sdk";
-import { filesServiceToken, type FilesServiceV1 } from "@doca/plugin-sdk/files";
-import { runPluginContractHarness } from "@doca/plugin-sdk/testing";
+import { definePlugin } from "@smartdoca/plugin-sdk";
+import { filesServiceToken, type FilesServiceV1 } from "@smartdoca/plugin-sdk/files";
+import { runPluginContractHarness } from "@smartdoca/plugin-sdk/testing";
 
 it("durably replays concurrent creates, rejects conflicts, recovers pending uploads and rechecks access", async () => {
   const root = await mkdtemp(join(tmpdir(), "doca-file-receipts-"));

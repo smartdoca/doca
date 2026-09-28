@@ -84,7 +84,7 @@ import {
   type JsonValue,
   type ToolOutcome,
 } from "@doca/ai-host";
-import type { FilesServiceV1 } from "@doca/files-capability";
+import type { FilesServiceV1 } from "@smartdoca/files-capability";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { sql } from "kysely";

@@ -3,11 +3,11 @@ import {
   type DocumentResourceId,
   type DocumentsServiceV1,
 } from "@doca/documents-capability";
-import { stableId } from "@doca/files-capability";
+import { stableId } from "@smartdoca/files-capability";
 import {
   createValidatedKnowledgeSourceEffect,
   type KnowledgeSourceEffect,
-} from "@doca/knowledge-capability";
+} from "@smartdoca/knowledge-capability";
 
 export interface DocumentsKnowledgeSourceConfig {
   readonly libraryId: string | null;

@@ -1,12 +1,12 @@
 import { publishPluginNotification, withdrawPluginNotification, pluginNotificationTarget } from "@core/modules/interactions/plugin-notifications.js";
-import { filesServiceToken, stableId } from "@doca/plugin-sdk/files";
+import { filesServiceToken, stableId } from "@smartdoca/plugin-sdk/files";
 import { Readable } from "node:stream";
 import { randomUUID } from "node:crypto";
 import {
   notificationsServiceToken, eventsServiceToken, httpServiceToken, permissionsServiceToken, policiesServiceToken, usersServiceToken,
   type PluginPrincipal, type PluginRequestContext, type PluginHttpResponse,
-} from "@doca/plugin-sdk/platform";
-import type { PluginLifecycleContext } from "@doca/plugin-sdk";
+} from "@smartdoca/plugin-sdk/platform";
+import type { PluginLifecycleContext } from "@smartdoca/plugin-sdk";
 import { activeActor } from "@core/modules/access/queries.js";
 import { visibleUsers } from "@core/modules/interactions/community.js";
 import { pluginServices, checkOperation } from "@core/shared/plugin-services.js";

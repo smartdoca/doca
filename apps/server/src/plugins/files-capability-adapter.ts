@@ -13,7 +13,7 @@ import {
   type FileUpload,
   type FilesRequestContext,
   type FilesServiceV1,
-} from "@doca/files-capability";
+} from "@smartdoca/files-capability";
 import { authorize } from "@core/modules/access/queries.js";
 import { enqueueProjection } from "@core/modules/automation/jobs.js";
 import { fail } from "@core/shared/errors.js";

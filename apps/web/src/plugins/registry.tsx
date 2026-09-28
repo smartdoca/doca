@@ -26,7 +26,7 @@ import {
   type ClientPluginManifest,
   type PluginLocale,
   type WebPluginBundle,
-} from "@doca/web-plugin-registry";
+} from "@smartdoca/web-plugin-registry";
 
 export interface AppPluginRouteContext {
   readonly sharedFolderName: string;

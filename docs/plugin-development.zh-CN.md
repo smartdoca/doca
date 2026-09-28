@@ -55,9 +55,9 @@ manifest.json 必须为静态 JSON，版本与 package.json 一致：
 依赖公开契约，禁止导入 `@server/*`、`@core/*`、`@web/*`、`@db/*`、同级 Doca 源码或全局桥接。SDK 的服务 ID 在不同安装副本之间保持一致；运行时由宿主注入实现。
 
 ```ts
-import { definePlugin } from "@doca/plugin-sdk";
-import { filesServiceToken } from "@doca/plugin-sdk/files";
-import { httpServiceToken, usersServiceToken } from "@doca/plugin-sdk/platform";
+import { definePlugin } from "@smartdoca/plugin-sdk";
+import { filesServiceToken } from "@smartdoca/plugin-sdk/files";
+import { httpServiceToken, usersServiceToken } from "@smartdoca/plugin-sdk/platform";
 import manifest from "../manifest.json" with { type: "json" };
 
 export default () =>
@@ -114,13 +114,13 @@ Doca 不内置会员、货币价格、积分或业务额度。模型管理中的
 
 ## Web
 
-可选 Web 产物默认导出 `async host => bundle`，host 提供 React、apiBase、useEnvironment、navigate、toast、confirm、request 和 FilePicker。React 从 host 注入，避免重复 renderer；其他依赖须打入浏览器产物，不要求宿主解析 npm 裸路径。bundle 遵循 `@doca/web-plugin-registry` 的 WebPluginBundle，manifest.pluginId/version 与服务端一致，支持页面、导航、管理和设置贡献。
+可选 Web 产物默认导出 `async host => bundle`，host 提供 React、apiBase、useEnvironment、navigate、toast、confirm、request 和 FilePicker。React 从 host 注入，避免重复 renderer；其他依赖须打入浏览器产物，不要求宿主解析 npm 裸路径。bundle 遵循 `@smartdoca/web-plugin-registry` 的 WebPluginBundle，manifest.pluginId/version 与服务端一致，支持页面、导航、管理和设置贡献。
 
 宿主从 `/api/v1/plugin-assets/{id}/{version}/` 提供声明目录，启动前加载注册。插件加载错误隔离并记录，禁止暴露服务端包文件。贡献 render 已加入错误边界；通用目录树插槽尚待补齐。
 
 ## 构建与验证
 
-宿主仓库运行 `pnpm build:plugin-sdk` 生成 SDK、契约和文件能力包的 JS 与 d.ts。使用 pnpm pack 生成发布包，publishConfig 指向 dist；未执行 npm 发布。安装消费者只能依赖发布产物。
+宿主仓库运行 `pnpm build:plugin-sdk` 生成 SDK、契约和文件能力包的 JS 与 d.ts。发布到 npm 的包名是 `@smartdoca/plugin-sdk`，以及它再导出的契约包。`publishConfig` 指向 `dist`。安装插件时依赖这些发布产物，不要依赖仓库源码。
 
 至少验证独立安装、无插件启动、依赖冲突、跨用户拒绝、版本冲突、调用幂等、撤销关系、两个宿主实例隔离和关闭回收。测试使用独立数据库、用户和文档。界面文案遵循 [语言规范](i18n.zh-CN.md)，编辑器遵循 [集成规范](editor-integration.zh-CN.md) 和 [协同规范](collaboration-sdk-contract.zh-CN.md)。
 

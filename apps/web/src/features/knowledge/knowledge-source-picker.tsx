@@ -12,7 +12,7 @@ import { resolveDocumentReferences } from "./document-source-input.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { useI18n } from "@web/shared/i18n.js";
-import type { KnowledgeSourceSelection } from "@doca/web-plugin-registry";
+import type { KnowledgeSourceSelection } from "@smartdoca/web-plugin-registry";
 import { pluginMessage, webPluginRegistry } from "@web/plugins/registry.js";
 const knownSelections = new Set<KnowledgeSourceSelection>([
   "document",

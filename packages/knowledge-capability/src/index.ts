@@ -1,4 +1,4 @@
-import type { FileId } from "@doca/files-capability";
+import type { FileId } from "@smartdoca/files-capability";
 
 export const KNOWLEDGE_SOURCE_EFFECT_VERSION = 1 as const;
 export const KNOWLEDGE_SOURCE_REGISTRY_SERVICE_ID =

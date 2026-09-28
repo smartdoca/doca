@@ -8,6 +8,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@doca/files-capability": "workspace:*"
+    "@smartdoca/files-capability": "workspace:*"
   }
 }

@@ -1,6 +1,6 @@
-import type { PluginAISkill } from "@doca/plugin-sdk/ai";
-import type { DirectorySource, OperationPolicy, PermissionSource } from "@doca/plugin-sdk/platform";
-import type { JsonObject } from "@doca/plugin-sdk";
+import type { PluginAISkill } from "@smartdoca/plugin-sdk/ai";
+import type { DirectorySource, OperationPolicy, PermissionSource } from "@smartdoca/plugin-sdk/platform";
+import type { JsonObject } from "@smartdoca/plugin-sdk";
 import type { DB } from "../../../db/src/index.js";
 import { databaseRuntimeScope } from "../../../db/src/runtime-scope.js";
 

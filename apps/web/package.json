@@ -5,6 +5,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@doca/web-plugin-registry": "workspace:*"
+    "@smartdoca/web-plugin-registry": "workspace:*"
   }
 }

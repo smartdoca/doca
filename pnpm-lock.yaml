@@ -96,16 +96,16 @@ importers:
       '@doca/documents-capability':
         specifier: workspace:*
         version: link:packages/documents-capability
-      '@doca/files-capability':
+      '@smartdoca/files-capability':
         specifier: workspace:*
         version: link:packages/files-capability
-      '@doca/knowledge-capability':
+      '@smartdoca/knowledge-capability':
         specifier: workspace:*
         version: link:packages/knowledge-capability
-      '@doca/plugin-sdk':
+      '@smartdoca/plugin-sdk':
         specifier: workspace:*
         version: link:packages/plugin-sdk
-      '@doca/search-host':
+      '@smartdoca/search-host':
         specifier: workspace:*
         version: link:packages/search-host
       '@fastify/swagger':
@@ -319,7 +319,7 @@ importers:
 
   apps/mobile:
     dependencies:
-      '@doca/web-plugin-registry':
+      '@smartdoca/web-plugin-registry':
         specifier: workspace:*
         version: link:../../packages/web-plugin-registry
       '@expo/vector-icons':
@@ -458,10 +458,10 @@ importers:
       '@doca/documents-capability':
         specifier: workspace:*
         version: link:../../packages/documents-capability
-      '@doca/files-capability':
+      '@smartdoca/files-capability':
         specifier: workspace:*
         version: link:../../packages/files-capability
-      '@doca/knowledge-capability':
+      '@smartdoca/knowledge-capability':
         specifier: workspace:*
         version: link:../../packages/knowledge-capability
       '@doca/plugin-documents':
@@ -473,16 +473,16 @@ importers:
       '@doca/plugin-host':
         specifier: workspace:*
         version: link:../../packages/plugin-host
-      '@doca/plugin-sdk':
+      '@smartdoca/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
-      '@doca/search-host':
+      '@smartdoca/search-host':
         specifier: workspace:*
         version: link:../../packages/search-host
 
   apps/web:
     dependencies:
-      '@doca/web-plugin-registry':
+      '@smartdoca/web-plugin-registry':
         specifier: workspace:*
         version: link:../../packages/web-plugin-registry
 
@@ -494,7 +494,7 @@ importers:
 
   packages/documents-capability:
     dependencies:
-      '@doca/files-capability':
+      '@smartdoca/files-capability':
         specifier: workspace:*
         version: link:../files-capability
 
@@ -506,7 +506,7 @@ importers:
 
   packages/knowledge-capability:
     dependencies:
-      '@doca/files-capability':
+      '@smartdoca/files-capability':
         specifier: workspace:*
         version: link:../files-capability
 
@@ -520,16 +520,16 @@ importers:
       '@doca/documents-capability':
         specifier: workspace:*
         version: link:../documents-capability
-      '@doca/files-capability':
+      '@smartdoca/files-capability':
         specifier: workspace:*
         version: link:../files-capability
-      '@doca/knowledge-capability':
+      '@smartdoca/knowledge-capability':
         specifier: workspace:*
         version: link:../knowledge-capability
-      '@doca/plugin-sdk':
+      '@smartdoca/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk
-      '@doca/search-host':
+      '@smartdoca/search-host':
         specifier: workspace:*
         version: link:../search-host
 
@@ -538,25 +538,25 @@ importers:
       '@doca/ai-host':
         specifier: workspace:*
         version: link:../ai-host
-      '@doca/files-capability':
+      '@smartdoca/files-capability':
         specifier: workspace:*
         version: link:../files-capability
-      '@doca/knowledge-capability':
+      '@smartdoca/knowledge-capability':
         specifier: workspace:*
         version: link:../knowledge-capability
-      '@doca/plugin-sdk':
+      '@smartdoca/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk
-      '@doca/search-host':
+      '@smartdoca/search-host':
         specifier: workspace:*
         version: link:../search-host
 
   packages/plugin-host:
     dependencies:
-      '@doca/plugin-contracts':
+      '@smartdoca/plugin-contracts':
         specifier: workspace:*
         version: link:../plugin-contracts
-      '@doca/plugin-sdk':
+      '@smartdoca/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk
 
@@ -565,19 +565,19 @@ importers:
       '@deepseek-ai/cordis':
         specifier: 4.0.4
         version: 4.0.4
-      '@doca/files-capability':
+      '@smartdoca/files-capability':
         specifier: workspace:*
         version: link:../files-capability
-      '@doca/knowledge-capability':
+      '@smartdoca/knowledge-capability':
         specifier: workspace:*
         version: link:../knowledge-capability
-      '@doca/plugin-contracts':
+      '@smartdoca/plugin-contracts':
         specifier: workspace:*
         version: link:../plugin-contracts
-      '@doca/search-host':
+      '@smartdoca/search-host':
         specifier: workspace:*
         version: link:../search-host
-      '@doca/web-plugin-registry':
+      '@smartdoca/web-plugin-registry':
         specifier: workspace:*
         version: link:../web-plugin-registry
 

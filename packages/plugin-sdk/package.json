@@ -1,5 +1,5 @@
 {
-  "name": "@doca/plugin-sdk",
+  "name": "@smartdoca/plugin-sdk",
   "version": "0.1.0",
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -15,11 +15,11 @@
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.4",
-    "@doca/plugin-contracts": "workspace:*",
-    "@doca/files-capability": "workspace:*",
-    "@doca/search-host": "workspace:*",
-    "@doca/knowledge-capability": "workspace:*",
-    "@doca/web-plugin-registry": "workspace:*"
+    "@smartdoca/plugin-contracts": "workspace:*",
+    "@smartdoca/files-capability": "workspace:*",
+    "@smartdoca/search-host": "workspace:*",
+    "@smartdoca/knowledge-capability": "workspace:*",
+    "@smartdoca/web-plugin-registry": "workspace:*"
   },
   "files": [
     "dist"

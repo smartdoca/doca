@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@doca/plugin-contracts": "workspace:*",
-    "@doca/plugin-sdk": "workspace:*"
+    "@smartdoca/plugin-contracts": "workspace:*",
+    "@smartdoca/plugin-sdk": "workspace:*"
   }
 }

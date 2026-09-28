@@ -7,7 +7,7 @@ import {
   type DocaPlugin,
   type JsonObject,
   type ServiceToken,
-} from "@doca/plugin-contracts";
+} from "@smartdoca/plugin-contracts";
 
 export interface PluginContractHarnessOptions {
   readonly config?: JsonObject;

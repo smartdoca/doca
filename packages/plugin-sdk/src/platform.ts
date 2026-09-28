@@ -1,5 +1,5 @@
 import { defineService } from "./index.js";
-import type { JsonObject, MaybePromise } from "@doca/plugin-contracts";
+import type { JsonObject, MaybePromise } from "@smartdoca/plugin-contracts";
 
 export interface PluginPrincipal {
   readonly id: string;

@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { validatePluginManifest, type DocaPlugin, type PluginManifest } from "@doca/plugin-sdk";
+import { validatePluginManifest, type DocaPlugin, type PluginManifest } from "@smartdoca/plugin-sdk";
 import { validatePluginGraph } from "@doca/plugin-host";
 import { scopeInstalledPlugin } from "./scope.js";
 

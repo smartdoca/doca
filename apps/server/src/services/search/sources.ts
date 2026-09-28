@@ -2,7 +2,7 @@ import type {
   SearchProjection,
   SearchSource,
   SearchSourceDescriptor,
-} from "@doca/search-host";
+} from "@smartdoca/search-host";
 
 import type { Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";

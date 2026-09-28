@@ -10,7 +10,7 @@ import {
 import {
   stableId,
   type FilesServiceV1,
-} from "@doca/files-capability";
+} from "@smartdoca/files-capability";
 import { authorize } from "@core/modules/access/queries.js";
 import { createDocuments } from "@core/modules/collaboration/documents.js";
 import type { Actor } from "@core/modules/identity/passwords.js";

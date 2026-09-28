@@ -1,4 +1,4 @@
-export type * from "@doca/web-plugin-registry";
+export type * from "@smartdoca/web-plugin-registry";
 export interface PluginFileReference { readonly id: string; readonly name: string; readonly mime: string; readonly size: number }
 export interface PluginFilePickerProps {
   close(): void;

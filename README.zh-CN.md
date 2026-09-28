@@ -92,11 +92,11 @@ bash scripts/bootstrap-admin.sh
 }
 ```
 
-依赖 `@doca/plugin-sdk` 和公开服务。不要导入 `@server/*`、`@core/*`、`@web/*`、`@db/*` 或其他宿主源码。实现由宿主在运行时注入。
+依赖 `@smartdoca/plugin-sdk` 和公开服务。不要导入 `@server/*`、`@core/*`、`@web/*`、`@db/*` 或其他宿主源码。实现由宿主在运行时注入。
 
 ```ts
-import { definePlugin } from "@doca/plugin-sdk";
-import { httpServiceToken } from "@doca/plugin-sdk/platform";
+import { definePlugin } from "@smartdoca/plugin-sdk";
+import { httpServiceToken } from "@smartdoca/plugin-sdk/platform";
 import manifest from "../manifest.json" with { type: "json" };
 
 export default () =>

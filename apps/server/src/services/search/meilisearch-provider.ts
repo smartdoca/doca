@@ -8,7 +8,7 @@ import {
   type SearchProviderQuery,
   type SearchSourceDescriptor,
   type SearchTombstone,
-} from "@doca/search-host";
+} from "@smartdoca/search-host";
 
 export interface MeilisearchConnection {
   readonly endpoint: string;
