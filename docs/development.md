@@ -23,9 +23,9 @@ bash scripts/bootstrap-admin-local.sh
 
 脚本只在当前终端临时传递管理员账号和密码给初始化命令，数据库中只保存密码哈希。
 
-Docker Compose 部署使用 `bash scripts/bootstrap-admin.sh`，它会在一次性容器中执行同一个初始化命令。
+Docker Compose 部署使用 `bash scripts/bootstrap-admin.sh`。它在一次性容器里执行同一个初始化命令，并使用 Compose 的数据卷。已有管理员时初始化返回冲突，不覆盖密码；不要删除已有数据库来“重试”。普通用户可由管理员创建，或开启注册后自行注册。
 
-已有管理员时初始化返回冲突，不覆盖密码；不要删除已有数据库来“重试”。普通用户可由管理员创建，或开启注册后自行注册。
+容器部署忘记管理员密码时，在同一目录执行 `bash scripts/reset-admin-password.sh`。它只接受已有管理员账号，更新密码哈希并撤销该账号的全部会话。数据库文件被运行中的容器锁住时，先 `docker compose stop`，重置完成后再启动。
 
 ## 忘记管理员密码
 
@@ -53,6 +53,15 @@ unset DOCA_RESET_ADMIN_LOGIN DOCA_RESET_ADMIN_PASSWORD
 | DOCA_SQLITE_PATH  | ./data/v1/doca.db      | 新版独立数据库                      |
 | DOCA_DATABASE_URL | 无                     | PostgreSQL连接串，专用新数据库      |
 | NODE_ENV          | 未设置                 | production强制HTTPS Origin并禁止dev |
+| DOCA_ASSET_BASE   | 空                     | 构建资源的 HTTPS 前缀；空则从本机 `/assets` 提供 |
+
+## 静态资源地址
+
+生产页面的 HTML 始终由 Doca 返回，接口也使用页面所在的源。`DOCA_ASSET_BASE` 只改写 HTML 里的 `/assets/...` 地址。
+
+不设置时，JS、CSS 和其他构建文件由容器从 `/assets` 读取。设置时，HTML 中的这些地址改为该前缀，例如 `https://cdn.example.com/doca/0.1.0/assets/index-abc.js`。前缀必须是没有账号、查询参数或哈希的 HTTP(S) URL；生产环境必须是 HTTPS。容器里的 `/assets` 仍然保留，样式表内部以根路径引用的字体和图片会继续回到 Doca。
+
+推送正式版本标签 `v1.2.3` 时，GitHub Actions 会构建网页并创建 Release，附件是 `doca-web-assets-v1.2.3.tar.gz`。解压后保留其中的 `assets` 目录，再把包含该目录的 HTTPS 前缀写入 `DOCA_ASSET_BASE`。`v1.2.3-rc.1` 这类预发布标签不会创建 Release。推送到 `main` 也不会。浏览器不要直接使用 `github.com/.../releases/download` 作为 `DOCA_ASSET_BASE`：下载地址会跳转，也不为 ES module 提供跨源响应头。把解压出的 `assets` 目录放到允许跨源读取脚本的 CDN 或对象存储上。
 
 ## 发布模式
 
