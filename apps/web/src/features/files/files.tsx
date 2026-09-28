@@ -3321,10 +3321,6 @@ export function SharedFoldersPage() {
     <section className="shared-folders-page">
 
       <header className="shared-folders-header">
-        <div>
-          <h2>{t("nav.sharedFiles")}</h2>
-          <p>{t("fileManager.sharedIntro")}</p>
-        </div>
         <button
           className="primary"
           onClick={() => {
