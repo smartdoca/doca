@@ -73,7 +73,11 @@ it("marks the in-view question from bubble tops, not the previous round", () => 
 });
 
 it("formats recorded input tokens and hides missing usage", () => {
-  expect(formatContextTokens(32000)).toBe("上下文 32,000 Token");
+  const label = (count: string) => `上下文 ${count} Token`;
+  expect(formatContextTokens(32000, label, "zh")).toBe("上下文 32,000 Token");
+  expect(
+    formatContextTokens(32000, (count) => `Context ${count} tokens`, "en"),
+  ).toBe("Context 32,000 tokens");
   expect(formatContextTokens(0)).toBeNull();
   expect(formatContextTokens(null)).toBeNull();
 });

@@ -1720,7 +1720,11 @@ export function AIChat({ full = false }: { full?: boolean }) {
         (m) => m.id === job.id || m.id === `${job.id}-answer`,
       ) || ["queued", "running", "awaiting_approval"].includes(job.status),
   );
-  const contextLabel = formatContextTokens(conversation?.contextTokens);
+  const contextLabel = formatContextTokens(
+    conversation?.contextTokens,
+    (count) => t("chat.contextTokens", { count }),
+    locale,
+  );
   const jumpToQuestion = (id: string) => {
     pendingScrollKey.current = id;
     setFollowing(false);
