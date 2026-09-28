@@ -28,6 +28,7 @@ try {
     instanceId: cfg.instanceId,
     trustProxy: cfg.trustProxy,
     ...(!dev ? { staticDirectory: resolve("apps/web/dist") } : {}),
+    assetBase: cfg.assetBase,
   });
   if (dev)
     web = await createServer({

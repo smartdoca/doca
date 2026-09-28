@@ -37,20 +37,39 @@ pnpm check
 
 ## Docker 部署
 
-生产容器配置见 [compose.yaml](compose.yaml)。先复制 [docker.env.example](docker.env.example) 为 `.env`，填写 HTTPS 域名，再构建并启动：
+生产容器配置见 [compose.yaml](compose.yaml)。镜像是 [smartdoca/doca:0.1.0](https://hub.docker.com/r/smartdoca/doca)。先复制 [docker.env.example](docker.env.example) 为 `.env`，填写 HTTPS 域名，再拉取并启动：
 
 ```sh
 cp docker.env.example .env
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-Doca 对外监听宿主机 `127.0.0.1:39120`，由外部 HTTPS 反向代理转发；代理需要支持 `/api/v1/ws` WebSocket。SQLite 数据库、AI 会话和本地上传文件都保存在 `doca_data` 卷。首次启动后运行 `bash scripts/bootstrap-admin.sh` 创建管理员账号。项目没有默认账号或密码，初始化时由部署者临时输入，凭据不会写入仓库：
+要改镜像里的代码时，在本仓库执行 `docker compose up -d --build`。默认启动使用已发布的镜像，不会本地重新构建。
+
+Doca 对外监听宿主机 `127.0.0.1:39120`，由外部 HTTPS 反向代理转发；代理需要支持 `/api/v1/ws` WebSocket。SQLite 数据库、AI 会话和本地上传文件都保存在 `doca_data` 卷。页面 HTML 由容器返回。构建出的 JS 和 CSS 默认也由容器从 `/assets` 提供。要改成 CDN 时，在 `.env` 设置 `DOCA_ASSET_BASE` 为该版本资源目录的 HTTPS 前缀，然后重新启动。不设置时仍用容器里的文件。接口请求始终发往页面所在的源。
+
+## 初始化管理员
+
+没有默认账号或密码。容器启动并健康之后，在存放 `compose.yaml` 的目录执行：
 
 ```sh
 bash scripts/bootstrap-admin.sh
 ```
 
-初始化成功后，密码只以哈希形式保存在数据库中，无法从容器或后台查看明文。
+脚本会询问管理员账号和密码。密码至少 12 位，只在这一次命令的环境里传递，数据库只保存哈希。已经有管理员时命令会拒绝，不会覆盖现有密码。
+
+## 修改密码
+
+登录后打开账号页 `#/account`，在「修改密码」中设置新密码。新密码至少 12 位。修改成功后，该账号在所有设备上的登录都会退出。
+
+忘记密码、无法登录时，在部署目录执行下面的命令。它只重置已经存在的管理员，不会新建账号，也不会通过网页提供这个入口：
+
+```sh
+bash scripts/reset-admin-password.sh
+```
+
+如果提示数据库被占用，先执行 `docker compose stop`，完成重置后再 `docker compose up -d`。不要把账号或密码写进 `.env`。
 
 检查类型、接口集成测试与前端构建。SQLite 与隔离 PostgreSQL 实库均运行完整回归；容量和真实第三方服务联调另行验收。
 

@@ -78,6 +78,7 @@ import { composeServerPlugins } from "../plugins/composition.js";
 export interface CreateAppOptions {
   origin: string;
   staticDirectory?: string;
+  assetBase?: string;
   logging?: boolean;
   storage?: StorageRuntime;
   search?: SearchRuntime;
@@ -1471,8 +1472,12 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       return { ok: true };
     },
   );
-  await registerStaticRoutes(api, db, options.staticDirectory, () =>
-    realtimeCluster.isReady(),
+  await registerStaticRoutes(
+    api,
+    db,
+    options.staticDirectory,
+    () => realtimeCluster.isReady(),
+    options.assetBase,
   );
   try {
     await api.ready();
