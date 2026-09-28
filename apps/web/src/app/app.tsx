@@ -193,6 +193,7 @@ export function App() {
     [navigationOpen, setNavigationOpen] = useState(false),
     [me, setMe] = useState<Me | null>(null),
     [libraryInfo, setLibraryInfo] = useState<Resource | null>(null),
+    [heldLibraryId, setHeldLibraryId] = useState<string | null>(null),
     [hash, setHash] = useState(location.hash),
     [refresh, setRefresh] = useState(0),
     [scope, setScope] = useState(() => {
@@ -314,10 +315,18 @@ export function App() {
       setImportProgress(null);
     }
   }
+  const libraryIdFromDetail =
+    detail?.resource.id === resourceId
+      ? detail.resource.kind === "library"
+        ? detail.resource.id
+        : (detail.resource.library_id ?? null)
+      : undefined;
   const containingLibraryId =
-    detail?.resource.kind === "library"
-      ? detail.resource.id
-      : detail?.resource.library_id;
+    libraryIdFromDetail !== undefined ? libraryIdFromDetail : resourceId ? heldLibraryId : null;
+  useEffect(() => {
+    if (!resourceId) setHeldLibraryId(null);
+    else if (libraryIdFromDetail !== undefined) setHeldLibraryId(libraryIdFromDetail);
+  }, [resourceId, libraryIdFromDetail]);
   const currentLibraryId = containingLibraryId || undefined;
   const libraryView = new URLSearchParams(hash.split("?")[1]).get("view");
   const libraryRole =
@@ -1409,7 +1418,6 @@ export function App() {
           close={() => setModal("")}
           saved={() => {
             setRefresh((n) => n + 1);
-            navigate("trash");
           }}
         />
       )}

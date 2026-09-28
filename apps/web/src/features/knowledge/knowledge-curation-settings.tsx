@@ -43,7 +43,7 @@ export function KnowledgeCurationSettings({ scopeId }: { scopeId: string }) {
   async function configure(patch: Record<string, string>) {
     if (settings)
       await work(() =>
-        api(`/knowledge/libraries/${scopeId}/settings`, "PUT", {
+        api(`/knowledge/libraries/${scopeId}/settings`, "POST", {
           expectedRevision: settings.revision,
           settings: { ...settings.value, ...patch },
         }),

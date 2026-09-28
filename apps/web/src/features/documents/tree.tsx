@@ -297,7 +297,7 @@ export function DocumentTree({
   return (
     <div className="document-tree">
       {menu && <TreeDocumentMenu key={menu.resource.id} {...menu} close={() => setMenu(null)} changed={() => { setLocalRefresh(n => n + 1); changed?.(); }} remove={() => setTrash(menu.resource)} />}
-      {trash && <ResourceActionDialog resource={trash} action="trash" close={() => setTrash(null)} saved={() => { setLocalRefresh(n => n + 1); changed?.(); if (selected === trash.id) location.hash = "/home"; }} />}
+      {trash && <ResourceActionDialog resource={trash} action="trash" close={() => setTrash(null)} saved={() => { setLocalRefresh(n => n + 1); changed?.(); }} />}
       {error && <Feedback message={error} tone="error" />}
       {truncated && (
         <Feedback message={t("tree.tooLarge")} tone="warning" />
