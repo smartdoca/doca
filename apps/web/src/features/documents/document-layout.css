@@ -1,0 +1,498 @@
+/* One stationary header, with the workspace content as the only page scroller. */
+.app-shell {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+.app-shell.public-view,
+.app-shell.mobile-editor-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+.app-shell.mobile-editor-shell > .workspace > .topbar,
+.app-shell.mobile-editor-shell .ai-document-panel,
+.app-shell.mobile-editor-shell .ai-document-trigger,
+.app-shell.mobile-editor-shell #document-export-slot {
+  display: none;
+}
+html[data-editor-shell="mobile"],
+html[data-editor-shell="mobile"] body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+html[data-editor-shell="mobile"] .app-shell,
+html[data-editor-shell="mobile"] .workspace,
+html[data-editor-shell="mobile"] .document-editor-shell,
+html[data-editor-shell="mobile"] .editor-content,
+html[data-editor-shell="mobile"] .editor-columns,
+html[data-editor-shell="mobile"] .markdown-document,
+html[data-editor-shell="mobile"] .doca-markdown {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+html[data-editor-shell="mobile"] .document-view:not(.surface-view) .main-scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-width: 100%;
+}
+html[data-editor-shell="mobile"] .document-view.surface-view .main-scroll,
+html[data-editor-shell="mobile"] .surface-editor {
+  overflow: hidden;
+  max-width: 100%;
+}
+html[data-editor-shell="mobile"] .surface-view [class*="toolbar"],
+html[data-editor-shell="mobile"] .surface-view [class*="ribbon"],
+html[data-editor-shell="mobile"] .surface-view [class*="Toolbar"],
+html[data-editor-shell="mobile"] #editor-toolbar-slot,
+html[data-editor-shell="mobile"] .markdown-toolbar {
+  max-height: 48px;
+  max-width: 100%;
+  overflow: auto;
+}
+html[data-editor-shell="mobile"] .app-shell.mobile-editor-shell > .workspace {
+  padding-top: 12px;
+}
+html[data-editor-shell="mobile"] .editor-fixed-toolbar,
+html[data-editor-shell="mobile"] .markdown-toolbar {
+  top: 0;
+  margin-top: 0;
+}
+html[data-editor-shell="mobile"] .editor-columns,
+html[data-editor-shell="mobile"] .editor-columns.with-comments,
+html[data-editor-shell="mobile"] .compact-document .editor-columns,
+html[data-editor-shell="mobile"] .compact-document .editor-columns.with-comments {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  padding: 8px 0 0;
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+html[data-editor-shell="mobile"] .sk-block-gutter,
+html[data-editor-shell="mobile"] .sk-block-menu,
+html[data-editor-shell="mobile"] .sk-floating,
+html[data-editor-shell="mobile"] .exmd-selection-toolbar,
+html[data-editor-shell="mobile"] .selection-comment-floating,
+html[data-editor-shell="mobile"] .document-outline,
+html[data-editor-shell="mobile"] .outline-floating-toggle,
+html[data-editor-shell="mobile"] .outline-drawer-host,
+html[data-editor-shell="mobile"] .document-scroll-buttons,
+html[data-editor-shell="mobile"] .content-comments,
+html[data-editor-shell="mobile"] #document-page-width-slot,
+html[data-editor-shell="mobile"] .note-float,
+html[data-editor-shell="mobile"] .note-float-pill {
+  display: none !important;
+}
+html[data-editor-shell="mobile"] .editor-content .sk-page,
+html[data-editor-shell="mobile"] .document-editor-shell[data-page-width] .editor-content .sk-page,
+html[data-editor-shell="mobile"] .markdown-body {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box;
+}
+html[data-editor-shell="mobile"] .editor-content .sk-page,
+html[data-editor-shell="mobile"] .document-editor-shell[data-page-width] .editor-content .sk-page {
+  padding: 20px 16px 72px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+html[data-editor-shell="mobile"] .sk-block-frame,
+html[data-editor-shell="mobile"] .sk-table-block,
+html[data-editor-shell="mobile"] .sk-code,
+html[data-editor-shell="mobile"] .sk-code-body,
+html[data-editor-shell="mobile"] .sk-diagram-figure,
+html[data-editor-shell="mobile"] .markdown-body pre,
+html[data-editor-shell="mobile"] .cm-scroller,
+html[data-editor-shell="mobile"] .katex-display {
+  max-width: 100%;
+}
+html[data-editor-shell="mobile"] .sk-table-block,
+html[data-editor-shell="mobile"] .sk-code,
+html[data-editor-shell="mobile"] .sk-code-body,
+html[data-editor-shell="mobile"] .markdown-body pre,
+html[data-editor-shell="mobile"] .cm-scroller,
+html[data-editor-shell="mobile"] .katex-display {
+  overflow-x: auto;
+}
+html[data-editor-shell="mobile"] .sk-page-shell,
+html[data-editor-shell="mobile"] .sk-editor,
+html[data-editor-shell="mobile"] [data-slate-editor="true"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
+html[data-editor-shell="mobile"] [data-slate-editor="true"],
+html[data-editor-shell="mobile"] [data-slate-editor="true"] * {
+  max-width: 100%;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  white-space: pre-wrap !important;
+}
+html[data-editor-shell="mobile"] .sk-columns {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+}
+html[data-editor-shell="mobile"] .sk-column {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+html[data-editor-shell="mobile"] [data-slate-editor="true"] .sk-code,
+html[data-editor-shell="mobile"] .sk-code,
+html[data-editor-shell="mobile"] .sk-code-body,
+html[data-editor-shell="mobile"] .sk-code-editor,
+html[data-editor-shell="mobile"] .markdown-body pre,
+html[data-editor-shell="mobile"] .cm-scroller {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+}
+html[data-editor-shell="mobile"] [data-slate-editor="true"] .sk-code,
+html[data-editor-shell="mobile"] [data-slate-editor="true"] .sk-code *,
+html[data-editor-shell="mobile"] .sk-code,
+html[data-editor-shell="mobile"] .sk-code *,
+html[data-editor-shell="mobile"] .sk-code-body,
+html[data-editor-shell="mobile"] .sk-code-body pre,
+html[data-editor-shell="mobile"] .markdown-body pre,
+html[data-editor-shell="mobile"] .cm-scroller,
+html[data-editor-shell="mobile"] .cm-scroller * {
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+html[data-editor-shell="mobile"] [data-slate-editor="true"] .sk-code *,
+html[data-editor-shell="mobile"] .sk-code *,
+html[data-editor-shell="mobile"] .cm-scroller * {
+  max-width: none !important;
+}
+html[data-editor-shell="mobile"] .sk-table-block,
+html[data-editor-shell="mobile"] .sk-table-scroll {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+html[data-editor-shell="mobile"] .sk-table-block table {
+  width: max-content !important;
+  min-width: 100% !important;
+  max-width: none !important;
+  table-layout: auto !important;
+}
+html[data-editor-shell="mobile"] .sk-table-block td,
+html[data-editor-shell="mobile"] .sk-table-block th {
+  min-width: 112px !important;
+  max-width: 240px !important;
+  vertical-align: top !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+html[data-editor-shell="mobile"] .sk-table-block td *,
+html[data-editor-shell="mobile"] .sk-table-block th * {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  max-width: 100% !important;
+}
+html[data-editor-shell="mobile"] .sk-table-block .sk-code,
+html[data-editor-shell="mobile"] .sk-table-block .sk-code * {
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  max-width: none !important;
+}
+html[data-editor-shell="mobile"] .sk-page img,
+html[data-editor-shell="mobile"] .markdown-body img {
+  max-width: 100% !important;
+  height: auto !important;
+}
+html[data-editor-shell="mobile"] .sk-table-block td img,
+html[data-editor-shell="mobile"] .sk-table-block th img,
+html[data-editor-shell="mobile"] .sk-table-block td video,
+html[data-editor-shell="mobile"] .sk-table-block th video,
+html[data-editor-shell="mobile"] .sk-table-block td svg,
+html[data-editor-shell="mobile"] .sk-table-block th svg {
+  display: block !important;
+  width: auto !important;
+  max-width: 200px !important;
+  height: auto !important;
+}
+.app-shell.personal-document-view {
+  grid-template-columns: minmax(0, 1fr);
+}
+.app-shell > .sidebar {
+  padding: 20px 8px 8px;
+}
+.app-shell > .workspace > .topbar {
+  height: 64px;
+  min-height: 64px;
+  padding: 0 22px;
+  gap: 20px;
+  background: #fff;
+  position: relative;
+  z-index: 25;
+  flex-wrap: nowrap;
+}
+.topbar > .document-topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.document-topbar-title > strong {
+  font-size: 18px;
+  line-height: 1.4;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+.document-topbar-title .favorite,
+.document-topbar-title .pin {
+  flex: none;
+  border: 0;
+  background: none;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  padding: 5px;
+  color: #8f959e;
+}
+.document-topbar-title .favorite.enabled {
+  color: #edb445;
+}
+.document-topbar-title .pin.enabled {
+  color: #3370ff;
+}
+.last-editor {
+  font-size: 12px;
+  color: #8f959e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.app-shell .document-topbar-actions {
+  flex: none;
+  gap: 14px;
+  flex-wrap: nowrap;
+}
+.global-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+  margin-left: auto;
+}
+.global-header-tools > *,
+.global-header-tools .notification-trigger,
+.global-header-tools > details > summary {
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  flex: none;
+  padding: 0;
+  margin: 0;
+}
+.global-header-tools > .todo-icon,
+.global-header-tools > details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.global-header-tools > a.todo-icon {
+  height: 34px;
+}
+.global-header-tools > details > summary > .user-avatar {
+  pointer-events: none;
+}
+.settings-shell > .settings-shell-header {
+  height: 64px;
+  padding-right: 22px;
+}
+.document-topbar-actions > .resource-actions {
+  position: static;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+.document-topbar-actions .share-button {
+  background: #3370ff;
+  color: #fff;
+  border: 1px solid #3370ff;
+  white-space: nowrap;
+  border-radius: 6px;
+  height: 34px;
+  padding: 0 13px;
+  font-size: 13px;
+}
+.document-topbar-actions .share-button:hover {
+  background: #245bdb;
+}
+.document-topbar-actions .menu > summary {
+  border: 0;
+  background: transparent;
+}
+.document-back-button {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: #646a73;
+}
+.document-back-button:hover {
+  color: #1f2329;
+  background: #f2f3f5;
+}
+.document-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid #eff0f1;
+  padding: 12px 12px 16px !important;
+  color: #646a73;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.document-info > strong {
+  font-size: 13px;
+}
+.document-live-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.navigation-toggle,
+.navigation-close {
+  display: none !important;
+}
+.document-view .main-scroll {
+  padding: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+@media (max-width: 1200px) {
+  .app-shell:not(.public-view):not(.personal-document-view):not(.mobile-editor-shell) {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+  .app-shell > .sidebar {
+    padding: 18px 5px;
+  }
+  .app-shell > .sidebar .brand {
+    padding: 0 5px 20px;
+  }
+  .app-shell > .sidebar .brand > span:last-child,
+  .app-shell > .sidebar .sidebar-search span,
+  .app-shell > .sidebar .sidebar-search kbd,
+  .app-shell > .sidebar .sidebar-tree-heading,
+  .app-shell > .sidebar .document-tree,
+  .app-shell > .sidebar .library-identity,
+  .app-shell > .sidebar .sidebar-create-label {
+    display: none;
+  }
+  .app-shell > .sidebar nav button {
+    font-size: 0;
+    justify-content: center;
+    padding: 10px;
+  }
+  .app-shell > .sidebar nav button svg {
+    width: 20px;
+    height: 20px;
+    flex: none;
+  }
+  .app-shell > .sidebar .sidebar-search {
+    justify-content: center;
+    padding: 10px;
+    min-height: 36px;
+  }
+  .navigation-toggle {
+    display: inline-flex !important;
+    border: 0 !important;
+    background: transparent !important;
+    flex: none;
+    width: 28px;
+    min-width: 28px;
+    padding: 4px !important;
+  }
+  .app-shell.navigation-expanded > .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 220px;
+    z-index: 40;
+    box-shadow: 8px 0 24px #1f23291a;
+    padding: 20px 8px 8px;
+  }
+  .app-shell.navigation-expanded > .sidebar .brand > span:last-child,
+  .app-shell.navigation-expanded > .sidebar .sidebar-search span,
+  .app-shell.navigation-expanded > .sidebar .sidebar-search kbd,
+  .app-shell.navigation-expanded > .sidebar .sidebar-tree-heading,
+  .app-shell.navigation-expanded > .sidebar .document-tree,
+  .app-shell.navigation-expanded > .sidebar .library-identity,
+  .app-shell.navigation-expanded > .sidebar .sidebar-create-label {
+    display: revert;
+  }
+  .app-shell.navigation-expanded > .sidebar nav button {
+    font-size: 14px;
+    justify-content: flex-start;
+  }
+  .app-shell.navigation-expanded > .sidebar .sidebar-search {
+    justify-content: flex-start;
+  }
+  .app-shell.navigation-expanded > .sidebar .sidebar-tree-heading,
+  .app-shell.navigation-expanded > .sidebar .library-identity {
+    display: flex;
+  }
+  .navigation-expanded .navigation-close {
+    display: inline-flex !important;
+    position: absolute;
+    top: 24px;
+    right: 8px;
+    z-index: 41;
+  }
+  .navigation-expanded .brand {
+    padding-right: 30px !important;
+  }
+}
+@media (max-width: 720px) {
+  .document-view > .workspace > .topbar {
+    gap: 8px;
+    padding: 0 10px;
+    height: 60px;
+    min-height: 60px;
+  }
+  .document-topbar-title {
+    gap: 6px !important;
+  }
+  .document-topbar-title > strong {
+    font-size: 16px;
+  }
+  .last-editor {
+    display: none;
+  }
+  .document-view .document-topbar-actions {
+    gap: 6px;
+  }
+  .document-topbar-actions > .resource-actions {
+    gap: 4px;
+  }
+  .document-topbar-actions .share-button {
+    padding: 0 8px;
+    font-size: 12px;
+  }
+  .document-topbar-actions .share-button svg {
+    display: none;
+  }
+}
+#editor-toolbar-slot {
+  flex: none;
+  z-index: 24;
+}

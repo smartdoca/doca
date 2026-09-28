@@ -1,0 +1,28 @@
+.ai-document-main { position: relative; }
+.document-scroll-buttons {
+  position: absolute;
+  right: 22px;
+  bottom: 110px;
+  z-index: 21;
+  display: flex;
+  flex-direction: column;
+  width: 44px;
+  padding: 3px;
+  border: 1px solid var(--border, #dee0e3);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  box-shadow: 0 4px 18px #312e8112;
+}
+.document-scroll-buttons > button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: #646a73;
+  background: transparent;
+}
+.document-scroll-buttons > button:hover { background: #f0f4ff; color: #3370ff; }
+.document-scroll-buttons > button:focus-visible { outline: 2px solid #3370ff; outline-offset: 1px; }

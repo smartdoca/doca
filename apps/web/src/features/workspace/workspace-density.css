@@ -1,0 +1,186 @@
+/* Shared navigation density, independent of the active editor's lazy styles. */
+.app-shell > .workspace > .topbar {
+  height: 56px;
+  min-height: 56px;
+  padding: 0 16px;
+  gap: 12px;
+}
+.settings-shell > .settings-shell-header {
+  height: 56px;
+  min-height: 56px;
+}
+.topbar .document-name-line {
+  gap: 6px;
+}
+.topbar .document-name-value {
+  min-width: 0;
+  max-width: min(42vw, 560px);
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+}
+.topbar .document-name-value > strong,
+.topbar .document-title-edit,
+.topbar .document-name-editor {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+.topbar .document-title-edit {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar .document-name-editor {
+  min-width: 2em;
+  max-width: 100%;
+  height: 29px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--brand, #3370ff);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  box-shadow: none;
+  outline: none;
+}
+.topbar .document-title-lines .last-editor {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 260px;
+  padding: 3px 5px;
+  border: 0;
+  background: transparent;
+  color: var(--muted, #8f959e);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+}
+.topbar .last-editor > svg {
+  flex: none;
+}
+.topbar .last-editor > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar .last-editor:hover:not(:disabled) {
+  color: var(--brand);
+  background: var(--hover);
+}
+.topbar .last-editor:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.app-shell .document-topbar-actions,
+.topbar .global-header-tools {
+  gap: 10px;
+}
+.topbar .share-button {
+  height: 30px;
+  font-size: 12px;
+  padding: 0 10px;
+}
+.topbar .global-header-tools > *,
+.topbar .global-header-tools .notification-trigger,
+.topbar .global-header-tools > details > summary,
+.topbar .global-header-tools > a.todo-icon {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+}
+
+/* Home has one scroll surface: actions leave first, then the list tabs stick. */
+.dashboard-scroll-host:has(> .dashboard-home) {
+  overflow: auto;
+  display: block;
+  scrollbar-gutter: stable;
+}
+.dashboard-scroll-host > .dashboard-home {
+  height: auto;
+  min-height: 100%;
+  display: block;
+  padding-top: 24px;
+}
+.dashboard-controls {
+  flex: none;
+  background: var(--surface, #fff);
+}
+.dashboard-controls > .document-table-head {
+  position: static;
+  min-width: 640px;
+}
+.dashboard-home > .dashboard-controls {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.dashboard-home > .dashboard-controls > .document-table-head {
+  height: 34px;
+}
+.dashboard-home .home-tabs {
+  height: 44px;
+  margin: 0;
+  background: var(--surface, #fff);
+}
+.dashboard-home .home-tabs button {
+  padding-block: 10px;
+  font-size: 13px;
+}
+.dashboard-home .dashboard-toolbar {
+  min-height: 60px;
+  padding-block: 12px;
+  background: var(--surface, #fff);
+}
+.dashboard-home .document-table-row {
+  height: 54px;
+  contain-intrinsic-size: auto 54px;
+}
+.dashboard-home .table-title {
+  gap: 9px;
+  font-size: 13px;
+}
+.dashboard-home .table-title .file-glyph {
+  width: 24px;
+  height: 28px;
+}
+.dashboard-home .table-title .file-glyph svg {
+  width: 17px;
+  height: 17px;
+}
+.dashboard-home > .dashboard-results {
+  overflow: visible;
+  min-height: calc(100dvh - 200px);
+  flex: none;
+}
+@media (max-width: 1100px) {
+  .topbar .last-editor > span {
+    max-width: 150px;
+  }
+  .topbar .document-name-value > strong,
+  .topbar .document-title-edit,
+  .topbar .document-name-editor {
+    font-size: 18px;
+  }
+}
+@media (max-width: 720px) {
+  .dashboard-controls > .document-table-head {
+    min-width: 420px;
+  }
+  .topbar .last-editor > span {
+    display: none;
+  }
+  .topbar .document-title-lines .last-editor {
+    flex: none;
+  }
+}

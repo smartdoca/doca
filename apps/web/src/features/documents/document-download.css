@@ -1,0 +1,14 @@
+/* Loaded with the download component, including on a fresh rich-text page. */
+.document-more-menu .document-download-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  width: 100%;
+  min-height: 34px;
+  padding: 9px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+}

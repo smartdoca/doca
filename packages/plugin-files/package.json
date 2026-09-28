@@ -1,0 +1,63 @@
+{
+  "name": "@doca/plugin-files",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ai": "./src/ai.ts",
+    "./knowledge": "./src/knowledge.ts",
+    "./manifest": "./src/manifest.ts",
+    "./server": "./src/index.ts",
+    "./web": "./src/manifest.ts",
+    "./mobile": "./src/manifest.ts"
+  },
+  "doca": {
+    "manifest": "./src/manifest.ts",
+    "server": "./src/index.ts",
+    "web": "./src/manifest.ts",
+    "mobile": "./src/manifest.ts",
+    "injections": {
+      "required": [],
+      "optional": [
+        "knowledge.sources.v1",
+        "search.sources.v1",
+        "doca.ai.contributions"
+      ]
+    },
+    "contributions": {
+      "server": [
+        "files.v1",
+        "files.routes.v1",
+        "files.search-source.v1",
+        "files.knowledge-source.v1",
+        "files.jobs.v1"
+      ],
+      "web": [
+        "files.route",
+        "files.navigation",
+        "files.browser",
+        "files.picker",
+        "files.upload",
+        "files.preview",
+        "files.download"
+      ],
+      "mobile": [
+        "files.route",
+        "files.navigation",
+        "files.picker",
+        "files.upload",
+        "files.preview",
+        "files.download"
+      ]
+    }
+  },
+  "dependencies": {
+    "@doca/ai-host": "workspace:*",
+    "@doca/files-capability": "workspace:*",
+    "@doca/knowledge-capability": "workspace:*",
+    "@doca/plugin-sdk": "workspace:*",
+    "@doca/search-host": "workspace:*"
+  }
+}

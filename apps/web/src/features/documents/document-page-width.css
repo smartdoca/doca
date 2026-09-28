@@ -1,0 +1,26 @@
+/* Width is owned by the host, independent of lazy SDK styles and viewport breakpoints. */
+.document-editor-shell[data-page-width] {
+  width: 100%;
+}
+.document-editor-shell[data-page-width] .editor-content {
+  flex: 1 1 auto;
+  width: 100% !important;
+}
+.document-editor-shell[data-page-width] .editor-columns {
+  width: 100%;
+  box-sizing: border-box;
+}
+.document-editor-shell[data-page-width] .editor-content .sk-page {
+  max-width: none !important;
+  width: 100% !important;
+  padding-inline: 48px;
+}
+.document-editor-shell[data-page-width] .document-outline {
+  display: flex;
+}
+.document-editor-shell[data-page-width].compact-document .content-comments {
+  right: var(--document-panel-right, 0px);
+}
+.document-editor-shell[data-page-width="fluid"] .editor-content .sk-page {
+  padding-inline: clamp(24px, 4vw, 48px);
+}

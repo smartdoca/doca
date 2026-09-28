@@ -1,0 +1,60 @@
+# Historical implementation and local recovery copies.
+/.archive/
+
+# Runtime user data and secrets (including nested app configuration).
+/data/
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-shm
+*.sqlite3-wal
+
+# Installed dependencies, generated builds and tool caches.
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+.cache/
+.vite/
+.vite-temp/
+*.tsbuildinfo
+.eslintcache
+
+# Installed business plugins. Keep the README; packages dropped here are local.
+/plugins/*
+!/plugins/README.md
+
+# Local browser-test output, scratch work and logs; keep reusable tests.
+test-results/
+playwright-report/
+blob-report/
+/tmp/
+/.local/
+/docs/local/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local pack output is disposable; vendor contains required file: dependencies.
+*.tgz
+!/vendor/*.tgz
+
+# OS/editor temporary files.
+.DS_Store
+._*
+*.swp
+*.swo
+*~

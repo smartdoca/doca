@@ -1,0 +1,536 @@
+.surface-view #editor-toolbar-slot:empty {
+  display: none;
+}
+.surface-editor {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  isolation: isolate;
+}
+.surface-editor > .uos-editor,
+.surface-editor > .eppt-workspace,
+.surface-editor > .doca-canvas {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+.presentation-document > .workspace {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.ppt-comment-action {
+  color: #b87800;
+  background: #fff8df;
+  border: 1px solid #f3d889;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.region-comment-controls {
+  position: absolute;
+  z-index: 12;
+  right: 12px;
+  top: 82px;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border, #dee0e3);
+  background: var(--surface, #fff);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px #0001;
+}
+.region-comment-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  padding: 4px;
+}
+.region-comment-controls svg {
+  flex-shrink: 0;
+}
+.surface-editor .region-comments-drawer {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 20;
+  width: min(360px, 90%);
+  background: var(--surface, #fff);
+  padding: 16px;
+  overflow-y: auto;
+  box-shadow: -8px 0 24px #18233418;
+  border-left: 1px solid var(--border, #dee0e3);
+  animation: region-slide-in 0.18s ease-out;
+}
+.region-comments-drawer > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.region-comment-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.presentation-document .region-comments-drawer {
+  top: var(--ppt-toolbar-height, 72px);
+  bottom: var(--ppt-status-height, 24px);
+}
+.presentation-document .region-comment-controls {
+  top: calc(var(--ppt-toolbar-height, 72px) + 10px);
+}
+.presentation-document .region-comments-drawer > header {
+  position: sticky;
+  top: -16px;
+  padding-block: 12px;
+  z-index: 1;
+  background: var(--surface, #fff);
+}
+.region-comments-drawer h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.region-comments-drawer .selection-thread {
+  margin-bottom: 12px;
+}
+.surface-editor > .feedback {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  max-width: 70%;
+}
+.surface-editor .doca-canvas {
+  --aidcanvas-background: #f5f6f8;
+  /* Match the standalone demo instead of inheriting the document typography. */
+  font-size: 16px;
+  line-height: normal;
+}
+.document-name-editor {
+  width: min(420px, 40vw);
+  font-size: 18px;
+  padding: 2px 5px;
+}
+.document-title-edit {
+  min-width: 0;
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  font-weight: 600;
+  font-size: 18px;
+  text-align: left;
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.document-name-value {
+  min-width: 0;
+  max-width: min(560px, 42vw);
+  display: flex;
+  align-items: center;
+}
+.sheet-comment-icon {
+  color: #b77900;
+  background: #fff3cc;
+  border-radius: 4px;
+  box-shadow: 0 0 0 5px #fff3cc;
+}
+.comment-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: #fffae8;
+}
+.comment-candidates button {
+  text-align: left;
+}
+.document-name-value > strong,
+.document-name-value > button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.document-name-value > strong {
+  font-size: 18px;
+  line-height: 1.4;
+}
+.tree-drag-preview {
+  position: fixed;
+  left: -1000px;
+  top: 0;
+  width: 132px;
+  height: 26px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 8px;
+  box-sizing: border-box;
+  border-radius: 5px;
+  font: 12px/18px sans-serif;
+  color: #2456c5;
+  background: #eaf0ff;
+  border: 1px solid #b8cdfa;
+  pointer-events: none;
+}
+.type-icon.canvas,
+.document-type-icon.type-canvas {
+  color: #cb7b13;
+}
+@keyframes region-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .region-comments-drawer {
+    animation: none !important;
+  }
+}
+.surface-recovery {
+  position: absolute;
+  bottom: 44px;
+  left: 16px;
+  z-index: 20;
+  padding: 6px 12px;
+  border: 1px solid #f3cf75;
+  border-radius: 6px;
+  background: #fff8df;
+  color: #8a5c00;
+}
+.doca-canvas .selection-actions .icon-button {
+  /* Reset host button padding: it otherwise squeezes an 18px SVG to 6px. */
+  padding: 0;
+}
+.doca-canvas .selection-actions .icon-button:has(.canvas-comment-icon) {
+  width: 36px;
+  height: 34px;
+  margin-left: 8px;
+  color: #a66b00;
+  background: #fff3cc;
+  box-shadow: -5px 0 0 -4px #dce1e8;
+}
+.doca-canvas .selection-actions .icon-button:has(.canvas-comment-icon):hover {
+  color: #805200;
+  background: #ffe7a0;
+}
+.doca-canvas .canvas-comment-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.doca-canvas .anchor-decorations .anchor-decoration-marker {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #e1bc67;
+  border-radius: 7px;
+  color: #a66b00;
+  background: #fff9e8;
+  font-size: 0;
+  gap: 0;
+  box-shadow: 0 2px 5px #00000014;
+  transform: translate(6px, -18px);
+}
+/* Normal comments must not tint or outline the artwork. */
+.doca-canvas .anchor-decorations [data-active="false"] .anchor-decoration-box {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.doca-canvas .anchor-decorations [data-active="true"] .anchor-decoration-box {
+  background: transparent;
+  border: 1px dashed #d49a21;
+  box-shadow: none;
+}
+.canvas-comment-visibility {
+  position: absolute;
+  right: 62px;
+  top: 85px;
+  z-index: 12;
+  width: 32px;
+  height: 32px;
+  padding: 4px;
+  background: white;
+  border: 1px solid var(--border, #dee0e3);
+  border-radius: 8px;
+}
+.doca-canvas .anchor-decoration-marker::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  flex: none;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-5 5V5a2 2 0 0 1 2-2h15a2 2 0 0 1 2 2z' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+.doca-canvas
+  .anchor-decorations
+  [data-active="true"]
+  .anchor-decoration-marker {
+  color: #805200;
+  background: #ffe7a0;
+  outline: 2px solid #f5cf74;
+}
+.import-file-panel {
+  padding: 4px 8px;
+  color: #667080;
+  white-space: normal;
+}
+.import-file-panel small {
+  display: block;
+  margin-bottom: 12px;
+}
+.import-file-panel label:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.markdown-toolbar .download-button {
+  display: none;
+}
+.library-back-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 28px;
+  flex: none;
+  color: #626b78;
+  background: none;
+}
+.exmd-selection-toolbar {
+  /* The SDK portals to body with an inline z-index. Stay below host dialogs. */
+  z-index: 30 !important;
+  border: 1px solid #dee0e3;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 4px 16px #1f232918;
+}
+/* Opening navigation must not leave an actionable selection toolbar over it. */
+body:has(.modal-shade) > .exmd-selection-toolbar {
+  visibility: hidden;
+  pointer-events: none;
+}
+/* Markdown portals outside .doca-markdown, so its scoped SDK button rules
+   cannot reach this toolbar. Keep both text-selection menus self-contained. */
+:is(.exmd-selection-toolbar, .selection-comment-floating) {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+}
+.exmd-selection-toolbar .exmd-host-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1;
+}
+.exmd-selection-toolbar .exmd-host-actions button > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+:is(.exmd-selection-toolbar, .selection-comment-floating) button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 !important;
+  margin: 0;
+  border: 0;
+  border-radius: 5px;
+  box-shadow: none;
+  background: transparent;
+  color: #a66d00;
+  font: 500 16px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+:is(.exmd-selection-toolbar, .selection-comment-floating) button[aria-label="引用给 AI"] {
+  color: #7859b8 !important;
+}
+:is(.exmd-selection-toolbar, .selection-comment-floating) button:hover:not(:disabled) {
+  background: #f3f4f6 !important;
+}
+:is(.exmd-selection-toolbar, .selection-comment-floating) button:focus-visible {
+  outline: 2px solid #3370ff;
+  outline-offset: -2px;
+}
+:is(.exmd-selection-toolbar, .selection-comment-floating) button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+:is(.exmd-selection-toolbar, .selection-comment-floating) button svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+.sheet-selection-comment {
+  position: fixed;
+  z-index: 30;
+  width: 36px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: #ad7700;
+  background: #fffbeb;
+  border: 1px solid #f0d787;
+  border-radius: 7px;
+  box-shadow: 0 3px 12px #0002;
+}
+.sheet-user-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  background: #0002;
+}
+.sheet-user-picker {
+  width: 340px;
+  max-height: 420px;
+  padding: 16px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px #0002;
+}
+.sheet-user-picker input {
+  width: 100%;
+}
+.sheet-user-picker small {
+  display: block;
+  color: #87909c;
+  margin: 6px 0;
+}
+.sheet-user-picker > div {
+  max-height: 300px;
+  overflow: auto;
+}
+.sheet-user-picker button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  background: white;
+}
+.sheet-user-picker button:hover {
+  background: #edf3ff;
+}
+.ppt-comment-action-group {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding-left: 10px;
+  border-left: 1px solid #dce0e5;
+}
+.eppt-workspace .ppt-comment-action {
+  color: #a66b00;
+  background: #fff7dc;
+  border-color: #efd27f;
+}
+.app-shell:has(.presentation-document.is-presenting) > .workspace > .topbar {
+  visibility: hidden;
+}
+
+/* View mode keeps host comment/reference actions while hiding SDK editing chrome. */
+.sheet-document .uos-office-toolbar .uos-toolbar-host-actions {
+  gap: 6px;
+  padding-left: 8px;
+  margin-left: 8px;
+  overflow: visible;
+}
+.sheet-document .uos-office-toolbar .uos-toolbar-host-actions button {
+  min-width: 38px;
+  padding: 3px 6px;
+  border: 0 !important;
+  border-radius: 5px;
+  background: transparent !important;
+  box-shadow: none;
+  color: #a66d00 !important;
+  font-size: 12px;
+}
+.sheet-document .uos-office-toolbar .uos-toolbar-host-actions button[aria-label="引用给 AI"] {
+  color: #7859b8 !important;
+}
+.sheet-document .uos-office-toolbar .uos-toolbar-host-actions button:hover:not(:disabled) {
+  background: #eeedf4 !important;
+}
+.sheet-document .uos-office-toolbar .uos-toolbar-host-actions button > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.sheet-document.is-reading .uos-office-groups > :not(.uos-toolbar-host-actions),
+body:has(.sheet-document.is-reading) .uos-office-popover,
+.presentation-document.is-reading .eppt-toolbar {
+  display: none !important;
+}
+.sheet-document.is-reading .uos-office-toolbar {
+  padding: 4px 12px;
+  background: #fff;
+}
+.sheet-document.is-reading .uos-office-toolbar .uos-office-groups {
+  height: 32px;
+  min-height: 0;
+  justify-content: flex-end;
+  background: transparent;
+}
+.sheet-document.is-reading .uos-office-toolbar .uos-toolbar-host-actions {
+  height: 32px;
+  max-height: none;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: 4px;
+  overflow: visible;
+}
+.sheet-document.is-reading .uos-office-toolbar .uos-toolbar-host-actions button {
+  flex-direction: row;
+  gap: 6px;
+  width: auto;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 0 !important;
+  border-radius: 5px;
+  background: transparent !important;
+  box-shadow: none;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.sheet-document.is-reading .uos-toolbar-host-actions button[aria-label="引用给 AI"] {
+  color: #7859b8 !important;
+}
+.sheet-document.is-reading .uos-toolbar-host-actions button:hover:not(:disabled) {
+  background: #f3f4f6 !important;
+}
+.sheet-document.is-reading .uos-toolbar-host-actions button svg {
+  width: 16px;
+  height: 16px;
+}

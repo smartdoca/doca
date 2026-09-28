@@ -1,0 +1,64 @@
+{
+  "name": "@doca/plugin-sdk",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts",
+    "./platform": "./src/platform.ts",
+    "./files": "./src/files.ts",
+    "./ai": "./src/ai.ts",
+    "./search": "./src/search.ts",
+    "./knowledge": "./src/knowledge.ts",
+    "./web": "./src/web.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.0.4",
+    "@doca/plugin-contracts": "workspace:*",
+    "@doca/files-capability": "workspace:*",
+    "@doca/search-host": "workspace:*",
+    "@doca/knowledge-capability": "workspace:*",
+    "@doca/web-plugin-registry": "workspace:*"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.ts",
+        "import": "./dist/testing.js"
+      },
+      "./platform": {
+        "types": "./dist/platform.d.ts",
+        "import": "./dist/platform.js"
+      },
+      "./files": {
+        "types": "./dist/files.d.ts",
+        "import": "./dist/files.js"
+      },
+      "./ai": {
+        "types": "./dist/ai.d.ts",
+        "import": "./dist/ai.js"
+      },
+      "./search": {
+        "types": "./dist/search.d.ts",
+        "import": "./dist/search.js"
+      },
+      "./knowledge": {
+        "types": "./dist/knowledge.d.ts",
+        "import": "./dist/knowledge.js"
+      },
+      "./web": {
+        "types": "./dist/web.d.ts",
+        "import": "./dist/web.js"
+      }
+    }
+  }
+}

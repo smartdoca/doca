@@ -1,0 +1,129 @@
+.app-shell .navigation-toggle {
+  display: inline-flex !important;
+  flex: none;
+  width: 28px;
+  min-width: 28px;
+  padding: 4px !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+@media (min-width: 1201px) {
+  .app-shell.navigation-collapsed:not(.public-view) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-shell.navigation-collapsed > .sidebar { display: none; }
+}
+
+/* Personal document pages hide the sidebar, so the workspace must occupy the
+   only grid column instead of remaining in the desktop navigation column. */
+.app-shell.personal-document-view:not(.public-view) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.settings-shell.admin-navigation-collapsed .admin-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.settings-shell.admin-navigation-collapsed .admin-nav { display: none; }
+
+/* Compact navigation leaves the available height to the document tree. */
+.app-shell > .sidebar {
+  padding-top: 12px;
+}
+.app-shell > .sidebar .library-brand-row {
+  padding-bottom: 12px;
+  flex: none;
+}
+.app-shell > .sidebar .brand {
+  padding: 0 6px;
+  font-size: 16px;
+  gap: 8px;
+}
+.app-shell > .sidebar .brand-symbol {
+  padding: 5px;
+  border-radius: 6px;
+}
+.app-shell > .sidebar .brand-symbol svg {
+  width: 18px;
+  height: 18px;
+}
+.app-shell > .sidebar .sidebar-search {
+  height: 38px;
+  min-height: 38px;
+  padding: 7px 10px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  flex: none;
+}
+.app-shell > .sidebar .sidebar-search svg {
+  width: 17px;
+  height: 17px;
+}
+.app-shell > .sidebar nav {
+  gap: 4px;
+  flex: none;
+}
+.app-shell > .sidebar nav > button,
+.app-shell > .sidebar nav > a {
+  height: 40px;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.app-shell > .sidebar nav svg {
+  width: 18px;
+  height: 18px;
+}
+.app-shell > .sidebar nav > .sidebar-create-entry .sidebar-create-plus svg {
+  width: 14px;
+  height: 14px;
+}
+.app-shell > .sidebar nav > .sidebar-trash-navigation-entry {
+  height: 52px;
+  min-height: 52px;
+  margin-top: 8px;
+  padding-top: 19px;
+  border-top: 1px solid var(--line, #dee0e3);
+  border-radius: 0;
+}
+.app-shell > .sidebar nav > .ai-navigation-entry {
+  color: #7859b8;
+  font-weight: 600;
+}
+.app-shell > .sidebar nav > .ai-navigation-entry:hover {
+  background: #eee8f8;
+}
+.app-shell > .sidebar nav > .ai-navigation-entry.active {
+  color: #6944ad;
+  background: #e8def7;
+}
+.app-shell > .sidebar .sidebar-tree-heading {
+  margin: 12px 8px 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line, #dee0e3);
+  flex: none;
+}
+.app-shell > .workspace > .workspace-topbar {
+  border-bottom: 0;
+  background: inherit;
+}
+.settings-shell > .settings-shell-header {
+  border-bottom: 0;
+  background: inherit;
+}
+@media (max-width: 1200px) {
+  .app-shell:not(.navigation-expanded) > .sidebar .library-brand-row {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .app-shell:not(.navigation-expanded) > .sidebar nav > button {
+    font-size: 0;
+    justify-content: center;
+  }
+  .app-shell:not(.navigation-expanded) > .sidebar .sidebar-create-label {
+    display: none;
+  }
+  .app-shell.navigation-expanded > .sidebar .brand {
+    padding-right: 6px !important;
+  }
+}

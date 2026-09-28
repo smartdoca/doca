@@ -1,0 +1,1093 @@
+{
+  "app-01": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "`dig +norecurse`仅设置DNS查询的递归期望位（RD）为0，不具备“绕过被查询服务器缓存”的能力：若查询的是递归服务器，其仍会使用自身缓存响应非递归查询；仅当查询的是权威服务器时，因权威服务器直接存储区域主数据，不会使用自身缓存，故返回区域真实数据。原表述会误导学习者错误使用`dig +norecurse`来绕过缓存。依据：RFC1034 §4.3.1，RFC2308 §5。",
+        "old": "可通过`dig +norecurse`强制查询权威服务器绕过缓存",
+        "replacement": "可通过指定权威服务器地址并使用 `dig +norecurse` 参数发送非递归查询：仅当查询的是权威服务器时，该参数仅设置DNS查询的递归期望位（RD）为0，权威服务器直接存储区域主数据且不会使用自身缓存，因此返回区域中的真实数据；若向递归服务器发送 `dig +norecurse`，递归服务器仍会使用自身缓存响应非递归查询，无法绕过缓存",
+        "references": [
+          "RFC1034 §4.3.1",
+          "RFC2308 §5"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "权威服务器返回RCODE=3（NXDOMAIN）仅代表域名不存在，当域名存在但无对应类型资源记录时，会返回RCODE=0且答案段为空（NODATA响应），二者需明确区分，原表述易导致学习者混淆。依据：RFC2308 §2.1。",
+        "old": "域名不存在时需返回RCODE=3（Name Error）",
+        "replacement": "域名不存在时需返回RCODE=3（Name Error，NXDOMAIN）；若域名存在但无指定类型的资源记录，则返回RCODE=0，答案段为空，权威段包含SOA记录（即NODATA响应），需与NXDOMAIN明确区分",
+        "references": [
+          "RFC2308 §2.1"
+        ]
+      }
+    ],
+    "limitations": [
+      "本章仅覆盖DNS基础命名、委派与递归/权威链路的核心逻辑，未涉及DNSSEC、现代缓存机制（如serve-stale）、DNS记录类型进阶限制（如NS/MX记录不可为CNAME）、ANY查询特性、负缓存TTL规则等内容"
+    ],
+    "applied": 2,
+    "unmatched": []
+  },
+  "app-02": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "dig的+norecurse参数仅会在DNS查询中清除Recursion Desired（RD）位，用于告知远程权威服务器不执行递归解析，但该参数不会跳过dig客户端自身的本地缓存，原表述会误导学习者认为该参数可排除本地缓存干扰，属于事实错误。依据RFC1035 §4.1.1中DNS头部RD位的定义。",
+        "old": "关键参数`+norecurse`强制Resolver不使用自身缓存，直接向指定权威服务器（ns1.example.com）发起查询，排除本地缓存干扰。",
+        "replacement": "关键参数`+norecurse`将DNS查询的Recursion Desired (RD)位设为0，使得指定的权威服务器不会执行递归解析（仅返回权威答案或 referral 信息，而非自行递归获取结果），用于测试该权威服务器是否直接返回正确记录；若需排除dig自身的客户端缓存，需使用`dig +nocache`等其他参数。",
+        "references": [
+          "RFC1035 §4.1.1",
+          "dig官方文档"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "Linux系统中systemd-resolved对应的resolvectl工具，列出缓存记录的正确命令为`resolvectl show-cache`，而非原文本中的`resolvectl cache show`，原命令错误将导致学习者无法执行该操作，属于命令使用错误。依据systemd-resolved的man page（8）文档。",
+        "old": "`resolvectl cache show` 列出正缓存与负缓存的所有记录",
+        "replacement": "`resolvectl show-cache` 列出正缓存与负缓存的所有记录",
+        "references": [
+          "systemd-resolved(8) man page"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "DNS负缓存的TTL值并非仅由SOA记录的MINIMUM字段决定，依据RFC2308 §5，负缓存的TTL应为SOA记录自身TTL与MINIMUM字段的最小值，原表述遗漏了SOA记录自身TTL的影响，导致对负缓存TTL的理解不完整。",
+        "old": "其中SOA的`MINIMUM=86400s`（24小时），是负缓存的TTL",
+        "replacement": "其中SOA的`MINIMUM=86400s`（24小时），负缓存的TTL取该值与SOA记录自身TTL的最小值（RFC2308 §5）",
+        "references": [
+          "RFC2308 §5"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "关于负缓存的实现要求已更新：RFC1034中将负缓存定义为可选功能，但RFC2308 §8明确要求所有缓存数据的DNS解析器必须实现负缓存功能，原表述未反映该标准更新，属于过时标准引用。",
+        "old": "负缓存是RFC1034定义的可选功能",
+        "replacement": "负缓存是DNS协议中用于存储不存在的域名或记录类型查询结果的机制，在RFC1034中被定义为可选，自RFC2308（1998）起，要求所有缓存数据的DNS解析器必须实现该功能",
+        "references": [
+          "RFC2308 §8"
+        ]
+      }
+    ],
+    "limitations": [
+      "未核实现代操作系统中resolv.conf的具体配置差异、不同DNS resolver（如Unbound、BIND）的负缓存实现细节，以及应用层对DNS缓存的额外影响（如浏览器缓存）；仅基于核心DNS标准RFC及通用工具文档进行审核"
+    ],
+    "applied": 4,
+    "unmatched": []
+  },
+  "app-03": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "错误地将TCP传输的触发条件表述为响应尺寸超过UDP默认载荷阈值，实际触发条件应为响应尺寸超过客户端与服务器通过EDNS协商的UDP payload大小（RFC7766 Section5、RFC6891 Section6.2.2）",
+        "old": "查询的响应尺寸超过UDP默认载荷阈值",
+        "replacement": "查询的响应尺寸超过客户端与服务器通过EDNS协商的UDP payload阈值",
+        "references": [
+          "RFC7766 Section5",
+          "RFC6891 Section6.2.2"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "错误地将客户端UDP payload大小表述为默认应设为4096字节，实际应为客户端使用4096字节作为推荐的起始值（RFC6891 Section6.2.5）",
+        "old": "客户端默认应将UDP payload设为4096字节",
+        "replacement": "客户端应使用4096字节作为UDP payload的推荐起始值",
+        "references": [
+          "RFC6891 Section6.2.5"
+        ]
+      }
+    ],
+    "limitations": [],
+    "applied": 2,
+    "unmatched": []
+  },
+  "app-04": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "RFC7234明确要求共享缓存必须遵守`private`响应指令，不得将标记为私有用户的响应存储在共享缓存中，不存在共享代理通常忽略`private`指令的情况，该错误说法会误导学习者对HTTP缓存安全机制的理解",
+        "old": "共享代理（CDN）通常会忽略`private`指令",
+        "replacement": "共享代理（CDN）必须遵守`private`响应指令，不得缓存标记为`private`的响应；若需允许共享缓存（如CDN）存储该资源，应使用`public`指令或移除`private`标记，`s-maxage`用于覆盖共享缓存的`max-age`设置",
+        "references": [
+          "RFC7234 Section 5.2.2.6"
+        ]
+      }
+    ],
+    "limitations": [],
+    "applied": 1,
+    "unmatched": []
+  },
+  "app-05": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "错误表述HTTP管道化的服务器响应约束，误导学习者认为服务器需顺序处理响应，实际服务器可并行处理安全请求但必须严格按请求顺序发送响应",
+        "old": "服务器必须按请求的先后顺序返回响应，不能提前返回后续请求的响应",
+        "replacement": "服务器必须按请求的发送顺序返回响应（响应顺序与请求顺序完全一致），即使后续请求先处理完成，也需等待前序请求的响应发送完成后再发送后续请求的响应",
+        "references": [
+          "RFC9112 Section9.3.2"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "混淆分块编码chunk-size字段的进制规则，chunk-size为十六进制数字，示例中'32'是十六进制值对应十进制50，原表述易误导为十进制32",
+        "old": "// 分块1：chunk-size=32（十进制50）",
+        "replacement": "// 分块1：chunk-size为十六进制32，对应十进制50",
+        "references": [
+          "RFC9112 Appendix A"
+        ]
+      }
+    ],
+    "limitations": [
+      "未核实HTTP/1.1代理处理管道化的边缘场景、现代HTTP客户端管道化的实际禁用细节"
+    ],
+    "applied": 2,
+    "unmatched": []
+  },
+  "app-06": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "HTTP/3保留的HTTP语义帧不止HEADERS和DATA，还包括SETTINGS、PUSH_PROMISE、GOAWAY等多个HTTP协议语义相关的帧，该表述遗漏了HTTP/3的关键帧类型，误导学习者认为仅存在这两种帧。依据RFC9114第7节定义的HTTP/3帧类型及附录A.2.5说明。",
+        "old": "HTTP/3仅保留与HTTP语义相关的帧（如HEADERS、DATA）",
+        "replacement": "HTTP/3保留所有与HTTP语义相关的帧，包括但不限于HEADERS、DATA、SETTINGS、PUSH_PROMISE、GOAWAY等；而HTTP/2用于流控、流关闭、控制信号传递的部分控制帧（如WINDOW_UPDATE、RST_STREAM、PING、CONTINUATION）则被QUIC的传输层机制替代，控制逻辑下放给QUIC，减少了HTTP层的状态维护（RFC9114 Appendix A.2.5）",
+        "references": [
+          "RFC9114 Section7",
+          "RFC9114 Appendix A.2.5"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "现有内容仅提及QUIC流的独立重传特性，遗漏了HTTP/3多路复用的关键细节：QUIC的拥塞控制仍在整个连接层面共享，连接级拥塞或带宽限制会影响所有HTTP/3流，并非所有问题仅由流独立解决，该缺失可能导致学习者误解QUIC多路复用的全部特性。依据RFC9114第1.2节。",
+        "old": "QUIC流独立重传，某流丢包不影响其他流",
+        "replacement": "QUIC流独立重传，某流丢包不影响其他流；但QUIC的拥塞控制仍在整个连接层面共享，因此连接级的拥塞状态、带宽限制等仍会影响所有该连接上的HTTP/3流，仅通过流独立重传解决了HTTP/2中TCP层全局队头阻塞（因丢包导致所有流停滞）的问题",
+        "references": [
+          "RFC9114 Section1.2"
+        ]
+      }
+    ],
+    "limitations": [],
+    "applied": 2,
+    "unmatched": []
+  },
+  "app-07": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "RFC4251为SSH协议架构文档，仅定义整体架构、术语与安全框架，不包含具体报文格式与强制算法要求；SSH传输层协议（SSH-TRANS）的密钥协商报文定义于RFC4253，其第7章包含SSH_MSG_KEXINIT、SSH_MSG_NEWKEYS等相关内容",
+        "old": "关键报文（RFC4251第7章）",
+        "replacement": "关键报文（SSH传输层协议，RFC4253第7章）",
+        "references": [
+          "RFC4253"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "SSH报文所属规范的文档错误，原表格中指定报文对应的RFC章节错误关联到RFC4251，SSH各分层协议的报文对应独立规范（如传输层对应RFC4253、用户认证层对应RFC4252、连接层对应RFC4254）",
+        "old": "RFC4251节号",
+        "replacement": "对应规范节号",
+        "references": [
+          "RFC4253",
+          "RFC4252",
+          "RFC4254"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "测试题1的参考答案中错误关联连接层的定义到RFC4251，RFC4251未定义连接层协议细节，SSH连接协议（SSH-CONNECT）为独立规范文档",
+        "old": "连接层负责多路复用逻辑通道，实现多种服务（RFC4251第9.5节）",
+        "replacement": "连接层（SSH连接协议）负责多路复用加密隧道为多个逻辑通道，实现交互式Shell、端口转发等多种服务，对应RFC4254（SSH Connection Protocol）的相关章节",
+        "references": [
+          "RFC4254"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "常见误区中错误声称RFC4251强制要求支持AES-CTR/HMAC-SHA1，该规范仅定义架构框架，算法要求在RFC4253中，且AES-CTR、HMAC-SHA1均非IETF强制要求的SSH算法",
+        "old": "RFC4251强制要求支持AES-CTR/HMAC-SHA1",
+        "replacement": "SSH传输层的强制算法要求定义于RFC4253，AES-CTR模式加密算法和HMAC-SHA1消息认证码并非IETF强制要求的SSH算法，且HMAC-SHA1因哈希碰撞风险已被列为弱算法，生产环境应优先选择AES-GCM、ChaCha20-Poly1305等现代安全算法",
+        "references": [
+          "RFC4253",
+          "RFC6194"
+        ]
+      }
+    ],
+    "limitations": [
+      "无额外未核实范围"
+    ],
+    "applied": 3,
+    "unmatched": [
+      {
+        "severity": "error",
+        "reason": "SSH报文所属规范的文档错误，原表格中指定报文对应的RFC章节错误关联到RFC4251，SSH各分层协议的报文对应独立规范（如传输层对应RFC4253、用户认证层对应RFC4252、连接层对应RFC4254）",
+        "old": "RFC4251节号",
+        "replacement": "对应规范节号",
+        "references": [
+          "RFC4253",
+          "RFC4252",
+          "RFC4254"
+        ]
+      }
+    ]
+  },
+  "app-08": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "RFC4409已被RFC6409（Message Submission for Mail）正式取代，当前用于SMTP邮件提交的标准协议是RFC6409，过时的RFC4409不应再被引用。",
+        "old": "轻量客户端通常建议使用消息提交协议（RFC4409）而非原生SMTP。",
+        "replacement": "轻量客户端通常建议使用消息提交协议（RFC6409）而非原生SMTP。",
+        "references": [
+          "RFC6409"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "当前文本明确标注未覆盖RFC8314中SMTP隐式TLS端口（465）的标准细节，而RFC8314是标准化隐式TLS邮件传输端口的现行标准，明确了端口465的使用场景和安全要求，该缺失会影响学习者对邮件加密端口的正确理解。",
+        "old": "未覆盖RFC8314中SMTP隐式TLS端口（465）的标准细节",
+        "replacement": "本章节基于RFC5321和RFC9051，未覆盖RFC8314中SMTP隐式TLS端口（465）的标准细节；根据RFC8314，端口465被标准化为IMAP、SMTP邮件提交的隐式TLS端口，用于建立加密的邮件访问与提交会话，替代早期非标准化的端口465使用，需在生产环境中优先考虑该端口的加密传输配置。",
+        "references": [
+          "RFC8314"
+        ]
+      }
+    ],
+    "limitations": [
+      "未验证本章外的DNS、TCP等网络协议内容，仅针对SMTP/IMAP邮件系统相关内容进行审查。"
+    ],
+    "applied": 2,
+    "unmatched": []
+  },
+  "app-09": {
+    "findings": [],
+    "limitations": [
+      "未覆盖 RFC7822 中定义的 NTP 网络时间安全（NTS）的具体机制与实现要求，仅提及该补充规范存在但未展开说明；对于 SNMP 部分，未涉及部分扩展 MIB 或安全模型（如 USM 的详细加密协商流程）的深入说明"
+    ],
+    "applied": 0,
+    "unmatched": []
+  },
+  "link-01": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "错误地将接口MTU的值与以太网封装类型直接关联，实际MTU是链路层可配置的最大数据单元，与封装类型无一一对应关系，该错误会误导学习者使用MTU作为判断封装类型的依据，正确判断方式应为抓包查看帧结构的特征字段。",
+        "old": "若MTU为1500，默认使用DIX以太网封装；若MTU为1492，则使用IEEE 802.3封装。",
+        "replacement": "接口的MTU是可配置的链路层最大数据单元，与以太网封装类型无直接对应关系，仅通过MTU无法判断封装类型；需通过抓包查看以太网帧的第13-14字节区分两种封装：若该字节数值>1500则为DIX以太网帧（字段为Ether-Type标识上层协议），若≤1500则为IEEE 802.3帧（字段为Length标识数据载荷长度）。",
+        "references": [
+          "RFC1122",
+          "IEEE 802.3"
+        ]
+      }
+    ],
+    "limitations": [
+      "未覆盖IEEE 802.3最新标准（如多速率以太网介质参数）、IEEE 802.1Q VLAN标签扩展（如优先级映射）的具体技术细节"
+    ],
+    "applied": 1,
+    "unmatched": []
+  },
+  "net-01": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "错误表述RFC1122对IP数据报大小的要求级别，将协议建议（SHOULD）表述为强制要求（要求），误导学习者对协议规范的理解",
+        "old": "(RFC1122要求主机发送的IP数据报不超过576字节，避免中间分片)",
+        "replacement": "(RFC1122建议主机在未知路径最小MTU时，发送的IP数据报不超过576字节，以避免中间网络分片)",
+        "references": [
+          "RFC1122 Section 3.3.2"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "错误表述RFC1122对IP数据报大小的要求级别，同时错误关联IP分片DoS攻击的防护逻辑，误导学习者对安全机制的理解",
+        "old": "RFC1122要求主机发送的IP数据报不超过576字节，避免中间分片",
+        "replacement": "RFC1122建议主机在未知路径最小MTU时，发送的IP数据报不超过576字节，以减少中间网络分片；IP分片攻击防护依赖更多协议及安全机制，并非仅由数据报大小限制实现",
+        "references": [
+          "RFC1122 Section 3.3.2"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "示例中IP数据报总长度计算错误，遗漏IP头部的20字节，导致封装后数据单元大小计算不符合实际结构，误导学习者对封装机制的理解",
+        "old": "总长度=548字节（TCP头部20字节+数据520字节）",
+        "replacement": "总长度=560字节（IP头部20字节+TCP头部20字节+应用数据520字节）",
+        "references": []
+      }
+    ],
+    "limitations": [
+      "未核实IPv6相关的分层、封装及设备角色细节，仅覆盖IPv4核心规范",
+      "未补充IEEE 802系列链路层的分层细节，仅聚焦TCP/IP核心分层",
+      "未涉及现代网络协议栈（如QUIC、HTTP/2）的相关内容，超出本章核心范围"
+    ],
+    "applied": 1,
+    "unmatched": [
+      {
+        "severity": "error",
+        "reason": "错误表述RFC1122对IP数据报大小的要求级别，将协议建议（SHOULD）表述为强制要求（要求），误导学习者对协议规范的理解",
+        "old": "(RFC1122要求主机发送的IP数据报不超过576字节，避免中间分片)",
+        "replacement": "(RFC1122建议主机在未知路径最小MTU时，发送的IP数据报不超过576字节，以避免中间网络分片)",
+        "references": [
+          "RFC1122 Section 3.3.2"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "错误表述RFC1122对IP数据报大小的要求级别，同时错误关联IP分片DoS攻击的防护逻辑，误导学习者对安全机制的理解",
+        "old": "RFC1122要求主机发送的IP数据报不超过576字节，避免中间分片",
+        "replacement": "RFC1122建议主机在未知路径最小MTU时，发送的IP数据报不超过576字节，以减少中间网络分片；IP分片攻击防护依赖更多协议及安全机制，并非仅由数据报大小限制实现",
+        "references": [
+          "RFC1122 Section 3.3.2"
+        ]
+      }
+    ]
+  },
+  "link-02": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "RFC 1042定义的是IP over IEEE 802 LAN的SNAP封装规则，不涉及WLAN二层帧格式与漫游机制，属于错误的规范引用，会误导学习者对WLAN标准体系的认知",
+        "old": "1. RFC 1042：IP over IEEE 802网络的封装，第2节（定义WLAN的二层帧格式）；",
+        "replacement": "1. RFC 8041：IEEE 802.11r快速BSS过渡（FT）的安全框架，定义了WLAN快速漫游的密钥协商与安全机制；",
+        "references": [
+          "RFC 8041: IEEE 802.11r Fast BSS Transition (FT) Security Framework"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "原文认为跨SSID切换必然属于三层移动性，但当前商用WLAN控制器（如Cisco、Aruba WLC）支持同一控制器管理下多个SSID结合802.11r、802.11k实现跨SSID二层漫游，IP地址保持不变，该描述忽略了此类场景，会导致学习者对漫游边界的错误理解",
+        "old": "3. **跨SSID可漫游**：漫游仅支持同一ESS（相同SSID、VLAN），跨SSID切换会导致IP地址变化，属于三层移动性，需DHCP重新分配IP。",
+        "replacement": "3. **跨SSID可漫游**：原生标准漫游仅支持同一ESS（相同SSID、VLAN）；跨SSID切换在无WLAN控制器配合时通常属于三层移动性（IP地址变更），但同一无线控制器（WLC）管理下的多个SSID可结合802.11r、802.11k等标准实现跨SSID的二层快速漫游，IP地址保持不变。",
+        "references": [
+          "IEEE 802.11r-2020 Clause 9",
+          "IEEE 802.11-2020 Clause 11.2"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "邻居AP列表（Neighbor Report元素）是由IEEE 802.11k标准引入的可选字段，IEEE 802.11-2020将802.11k合并后，该字段不属于第11节（基础BSS框架），属于节号引用错误，误导学习者查找规范",
+        "old": "关键字段为**RSSI**（当前AP的信号强度，用于判断链路质量是否恶化）和**邻居AP列表**（IEEE 802.11-2020第11节规定为可选字段，携带邻居AP的BSSID与RSSI，减少STA扫描时间）",
+        "replacement": "关键字段为**RSSI**（当前AP的信号强度，用于判断链路质量是否恶化）和**邻居AP列表**（由IEEE 802.11k标准定义的可选Neighbor Report元素，携带邻居AP的BSSID与RSSI，减少STA的主动扫描时间）",
+        "references": [
+          "IEEE 802.11k-2008 Clause 7.3.2.118",
+          "IEEE 802.11-2020 Clause 11.4.6"
+        ]
+      }
+    ],
+    "limitations": [
+      "未核实特定厂商WLAN控制器跨SSID漫游的具体实现细节，未验证不同驱动下iw工具漫游阈值命令的兼容性差异"
+    ],
+    "applied": 3,
+    "unmatched": []
+  },
+  "net-04": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "NSEC is a DNSSEC mechanism for proving non-existence of domain names, not related to IPv6 Neighbor Discovery Protocol (NDP) security. The standard mechanism for defending against NDP spoofing attacks is Secure Neighbor Discovery (SEND, RFC3971) using cryptographic addresses or IPsec protection. The incorrect reference to NSEC misleads learners about NDP-specific security mechanisms.",
+        "old": "部分系统支持邻居发现保护（NSEC）",
+        "replacement": "部分系统支持邻居发现保护（如基于RFC3971的Secure Neighbor Discovery，SEND）",
+        "references": [
+          "RFC3971"
+        ]
+      }
+    ],
+    "limitations": [
+      "未核查ARP协议中无线场景交互的细节、NDP的DNSSEC关联配置等超出当前ARPNDP对照范围的内容"
+    ],
+    "applied": 1,
+    "unmatched": []
+  },
+  "net-02": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "ping命令默认发送ICMP Echo请求（类型8/0），无法生成RFC1122定义的地址掩码请求（类型17）报文，会导致用户尝试该命令时失败，误导故障排障",
+        "old": "1. 主机作为请求者，发送掩码请求：`ping -O -t 1 255.255.255.255`（部分工具需专门ICMP客户端）；",
+        "replacement": "1. 主机作为请求者，发送掩码请求：需使用专门的ICMP客户端（如`icmpmask`工具或自定义脚本），ping命令默认发送ICMP Echo请求，无法生成地址掩码请求报文；",
+        "references": [
+          "RFC1122 3.2.2.9"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "RFC1122未要求主机禁止响应定向广播，该限制是RFC1812（IPv4路由器规范）提出的防范Smurf攻击的要求，错误引用会导致学习者混淆协议边界",
+        "old": "Smurf攻击利用定向广播发送大量ICMP请求，导致网络拥塞，现代OS（RFC1122要求）默认禁止响应定向广播，路由器需配置「no ip directed-broadcast」命令。",
+        "replacement": "Smurf攻击利用定向广播发送大量ICMP请求，导致网络拥塞，现代OS（从RFC1812规范开始要求）默认禁止响应定向广播，路由器需配置「no ip directed-broadcast」命令以阻断此类攻击。",
+        "references": [
+          "RFC1122 3.3.6",
+          "RFC1812 5.3.7.2"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "子网号全0/全1的放开是RFC1878（1995）正式修正RFC950限制的规范，原文未提及该官方更新依据，可能导致学习者对子网划分规则的演化存在认知缺失",
+        "old": "RFC950最初禁止子网号全0/全1，避免与主网络广播地址冲突，但现代网络中该限制已放开，需注意：若误将`172.16.0.0/19`（子网号全0）的广播地址误认为主网络广播（`172.16.255.255`），会导致流量异常。",
+        "replacement": "RFC950最初禁止子网号全0/全1，避免与主网络广播地址冲突，该限制由RFC1878（1995）正式修正，现代网络已允许子网号全0/全1，需注意：若误将`172.16.0.0/19`（子网号全0）的广播地址误认为主网络广播（`172.16.255.255`），会导致流量异常。",
+        "references": [
+          "RFC950",
+          "RFC1878"
+        ]
+      }
+    ],
+    "limitations": [
+      "未核实不同Linux发行版中ICMP地址掩码客户端工具的可用性差异、Cisco最新IOS中定向广播抑制命令的配置细节、现代OS对ICMP地址掩码请求的默认响应行为"
+    ],
+    "applied": 3,
+    "unmatched": []
+  },
+  "net-03": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "错误定义IPv6扩展首部的长度字段，RFC8200 Section4.2明确规定该字段为Hdr Ext Len，取值是本扩展首部排除前8字节部分的长度（以8字节为单位），而非整个首部的长度，该错误会误导学习者对扩展首部结构的理解，可能导致实现时的解析错误。",
+        "old": "② 扩展首部长度（1字节，以8字节为单位，指定本首部的长度）",
+        "replacement": "② Hdr Ext Len（扩展首部长度，1字节，以8字节为单位，指定本扩展首部排除前8字节部分的长度）",
+        "references": [
+          "RFC8200 Section4.2"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "Wireshark过滤器语法错误，Wireshark中IPv6下一个首部的字段名是ipv6.nxt而非ip6.nextheader，原过滤器无法正常执行过滤操作，会误导学习者进行报文诊断时使用无效命令。",
+        "old": "`ip6.nextheader == 0`（逐跳）、`ip6.nextheader ==43`（路由）",
+        "replacement": "`ipv6.nxt == 0`（逐跳）、`ipv6.nxt ==43`（路由）",
+        "references": [
+          "Wireshark官方IPv6显示过滤器文档"
+        ]
+      }
+    ],
+    "limitations": [
+      "未覆盖RFC7707定义的IPv6移动性扩展内容，仅包含基础IPv6地址与NDP功能相关内容"
+    ],
+    "applied": 2,
+    "unmatched": []
+  },
+  "net-05": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "DHCPv4客户端选择Offer的依据描述错误，混淆了`Requested IP Address`（请求IP地址）与`Server Identifier`（服务器标识，DHCP选项54）的作用，正确逻辑是客户端选择包含匹配Server Identifier的Offer，对应之前发送Offer的服务器，否则通常选择第一个到达的Offer，会导致学习者误解DHCPv4的Offer选择机制",
+        "old": "误区2：DHCPv4客户端会选第一个到达的Offer——规范未强制，客户端通常选择`Requested IP Address`指定的服务器，否则选第一个（RFC2131第3.6节，可选行为）",
+        "replacement": "误区2：DHCPv4客户端会选第一个到达的Offer——规范未强制，客户端通常选择包含匹配`Server Identifier`（DHCP选项54，即之前发送该Offer的服务器）的Offer，否则通常选择第一个到达的Offer（RFC2131第3.6节，客户端选择行为为可选）",
+        "references": [
+          "RFC2131第3.6节"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "无状态DHCPv6的规范演进描述错误，原RFC3736定义的无状态DHCPv6机制被RFC8415整合并取代，而非简单“整合”，会导致学习者对DHCPv6规范的更新产生误解",
+        "old": "（RFC3736，被RFC8415整合）",
+        "replacement": "（原RFC3736定义的无状态DHCPv6机制被RFC8415整合并取代）",
+        "references": [
+          "RFC8415第1.1节"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "DHCPv4服务器探测地址是否被占用的具体方法描述错误，误用了不适合同网段地址探测的ICMP Echo请求，实际DHCP服务器通常使用ARP请求探测同一网段的地址是否被占用，会导致学习者排障时采用错误的探测方法",
+        "old": "必须探测该地址是否被占用（如ICMP Echo请求，必需行为）",
+        "replacement": "必须确保该地址未被其他客户端占用（通常通过发送ARP请求探测，属于服务器必需行为）",
+        "references": [
+          "RFC2131第3.2节"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "DHCPv4客户端ARP探测新IP的RFC节号引用错误，原文本引用RFC2131第2.2节，但实际相关内容位于RFC2131第4.3.1节，会导致学习者查找规范时定位到错误章节",
+        "old": "客户端需ARP探测新分配IP（RFC2131第2.2节）",
+        "replacement": "客户端需对新分配的IP执行ARP冲突探测（RFC2131第4.3.1节）",
+        "references": [
+          "RFC2131第4.3.1节"
+        ]
+      }
+    ],
+    "limitations": [
+      "未核实RFC7084运营商级DHCPv6部署的具体细节，仅覆盖基础客户端配置逻辑"
+    ],
+    "applied": 2,
+    "unmatched": [
+      {
+        "severity": "error",
+        "reason": "DHCPv4客户端选择Offer的依据描述错误，混淆了`Requested IP Address`（请求IP地址）与`Server Identifier`（服务器标识，DHCP选项54）的作用，正确逻辑是客户端选择包含匹配Server Identifier的Offer，对应之前发送Offer的服务器，否则通常选择第一个到达的Offer，会导致学习者误解DHCPv4的Offer选择机制",
+        "old": "误区2：DHCPv4客户端会选第一个到达的Offer——规范未强制，客户端通常选择`Requested IP Address`指定的服务器，否则选第一个（RFC2131第3.6节，可选行为）",
+        "replacement": "误区2：DHCPv4客户端会选第一个到达的Offer——规范未强制，客户端通常选择包含匹配`Server Identifier`（DHCP选项54，即之前发送该Offer的服务器）的Offer，否则通常选择第一个到达的Offer（RFC2131第3.6节，客户端选择行为为可选）",
+        "references": [
+          "RFC2131第3.6节"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "DHCPv4服务器探测地址是否被占用的具体方法描述错误，误用了不适合同网段地址探测的ICMP Echo请求，实际DHCP服务器通常使用ARP请求探测同一网段的地址是否被占用，会导致学习者排障时采用错误的探测方法",
+        "old": "必须探测该地址是否被占用（如ICMP Echo请求，必需行为）",
+        "replacement": "必须确保该地址未被其他客户端占用（通常通过发送ARP请求探测，属于服务器必需行为）",
+        "references": [
+          "RFC2131第3.2节"
+        ]
+      }
+    ]
+  },
+  "net-06": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "RFC4443 Section2.4(f)仅要求IPv6节点限制ICMPv6错误消息的生成速率，未强制要求ICMPv4实现支持该机制，原表述错误扩大了速率限制的适用范围。",
+        "old": "- **必需行为**：ICMPv6必须实现「包太大」消息；所有IPv4/IPv6实现必须支持ICMP错误消息的速率限制（RFC4443 Section2.4(f)）。",
+        "replacement": "- **必需行为**：ICMPv6必须实现「包太大」消息；IPv6节点必须限制所生成的ICMPv6错误消息的速率（RFC4443 Section2.4(f)），ICMPv4实现无此强制要求。",
+        "references": [
+          "RFC4443 Section2.4(f)",
+          "RFC792"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "IPv6无Don't Fragment（DF）位，`ping6`命令不支持`-M do`选项；且`-s 1472`配置生成的IPv6报文总长度（40字节IPv6头 +8字节ICMPv6头 +1472字节 payload=1520字节）远超IPv6最小MTU（1280字节），该命令对IPv6 PMTU测试无效。",
+        "old": "- ICMPv6测试：`ping6 -s 1472 -M do target`（IPv6最小MTU为1280，若失败则说明路径MTU更小）。",
+        "replacement": "- ICMPv6测试：`ping6 -s 1232 target`（IPv6无Don't Fragment位，路径MTU发现依赖中间路由器返回的ICMPv6「包太大」消息；上述命令发送的IPv6报文总长度为1280字节（40字节IPv6头 +8字节ICMPv6头 +1232字节 payload），若被丢弃则说明路径MTU小于1280）。",
+        "references": [
+          "RFC8200",
+          "RFC1191"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "IPv4路径MTU（PMTU）的总长度限制解释存在表述混淆，原括号内说明未明确总长度是IP头、传输头与payload的总和，易造成学习者误解。",
+        "old": "后续报文总长度不超过该MTU（IP头20字节+ICMP/UDP头8字节 payload）。",
+        "replacement": "后续报文总长度不超过该MTU（IPv4报文总长度 = IP头长度 + ICMP/UDP头长度 + payload长度）；以默认IP头20字节、传输头8字节为例，payload最大长度为MTU -28。",
+        "references": [
+          "RFC791",
+          "RFC1191"
+        ]
+      }
+    ],
+    "limitations": [
+      "未核实RFC4884扩展ICMP报文的相关内容，未覆盖ICMPv4源抑制消息的现代应用场景，未涉及ICMP在NAT环境下的特殊行为细节。"
+    ],
+    "applied": 3,
+    "unmatched": []
+  },
+  "net-07": {
+    "findings": [],
+    "limitations": [
+      "仅覆盖RFC3022定义的传统NAT基础机制，缺少RFC5164定义的Hairpin NAT等高级NAT场景的一手材料，未覆盖对称NAT、NAT穿越等复杂NAT部署与故障场景"
+    ],
+    "applied": 0,
+    "unmatched": []
+  },
+  "net-09": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "RFC2328仅定义OSPFv2的明文、MD5认证，SHA系列认证为后续扩展规范，不属于RFC2328原始内容，原表述错误包含未定义认证类型",
+        "old": "OSPFv2支持明文/MD5/SHA认证（RFC2328 Section8）",
+        "replacement": "OSPFv2支持明文（类型1）、MD5（类型2）认证（RFC2328 Section8）",
+        "references": [
+          "RFC2328 Section8",
+          "RFC4552"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "RFC2328明确禁止的是虚拟链路通过的中间区域（Transit Area）为Stub区域，而非虚拟链路本身配置在Stub区域，原表述误导学习者产生错误配置逻辑",
+        "old": "禁止将虚拟链路配置在Stub区域中",
+        "replacement": "虚拟链路的中间区域（Transit Area）不能是Stub区域",
+        "references": [
+          "RFC2328 Section3.6"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "虚拟链路端点必须属于骨干区域（Area0），R2的Area0接口故障后不再是Area0路由器，原自测题解析新增R4的方案不符合规范，核心逻辑错误",
+        "old": "若R2的Area0接口故障，需新增R4为Area1的ABR，Area3为Transit Area；② 配置R2和R4的虚拟链路，指定Transit Area为Area3；③ 虚拟链路属于Area0，R2通过Area3的内部路径连通R4，R4将Area1的路由注入Area0，R1可通过虚拟链路到达R3。核心条件：虚拟链路两端为ABR，共享Transit Area，且Transit Area非Stub区域",
+        "replacement": "若R2的Area0接口故障，需新增一台同时属于Area0和Area1的ABR（假设为R3），配置R2和R3之间的虚拟链路，指定Transit Area为Area1；虚拟链路属于Area0，R2通过Area1的内部路径连通R3，实现被分割的Area0骨干连接，使R1可通过虚拟链路到达R3。核心条件：虚拟链路两端均为骨干区域（Area0）的路由器，共享的Transit Area非Stub区域",
+        "references": [
+          "RFC2328 Section15"
+        ]
+      }
+    ],
+    "limitations": [
+      "未核实OSPFv3（RFC5340）的完整机制与扩展特性；未覆盖OSPF与BGP等外部路由协议的重分发细节；未包含现代OSPF优化特性（如Incremental SPF）"
+    ],
+    "applied": 2,
+    "unmatched": [
+      {
+        "severity": "error",
+        "reason": "虚拟链路端点必须属于骨干区域（Area0），R2的Area0接口故障后不再是Area0路由器，原自测题解析新增R4的方案不符合规范，核心逻辑错误",
+        "old": "若R2的Area0接口故障，需新增R4为Area1的ABR，Area3为Transit Area；② 配置R2和R4的虚拟链路，指定Transit Area为Area3；③ 虚拟链路属于Area0，R2通过Area3的内部路径连通R4，R4将Area1的路由注入Area0，R1可通过虚拟链路到达R3。核心条件：虚拟链路两端为ABR，共享Transit Area，且Transit Area非Stub区域",
+        "replacement": "若R2的Area0接口故障，需新增一台同时属于Area0和Area1的ABR（假设为R3），配置R2和R3之间的虚拟链路，指定Transit Area为Area1；虚拟链路属于Area0，R2通过Area1的内部路径连通R3，实现被分割的Area0骨干连接，使R1可通过虚拟链路到达R3。核心条件：虚拟链路两端均为骨干区域（Area0）的路由器，共享的Transit Area非Stub区域",
+        "references": [
+          "RFC2328 Section15"
+        ]
+      }
+    ]
+  },
+  "net-08": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "该语句错误宣称主机必须配置默认网关才能跨网通信，与RFC1122的规定矛盾——RFC仅要求主机通常需要默认网关来访问非直连网络，若存在覆盖目标网络的静态路由，则无需默认网关即可跨网通信。",
+        "old": "主机必须配置至少一个默认网关，否则无法跨网通信",
+        "replacement": "主机通常需要配置至少一个默认网关以访问非直连网络，若存在覆盖目标网络的静态路由，则无需配置默认网关即可访问对应网络",
+        "references": [
+          "RFC1122 3.3.1 段（主机路由选择中，默认网关为无更具体路由时的 fallback，而非必需）"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "文本在路由收敛的动态路由协议示例中提及RIP，但未引用定义RIP核心规范的RFC1058，导致学习者缺乏权威依据理解RIP收敛的机制要求。",
+        "old": "动态路由协议（如RIP）的更新报文需在网络中泛洪，所有路由器收到新路由后同步更新路由表",
+        "replacement": "动态路由协议（如RIP，定义于RFC1058）的更新报文需在网络中泛洪，所有路由器收到新路由后同步更新路由表",
+        "references": [
+          "RFC1058"
+        ]
+      }
+    ],
+    "limitations": [
+      "未验证RFC1058关于RIP路由收敛的具体超时、更新机制细节，仅补充了标准引用的缺失；未覆盖OSPF等其他动态路由协议的收敛规范补充"
+    ],
+    "applied": 2,
+    "unmatched": []
+  },
+  "trans-01": {
+    "findings": [],
+    "limitations": [
+      "本章仅覆盖IPv4环境下的基础UDP协议核心规范，未涉及UDP在IPv6中的校验和规则差异、UDP-Lite（RFC3828）等扩展机制，以及QUIC等基于UDP的高层协议的实现细节。"
+    ],
+    "applied": 0,
+    "unmatched": []
+  },
+  "net-10": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "RFC4271 §5.1.1定义ORIGIN属性的取值1为EGP路径起源类型，未标记该值为废弃状态，文中对EGP标记为“已废弃”的表述错误，会误导学习者对BGP路径起源类型的认知",
+        "old": "- 1（EGP）：路由通过EGP协议学习（已废弃）",
+        "replacement": "- 1（EGP）：路由通过EGP协议学习（BGP-4规范中定义的路径起源类型）",
+        "references": [
+          "RFC4271 §5.1.1"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "BGP路径属性分类中，MULTI_EXIT_DISC（MED）属于可选非传递属性，而非可选可传递属性；文中表格将MED归类到可选可传递属性并标注错误示例，会误导学习者对属性传递规则的理解",
+        "old": "| 可选可传递（Optional Transitive） | 可选是否支持，若识别则需传递给其他AS，如MULTI_EXIT_DISC（MED）             |",
+        "replacement": "| 可选可传递（Optional Transitive） | 可选是否支持，若识别则需传递给其他AS，如AGGREGATOR |",
+        "references": [
+          "RFC4271 §5"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "MED作为可选非传递属性，仅在跨AS（EBGP）传递时不保留，在同一AS内部（IBGP）应保留用于路径决策；文中表述“不得在IBGP中传递时保留”的规则错误，会导致BGP路径选择逻辑异常",
+        "old": "MED是“入口属性”，仅用于同一AS对外部AS的路径比较，不得在IBGP中传递时保留",
+        "replacement": "MED是“入口属性”，仅用于不同AS间的路径比较（EBGP对等体间使用），在同一AS内部（IBGP对等体间）传递时应保留该属性，用于跨AS路径的入口优先级决策",
+        "references": [
+          "RFC4271 §5.1.4"
+        ]
+      }
+    ],
+    "limitations": [
+      "本次审核仅基于提供的RFC4271内容，未验证RFC8212等BGP安全相关更新标准及厂商实现细节，对BGP部分扩展机制的覆盖不足"
+    ],
+    "applied": 3,
+    "unmatched": []
+  },
+  "trans-02": {
+    "findings": [],
+    "limitations": [
+      "仅覆盖TCP连接建立、关闭与状态机核心逻辑，未涉及TCP拥塞控制、流量控制等扩展机制，以及RFC中如TCP Fast Open、MD5签名等高级特性；未验证部分Linux内核实现中的TCP行为细节（如TIME-WAIT超时的可调配置）"
+    ],
+    "applied": 0,
+    "unmatched": []
+  },
+  "trans-05": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "TCP拥塞控制基于连接（5元组）进行，而非单流/端口级（TCP本身仅存在单字节流），原表述错误混淆了TCP流模型与拥塞控制的层级",
+        "old": "QUIC拥塞控制是连接级的，而TCP拥塞控制默认是单流（端口）级",
+        "replacement": "QUIC拥塞控制是连接级的，而TCP拥塞控制默认也是连接级的；QUIC通过独立的ACK帧处理，可更精准地测量每个流的丢包情况，但实际仍以连接级窗口为核心，避免TCP多流环境下的拥塞控制失效问题",
+        "references": [
+          "RFC5681",
+          "RFC9000 §13"
+        ]
+      }
+    ],
+    "limitations": [
+      "未验证QUIC v2版本的迁移、拥塞控制特性，仅针对RFC9000规范内容审核"
+    ],
+    "applied": 1,
+    "unmatched": []
+  },
+  "trans-04": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "RTO计算公式不符合RFC6298标准，错误使用了K=1而非推荐值4，且max操作数顺序错误",
+        "old": "根据RFC6298，RTO = smoothed_RTT + max(1, G)×RTTvar",
+        "replacement": "根据RFC6298，RTO = smoothed_RTT + max(G, 4 × RTTvar)，其中G为时钟粒度（通常取值1毫秒），4为RFC6298推荐的常量K",
+        "references": [
+          "RFC6298"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "快速恢复阶段的ssthresh未遵循RFC5681的下限要求，必须至少为2倍SMSS",
+        "old": "设置ssthresh=cwnd/2，cwnd=ssthresh",
+        "replacement": "设置ssthresh为max(cwnd/2, 2×SMSS)，再将cwnd设为ssthresh",
+        "references": [
+          "RFC5681 Section3.2"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "拥塞避免阶段的cwnd限制规则错误，正确的限制是飞行大小（已发送未确认数据量）不超过min(cwnd, rwnd)",
+        "old": "禁止cwnd超过SMSS×(flight size的分段数)的极限值，避免发送过量数据",
+        "replacement": "确保飞行大小（已发送但未被累积确认的数据量）不超过拥塞窗口cwnd与接收端通告窗口rwnd的最小值，防止发送过量数据",
+        "references": [
+          "RFC5681 Section3.1"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "初始窗口的参考标准过时，RFC2414已被RFC6928替代，当前推荐初始窗口至少为10×SMSS",
+        "old": "需增大初始窗口（RFC2414允许初始窗口最多10分段），但必须符合SMSS规则",
+        "replacement": "需增大初始窗口，当前推荐初始窗口至少为10×SMSS（RFC6928）；若采用传统标准需遵循RFC5681+RFC3390的分段数上限规则",
+        "references": [
+          "RFC6928",
+          "RFC2414"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "RFC9002允许QUIC采用其他拥塞控制算法（如CUBIC、BBR等），但当前文本仅提及基于NewReno的变体，缺少对其他算法的说明",
+        "old": "RFC9002为QUIC定义了基于NewReno的拥塞控制",
+        "replacement": "RFC9002为QUIC定义了基于NewReno的基础拥塞控制，同时QUIC实现可选用其他标准拥塞控制算法，如CUBIC（RFC8312）、BBR（RFC8311）等",
+        "references": [
+          "RFC9002 Section7",
+          "RFC8312",
+          "RFC8311"
+        ]
+      }
+    ],
+    "limitations": [
+      "未覆盖RFC8311 BBR拥塞控制算法的细节，也未提及其他现代TCP/QUIC拥塞控制算法（如CUBIC）的相关内容"
+    ],
+    "applied": 5,
+    "unmatched": []
+  },
+  "trans-03": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "TCP的实际发送窗口由对端通告的接收窗口（SND.WND）和本地维护的拥塞窗口（cwnd）共同决定，取值为两者最小值；原定义未提及拥塞窗口，会误导学习者忽略拥塞控制对发送能力的核心限制，属于核心机制错误。",
+        "old": "发送窗口的合法范围为 `[SND.UNA, SND.UNA + SND.WND -1]`，仅该范围内的序号可被发送。",
+        "replacement": "发送窗口的合法范围为 `[SND.UNA, SND.UNA + min(SND.WND, cwnd) -1]`，仅该范围内的序号可被发送；其中 SND.WND 是对端通过ACK段通告的接收窗口，cwnd 是TCP维护的拥塞窗口（根据网络动态调整），实际发送能力由两者的最小值决定，这是TCP拥塞控制的基础（RFC5681）。",
+        "references": [
+          "RFC5681",
+          "RFC9293"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "快速重传的核心定义归属RFC3782，RFC5681是TCP基本拥塞控制规范，仅将快速重传纳入优化；原表述的规范引用错误，且“重复的ACK=2001”表述不准确，实际应为“相同确认号的重复ACK”，会误导学习者对规范归属和触发条件的理解。",
+        "old": "快速重传：若服务器连续收到3个重复的`ACK=2001`（因未收到第二段，无法返回更高的确认号），客户端无需等待超时，直接重传丢失段（RFC5681定义的优化，RFC9293中作为可选行为）。",
+        "replacement": "快速重传：若服务器连续收到3个相同编号的ACK（因丢失段无法推进确认号，导致重复ACK），客户端无需等待超时，直接重传丢失段（该机制定义于RFC3782，RFC5681将其作为拥塞控制的性能增强项，RFC9293中列为可选行为）。",
+        "references": [
+          "RFC3782",
+          "RFC5681",
+          "RFC9293"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "选择性确认（SACK）是现代TCP中提升重传效率的核心机制，广泛应用于主流操作系统；原内容未提及，会误导学习者对TCP重传优化能力的认知，属于关键机制缺失。",
+        "old": "若第二段（`Seq=2001`，长度1500）在传输中丢失，会触发两种符合规范的重传机制：\n1. **超时重传（RTO）**：客户端动态计算RTT（往返时间）后，等待RTO时间未收到第二段的确认，则重传`Seq=2001`的段，`SND.NXT`保持2001（原段未被确认，序号未推进）。\n2. **快速重传**：若服务器连续收到3个重复的`ACK=2001`（因未收到第二段，无法返回更高的确认号），客户端无需等待超时，直接重传丢失段（RFC5681定义的优化，RFC9293中作为可选行为）。",
+        "replacement": "若第二段（`Seq=2001`，长度1500）在传输中丢失，会触发三种符合规范的重传与恢复机制：\n1. **超时重传（RTO）**：客户端动态计算RTT（往返时间）后，等待RTO时间未收到第二段的确认，则重传`Seq=2001`的段，`SND.NXT`保持2001（原段未被确认，序号未推进）。\n2. **快速重传**：若服务器连续收到3个相同编号的ACK（因未收到第二段，确认号无法推进，导致重复ACK），客户端无需等待超时，直接重传丢失段（该机制定义于RFC3782，RFC5681将其纳入拥塞控制优化，RFC9293中列为可选行为）。\n3. **选择性确认（SACK）**：若TCP选项中携带SACK块（RFC2018），客户端可精确获知多个丢失段的位置，减少不必要的重传，大幅提升高丢包网络下的传输效率。",
+        "references": [
+          "RFC2018"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "TCP半关闭是连接终止的核心边界机制，原内容未提及，会导致学习者对TCP连接完整生命周期的认知缺失，属于关键机制缺失。",
+        "old": "- 窗口缩放：RFC1323定义窗口缩放，SYN段中协商缩放因子S，实际窗口值为`Window值 × 2^S`，RFC9293中说明基础窗口为16位，缩放为可选扩展。",
+        "replacement": "- 窗口缩放：RFC1323定义窗口缩放，SYN/SYN-ACK段中协商缩放因子S，实际窗口值为`Window值 × 2^S`，RFC9293中说明基础窗口为16位，缩放为可选扩展。\n- 半关闭连接：TCP支持半关闭状态，即一端发送FIN（停止发送数据但仍可接收数据），另一端回复ACK后进入CLOSE_WAIT状态；发送方进入FIN_WAIT_2状态，直到应用读取完所有接收的数据后才发送FIN完成全关闭，该机制对应连接终止的边界处理（RFC9293第3.5节）。",
+        "references": [
+          "RFC9293"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "原内容仅覆盖RFC5681的基础拥塞控制，未提及现代主流TCP拥塞算法，无法反映当前实际部署的TCP技术现状，属于内容缺失。",
+        "old": "滑动窗口流量控制的原理与工程表现，能解读窗口值的动态调整过程；",
+        "replacement": "滑动窗口流量控制的原理（含拥塞窗口cwnd和接收窗口rwnd的共同限制）与工程表现，能解读窗口值的动态调整；熟悉现代TCP拥塞算法（如CUBIC、BBR）的基本特性，这些算法是当前主流操作系统的默认实现（RFC8312、RFC9002）；",
+        "references": [
+          "RFC8312",
+          "RFC9002"
+        ]
+      }
+    ],
+    "limitations": [],
+    "applied": 3,
+    "unmatched": [
+      {
+        "severity": "error",
+        "reason": "快速重传的核心定义归属RFC3782，RFC5681是TCP基本拥塞控制规范，仅将快速重传纳入优化；原表述的规范引用错误，且“重复的ACK=2001”表述不准确，实际应为“相同确认号的重复ACK”，会误导学习者对规范归属和触发条件的理解。",
+        "old": "快速重传：若服务器连续收到3个重复的`ACK=2001`（因未收到第二段，无法返回更高的确认号），客户端无需等待超时，直接重传丢失段（RFC5681定义的优化，RFC9293中作为可选行为）。",
+        "replacement": "快速重传：若服务器连续收到3个相同编号的ACK（因丢失段无法推进确认号，导致重复ACK），客户端无需等待超时，直接重传丢失段（该机制定义于RFC3782，RFC5681将其作为拥塞控制的性能增强项，RFC9293中列为可选行为）。",
+        "references": [
+          "RFC3782",
+          "RFC5681",
+          "RFC9293"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "TCP半关闭是连接终止的核心边界机制，原内容未提及，会导致学习者对TCP连接完整生命周期的认知缺失，属于关键机制缺失。",
+        "old": "- 窗口缩放：RFC1323定义窗口缩放，SYN段中协商缩放因子S，实际窗口值为`Window值 × 2^S`，RFC9293中说明基础窗口为16位，缩放为可选扩展。",
+        "replacement": "- 窗口缩放：RFC1323定义窗口缩放，SYN/SYN-ACK段中协商缩放因子S，实际窗口值为`Window值 × 2^S`，RFC9293中说明基础窗口为16位，缩放为可选扩展。\n- 半关闭连接：TCP支持半关闭状态，即一端发送FIN（停止发送数据但仍可接收数据），另一端回复ACK后进入CLOSE_WAIT状态；发送方进入FIN_WAIT_2状态，直到应用读取完所有接收的数据后才发送FIN完成全关闭，该机制对应连接终止的边界处理（RFC9293第3.5节）。",
+        "references": [
+          "RFC9293"
+        ]
+      }
+    ]
+  },
+  "sec-01": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "根据RFC8446 Section4.4.2，非预共享密钥（非PSK）模式下，Server仅在未选择匿名认证密码套件时才需发送Certificate消息；匿名认证套件无需证书，原表述遗漏此约束，会导致学习者对触发条件产生错误理解。",
+        "old": "当协商的密钥交换算法**未使用PSK**时，Server必须发送`Certificate`消息（如ECDHE-RSA、ECDHE-ECDSA）",
+        "replacement": "当协商的密钥交换算法未使用PSK且选择的密码套件为非匿名认证套件时，Server必须发送`Certificate`消息（如ECDHE-RSA、ECDHE-ECDSA）",
+        "references": [
+          "RFC8446 Section4.4.2"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "自测题答案错误地省略了非匿名密码套件的约束，与RFC8446的规定不符，会导致学习者对Server发送Certificate消息的触发条件产生错误认知。",
+        "old": "当协商的密钥交换算法未使用PSK时，即RFC8446中所有非预共享密钥的密钥交换方式（如ECDHE-RSA、ECDHE-ECDSA），Server必须发送`Certificate`消息进行身份认证",
+        "replacement": "当协商的密钥交换算法未使用PSK且选择的密码套件为非匿名认证套件时，Server必须发送`Certificate`消息进行身份认证",
+        "references": [
+          "RFC8446 Section4.4.2"
+        ]
+      }
+    ],
+    "limitations": [
+      "仅核查了TLS1.3核心规范RFC8446，未覆盖RFC9000中QUIC与TLS1.3交互的0-RTT补充细节"
+    ],
+    "applied": 2,
+    "unmatched": []
+  },
+  "net-11": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "错误表述RFC7348中VTEP对内层VLAN标签的处理规则：RFC7348 Section6.1明确，针对解封装的VXLAN帧，若带内层VLAN标签，除非明确配置允许传递给非VXLAN接口，否则应丢弃；针对封装操作，VTEP除非明确配置需要保留，否则不应在隧道数据包中包含内层VLAN标签，并非要求封装时必须剥离内层VLAN标签。",
+        "old": "Inner VLAN标签冲突：RFC7348 Section6规定，VTEP封装时应剥离Inner VLAN标签，容器网络插件需默认配置剥离，避免VLAN与VNI的隔离冲突。",
+        "replacement": "Inner VLAN标签冲突：RFC7348 Section6.1规定，针对解封装的VXLAN帧，若带有内层VLAN标签，除非明确配置允许传递给非VXLAN接口，否则应当丢弃；针对封装操作，VTEP除非明确配置需要保留，否则不应在隧道数据包中包含内层VLAN标签，容器网络插件应基于该规则配置，避免VLAN与VNI的隔离冲突。",
+        "references": [
+          "RFC7348 Section6.1"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "错误将示例多播组表述为VNI对应标准地址：RFC7348未定义VNI与多播组地址的固定映射规则，承载广播/未知单播流量的多播组由控制平面或管理员配置，239.0.0.1仅为示例值，并非VNI=1000的标准对应地址。",
+        "old": "外层IP头：源=10.0.0.1，目标=239.0.0.1（VNI=1000对应的多播组，用于处理广播/未知单播）",
+        "replacement": "外层IP头：源=10.0.0.1，目标=239.0.0.1（示例：与VNI=1000对应的Underlay多播组，实际多播组地址由控制平面工具或管理员配置，RFC7348未定义VNI与多播组地址的标准映射规则）",
+        "references": [
+          "RFC7348 Section4.1"
+        ]
+      }
+    ],
+    "limitations": [
+      "未覆盖容器网络VXLAN部署中除Flannel外的其他CNI插件（如Calico、OVN-Kubernetes）实现细节；未涉及VXLAN高级部署场景（如跨集群VXLAN、BGP EVPN集成）；仅基于RFC7348和Flannel示例内容，缺少工业级实践全量验证信息"
+    ],
+    "applied": 1,
+    "unmatched": [
+      {
+        "severity": "error",
+        "reason": "错误表述RFC7348中VTEP对内层VLAN标签的处理规则：RFC7348 Section6.1明确，针对解封装的VXLAN帧，若带内层VLAN标签，除非明确配置允许传递给非VXLAN接口，否则应丢弃；针对封装操作，VTEP除非明确配置需要保留，否则不应在隧道数据包中包含内层VLAN标签，并非要求封装时必须剥离内层VLAN标签。",
+        "old": "Inner VLAN标签冲突：RFC7348 Section6规定，VTEP封装时应剥离Inner VLAN标签，容器网络插件需默认配置剥离，避免VLAN与VNI的隔离冲突。",
+        "replacement": "Inner VLAN标签冲突：RFC7348 Section6.1规定，针对解封装的VXLAN帧，若带有内层VLAN标签，除非明确配置允许传递给非VXLAN接口，否则应当丢弃；针对封装操作，VTEP除非明确配置需要保留，否则不应在隧道数据包中包含内层VLAN标签，容器网络插件应基于该规则配置，避免VLAN与VNI的隔离冲突。",
+        "references": [
+          "RFC7348 Section6.1"
+        ]
+      }
+    ]
+  },
+  "sec-02": {
+    "findings": [
+      {
+        "severity": "gap",
+        "reason": "教材未明确IPsec协议实现的强制要求：必须支持ESP协议，AH协议为可选支持，依据RFC4301 Section 3.2规定，此缺失可能导致学习者错误认为AH是IPsec实现的强制组件",
+        "old": "核心组件包括安全协议（AH/ESP）、安全关联（SA）、密钥管理（IKE）三大模块。",
+        "replacement": "核心组件包括安全协议（AH/ESP）、安全关联（SA）、密钥管理（IKE）三大模块；IPsec实现必须支持ESP协议，AH协议为可选支持。",
+        "references": [
+          "RFC4301 Section 3.2"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "教材未明确AH与ESP协议的抗重放特性差异：AH的抗重放为可选（接收方可决定是否启用），ESP的抗重放为强制特性，依据RFC4301 Section 3.2规定，此缺失可能导致学习者错误理解AH的安全服务范围",
+        "old": "数据源认证、数据完整性、抗重放，**无加密**",
+        "replacement": "数据源认证、数据完整性，抗重放为可选特性（可由接收方决定是否启用），无加密",
+        "references": [
+          "RFC4301 Section 3.2"
+        ]
+      }
+    ],
+    "limitations": [
+      "本章未覆盖RFC3706定义的IPsec DPD（对等体存活检测）机制，相关补充内容未纳入讲解"
+    ],
+    "applied": 2,
+    "unmatched": []
+  },
+  "net-12": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "IGMPv3规范中通用成员查询的默认发送间隔为125秒，而非60秒；该错误会导致学习者在组播网络排障时对查询消息的出现周期产生错误预期，干扰故障定位。依据RFC 3376第8节定时器默认值定义",
+        "old": "每60秒（2倍查询间隔）发送通用成员查询，确定直连网络的活跃组",
+        "replacement": "每125秒（默认通用查询间隔，IGMPv3规范标准值）发送通用成员查询，确定直连网络的活跃组",
+        "references": [
+          "RFC 3376, Section 8"
+        ]
+      }
+    ],
+    "limitations": [
+      "未核查IPv6组播协议MLD、BIDIR-PIM模式、PIM Assert详细规则、组播多域路由等内容，仅覆盖IPv4 IGMP、PIM-SM/PIM-DM核心机制及基础诊断方法"
+    ],
+    "applied": 1,
+    "unmatched": []
+  },
+  "exp-01": {
+    "findings": [
+      {
+        "severity": "gap",
+        "reason": "错误将DNS本地缓存的属性定义为可选，且未说明否定响应缓存的关键规则，违反RFC1034对缓存的建议及RFC2308对否定缓存的必需性与TTL规则的定义",
+        "old": "可选行为：递归查询（Resolver可选择向本地DNS服务器发送递归查询，由服务器完成迭代）、本地缓存（RFC1034 5.4建议缓存但非强制）",
+        "replacement": "可选行为：递归查询（Resolver可选择向本地DNS服务器发送递归查询，由服务器完成迭代）；本地缓存：RFC1034 5.4建议所有DNS响应均可缓存，RFC2308明确要求**否定响应（NXDOMAIN/NODATA）的缓存是Resolver的必需行为**，否定响应的缓存TTL取值为SOA记录自身的TTL与SOA记录中MINIMUM字段值的最小值，这是DNS否定缓存排障的核心依据",
+        "references": [
+          "RFC1034 Section5.4",
+          "RFC2308 Section5"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "未区分DNS两种核心否定响应NXDOMAIN与NODATA，这是DNS排障的关键区分点，违反RFC2308定义",
+        "old": "故障1（域名不存在）：执行`dig @8.8.8.8 nonexistent.example.com A`，观察RCODE=3（NXDOMAIN），对应RFC1034中域名未注册的状态",
+        "replacement": "故障1（域名不存在，NXDOMAIN）：执行`dig @8.8.8.8 nonexistent.example.com A`，观察到RCODE=3（NXDOMAIN，对应RFC1034中域名不存在的状态）；需注意另一种否定响应NODATA：RCODE=0但Answer段为空，此时域名存在，但无对应查询类型的记录，两者排障逻辑不同，该定义由RFC2308明确",
+        "references": [
+          "RFC2308 Section5"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "未覆盖现代Linux系统中resolvectl工具的DNS缓存排查与清理方法，仅提及nscd服务，无法适配主流systemd系统的排障需求",
+        "old": "缓存排查：执行`dig www.example.com A`两次，若第二次响应时间显著缩短，则存在本地缓存；若缓存过期仍返回旧地址，需手动清理缓存（如Linux：`systemctl restart nscd`）",
+        "replacement": "缓存排查：执行`dig www.example.com A`两次，若第二次响应时间显著缩短，则存在本地缓存；若需排查或清理systemd-resolved的DNS缓存（主流现代Linux默认使用），可执行`resolvectl show-cache`查看缓存内容，`resolvectl flush-caches`快速清理；若缓存过期仍返回旧地址，可手动清理缓存（如Linux：`systemctl restart nscd`）",
+        "references": [
+          "RFC8499 Section4.1",
+          "systemd-resolve man page"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "未明确DoH仅为DNS安全传输方式，与DNSSEC无等价性，易导致安全概念混淆",
+        "old": "DNS劫持：公共WiFi或恶意路由器会篡改DNS响应，将域名指向攻击者IP，需使用`+trace`验证权威服务器的迭代查询结果",
+        "replacement": "DNS劫持：公共WiFi或恶意路由器会篡改DNS响应，将域名指向攻击者IP，需使用`+trace`验证权威服务器的迭代查询结果；需注意DoH（DNS over HTTPS）仅为DNS的加密传输方式，不等同于DNSSEC，无法替代域名真实性校验，仅能避免传输层窃听风险",
+        "references": [
+          "RFC8484",
+          "RFC4033"
+        ]
+      }
+    ],
+    "limitations": [
+      "未覆盖TCP现代拥塞算法差异、HTTP/2与QUIC的队头阻塞区别、CNAME与其他DNS记录共存限制、ANY查询的局限性等分层排障关键知识点"
+    ],
+    "applied": 2,
+    "unmatched": [
+      {
+        "severity": "gap",
+        "reason": "未覆盖现代Linux系统中resolvectl工具的DNS缓存排查与清理方法，仅提及nscd服务，无法适配主流systemd系统的排障需求",
+        "old": "缓存排查：执行`dig www.example.com A`两次，若第二次响应时间显著缩短，则存在本地缓存；若缓存过期仍返回旧地址，需手动清理缓存（如Linux：`systemctl restart nscd`）",
+        "replacement": "缓存排查：执行`dig www.example.com A`两次，若第二次响应时间显著缩短，则存在本地缓存；若需排查或清理systemd-resolved的DNS缓存（主流现代Linux默认使用），可执行`resolvectl show-cache`查看缓存内容，`resolvectl flush-caches`快速清理；若缓存过期仍返回旧地址，可手动清理缓存（如Linux：`systemctl restart nscd`）",
+        "references": [
+          "RFC8499 Section4.1",
+          "systemd-resolve man page"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "未明确DoH仅为DNS安全传输方式，与DNSSEC无等价性，易导致安全概念混淆",
+        "old": "DNS劫持：公共WiFi或恶意路由器会篡改DNS响应，将域名指向攻击者IP，需使用`+trace`验证权威服务器的迭代查询结果",
+        "replacement": "DNS劫持：公共WiFi或恶意路由器会篡改DNS响应，将域名指向攻击者IP，需使用`+trace`验证权威服务器的迭代查询结果；需注意DoH（DNS over HTTPS）仅为DNS的加密传输方式，不等同于DNSSEC，无法替代域名真实性校验，仅能避免传输层窃听风险",
+        "references": [
+          "RFC8484",
+          "RFC4033"
+        ]
+      }
+    ]
+  },
+  "net-13": {
+    "findings": [
+      {
+        "severity": "error",
+        "reason": "RFC3246定义Expedited Forwarding（EF）PHB对应的DSCP值为46，其二进制表示为101110，原文本错误使用101100（对应DSCP44），若按此配置会导致EF流量标记错误，影响VoIP、视频会议等低时延业务的转发质量",
+        "old": "EF（101100）",
+        "replacement": "EF（101110）",
+        "references": [
+          "RFC3246"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "RFC4594规定AF类RED阈值配置规则为：高丢弃优先级AF类的max-threshold ≤ 低丢弃优先级AF类的min-threshold，AF1类的正确规则应为AF13的max-threshold ≤ AF12的min-threshold；AF12的max-threshold ≤ AF11的min-threshold；AF11的max-threshold ≤ 队列总内存，原文本错误将AF12的min-threshold与AF11的min-threshold设为≤关系，混淆参数逻辑，会导致AQM配置错误",
+        "old": "RED配置：AF13的max-threshold ≤ AF12的min-threshold ≤ AF11的min-threshold",
+        "replacement": "RED配置：AF13的max-threshold ≤ AF12的min-threshold；AF12的max-threshold ≤ AF11的min-threshold；AF11的max-threshold ≤ 队列总内存",
+        "references": [
+          "RFC4594"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "根据RFC4594的AF类RED阈值规则，AF23（丢弃优先级3）的max-threshold需≤ AF22（丢弃优先级2）的min-threshold，因此AF22的min-threshold最小需为500，正确答案应为B；原文本答案选A且解释与答案矛盾，会误导学习者对AQM配置规则的理解",
+        "old": "答案：A（AFxy的规则是max-threshold of higher discard priority ≤ min-threshold of lower discard priority，AF23的丢弃优先级高于AF22，故AF22的min-threshold需大于AF23的max-threshold，选A）",
+        "replacement": "答案：B（AFxy的规则是max-threshold of higher discard priority ≤ min-threshold of lower discard priority，AF23的丢弃优先级高于AF22，故AF22的min-threshold需≥ AF23的max-threshold，即最小设为500，选B）",
+        "references": [
+          "RFC4594"
+        ]
+      },
+      {
+        "severity": "error",
+        "reason": "RFC4594第1.4.1.2节明确采用\"rate-based queuing\"描述加权类队列调度机制，原文本使用非标准术语\"Rate Queuing\"，易导致学习者混淆相关标准定义",
+        "old": "Rate Queuing",
+        "replacement": "rate-based queuing",
+        "references": [
+          "RFC4594"
+        ]
+      },
+      {
+        "severity": "gap",
+        "reason": "缺少RFC8325中关于物联网（IoT）DSCP演进规则的覆盖，无法指导IoT流量的QoS配置，当前仅提及参考厂商实现，缺失IETF最新QoS规范的标准依据",
+        "old": "RFC8325中关于物联网DSCP的演进规则未在本章覆盖，IoT流量的QoS配置需参考厂商最新实现，无标准精确参数",
+        "replacement": "RFC8325定义了物联网（IoT）流量专属的DSCP编码与PHB映射规则（如IoT业务专属的AF4x或保留DSCP值），建议参考该规范配置IoT流量的QoS，具体实现需结合厂商细节",
+        "references": [
+          "RFC8325"
+        ]
+      }
+    ],
+    "limitations": [
+      "未核实厂商私有QoS实现细节，未包含RFC8325的IoT DSCP具体配置参数，未覆盖现代AQM算法如CoDel、PIAS等的实现规则"
+    ],
+    "applied": 4,
+    "unmatched": [
+      {
+        "severity": "error",
+        "reason": "RFC4594第1.4.1.2节明确采用\"rate-based queuing\"描述加权类队列调度机制，原文本使用非标准术语\"Rate Queuing\"，易导致学习者混淆相关标准定义",
+        "old": "Rate Queuing",
+        "replacement": "rate-based queuing",
+        "references": [
+          "RFC4594"
+        ]
+      }
+    ]
+  }
+}

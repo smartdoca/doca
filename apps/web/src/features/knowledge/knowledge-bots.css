@@ -1,0 +1,235 @@
+.kb-list-toolbar,
+.kb-detail-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.kb-list-toolbar p {
+  flex: 1;
+  color: var(--text-secondary, #646a73);
+}
+.kb-detail-toolbar h2 {
+  margin: 0;
+  font-size: 18px;
+  flex: 1;
+}
+.kb-detail-toolbar > svg {
+  color: #5269c7;
+}
+.kb-bot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 18px;
+}
+.kb-bot-card {
+  padding: 24px;
+  border: 1px solid var(--border-color, #e4e7ee);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.kb-bot-card > svg {
+  color: #5269c7;
+}
+.kb-bot-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.kb-bot-card p,
+.kb-bot-card small {
+  margin: 0;
+  color: var(--text-secondary, #646a73);
+}
+.kb-bot-card a {
+  margin-top: 12px;
+}
+.kb-empty {
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-secondary, #646a73);
+  text-align: center;
+}
+.kb-empty h3 {
+  padding: 0;
+  color: var(--text-primary, #1f2329);
+}
+.knowledge-bot-dialog {
+  width: min(720px, calc(100vw - 32px));
+}
+.knowledge-bot-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+}
+.knowledge-bot-dialog .kb-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.kb-check input {
+  width: 16px;
+  height: 16px;
+}
+.knowledge-bot-dialog fieldset {
+  border: 1px solid var(--border-color, #e4e7ee);
+  border-radius: 10px;
+  margin: 18px 0;
+}
+.kb-channel-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.kb-share-link,
+.kb-key-create,
+.kb-members li,
+.kb-keys li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.kb-share-link input,
+.kb-key-create input,
+.kb-members li > span,
+.kb-keys li > span {
+  flex: 1;
+  min-width: 0;
+}
+.kb-members,
+.kb-keys ul {
+  list-style: none;
+  padding: 0;
+}
+.kb-members li,
+.kb-keys li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-color, #e4e7ee);
+}
+.kb-keys {
+  margin: 20px 0;
+}
+.kb-keys summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.kb-keys code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.knowledge-bots-page.is-bot-detail .answer-chat {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+.knowledge-bots-page.is-bot-detail {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 16px;
+}
+.knowledge-bots-page.is-bot-detail .kb-detail-toolbar {
+  flex: none;
+  min-width: 0;
+}
+.knowledge-bots-page.is-bot-detail .kb-detail-toolbar h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.knowledge-bots-page.is-bot-detail .kb-detail-toolbar > :not(h2) {
+  flex: none;
+}
+.kc-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+}
+.kc-attachments span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  background: var(--surface-muted, #f5f6fa);
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.kc-attachment-history {
+  font-size: 12px;
+  opacity: 0.8;
+  padding: 8px 0;
+}
+@media (max-width: 700px) {
+  .kb-list-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .kb-key-create {
+    flex-wrap: wrap;
+  }
+  .kb-detail-toolbar {
+    gap: 8px;
+  }
+  .kb-detail-toolbar h2 {
+    font-size: 16px;
+  }
+}
+.knowledge-public-page {
+  padding: 16px;
+  height: 100dvh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.knowledge-public-page > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.knowledge-public-page > header h1 {
+  margin: 0;
+  font-size: 18px;
+  flex: 1;
+}
+.knowledge-public-page .knowledge-chat {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+.global-header-tools > #knowledge-share-slot,
+.topbar .global-header-tools > #knowledge-share-slot {
+  width: auto;
+  min-width: max-content;
+  height: auto;
+  display: flex;
+  align-items: center;
+}
+#knowledge-share-slot:empty {
+  display: none;
+}
+#knowledge-share-slot .share-trigger {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.kb-bot-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.kb-bot-card-header > svg { color: #6879bc; }
+.kb-bot-card-actions { display: flex; align-items: center; gap: 4px; }
+.kb-bot-card { padding: 22px; gap: 14px; }
+.kb-bot-card a { margin-top: auto; padding-top: 10px; }

@@ -1,0 +1,14 @@
+{
+  "name": "@doca/plugin-host",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@doca/plugin-contracts": "workspace:*",
+    "@doca/plugin-sdk": "workspace:*"
+  }
+}

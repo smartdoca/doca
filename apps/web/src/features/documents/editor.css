@@ -1,0 +1,685 @@
+.document-editor-shell {
+  min-width: 0;
+  background: #fff;
+  container-type: inline-size;
+  container-name: document;
+}
+.document-editor-shell .sk-attachment {
+  cursor: pointer;
+}
+.editor-content .sk-page-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 0;
+}
+.editor-content .sk-page {
+  flex: 1;
+  width: 100%;
+  min-height: max(420px, calc(100dvh - 150px));
+  margin: 0;
+  padding: 8px 48px 80px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.editor-content .sk-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: #fff;
+}
+.editor-panel-toggle {
+  position: sticky;
+  top: 16px;
+  float: right;
+  margin: 14px 14px 0 0;
+  z-index: 9;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px #1f232908;
+  gap: 4px;
+}
+.editor-panel-toggle small {
+  font-size: 11px;
+}
+.selection-comment-create {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #dce4f5;
+  background: #fff;
+  color: #3370ff;
+  margin: 14px 0;
+}
+.editor-peers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  vertical-align: middle;
+  font-size: 13px;
+}
+.user-badge > .user-avatar {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  font-size: 12px;
+}
+.user-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.editor-columns {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+  padding: 10px 20px 0;
+  align-items: start;
+  min-height: 480px;
+}
+.editor-columns.with-comments {
+  grid-template-columns: 200px minmax(0, 1fr) 280px;
+}
+.editor-content {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  position: relative;
+  min-width: 0;
+  max-width: 850px;
+  width: 100%;
+  margin: 0 auto;
+}
+.editor-content .rich-editor {
+  min-height: 400px;
+}
+.document-outline {
+  position: sticky;
+  top: 18px;
+  max-height: calc(100dvh - 110px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: 12px;
+}
+.document-outline small {
+  display: block;
+  color: #8f959e;
+  margin: 0 8px 12px;
+}
+.document-outline button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: #646a73;
+  font-size: 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: 4px;
+}
+.document-outline button:hover {
+  background: #f5f6f8;
+  color: #3370ff;
+}
+.document-outline .outline-collapse {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  margin: 0 0 10px 2px;
+}
+.document-outline-links {
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-width: thin;
+}
+.document-outline-links > button {
+  min-height: 34px;
+  padding: 6px 8px;
+  line-height: 22px;
+  margin-bottom: 2px;
+}
+.document-outline-links > button[data-level="1"],
+.document-outline-links > button[data-level="2"] {
+  font-weight: 600;
+}
+.document-outline-links > button[aria-current="location"] {
+  color: #245bdb;
+  background: transparent;
+}
+.document-outline .outline-empty {
+  color: #8f959e;
+  font-size: 12px;
+  padding: 0 8px;
+}
+.editor-columns.outline-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+.editor-columns.with-comments.outline-collapsed {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+.content-comments {
+  position: relative;
+  min-width: 0;
+  background: transparent;
+  padding: 0 0 0 12px;
+  border-left: 1px solid #eff0f1;
+}
+.content-comments > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  margin-bottom: 8px;
+}
+.content-comments > header > h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.content-comments > header > h3 > small {
+  color: #8f959e;
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 400;
+}
+.content-comments > header > .icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
+  border-radius: 6px;
+}
+.content-comments > header > .icon > svg {
+  display: block;
+  flex-shrink: 0;
+}
+.selection-thread {
+  background: #fff;
+  border: 1px solid #e6e8ed;
+  border-radius: 7px;
+  padding: 12px;
+  margin: 0 0 16px;
+  width: 100%;
+  font-size: 13px;
+}
+.comment-quote {
+  border: 0;
+  border-left: 3px solid #ccd9ff;
+  background: transparent;
+  text-align: left;
+  display: block;
+  width: 100%;
+  overflow-wrap: anywhere;
+  color: #646a73;
+  font-size: 12px;
+}
+.selection-reply {
+  padding: 12px 0;
+  border-bottom: 1px solid #f1f2f5;
+}
+.selection-reply p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.content-comments button {
+  font-size: 12px;
+}
+.content-comments textarea {
+  width: 100%;
+  min-height: 90px;
+}
+.editor-content .slate-editor {
+  min-height: 400px;
+}
+/* Only suppress the text editor's native focus ring. Void blocks also carry
+   contenteditable=false and rely on the SDK outline for selection feedback. */
+.editor-content [data-slate-editor="true"] {
+  outline: none;
+}
+.content-comments blockquote {
+  font-size: 12px;
+  border-left: 3px solid #3370ff;
+  padding-left: 10px;
+  margin: 12px 0;
+}
+.editor-content button {
+  font-family: inherit;
+}
+.editor-content p {
+  color: inherit;
+}
+.editor-peers small {
+  font-size: 11px;
+  color: #8f959e;
+}
+@container document (max-width: 1050px) {
+  .editor-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .editor-columns.with-comments {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+  .document-outline {
+    display: none;
+  }
+  .editor-content .sk-page {
+    padding: 8px 24px 80px;
+  }
+}
+.compact-document .editor-columns,
+.compact-document .editor-columns.with-comments {
+  grid-template-columns: minmax(0, 1fr);
+}
+.compact-document .content-comments {
+  position: fixed;
+  right: var(--document-panel-right, 0px);
+  top: var(--document-panel-top, 120px);
+  bottom: var(--document-panel-bottom, 0px);
+  z-index: 20;
+  width: min(360px, calc(100vw - 80px));
+  box-shadow: -8px 0 24px #18233418;
+  max-height: none;
+  overflow: auto;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+  padding: 16px;
+  background: #fff;
+  border-left: 1px solid #dee0e3;
+  border-radius: 0;
+}
+.compact-document .content-comments > header {
+  top: -16px;
+  padding-block: 12px;
+}
+.comment-cards {
+  position: relative;
+  min-height: 1px;
+}
+.content-comments > header {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 2;
+}
+.selection-thread:hover,
+.selection-thread:focus-within {
+  border-color: #a8c0ff;
+  box-shadow: 0 4px 16px #1f23290a;
+}
+.selection-thread.draft {
+  border-color: #3370ff;
+}
+.comment-time {
+  color: #8f959e;
+  font-size: 11px;
+  margin-left: 6px;
+}
+.comment-composer {
+  margin-top: 12px;
+}
+.comment-composer textarea {
+  border-radius: 7px;
+  font-size: 13px;
+}
+.remote-cursors {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  overflow: visible;
+}
+.remote-selection {
+  position: absolute;
+  opacity: 0.16;
+}
+.remote-caret {
+  position: absolute;
+  width: 0 !important;
+  border-left: 2px solid;
+}
+.remote-caret > span {
+  position: absolute;
+  left: -2px;
+  bottom: 100%;
+  border-radius: 4px 4px 4px 0;
+  padding: 2px 6px;
+  color: #fff;
+  font-size: 11px;
+  line-height: 17px;
+  white-space: nowrap;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.remote-caret > span.flip {
+  top: 100%;
+  bottom: auto;
+  border-radius: 0 4px 4px 4px;
+}
+@container document (max-width:600px) {
+  .editor-columns {
+    padding: 20px 12px 0;
+  }
+  .editor-content .sk-page {
+    padding: 20px 10px 60px;
+  }
+}
+.editor-fixed-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  width: 100%;
+  background: #fff;
+  border-bottom: 1px solid #eff0f1;
+  padding: 6px 12px;
+}
+.document-find-panel {
+  position: fixed;
+  top: 70px;
+  right: 24px;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(410px, calc(100vw - 24px));
+  padding: 8px 10px;
+  background: white;
+  color: #646a73;
+  border: 1px solid #dee0e3;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px #1f23291a;
+}
+.document-find-panel input {
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  box-shadow: none;
+  padding: 5px;
+}
+.document-find-panel span {
+  white-space: nowrap;
+  font-size: 12px;
+}
+.document-find-panel button {
+  flex: none;
+  padding: 4px;
+}
+::highlight(doca-find) {
+  background: #fff2a8;
+  color: #1f2329;
+}
+::highlight(doca-find-current) {
+  background: #ffb84d;
+  color: #1f2329;
+}
+.document-find-code {
+  outline: 2px solid #ffb84d;
+  outline-offset: -2px;
+}
+.editor-toolbar-buttons {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-inline: auto;
+  align-items: center;
+  gap: 2px;
+  min-height: 30px;
+}
+.editor-toolbar-buttons > button,
+.editor-toolbar-buttons .toolbar-item > button,
+.editor-toolbar-buttons .toolbar-overflow-item > button,
+.toolbar-history-group > button,
+.editor-toolbar-buttons summary,
+.editor-toolbar-buttons .emoji-picker > button {
+  border: 0;
+  background: transparent;
+  color: #646a73;
+  border-radius: 4px;
+  height: 30px;
+  min-width: 30px;
+  padding: 6px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.editor-toolbar-buttons > button:hover,
+.editor-toolbar-buttons .toolbar-item > button:hover,
+.toolbar-history-group > button:hover,
+.editor-toolbar-buttons button[aria-pressed="true"],
+.editor-toolbar-buttons summary:hover {
+  background: #f0f3f8;
+  color: #3370ff;
+}
+.editor-toolbar-buttons .menu > div {
+  min-width: 150px;
+  top: 34px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.editor-toolbar-buttons .menu > div button {
+  justify-content: flex-start;
+  display: flex;
+  gap: 10px;
+}
+.editor-toolbar-buttons .emoji-palette {
+  bottom: auto;
+  top: 38px;
+}
+.toolbar-divider {
+  height: 18px;
+  border-left: 1px solid #dee0e3;
+  margin: 0 4px;
+}
+.toolbar-history-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.toolbar-item {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+.toolbar-item > .menu {
+  width: 100%;
+}
+.toolbar-item > .menu > summary {
+  white-space: nowrap;
+}
+.editor-toolbar-buttons > .toolbar-overflow {
+  flex: none;
+}
+.editor-toolbar-buttons .toolbar-overflow-panel {
+  width: 230px;
+  max-width: calc(100vw - 24px);
+  right: 0;
+  left: auto;
+  padding: 8px;
+}
+.toolbar-overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+}
+.toolbar-overflow-item > span {
+  font-size: 12px;
+  color: #646a73;
+  pointer-events: none;
+}
+.toolbar-overflow-item:has(details[open]) {
+  flex-wrap: wrap;
+}
+.editor-toolbar-buttons .toolbar-overflow-item .menu > div {
+  position: static;
+  width: auto;
+  box-shadow: none;
+  border: 0;
+}
+.editor-toolbar-buttons .toolbar-overflow-item .menu[open] {
+  width: 100%;
+}
+.editor-toolbar-buttons .toolbar-overflow-item .menu[open] + span {
+  display: none;
+}
+.editor-toolbar-buttons .menu > .toolbar-font-sizes,
+.editor-toolbar-buttons .menu > .toolbar-colors {
+  padding: 8px;
+}
+.editor-fixed-toolbar ~ .editor-columns .document-outline {
+  top: 62px;
+}
+.document-inline-reference {
+  display: inline;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: #3370ff;
+  background: #edf2ff;
+  text-decoration: none;
+  box-decoration-break: clone;
+}
+.document-inline-reference .reference-icon {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-right: 3px;
+  user-select: none;
+}
+.history-editor-preview .sk-page {
+  min-height: 250px;
+  padding: 20px;
+  border: 0;
+  box-shadow: none;
+}
+.sheet-document {
+  width: 100%;
+  min-width: 0;
+  background: white;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.sheet-peer-label {
+  display: block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: white;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.sheet-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  height: 42px;
+  padding: 5px 16px;
+  color: #8f959e;
+  font-size: 12px;
+}
+.sheet-status button {
+  border: 0;
+  background: transparent;
+  color: #3370ff;
+  font-size: 12px;
+}
+.editor-toolbar-buttons .menu > .toolbar-table-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 24px);
+  gap: 3px;
+  padding: 10px;
+  width: max-content;
+  min-width: max-content;
+  max-width: none;
+  overflow: visible;
+  right: 0;
+  left: auto;
+}
+.editor-toolbar-buttons .toolbar-table-grid button {
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  min-width: 0;
+  border: 1px solid #dee0e3;
+  padding: 0;
+}
+@media (max-width: 720px) {
+  .editor-toolbar-buttons {
+    width: 100%;
+  }
+}
+.spreadsheet-view .main-scroll {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  scrollbar-gutter: auto;
+}
+.spreadsheet-view .uos-editor {
+  min-height: 0;
+  flex: 1;
+}
+.editor-toolbar-buttons .toolbar-table-grid button.in-range {
+  background: #c7d9ff;
+  border-color: #3370ff;
+}
+.toolbar-font-sizes,
+.toolbar-colors {
+  display: flex;
+  flex-wrap: wrap;
+  width: 170px;
+  gap: 3px;
+  padding: 6px 0;
+}
+.editor-toolbar-buttons .toolbar-font-sizes button,
+.editor-toolbar-buttons .toolbar-colors button {
+  width: 28px;
+  height: 28px;
+  padding: 3px;
+  justify-content: center;
+}
+/* Gutter paint containment is handled by the SDK's overflow-clip-margin.
+   Do not switch content-visibility on hover: it changes the block's formatting
+   context and can shift heading margins in the embedded document. */
+.sk-editor.is-large-document
+  .sk-editable
+  > .sk-block-frame
+  > .sk-block-gutter::before {
+  /* Bridge the 7px gap, so moving from the row to its grip keeps :hover active. */
+  content: "";
+  position: absolute;
+  left: 100%;
+  top: 0;
+  width: 8px;
+  height: 100%;
+}

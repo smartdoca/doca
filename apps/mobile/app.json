@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "Doca",
+    "slug": "zhangxiaojia",
+    "scheme": "doca",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.doca.mobile",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "NSCameraUsageDescription": "允许 Doca 扫描网页登录二维码。"
+      }
+    },
+    "android": {
+      "package": "app.doca.mobile",
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "backgroundColor": "#f7f4ee"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "允许 Doca 读取相册，以便上传图片。",
+          "cameraPermission": "允许 Doca 拍摄图片，以便发送给 AI 助手。"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "允许 Doca 扫描网页登录二维码。"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "589807d5-8853-4a27-9ca7-48554993458f"
+      }
+    },
+    "owner": "zhangxiaojias-team"
+  }
+}

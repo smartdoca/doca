@@ -1,0 +1,73 @@
+.document-file-preview-backdrop {
+  position: fixed;
+  z-index: 130;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(24, 30, 42, 0.42);
+  backdrop-filter: blur(6px);
+}
+.document-file-preview {
+  width: min(1120px, 96vw);
+  height: min(820px, 92vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #e1e5eb;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 25px 70px rgba(17, 25, 40, 0.28);
+}
+.document-file-preview > header {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px 0 18px;
+  border-bottom: 1px solid #edf0f3;
+}
+.document-file-preview > header strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #303743;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.document-file-preview > header > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.document-file-preview-body {
+  min-height: 0;
+  flex: 1;
+}
+.document-file-preview-body .open-file-viewer,
+.document-file-preview-body .file-preview-image,
+.document-file-preview-body .file-markdown-preview {
+  width: 100%;
+  height: 100%;
+}
+.document-file-preview-body .file-preview-empty {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  height: 100%;
+  color: #8f959e;
+  text-align: center;
+}
+.sheet-attachment-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}

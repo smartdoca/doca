@@ -1,0 +1,45 @@
+// Debug: where does focus live during sheet cell editing?
+if (process.env.DOCA_QA_ISOLATED !== '1') throw Error('Set DOCA_QA_ISOLATED=1');
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const assert = require('node:assert/strict');
+(async () => {
+  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+    const origin = 'http://127.0.0.1:39140';
+    const req = async (path, data, method = 'POST') => {
+      const r = await ctx.request.fetch(origin + '/api/v1' + path, { method, headers: { origin }, data });
+      assert.equal(r.status(), 200, await r.text());
+      return r.json();
+    };
+    await req('/auth/login', { login: 'qatest', password: 'qa-password-2026' });
+    const doc = await req('/resources', { kind: 'document', format: 'spreadsheet', title: 'Sheet Debug' });
+    const p = await ctx.newPage();
+    p.on('pageerror', (e) => console.log('PAGEERROR', e.message));
+    await p.goto(origin + '/#/r/' + doc.id);
+    await p.locator('.uos-editor canvas').first().waitFor({ timeout: 30000 });
+    await p.waitForTimeout(2500);
+    await p.mouse.dblclick(308, 156);
+    await p.waitForTimeout(600);
+    await p.keyboard.type('@');
+    await p.waitForTimeout(900);
+    console.log('menu open:', await p.locator('.sheet-native-candidates').count());
+    const info = await p.evaluate(() => {
+      const ae = document.activeElement;
+      const chain = [];
+      let n = ae;
+      while (n && chain.length < 8) { chain.push(n.tagName + '.' + (n.className?.toString?.().split(' ')[0] || '')); n = n.parentElement; }
+      return {
+        tag: ae?.tagName, cls: ae?.className?.toString?.(),
+        inSheetDocument: !!ae?.closest?.('.sheet-document'),
+        chain,
+      };
+    });
+    console.log('focus during editing:', JSON.stringify(info, null, 1));
+    // dispatch a keydown manually to see if handler condition passes
+    await p.keyboard.press('ArrowDown');
+    await p.waitForTimeout(400);
+    console.log('menu after ArrowDown:', await p.locator('.sheet-native-candidates').count());
+    console.log('aria-selected count:', await p.locator('.sheet-native-candidates [aria-selected="true"]').count());
+  } finally { await browser.close(); }
+})().catch((e) => { console.error(e); process.exitCode = 1; });

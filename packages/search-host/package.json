@@ -1,0 +1,28 @@
+{
+  "name": "@doca/search-host",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./memory": "./src/memory-provider.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./memory": {
+        "types": "./dist/memory-provider.d.ts",
+        "import": "./dist/memory-provider.js"
+      }
+    },
+    "types": "./dist/index.d.ts"
+  }
+}

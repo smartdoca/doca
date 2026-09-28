@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  official:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.tag.outputs.release }}
+    steps:
+      - id: tag
+        run: |
+          if [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "Skip GitHub Release for $GITHUB_REF_NAME. Official tags look like v1.2.3."
+          fi
+
+  release:
+    needs: official
+    if: needs.official.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@11.25.0 --activate
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build the web app
+        run: pnpm build
+      - name: Pack web assets
+        run: |
+          archive="doca-web-assets-${GITHUB_REF_NAME}.tar.gz"
+          tar -C apps/web/dist -czf "$archive" assets
+          echo "archive=$archive" >> "$GITHUB_ENV"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="$(mktemp)"
+          {
+            echo "Web assets are attached as \`$archive\`."
+            echo "Extract it and publish the \`assets\` directory unchanged."
+            echo "Set DOCA_ASSET_BASE to the HTTPS prefix that contains that assets directory, with no trailing slash."
+            echo
+            gh api --method POST "/repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+              -f tag_name="$GITHUB_REF_NAME" --jq .body || true
+          } > "$notes"
+          gh release create "$GITHUB_REF_NAME" "$archive" \
+            --title "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --notes-file "$notes"
