@@ -3,6 +3,7 @@ import {
   collectEditOperations,
   normalizeEditOperations,
   parseA1,
+  repairRichTextValue,
   resolveSpreadsheetSheetId,
 } from "../packages/core/src/modules/ai/edit-normalize.js";
 import { validateEditOperations } from "../packages/core/src/modules/ai/edit-schema.js";
@@ -73,6 +74,39 @@ it("resolves Sheet1 names to the real sheet UUID", () => {
     { type: "write", sheetId: "Sheet1", cells: { A1: 1 } },
   ]);
   expect(() => validateEditOperations("spreadsheet", normalized)).not.toThrow();
+});
+
+it("turns a model code block into a native block and separates the next sentence", () => {
+  const [op] = normalizeEditOperations("rich_text", [
+    {
+      type: "insertBlock",
+      block: {
+        id: "code-1",
+        type: "codeBlock",
+        lang: "sh",
+        children: [{ text: "pnpm dev" }],
+      },
+    },
+  ]);
+  expect(op!.block).toMatchObject({
+    type: "code-block",
+    language: "sh",
+    code: "pnpm dev",
+    children: [{ text: "" }],
+  });
+  expect(() => validateEditOperations("rich_text", [op])).not.toThrow();
+  const repaired = repairRichTextValue([
+    {
+      id: "p",
+      type: "paragraph",
+      children: [
+        { text: "docker.io/smartdoca/doca:0.1.0", code: true },
+        { text: "A single container uses SQLite." },
+      ],
+    },
+  ]);
+  expect(repaired.changed).toBe(true);
+  expect(repaired.value[0].children[1].text).toBe(" A single container uses SQLite.");
 });
 
 it("hydrates JSON-string cells and top-level sheetId/cells onto the operation", () => {
