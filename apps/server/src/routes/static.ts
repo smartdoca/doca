@@ -4,11 +4,19 @@ import type { FastifyInstance } from "fastify";
 import { readFile, realpath } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 
+export function rewriteAssetUrls(html: string, assetBase?: string) {
+  if (!assetBase) return html;
+  return html
+    .replaceAll('"/assets/', `"${assetBase}/assets/`)
+    .replaceAll("'/assets/", `'${assetBase}/assets/`);
+}
+
 export async function registerStaticRoutes(
   api: FastifyInstance,
   db: DB,
   staticDirectory?: string,
   realtimeReady: () => boolean = () => true,
+  assetBase?: string,
 ) {
   api.get("/api/openapi.json", { schema: { hide: true } }, async () =>
     api.swagger(),
@@ -41,8 +49,13 @@ export async function registerStaticRoutes(
       ".css": "text/css; charset=utf-8",
       ".svg": "image/svg+xml",
     };
+    const body = await readFile(file);
     return reply
       .type(mime[extname(file)] ?? "application/octet-stream")
-      .send(await readFile(file));
+      .send(
+        extname(file) === ".html"
+          ? rewriteAssetUrls(body.toString("utf8"), assetBase)
+          : body,
+      );
   });
 }
