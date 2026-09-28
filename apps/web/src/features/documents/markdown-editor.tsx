@@ -19,6 +19,7 @@ import * as Y from "yjs";
 import {
   CollaborativeMarkdownEditor,
   createHostMarkdownSession,
+  initializeMarkdownDocument,
   updateHostMarkdownSession,
   observeLocalMarkdownUpdates,
   applyRemoteMarkdownUpdate,
@@ -119,6 +120,9 @@ export default function MarkdownDocument({
   }, [detail.resource.title]);
   const model = useMemo(() => {
     const doc = new Y.Doc();
+    // The session asserts codec metadata immediately. An empty replica has none
+    // until the server checkpoint arrives, so stamp the supported codec first.
+    initializeMarkdownDocument(doc, "");
     return createHostMarkdownSession({
       doc,
       state: "loading",
