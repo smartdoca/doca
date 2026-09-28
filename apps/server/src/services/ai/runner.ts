@@ -112,6 +112,7 @@ import {
 import {
   readAIDocument,
   editAIDocument,
+  repairDeliveredRichText,
   createAIDocument,
   checkScope,
   digest,
@@ -4194,6 +4195,14 @@ export function createAIRunner(
             );
             await publish(true);
             return documentReview;
+          }
+          for (const id of written) {
+            try {
+              if (await repairDeliveredRichText(db, ctx, id))
+                addSystemEvent("status", "rich_text_fallback", { resourceId: id });
+            } catch {
+              /* A failed cleanup must not hide the review of what was saved. */
+            }
           }
           if (
             !needsLlmReview({

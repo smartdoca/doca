@@ -18,6 +18,7 @@ import {
 import {
   collectEditOperations,
   normalizeEditOperations,
+  repairRichTextValue,
   resolveSpreadsheetSheetId,
 } from "../modules/ai/edit-normalize.js";
 import {
@@ -752,6 +753,10 @@ export async function editAIDocument(
             l.runtime.execute(op as any);
           else fail(400, "不支持的富文本命令");
         }
+        const beforeRepair = l.runtime.getValue();
+        const repaired = repairRichTextValue(beforeRepair);
+        if (repaired.changed)
+          l.runtime.acceptEditorValue(beforeRepair, repaired.value);
         update = Y.encodeStateAsUpdate(l.doc, vector);
       } finally {
         l.destroy();
@@ -1013,6 +1018,45 @@ export async function editAIDocument(
   // Saving has committed. A disconnected client must not turn a durable edit into a failed tool result.
   await ctx.notify?.(id).catch(() => {});
   return result;
+}
+export async function repairDeliveredRichText(
+  db: DB,
+  ctx: ToolContext,
+  id: string,
+) {
+  const changed = await transact(db, async (tx) => {
+    const { resource } = await checkScope(tx, ctx, id, true);
+    if (resource.format !== "rich_text") return false;
+    const loaded = await restoreDocument(tx, id);
+    try {
+      if (!loaded.state) return false;
+      const before = loaded.runtime.getValue();
+      const repaired = repairRichTextValue(before);
+      if (!repaired.changed) return false;
+      const vector = Y.encodeStateVector(loaded.doc);
+      loaded.runtime.acceptEditorValue(before, repaired.value);
+      const epochId = (
+        await tx
+          .selectFrom("editor_epochs")
+          .select("epoch_id")
+          .where("resource_id", "=", id)
+          .executeTakeFirstOrThrow()
+      ).epoch_id;
+      await createDocuments(tx).exchange(ctx.actor, id, {
+        update: b64(Y.encodeStateAsUpdate(loaded.doc, vector)),
+        codec: loaded.state.codec,
+        protocolVersion: 1,
+        schemaVersion: 3,
+        epochId,
+        messageId: randomUUID(),
+      });
+      return true;
+    } finally {
+      loaded.destroy();
+    }
+  });
+  if (changed) await ctx.notify?.(id).catch(() => {});
+  return changed;
 }
 export async function createAIDocument(
   db: DB,

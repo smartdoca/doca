@@ -343,13 +343,115 @@ function presentationOperation(op: Record<string, unknown>) {
   return next;
 }
 
+const codeBlockTypes = new Set(["code", "codeBlock", "code_block", "pre", "code-block"]);
+
+function leafText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const record = node as { text?: unknown; children?: unknown };
+  if (typeof record.text === "string" && record.text) return record.text;
+  if (!Array.isArray(record.children)) return "";
+  return record.children.map(leafText).filter(Boolean).join("\n");
+}
+
+function normalizeCodeBlock(node: Record<string, unknown>) {
+  if (!codeBlockTypes.has(String(node.type))) return node;
+  const next = { ...node, type: "code-block" };
+  if (typeof next.lang === "string" && typeof next.language !== "string") {
+    next.language = next.lang;
+    delete next.lang;
+  }
+  if (typeof next.code !== "string") next.code = leafText({ children: next.children });
+  next.children = [{ text: "" }];
+  return next;
+}
+
+function normalizeRichBlock(node: unknown): unknown {
+  const media = normalizeMediaNode(node);
+  if (!media || typeof media !== "object" || Array.isArray(media)) return media;
+  const next = normalizeCodeBlock(media as Record<string, unknown>);
+  if (next.type !== "code-block" && Array.isArray(next.children))
+    next.children = next.children.map(normalizeRichBlock);
+  return next;
+}
+
 function richTextOperation(op: Record<string, unknown>) {
   let next = op;
   if (next.type === "insertBlock" && next.block && typeof next.block === "object")
-    next = { ...next, block: normalizeMediaNode(next.block) as Record<string, unknown> };
+    next = { ...next, block: normalizeRichBlock(next.block) as Record<string, unknown> };
   if (next.type === "setCellContent" && Array.isArray(next.children))
-    next = { ...next, children: next.children.map(normalizeMediaNode) };
+    next = { ...next, children: next.children.map(normalizeRichBlock) };
   return next;
+}
+
+const fencedBlock = /^```([A-Za-z0-9_+-]*)\n([\s\S]*?)\n```$/;
+
+/** Host-side repair after a model save. Invalid code blocks become native
+ * blocks, and a sentence that starts immediately after inline code gets a space. */
+export function repairRichTextValue(value: unknown): { value: any[]; changed: boolean } {
+  if (!Array.isArray(value)) return { value: [], changed: false };
+  const next = structuredClone(value);
+  let changed = false;
+  const visit = (node: any) => {
+    if (!node || typeof node !== "object") return;
+    if (node.type === "paragraph" && Array.isArray(node.children) && node.children.length === 1) {
+      const only = node.children[0];
+      const fenced = typeof only?.text === "string" ? only.text.trim().match(fencedBlock) : null;
+      if (fenced) {
+        node.type = "code-block";
+        node.language = fenced[1] || "text";
+        node.code = fenced[2] ?? "";
+        node.children = [{ text: "" }];
+        delete node.title;
+        delete node.list;
+        changed = true;
+        return;
+      }
+    }
+    if (codeBlockTypes.has(String(node.type)) && node.type !== "code-block") {
+      node.type = "code-block";
+      changed = true;
+    }
+    if (node.type === "code-block") {
+      if (typeof node.code !== "string") {
+        node.code = leafText(node);
+        changed = true;
+      }
+      if (
+        !Array.isArray(node.children) ||
+        node.children.length !== 1 ||
+        node.children[0]?.text !== "" ||
+        node.children[0]?.type
+      ) {
+        node.children = [{ text: "" }];
+        changed = true;
+      }
+      return;
+    }
+    if (!Array.isArray(node.children)) return;
+    for (let i = 0; i < node.children.length; i++) {
+      const leaf = node.children[i];
+      if (!leaf || typeof leaf.text !== "string" || leaf.code !== true) continue;
+      const version = leaf.text.match(/^(.*\d)\.([A-Z].*)$/);
+      if (version?.[1] && version[2]) {
+        leaf.text = version[1];
+        node.children.splice(i + 1, 0, { text: `. ${version[2]}` });
+        changed = true;
+        continue;
+      }
+      const following = node.children[i + 1];
+      if (!following || typeof following.text !== "string" || following.type) continue;
+      if (/^[A-Za-z\u4e00-\u9fff]/.test(following.text)) {
+        following.text = ` ${following.text}`;
+        changed = true;
+      } else if (/^\.[A-Za-z\u4e00-\u9fff]/.test(following.text)) {
+        following.text = following.text.replace(/^\./, ". ");
+        changed = true;
+      }
+    }
+    node.children.forEach(visit);
+  };
+  next.forEach(visit);
+  return { value: next, changed };
 }
 
 export function resolveSpreadsheetSheetId(
