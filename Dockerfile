@@ -13,13 +13,24 @@ RUN apt-get -o Acquire::Retries=5 update \
       python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-# Keep dev dependencies: the current server entry point imports vite and uses tsx.
-RUN pnpm install --frozen-lockfile \
-    --fetch-retries=5 \
-    --fetch-timeout=120000 \
-    --network-concurrency=8 \
-    --reporter=append-only
+ARG TARGETARCH
+# Keep downloaded tarballs outside the image layers. A source change no longer
+# throws them away, and a lockfile change only downloads packages that are new.
+RUN pnpm config set store-dir /pnpm/store \
+    && pnpm config set fetch-retries 5 \
+    && pnpm config set fetch-timeout 120000 \
+    && pnpm config set network-concurrency 8
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+RUN --mount=type=cache,id=pnpm-${TARGETARCH},target=/pnpm/store,sharing=locked \
+    pnpm fetch --reporter=append-only
+
+# Manifests only, so editing application source does not reinstall dependencies.
+# Keep dev dependencies: the server entry point imports vite and uses tsx.
+COPY --parents apps/*/package.json packages/*/package.json ./
+RUN --mount=type=cache,id=pnpm-${TARGETARCH},target=/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --offline --reporter=append-only \
+    && pnpm config set verify-deps-before-run false
 
 COPY tsconfig.json ./
 COPY apps ./apps

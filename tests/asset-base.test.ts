@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { assetBase } from "../apps/server/src/bootstrap/config.js";
-import { rewriteAssetUrls } from "../apps/server/src/routes/static.js";
+import {
+  rewriteAssetUrls,
+  staticCacheControl,
+} from "../apps/server/src/routes/static.js";
 
 describe("DOCA_ASSET_BASE", () => {
   it("leaves local asset URLs unchanged when unset", () => {
@@ -20,6 +23,13 @@ describe("DOCA_ASSET_BASE", () => {
   it("accepts an https prefix and strips a trailing slash", () => {
     expect(assetBase("https://cdn.example/doca/0.1.0/")).toBe(
       "https://cdn.example/doca/0.1.0",
+    );
+  });
+
+  it("revalidates HTML and keeps hashed assets for a year", () => {
+    expect(staticCacheControl("/")).toBe("no-cache");
+    expect(staticCacheControl("/assets/index-abc.js")).toBe(
+      "public, max-age=31536000, immutable",
     );
   });
 
