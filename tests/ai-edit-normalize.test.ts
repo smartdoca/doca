@@ -181,6 +181,39 @@ it("keeps canonical image cells", () => {
   ).not.toThrow();
 });
 
+it("turns common presentation payloads into native elements", () => {
+  const [pixel, titled] = normalizeEditOperations("presentation", [
+    {
+      type: "insert",
+      slideId: "slide-1",
+      element: {
+        type: "text",
+        text: "封面",
+        fontSize: 36,
+        transform: { x: 80, y: 60, width: 640, height: 80 },
+      },
+    },
+    { type: "add", slideId: "slide-1", kind: "title" },
+  ]);
+  expect(pixel!.element).toMatchObject({
+    type: "text",
+    transform: { x: 762000, y: 571500, width: 6096000, height: 762000, rotation: 0 },
+    paragraphs: [{ type: "paragraph", children: [{ text: "封面", fontSize: 36 }] }],
+  });
+  expect(pixel!.element).not.toHaveProperty("text");
+  expect(pixel!.element).not.toHaveProperty("fontSize");
+  expect(titled).toMatchObject({ type: "add", kind: "text" });
+  expect(() => validateEditOperations("presentation", [pixel!, titled!])).not.toThrow();
+});
+
+it("keeps presentation page fields on the advertised tool schema", async () => {
+  const { z } = await import("zod");
+  const { editToolSchema } = await import("../packages/core/src/modules/ai/edit-schema.js");
+  const wire = JSON.stringify(z.toJSONSchema(editToolSchema("presentation")));
+  for (const field of ["slideId", "kind", "query", "ids"])
+    expect(wire).toContain(`"${field}"`);
+});
+
 it("advertises concrete cell fields and rejects the null payload seen in live model loops", async () => {
   const { z } = await import("zod");
   const { editToolSchema } = await import("../packages/core/src/modules/ai/edit-schema.js");

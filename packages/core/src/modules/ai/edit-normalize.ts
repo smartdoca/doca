@@ -1,4 +1,42 @@
+import { randomUUID } from "node:crypto";
+
 const a1 = /^\$?([A-Za-z]+)\$?(\d+)$/;
+const EMU_PER_PX = 9525;
+const pptShapeKinds = new Set([
+  "rect",
+  "roundRect",
+  "ellipse",
+  "triangle",
+  "rtTriangle",
+  "diamond",
+  "parallelogram",
+  "trapezoid",
+  "pentagon",
+  "hexagon",
+  "octagon",
+  "plus",
+  "star5",
+  "star6",
+  "star8",
+  "heart",
+  "teardrop",
+  "wedgeRectCallout",
+  "rightArrow",
+  "leftArrow",
+  "upArrow",
+  "downArrow",
+  "leftRightArrow",
+  "chevron",
+  "homePlate",
+]);
+const pptKindAliases: Record<string, string> = {
+  title: "text",
+  textbox: "text",
+  body: "text",
+  rectangle: "rect",
+  circle: "ellipse",
+  oval: "ellipse",
+};
 const canvasTags: Record<string, string> = {
   rect: "Rect",
   rectangle: "Rect",
@@ -218,6 +256,93 @@ function normalizeMediaNode(node: unknown): unknown {
   return next;
 }
 
+function normalizePptTransform(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const transform = { ...(value as Record<string, unknown>) };
+  if (typeof transform.rotation !== "number") transform.rotation = 0;
+  const numbers = ["x", "y", "width", "height"]
+    .map((key) => transform[key])
+    .filter((item): item is number => typeof item === "number");
+  // A slide is millions of EMU wide. Values under 20,000 are CSS pixels.
+  if (numbers.length && Math.max(...numbers.map((item) => Math.abs(item))) < 20000)
+    for (const key of ["x", "y", "width", "height"])
+      if (typeof transform[key] === "number")
+        transform[key] = Math.round(transform[key] * EMU_PER_PX);
+  return transform;
+}
+
+function textParagraphs(element: Record<string, unknown>) {
+  if (Array.isArray(element.paragraphs) && element.paragraphs.length)
+    return element.paragraphs;
+  const raw =
+    typeof element.paragraphs === "string"
+      ? element.paragraphs
+      : typeof element.text === "string"
+        ? element.text
+        : typeof element.content === "string"
+          ? element.content
+          : undefined;
+  if (raw === undefined) return undefined;
+  const leaf: Record<string, unknown> = { text: raw };
+  for (const key of ["fontSize", "bold", "italic", "color", "fontFamily"])
+    if (element[key] !== undefined) leaf[key] = element[key];
+  return [{ type: "paragraph", children: [leaf] }];
+}
+
+function normalizePptElement(element: unknown) {
+  if (!element || typeof element !== "object" || Array.isArray(element))
+    return element;
+  const next = { ...(element as Record<string, unknown>) };
+  if (typeof next.id !== "string" || !next.id) next.id = randomUUID();
+  if (next.transform) next.transform = normalizePptTransform(next.transform);
+  const shape = pptShapeKinds.has(String(next.type)) ? String(next.type) : undefined;
+  if (shape) {
+    next.shape ??= shape;
+    next.type = "shape";
+  }
+  if (next.type === "text") {
+    const paragraphs = textParagraphs(next);
+    if (paragraphs) next.paragraphs = paragraphs;
+  }
+  if (typeof next.text === "string") delete next.text;
+  for (const key of ["content", "fontSize", "fontFamily", "bold", "italic", "underline"])
+    delete next[key];
+  return next;
+}
+
+function presentationOperation(op: Record<string, unknown>) {
+  const next = { ...op };
+  if (typeof next.kind === "string" && pptKindAliases[next.kind])
+    next.kind = pptKindAliases[next.kind];
+  if (next.type === "insert") next.element = normalizePptElement(next.element);
+  if (
+    next.type === "addSlide" &&
+    next.slide &&
+    typeof next.slide === "object" &&
+    !Array.isArray(next.slide)
+  ) {
+    const slide = { ...(next.slide as Record<string, unknown>) };
+    if (slide.elements && typeof slide.elements === "object" && !Array.isArray(slide.elements))
+      slide.elements = Object.fromEntries(
+        Object.entries(slide.elements as Record<string, unknown>).map(([id, element]) => [
+          id,
+          normalizePptElement(
+            element && typeof element === "object"
+              ? { id, ...(element as Record<string, unknown>) }
+              : element,
+          ),
+        ]),
+      );
+    next.slide = slide;
+  }
+  if (next.type === "patch" && next.patch && typeof next.patch === "object") {
+    const patch = { ...(next.patch as Record<string, unknown>) };
+    if (patch.transform) patch.transform = normalizePptTransform(patch.transform);
+    next.patch = patch;
+  }
+  return next;
+}
+
 function richTextOperation(op: Record<string, unknown>) {
   let next = op;
   if (next.type === "insertBlock" && next.block && typeof next.block === "object")
@@ -262,6 +387,8 @@ export function normalizeEditOperations(
       return canvasOperation(op) as { type: string; [key: string]: any };
     if (format === "rich_text")
       return richTextOperation(op) as { type: string; [key: string]: any };
+    if (format === "presentation")
+      return presentationOperation(op) as { type: string; [key: string]: any };
     return op;
   });
 }

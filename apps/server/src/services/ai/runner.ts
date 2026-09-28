@@ -34,7 +34,7 @@ import {
   fitPromptToModelInput,
   taskStateHint
 } from "./context-budget.js";
-import { markPromptCacheBoundary } from "./providers.js";
+import { markPromptCacheBoundary, transientModelFailure } from "./providers.js";
 import { searchIntent, searchRetrieval, } from "@core/modules/discovery/search-intent.js";
 import {
   imageInsertSchema,
@@ -4608,11 +4608,25 @@ export function createAIRunner(
               .select(["cancelled", "result", "attempts"])
               .where("id", "=", job.id)
               .executeTakeFirst();
+            const checkpointReady = (() => {
+              try {
+                return !!(current?.result && JSON.parse(current.result).checkpoint);
+              } catch {
+                return false;
+              }
+            })();
             const recoverable =
-              stopping &&
+              stopping && !current?.cancelled && checkpointReady;
+            // A 504 during review or generation can resume from the saved
+            // checkpoint. Cap it with the existing attempt budget.
+            const retryProvider =
+              !recoverable &&
               !current?.cancelled &&
-              !!(current?.result && JSON.parse(current.result).checkpoint);
-            const terminalStatus = recoverable
+              !controller.signal.aborted &&
+              checkpointReady &&
+              (current?.attempts ?? job.attempts) < 4 &&
+              transientModelFailure(e);
+            const terminalStatus = recoverable || retryProvider
               ? "queued"
               : current?.cancelled || controller.signal.aborted
                 ? "cancelled"
@@ -4621,7 +4635,7 @@ export function createAIRunner(
               .updateTable("ai_jobs")
               .set({
                 status: terminalStatus,
-                error: recoverable
+                error: recoverable || retryProvider
                   ? ""
                   : current?.cancelled
                     ? "任务已停止，已保存内容保留，可核对后重试"
@@ -4652,7 +4666,7 @@ export function createAIRunner(
                 error: errorMessage,
               },
             });
-            if (!recoverable) {
+            if (!recoverable && !retryProvider) {
               await sessionEvents.append({
                 sessionId: job.session_id,
                 id: `${job.id}:turn:end`,

@@ -342,6 +342,18 @@ export function modelConnectionDetail(
   return detail.replace(/Bearer\s+\S+/gi, "Bearer ***").slice(0, 300);
 }
 
+/** Provider outages worth another attempt. Schema and configuration failures are not. */
+export function transientModelFailure(error: unknown) {
+  const status =
+    (error as { status?: number; statusCode?: number })?.status ??
+    (error as { statusCode?: number })?.statusCode;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if ([400, 401, 403, 404, 409, 413, 422, 429].includes(status ?? 0))
+    return false;
+  if (/模型返回格式|工具调用不兼容|请检查模型配置/.test(message)) return false;
+  return /模型厂商服务暂时异常|模型连接超时|无法完成模型连接/.test(message);
+}
+
 // Never return provider request bodies, headers or secrets in an error response.
 export function modelConnectionError(error: unknown): string {
   const e = error as {

@@ -38,7 +38,7 @@ import type {
 import { resolveMarkdownTextAnchor } from "@smartdoca/markdown";
 import type { DB } from "../../../db/src/index.js";
 import { transact } from "../../../db/src/transactions.js";
-import { fail } from "../shared/errors.js";
+import { AppError, fail } from "../shared/errors.js";
 import { authorize } from "../modules/access/queries.js";
 import type { Actor } from "../modules/identity/passwords.js";
 import { createContent } from "./resources.js";
@@ -798,8 +798,11 @@ export async function editAIDocument(
             if (op.type === "addSlide") controller.addSlide(op.after, op.slide);
             else if (op.type === "deleteSlide")
               controller.deleteSlide(op.slideId);
-            else if (op.type === "insert")
+            else if (op.type === "insert") {
+              if (op.element?.type === "text" && !Array.isArray(op.element.paragraphs))
+                fail(400, '文本元素需要 paragraphs:[{type:"paragraph",children:[{text:"…"}]}]，或直接给 text 字符串');
               controller.insert(op.slideId, op.element);
+            }
             else if (op.type === "add") controller.add(op.slideId, op.kind);
             else if (op.type === "patch") {
               if ("paragraphs" in op.patch)
@@ -828,8 +831,12 @@ export async function editAIDocument(
               controller.formatText(op.slideId, op.ids, op.marks);
             else if (op.type === "paragraphFormat")
               controller.paragraphFormat(op.slideId, op.ids, op.format);
-            else if (op.type === "pageSize")
-              controller.pageSize(op.width, op.height);
+            else if (op.type === "pageSize") {
+              // The editor takes CSS pixels. Models often send the document's EMU size.
+              const pixels = (value: number) =>
+                value > 10000 ? value / 9525 : value;
+              controller.pageSize(pixels(op.width), pixels(op.height));
+            }
             else if (op.type === "distribute")
               controller.distribute(op.slideId, op.ids, op.axis);
             else if (op.type === "arrange")
@@ -854,6 +861,10 @@ export async function editAIDocument(
             else fail(400, "不支持的幻灯片命令");
           }
           update = Y.encodeStateAsUpdate(doc, vector);
+        } catch (error) {
+          if (error instanceof AppError) throw error;
+          const reason = error instanceof Error ? error.message : "未知错误";
+          fail(400, `幻灯片编辑失败：${reason}`);
         } finally {
           controller.dispose();
           doc.destroy();

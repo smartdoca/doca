@@ -388,14 +388,38 @@ const wireCells = z
     '必须提供实际单元格数据。优先使用 [{row:0,column:0,v:"表头"},{row:1,column:0,f:"=SUM(B2:B4)"}]。零基坐标，禁止 null 或空数组。',
   );
 
+const presentationWireFields = {
+  slideId: z.string().min(1).max(200).optional(),
+  after: z.string().min(1).max(200).optional(),
+  before: z.string().min(1).max(200).nullable().optional(),
+  slide: z.any().optional(),
+  kind: z.string().min(1).max(40).optional(),
+  ids: z.array(z.string().min(1).max(200)).max(1000).optional(),
+  marks: z.any().optional(),
+  query: z.string().optional(),
+  field: z.string().min(1).max(40).optional(),
+  value: z.any().optional(),
+  command: z.any().optional(),
+  axis: z.string().min(1).max(20).optional(),
+  format: z.any().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  hidden: z.boolean().optional(),
+  name: z.string().max(200).optional(),
+  sectionId: z.string().min(1).max(200).nullable().optional(),
+  action: z.string().min(1).max(20).optional(),
+};
+
 export function editToolSchema(format: DocumentFormat) {
   const operation =
     format === "spreadsheet"
       ? wireOperation.extend({ cells: wireCells.optional() })
-      : wireOperation;
+      : format === "presentation"
+        ? wireOperation.extend(presentationWireFields)
+        : wireOperation;
   // Keep union checks out of the wire schema: Mastra reports those as a bare
   // "Invalid input". Named fields still have to be listed, otherwise providers
-  // drop sheetId/cells and the model only retries with type.
+  // drop sheetId/cells or slideId and the model only retries with type.
   return z
     .object({
       resourceId: z.string().uuid(),

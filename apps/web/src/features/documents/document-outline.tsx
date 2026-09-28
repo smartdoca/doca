@@ -21,25 +21,18 @@ export function DocumentOutline({
     let frame = 0;
     const update = () => {
       frame = 0;
-      const workspace = host.closest(".workspace");
-      const top = Math.max(
-        workspace?.querySelector(".topbar")?.getBoundingClientRect().bottom ??
-          0,
-        workspace
-          ?.querySelector("#editor-toolbar-slot")
-          ?.getBoundingClientRect().bottom ?? 0,
-      );
+      const scroller = host.closest(".main-scroll");
+      const top = scroller?.getBoundingClientRect().top ?? 0;
       let current = headings[0]?.id;
       for (const heading of headings) {
         const block = host.querySelector(
           `[data-block-id="${CSS.escape(heading.id)}"]`,
         );
         if (!block) continue;
-        // The editor scrolls headings below its toolbar using scroll-margin-top.
-        // Use that same offset so a clicked heading remains the active item.
+        // Match the heading's scroll-margin so the item that lands at the
+        // top of the document scroller stays the active nav entry.
         const margin = parseFloat(getComputedStyle(block).scrollMarginTop) || 0;
-        if (block.getBoundingClientRect().top > top + Math.max(80, margin) + 2)
-          break;
+        if (block.getBoundingClientRect().top > top + margin + 8) break;
         current = heading.id;
       }
       if ((host.closest(".main-scroll")?.scrollTop ?? 0) <= 1)
