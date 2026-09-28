@@ -4,6 +4,12 @@ import type { FastifyInstance } from "fastify";
 import { readFile, realpath } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 
+const hashedAssetCache = "public, max-age=31536000, immutable";
+
+export function staticCacheControl(path: string) {
+  return path.startsWith("/assets/") ? hashedAssetCache : "no-cache";
+}
+
 export function rewriteAssetUrls(html: string, assetBase?: string) {
   if (!assetBase) return html;
   return html
@@ -37,7 +43,11 @@ export async function registerStaticRoutes(
   const directory = await realpath(staticDirectory);
   api.get("/*", { schema: { hide: true } }, async (req, reply) => {
     const path = req.url.split("?")[0]!;
-    if (path !== "/" && !/^\/assets\/[a-zA-Z0-9_.-]+$/.test(path))
+    if (
+      path !== "/" &&
+      path !== "/favicon.svg" &&
+      !/^\/assets\/[a-zA-Z0-9_.-]+$/.test(path)
+    )
       fail(404, "页面不存在");
     const file = await realpath(
       resolve(directory, path === "/" ? "index.html" : path.slice(1)),
@@ -51,6 +61,7 @@ export async function registerStaticRoutes(
     };
     const body = await readFile(file);
     return reply
+      .header("Cache-Control", staticCacheControl(path))
       .type(mime[extname(file)] ?? "application/octet-stream")
       .send(
         extname(file) === ".html"

@@ -23,9 +23,7 @@ bash scripts/bootstrap-admin-local.sh
 
 脚本只在当前终端临时传递管理员账号和密码给初始化命令，数据库中只保存密码哈希。
 
-Docker Compose 部署使用 `bash scripts/bootstrap-admin.sh`。它在一次性容器里执行同一个初始化命令，并使用 Compose 的数据卷。已有管理员时初始化返回冲突，不覆盖密码；不要删除已有数据库来“重试”。普通用户可由管理员创建，或开启注册后自行注册。
-
-容器部署忘记管理员密码时，在同一目录执行 `bash scripts/reset-admin-password.sh`。它只接受已有管理员账号，更新密码哈希并撤销该账号的全部会话。数据库文件被运行中的容器锁住时，先 `docker compose stop`，重置完成后再启动。
+容器部署见 [部署 Doca](deployment.zh-CN.md)（[English](deployment.md)）。其中包含反向代理、`DOCA_ORIGIN`、管理员初始化和重置密码。
 
 ## 忘记管理员密码
 

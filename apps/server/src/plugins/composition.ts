@@ -197,7 +197,17 @@ function searchPlugin() {
       await context.effectAsync(async () => {
         const mounted = await mountFastifyAdapter(runtime.api, (api) =>
           registerSearch(api, runtime.db, runtime.admin, {
-            ...runtime.runtime.search,
+            // Credential updates replace these fields on the shared runtime.
+            // Copying them here would keep the startup values until restart.
+            get allowedOrigins() {
+              return runtime.runtime.search.allowedOrigins;
+            },
+            get apiKey() {
+              return runtime.runtime.search.apiKey;
+            },
+            get fetch() {
+              return runtime.runtime.search.fetch;
+            },
             sources: {
               documents: false,
               files: false,

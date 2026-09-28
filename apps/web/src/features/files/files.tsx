@@ -967,12 +967,7 @@ export function FilesExplorer({
     setSelection({ kind: "folder", value: folder });
   }
   function back() {
-    if (trail.length <= 1) return;
-    const nextTrail = trail.slice(0, -1);
-    const next = nextTrail[nextTrail.length - 1]!;
-    setFuture((old) => [location, ...old]);
-    navigateTrail(nextTrail);
-    clearSelection();
+    parentFolder();
   }
   function parentFolder() {
     if (trail.length <= 1) {
@@ -2061,8 +2056,14 @@ export function FilesExplorer({
           <button
             className="icon"
             onClick={back}
-            disabled={trail.length <= 1}
-            aria-label={t("fileManager.back")}
+            disabled={trail.length <= 1 && !sharedRoot && !atSystemRoot}
+            aria-label={
+              trail.length <= 1 && sharedRoot
+                ? t("fileManager.backShared")
+                : atSystemRoot
+                  ? t("fileManager.backPersonal")
+                  : t("fileManager.parent")
+            }
           >
             <ArrowLeft size={18} />
           </button>

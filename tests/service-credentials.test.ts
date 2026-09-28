@@ -135,6 +135,30 @@ it("persists secrets without returning them, preserves masked values, checks rev
   ).toBe(200);
   expect((await read()).config.search.apiKey).toBe("");
 });
+it("applies a newly saved search origin without restarting the server", async () => {
+  const endpoint = "http://172.17.0.1:7700";
+  const credentials = await read();
+  credentials.config.search.allowedOrigins = [
+    ...credentials.config.search.allowedOrigins,
+    endpoint,
+  ];
+  expect(
+    (await request("PUT", "/admin/service-credentials", admin, credentials))
+      .statusCode,
+  ).toBe(200);
+  const current = await request("GET", "/admin/search");
+  expect(current.statusCode, current.body).toBe(200);
+  const settings = current.json();
+  expect(settings.allowedOrigins).toContain(endpoint);
+  const saved = await request("PUT", "/admin/search", admin, {
+    enabled: false,
+    endpoint,
+    indexName: settings.index_name,
+    imageRecognitionEnabled: settings.image_recognition_enabled,
+    reconcileIntervalHours: settings.reconcile_interval_hours,
+  });
+  expect(saved.statusCode, saved.body).toBe(200);
+});
 it("rejects unsafe endpoint, malformed keys and unexpected configuration fields", async () => {
   const c = await read();
   for (const update of [
