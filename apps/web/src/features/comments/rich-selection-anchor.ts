@@ -62,6 +62,6 @@ export function captureRichSelection(editor: Editor, runtime: YjsDocument, selec
     const [start, end] = Range.edges(range), from = offset(start), to = offset(end);
     if (to > from) parts.push(encodeRichAnchorPart(runtime.createCommentAnchor(block.id, from, to)));
   }
-  if (!parts.length) throw Error("请先选中文字、图片或文件");
+  if (!parts.length) throw Error("comment_need_selection");
   return combineRichAnchors(parts, epochId);
 }

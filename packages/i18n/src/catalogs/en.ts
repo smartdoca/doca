@@ -2556,6 +2556,10 @@ export const en = {
   "comment.regionIndex": "Comment {index}",
   "comment.regionEmpty":
     "Select something, then use the comment icon to add a comment.",
+  "comment.selectionHint":
+    "Select text, an image, or a file, then click Comment or @, or press ⌘ / Ctrl + Alt + M.",
+  "comment.quoteDeleted": "Original text deleted",
+  "comment.thread": "Comment: {quote}",
   "comment.moreReplies": "Load more replies",
   "comment.more": "Load more comments",
   "comment.moreLater": "Load later comments",
