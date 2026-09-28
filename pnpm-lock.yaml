@@ -166,8 +166,8 @@ importers:
         specifier: 0.2.0-rc.16
         version: 0.2.0-rc.16(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@smartdoca/slate':
-        specifier: 0.4.10
-        version: 0.4.10(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1)
+        specifier: 0.4.11
+        version: 0.4.11(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1)
       '@smartdoca/slides':
         specifier: 0.3.0-alpha.1
         version: 0.3.0-alpha.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3754,8 +3754,8 @@ packages:
       react: '>=18'
       react-dom: '>=18'
 
-  '@smartdoca/slate@0.4.10':
-    resolution: {integrity: sha512-EuJPUFGLM4gmJr4jXSIyJyvz5N4wep3mpaRlnSPpntb0CFqXolOsbGw3R4RbNfUjI0Mn9RFAUuhvvVOo7vLBeA==}
+  '@smartdoca/slate@0.4.11':
+    resolution: {integrity: sha512-j464yZ7qkAg2GVICe78wOqyyH6pRn+/tb81Gt52H/GpF4+Py524MK4MJ+jjnF6vQ86iOzsHHoAfjKarIdI0HeA==}
     peerDependencies:
       katex: ^0.18.7
       react: '>=18.2.0'
@@ -13625,7 +13625,7 @@ snapshots:
       - '@types/react'
       - '@types/react-dom'
 
-  '@smartdoca/slate@0.4.10(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1)':
+  '@smartdoca/slate@0.4.11(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1)':
     dependencies:
       '@antv/x6': 2.19.2
       '@antv/x6-plugin-clipboard': 2.1.6(@antv/x6@2.19.2)
