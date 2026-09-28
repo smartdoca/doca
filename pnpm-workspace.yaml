@@ -13,6 +13,7 @@ minimumReleaseAgeExclude:
   - '@smartdoca/sheet@0.2.0-rc.16'
   - '@smartdoca/slate@0.4.9'
   - '@smartdoca/slate@0.4.10'
+  - '@smartdoca/slate@0.4.11'
   - '@smartdoca/slides@0.3.0-alpha.1'
 overrides:
   yjs: 13.6.32

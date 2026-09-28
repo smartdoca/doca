@@ -601,7 +601,7 @@ function RichDocument({
       const editor = handle.current?.editor;
       const dom = editor ? selectedTextRange(editor, contentHost.current) : null;
       const selection = dom && !Range.isCollapsed(dom) ? dom : editor?.selection;
-      if (!editor || !selection) throw new Error("请先选中文字、图片或文件");
+      if (!editor || !selection) throw new Error("comment_need_selection");
       return captureRichSelection(editor, session.runtime, selection, epoch.current);
   }
   function selectComment() {
@@ -611,7 +611,10 @@ function RichDocument({
       setEditingComment(null);
       setCommentsOpen(true);
       setError("");
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) {
+      const message = (e as Error).message;
+      setError(message === "comment_need_selection" ? t("comment.needSelection") : message);
+    }
   }
   const [aiHighlightedAnchor, setAIHighlightedAnchor] = useState<unknown>(null);
   useEffect(() => {
@@ -1104,7 +1107,7 @@ function RichDocument({
           )}
         </div>
         {commentsOpen && (
-          <aside className={`content-comments ${compact ? "document-comments-drawer" : ""}`} aria-label={compact ? "内容评论抽屉" : "内容评论"}>
+          <aside className={`content-comments ${compact ? "document-comments-drawer" : ""}`} aria-label={compact ? t("comment.drawer") : t("comment.region")}>
             <header>
               <h3>{t("comment.region")}<small>{roots.length}</small>
               </h3>
@@ -1131,9 +1134,7 @@ function RichDocument({
               </button>
             </header>
             {!roots.length && !anchor && (
-              <p className="subtle">
-                选中文字、图片或文件后，点击评论或 @，或按 ⌘ / Ctrl + Alt + M。
-              </p>
+              <p className="subtle">{t("comment.selectionHint")}</p>
             )}
             <CommentCards
               compact={compact}
@@ -1141,12 +1142,12 @@ function RichDocument({
               runtime={session.runtime}
             >
               {roots.slice(0, visibleThreads).map((c) => {
-                let quote = "原文已删除",
+                let quote = t("comment.quoteDeleted"),
                   blockId = "";
                 try {
                   const a = JSON.parse(c.anchor!);
                   const resolved = resolveRichAnchor(session.runtime, a)[0];
-                  quote = resolved ? a.quote : "原文已删除";
+                  quote = resolved ? a.quote : t("comment.quoteDeleted");
                   blockId = resolved?.blockId ?? "";
                 } catch {}
                 return (
@@ -1156,7 +1157,7 @@ function RichDocument({
                     onClick={() => setActiveThread(c.id)}
                     key={c.id}
                     data-anchor={c.anchor}
-                    aria-label={`内容评论：${quote}`}
+                    aria-label={t("comment.thread", { quote })}
                   >
                     <button
                       className="comment-quote"
@@ -1241,7 +1242,7 @@ function RichDocument({
                 className="comments-load-more"
                 onClick={() => setVisibleThreads((n) => n + 10)}
               >
-                加载更多内容评论
+                {t("comment.more")}
               </button>
             )}
             {visibleThreads >= roots.length &&
