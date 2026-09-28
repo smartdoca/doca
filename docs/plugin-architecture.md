@@ -1,11 +1,13 @@
-# 插件架构
+# Plugin architecture
 
-[SDK 契约](plugin-sdk-contract.md) 定义核心与业务边界，[开发规范](plugin-development.md) 列出当前可用接口。
+[中文](plugin-architecture.zh-CN.md)
 
-plugin-contracts 定义 manifest 与生命周期；plugin-sdk 提供注入、事件、贡献和 effect；plugin-host 校验依赖并管理启动和逆序关闭。composition 组装核心文件、文档、搜索和 AI，再从独立安装目录引入业务插件。
+The [SDK contract](plugin-sdk-contract.md) defines the boundary between the core and business plugins. The [development guide](plugin-development.md) lists the interfaces that exist now.
 
-业务插件通过公开 files、users、permissions、http、data、policies、events 和 ai 服务对接宿主。注册归属插件实例，不通过宿主私有数据库类型或进程全局桥接获取服务。Web 插件提供独立构建产物，由活动清单动态加载。
+`plugin-contracts` defines the manifest and lifecycle. `plugin-sdk` provides injection, events, contributions, and effects. `plugin-host` checks dependencies and starts plugins, then disposes them in reverse order. Composition assembles core files, documents, search, and AI, then loads business plugins from the separate installation directory.
 
-宿主保留身份认证、授权、文件、文档协同、安全审计、AI 原始用量及按模型速率折算的统一 Token 用量。会员、积分、货币价格、内容审核和邮件不再包含核心表、专用工具或页面入口；未来邮箱插件独立管理业务后端、资料和验收。
+A business plugin talks to the host through the public files, users, permissions, http, policies, events, and ai services. Registration belongs to the plugin instance. A plugin does not reach into the host's private database types or a process-wide bridge. A web plugin ships its own build, and the active manifest loads it.
 
-通用目录树插槽、更多业务能力服务化和资金预留补偿协议仍以契约的实现状态表为准，不能把提案 API 当作可用导出。
+The host keeps authentication, authorization, files, document collaboration, security audit, original AI usage, and token usage rated by the model. Membership, points, prices, content moderation, and mail are not core tables, tools, or pages. A future mail plugin owns its backend, data, and acceptance tests.
+
+A generic tree slot, more business services, and a fund reservation protocol are still listed by implementation status in the contract. A proposed API is not an export you can call.

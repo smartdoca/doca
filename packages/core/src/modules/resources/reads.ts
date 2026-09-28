@@ -50,7 +50,7 @@ export function createResourceReads(
         };
       });
     },
-    list(actor: Actor, query: ResourceQuery) {
+    list(actor: Actor | null, query: ResourceQuery) {
       return queryResourcePage(db, actor, query);
     },
     detail(actor: Actor | null, id: string) {

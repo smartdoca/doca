@@ -186,7 +186,7 @@ const fieldLabels = useFieldLabels();
     <>
       <p className="subtle">{t("fields.usernameHelp")}</p>
       {fields
-        .filter((f) => !f.derivedFrom)
+        .filter((f) => f.required && !f.derivedFrom)
         .map((f) =>
           f.key === "phone" || f.key === "email" ? (
             <VerificationField
@@ -234,19 +234,29 @@ export function ContactRequirements({
   setProofs,
   purpose = "profile",
   editable,
+  onlyRequired = false,
 }: {
   options: AccountOptions;
   proofs: Proofs;
   setProofs: (p: Proofs) => void;
   purpose?: string;
   editable?: Record<string, boolean>;
+  onlyRequired?: boolean;
 }) {
   const [email, setEmail] = useState(""),
     [phone, setPhone] = useState("");
+  const showContact = (kind: "email" | "phone") => {
+    const rule = options.fields?.[kind];
+    if (rule?.enabled === false) return false;
+    const needed =
+      !!rule?.required || options.fields?.username.source === kind;
+    return onlyRequired
+      ? needed
+      : needed || (kind === "email" ? !!options.emailReady : !!options.phoneReady);
+  };
   return (
     <>
-      {(options.fields?.email.required || options.emailReady) &&
-        options.fields?.email.enabled !== false && (
+      {showContact("email") && (
           <VerificationField
             kind="email"
             purpose={purpose}
@@ -257,8 +267,7 @@ export function ContactRequirements({
             disabled={editable?.email === false}
           />
         )}{" "}
-      {(options.fields?.phone.required || options.phoneReady) &&
-        options.fields?.phone.enabled !== false && (
+      {showContact("phone") && (
           <VerificationField
             kind="phone"
             purpose={purpose}

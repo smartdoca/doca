@@ -346,6 +346,7 @@ export function AccountLogin({
                   options={options}
                   proofs={proofs}
                   setProofs={setProofs}
+                  onlyRequired
                 />
               )}
             </>

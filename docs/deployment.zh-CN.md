@@ -2,7 +2,7 @@
 
 [English](deployment.md)
 
-一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.1.0`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.md)。
+一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.1.0`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
 
 ## 条件
 

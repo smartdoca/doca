@@ -1,245 +1,193 @@
-# Doca 插件 SDK 与核心边界
+# Plugin SDK and core boundary
 
-状态：2026-09-27 更新，插件自管业务存储。本文定义接下来重构的验收标准，不表示所有接口已经实现。当前实现差距见第 12 节。开发教程和部署文档不得把本文的目标接口写成现有导出。
+[中文](plugin-sdk-contract.zh-CN.md)
 
-## 1. 决策
+Status: updated 2026-09-27. Plugins store their own business data. This document is the acceptance standard for the refactor. It does not mean every interface is implemented. The gap is in section 12. A development tutorial must not present a target interface as an export that exists today.
 
-Doca 保留文档产品核心和通用平台服务；独立业务通过安装目录发现。邮件、日程、会员、收费、用量控制、内容审核不作为宿主必装业务。
+## 1. Decisions
 
-插件开发时依赖独立发布的 SDK/能力契约包，运行时注入宿主实现。禁止依赖 Doca 工作区路径、宿主私有模块、全局变量桥接或宿主私有表。宿主也不得导入业务插件源码或识别特定业务插件 ID 才能完成公共流程。
+Doca keeps the document product core and generic platform services. Independent business is discovered from the installation directory. Mail, calendar, membership, billing, usage control, and content moderation are not required host products.
 
-插件运行在可信服务端进程内。这是扩展接口边界，不是 Node.js 安全沙箱。安装目录独立于程序发布目录；宿主只加载声明当前 SDK 范围、且数据库符合当前基线的插件。
+A plugin depends on a separately published SDK and capability contract. The host injects the implementation at runtime. Do not depend on a Doca workspace path, a private host module, a global bridge, or a private host table. The host does not import business plugin source or require a particular business plugin id to finish a public flow.
 
-## 2. 核心与业务的归属
+Plugins run inside a trusted server process. This is an extension boundary, not a Node.js sandbox. The install directory is separate from the program directory. The host loads only plugins that declare the current SDK range and whose database matches the current baseline.
 
-| 能力      | Doca 核心职责                                                                                    | 插件职责                                                                     |
-| --------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| 身份      | 用户稳定 ID、认证、会话、启停、基础资料、字段可见性                                              | 外部业务账号、业务资料扩展、身份源适配                                       |
-| 权限      | 统一授权入口、默认拒绝、用户目录策略、权限交集汇总                                               | 注册业务资源类型、角色/动作映射、提供资源授权与交集事实                      |
-| 文件      | 文件夹、文件、附件绑定、上传下载、对象存储、权限                                                 | 业务附件引用、导入器、预览器、抽取器                                         |
-| 文档      | 编辑器宿主、持久化、协同、历史、评论及文档权限                                                   | 新编辑器适配、模板、导入导出、文档操作扩展                                   |
-| AI        | 模型执行、工具/skill 注册、调用上下文、原始用量账本、按模型速率折算的统一 Token 用量             | 领域工具、skill、流程、会员额度、货币价格和收费                              |
-| 搜索/知识 | 统一搜索能力及全局入口；知识订阅持久模型、调度、游标提交及派生索引撤权清理（实现状态见第 12 节） | 业务来源注册、投影与删除事实、当前权限复核、preview/pull；外部账号及业务同步 |
-| 任务/事件 | 宿主事实事件和插件启动/关闭钩子                                                                  | 插件自行管理业务任务、数据库、重试和幂等                                     |
-| 界面      | 页面外壳、路由、导航插槽、主题、语言、错误边界                                                   | 业务目录树、页面、设置、管理页、AI 结果卡片                                  |
-| 商业策略  | 通用操作策略扩展点、事实统计                                                                     | 等级、会员、积分、套餐、额度、支付、开通/到期                                |
-| 审核      | 通用资源限制机制、操作事件、安全审计                                                             | 举报、审核队列、内容检测、审核决策、供应商                                   |
+## 2. What the core owns
 
-不按“能做成插件”机械拆除核心。文档、文件、用户、授权在没有任何业务插件时必须可运行。文件/文档当前采用内部插件生命周期属于核心实现细节，不构成业务插件安装渠道。
+| Area | Host | Plugin |
+| --- | --- | --- |
+| Identity | Stable user id, authentication, sessions, enable and disable, basic profile, field visibility | External business accounts, profile extensions, identity-provider adapters |
+| Permissions | The unified grant entry, default deny, directory policy, intersection | Register business resource types, map roles and actions, provide grant and intersection facts |
+| Files | Folders, files, attachment bindings, upload and download, object storage, permissions | Business attachment references, importers, previewers, extractors |
+| Documents | Editor host, persistence, collaboration, history, comments, document permissions | New editor adapters, templates, import and export, document actions |
+| AI | Model execution, tool and skill registration, call context, raw usage ledger, token usage rated by model | Domain tools, skills, flows, membership quotas, prices, and charges |
+| Search and knowledge | Unified search and the global entry. Subscription model, scheduling, cursor commit, and derived-index cleanup. See section 12 for what exists | Register sources, projections and delete facts, current permission recheck, preview and pull. External accounts and business sync |
+| Jobs and events | Host fact events and plugin start and stop hooks | The plugin manages business jobs, its database, retry, and idempotence |
+| Interface | Shell, routes, navigation slots, theme, language, error boundaries | Business trees, pages, settings, admin, AI result cards |
+| Commercial policy | Generic operation policy extension and fact statistics | Levels, membership, points, plans, quotas, payment |
+| Moderation | Generic resource limits, operation events, security audit | Reports, review queues, detection, decisions, vendors |
 
-## 3. 唯一发现入口：安装目录
+Do not remove a core capability only because it could be a plugin. Documents, files, users, and grants must run with no business plugin installed. Files and documents using an internal plugin lifecycle is a core implementation detail. It is not the business plugin install channel.
 
-目标部署布局：
+## 3. Discovery
 
 ```text
-/opt/doca/                       可替换的 Doca 发布目录
+/opt/doca/                       replaceable Doca release
 /var/lib/doca/plugins/
-  package.json                  直接安装的插件依赖清单
-  pnpm-lock.yaml                 插件安装版本锁
-  node_modules/                 npm/pnpm 安装产物
-/var/lib/doca/plugin-data/       插件持久运行数据
+  package.json                   direct plugin dependencies
+  pnpm-lock.yaml
+  node_modules/
+/var/lib/doca/plugin-data/       plugin runtime data
 ```
 
-宿主只配置一个安装根目录，默认 `<data-root>/plugins`，允许部署环境覆盖。安装业务插件不修改宿主 package.json、TypeScript 配置、Vite 配置或任何源码。
+The host configures one install root, default `<data-root>/plugins`. Installing a plugin does not change the host package.json, TypeScript config, Vite config, or source. The scan reads direct dependencies, resolves them with Node package rules, and reads the package `doca` field. It does not walk `node_modules`, scan transitive dependencies, or run npm install at startup. A missing manifest is an empty install. A declared package that cannot be resolved is an install error.
 
-扫描读取安装根目录 package.json 的直接 dependencies，用 Node 包解析语义定位已安装包（支持 scoped 包、pnpm 和开发链接），读取包的 `doca` 声明。不得递归遍历 node_modules、扫描间接依赖或在启动时执行 npm install。根目录内缺少清单时视为空安装；已声明但无法解析的包必须报安装错误。
+The `doca` field contains manifest, server, and optional web or mobile entries. A release package ships built JavaScript, type declarations, and browser assets. The host does not compile plugin TypeScript. The manifest is static data checked before the plugin runs. Check the SDK range, duplicate ids, dependencies, entries, and asset directories. Entries are package-relative. URLs, absolute paths, and paths outside the package root are rejected. A dev link is resolved to the real package root before the boundary check.
 
-`doca` 声明包含 manifest、server 和可选 web/mobile 入口。正式安装包提供构建后的 JS、类型声明和浏览器资源，不能要求宿主编译插件 TypeScript。manifest 必须是可在执行插件前校验的静态数据；必须检查 SDK 范围、重复 ID、依赖、入口和资源目录。入口为包内相对路径，禁止 URL、绝对路径和越出包根；开发链接先解析实际包根，再做边界检查。
+Enable and disable apply only to packages the scan found. They cannot name an arbitrary code path. Business plugins come from this directory. There is no business plugin import list in `doca.config.ts`.
 
-启用/禁用设置只作用于扫描发现的包，不能指定另一条任意代码加载路径。所有业务插件来自该目录，不再保留 `doca.config.ts` 中的业务插件导入清单。
+Install, update, and delete happen while the process is stopped, or in a staging directory that is then switched. The first version takes effect on restart. Hot removal of Fastify routes is not promised. A duplicate package or an incompatible required dependency fails before the service accepts traffic.
 
-插件安装、更新、删除在进程停止后进行，或先在独立 staging 目录完成再切换；首版以重启生效，不承诺热卸载 Fastify 路由。重复包或不兼容必需依赖在服务接收流量前失败，不能静默跳过约束插件后继续提供业务操作。
-
-## 4. 公共 SDK 与生命周期
-
-现有 `@doca/plugin-sdk`、`@doca/files-capability`、`@doca/documents-capability` 等作为公共契约的基础。契约包必须能独立打包、发布和安装，禁止 `../../other-package/src` 形式的跨包导入。消费者不依赖 Provider 实现包；服务 token 与类型放在对应公共契约的导出中。
-
-生命周期保持：
+## 4. Lifecycle
 
 ```text
-扫描静态元信息 → 校验依赖 → 导入代码
-→ discover → 必需服务检查 → initialize → mount → ready
-→ 停止接收请求/排空任务 → 逆依赖顺序 dispose
+scan static metadata → check dependencies → import code
+→ discover → required service check → initialize → mount → ready
+→ stop accepting work → dispose in reverse dependency order
 ```
 
-服务按稳定字符串 ID 和版本识别，不依赖 token 对象引用相等。宿主预先提供平台服务；业务插件只能注册自己命名空间的服务，不允许注入 doca.server.* 等私有宿主服务。每个服务 ID 只能有一个 Provider，多贡献能力使用 registry。
+Services are identified by a stable string id and version, not by token object identity. The host provides platform services first. A business plugin registers services only in its own namespace. It cannot inject private host services such as `doca.server.*`. Each service id has one provider. Multi-contribution capabilities use a registry.
 
-每次注册返回 disposer，由 context effect 管理。服务、任务、事件订阅和 UI 注册属于具体宿主实例，禁止 `globalThis`、`Symbol.for` 保存业务实例。一个进程创建两套测试应用必须互不影响。
+Each registration returns a disposer owned by a context effect. Services, jobs, event subscriptions, and UI registrations belong to one host instance. Do not store them on `globalThis` or `Symbol.for`. Two test apps in one process must not affect each other.
 
-目标公共能力目录（名称是规范建议，新增项尚未全部导出）：
+Target capabilities, some of which are not exported yet: files.v1, documents.v1, users.v1, permissions.v1, http.v1, ai.v1, ai-usage.v1, search.v1, knowledge.sources.v1, notifications.v1 (exported), events.v1, the plugin's private database, and policies.v1. Actual ids follow the current exports. A rename must be versioned. This table is not permission to pass an unimplemented interface to an existing plugin.
 
-| 能力                 | 目标接口职责                                                    |
-| -------------------- | --------------------------------------------------------------- |
-| files.v1             | 文件夹/文件 CRUD、流式读取、上传、owner binding                 |
-| documents.v1         | 文档读取与受控修改                                              |
-| users.v1             | 当前用户、受控资料读取、统一目录搜索、后台 status 复核          |
-| permissions.v1       | 授权、业务资源授权器注册、交集来源注册                          |
-| http.v1              | 命名空间路由、校验、身份和取消上下文                            |
-| ai.v1                | 工具、skill、模型调用与调用策略注册                             |
-| ai-usage.v1          | 分用户/模型/时间/插件的调用及用量查询                           |
-| search.v1            | 搜索来源注册、投影、重建及授权查询                              |
-| knowledge.sources.v1 | 知识来源注册及卸载                                              |
-| notifications.v1     | 幂等发布、撤回、动态授权和站内跳转（已导出）                    |
-| events.v1            | 宿主事实事件；业务任务、重试、幂等由插件持久化                  |
-| 插件私有数据库       | 插件自行管理当前空库基线、事务、凭证、任务和 outbox；宿主不开放业务存储 |
-| policies.v1          | 通用业务操作的约束策略                                          |
+## 5. User information and request context
 
-已有服务的实际 ID 以当前导出为准，重命名必须显式版本化；表格不允许作为向现有插件传入未实现接口的依据。
+HTTP requests, AI tools, and background jobs share one trusted execution context: requestId, principal, pluginId, signal, and optionally sessionId, turnId, jobId, and callId. Identity comes from host authentication or a persisted job authorization. A plugin cannot build a user identity from its HTTP body.
 
-## 5. 用户信息与请求上下文
+A full user record available on the server is the stable id, public id, login, display name, avatar, status, administrator flag, verified contacts, profile fields, custom business fields, and identity-link metadata the caller may read. Ordinary search results stay a minimal projection. The object does not contain a password hash, session token, verification code, OAuth token, model API key, or storage secret. Do not return a full server profile to the browser or add it to a model prompt automatically.
 
-HTTP 请求、AI 工具和后台任务使用同一来源可信的执行上下文。目标字段包括 requestId、principal、pluginId、signal，以及可选 sessionId、turnId、jobId、callId。身份由宿主认证或持久任务授权生成，不能从插件 HTTP body 直接构造用户身份。
+Persist user create, profile update, and status change events. There is no user-delete entry yet. A background job rechecks user status and resource permission. A disabled user cannot keep access from an old job snapshot.
 
-“完整用户信息”定义为服务端可用的业务资料：稳定 ID、公开 ID、登录名、昵称、头像、状态、管理员标记、已验证联系方式、资料字段、自定义业务字段和允许读取的身份关联元信息。字段是否返回遵循显式的服务端读取用途与权限。普通搜索结果仍采用最小展示投影。
+A future delete flow is recorded by the host: mark deleting and revoke access, plugins clean up idempotently and confirm, then the host completes the delete. It must cover disabled, uninstalled, and unavailable plugins, with retry and an audited manual path. A timeout is not success. It does not use a cross-database two-phase commit. It must be accepted before a user-delete entry is opened.
 
-用户对象不包含密码哈希、会话 token、验证码、OAuth token、模型 API key 或存储密钥。需要调用外部服务时注入对应能力，不把凭据塞入用户 DTO。服务端能读取的完整资料也不得直接返回浏览器或自动加入模型提示词。
+## 6. Permissions and user intersection
 
-提供持久用户创建/资料更新/状态变更事件。当前无用户删除业务入口，用户删除生命周期与异步清理协议属于后续设计。插件后台任务执行时重新检查用户状态和资源权限，用户停用后不能靠旧任务快照继续获得访问权。
+A resource reference is `(pluginId, resourceType, resourceId)`. The plugin registers its authorizer. The host calls it. File and document services keep their own ACLs. Registering a plugin does not grant the right to read a user's files.
 
-未来删除流程由宿主持久记录删除请求和参与插件：标记删除中并撤销访问 → 插件幂等清理及确认 → 汇总结果并完成删除。必须覆盖停用、已卸载或不可用插件，支持重试、错误展示及有审计的人工处理；超时不能记为清理成功，也不能仅向当前加载插件广播。该流程不使用跨数据库两阶段提交，不阻塞当前邮箱首版；在开放用户删除入口前必须完成验收。
+The plugin defines business actions and role maps, such as mailbox.read. Plugin actions are not forced to equal document editor. A missing authorizer, a disabled plugin, or an uncertain result denies access. Body reads, attachment downloads, AI tools, and search hydrate recheck.
 
-## 6. 权限复用与用户交集
+The host keeps the administrator's all, related, and none rules and per-user overrides. related candidates are the union of built-in document and file sources and active plugin intersection sources. The host still filters user status, field visibility, and paging. none does not ask a plugin to widen the rule.
 
-### 6.1 资源授权
+An intersection source states which site users can be discovered because of an authorized business relationship. Shared mailbox or calendar members can be an intersection. A stranger's mail, the same email domain, or a name in a message body is not. The plugin does not write the administrator directory policy.
 
-统一资源引用为 `(pluginId, resourceType, resourceId)`。插件注册自己的资源授权器，宿主统一调用。文件服务和文档服务始终保留自身 ACL，插件注册成功不产生读取用户文件的特权。
+The source protocol supports a source id, schema version, candidate batches and cursors, relationship id and version, and a current-fact recheck. The plugin maintains large relationship indexes and its outbox. User search does not scan the plugin database. Expired candidates are rechecked before they are returned. A source failure does not widen search. Disabling a plugin removes its source immediately. Enabling it again calibrates versions and valid relationships first.
 
-插件定义业务动作及角色映射，例如 mailbox.read、mailbox.send、calendar.edit；不能把所有插件动作强制等同文档 editor。资源授权器缺失、插件停用或授权结果不确定时拒绝访问。正文读取、附件下载、AI 工具、搜索 hydrate 均需复核。
+Being searchable grants no business permission and does not expose the full profile. Duplicate users from several sources are deduplicated before paging. A pre-filter total must not leak hidden users.
 
-### 6.2 用户目录
+## 7. Files, plugin data, and transactions
 
-宿主保留管理员配置的 all / related / none 规则以及现有管理员设置的单用户覆盖。related 的候选集合由内置文档/文件来源与活动插件交集来源合并，之后仍由宿主过滤用户状态、字段可见性和分页。none 不调用插件放宽规则。
+Plugins use injected files.v1 and store stable ids. An attachment binding is `(ownerPlugin, ownerType, ownerId, role)`. Do not build a private attachment store or save a temporary signed URL as a permanent reference. An owner binding is ownership, not access. Reading an attachment through mail rechecks the mailbox and the binding. Opening the original file still follows that file's ACL.
 
-交集来源提供“哪些站内用户因何种受权业务关系可被发现”的事实。共享邮箱成员、共享日历成员可以构成交集；收到陌生邮件、同域邮箱、邮件正文出现用户名不自动构成交集。插件不能自行写管理员目录策略。
+Business data, credentials, jobs, and the outbox live in the plugin database. Doca does not offer business storage, SQL, or data.v1 or data.v2. initialize, mount, ready, and dispose are the lifecycle. A plugin accepts only its current empty baseline. Another structure refuses startup. Uninstall does not delete the plugin database. The package directory and the data directory are separate.
 
-来源协议须支持 source ID、schema version、候选批次/游标、关系 ID、版本，以及针对候选的当前事实复核。宿主不得为扩展一个业务而给 directoryIds 增加邮件/日程专用 SQL。
+Across databases and the file service, use idempotence, compensation, and calibration. There is no shared transaction.
 
-需要记录的关系含 ownerPlugin、relationId、参与用户、类型、有效状态/有效期。对于“曾经交互”的持久关系与“当前共享”的可撤销关系，来源须明确语义；当前共享撤销必须失效，历史关系只能在管理员策略允许且确有成功权限交互时参与。默认采用当前有效关系，不能把撤销共享永久变成可搜索关系。
+### 7.1 Durable file creation
 
-大量关系由插件自己的索引和 outbox 维护，不在用户搜索中全表扫描插件数据库。过期候选返回前复核；来源故障不扩大搜索范围。停用插件立即移除其来源，保留的历史投影不再参与查询。重新启用时先校准版本与有效关系。
+`files.v1.folders.create` and `files.v1.files.create` accept an optional `idempotencyKey`, non-empty, at most 200 characters, no control characters. The scope is the injected plugin id, the current user, and the operation type. The same key and the same parameters return the first result. The same key and different parameters throw 409. The file or folder row and the completed receipt commit together. Receipts do not expire. Disable and uninstall do not delete them. Replaying after the result was deleted returns 404 and does not recreate the file. Replay and query recheck the account and write permission.
 
-可搜索到用户不授予任何业务资源权限，也不自动暴露用户全部资料。相同用户多来源去重后再分页，不能依靠过滤前的总数泄露隐藏用户。
+Upload completion returns `contentIdentity: {sha256, size, mime}`. An idempotent upload must pass it. The host checks the uploaded bytes. The request fingerprint includes the destination directory, name, and content identity, not the temporary uploadId. Copy uses sourceFileId and does not need contentIdentity. The plugin stores the operation key, business parameters, and content identity in its own outbox.
 
-## 7. 文件、插件数据与事务
+`files.receipts.get(context, {operation, key})` returns null or `{status: "pending" | "completed", operation, result}`. pending means the original parameters may be retried. It does not mean a job is still running. completed returns the historical snapshot. If the response is unknown, read the receipt, then replay the original create. A failure is not forged into a success receipt.
 
-插件通过注入的 files.v1 操作 Doca 文件夹和文件，保存稳定 ID。附件绑定使用 `(ownerPlugin, ownerType, ownerId, role)`，禁止私建与 Doca 隔离的附件存储或保存临时签名链接为永久引用。
+The host reserves the object id and storage configuration, then writes bytes. Local writes use an atomic replace. S3 writes a complete object. Startup and an hourly sweep reclaim spare objects from completed intents, bytes from intents unfinished for more than 24 hours, and temporary files. Reclaim and upload retry share a database user lock and check object references. A registered object is not deleted as garbage.
 
-owner binding 是资源归属事实，不等于访问授权。通过邮箱读取附件时必须复核邮箱及绑定权限；直接访问原文件仍遵循原文件 ACL，不能通过绑定公开他人的私有文件。
+### 7.2 Search and external knowledge
 
-业务数据、凭证、任务和 outbox 由插件独立数据库管理。Doca 不提供业务存储、SQL 或 data.v1/data.v2。initialize/mount/ready/dispose 提供初始化与清理时机。插件只接受自己的当前空库基线；检测到其他结构时拒绝启动，不由宿主或插件运行升级脚本。卸载不删除插件数据库；安装包与业务数据目录分离。文件服务是受控 SDK 能力，不开放宿主表或对象存储路径。
+`search.v1` is the shared search base for in-plugin search and global federated search. Those entries and AI retrieval enable sources separately. Registering a source does not turn on global display or AI. A public query capability does not mean those entries are connected.
 
-跨数据库和文件服务采用幂等、补偿和校准，不承诺共同事务。关系投影亦由插件存储，目录来源只提交有效交集事实。
+The host persists the subscription, target library, source configuration reference, plugin, source, and record ids and versions, sync cursor, job status, and last error. It schedules pull and owns the derived index lifecycle. That is host knowledge data, not plugin database hosting. The plugin keeps external accounts, credentials, business data, its own sync cursor, and outbox, and provides preview, pull, delete facts, and a current authorization recheck.
 
-### 7.1 文件创建持久幂等
+The host advances the subscription cursor only after a batch is persisted. It supports replay, cancel, retry, and restart. A subscription constrained by source permission stops retrieval and AI use immediately when access is revoked, the source is disabled, or permission cannot be confirmed. Physical cleanup of derived content may retry asynchronously. Deleting a source propagates to derived records. An independent copy the user imported explicitly has its own authorization and lifecycle. This orchestration is not implied by a register call.
 
-`files.v1.folders.create` 和 `files.v1.files.create` 已支持可选 `idempotencyKey`（非空、最多 200 字符，不含控制字符）。作用域为安装边界注入的插件 ID、当前用户和操作类型；插件不能通过请求字段指定其他插件身份。同键同参数返回第一次创建的结果快照，同键异参抛出 409。文件/文件夹记录与 completed 回执在同一数据库事务提交。回执不自动过期，禁用、卸载不删除回执；删除结果后重放返回 404，不重建文件。重放与查询均重新校验当前账号和结果的写权限。
+## 8. AI tools, skills, and usage
 
-上传完成返回 `contentIdentity: {sha256, size, mime}`。上传方式的幂等创建必须传此字段，宿主校验实际上传字节；请求指纹包含目标目录、名称和内容身份，不包含临时 uploadId。上传状态仍在内存，重启后可重新上传相同内容，以新 uploadId 和原操作键继续。复制方式用 sourceFileId 标识来源，不需要 contentIdentity。插件必须把操作键、业务参数和内容身份存入自己的 outbox，不能用每次变化的请求 ID 替代。
+A plugin may register tools, skills, intents, workflows, result renderers, and checkers. A tool has a namespaced id, input and output schemas, an executor, and a permission requirement. A skill is versioned content in the package. It is not a way around tool authorization.
 
-`files.receipts.get(context, {operation: "file.create" | "folder.create", key})` 返回 null（没有持久回执）或 `{status: "pending" | "completed", operation, result}`。pending 的 result 为 null，表示可使用原参数重试，不表示仍有任务运行；completed 返回历史结果快照。响应未知时先查回执，再重放原创建请求。失败不伪造成功回执；文件夹失败随事务回滚，上传创建可能保留 pending 意图。
+A plugin tool receives the authorized user profile and the AI call context: session, turn, job, tool call, model id, parameters, cancel signal, and allowed material references. Arbitrary history and every prompt are not the default tool context. Chat and MCP share authorization and tool execution.
 
-宿主先持久预留对象 ID 和存储配置，再写字节；数据库提交前失败后使用同一路径恢复。本地写使用原子替换，S3 使用完整对象写入。启动及每小时分批回收已完成意图的备用对象、超过 24 小时未完成意图的字节及临时文件。回收与上传重试持有同一数据库用户锁，并校验对象引用；已注册对象不作为预留垃圾删除。回执及 pending 对象位置保留，重试可以重新上传。邮件发送幂等、业务补偿和插件数据库清理由插件负责。
+The core does not have membership levels, points, prices, gift quotas, or model filtering by level. The host keeps model configuration, technical timeouts, concurrency, context limits, and raw usage queryable by user, model, plugin, job, and call. Each model has input and output token rates. Image generation has tokens per successful image. Those rates convert vendor usage into cumulative tokens. They are not a currency or a final price.
 
-### 7.2 搜索与外部知识来源
+Each provider attempt has its own callId and attemptId. Unknown values are null. Do not invent 0. Cache or reasoning tokens may already be included in input or output totals. Do not add them twice. Settlement freezes the rate snapshot from the start of the call. The UI and `ai.usage.recorded` show rated usage. The ledger keeps raw vendor metrics. Estimates and actuals stay separate. Replay does not meter twice.
 
-`search.v1` 定位为宿主统一搜索基础能力，供插件内搜索和全局联邦搜索复用；两种入口与 AI 检索的来源启用范围独立控制。来源注册不自动开启全局展示或 AI 使用。全局接入需完成 endpoint、来源筛选、排序分页、超时与部分失败处理、UI、renderer 及缺失 renderer 的通用展示；标题、摘要、总数和正文均不得泄露未授权内容。当前公开查询能力不代表上述入口已接通。
+Only calls that go through the host AI executor are in the unified meter. A plugin that calls a provider directly is outside that promise.
 
-外部知识订阅由宿主持久保存订阅主体、目标知识库、来源配置引用、插件/来源/记录 ID 与版本、同步游标、任务状态和最近错误，并负责 pull 调度与派生索引生命周期。这是宿主知识产品数据，不是插件数据库托管。插件保存外部账号、凭证、业务数据、业务同步游标和 outbox，提供 preview/pull、删除事实及当前授权复核；宿主订阅游标与插件业务同步游标分别归各自所有者管理。
+A control plugin must reserve atomically in its own transaction and return an idempotent reservation id. Completion or failure releases or settles through a durable event retry. Check balance, call, then deduct is not concurrent quota control. A failed usage event does not erase the host ledger. Replay deduplicates by callId and attemptId.
 
-宿主仅在批次成功持久化后推进订阅游标，支持重放、取消、重试和重启恢复。受来源权限约束的订阅在撤权、来源停用或权限无法确认时立即停止检索及 AI 使用；派生内容和索引物理清理可异步重试。来源删除须传播到派生记录。用户明确导入的独立副本须另行定义授权及生命周期，不能通过订阅流程暗中转为永久副本。此编排及持久模型属于待验收能力，不能由注册接口推断已实现。
+policies.v1 also covers document create, file upload, and share. It returns allow or deny and a stable reason code. The default has no commercial constraint. A policy plugin cannot widen a resource ACL, account status, request size, or execution safety limit. A policy exception is not swallowed into allow. If a required control plugin is missing, the operation is unavailable and the error is explicit.
 
-## 8. AI 工具、skill 与用量
+## 9. Pages, navigation, and HTTP
 
-插件可注册 tool、skill、intent、workflow、结果 renderer 和验收器。工具有命名空间 ID、输入/输出 schema、执行器和权限要求；skill 是插件包内的版本化内容，不是绕过工具授权的执行通道。
+A business plugin may contribute global navigation, its own tree or sidebar, pages, admin, personal settings, document menu actions, search results, and AI result display. Position uses a stable slot, order, and id. Do not edit a host route branch to add a business.
 
-插件工具获得受权用户资料和 AI 调用上下文，包括 session/turn/job/toolCall、模型标识、参数、取消信号与允许使用的资料引用。任意用户历史会话和全部提示词不作为默认工具上下文。Chat 与 MCP 复用同一授权和工具执行管线。
+The web target is a browser ESM, styles, and assets built by the plugin. The host loads a versioned URL from the active manifest. The build must not import `@web/*`, local host source, or unresolved bare imports. The host serves the declared static directory, not the whole npm package. A server and client version mismatch makes that plugin's page unavailable. A missing renderer keeps a generic historical display. A web registration error stays inside the plugin boundary.
 
-### 8.1 宿主只记事实
+http.v1 registers `/api/v1/plugins/<plugin-id>/...` and reuses host authentication, Origin and Host checks, request schema, error format, rate limit, and cancellation. A public webhook must declare how external identity is verified. Native mobile code still ships with the app build. A dynamic WebView is a later capability and is not provided now.
 
-核心取消会员等级、积分、货币价格、赠送额度和按等级筛选模型。宿主保留模型可用配置、技术性超时/并发/上下文上限，以及按用户、模型、插件、任务、调用维度查询的原始用量。每个模型同时配置输入、输出 Token 折算速率；图片生成配置每张图片折算的 Token。该速率用于把不同厂商和模态统一为可累计的 Token 用量，不表示币种或最终售价。
+## 10. Removing membership and moderation
 
-每次实际 provider 尝试具有独立 callId 和 attemptId。记录输入、输出、缓存读取、缓存写入、推理、音频/图像等 provider 支持的细分 token，以及图像张数等非 token 单位。未知值为 null，并保存脱敏原始 usage；不能编造为 0。
+Removing membership includes admin pages, level display, plan and grant APIs, identity-provider level maps, resource quotas, AI points, and model filtering by level. Hiding a page while keeping a level limit is not enough. Raw AI usage records stay. The project is not carrying old commercial fields or a migration layer.
 
-标准化账本必须说明 provider 各字段的包含关系：缓存或推理可能已包含在输入/输出总量中，汇总不能重复相加。结算时把调用开始时的速率快照固化；对话按输入量 × 输入速率与输出量 × 输出速率分别折算，图片只按成功张数 × 每张 Token 折算，不再叠加厂商返回的图像输入/输出 Token。用户界面与 `ai.usage.recorded` 对外事件展示折算后的用量，同时账本保留厂商原始指标供审计。取消、失败、重试、流中断和用量缺失都有明确状态；预估与实际量分开，持久记录幂等，插件重放不重复计量。
+Removing content moderation includes report entry points, the review admin, vendors, scan jobs, and dedicated review calls in host flows. Administrator approval of registration is account policy. Security audit is core. Neither is deleted because content moderation is removed.
 
-仅经过宿主 AI 执行服务的调用能保证统一计量；插件自行直接请求 provider 的行为不计入宿主完整性承诺。插件需要模型能力时应复用宿主执行服务。
+Mail, calendar, membership, and moderation are business plugins. Quick notes, tickets, third-party sync, recognizers, and notification channels are candidates to split later, only after the same SDK, data, and client acceptance. Do not leave a wrapper that still imports a private host implementation.
 
-### 8.2 用量控制属于插件
+## 11. Development and acceptance
 
-提供执行前和执行后的扩展：调用前提供用户、模型、任务、预估上限并允许策略拒绝或预留；调用完成后提交实际 usage 与结果。会员插件负责余额、额度、周期、定价及扣费。
+- Public ids, tables, events, and tools have a plugin namespace. The SDK version range is explicit.
+- The package provides JavaScript, `.d.ts`, a static manifest, and declared client artifacts. It does not depend on Doca repository aliases.
+- Unit tests use capability fakes. Integration tests use a separate Doca, an isolated database, and a temporary install directory.
+- Acceptance uses a real host build, the SDK, and the plugin tarball outside the repository, with the dependency closure. Install and startup do not fetch a registry or follow a source link.
+- Verify an empty plugin directory, one plugin, several plugins, a missing dependency, a duplicate id, a version conflict, a mismatched database baseline, and cleanup on shutdown.
+- Verify two host instances do not share plugin services, user events, or tool registrations.
+- Verify related and none policy, relationship revocation, plugin disable, source failure, file binding, and the same permission in search and AI.
+- Verify concurrent AI calls, failure and cancel, missing usage, settlement replay, and a failed control plugin, without double metering.
+- Verify a host upgrade does not change the plugin lockfile, business data, or attachments. With plugins disabled, core documents and files still run.
+- Interface copy follows [interface languages](i18n.md). Editor extensions follow the collaboration and editor integration documents.
 
-控制插件必须能在自己的事务中原子预留，返回幂等 reservation ID；完成/失败释放或结算通过持久事件重试。单纯“先查余额、调用后再扣”不能作为并发额度控制。插件接收用量事件失败不抹去宿主账本，重放依据 callId/attemptId 去重。
+## 12. What exists
 
-通用 policies.v1 同时覆盖文档创建、文件上传、分享等操作，返回允许/拒绝及稳定原因码；默认无商业约束。资源 ACL、账号状态、请求大小和执行安全上限不能被策略插件放宽。策略异常不能被吞掉后放行；被配置为必需的控制插件缺失时，相关操作应不可用并明确报错。
+Checked against the repository on 2026-09-25. This is not a claim that the target above has landed.
 
-## 9. 页面、导航及后端扩展
+| Item | Present | Still to do |
+| --- | --- | --- |
+| Discovery | Separate install root, direct dependencies, static manifest checks | Acceptance of an independent package set |
+| Injection | Services, effects, public SDK build, public service catalog | More business capabilities as services |
+| Files and documents | Public file contract, binding download authorization, durable create idempotence, SDK package build | Full acceptance of an independent document capability package. Spare file objects are reclaimed on a schedule |
+| Users | Paged calibration, user-create events in a transaction, status and some profile events | User deletion and async cleanup before a delete entry is opened. More profile entry checks |
+| Intersection | Paged relationship sources, current-fact recheck, timeout and sign-out denial | The plugin maintains its own incremental relationship index |
+| Client | Dynamic load, web host interface, render error isolation | Generic tree slot, native mobile build integration |
+| AI | Public tools and skills, raw usage, model-rate conversion, admission policy, durable settlement events | MCP alignment, reservation and failure compensation, more usage dimensions |
+| Search and knowledge | search.v1 projection, rebuild, and authorization query. Knowledge registration contract is packaged | Global retrieval, durable knowledge subscription, scheduling, and revocation cleanup |
+| Mail | Host source, bridge, database, tools, web and mobile entry, and business tests removed | A future mail plugin is developed and accepted on its own |
+| Membership | Backend, UI, and commercial data definitions removed | Combined verification |
+| Moderation | Routes, worker, business fields, and read restrictions removed | A future business plugin |
 
-业务插件可以贡献全局导航项、自己的目录树/侧栏、独立页面、管理页、个人设置、文档菜单/侧栏动作、搜索结果和 AI 结果展示。导航位置使用稳定 slot、order 和 ID；不能修改宿主路由分支来接入一个新业务。
+Order: public SDK and the install directory, web runtime loading and independent package verification, user, permission, and AI extensions, mail on public interfaces, membership and moderation removal, then combined upgrade acceptance. Update this table each stage. An unimplemented capability must not appear in a tutorial example that claims to run.
 
-动态 Web 目标：插件自行产出浏览器 ESM、样式和资源，宿主通过活动插件清单加载版本化 URL。构建产物不能引用宿主 `@web/*`、本地源码或未解析 bare imports。宿主需明确 browser SDK 和 React 等共享依赖的解析/单例方案，提供构建工具验证；不能把当前 Vite eager glob 称为运行时加载。
+Interface increments and storage ownership on 2026-09-26 follow the [mail handoff](plugin-mail-handoff.md).
 
-宿主从插件声明的静态资源目录提供版本化资源，不开放整个 npm 包目录。服务端和客户端版本不匹配时该插件页面不可用；缺失 renderer 保留通用历史事实展示。Web 注册错误要隔离到插件边界，不能使核心文档工作台白屏。
+## 13. Delivery grades
 
-后端通过 http.v1 注册 `/api/v1/plugins/<plugin-id>/...` 命名空间路由，复用宿主认证、Origin/Host 校验、请求 schema、错误格式、限流和取消。公开 webhook 必须显式声明外部身份验证方式，不能以整个业务路径跳过安全边界。插件可自行实现邮件、日程等完整后端和任务。
+- Near term: file-create idempotence the mail integration already has, and a real offline tarball acceptance. Search and knowledge follow section 7.2. The first delivery states disable, uninstall, data retention, and the current database baseline.
+- When the product promises it: automatic mail sync into a library needs the full host subscription orchestration. Global search needs the full global entry. Do not claim them before they exist, and do not treat them as unconditional blockers for a basic mail connection.
+- As the feature arrives: user deletion with the account-delete entry. Dynamic WebView with a mobile promise that does not require an app release.
+- Later operations: a default plugin data directory, redacted structured logs, health, recent job errors, and a backlog page for jobs and the outbox. The host summarizes through a public status interface. It does not query the plugin database. The default directory is a path convention. It does not host the database, credentials, or backups.
 
-原生 Mobile 代码仍需随 App 构建；目录扫描仅发现可构建的插件目标。要在已发布 App 中动态提供新业务，需另行采用受限 Web 页面/API 能力，不能承诺任意 npm 原生模块安装后立即生效。
+After disable, jobs are stopped and drained, sources unregister, and business access is denied. The first version still changes configuration while stopped and takes effect on restart. Uninstall keeps business data. An explicit wipe is a separate operation with a stated scope and a confirmation. Attachment cleanup rechecks ownership and other live references.
 
-动态 WebView shell 是独立的后续能力；仅在产品承诺已发布 App 无须重新发版即可接入插件时提升为交付前提。目标 ticket 必须短期、一次性、绑定用户/插件/用途，并兑换为服务端强制限制范围的会话，不能兑换完整宿主会话。限制页面来源与导航，原生桥仅允许明确列出的能力，不向页面暴露原生登录凭证。需验收重放、越权、注销、插件停用和客户端版本不兼容；当前不提供该协议。
+The SDK range check stays. A plugin database accepts only the current structure. A mismatch refuses startup. There is no upgrade or downgrade script.
 
-## 10. 会员与审核的移除标准
-
-会员移除包含管理页、用户等级展示、会员跳转、套餐/授权接口、身份源等级映射、资源额度判断、AI 积分及按等级模型过滤。不得只隐藏页面而保留等级限制。保留原始 AI 用量记录。项目未上线，不保留旧商业字段、接口或迁移兼容层；测试使用隔离数据库。
-
-内容审核移除包含举报入口、审核后台、审核供应商、扫描任务和宿主业务流程里的专用审核调用。登录注册的管理员审批属于账号接入策略，安全操作审计属于核心，两者不因“卸载内容审核”一起删除。
-
-项目未上线，不保留历史审核状态或兼容限制字段。未来业务插件如需限制资源，应通过明确的通用权限契约实现，不得绕过私有内容访问控制。
-
-邮件、日程、会员、审核作为业务插件对待。随手记、票据、第三方同步、内容识别器、通知渠道等列为可拆分业务候选；每个候选达到相同 SDK/数据/客户端验收后再移出，不能留下包装层继续导入宿主私有实现。
-
-## 11. 开发规范与验收
-
-- 所有公开 ID、数据表、事件和工具有插件命名空间；SDK 版本范围明确。
-- 包提供 JS、d.ts、静态 manifest 和声明过的客户端产物；不依赖 Doca 仓库别名。
-- 单元测试用能力替身，集成测试使用独立 Doca、隔离数据库和临时安装目录。
-- 必须用实际宿主交付物、SDK 与业务插件 tgz 在仓库外安装测试；依赖闭包必须随验收材料提供，安装及启动不访问包仓库，不依赖源码链接或未声明缓存。验收包括发现、启动、Web 资源与页面加载、实际业务流程、权限撤销、故障重试和重启恢复。外部邮件服务可用测试服务替代；SDK 导入成功不能替代插件端到端验收。
-- 验证空插件目录、仅单插件、多插件组合、缺失依赖、重复 ID、版本冲突、数据库基线不匹配和关闭清理。
-- 验证两个宿主实例互不共享插件服务/用户事件/工具注册。
-- 验证 related/none 策略、关系撤销、插件停用、来源故障、文件绑定以及搜索/AI 权限一致。
-- 验证并发 AI 调用、失败/取消、实际用量缺失、结算重放和插件控制失效，不重复计量。
-- 验证升级宿主不修改插件安装锁文件、业务数据及附件；禁用插件仍能运行核心文档/文件功能。
-- 界面遵循 [i18n.md](i18n.md)，编辑器扩展继续遵循现有协同与编辑器集成规范。
-
-## 12. 当前实现与改造清单
-
-以下为对 2026-09-25 仓库的静态核对，不是上述目标已经落地的声明。
-
-| 项目      | 已有基础                                                             | 尚需实施                                                           |
-| --------- | -------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| 插件发现  | 独立安装根、直接依赖、静态 manifest 校验已实现                       | 独立包组合验收                                                     |
-| 服务注入  | 服务、effect、公共 SDK 构建及公开服务目录已实现                      | 更多业务能力服务化                                                 |
-| 文件/文档 | 公共文件契约、绑定下载动态授权、文件创建持久幂等、SDK 包构建         | 文档能力独立包的完整验收；文件暂存对象已支持定时回收               |
-| 用户      | 分页校准、事务用户创建事件、状态/部分资料变更事件                    | 用户删除生命周期与异步清理协议（开放删除入口前）、更多资料入口核对 |
-| 权限交集  | 分页关系来源、当前事实复核、超时/注销拒绝                            | 插件自行维护增量关系索引                                           |
-| 客户端    | 动态加载、Web host 接口、渲染错误隔离                                | 通用目录树插槽、Mobile 原生构建接入                                |
-| AI        | 公开工具/skill、原始用量、模型速率折算、准入策略及持久结算事件已实现 | MCP 对齐、预留与失败补偿协议、更多维度用量汇总                     |
-| 搜索/知识 | search.v1 投影/重建/授权查询、知识注册契约公开打包                   | 全局检索接入、知识持久订阅/调度及撤权清理                          |
-| 邮件      | 宿主源码引用、桥接、数据库、工具、Web/Mobile 入口与业务测试已移除    | 未来邮箱插件独立开发验收                                           |
-| 会员      | 后端、界面、商业数据定义已移除                                       | 组合验证                                                           |
-| 审核      | 路由、worker、业务字段及读取限制已移除                               | 未来由业务插件实现                                                 |
-
-实施顺序：公共 SDK 与独立安装目录 → Web 运行时加载与独立包验证 → 用户/权限/AI 扩展 → 邮件切换公共接口 → 会员与审核移除 → 全量组合及升级验收。每阶段更新本表，未实现能力不得出现在可直接运行的教程示例里。
-
-2026-09-26 接口增量与存储归属以 [邮箱插件交接](plugin-mail-handoff.md) 为准；该文档明确当前已实现与仍需实施的能力。
-
-## 13. 接入需求分级与运维边界
-
-- 近期交付：邮箱接入已提供的文件创建幂等，完成实际 tgz 离线业务集成验收；搜索与知识职责按第 7.2 节执行。首次交付即明确禁用、卸载、数据保留和当前数据库基线。
-- 按产品承诺交付：邮件自动同步知识库需要完整宿主订阅编排；全局搜索需要完整全局入口。未完成前不得宣称支持相应功能，也不把它们无条件列为基础邮箱接入阻塞项。
-- 随功能推进：用户删除协议随账号删除入口交付；动态 WebView 随移动端免发版接入需求交付。
-- 后续管理能力：默认插件数据目录、结构化日志、健康状态、最近任务错误，以及后台任务/outbox backlog 管理页。宿主通过插件公开状态接口汇总，不查询插件私有数据库；日志需脱敏。默认目录仅提供路径约定，不托管数据库、凭证或备份。
-
-禁用生效后需停止并排空任务、注销来源并拒绝业务访问；首版仍以停机修改配置并重启生效，不承诺运行时热卸载。卸载保留业务数据，显式清除是独立管理操作，需展示范围并获得明确确认；附件清理复核归属和其他有效引用，不能删除其他业务仍使用的文件或静默解除资源限制。管理页面可以后置，行为契约必须先落实。
-
-SDK 范围校验继续保留。插件数据库只接受当前结构；结构不匹配时拒绝启动，不运行升级或降级脚本。
-
-明确不做：通用插件 SQL/data.v2、跨插件数据库分布式事务、默认将所有插件搜索来源交给 AI、在原生进程中动态执行 npm 插件代码。
+Explicitly not done: generic plugin SQL or data.v2, a distributed transaction across plugin databases, giving every plugin search source to AI by default, and executing npm plugin code dynamically in the native process.

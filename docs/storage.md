@@ -1,43 +1,45 @@
-# 文件存储与上传
+# File storage and uploads
 
-本模块用于头像、知识库封面、文档图片和附件。正文编辑器与管理页共用上传接口，正文仅保存稳定资产ID，由资源适配器解析鉴权URL，不保存短时CDN签名链接。
+[中文](storage.zh-CN.md)
 
-## 本地部署
+This module stores avatars, library covers, document images, and attachments. The editor and the admin pages share the upload API. Document bodies store a stable asset id. A resource adapter resolves an authorized URL. Short-lived CDN signatures are not stored in the document.
 
-默认本地存储，上传目录 `data/v1/uploads`，可用 `DOCA_UPLOAD_DIR` 指定。目录应为服务专用、仅服务用户可写，位于公开静态目录之外；容器需挂载持久化卷。不可在已有文件时直接改目录而不迁移文件。备份同时覆盖数据库、上传目录与服务器凭据配置。
+## Local deployment
 
-路径由服务生成 `objects/{uuid}`，不使用用户文件名拼接磁盘路径。文件以受限权限创建，不覆盖已有对象；GET `/api/v1/assets/:id/content` 检查访问权限，不能通过静态目录绕过。
+The default is local storage under `data/v1/uploads`, or `DOCA_UPLOAD_DIR`. The directory should be dedicated to the service, writable only by the service user, and outside the public static tree. A container needs a persistent volume. Do not point the setting at a new directory that already has files without moving those files. Backups cover the database, the upload directory, and server credential configuration.
 
-## 云存储
+Paths are generated as `objects/{uuid}`. User filenames are not joined into the disk path. Files are created with restricted permissions and never overwrite an existing object. `GET /api/v1/assets/:id/content` checks access. The static file tree cannot bypass that check.
 
-支持 S3 兼容接口。先在「平台设置 → 服务凭据 → 对象存储」添加凭据名称、Access Key ID、Secret Access Key 和可选 Session Token，再在「文件存储」选择云存储、桶名、区域、端点及凭据名称。允许的端点域名也在服务凭据页设置。
+## Cloud storage
 
-密钥保存在数据库，保存后生效，读取配置不回显密钥。AWS S3 默认端点留空；其他服务填写 HTTPS 根端点，必须在端点白名单中，管理员可根据供应商要求启用 Path-style。白名单由可信部署者管理，不应允许不可信代理服务；网络层也应限制存储出口。
+S3-compatible storage is supported. Under Platform settings, Service credentials, Object storage, add a credential name, access key id, secret access key, and optional session token. Then under File storage choose cloud storage, the bucket, region, endpoint, and credential name. Allowed endpoint hosts are also set on the credentials page.
 
-桶必须私有。授予服务凭据目标桶 `objects/` 前缀的 GetObject、PutObject、DeleteObject 最小权限，不使用公开 ACL。区域、桶和 endpoint 的真实连通性在首次上传时验证；保存设置只校验格式及服务器配置，不声称连接成功。
+Secrets are stored in the database and take effect when saved. Reading the configuration does not echo them. Leave the endpoint empty for the default AWS S3 endpoint. Other services need an HTTPS root endpoint that is on the allowlist. An administrator may enable path-style when the vendor requires it. The allowlist is managed by the trusted operator. Do not allow an untrusted proxy, and restrict storage egress on the network.
 
-修改存储会创建新的配置记录，只影响之后上传的文件。旧资产保留旧profile，不能移除仍在使用的桶或凭据别名。切换配置不是数据迁移工具；密钥轮换可更新同一别名，但不要把该别名改指向完全不同的账号。
+The bucket must be private. Grant the credential `GetObject`, `PutObject`, and `DeleteObject` only under the `objects/` prefix. Do not use a public ACL. Connectivity of the region, bucket, and endpoint is checked on the first upload. Saving settings checks the shape and the server configuration. It does not claim the connection succeeded.
 
-## CDN 域名与私有文件
+Changing storage creates a new configuration record and affects only later uploads. Old assets keep their old profile. Do not remove a bucket or credential alias that is still in use. Switching configuration is not a migration tool. Rotating a key may update the same alias. Do not point that alias at a different account.
 
-当前 CDN 支持 **CloudFront 签名协议**（不是任意 CDN 的公开域名替换）。配置步骤：
+## CDN and private files
 
-1. 建立 CloudFront 分配，使用私有 S3 源站及 OAC，源站路径与 `objects/` key一致，保持对象 Content-Type、Content-Disposition。
-2. 配置受信任密钥组，要求所有对象使用签名URL访问；源站与分配都不能有无签名公开旁路。
-3. 在「服务凭据 → CDN 签名」配置密钥 ID 和 PEM 私钥，管理页填写 `https://files.example.com`。证书与DNS由部署者配置。
-4. 应用先检查最新ACL，然后重定向到60秒有效的签名链接。撤销权限后不再发新链接，已发链接最多还能访问60秒。任何下载到客户端的内容无法撤回。
+The CDN path is the CloudFront signed-URL protocol, not a public hostname swap for an arbitrary CDN.
 
-不使用 CDN 时，私有云文件由应用代理读取，不要求前端接触云存储密钥。其他厂商的CDN签名机制需新增签名适配器；系统不会降级为永久公开URL。历史CDN配置的密钥组需保留信任，密钥轮换后要保持所有历史域名可用。
+1. Create a CloudFront distribution with a private S3 origin and origin access control. The origin path matches the `objects/` key. Preserve `Content-Type` and `Content-Disposition`.
+2. Require a trusted key group and signed URLs for every object. Neither the origin nor the distribution may offer an unsigned public bypass.
+3. Under Service credentials, CDN signing, set the key id and PEM private key. The admin page stores a host such as `https://files.example.com`. The operator configures the certificate and DNS.
+4. The app checks the latest ACL, then redirects to a signed URL that lasts 60 seconds. After access is revoked, no new link is issued. An already issued link can work for at most 60 seconds. Bytes already downloaded cannot be recalled.
 
-## 校验与权限
+Without a CDN, the app proxies private cloud files. The browser never sees the storage secret. Another vendor's signing scheme needs a new adapter. Doca does not fall back to a permanent public URL. Key groups for historical CDN settings must stay trusted, and every historical domain must keep working after a key rotation.
 
-- 头像/封面最大5MB，识别PNG、JPEG、WebP、GIF真实文件头并解码；限制2500万像素，移除元数据，转WebP。头像裁为方形(最大512)，封面最大1600宽；GIF仅取首帧。
-- 附件最大20MB。可识别的图片会压缩为WebP(最大2400)，其余原样保存为二进制下载。SVG/HTML不作为可执行图片内联展示；普通文件强制 attachment、nosniff、sandbox。未接入病毒扫描。
-- 最多4个并发上传、单用户每10分钟最多60次尝试；API也检查最近上传记录。反向代理需额外设置请求体大小、连接数和总存储配额，当前未提供每用户磁盘配额。
-- 头像草稿仅上传者可读，绑定后本站登录用户可查看；匿名不可查看。封面遵循知识库ACL，未绑定草稿仅上传者可读；附件遵循文档ACL，系统管理员无阅读特权。封面需要管理者权限、附件需要编辑者权限。
-- 上传先落对象，再在事务中复核用户状态/资源权限并登记；登记失败尽力删除未提交对象。编辑封面使用资源version，修改头像使用个人设置version。
-- 已完成上传但未绑定的头像/封面草稿暂保留；后台定时孤儿回收、存储配额、病毒扫描和分片上传待补充。异常宕机可能遗留未登记对象，运维清理必须校验所有资产引用，不能按单篇文档删除共享对象。
+## Checks and permissions
 
-## 验证边界
+- Avatars and covers are at most 5 MB. PNG, JPEG, WebP, and GIF are recognized from the file header and decoded. The limit is 25 million pixels. Metadata is removed and the image is stored as WebP. Avatars are cropped square, at most 512 px. Covers are at most 1600 px wide. A GIF keeps the first frame.
+- Attachments are at most 20 MB. Recognized images are compressed to WebP, at most 2400 px. Other files are stored as the original bytes. SVG and HTML are not inlined as executable images. Ordinary files are served as attachments with `nosniff` and a sandbox. There is no virus scan.
+- At most 4 concurrent uploads, and 60 attempts per user per 10 minutes. The API also checks recent upload records. A reverse proxy should add its own body size, connection, and storage limits. There is no per-user disk quota yet.
+- An avatar draft is readable only by the uploader. After it is bound, signed-in users of the site can see it. Anonymous users cannot. A cover follows the library ACL. An unbound cover draft is readable only by the uploader. An attachment follows the document ACL. A system administrator has no extra read right. A cover requires manager. An attachment requires editor.
+- The object is written first. A transaction then rechecks the user and the resource permission and records the asset. If recording fails, the uncommitted object is deleted when possible. Cover edits use the resource version. Avatar edits use the profile version.
+- Finished but unbound avatar and cover drafts are kept for now. Scheduled orphan cleanup, quotas, virus scanning, and multipart upload are not done. A crash can leave an unregistered object. Cleanup must check every asset reference. Do not delete a shared object because one document was removed.
 
-自动化覆盖本地上传、私有权限、图片校验、头像/封面绑定、冲突与历史配置读取。S3 SDK调用及CDN签名有模拟测试，未使用真实云凭据联调。上线前需完成真实桶上传下载、私有源站封锁、过期签名、权限撤销、网络故障和备份恢复验证；PostgreSQL仍需实库集成测试。
+## Verification
+
+Automated tests cover local upload, private permissions, image checks, avatar and cover binding, conflicts, and reading a historical configuration. S3 SDK calls and CDN signatures are simulated. They do not use live cloud credentials. Before production, verify a real bucket upload and download, a locked private origin, an expired signature, revocation, a network failure, and backup restore. PostgreSQL still needs a test against a real server.

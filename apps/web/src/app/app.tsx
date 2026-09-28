@@ -318,15 +318,18 @@ export function App() {
     detail?.resource.kind === "library"
       ? detail.resource.id
       : detail?.resource.library_id;
-  const currentLibraryId =
-    detail?.resource.kind === "library"
-      ? detail.resource.id
-      : libraryInfo && libraryInfo.id === containingLibraryId
-        ? libraryInfo.id
-        : undefined;
+  const currentLibraryId = containingLibraryId || undefined;
   const libraryView = new URLSearchParams(hash.split("?")[1]).get("view");
-  const librarySettingsPage = libraryView === "settings";
-  const librarySystemPage = libraryView === "system";
+  const libraryRole =
+    libraryInfo && libraryInfo.id === currentLibraryId
+      ? libraryInfo.role
+      : detail?.resource.kind === "library" &&
+          detail.resource.id === currentLibraryId
+        ? detail.resource.role
+        : "none";
+  const canManageLibrary = roleRank(libraryRole) >= 4;
+  const librarySettingsPage = libraryView === "settings" && canManageLibrary;
+  const librarySystemPage = libraryView === "system" && canManageLibrary;
   const libraryQaPage = libraryView === "qa";
   const currentDetail = detail?.resource.id === resourceId ? detail : null;
   const sharedPersonalView = !!(
@@ -493,8 +496,10 @@ export function App() {
   const reload = async () => {
     setRefresh((n) => n + 1);
   };
+  const signedIn = !!bootstrap?.user;
   useEffect(() => {
     const shortcut = (e: KeyboardEvent) => {
+      if (!signedIn) return;
       if (document.documentElement.dataset.editorShell === "mobile") return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -503,7 +508,7 @@ export function App() {
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, []);
+  }, [signedIn]);
   useEffect(() => {
     const load = () =>
       void api<Bootstrap>("/bootstrap")
@@ -890,14 +895,15 @@ export function App() {
     <DocumentModeContext.Provider value={documentMode}>
     <AIProvider userId={user?.id} resource={detail?.resource} hash={hash} onResourcesChanged={() => setRefresh((n) => n + 1)}>
     <div
-      className={`app-shell ${mobileShell ? "mobile-editor-shell" : ""} ${!user || sharedPersonalView ? "public-view" : ""} ${personalDocumentPage ? "personal-document-view" : ""} ${resourceId ? "document-view" : ""} ${["spreadsheet", "canvas", "presentation"].includes(detail?.resource.format ?? "") ? "spreadsheet-view surface-view" : ""} ${navigationOpen ? "navigation-expanded" : ""} ${navigationCollapsed ? "navigation-collapsed" : ""}`}
+      className={`app-shell ${mobileShell ? "mobile-editor-shell" : ""} ${(!user && !currentLibraryId) || sharedPersonalView ? "public-view" : ""} ${personalDocumentPage ? "personal-document-view" : ""} ${resourceId ? "document-view" : ""} ${["spreadsheet", "canvas", "presentation"].includes(detail?.resource.format ?? "") ? "spreadsheet-view surface-view" : ""} ${navigationOpen ? "navigation-expanded" : ""} ${navigationCollapsed ? "navigation-collapsed" : ""}`}
     >
-      {user && !sharedPersonalView && !personalDocumentPage && !mobileShell && (
+      {(user || currentLibraryId) && !sharedPersonalView && !personalDocumentPage && !mobileShell && (
         <aside
           className={`sidebar ${currentLibraryId ? "library-sidebar" : ""}`}
         >
           <div className="library-brand-row">
             {currentLibraryId ? (
+              user ? (
               <BackLink
                 fallback="/libraries"
                 className="brand"
@@ -908,6 +914,11 @@ export function App() {
                 </span>
                 <span title={libraryTitle}>{libraryTitle}</span>
               </BackLink>
+              ) : (
+              <a href={`#/r/${currentLibraryId}`} className="brand" title={libraryTitle}>
+                <span title={libraryTitle}>{libraryTitle}</span>
+              </a>
+              )
             ) : (
               <a
                 href="#/home"
@@ -918,7 +929,7 @@ export function App() {
                 <span title={bootstrap.siteName}>{bootstrap.siteName}</span>
               </a>
             )}
-            {currentLibraryId && (
+            {user && currentLibraryId && (
               <LibraryFavorite key={currentLibraryId} id={currentLibraryId} />
             )}
             <button
@@ -931,12 +942,12 @@ export function App() {
               <PanelLeft size={16} />
             </button>
           </div>
-          <button className="sidebar-search" onClick={() => setModal("search")}>
+          {user && <button className="sidebar-search" onClick={() => setModal("search")}>
             <Search size={17} />
             <span>{t("common.search")}</span>
             <kbd>⌘ K</kbd>
-          </button>
-          {currentLibraryId && (
+          </button>}
+          {currentLibraryId && canManageLibrary && (
             <nav>
               <a
                 className={librarySettingsPage ? "active" : ""}
@@ -955,7 +966,7 @@ export function App() {
 
             </nav>
           )}
-          {!currentLibraryId && (
+          {user && !currentLibraryId && (
             <nav>
               <button
                 type="button"
@@ -1016,22 +1027,22 @@ export function App() {
             >
               {t("nav.contents")}
             </button>
-            <button
+            {libraryInfo && roleRank(libraryInfo.role) >= 3 && <button
               className="icon"
               aria-label={t("nav.newLibraryDocument")}
-              disabled={!libraryInfo || roleRank(libraryInfo.role) < 3}
-              onClick={() => create("document", libraryInfo ?? undefined)}
+              onClick={() => create("document", libraryInfo)}
             >
               <Plus size={17} />
-            </button>
+            </button>}
           </div>}
           {currentLibraryId && <DocumentTree
-            key={user.id + ":" + currentLibraryId}
+            key={(user?.id ?? "anonymous") + ":" + currentLibraryId}
             refresh={refresh}
-            userId={user.id}
+            userId={user?.id ?? "anonymous"}
             selected={resourceId}
             libraryId={currentLibraryId}
             knowledgeEnabled={!!libraryInfo?.ai_curated && roleRank(libraryInfo.role) >= 4}
+            accountActions={!!user}
             create={(r) => create("document", r)}
             changed={() => setRefresh((n) => n + 1)}
           />}
@@ -1040,7 +1051,7 @@ export function App() {
       <main className="workspace">
         <header className={`topbar ${documentHeader ? "" : "workspace-topbar"}`}>
           <div className="document-topbar-title">
-            {user && desktopNavigation && navigationCollapsed && (
+            {(user || currentLibraryId) && desktopNavigation && navigationCollapsed && (
               <button
                 className="icon navigation-toggle"
                 title={(desktopNavigation ? !navigationCollapsed : navigationOpen) ? t("nav.collapseSidebar") : t("nav.expandSidebar")}
@@ -1377,7 +1388,7 @@ export function App() {
           }}
         />
       )}
-      {modal === "search" && (
+      {user && modal === "search" && (
         <GlobalSearch
           close={() => { setModal(""); setSearchSeed(""); }}
           initialQuery={searchSeed}

@@ -1,64 +1,65 @@
-# 文档交互、分享与历史版本
+# Document interaction, sharing, and history
 
-## 编辑与导航
+[中文](document-experience.zh-CN.md)
 
-点击「+」选择文档、表格、幻灯片后直接创建。新文档默认名称「未命名」，富文本标题内容为空。启用 `firstLineTitle`，后端从有效 Yjs 更新后的首行提取标题（最多 160 字），空白回退为「未命名」。顶部即时更新，目录名称在标题变化后延迟 1.5 秒刷新。表格、幻灯片可以创建条目，但尚未接入编辑器。
+## Editing and navigation
 
-编辑区最小高度 540px，随可用高度增加，空白处可恢复末尾光标。独立附件上传区移除，图片与附件通过编辑器自身菜单插入。打开文档展开直接下一层目录和祖先节点。固定顶栏限制标题宽度并显示省略号，最近编辑信息在下方。头像、通知和更多菜单支持外部点击、失焦及 Esc 关闭。
+Choosing document, spreadsheet, or slides from "+" creates it immediately. A new document is named "Untitled" and the rich text title is empty. `firstLineTitle` is enabled. After a valid Yjs update the server takes the title from the first line, at most 160 characters, and falls back to "Untitled" when it is blank. The top bar updates immediately. The tree name refreshes 1.5 seconds after the title changes. Spreadsheet and slides entries can be created. Their editors are connected through the published packages. Treat an older note that says they are not connected as outdated where the current package is installed.
 
-点赞人头像默认显示 8 人，更多以省略号表示，点击后分页查看全部。原有点赞与评论数据保持不变。
+The editing area is at least 540 px and grows with the available height. Empty space restores the caret at the end. There is no separate attachment upload strip. Images and attachments are inserted from the editor menu. Opening a document expands the next level and the ancestors. The fixed top bar limits the title width and shows an ellipsis. Last-edited information is underneath. Avatar, notification, and more menus close on outside click, blur, and Esc.
 
-## 可撤销链接授权
+Like avatars show 8 people by default. The rest is an ellipsis that pages through everyone. Existing likes and comments are unchanged.
 
-分享开关、链接角色、邀请协作者、协作者角色和移除协作者均直接保存，不再需要底部确认。保存中禁用重复提交，服务端版本检查防止覆盖并发修改；失败恢复服务端已确认状态并显示错误。移除链接授权不影响显式邀请权限。
+## Revocable link grants
 
-当前实现中，直接邀请和链接领取人都写入 `grants` 授权表，通过 `source_type` 和 `source_id` 区分来源；`share_links` 只保存公共链接配置。链接领取人仍保留链接来源和分享 ID，不会失去来源信息，也不会把公共链接配置和某个用户的授权调整混在一起。设计记录见[统一授权来源与权限计算方案](superpowers/specs/2026-09-19-unified-authorization-design.md)。
+The share switch, link role, inviting a collaborator, collaborator role, and removing a collaborator save immediately. There is no extra confirm at the bottom. Repeated submits are disabled while saving. The server version check prevents overwriting a concurrent edit. Failure restores the last confirmed server state and shows the error. Removing a link grant does not remove an explicit invitation.
 
-- 链接为 `#/s/{token}`，令牌使用 32 字节安全随机值，放在 URL fragment 而非 HTTP URL 查询参数。登录后通过同源 POST 兑换。
-- 当前链接需要登录使用，支持 reader/commenter/editor/manager。匿名公开阅读仍由原有 visibility 设置提供。
-- 链接表保存令牌和 SHA-256 索引；只有管理者接口返回令牌，不能把令牌放进资源投影、审计或搜索索引。数据库备份应按敏感数据保护。
-- 权限调整即时作用于已领取者；关闭立即撤销链接派生权限。重新开启生成新令牌与 generation，旧链接和旧领取记录失效。revision 独立于 generation，防止并发配置互相覆盖，冲突返回 409。
-- 关闭链接不影响所有权、直接邀请及上级继承权限。撤销链接只删除该分享 ID 的授权来源并记录一次撤销事件；被撤销用户可以通过新的分享 ID 重新获得权限。可管理者能调整协作者权限，转移所有权仍仅限所有者。移动文档子树会关闭相关链接，保持原先移动后重置分享为私有的行为。
-- 正文、目录、搜索、附件统一查询有效权限。WebSocket 写入及推送重新鉴权，无其他访问权的连接在链接关闭后断开；已下载内容无法追溯删除。
+Direct invitations and people who redeemed a link are both rows in `grants`, distinguished by `source_type` and `source_id`. `share_links` stores only the public link configuration. A person who redeemed a link keeps the link source and share id. The public link configuration is not mixed with one user's grant adjustment. The design record for the unified grant table is kept with the Chinese permission notes.
 
-## 信息与历史
+- A link is `#/s/{token}`. The token is 32 random bytes in the URL fragment, not an HTTP query parameter. After sign-in it is redeemed with a same-origin POST.
+- The current link requires sign-in and supports reader, commenter, editor, and manager. Anonymous public reading still comes from visibility.
+- The link table stores the token and a SHA-256 index. Only a manager API returns the token. Do not put the token in a resource projection, audit log, or search index. Database backups are sensitive.
+- A permission change applies immediately to people who already redeemed. Turning the link off revokes permissions derived from it. Turning it on creates a new token and generation. Old links and old redemptions stop working. `revision` is independent of generation so concurrent configuration does not overwrite itself. A conflict is 409.
+- Turning a link off does not change ownership, direct invitations, or parent inheritance. Revoking a link deletes the grant source for that share id and records one revocation. The user can receive access again from a new share id. A manager can change collaborator permissions. Transferring ownership is still owner-only. Moving a document subtree closes related links, matching the older reset-to-private behavior.
+- Body, tree, search, and attachments query effective permissions together. WebSocket writes and pushes recheck access. A connection with no other access is closed when the link is turned off. Bytes already downloaded cannot be recalled.
 
-- 作品数据：访问次数、点赞、收藏、评论数，有阅读权限即可查看。
-- 访问与操作记录：仅管理者及所有者可看，每页 100 条。访问事件从本次升级开始记录，不用旧的最近访问数据冒充完整历史。
-- `document_versions` 独立保存完整 Yjs checkpoint，不随增量压缩被覆盖。每 50 次有效更新或超过 5 分钟后的下一次有效更新生成，编辑者也可手动保存。正文操作日志随自动快照聚合记录，不按每个按键写入。
-- 历史查看按当前文档权限鉴权，提供当时正文的只读文本预览，不覆盖正在协作的文档。暂不提供恢复操作。升级前未留存的快照无法追溯。
-- 演示模式调用浏览器全屏 API，隐藏管理栏、目录与评论，将编辑器切为只读，Esc 退出。
+## Information and history
 
-## HTTP 接口
+- Visit count, likes, favorites, and comment count are visible to anyone who can read.
+- Visit and operation records are visible to managers and the owner, 100 rows per page. Visit events start from this upgrade. Old recent-visit data is not presented as a complete history.
+- `document_versions` stores a full Yjs checkpoint that incremental compaction does not overwrite. One is created every 50 valid updates, or on the next valid update more than 5 minutes later. An editor can also save manually. The operation log is aggregated with automatic snapshots. It is not written on every keystroke.
+- Viewing history uses the current document permission and shows a readonly text preview of the body at that time. It does not replace the document that is being collaborated on. Restore is not offered yet. Snapshots that were not kept before the upgrade cannot be reconstructed.
 
-路径统一以 `/api/v1` 开头，写操作沿用同源与有效登录校验。
+Presentation mode uses the browser fullscreen API, hides the admin bar, tree, and comments, and makes the editor readonly. Esc leaves it.
 
-| 接口 | 用途 |
+## HTTP
+
+Writes use the same origin and a valid sign-in. The prefix is `/api/v1`.
+
+| Route | Purpose |
 | --- | --- |
-| GET /resources/:id/likes?cursor= | 点赞人、首屏 total、nextCursor |
-| GET /resources/:id/share-link | 管理者获取链接配置与当前令牌 |
-| PUT /resources/:id/share-link | `{enabled,role,version}`，返回新的 version 与链接配置 |
-| POST /share/redeem | `{token}`，返回资源 id |
-| GET /resources/:id/info?tab=stats/visits/audit&cursor= | tab 三选一，统计或游标分页记录 |
-| GET /resources/:id/versions?cursor= | 快照元信息及 nextCursor |
-| POST /resources/:id/versions | 编辑者保存当前快照 |
-| GET /resources/:id/versions/:versionId | 只读历史正文 |
+| GET /resources/:id/likes?cursor= | People who liked, first-page total, nextCursor |
+| GET /resources/:id/share-link | A manager reads the link configuration and current token |
+| PUT /resources/:id/share-link | `{enabled,role,version}` returns a new version and link configuration |
+| POST /share/redeem | `{token}` returns the resource id |
+| GET /resources/:id/info?tab=stats\|visits\|audit&cursor= | One tab: statistics or a paged record |
+| GET /resources/:id/versions?cursor= | Snapshot metadata and nextCursor |
+| POST /resources/:id/versions | An editor saves the current snapshot |
+| GET /resources/:id/versions/:versionId | Readonly historical body |
 
-## 编辑器依赖
+Editors are the published `@smartdoca/*` packages locked in this repository. Do not follow an older checkout that pinned a private tarball.
 
-用户提供的 `/private/tmp/slatetsx-kit-editor-0.2.0.tgz`（2026-09-10 本轮最终获取的构建）在仓库另存为 `vendor/slatetsx-kit-editor-0.2.0-c9a94dfe.tgz`，锁文件已更新，避免相同版本号的旧包缓存混淆。SHA-256：`c9a94dfe39d248df0d8f6491c6452ca8aa1ed7a49d2a1259c9730d07bf06901e`。上游构建持续更新，本项目锁定此校验值，不自动跟随同名临时文件变化。
+## Immediate actions and dialogs
 
-## 即时操作与弹框
+- A dialog closes on the backdrop or Escape. An action inside it does not close it by accident. Focus is restored and Tab stays inside.
+- Choosing an avatar upload saves automatically. A preset avatar saves on click. Failure shows an error. Upload and asset permission rules are unchanged.
+- Hovering a display name shows an edit icon. Enter or blur saves. Escape cancels. Enter during an input-method composition does not submit early.
+- Theme, density, and sort preferences save when chosen. A profile update refreshes the avatar and name cache on the current page.
+- Collaborator search runs 300 ms after typing. A stale request is cancelled so an old result cannot replace a new one.
+- Delete, transfer, move that resets permissions, password change, and unlinking a third-party account keep an explicit button or confirmation. They are not silent submits.
 
-- 通用 Dialog 点击遮罩空白处或按 Escape 关闭，内部操作不会误关闭；保留焦点恢复和 Tab 焦点约束。
-- 点击资料头像上传后自动保存；预设头像点击即保存，失败展示错误。上传服务和资产权限规则不变。
-- 昵称悬停出现编辑图标，点击行内编辑；Enter 或失焦保存，Escape 放弃，输入法组合输入期间 Enter 不提前提交。
-- 色调、列表密度、排序偏好选择后自动保存。个人资料更新后刷新当前页面的用户头像/昵称缓存。
-- 选择协作者时输入后 300ms 自动查找；过期请求取消，防止旧结果覆盖新查询。
-- 删除、转移所有权、移动并重置权限、密码及第三方账号解绑等高影响操作继续保留明确操作按钮/确认，不做静默提交。
+## Verification in this round
 
-## 本轮验证
+Two pages of the same account were checked for body and code-block cursors and name colors, changing only the selection. An in-memory page checked avatar and name autosave, the share switch succeeding and rolling back on failure, and independent comment cards that do not overlap. Automation covers readonly cursor rejection, server identity that cannot be forged, cleanup on session exit, cursors that do not write the document version, and rich text and mention UTF-16 offsets that follow relative positions.
 
-实际双页面验证同账号正文与代码块光标、用户名颜色标记；仅操作选区，不改现有正文。独立内存页面验证头像/昵称自动保存、分享开关生效与失败回退、独立评论卡片定位和防重叠。自动化覆盖只读光标拒绝、服务端身份防伪、会话退出清理、光标不写入文档版本、富文本/提及 UTF-16 偏移与相对位置跟随。临时验收页面完成后移除。
-
-如果本地开发服务仍加载旧预编译依赖，用 `DOCA_REBUILD_DEPS=1 pnpm dev` 重启一次，强制重建缓存。已在独立内存协同页面复核：代码块连续输入、换行、Tab 后焦点保留，后方正文不被改写；标题行回车后不再重复标题样式。真实中文输入法及跨浏览器仍需补充人工验收。
+If local development still loads an old prebuilt dependency, restart once with `DOCA_REBUILD_DEPS=1 pnpm dev`. A real Chinese input method and cross-browser checks still need a person.

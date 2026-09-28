@@ -1,30 +1,32 @@
-# 单实例与水平扩展部署
+# Single instance and horizontal scaling
 
-Doca 保留零额外依赖的单实例模式。SQLite、本地上传目录和进程内实时总线适合个人、小团队及开源体验；只有需要多个应用副本时，才配置 PostgreSQL、共享对象存储和 Redis。两种模式使用同一套业务协议，不需要兼容旧部署数据或维护双写路径。
+[中文](horizontal-scaling.zh-CN.md)
 
-## 能力矩阵
+Doca keeps a single-instance mode with no extra infrastructure. SQLite, a local upload directory, and an in-process realtime bus fit a person, a small team, or a trial. Configure PostgreSQL, shared object storage, and Redis only when more than one application replica is running. Both modes use the same business protocol. There is no migration from an older deployment and no dual-write path.
 
-| 能力                     | 单实例默认           | 多实例要求                                   |
-| ------------------------ | -------------------- | -------------------------------------------- |
-| 数据库                   | SQLite 或 PostgreSQL | PostgreSQL；所有副本连接同一数据库           |
-| 正文协作与通知           | 进程内广播、在线状态 | Redis Pub/Sub 广播，Redis 在线状态           |
-| 登录/上传/公开机器人限流 | 进程内计数           | Redis 全局计数                               |
-| 文件                     | 本地持久目录         | S3 兼容对象存储或所有副本真正共享的文件系统  |
-| CDN                      | 可选                 | 可选，只负责读取加速，不能替代共享对象存储   |
-| 后台任务                 | 数据库租约           | 同一数据库租约；任一副本可领取，失败可重试   |
-| 移动推送                 | 数据库 outbox        | 同一 outbox 与租约，避免仅存在某个进程内存中 |
-| 建表                     | 首次启动创建当前基线 | 首次部署前由一个实例创建空库基线             |
-| 健康检查                 | `/live`、`/ready`    | `/ready` 同时检查数据库和 Redis              |
+## Capability matrix
 
-## 单实例默认
+| Capability | Single instance | Multiple replicas |
+| --- | --- | --- |
+| Database | SQLite or PostgreSQL | PostgreSQL; every replica uses the same database |
+| Document collaboration and notifications | In-process broadcast and presence | Redis Pub/Sub and Redis presence |
+| Login, upload, and public-bot rate limits | In-process counters | Redis counters |
+| Files | Local persistent directory | S3-compatible storage, or a filesystem truly shared by every replica |
+| CDN | Optional | Optional. It only accelerates reads and does not replace shared storage |
+| Background jobs | Database leases | The same leases; any replica may claim a job, and a failure can be retried |
+| Mobile push | Database outbox | The same outbox and leases; do not keep the queue only in one process |
+| Schema | The first start creates the current baseline | One instance creates the empty baseline before the first deployment |
+| Health | `/live` and `/ready` | `/ready` also checks the database and Redis |
 
-不设置 `DOCA_REDIS_URL` 时，实时事件、presence 和限流自动使用本机实现；不需要安装 Redis。`pnpm dev`、`pnpm start` 和单容器 Compose 首次连接空库时直接创建当前基线，之后只校验结构。
+## Single instance
 
-该模式不应启动两个副本。负载均衡器的 WebSocket 粘性会暂时掩盖问题，但通知、权限失效、在线用户和全局限流仍会被分割。
+When `DOCA_REDIS_URL` is unset, realtime events, presence, and rate limits stay in the process. Redis is not required. `pnpm dev`, `pnpm start`, and a single Compose container create the current baseline on an empty database, then only check the schema.
 
-## 多实例最小配置
+Do not run two replicas in this mode. Sticky WebSockets on a load balancer hide the problem for a while. Notifications, permission revocation, online users, and global limits are still split.
 
-所有副本至少使用以下共同配置：
+## Minimum multi-replica configuration
+
+Every replica needs the same settings:
 
 ```dotenv
 DOCA_DATABASE=postgres
@@ -35,32 +37,32 @@ DOCA_REDIS_PREFIX=doca-production
 DOCA_TRUST_PROXY=10.0.0.0/8
 ```
 
-`DOCA_INSTANCE_ID` 可由编排平台设置为 Pod/容器名；未设置时每个进程生成随机 ID。`DOCA_REDIS_PREFIX` 必须在共享 Redis 中区分环境。`DOCA_TRUST_PROXY` 只列出实际反向代理的 IP 或 CIDR，否则客户端可伪造 IP，破坏审计和限流。
+The orchestrator may set `DOCA_INSTANCE_ID` to the pod or container name. Otherwise each process generates a random id. `DOCA_REDIS_PREFIX` must separate environments that share one Redis. `DOCA_TRUST_PROXY` lists only the reverse proxy addresses or CIDRs. A wider range lets clients forge IPs and break audit and rate limits.
 
-发布顺序：
+Release order:
 
-1. 首次部署使用一个应用实例连接空数据库，创建当前基线并成功启动；不要让多个副本并发初始化空库。
-2. 再启动其余副本。结构不匹配会直接启动失败，不会执行任何升级或改写。
-3. 负载均衡器以 `/ready` 决定是否接收流量，以 `/live` 判断进程是否存活；WebSocket 必须允许升级和正常排空。
-4. 滚动发布先摘除 readiness，再等待 HTTP 请求和 WebSocket 在停止宽限期内关闭。
+1. Start one instance against an empty database so it creates the baseline. Do not let several replicas initialize an empty database together.
+2. Start the other replicas. A schema mismatch fails startup. Nothing is upgraded or rewritten.
+3. The load balancer uses `/ready` for traffic and `/live` for process health. WebSocket upgrades and a normal drain must be allowed.
+4. A rolling update removes readiness first, then waits for HTTP and WebSocket connections to close within the stop grace period.
 
-Redis 一旦配置就是必需依赖：启动连接失败、运行期不可用或 readiness 失败时，不会静默切回本机广播。这样可避免集群在故障时分裂成多个看似正常的单实例。
+Once Redis is configured it is required. A failed startup connection, a later outage, or a failed readiness check does not silently fall back to the local bus. That avoids splitting the cluster into several single instances that still look healthy.
 
-## 一致性边界
+## Consistency
 
-协作更新先在 PostgreSQL 事务中持久化并生成提交回执，再通过 Redis 通知其他副本。Redis 不是正文日志；重复事件由协议去重，短暂丢失会在重连后通过数据库权威状态恢复。presence 有过期时间，实例异常退出后会自动消失。
+A collaboration update is stored in a PostgreSQL transaction and acknowledged, then Redis tells the other replicas. Redis is not the document log. Duplicate events are removed by the protocol. A short loss is repaired from the database after reconnect. Presence expires, so a crashed instance disappears.
 
-文件识别、正文抽取、知识整理和移动推送使用数据库任务与租约。计划任务的 occurrence key 保证多个副本同时扫描时只创建一个业务发生项。任务处理器必须保持幂等，因为租约超时后允许其他副本重试。
+File recognition, text extraction, knowledge curation, and mobile push use database jobs and leases. An occurrence key makes sure several replicas scanning together create only one business occurrence. Handlers must be idempotent, because another replica may retry after a lease expires.
 
-## 容量与运维卡点
+## Capacity
 
-- 数据库连接总量约为“副本数 × `DOCA_DATABASE_POOL_MAX`”，必须小于 PostgreSQL 或连接代理的可用额度，并预留运维和后台任务连接。
-- 本地磁盘不能用于多主机上传。CDN 只缓存读取结果；源对象仍必须位于 S3 或共享文件系统。历史 `storage_profile` 指向的存储配置必须继续可用。
-- Meilisearch、S3、消息网关等外部服务必须让所有副本看到同一配置和同一数据。凭据存于共享数据库，但网络连通、白名单和密钥仍由部署环境保证。
-- 插件目录必须随镜像只读发布，所有副本安装完全相同的插件版本。不要在滚动发布中修改共享插件目录。
-- Redis 建议启用认证、TLS/私网、内存上限与可观测告警；数据库和对象存储仍需独立备份。Redis 数据丢失不应造成正文丢失，但会中断实时传播、在线状态和全局限流。
-- `/ready` 只证明当前副本能访问数据库和实时集群，不代替端到端协作、对象存储、搜索与消息通道监控。
+- Total database connections are about replicas × `DOCA_DATABASE_POOL_MAX`. Stay under the PostgreSQL or pooler limit, and leave room for operations and background jobs.
+- Local disk cannot hold uploads for several hosts. A CDN only caches reads. Objects stay in S3 or on a shared filesystem. Storage named by an existing `storage_profile` must remain available.
+- Meilisearch, S3, and message gateways must show every replica the same configuration and the same data. Credentials live in the shared database. Network access, allowlists, and keys are still the deployment's job.
+- The plugin directory is published read-only with the image. Every replica runs the same plugin versions. Do not change a shared plugin directory during a rolling update.
+- Redis should use authentication, TLS or a private network, a memory limit, and alerts. The database and object storage still need their own backups. Losing Redis must not lose document text, but it stops realtime delivery, presence, and global limits.
+- `/ready` only proves that this replica can reach the database and the realtime cluster. It does not replace end-to-end checks of collaboration, object storage, search, and messaging.
 
-## 仍需外部验收
+## Still needs an external rehearsal
 
-代码已覆盖双应用实例的文档更新、光标/presence、共享限流，以及数据库租约/outbox。正式上线前仍需在目标基础设施完成 PostgreSQL、托管 Redis、S3、反向代理 WebSocket 排空和滚动发布演练，并做故障注入：暂停 Redis、终止任务执行副本、撤权同时编辑、数据库基线不匹配和对象存储超时。
+The code covers document updates, cursors, presence, shared limits, and database leases or outboxes across two application instances. Before production, rehearse PostgreSQL, managed Redis, S3, WebSocket drain, and rolling updates on the target infrastructure. Inject failures: pause Redis, kill the replica running a job, revoke access during an edit, present a mismatched database baseline, and time out object storage.
