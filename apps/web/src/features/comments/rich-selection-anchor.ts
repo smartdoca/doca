@@ -37,8 +37,11 @@ export function captureRichSelection(editor: Editor, runtime: YjsDocument, selec
   })) {
     if (!Element.isElement(block) || !block.id) continue;
     if (MEDIA.has(String(block.type))) {
+      const inside =
+        Path.equals(selection.anchor.path, path) ||
+        Path.isAncestor(path, selection.anchor.path);
       const selected = Range.isCollapsed(selection)
-        ? Editor.void(editor, { at: selection })?.[0] === block
+        ? Editor.void(editor, { at: selection })?.[0] === block || inside
         : Boolean(Range.intersection(selection, Editor.range(editor, path)));
       if (selected) parts.push(mediaPart(block));
       continue;

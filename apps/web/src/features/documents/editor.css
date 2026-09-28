@@ -490,6 +490,34 @@
   max-height: 60vh;
   overflow-y: auto;
 }
+/* The link editor is a form, so it misses the dropdown rule for menu > div
+   and otherwise sits in the toolbar row on top of the neighboring buttons. */
+.editor-toolbar-buttons .menu > .toolbar-link-form {
+  position: absolute;
+  z-index: 40;
+  top: 36px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  width: min(360px, calc(100vw - 24px));
+  margin: 0;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #dee0e3;
+  border-radius: 8px;
+  box-shadow: 0 8px 28px #1f232926;
+  box-sizing: border-box;
+}
+.editor-toolbar-buttons .toolbar-link-form input {
+  background: #fff;
+}
+.editor-toolbar-buttons .toolbar-overflow-item .toolbar-link-form {
+  position: static;
+  width: 100%;
+  padding: 8px 0 0;
+  border: 0;
+  box-shadow: none;
+}
 .editor-toolbar-buttons .menu > div button {
   justify-content: flex-start;
   display: flex;

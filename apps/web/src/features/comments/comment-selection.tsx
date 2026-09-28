@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { MessageSquare } from "lucide-react";
 import { useI18n } from "@web/shared/i18n.js";
-import { Range } from "slate";
+import { Element, Range, Transforms } from "slate";
 import { ReactEditor } from "slate-react";
 import type { RichTextEditorHandle } from "@smartdoca/slate";
 import type { YjsDocument } from "@smartdoca/slate/yjs";
@@ -48,6 +48,21 @@ export function SelectionCommentAction({
   const { t } = useI18n();
   const [toolbar, setToolbar] = useState<HTMLElement | null>(null),
     [rect, setRect] = useState<{ left: number; top: number } | null>(null);
+  const picked = useRef<HTMLElement | null>(null);
+  const mediaSelector = ".sk-image, .sk-video, .sk-attachment";
+  const selectMedia = (el: HTMLElement) => {
+    const editor = handle.current?.editor;
+    if (!editor) return;
+    const slateNode =
+      el.closest<HTMLElement>('[data-slate-node="element"]') ?? el;
+    try {
+      const node = ReactEditor.toSlateNode(editor, slateNode);
+      if (!Element.isElement(node)) return;
+      Transforms.select(editor, ReactEditor.findPath(editor, node));
+    } catch {
+      /* The image node can unmount between the click and the action. */
+    }
+  };
   useEffect(() => {
     let frame = 0;
     const update = () => {
@@ -55,9 +70,12 @@ export function SelectionCommentAction({
         e = handle.current?.editor;
       if (!h || !e) return;
       setToolbar(h.querySelector<HTMLElement>(".sk-floating"));
-      const media = h.querySelector<HTMLElement>(
-        ".sk-image.is-selected, .sk-video.is-selected, .sk-attachment.is-selected",
-      );
+      const held =
+        picked.current && h.contains(picked.current) ? picked.current : null;
+      const media =
+        h.querySelector<HTMLElement>(
+          ".sk-image.is-selected, .sk-video.is-selected, .sk-attachment.is-selected",
+        ) ?? held;
       if (media) {
         const r = media.getBoundingClientRect();
         setRect(
@@ -105,8 +123,33 @@ export function SelectionCommentAction({
         attributes: true,
         attributeFilter: ["class"],
       });
+    const chooseMedia = (event: Event) => {
+      const el = (event.target as HTMLElement | null)?.closest?.(
+        mediaSelector,
+      );
+      const h = host.current;
+      if (!el || !h?.contains(el)) return;
+      picked.current = el;
+      // The image click focuses the editor after selecting the void, which
+      // drops the selection. Put it back once that focus settles.
+      requestAnimationFrame(() => selectMedia(el));
+      schedule();
+    };
+    const clearMedia = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.closest(mediaSelector) ||
+        target?.closest(".selection-comment-floating")
+      )
+        return;
+      if (!picked.current) return;
+      picked.current = null;
+      schedule();
+    };
     document.addEventListener("selectionchange", schedule);
     document.addEventListener("scroll", schedule, true);
+    document.addEventListener("pointerdown", clearMedia);
+    host.current?.addEventListener("pointerup", chooseMedia);
     window.addEventListener("resize", schedule);
     schedule();
     return () => {
@@ -114,6 +157,8 @@ export function SelectionCommentAction({
       cancelAnimationFrame(frame);
       document.removeEventListener("selectionchange", schedule);
       document.removeEventListener("scroll", schedule, true);
+      document.removeEventListener("pointerdown", clearMedia);
+      host.current?.removeEventListener("pointerup", chooseMedia);
       window.removeEventListener("resize", schedule);
     };
   }, [host, handle, editable]);
@@ -130,7 +175,13 @@ export function SelectionCommentAction({
     </button>
   );
   const floating = rect ? (
-    <div className="selection-comment-floating" style={rect}>
+    <div
+      className="selection-comment-floating"
+      style={rect}
+      onMouseDown={() => {
+        if (picked.current) selectMedia(picked.current);
+      }}
+    >
       {button}
       <AIReferenceButton />
     </div>
@@ -138,7 +189,8 @@ export function SelectionCommentAction({
   const mediaSelected = Boolean(
     host.current?.querySelector(
       ".sk-image.is-selected, .sk-video.is-selected, .sk-attachment.is-selected",
-    ),
+    ) ||
+      (picked.current && host.current?.contains(picked.current)),
   );
   return mediaSelected && floating
     ? createPortal(floating, document.body)
