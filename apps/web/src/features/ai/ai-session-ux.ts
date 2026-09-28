@@ -138,9 +138,16 @@ export function activeQuestionFromPositions(
   return current ?? items[0]!.id;
 }
 
-export function formatContextTokens(tokens?: number | null) {
+export function formatContextTokens(
+  tokens?: number | null,
+  format?: (count: string) => string,
+  locale = "en",
+) {
   if (!Number.isFinite(tokens) || !tokens || tokens <= 0) return null;
-  return `上下文 ${Math.round(tokens).toLocaleString()} Token`;
+  const count = Math.round(tokens).toLocaleString(
+    locale === "zh" ? "zh-CN" : "en",
+  );
+  return format ? format(count) : count;
 }
 
 function isFile(value: unknown): value is ChatFileSnapshot {

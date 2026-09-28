@@ -25,26 +25,26 @@ const { t } = useI18n();
   const localInput = useRef<HTMLInputElement>(null);
   return (
     <Dialog
-      title="知识库封面"
+      title={t("library.coverTitle")}
       close={() => {
         if (!busy) close();
       }}
     >
       <div className="cover-preview">
         {assetId ? (
-          <img src={assetUrl(assetId)} alt="封面预览" />
+          <img src={assetUrl(assetId)} alt={t("library.coverPreview")} />
         ) : (
           <>
             <ImagePlus size={36} />
-            <p>上传一张封面，让知识库更易辨认</p>
+            <p>{t("library.coverEmpty")}</p>
           </>
         )}
       </div>
       <div className="inline">
-        <button className="upload-control" disabled={busy} onClick={() => setSourceOpen(true)}><ImagePlus size={15} /><span>选择封面图片</span></button>
+        <button className="upload-control" disabled={busy} onClick={() => setSourceOpen(true)}><ImagePlus size={15} /><span>{t("library.chooseCover")}</span></button>
         <label className="upload-control" hidden>
           <ImagePlus size={16} />
-          <span>{busy ? "处理中…" : "选择封面图片"}</span>
+          <span>{busy ? t("library.working") : t("library.chooseCover")}</span>
           <input
             ref={localInput}
             type="file"
@@ -69,18 +69,16 @@ const { t } = useI18n();
         {assetId && (
           <button disabled={busy} onClick={() => setAssetId(null)}>
             <X size={15} />
-            移除封面
+            {t("library.removeCover")}
           </button>
         )}
       </div>
-      <p className="subtle">
-        最大 5MB，支持 PNG、JPEG、WebP、GIF；图片自动压缩，封面居中裁切展示。
-      </p>
+      <p className="subtle">{t("library.coverHelp")}</p>
       {error && (
         <Feedback message={error} tone="error" />
       )}
-      {picking && <FolderFilePicker accept={(file) => file.mime.startsWith("image/")} close={() => setPicking(false)} select={async (file: FileItem) => { const response = await fetch(`/api/v1/files/items/${file.id}/content`); if (!response.ok) throw new Error("图片读取失败"); const selected = new File([await response.blob()], file.name, { type: file.mime }); setAssetId((await uploadFile(selected, "cover", resource.id)).id); }} />}
-      {sourceOpen && <FileSourceDialog title="选择封面图片" close={() => setSourceOpen(false)} chooseDoca={() => setPicking(true)} chooseLocal={() => localInput.current?.click()} />}
+      {picking && <FolderFilePicker accept={(file) => file.mime.startsWith("image/")} close={() => setPicking(false)} select={async (file: FileItem) => { const response = await fetch(`/api/v1/files/items/${file.id}/content`); if (!response.ok) throw new Error(t("library.coverReadFailed")); const selected = new File([await response.blob()], file.name, { type: file.mime }); setAssetId((await uploadFile(selected, "cover", resource.id)).id); }} />}
+      {sourceOpen && <FileSourceDialog title={t("library.chooseCover")} close={() => setSourceOpen(false)} chooseDoca={() => setPicking(true)} chooseLocal={() => localInput.current?.click()} />}
       <footer>
         <button disabled={busy} onClick={close}>{t("common.cancel")}</button>
         <button
@@ -103,7 +101,7 @@ const { t } = useI18n();
             }
           }}
         >
-          保存封面
+          {t("library.saveCover")}
         </button>
       </footer>
     </Dialog>
@@ -128,10 +126,10 @@ const { t } = useI18n();
     [error, setError] = useState("");
   const label =
     action === "rename"
-      ? "重命名"
+      ? t("shell.rename")
       : action === "trash"
-        ? "移入回收站"
-        : "恢复内容";
+        ? t("library.moveToTrash")
+        : t("library.restoreContent");
   return (
     <Dialog
       title={label}
@@ -165,7 +163,9 @@ const { t } = useI18n();
       >
         {action === "rename" ? (
           <label>
-            {resource.kind === "library" ? "知识库名称" : "文档名称"}
+            {resource.kind === "library"
+              ? t("library.libraryName")
+              : t("library.documentName")}
             <input
               autoFocus
               required
@@ -177,10 +177,9 @@ const { t } = useI18n();
           </label>
         ) : (
           <p>
-            确认{action === "trash" ? "将" : "恢复"}「{resource.title}」
             {action === "trash"
-              ? "及其子文档移入回收站？内容可在回收站恢复。"
-              : "？"}
+              ? t("library.confirmTrash", { title: resource.title })
+              : t("library.confirmRestore", { title: resource.title })}
           </p>
         )}
         {error && (
@@ -192,7 +191,7 @@ const { t } = useI18n();
             disabled={busy || !title.trim()}
             className={action === "trash" ? "danger" : "primary"}
           >
-            {busy ? "处理中…" : label}
+            {busy ? t("library.working") : label}
           </button>
         </footer>
       </form>

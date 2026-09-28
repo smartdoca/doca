@@ -25,7 +25,7 @@ export function LibraryLanding({
   resource: Resource;
   create: () => void;
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const [empty, setEmpty] = useState(false),
     [error, setError] = useState("");
   useEffect(() => {
@@ -65,18 +65,18 @@ export function LibraryLanding({
       ) : empty ? (
         <>
           <FilePlus2 size={38} />
-          <h2>知识库还没有文档</h2>
+          <h2>{t("library.emptyTitle")}</h2>
           {roleRank(resource.role) >= 3 && (
             <button
               className="primary"
               onClick={create}
             >
-              创建第一篇文档
+              {t("library.createFirst")}
             </button>
           )}
         </>
       ) : (
-        "正在打开第一篇文档…"
+        t("library.opening")
       )}
     </div>
   );
@@ -99,20 +99,22 @@ const { t } = useI18n();
   return (
     <section className="library-settings-page">
       <section className="settings-card">
-        <h3>基本信息</h3>
+        <h3>{t("library.basic")}</h3>
         <div className="library-setting-actions">
           <button disabled={!manager} onClick={() => setAction("cover")}>
             <ImagePlus size={18} />
-            设置封面
+            {t("library.cover")}
           </button>
           <button disabled={!manager} onClick={() => setAction("rename")}>
-            <Pencil size={18} />{t("shell.rename")}</button>
+            <Pencil size={18} />
+            {t("shell.rename")}
+          </button>
           <button
             disabled={r.role !== "owner"}
             onClick={() => setAction("transfer")}
           >
             <ArrowRightLeft size={18} />
-            移交所有权
+            {t("library.transfer")}
           </button>
           <button
             disabled={r.role !== "owner"}
@@ -120,7 +122,7 @@ const { t } = useI18n();
             onClick={() => setAction("trash")}
           >
             <Trash2 size={18} />
-            删除知识库
+            {t("library.delete")}
           </button>
         </div>
       </section>

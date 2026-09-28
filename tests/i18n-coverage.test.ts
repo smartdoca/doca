@@ -11,10 +11,14 @@ import {
 import { listTime } from "../apps/web/src/shared/utils/list-time.js";
 import { LocaleProvider } from "../apps/web/src/shared/i18n.js";
 import { DistributionSettings } from "../apps/web/src/features/settings/distribution-settings.js";
+import { LibrarySettings } from "../apps/web/src/features/documents/library.js";
+import type { Detail } from "../apps/web/src/shared/api.js";
 
 const covered = [
   "features/account/profile.tsx",
   "features/ai/ai-chat.tsx",
+  "features/ai/ai-admin.tsx",
+  "features/documents/library.tsx",
   "features/auth/authentication.tsx",
   "features/auth/account-fields.tsx",
   "features/auth/security-verification.tsx",
@@ -109,6 +113,63 @@ it("renders distribution settings using the selected language", () => {
     } else {
       expect(html).toContain("新建文档的默认范围");
       expect(html).toContain("新建知识库的默认范围");
+    }
+  }
+});
+
+it("renders library settings in the selected language and keeps the library title", () => {
+  const detail = {
+    lastEditorName: null,
+    lastEditedAt: null,
+    ownerName: "管理员",
+    comments: [],
+    likes: 0,
+    liked: false,
+    favorite: false,
+    pinned: false,
+    grants: [],
+    resource: {
+      id: "lib",
+      kind: "library",
+      format: "rich_text",
+      title: "研究资料",
+      owner_id: "user",
+      library_id: null,
+      parent_id: null,
+      version: 1,
+      role: "owner",
+      access_mode: "inherit",
+      visibility: "invited",
+      updated_at: "2026-09-28T00:00:00Z",
+      created_at: "2026-09-28T00:00:00Z",
+      deleted_at: null,
+    },
+  } satisfies Detail;
+  for (const locale of ["en", "zh"] as const) {
+    vi.stubGlobal("localStorage", { getItem: () => locale });
+    const html = renderToStaticMarkup(
+      createElement(
+        LocaleProvider,
+        null,
+        createElement(LibrarySettings, { detail, changed: async () => {} }),
+      ),
+    );
+    if (locale === "en") {
+      expect(html).toContain("Basic information");
+      expect(html).toContain("Set cover");
+      expect(html).toContain("Rename");
+      expect(html).toContain("Transfer ownership");
+      expect(html).toContain("Delete library");
+      expect(html).toContain("Share and access");
+      expect(html).not.toContain("基本信息");
+      expect(html).not.toContain("设置封面");
+    } else {
+      expect(html).toContain("基本信息");
+      expect(html).toContain("设置封面");
+      expect(html).toContain("重命名");
+      expect(html).toContain("移交所有权");
+      expect(html).toContain("删除知识库");
+      expect(html).toContain("分享与权限");
     }
   }
 });
