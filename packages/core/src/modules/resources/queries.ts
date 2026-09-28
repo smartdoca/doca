@@ -15,7 +15,6 @@ import {
   authorize,
   projectResource,
 } from "../access/queries.js";
-import { permission } from "../access/policy.js";
 import {
   distributionPolicy,
   resourceDistribution,
@@ -57,11 +56,139 @@ export function entryQuery(
       ${allowPublic ? sql`or (entry.kind = 'library' and entry.access_mode = 'custom' and entry.visibility in ('public', 'authenticated'))` : sql``}
     )))`;
 }
+/** Titles stay visible inside a library the caller can read; opening still requires document permission. */
+function redactClosed<T extends { role: string }>(resource: T) {
+  return resource.role === "none"
+    ? {
+        ...resource,
+        owner_id: "",
+        last_editor_id: null,
+        cover_asset_id: null,
+        content_bytes: null,
+      }
+    : resource;
+}
+
+/** Anonymous callers may outline one library they can read. Search and personal scopes stay signed-in. */
+async function anonymousLibraryPage(db: DB, input: ResourceQuery) {
+  const libraryIds =
+    input.libraryIds ?? (input.libraryId ? [input.libraryId] : []);
+  if (
+    libraryIds.length !== 1 ||
+    input.q ||
+    input.ownerIds?.length ||
+    input.favoritesOnly ||
+    input.likedOnly ||
+    input.visitedWithinDays !== undefined ||
+    input.matchedIds ||
+    input.location ||
+    input.sort === "visited_at" ||
+    (input.scope && input.scope !== "all")
+  )
+    fail(401, "请先登录");
+  return readSnapshot(db, async (tx) => {
+    const libraryId = libraryIds[0]!;
+    const allowed = await authorize(tx, null, libraryId);
+    if (allowed.resource.kind !== "library") fail(400, "知识库筛选条件无效");
+    if (input.parentId) await authorize(tx, null, input.parentId);
+    const treeMode = !!input.includeAncestors;
+    const policy = await distributionPolicy(tx);
+    const column = input.sort === "created_at" ? "created_at" : "updated_at";
+    const ascending = input.order === "asc";
+    const fingerprint = cursorFingerprint({
+      ...input,
+      cursor: undefined,
+      actor: "anonymous",
+    });
+    let query = tx
+      .selectFrom("resources as r")
+      .where("r.deleted_at", "is", null)
+      .where("r.library_id", "=", libraryId);
+    if (input.kind)
+      query = query.where("r.kind", "=", input.kind as "document" | "library");
+    if (input.format) query = query.where("r.format", "=", input.format as any);
+    if (input.parentId)
+      query = query.where((eb) =>
+        eb.or([
+          eb("r.parent_id", "=", input.parentId!),
+          eb.and([
+            eb("r.library_id", "=", input.parentId!),
+            eb("r.parent_id", "is", null),
+          ]),
+        ]),
+      );
+    if (!treeMode)
+      query = query.where(accessibleQuery(sql.ref("r.id"), null, 1));
+    const orderKey = sql.ref(`r.${column}`);
+    let total: number | null = null;
+    if (!input.cursor && !treeMode)
+      total = Number(
+        (
+          await query
+            .select((eb) => eb.fn.countAll().as("n"))
+            .executeTakeFirstOrThrow()
+        ).n,
+      );
+    if (input.cursor) {
+      const c = decodePageCursor(input.cursor, fingerprint);
+      query = query.where(
+        sql<boolean>`(${orderKey} ${ascending ? sql`>` : sql`<`} ${c.value} or (${orderKey} = ${c.value} and r.id > ${c.id}))`,
+      );
+    }
+    const rows = await query
+      .selectAll("r")
+      .orderBy(orderKey, ascending ? "asc" : "desc")
+      .orderBy("r.id")
+      .limit(treeMode ? 10001 : 101)
+      .execute();
+    const ctx = await accessContext(tx, null, [
+      libraryId,
+      ...rows.map((r) => r.id),
+    ]);
+    const page = rows.slice(0, treeMode ? 10000 : 100);
+    const last = page.at(-1);
+    if (treeMode) total = page.length;
+    return {
+      items: page.map((r) => {
+        const projected = redactClosed(
+          projectResource(
+            r,
+            null,
+            ctx.resources,
+            ctx.grants,
+            resourceDistribution(policy, r.kind).managerInfoVisible,
+          ),
+        );
+        return {
+          ...projected,
+          ...(treeMode
+            ? { parent_id: r.parent_id, library_id: r.library_id }
+            : {}),
+          ownerName: "",
+          collected: false,
+          is_public: true,
+          favorite: false,
+          pinned: false,
+          inLibrary: true,
+          libraryName: allowed.resource.title,
+        };
+      }),
+      total,
+      nextCursor:
+        !treeMode && rows.length > 100 && last
+          ? encodePageCursor(fingerprint, last[column], last.id)
+          : null,
+      truncated: treeMode && rows.length > 10000,
+    };
+  });
+}
+
 export async function queryResourcePage(
   db: DB,
-  actor: Actor,
+  actor: Actor | null,
   input: ResourceQuery,
 ) {
+  if (!actor) return anonymousLibraryPage(db, input);
   return readSnapshot(db, async (tx) => {
     await accessContext(tx, actor, []);
     const policy = await distributionPolicy(tx);
@@ -315,40 +442,25 @@ export async function queryResourcePage(
     );
     let page = rows.slice(0, 100);
     if (treeMode) {
-      const treeRows = rows.slice(0, 10000);
-      const included = new Set(
-        treeRows
-          .filter((r) => permission(r, actor, ctx.resources, ctx.grants) > 0)
-          .map((r) => r.id),
-      );
-      for (const row of treeRows) {
-        if (!included.has(row.id)) continue;
-        let parent = row.parent_id;
-        const seen = new Set<string>();
-        while (parent && !seen.has(parent)) {
-          seen.add(parent);
-          included.add(parent);
-          parent =
-            treeRows.find((candidate) => candidate.id === parent)?.parent_id ??
-            null;
-        }
-      }
-      page = treeRows.filter((r) => included.has(r.id));
+      // Library readers see the whole outline. Documents they cannot open stay in place with role none.
+      page = rows.slice(0, 10000);
       total = page.length;
     }
     const last = page.at(-1);
     return {
       items: page.map(({ cursorValue, ...r }) => {
-        const projected = projectResource(
-          r,
-          actor,
-          ctx.resources,
-          ctx.grants,
-          resourceDistribution(policy, r.kind).managerInfoVisible,
+        const projected = redactClosed(
+          projectResource(
+            r,
+            actor,
+            ctx.resources,
+            ctx.grants,
+            resourceDistribution(policy, r.kind).managerInfoVisible,
+          ),
         );
         return {
           ...projected,
-          ...(treeMode ? { parent_id: r.parent_id } : {}),
+          ...(treeMode ? { parent_id: r.parent_id, library_id: r.library_id } : {}),
           ownerName: projected.owner_id ? r.ownerName : "",
           collected: Number(r.collected) === 1,
           is_public: Number(r.is_public) === 1,

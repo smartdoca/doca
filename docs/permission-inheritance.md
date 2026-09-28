@@ -1,49 +1,51 @@
-# 文档与知识库权限继承
+# Document and library permission inheritance
 
-本文只描述当前权限模型。授权统一保存在 `grants`，公开链接定义保存在 `share_links`，链接撤销事件保存在 `share_link_revocations`。数据库不包含其它成员兼容表。
+[中文](permission-inheritance.zh-CN.md)
 
-## 公开阅读基线
+This page describes the current permission model. Grants live in `grants`. Public link definitions live in `share_links`. Link revocation events live in `share_link_revocations`. There is no other membership compatibility table.
 
-公开知识库（`public` / `authenticated`）统一其所有页面的阅读范围，页面不能通过独立可见性或关闭协作者继承取消这一基线。页面编辑、评论、管理授权仍按自身及继承规则计算。关闭知识库公开后，页面重新使用自身与祖先的权限设置。列表查询与单资源点查执行相同规则。
+## Public reading
 
-按资源类型独立的发现、搜索及主动收录规则见 [公开资源、发现与收录](public-resource-discovery.md)。
+A public library (`public` or `authenticated`) sets the reading scope for every page in it. A page cannot cancel that baseline with its own visibility or by turning off collaborator inheritance. Edit, comment, and manage rights are still calculated from the page and inheritance. After the library is no longer public, pages use their own settings and their ancestors again. List queries and single-resource lookups use the same rule.
 
-## 统一授权来源
+Discovery, search, and collection rules that differ by resource type are in [public resources, discovery, and collections](public-resource-discovery.md).
 
-`grants` 按“资源 + 用户 + 授权来源”保存记录：
+## One grant table
 
-- `direct`：主动邀请或管理页直接授权，每个用户在一个资源上最多一条。
-- `link`：领取分享链接得到的授权，以分享 ID 区分来源。
-- `parent_override`：当前节点对父级继承结果的覆盖或阻断。
+`grants` stores a row per resource, user, and grant source:
 
-每条授权记录保存角色、是否包含后代、来源 ID 以及 `active` / `disabled` 状态。权限管理页按用户聚合来源并展示最终权限，来源详情操作具体记录。删除直接授权时，可写入 disabled 的 `parent_override` 阻止权限回退；删除该覆盖后恢复父级继承。撤销链接只删除对应分享来源，不影响其它来源。
+- `direct`: an invitation or a grant from the management page. At most one per user on a resource.
+- `link`: a grant received from a share link, distinguished by the share id.
+- `parent_override`: this node overrides or blocks the inherited parent result.
 
-角色与“包含后代”是两个独立维度。计算某个后代资源的权限时必须沿资源层级逐项判断，不能分别取字段最大值后拼接出不存在的授权。
+Each row stores the role, whether it includes descendants, the source id, and `active` or `disabled`. The management page aggregates sources per user and shows the final permission. Source details operate on a specific row. Deleting a direct grant can write a disabled `parent_override` so the permission does not fall back. Deleting that override restores parent inheritance. Revoking a link deletes only that share source.
 
-## 协作者与继承范围
+Role and "include descendants" are separate. A descendant's permission is walked down the tree. Do not take the maximum of each field and invent a grant that does not exist.
 
-知识库是文档权限树根。知识库文档优先继承父文档，没有父文档时继承所属知识库；个人文档没有父文档和知识库归属，使用独立权限。
+## Collaborators and inheritance
 
-对命名用户，从当前节点向上寻找最近的明确决定。当前节点授权覆盖上级授权，disabled 的 `parent_override` 阻断上级授权；没有当前节点决定时才继续继承。`include_descendants` 决定授权能否传播到后代。当前节点的“仅本节点”决定会截断更上级的同一用户授权，后代仍可通过自己的授权重新取得权限。
+The library is the root of the document permission tree. A library document inherits its parent document, or the library when it has no parent. A personal document has neither, and uses its own permissions.
 
-公开权限与命名用户权限分别计算后取最高值。移除协作者不会把用户加入公开资源黑名单；匿名用户的公开权限最多为阅读。
+For a named user, walk upward to the nearest explicit decision. A grant on the current node overrides a grant above it. A disabled `parent_override` blocks the parent grant. Inheritance continues only when this node has no decision. `include_descendants` decides whether a grant reaches descendants. A "this node only" decision cuts off the same user's grant from further above. A descendant can still receive its own grant.
 
-## 权限设置
+Public permission and named-user permission are calculated separately, then the higher one is used. Removing a collaborator does not put that user on a public-resource block list. Anonymous public access is at most reader.
 
-`permission_overrides` 以位标记记录当前节点明确覆盖的字段：公开范围、公开角色、允许申请、公共发现、阅读者历史版本和链接分享总开关。未覆盖字段从祖先解析；当前节点修改后独立生效，恢复继承时清除相应覆盖位。
+## Permission settings
 
-关闭继承不会复制父级设置。当前节点已有覆盖保持不变，其余字段使用自身默认值；重新开启继承后继续解析未覆盖字段。具体分享链接、邀请和工单不复制也不继承，只有链接总开关可继承。
+`permission_overrides` is a bit set of fields this node explicitly overrides: public scope, public role, access requests, public discovery, reader history, and the master switch for link sharing. Fields that are not overridden resolve from ancestors. Restoring inheritance clears those bits.
 
-用户领取链接时写入带分享 ID 的 `link` 授权。修改、停用或过期控制后续领取；已写入的授权通过成员来源管理显式调整或撤销。
+Turning inheritance off does not copy the parent's settings. Existing overrides stay. Other fields use this node's defaults. Turning it on again resolves fields that are not overridden. Concrete share links, invitations, and tickets are not copied or inherited. Only the master link switch can be inherited.
 
-## 审批、通知与即时生效
+Redeeming a link writes a `link` grant with the share id. Changing, disabling, or expiring a link controls later redemptions. Grants already written are adjusted or revoked through the member source.
 
-权限申请的请求角色不可变，审批时可选择实际授予角色与范围。管理权限申请只由资源所有者审批，也只有所有者能授予管理权限。
+## Approval, notifications, and immediate effect
 
-工单通过受限的 `resource.grant` 操作执行，在同一事务中重新校验资源、处理人和申请人权限，并写入实际角色、范围、处理结果与事件。数据库事务和状态条件保证一个工单只有一个最终处理结果。
+The requested role on an access ticket cannot change. Approval can choose the role and scope that are actually granted. Only the resource owner approves a management request, and only the owner can grant management.
 
-点查与列表查询使用相同的最近决定、授权范围和字段覆盖规则，不为继承批量复制授权。权限变化后刷新受影响在线房间；读权限撤销立即关闭连接，写操作继续逐次鉴权。
+The ticket runs a restricted `resource.grant` in one transaction. It rechecks the resource, the handler, and the requester, then writes the role, scope, result, and event. The database transaction and status conditions give a ticket one final result.
 
-## 验证
+Lookups and lists use the same nearest decision, grant scope, and field overrides. Inheritance does not copy grants in bulk. After a permission change, affected online rooms refresh. Losing read access closes the connection immediately. Writes are checked on every operation.
 
-隔离测试覆盖多层继承、降权、阻断、未来子文档、授权范围、关闭和恢复继承、字段覆盖、公开基线、链接来源撤销、邀请接受、审批结果以及 WebSocket 撤权。
+## Verification
+
+Isolated tests cover multi-level inheritance, downgrade, blocking, future children, grant scope, turning inheritance off and on, field overrides, the public baseline, revoking a link source, accepting an invitation, approval results, and WebSocket revocation.

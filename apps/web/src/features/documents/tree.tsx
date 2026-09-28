@@ -16,12 +16,14 @@ export function DocumentTree({
   create,
   libraryId,
   knowledgeEnabled,
+  accountActions = true,
   changed,
 }: {
   refresh: number;
   userId: string;
   libraryId?: string;
   knowledgeEnabled?: boolean;
+  accountActions?: boolean;
   selected?: string;
   create: (parent: Resource) => void;
   changed?: () => void;
@@ -252,7 +254,11 @@ export function DocumentTree({
           )}
           <button
             className="tree-link"
-            title={r.title}
+            title={
+              roleRank(r.role) === 0
+                ? `${r.title} · ${t("role.none")}`
+                : r.title
+            }
             aria-disabled={roleRank(r.role) === 0}
             aria-current={r.id === selected ? "page" : undefined}
             onClick={() => {
@@ -273,7 +279,7 @@ export function DocumentTree({
               <Plus size={14} />
             </button>
           )}
-          {r.kind === "document" && (
+          {accountActions && r.kind === "document" && roleRank(r.role) > 0 && (
             <button
               className="tree-more icon"
               aria-label={r.title + "的更多操作"}

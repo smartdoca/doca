@@ -1130,7 +1130,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       },
     },
     async (req) =>
-      library.list(authenticated(req), {
+      library.list(actor(req), {
         ...req.query,
         includeAncestors: req.query.tree,
       }),

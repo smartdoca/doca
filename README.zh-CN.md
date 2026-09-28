@@ -19,7 +19,7 @@ Doca 是面向个人和小团队的文档与知识库。一次部署只有一套
 - 搜索。管理员可以配置 Meilisearch；未配置时用数据库匹配标题和正文。
 - 账号密码，以及 OIDC、Google、GitHub、微信扫码和 QQ 登录。注册可以关闭、自动通过，或交给管理员审核。没有默认账号。
 - 界面语言为中文和英文。
-- 单容器使用 SQLite。只有运行多个应用副本时才需要 PostgreSQL 和 Redis。见 [水平扩展](docs/horizontal-scaling.md)。
+- 单容器使用 SQLite。只有运行多个应用副本时才需要 PostgreSQL 和 Redis。见 [水平扩展](docs/horizontal-scaling.zh-CN.md)。
 
 ## 本地启动
 
@@ -119,17 +119,17 @@ export default () =>
 
 这个路由的实际地址是 `/api/v1/plugins/example.attachments/items`，身份来自宿主会话。注册 ID 要放在插件 ID 下面。插件数据放在插件自己的数据库里。停用插件只释放运行资源，不删除已保存的用户数据。
 
-规范、公开服务和验证要求见 [插件开发](docs/plugin-development.md) 和 [插件 SDK 契约](docs/plugin-sdk-contract.md)。安装目录见 [插件部署](docs/plugin-deployment.md)。
+规范、公开服务和验证要求见 [插件开发](docs/plugin-development.zh-CN.md) 和 [插件 SDK 契约](docs/plugin-sdk-contract.zh-CN.md)。安装目录见 [插件部署](docs/plugin-deployment.zh-CN.md)。
 
 ## 更多文档
 
-- [架构](docs/architecture.md)
-- [身份认证](docs/authentication.md)
-- [协同与搜索](docs/collaboration.md)
-- [编辑器集成](docs/editor-integration.md)
-- [存储](docs/storage.md)
-- [接口](docs/api.md)。运行中的服务还提供 `/api/openapi.json`。
-- [开发环境](docs/development.md)
+- [架构](docs/architecture.zh-CN.md)
+- [身份认证](docs/authentication.zh-CN.md)
+- [协同与搜索](docs/collaboration.zh-CN.md)
+- [编辑器集成](docs/editor-integration.zh-CN.md)
+- [存储](docs/storage.zh-CN.md)
+- [接口](docs/api.zh-CN.md)。运行中的服务还提供 `/api/openapi.json`。
+- [开发环境](docs/development.zh-CN.md)
 
 ## 许可证
 

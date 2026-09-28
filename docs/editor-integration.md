@@ -1,61 +1,61 @@
-# 文档接入与内容发现（2026-09-11）
+# Document integration and discovery
 
-## 本轮落地
+[中文](editor-integration.zh-CN.md)
 
-- 知识库设置只保留顶部标题和所有者信息，左侧知识库名称后提供收藏。主页分为收藏文档、收藏知识库。
-- 切换知识库时先加载正确上下文，只挂载知识库文档树；个人文档打开为独立页面，不展示左侧目录。列表绑定查询标识，不复用上一类资源的结果。
-- 内部文档引用、用户提及使用平台行内原子组件，保留 SDK 的 link 编码；引用存 `#/r/{资源 UUID}`，不是当前域名。可整体删除/复制，点击直接导航。
-- 点赞上方展示本文引用和引用本文。只统计当前请求用户能读取的文档，包括匿名公开访问；撤权和删除后不泄露标题、ID 或隐藏数量。
-- 文档标题单行省略，后面展示重叠在线头像及完整成员列表。使用已有 presence 消息，不创建另一条协同连接；用户数量去重，会话光标仍分别处理。
-- 固定工具栏新增超链接设置/移除；查找面板可展开单个替换、全部替换。只读/离线/演示模式不提供替换。替换走编辑器模型和本地协同事务，可撤销，不修改 DOM。
-- 上传进度采用 SDK 的 0～1；视频、图片、附件共用鉴权上传。下载使用鉴权后的 `?download=1`，明确 attachment，不把图片下载误当预览，也不绕过 ACL。
+## What shipped
 
-## 访问与主动展示分离
+- Library settings keep the title and owner at the top. A favorite control sits after the library name. Home separates favorite documents and favorite libraries.
+- Switching libraries loads the right context and mounts only that library's tree. A personal document opens as its own page without the sidebar. Lists are bound to the query id and do not reuse the previous resource type.
+- Internal document references and user mentions use platform inline atoms and keep the SDK link encoding. A reference stores `#/r/{resource UUID}`, not the current domain. It can be deleted or copied as a whole, and a click navigates directly.
+- References from this document and references to this document appear above likes. Only documents the current user can read are counted, including anonymous public access. Revocation and deletion do not leak a title, an id, or a hidden count.
+- The title is one truncated line, followed by overlapping online avatars and the full member list. This uses the existing presence message. It does not open a second collaboration connection. User counts are deduplicated. Session cursors stay separate.
+- The fixed toolbar can set or remove a link. The find panel can replace one match or all matches. Readonly, offline, and presentation modes do not offer replace. Replace goes through the editor model and the local collaboration transaction. It can be undone and does not edit the DOM.
+- Upload progress uses the SDK range 0 to 1. Video, images, and attachments share the authorized upload. Download uses the authorized `?download=1` URL as an attachment. An image download is not treated as a preview, and it does not bypass the ACL.
 
-管理员入口：用户可见范围 → 授权与内容展示。
+## Access and active display
 
-| 设置           | 默认           | 行为                                            |
-| -------------- | -------------- | ----------------------------------------------- |
-| 新协作者       | 直接授权       | 可切换接受邀请后生效；不倒退撤销已有权限        |
-| 分享给我的文档 | 交互后展示     | 直接文档授权 + 已打开或接受；可改授权生效即展示 |
-| 协作知识库     | 授权生效即展示 | 可改打开/接受后展示；所有者始终展示             |
-| 公开知识库     | 不主动展示     | 可开启本站公开知识库目录                        |
+The administrator entry is user visibility, then grants and content display.
 
-公开文档不会仅因公开进入分享列表。有阅读权限的文档仍可搜索。整库协作获得的子文档不计作直接分享；单独对某篇文档显式授权则计入。收藏与最近访问继续按自己的操作及当前权限展示。
+| Setting | Default | Behavior |
+| --- | --- | --- |
+| New collaborator | Grant immediately | Can switch to taking effect after the invitation is accepted. Existing rights are not revoked backwards |
+| Documents shared with me | Show after interaction | Direct document grant plus opened or accepted. Can show as soon as the grant is active |
+| Collaborating libraries | Show when the grant is active | Can switch to show after open or accept. The owner is always shown |
+| Public libraries | Do not show proactively | The signed-in public library catalog can be turned on |
 
-待处理分享位于主页“与我共享”和知识库列表的独立入口，不混入文件列表。直接授权在打开之前可接受加入列表；邀请授权接受前不产生额外权限（原有公开阅读权限不受影响）。拒绝删除该显式授权，不影响其他来源权限；撤回后不能再接受。邀请通知只透露定向邀请资源的必要标题，不使其他无权限通知可见。
+A public document does not enter the shared list only because it is public. A document you can read can still be searched. A child reached through whole-library collaboration is not a direct share. An explicit grant on that document is. Favorites and recent visits follow your own actions and current permission.
 
-权限记录直接使用当前 `grants` 状态；管理者看到 pending 状态。修改角色不会自动接受。所有接受/拒绝与资源版本变化在事务内完成，避免与权限编辑并发覆盖。
+Pending shares are a separate entry on home's Shared with me tab and on the library list. They are not mixed into the file list. A direct grant can be accepted into the list before it is opened. An invitation does not add permission until it is accepted. Existing public read is unchanged. Rejecting deletes that explicit grant and does not affect other sources. After it is withdrawn it cannot be accepted. An invitation notification reveals only the title required for that targeted resource.
 
-## 接口
+Permission records use the current `grants` state. Managers see pending. Changing a role does not accept automatically. Accept, reject, and resource version changes finish in one transaction so they do not overwrite a concurrent permission edit.
 
-- `GET /api/v1/admin/distribution`：管理员读取配置及 revision。
-- `PUT /api/v1/admin/distribution`：管理员提交 `{revision, grantMode: direct|invite, sharedDocuments: granted|interacted, libraryMembers: granted|interacted, publicLibraries: boolean}`；旧 revision 返回 409。
-- `GET /api/v1/me/invitations`：当前用户待接受邀请和未访问的直接授权；不返回其他用户邀请。
-- `POST /api/v1/me/invitations/:id`：`{accept: boolean}`；接受或拒绝当前用户的有效显式授权，已撤回/删除返回 404。
-- `GET /api/v1/resources/:id/references`：需能阅读当前资源；返回 `{outgoing, incoming}`，元素 `{id,title,format}`，双向按当前权限过滤。公开资源允许匿名。
-- `GET /api/v1/assets/:id/content?download=1`：按同一资产 ACL 下载，响应 attachment；下载不走预览 CDN 重定向。
+## API
 
-## 数据库与引用一致性
+- `GET /api/v1/admin/distribution`: an administrator reads the configuration and revision.
+- `PUT /api/v1/admin/distribution`: `{revision, grantMode: direct|invite, sharedDocuments: granted|interacted, libraryMembers: granted|interacted, publicLibraries: boolean}`. An old revision returns 409.
+- `GET /api/v1/me/invitations`: invitations waiting for the current user and direct grants not yet visited. Other users' invitations are not returned.
+- `POST /api/v1/me/invitations/:id`: `{accept: boolean}` accepts or rejects the current user's explicit grant. Withdrawn or deleted returns 404.
+- `GET /api/v1/resources/:id/references`: requires read access. Returns `{outgoing, incoming}` of `{id,title,format}`, filtered both ways by current permission. Public resources allow anonymous access.
+- `GET /api/v1/assets/:id/content?download=1`: download under the same asset ACL, as an attachment. Download does not follow the preview CDN redirect.
 
-当前基线中的分发与引用结构：
+## Database and references
 
-- `distribution_settings(id, config, revision)`：站点策略。
-- `grant_responses(resource_id, user_id, state)`：联合主键，pending/granted/accepted。缺失旧记录仍保持原 grant 生效；pending 不参与 effectiveGrants。
-- `document_references(source_id, target_id)`：唯一有向边，源资源外键，目标为稳定 UUID（可保留删除/暂不可访问目标的关系）；target 索引支持反向查询。
+- `distribution_settings(id, config, revision)`: site policy.
+- `grant_responses(resource_id, user_id, state)`: composite key, pending, granted, or accepted. A missing older row keeps the original grant. Pending does not join effective grants.
+- `document_references(source_id, target_id)`: a unique directed edge. The source is a foreign key. The target is a stable UUID, so a deleted or temporarily unreadable target can remain. The target index supports the reverse query.
 
-写入正文的同一事务更新引用边，删除引用会删除边。导入和副本创建也在写入事务中生成引用边；读取路径只查询当前索引，不执行数据修复。
+The same transaction that writes the body updates reference edges. Deleting a reference deletes the edge. Import and copy also create edges in the write transaction. Reads query the current index and do not repair data.
 
-## 组件边界与后续复用
+## Component boundary
 
-全局与仓库已提供 `$doca-editor-integration`，与 `$doca-collaboration` 配套。完整约定见 [接入参考](../skills/doca-editor-integration/references/integration.md)。它区分已经存在的 slatetsx props/commands 与其他模块待实现的能力，不把理想接口当成已发布 API。
+`$doca-editor-integration` is available with `$doca-collaboration`. The full notes are in [the integration reference](../skills/doca-editor-integration/references/integration.md). That reference separates props and commands that exist from capabilities other modules have not implemented. Do not treat a target interface as a published API.
 
-查找定位、替换、撤销最终应封装在各自编辑器包里，平台统一面板/快捷键/权限。目前 slatetsx 未导出完整 find/replace 能力，Doca 使用 Slate 模型适配器；Excel 后续包装原生能力，不复用 Slate 范围。当前支持字面量、不区分大小写搜索；不提供正则。原子引用不参与文本替换。文档展示高亮仍基于已渲染视图，大规模虚拟化应采用包的模型查找与 reveal 接口。
+Find, replace, and undo should eventually live in each editor package. The platform owns the panel, shortcuts, and permissions. The rich text package does not yet export a complete find and replace API. Doca uses a Slate model adapter. Spreadsheets should wrap their native capability later and should not reuse Slate ranges. Search is literal and case-insensitive. There is no regular expression. Atomic references are not part of text replace. Highlighting still uses the rendered view. Large virtualized documents should use the package's model find and reveal API.
 
-本轮未改 slatetsx 上游源码或新建传输协议。仍使用宿主共享 WebSocket/outbox；不宣称持久离线保障、Excel 永久区域锚点或所有类型均已改造。
+This round did not change upstream rich text source or add a transport protocol. The host shared WebSocket and outbox are still used. Persistent offline safety, permanent spreadsheet region anchors, and a finished conversion of every format are not claimed.
 
-## 验收
+## Acceptance
 
-自动测试覆盖：邀请接受/拒绝/撤回、管理员配置权限及 revision、公开/直接/整库权限与主动展示分离、匿名引用过滤、引用增删与旧索引补齐不增加 seq、原子引用 Backspace 与 CRDT 往返、跨格式文字及代码批量替换与撤销、资产下载 ACL。
+Automated tests cover accepting, rejecting, and withdrawing invitations, administrator configuration and revision, separation of public, direct, and whole-library rights from proactive display, anonymous reference filtering, adding and removing references without increasing seq, atomic reference backspace and CRDT round trip, cross-format replace and undo, and asset download ACL.
 
-隔离浏览器验收覆盖：同账号双页编辑和提及、内部引用相对链接与跳转、固定工具栏插入链接、真实 SDK 富文本格式复制粘贴及刷新保留、双向关系、替换后双页一致、知识库首篇/设置与收藏、头像列表、静置 60 秒无新增写入、刷新恢复和主页固定标签。额外修复了异步链接表单被全局菜单按钮处理提前关闭、选区引用被释放的问题。真实中文输入法、所有 Excel 操作、完整断网故障矩阵不属于这轮新增验证结论。
+Isolated browser checks cover two pages editing and mentioning on one account, internal reference links and navigation, inserting a link from the fixed toolbar, copy and paste of rich text that survives refresh, both reference directions, replace staying consistent on two pages, the first library document, settings and favorites, the avatar list, no new writes during 60 idle seconds, refresh recovery, and fixed home tabs. An async link form that the global menu closed early, and a selection reference that was released, were fixed. A real Chinese input method, every spreadsheet operation, and a full offline failure matrix are not part of this round's verification.

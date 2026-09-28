@@ -1,55 +1,57 @@
-# 公开资源、发现与收录
+# Public resources, discovery, and collections
 
-## 管理员策略
+[中文](public-resource-discovery.zh-CN.md)
 
-管理员在「权限与可见性 → 内容权限 → 公共发现」分别设置文档、知识库、问答、文件夹：
+## Administrator policy
 
-| 模式 | 发现目录 | 未收录全文搜索 | 主动收录后的个人搜索 |
+Under permissions and visibility, content permissions, public discovery, the administrator sets documents, libraries, Q&A assistants, and folders separately:
+
+| Mode | Discovery catalog | Full-text search before collection | Personal search after collection |
 | --- | --- | --- | --- |
-| 仅链接访问 | 不展示 | 不参与 | 参与 |
-| 可发现，收录后搜索 | 展示、按标题查询 | 不参与 | 参与 |
-| 全站可发现、可搜索 | 展示、按标题查询 | 参与 | 参与 |
+| Link only | Hidden | Excluded | Included |
+| Discoverable, searchable after collection | Shown, title query | Excluded | Included |
+| Discoverable and searchable site-wide | Shown, title query | Included | Included |
 
-策略只影响已公开资源的分发，不会使私有资源自动公开。四类都设为仅链接访问时，仍保留公共资源入口及“浏览过”“已收录”，隐藏“发现”Tab。接口不返回不可发现的资源。
+The policy only changes how resources that are already public are distributed. It does not publish a private resource. If all four types are link-only, the public entry and the Visited and Collected tabs remain, and the Discover tab is hidden. The API does not return a resource that cannot be discovered.
 
-历史分发配置在未保存新策略前按原配置解释；保存时写入四类独立的 `publicModes`。保留历史设置与收录数据，不删除访问记录。
+Until a new policy is saved, older distribution settings keep their previous meaning. Saving writes four independent `publicModes`. Visit history is kept.
 
-## 个人范围
+## Personal scope
 
-浏览只写访问记录，不再自动收录。旧 `source=opened` 的自动加入记录不提供收录搜索资格，也不出现在收录清单。主动授权、已接受邀请、所有权继续按现有规则参与。
+A visit writes a visit record and does not collect the resource. Old automatic `source=opened` rows do not qualify for collection search and do not appear in the collection list. Direct grants, accepted invitations, and ownership still follow their own rules.
 
-四类资源统一使用独立的 `resource_collections` 表，按用户、资源类型、资源 ID 去重。公开目录不排除自己拥有或已获授权的公开资源；点击收录就加入清单，不按原有授权关系过滤。
+All four resource types use `resource_collections`, unique per user, resource type, and resource id. The public catalog does not hide a public resource you own or can already access. Collecting adds it to the list. It is not filtered by the previous grant.
 
-搜索候选为原有范围、收藏与收录清单的并集，返回结果仍复核当前访问权限。取消收录只删除清单记录，不修改成员、邀请、原列表关系或问答接入偏好，原本可搜索的资源仍可搜索。问答收录会额外纳入检索，取消后恢复原接入规则。问答浏览不会自动收录。
+Search candidates are the union of the previous scope, favorites, and the collection list. Results are checked against current access again. Removing a collection deletes only that list row. It does not change membership, invitations, or Q&A attachment preferences. A resource that was already searchable stays searchable. Collecting a Q&A assistant also includes it in retrieval. Removing it restores the previous attachment rule. Browsing a Q&A assistant does not collect it.
 
-首次建立收录表时迁入旧文档/知识库手动收录及文件夹收录；自动加入、邀请、浏览记录及问答接入偏好不会被当作收录。
+The first time the collection table is created, older manual document, library, and folder collections are copied in. Automatic joins, invitations, visit records, and Q&A attachment preferences are not treated as collections.
 
-搜索可切换全部可搜索资源、我的范围、全站公开正文。全站正文仅包含管理员允许全站搜索的资源；发现目录的标题查询不调用正文搜索或向量检索。普通文件搜索及 AI 文件检索同样检查容器收录与公开搜索策略。
+Search can switch among everything searchable, my scope, and site-wide public text. Site-wide text includes only resources the administrator allowed to be searched site-wide. Title queries in the discovery catalog do not call body search or vector search. File search and AI file retrieval also check container collection and the public search policy.
 
-## 容器规则
+## Containers
 
-收录知识库或文件夹包含现有和以后新增的可访问内容，查询时动态判断，不复制成员记录到每个子项。
+Collecting a library or folder includes content that exists now and content added later. The query decides this dynamically. It does not copy a membership row onto every child.
 
-公开知识库统一其页面的阅读范围，即使页面关闭协作者继承也不能关闭公开阅读。页面仍可配置编辑、评论和管理类权限。点查权限与列表 SQL 使用相同的公开阅读继承规则。知识库中的页面使用知识库类型的发现与搜索策略，独立文档使用文档类型策略。
+A public library sets the reading scope of its pages. A page that turns off collaborator inheritance still cannot turn off public reading. The page can still configure edit, comment, and manage rights. Point lookups and list SQL use the same public-reading inheritance. A page inside a library uses the library discovery and search policy. A standalone document uses the document policy.
 
-文件夹公开状态保存在 `folder_publications`，允许站内登录用户阅读其中现有和新增内容；不授予管理权限。当前文件管理与下载接口要求登录，不提供匿名文件访问。公开关闭后，仍须依照当前成员权限判断访问，收录本身不授予权限。
+Folder publication is stored in `folder_publications`. Signed-in users may read current and future contents. They do not receive management. File management and download currently require sign-in. There is no anonymous file access. After publication is turned off, access follows current membership. A collection itself does not grant access.
 
-页面权限面板显示公开知识库来源；文件夹分享面板说明公开范围包含现有和新增内容。移入公开容器的内容随容器公开，移出按新位置权限计算。
+The page permission panel shows the public library as a source. The folder share panel says the public scope includes current and future contents. Moving into a public container publishes with the container. Moving out uses the new location.
 
-## 发现界面
+## Discovery UI
 
-统一公共资源页包含“浏览过”“发现”“已收录”，按文档、知识库、问答、文件夹筛选。“浏览过”包含访问过且当前仍可访问的仅链接公开资源；浏览历史不产生搜索资格。各业务列表不再设置“公开资源”快捷入口。
+The public resources page has Visited, Discover, and Collected, filtered by document, library, Q&A, and folder. Visited includes link-only public resources the user opened and can still access. Visit history does not create search eligibility. Business lists no longer have a public-resources shortcut.
 
-独立主页 `/home` 汇总文档、知识库、问答、文件夹和文件的最近访问、待处理工单与知识库人工裁决。文档页移至 `/documents`，继续保留最近浏览，并提供归我所有、与我协作、我的收藏、我的收录。知识库和问答默认“全部”仅合并个人所有权、协作、收藏、收录关系，不自动展示全站公开目录。共享文件夹无收藏，提供全部、我共享的、共享给我的、已收录。
+Home at `/home` summarizes recent visits across documents, libraries, Q&A, folders, and files, plus pending tickets and library decisions. Documents moved to `/documents` and keep recent visits, owned by me, collaborating, favorites, and my collections. The default All view for libraries and Q&A combines ownership, collaboration, favorites, and collections. It does not automatically show the site-wide public catalog. Shared folders have no favorites. They offer all, shared by me, shared with me, and collected.
 
-公开列表统一提供收录和取消收录。文档行的更多菜单包含收录、取消收录及有权执行的删除；收藏与置顶保持快捷操作。资源详情不另增收录入口。
+Public lists offer collect and uncollect. A document's more menu includes collect, uncollect, and delete when the user may delete. Favorite and pin stay as shortcuts. The resource detail page does not add another collect entry.
 
-主页统计使用当前用户可访问的数据。工单复用 onlyMine 审批/接受步骤；人工裁决复用知识库维护权限与待办校准逻辑，处理后从主页移除，来源失败单独展示，不冒充零待办。首版接入内置来源，尚未新增对外插件主页 SDK。
+Home statistics use data the current user can access. Tickets reuse the only-mine approval and accept steps. Library decisions reuse maintenance permission and the pending calibration. After they are handled they leave home. A source failure is shown on its own and is not presented as zero pending items. The first version uses built-in sources. There is no external plugin home SDK yet.
 
-文档与知识库沿用 resource_visits，问答沿用 knowledge_assistant_users.visited_at；文件和文件夹记录到 workspace_activity，问答收藏也保存在此表。读取最近访问时重新鉴权，按时间合并分页；预览文件才记录访问，列表缩略图不算浏览。
+Documents and libraries use `resource_visits`. Q&A uses `knowledge_assistant_users.visited_at`. Files and folders, and Q&A favorites, use `workspace_activity`. Recent visits are authorized again, then merged and paged by time. Opening a file preview counts as a visit. A list thumbnail does not.
 
-第一阶段提供标题查询、更新时间倒序、稳定分页、主动收录与批量取消收录。知识库以容器展示，不平铺其页面。使用数据库目录查询，不新增 Meilisearch 依赖，也不提供个性化推荐流。
+The first phase provides title query, updated-time order, stable paging, collecting, and batch uncollect. A library is shown as a container. Its pages are not flattened into the list. Queries use the database catalog. There is no new Meilisearch dependency and no recommendation feed.
 
-## 验证
+## Verification
 
-`tests/public-discovery.test.ts` 使用隔离数据库覆盖按类型分发、浏览不收录、容器新增内容、权限撤回、目录与全文边界、问答接入、文件夹管理权限、分页及 HTTP 配置校验。相关权限继承回归同步按公开容器阅读规则更新。
+`tests/public-discovery.test.ts` uses an isolated database for per-type distribution, visits that do not collect, new container contents, revocation, catalog versus full text, Q&A attachment, folder management, paging, and HTTP configuration checks. Permission-inheritance tests follow the public-container reading rule.

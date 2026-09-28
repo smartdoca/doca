@@ -1,216 +1,166 @@
 # HTTP API v0.1
 
-AI 会话、模型积分与对外 MCP 以当前 API 路由、运行配置和前端设置为准。
+[中文](api.zh-CN.md)
 
-新增文档统计、点赞人、可撤销分享链接和历史快照接口见 [文档交互接口](document-experience.md#http-接口)。
+AI sessions, model rates, and external MCP follow the current API routes, runtime configuration, and the web settings.
 
-Base URL：同源 /api/v1。运行时请求契约：GET /api/openapi.json，根据真实路由的 TypeBox schema 生成。包含路径、参数、请求体；响应和业务规则由本文补充，目前不是完整的 SDK 生成契约。
+Document statistics, people who liked a document, revocable share links, and history snapshots are in [document interaction](document-experience.md#http).
 
-## 通用约定
+Base URL is the same origin, `/api/v1`. The live request contract is `GET /api/openapi.json`, generated from the real route TypeBox schemas. It includes paths, parameters, and bodies. Responses and business rules are supplemented here. It is not yet a complete generated SDK.
 
-- 除 bootstrap、login、register 和公开资源详情外，需要 Cookie 会话。OpenAPI 部分手写 GET 尚未标注 security，以下权限与服务端校验为准。
-- Cookie 名 doca_session；浏览器同源请求自动携带，不放在 URL 或本地存储。
-- 所有请求 Host 必须匹配 DOCA_ORIGIN；修改请求还须 Origin 完全匹配。
-- JSON接口 Content-Type 为 application/json，上传为 application/octet-stream。拒绝未知字段；名称1–160字符且非全空，新密码12–128字符。
-- 通常成功为 HTTP 200，上传成功201，CDN读取302。失败为 {message:string,requestId:string}。
-- 400 参数/约束；401 未登录；403 权限不足或来源错误；404 不存在、无阅读权或已删除；409 版本/状态冲突；421 Host 不符；429 限流；500 未预期错误。
-- UUID 标识资源。可增长的业务列表使用不透明 `cursor`；`nextCursor=null` 表示结束。正文分片、外部搜索结果等有界数据可继续使用 offset。
+## Conventions
 
-## 账号与系统
+- Except bootstrap, login, register, and public resource detail, a cookie session is required. Some handwritten OpenAPI GET operations do not mark security yet. The permissions below and the server checks win.
+- The cookie name is `doca_session`. Same-origin browser requests send it. Do not put it in the URL or local storage.
+- Every request Host must match `DOCA_ORIGIN`. Mutations also require an exact Origin match.
+- JSON uses `application/json`. Uploads use `application/octet-stream`. Unknown fields are rejected. Names are 1–160 characters and not blank. A new password is 12–128 characters.
+- Success is usually HTTP 200. Upload success is 201. A CDN read is 302. Failure is `{message, requestId}`.
+- 400 is a bad parameter. 401 is signed out. 403 is missing permission or a bad origin. 404 is missing, unreadable, or deleted. 409 is a version or status conflict. 421 is a Host mismatch. 429 is rate limited. 500 is unexpected.
+- Resources use UUIDs. Growing lists use an opaque `cursor`. `nextCursor=null` is the end. Bounded data such as body slices and external search results may still use offset.
 
-| 方法 / 路径                 | 权限     | 请求 → 响应                                                         |
-| --------------------------- | -------- | ------------------------------------------------------------------- |
-| GET /bootstrap              | 公开     | siteName,registrationEnabled,initialized,user,capabilities          |
-| POST /auth/login            | 公开     | {login,password} → {user}，设置 Cookie                              |
-| POST /auth/register         | 开放注册 | {login,password,displayName} → User，不自动登录                     |
-| POST /auth/logout           | 登录     | 无请求体 → {ok:true}，撤销会话并清Cookie                            |
-| POST /auth/password         | 登录     | {currentPassword,newPassword} → {ok:true}，撤销全部会话             |
-| GET /users/lookup?q=        | 登录     | q至少2字符，名称模糊/完整账号 → {items:[{id,display_name}]}，最多20 |
-| GET /admin/users?q=&cursor= | 管理员   | 名称过滤、100条游标分页 → {items,nextCursor}                        |
-| POST /admin/users           | 管理员   | {login,password,displayName} → User，只创建普通用户                 |
-| PATCH /admin/users/:id      | 管理员   | {status:"active"或"disabled"} → {ok:true}，不能操作自己/其他管理员  |
-| GET /admin/settings         | 管理员   | {id:"system",site_name,registration:0或1,revision}                  |
-| PUT /admin/settings         | 管理员   | {siteName,registrationEnabled,revision} → {ok:true}                 |
+## Accounts
 
-User={id,display_name,admin:boolean}。管理列表另含 login,status,created_at，admin为0/1，不返回密码。用户创建/启停也可能改变设置 revision，409 后重新获取，不自动重放。
+| Method and path | Who | Request and response |
+| --- | --- | --- |
+| GET /bootstrap | Public | siteName, registrationEnabled, initialized, user, capabilities |
+| POST /auth/login | Public | `{login,password}` to `{user}`, sets the cookie |
+| POST /auth/register | Open registration | `{login,password,displayName}` to User. Does not sign in |
+| POST /auth/logout | Signed in | No body. `{ok:true}`, revokes the session and clears the cookie |
+| POST /auth/password | Signed in | `{currentPassword,newPassword}` to `{ok:true}`, revokes every session |
+| GET /users/lookup?q= | Signed in | q at least 2 characters. Fuzzy name or exact account. At most 20 `{id,display_name}` |
+| GET /admin/users?q=&cursor= | Administrator | Name filter, 100-row cursor page |
+| POST /admin/users | Administrator | `{login,password,displayName}` creates an ordinary user |
+| PATCH /admin/users/:id | Administrator | `{status:"active" or "disabled"}`. Cannot change yourself or another administrator |
+| GET /admin/settings | Administrator | `{id:"system",site_name,registration:0 or 1,revision}` |
+| PUT /admin/settings | Administrator | `{siteName,registrationEnabled,revision}` |
 
-## 资源读取
+User is `{id, display_name, admin}`. The admin list also has login, status, and created_at. admin is 0 or 1. Passwords are not returned. Creating or enabling a user can also change the settings revision. After 409, fetch again. Do not replay automatically.
 
-GET /resources（登录）支持 scope=mine/libraries/shared/favorites/all/trash，省略相当于all；q为标题子串，format=rich_text/spreadsheet/presentation；libraryId 限定库内文档；cursor 为服务端返回的不透明游标，每页100。
+Sign-in providers, identities, and registration approval are in [authentication](authentication.md#http).
 
-资源列表用于管理与目录读取；q非空时只匹配文档，不搜索知识库名称。产品中的内容搜索统一使用下述文档搜索接口。
+## Reading resources
 
-### 文档搜索
+`GET /resources` accepts `scope=mine|libraries|shared|favorites|all|trash`. Omitting it is all. `q` is a title substring. `format` is rich_text, spreadsheet, or presentation. `libraryId` limits documents inside a library. `cursor` is opaque. Pages are 100.
 
-GET `/search/documents`（登录），结果固定为文档，知识库永远不是结果项。
+The resource list is for management and the tree. A non-empty `q` matches documents only, not library names. Content search uses the document search API below.
 
-- `q`：关键词或文档描述，最多500字符。不匹配知识库标题。`mode=keyword/ai`，默认keyword；AI模式使用最近成功应用的向量配置，由Meilisearch生成查询向量并混合检索（semanticRatio=0.8）。AI不可用返回503及明确提示，不静默切换关键词。AI查询按管理员的最低相关度过滤（默认0.70），并以当前正文具体词覆盖度对接近的语义分数作有限调整；门槛不会被词覆盖加分绕过。
-- `scope=all/owned/shared/favorites/recent`：可访问文档、本人所有、非本人所有且可访问、本人收藏、本人最近访问；省略为all。
-- `location=personal/library`：不属于知识库／属于知识库，省略为全部位置。
-- `libraryIds`：可重复的UUID查询参数，限定1–50个可阅读知识库。例：`libraryIds=<id1>&libraryIds=<id2>`。多个知识库取并集，与scope、location、format、q取交集。不能与location=personal并用。
-- `format=rich_text/markdown/spreadsheet/presentation/canvas`；`offset`分页，每页100。
-- `ownerIds`：可重复UUID，最多10人；仅匹配允许当前用户查看所有者信息的文档。
-- `visitedWithinDays`：1–3650天内当前用户浏览过的文档；`likedOnly=true`、`favoritesOnly=true`分别限定当前用户点赞、收藏，所有条件取交集。数据库候选过滤及Meilisearch返回后的复核使用同一组条件。
-- 返回 `{items,total,nextCursor?,nextOffset?,engine,mode,notice?}`。数据库结果使用游标，外部搜索引擎的有界排名结果使用 offset。每项均kind=document，`summary`为当前可阅读正文的命中段落摘要，`summaryMatches`和`titleMatches`为高亮范围（start/length，JavaScript UTF-16索引），额外`inLibrary`表示是否在知识库。独立分享的文档可被检索，但无权阅读所属库时，library_id/libraryName保持null，不能通过指定私有库ID探测其成员关系。
+`GET /search/documents` returns documents only. A library is never a result item.
 
-知识库多选项来自可访问知识库的管理列表，不是搜索结果。管理列表仍支持正常列出知识库；知识库页面的搜索按钮打开文档搜索并预选“知识库内”。进入某个库后侧栏搜索默认限定当前库，可清空筛选扩大范围。无关键词且无任何筛选时，弹窗展示最近访问文档；筛选后即使关键词为空也会应用用户选择的条件。
+- `q` is a keyword or description, at most 500 characters. It does not match library titles. `mode=keyword|ai`, default keyword. AI uses the vector configuration from the last successful apply. Meilisearch builds the query vector and mixes retrieval with semanticRatio 0.8. If AI is unavailable the response is 503 with an explicit message. It does not silently switch to keywords. AI queries use the administrator minimum relevance, default 0.70, and may adjust a close semantic score by how well concrete words in the current body are covered. Word coverage cannot bypass the threshold.
+- `scope=all|owned|shared|favorites|recent`.
+- `location=personal|library`.
+- `libraryIds` repeats, 1–50 readable libraries, as a union, intersected with scope, location, format, and q. It cannot be combined with `location=personal`.
+- `format=rich_text|markdown|spreadsheet|presentation|canvas`. `offset` pages of 100.
+- `ownerIds` repeats, at most 10, and only matches documents whose owner the current user may see.
+- `visitedWithinDays` is 1–3650. `likedOnly=true` and `favoritesOnly=true` intersect with the other filters. The database candidate filter and the check after Meilisearch use the same conditions.
+- The response is `{items,total,nextCursor?,nextOffset?,engine,mode,notice?}`. Database results use a cursor. A bounded external ranking uses offset. Every item is `kind=document`. `summary` is a hit excerpt from body text the caller can read. `summaryMatches` and `titleMatches` are `{start,length}` in JavaScript UTF-16 indexes. `inLibrary` says whether it is in a library. A document shared on its own can be found. If the caller cannot read the library, `library_id` and `libraryName` stay null. A private library id cannot be probed.
 
-响应 `{items:Resource[],total,nextCursor}`。先鉴权再过滤分页。首屏按需要返回 total，后续页可为 null。知道 libraryId 不等于获得访问权。
+Library choices in the UI come from the accessible library list, not from search results. After entering a library, sidebar search defaults to that library and can be cleared. With no keyword and no filter, the dialog shows recent documents. After a filter, an empty keyword still applies the chosen conditions.
 
-GET /resources/:id 返回 `{resource,ownerName,lastEditorName,lastEditedAt,comments,commentsNextCursor,grants,likes,liked,favorite}`。lastEditorName/lastEditedAt 为真实最近编辑人及时间，无法从历史记录确认时为 null，不以所有者代替。public资源允许匿名；目录列表仍需登录。comments 按创建时间升序、每页最多200条；grants仅管理者和所有者可见。
+`GET /resources/:id` returns `{resource,ownerName,lastEditorName,lastEditedAt,comments,commentsNextCursor,grants,likes,liked,favorite}`. Last editor fields are null when history cannot confirm them. The owner is not substituted. Public resources allow anonymous access. Directory lists still require sign-in. Comments are oldest first, at most 200 per page. Grants are visible to managers and the owner.
 
-Resource 为 resources 表公开投影，额外 role=reader/commenter/editor/manager/owner。无权访问的 parent_id/library_id 返回null。请求使用camelCase，当前资源响应使用snake_case。
+A resource adds `role=reader|commenter|editor|manager|owner`. `parent_id` and `library_id` are null when the ancestor is not readable. Requests use camelCase. Current resource responses use snake_case.
 
-## 创建与生命周期
+Also `scope=recent|owned` and `kind=document|library`. `sort=created_at|updated_at|visited_at` and `order=asc|desc` are applied before paging. Lists add ownerName, libraryName, and visited_at. A library name is omitted when the library is not visible. Home tabs use `kind=document`. The library admin page still uses `scope=libraries`. `scope=libraries` returns libraries you own or where you were granted edit or manage on the whole library. A grant on one document does not return the parent library. That document is still available from `scope=shared&kind=document`. Commenting on a library returns 400.
 
-| 方法 / 路径                 | 最低权限                  | 请求 → 响应                                             |
-| --------------------------- | ------------------------- | ------------------------------------------------------- |
-| POST /resources             | 登录；目标editor          | {title,kind,format,parentId?,libraryId?} → 新资源数据行 |
-| PATCH /resources/:id        | editor                    | {title,version} → {ok:true}                             |
-| POST /resources/:id/move    | 全子树manager、目标editor | {version,parentId,libraryId} → {ok:true}                |
-| POST /resources/:id/copy    | 全子树reader；`includeChildren=false` 时当前文档manager | `{parentId, libraryId, includeChildren?}` → `{id:新根ID}` |
-| POST /resources/:id/trash   | 全未删子树manager         | {version} → {ok:true}                                   |
-| POST /resources/:id/restore | 恢复批次manager           | {version} → {ok:true}                                   |
+`POST /resources/:id/visit` records a visit after rechecking read permission. `{ok:true}` does not change the resource version or `updated_at`.
 
-kind=document/library；库不可嵌套。个人文档必须同时 `libraryId=null,parentId=null`；`parentId` 只能指向同一知识库内的文档。创建响应不带role，创建后GET详情。
+## Create and lifecycle
 
-知识库内移动清空整棵移动子树的直接授权，改custom+invited，保留各所有者和目标知识库治理权，禁止成环。跨知识库或移出知识库时，整棵迁移还要求当前操作者拥有当前文档及全部子文档，并拥有整棵子树的管理权限；不满足时不能带子文档迁出。个人文档只能由所有者移动到其有manager权限的知识库根或节点；知识库文档移回个人时由文档所有者操作，并将移动子树扁平化为独立个人文档。拥有当前文档管理权限即可通过复制接口只复制当前文档到个人根、知识库根或有管理权限的文档节点，子文档不会被复制。恢复按delete_batch，不复活之前单独删除的子节点；需先恢复父级。复制生成独立ID，复制元数据、目录、正文及附件引用，不复制评论、权限或撤销历史。
+| Method and path | Minimum permission | Request |
+| --- | --- | --- |
+| POST /resources | Signed in, and editor on the target | `{title,kind,format,parentId?,libraryId?}` |
+| PATCH /resources/:id | editor | `{title,version}` |
+| POST /resources/:id/move | manager of the whole subtree, editor on the target | `{version,parentId,libraryId}` |
+| POST /resources/:id/copy | reader of the whole subtree. `includeChildren=false` requires manager of the current document | `{parentId,libraryId,includeChildren?}` returns `{id}` |
+| POST /resources/:id/trash | manager of every child that is not deleted | `{version}` |
+| POST /resources/:id/restore | manager of the restore batch | `{version}` |
 
-## 权限与所有权
+`kind` is document or library. Libraries do not nest. A personal document requires `libraryId=null` and `parentId=null`. `parentId` points at a document in the same library. The create response has no role. GET the detail afterward.
 
-PUT /resources/:id/permissions，manager以上：
+A move inside a library clears direct grants on the moved subtree, sets custom plus invited, keeps each owner and the destination library's governance, and forbids cycles. Moving across libraries or out of a library also requires ownership of the current document and every child, plus management of the whole subtree. A personal document can be moved only by its owner into a library root or node where that owner is manager. Moving a library document back to personal is done by the document owner and flattens the subtree into independent personal documents. Copying only the current document does not copy children. Restore follows `delete_batch` and does not revive a child deleted earlier on its own. Restore the parent first. Copy creates independent ids and copies metadata, the tree, the body, and attachment references. It does not copy comments, permissions, or revocation history.
 
-```json
-{
-  "version": 3,
-  "accessMode": "custom",
-  "visibility": "invited",
-  "grants": [
-    { "userId": "d9c0e06b-657d-4f24-947a-7787b7d2bf79", "role": "commenter" }
-  ]
-}
-```
+## Permissions and ownership
 
-示例UUID需替换真实用户ID。grants全量替换，最多100人、不可重复、用户须active。角色reader/commenter/editor/manager。owner不用grant。直接受邀manager不能在此移除自己的manager授权。
+`PUT /resources/:id/permissions` requires manager. The body is `{version, accessMode, visibility, grants:[{userId, role}]}`. Grants replace the set, at most 100 distinct active users. Roles are reader, commenter, editor, and manager. Owner is not a grant. A directly invited manager cannot remove their own manager grant here.
 
-PUT `/resources/:id/permission-sources/:userId`，manager以上，用于查看到某个用户后调整或删除单条授权来源：
+`PUT /resources/:id/permission-sources/:userId` adjusts or deletes one source: `{revision, sourceType, sourceId, action, role, includeDescendants}`. `sourceType` is direct, link, or parent_override. `sourceId` is required for link. `action` is update or delete. One user can have one direct grant, one parent override, and several link grants. The list shows the highest combined permission. Deleting a direct grant on a library document keeps a disabled parent override so permission does not fall back. Deleting that override restores inheritance. Deleting a link source affects only that share link.
 
-```json
-{
-  "revision": 3,
-  "sourceType": "direct|link|parent_override",
-  "sourceId": "分享链接ID（仅link需要）",
-  "action": "update|delete",
-  "role": "reader|commenter|editor|manager",
-  "includeDescendants": true
-}
-```
+`POST /share/redeem` takes `{token, accept?, consume?}`. The server checks expiry, revocation, the member cap, and the caller's existing permission. If the caller already has at least the link's permission, `consume=false` returns `alreadyHasAccess:true`. `consume=true` uses a seat and records the source. After a link is revoked it cannot be used, but a new link can grant access again.
 
-`grants` 是统一授权表；一个用户在同一文档下可以有一条主动授权、一条父文档覆盖和多条分享链接授权。权限列表展示合并后的最高权限，来源详情页展示各条记录。删除直接授权时，知识库文档会保留一条 disabled 的父文档覆盖记录，避免权限回退到父文档；删除父文档覆盖后才恢复继承。`link` 来源的删除只影响指定分享链接。
+`accessMode` is inherit or custom. `visibility` is invited, authenticated, or public. A root cannot inherit. custom plus invited with no invitations is private. The library owner still governs documents in the library.
 
-POST `/share/redeem`，登录用户兑换分享链接：请求体为 `{token,accept?:boolean,consume?:boolean}`。链接有效期、撤销状态、人数上限和当前用户已有权限都会在服务端校验。当前用户已经拥有不低于链接的权限时，`consume=false` 返回 `alreadyHasAccess:true`，前端可让用户选择是否登记为该链接成员；`consume=true` 才占用该链接人数并登记来源。分享链接被撤销后，原链接不可用，但用户可以通过新的分享链接再次获得授权。
+`POST /resources/:id/transfer` is owner only: `{version, userId, retainAccess}`. For a personal document the target must already be a collaborator. Success is `{ok:true}`. `retainAccess=true` leaves the previous owner as manager. `false` removes their direct grant and does not cancel access that comes from inheritance, public scope, or library ownership.
 
-accessMode=inherit/custom；visibility=invited/authenticated/public。根不能inherit；custom+invited且无邀请即私有，知识库所有者仍保留库内治理权。
+## Comments and reactions
 
-POST /resources/:id/transfer，仅owner，{version,userId,retainAccess:boolean}。个人文档的目标用户必须是当前文档协作者；知识库文档沿用原有所有权转移规则。成功{ok:true}。retainAccess=true给原所有者manager；false移除其直接授权，但不取消继承、公开范围或知识库所有权带来的访问。
+| Method and path | Minimum permission | Body |
+| --- | --- | --- |
+| PUT /resources/:id/reaction | reader | `{kind:"like" or "favorite", enabled}` |
+| POST /resources/:id/comments | commenter | `{body, parentId}` or rich body. Optional anchor on a selection root, JSON at most 12000 characters, fields blockId, quote, start, end |
+| PATCH /resources/:id/comments/:commentId | commenter, then author or manager | `{version, body?, deleted?, resolved?}` |
 
-## 评论、点赞收藏
+A new comment returns `{id}`. Other calls return `{ok:true}`. Plain text is 1–5000 characters with one reply level. Only the author changes the body. The author or a manager deletes or resolves. You cannot reply to a reply or to a deleted or resolved thread. PATCH uses the comment version, not the resource version. Send one action at a time. A reaction is a target state, not a toggle. The list of people who favorited a document is not public.
 
-| 方法 / 路径                              | 最低权限                   | 请求                                      |
-| ---------------------------------------- | -------------------------- | ----------------------------------------- |
-| PUT /resources/:id/reaction              | reader                     | {kind:"like"或"favorite",enabled:boolean} |
-| POST /resources/:id/comments             | commenter                  | {body,parentId:null或主题ID}              |
-| PATCH /resources/:id/comments/:commentId | commenter并检查作者/管理权 | {version,body?,deleted?,resolved?}        |
+Rich comments, public ids, directory policy, and notification fields are in [comments and community](comments-and-community.md). The older plain-text comment body remains compatible.
 
-新增评论返回{id}，其他{ok:true}。评论纯文本1–5000字，单层回复。仅作者改body，作者或manager删除/处理；不能回复回复或已删/已处理主题。PATCH带评论version，不是资源version，建议每次只传一种动作。
+## Notifications
 
-reaction是目标状态而非toggle，重复开启不会重复计数；收藏人列表不公开。
+`GET /notifications?offset=` returns the latest 50: `{items, unread, nextOffset}`. `POST /notifications/read` takes `{ids}` of 1–100 UUIDs and changes only the current user's notifications. A durable notification pushes `notifications.changed` on the WebSocket, then HTTP reads the list the user may see. Read state is persisted. Reconnect refetches. The socket event is not the only source.
 
-## 通知
+## Workspace
 
-GET /notifications?offset=：当前用户最新50条，{items,unread,nextOffset}。item={id,user_id,resource_id,type,read_at,created_at}。
+- `GET /me` returns `{user, preferences}`. Preferences include avatar, theme, density, default_sort, sort_order, and version, default 0.
+- `PUT /me/profile` takes `{version, displayName, avatar, avatarAssetId?}`. avatar is initials or a preset id. avatarAssetId is an avatar asset the user uploaded, null clears it, and omitting it keeps it. External image URLs are rejected.
+- `PUT /me/preferences` takes `{version, theme, density, defaultSort, sortOrder}`. theme is light or soft. density is comfortable or compact. A stale version is 409.
+- `POST /me/heartbeat` every 60 seconds while the page is visible.
+- `GET /admin/stats` is administrators only: documents, libraries, users, online, and onlineWindowSeconds 0. Counts exclude trash. online deduplicates user ids on real WebSocket connections. An HTTP heartbeat is not online.
 
-POST /notifications/read：{ids:UUID[]}，1–100条，仅修改当前用户的通知，返回{ok:true}。
+`GET /users/:id/profile` returns id, display_name, avatar, and avatar_asset_id. It does not return a password, session, or email.
 
-持久化通知通过 WebSocket notifications.changed 推送失效信号，再由 HTTP 读取有权限的列表。已读状态仍持久化；重连后补取，不把连接内事件作为唯一通知来源。
+## Search administration
 
-## 工作台新增接口
+`GET /admin/search` returns configuration and index status, not the API key. It includes image recognition flags, reconcile interval, and reconciliation progress. `PUT /admin/search` takes `{enabled, endpoint, indexName, imageRecognitionEnabled?, reconcileIntervalHours?}`. Image recognition defaults off and does not run a recognition pipeline yet. The interval defaults to 6 hours, range 1–168. The endpoint must be in `MEILI_ALLOWED_ORIGINS`. The index name is letters, digits, underscore, and hyphen. Enabling or changing the connection probes health and builds the index in the background. Changing the connection while indexing returns 409.
 
-- GET /me：登录后返回 {user,preferences}。preferences含avatar、theme、density、default_sort、sort_order、version，默认version=0。
-- PUT /me/profile：{version,displayName,avatar,avatarAssetId?}，只修改本人；avatar 为 initials 或系统预设头像标识（fox/panda/cat/dog/rabbit/lion/tiger/bear/koala/monkey/penguin/owl/dragon/whale/butterfly/leaf/cactus/sun/moon/rocket）。avatarAssetId 须为本人上传的 avatar 资产，null 清除，省略保留。不接受外部图片 URL。GET /me 的 preferences 额外返回 avatar_asset_id。
-- PUT /me/preferences：{version,theme,density,defaultSort,sortOrder}。theme=light/soft，density=comfortable/compact，defaultSort=created_at/updated_at/visited_at，sortOrder=asc/desc。修改成功{ok:true}，过期版本409。
-- POST /me/heartbeat：登录且页面可见时每60秒调用，成功{ok:true}。
-- GET /admin/stats：仅管理员，返回documents、libraries、users、online、onlineWindowSeconds=0。内容数不含回收站；online按真实WebSocket连接的用户ID去重，不再把HTTP心跳计为在线。
+`POST /admin/search/reindex` and `POST /admin/search/reconcile` return `{accepted:true}`. Reconcile returns 409 when search is off. Scan state is stored in the business database and continues after restart.
 
-## 协同、选区评论、头像与搜索配置
+Embedding routes let an administrator choose an enabled vector model, apply or delete a named embedder, and set `minScore` from 0 to 1. Secrets, custom REST requests, and headers are not returned. Apply and delete are asynchronous Meilisearch tasks. `needsApply` is shown when the model address, key, or dimensions change. Nothing is recomputed automatically. Details of generation and task status match the Chinese API page and the OpenAPI document.
 
-- WebSocket `/api/v1/ws`：消息契约、认证与持久化顺序见 [协同说明](collaboration.md)。仅文档编辑内容经WS，管理操作仍为HTTP。
-- POST /resources/:id/comments：可选anchor(JSON字符串，最多12000字符)，仅选区根评论可带；字段blockId/quote/start/end。服务端解析已落库Yjs并验证。其余评论管理沿用现有PATCH契约。
-- GET /users/:id/profile：登录后取得协作者id/display_name/avatar/avatar_asset_id，不返回密码、会话、邮箱等字段。
-- GET /admin/search：管理员配置及索引运行状态，不返回API密钥。增加 image_recognition_enabled（布尔值）、image_policy_version、imageRecognitionAvailable（当前 false）、reconcile_interval_hours，以及 reconciliation（phase/scanned/differences/pending/startedAt/checkedAt/completedAt/nextAt/lastError）；扫描完成与修复完成分别记录。
-- PUT /admin/search：{enabled:boolean,endpoint:string,indexName:string,imageRecognitionEnabled?:boolean,reconcileIntervalHours?:integer}。图片识别默认关闭；当前仅持久保存策略，识别流程尚未接入。对账间隔默认6小时，范围1～168小时；省略新字段保留既有值。地址必须在MEILI_ALLOWED_ORIGINS中，索引名称仅字母数字下划线短横线。启用或更换连接时探测健康并后台建索引；索引中修改连接/启用状态返回409。图片策略和扫描周期可在索引中或搜索服务异常时保存，不探测健康、不重建全文索引。目标/启用状态变化使旧扫描代次失效，设置修改写入审计。
-- POST /admin/search/reindex：管理员触发后台重建，{accepted:true}，状态通过GET查询。
-- POST /admin/search/reconcile：管理员安排后台对账，{accepted:true}；已有轮次继续，搜索关闭时返回409。扫描计划、清单、游标与修复记录保存在业务数据库，重启后继续。
-- GET /admin/search/embeddings：管理员读取当前索引配置，返回 enabled、generation、endpoint、indexName、embedders、task、aiRevision 和 models。task.action 为 apply 或 delete。models 为 AI 模型管理中的向量模型，仅含 id、名称、厂商、维度、不可用原因；每个 embedder 含关联 modelId、needsApply 和 remotePresent。平台持久化模型选择、内容模板和长度限制，即使Meilisearch任务排队、失败或暂时离线，刷新仍返回保存值。不回传密钥、自定义 REST 请求或请求头。旧的独立配置仍可读取，需要选择 AI 模型并应用后建立关联。管理员可删除远程残留配置。
-- PUT /admin/search/embeddings：管理员提交 `{generation,name,modelId,aiRevision,documentTemplate,documentTemplateMaxBytes}`，仅允许选择已启用、厂商可用且已配置凭据的向量模型。服务端从 AI 模型管理解析模型、厂商基础地址与密钥，并补全 `/embeddings` 路径。拒绝独立传入 source、model、url、apiKey、dimensions。兼容接口使用实际输出维度；OpenAI 可选缩减维度。仅修改指定名称，保留其他 embedder。202 返回 `{taskUid,status:"enqueued",name,action:"apply",notice}`，不等于配置已生效。应用后变更模型地址、密钥、维度等会显示 needsApply，需管理员再次应用；不会自动触发重算。模型被停用或删除时拒绝新的应用，已写入 Meilisearch 的配置需管理员显式删除。generation/aiRevision 防止旧表单提交至已变化的配置。
-- DELETE /admin/search/embeddings：管理员提交 `{generation,name}`，向 Meilisearch PATCH `{[name]:null}` 删除该命名 embedder 及其已生成向量，同时删除平台绑定。自定义/不受支持的远程配置也可删除。202 返回 `{taskUid,status:"enqueued",name,action:"delete",notice}`；仅平台有绑定、远程已不存在时 200 并立即清除记录。不存在返回 404。任务活动期间拒绝并发删除或应用。
-- PUT /admin/search/relevance：管理员保存 `{minScore:0..1}`，立即用于后续AI检索，持久化并记录审计，不触发向量重新计算。GET /admin/search/embeddings 返回 minScore。
-- GET /admin/search/embeddings/status：管理员查询上次配置任务，返回 `{taskUid,status,name,action,notice}`。action 为 apply 或 delete。任务编号和目标持久化，重启后继续查原任务；网络错误保留处理中状态，失败信息不透传供应商原始响应。请求结果不确定时标记 unknown，不自动重复提交。配置任务活动期间拒绝并发配置及搜索连接/启用状态变更；变更连接后的旧表单由 generation 拒绝。删除任务成功后移除对应绑定。
-- GET /search/documents：关键词模式可降级到数据库，并通过notice说明；AI模式需可用向量模型。保持Meilisearch相关性顺序，摘要来自权限复核后的当前正文。当前通过数据库获取可搜索文档ID再传入Meilisearch过滤；超过1000个候选文档时，关键词模式降级、AI模式要求缩小知识库范围。
-- Agent和MCP的knowledge_search共用平台搜索，支持query、mode=auto/keyword/ai、libraryId和offset。auto优先AI，未配置时使用关键词并返回notice；本次授权范围在检索与分页前生效，返回snippet、url和seq。读取完整内容分别使用document_read和document_get。
-- POST /resources/:id/visit：记录当前用户的访问，重新验证阅读权限，成功{ok:true}；不修改资源version/updated_at。
+Keyword search may fall back to the database and say so in `notice`. AI mode needs an available vector model. Meilisearch order is kept. Snippets come from the current body after the permission check. Candidate ids are loaded from the database and passed as a Meilisearch filter. Above 1,000 candidates, keyword mode degrades and AI mode asks for a smaller library scope.
 
-GET /resources新增scope=recent/owned：recent为本人的实际访问记录；owned为本人所有文档（含知识库内）。新增sort=created_at/updated_at/visited_at及order=asc/desc，排序在分页前完成。资源列表额外返回ownerName、libraryName、visited_at；知识库不可见时不返回其名称。
+Agent and MCP `knowledge_search` uses the same search, with query, mode auto, keyword, or ai, libraryId, and offset. auto prefers AI and uses keywords with a notice when vectors are not configured. Authorization applies before retrieval and paging. Full content uses document read, not the snippet.
 
-新增 kind=document/library，可与scope组合，在计数/分页前过滤。主页各Tab均使用kind=document，知识库管理页仍使用scope=libraries。
+## Files
 
-## 文件上传与存储
+| Method and path | Who | Contract |
+| --- | --- | --- |
+| POST /assets?purpose=&filename=&resourceId= | Signed in. Attachment requires editor. Cover requires manager | purpose is avatar, cover, or attachment. Avatar omits resourceId. Others require it. Binary body. 201 returns `{id,url,filename,mime,size}` |
+| GET /assets/:id/content | Asset permission | Streams the file, or 302 to a 60-second signed URL when a CDN is configured |
+| GET /resources/:id/assets | reader, anonymous if public | Latest 200 document attachments |
+| PUT /resources/:id/cover | library manager | `{version, assetId}` uuid or null. 409 if stale |
+| GET /admin/storage | system administrator | Configuration without secrets |
+| PUT /admin/storage | system administrator | `{expectedId, config}` returns `{id}`. 409 on conflict |
 
-| 方法 / 路径 | 权限 | 契约 |
-|---|---|---|
-| POST /assets?purpose=&filename=&resourceId= | 登录，附件editor / 封面manager | purpose=avatar/cover/attachment；avatar不带resourceId，其他必带。二进制body，201 → {id,url,filename,mime,size} |
-| GET /assets/:id/content | 资产权限 | 本地/无CDN返回文件流，有CDN鉴权后302到60秒签名URL |
-| GET /resources/:id/assets | reader（可匿名公开阅读） | {items:[{id,filename,mime,size,created_at}]}，最新200个文档附件 |
-| PUT /resources/:id/cover | 知识库manager | {version,assetId:uuid或null} → {ok:true}，递增资源version；409过期 |
-| GET /admin/storage | 系统管理员 | {id,config,credentialRefs,cdnSigningReady,maxUploadBytes}，不包含密钥 |
-| PUT /admin/storage | 系统管理员 | {expectedId,config} → {id}，新配置ID；409并发冲突 |
+`config` is `{provider, bucket, region, endpoint, forcePathStyle, credentialRef, cdnDomain}`. Every field is required. Unused strings may be empty. region and credentialRef are non-empty. The endpoint is HTTPS and on the server allowlist. S3 needs a credential alias. CDN needs a CloudFront signing key. See [file storage](storage.md).
 
-config={provider:local或s3,bucket,region,endpoint,forcePathStyle,credentialRef,cdnDomain}，所有字段必填，未用字符串可为空；region、credentialRef非空。端点必须HTTPS且位于服务器白名单。S3需要服务器凭据别名，CDN需要CloudFront签名密钥。详情见 [文件存储部署](storage.md)。
+Avatar and cover uploads accept PNG, JPEG, WebP, and GIF, at most 5 MB. Attachments are at most 20 MB. Images are re-encoded to WebP and metadata is removed. A successful upload does not bind an avatar or cover. That needs the matching PUT. An attachment belongs to the resource immediately. 413 is the body limit. 429 is the upload limit. An asset id is not a public file URL. Copying a resource creates new asset ids and permission links and reuses the immutable stored object.
 
-上传头像/封面仅接受PNG/JPEG/WebP/GIF，最大5MB；附件最大20MB。图片重新编码成WebP并移除元数据。上传成功不自动绑定头像或封面，需要相应PUT；附件直接归属资源。错误413代表请求体超限，429表示上传限流；任何asset ID都不是无权限的公开文件链接。
+## Operations
 
-复制资源会给附件/封面生成独立资产ID和权限关联，复用不可变存储对象。文件上传不实现跨端双向同步。
+`GET /health` is not under `/api/v1`. It checks the database and returns `{status:"ok", version:"0.1.0"}`, and it also checks Host.
 
-## 运维与冲突
+The edit flow is GET the latest object, submit with version, and refresh on success. 409 asks the user to refresh. It does not overwrite. `version` is metadata only. It is not the Yjs state or a backup version. Rich text collaboration and external OIDC sign-in exist. Hook, backup, and acting as an OIDC provider do not. `bootstrap.capabilities` reports actual capabilities.
 
-GET /health（非/api/v1）查询数据库后返回{status:"ok",version:"0.1.0"}，也校验Host。
+WebSocket `/api/v1/ws` is specified in [collaboration](collaboration.md). Only document editing bytes use the socket. Management stays on HTTP.
 
-修改流程：GET最新对象 → 带version提交 → 成功刷新；409提示用户刷新，不自动强制覆盖。
+User cards: `GET /api/v1/user-card-settings` reads the site card. `PUT /api/v1/admin/user-card-settings` accepts `{enabled, text, style, url, revision}`. style is primary, secondary, or link. A conflict is 409. `{userId}` is the public id and `{uid}` is the internal UUID. Both are URL-encoded. Only HTTP(S) or an in-app relative path is allowed.
 
-version仅用于元数据；不是正文Yjs状态或备份版本。富文本协同和外部 OIDC 登录已实现；Hook、备份、OIDC 提供方尚未实现。bootstrap.capabilities 按实际能力返回。
+Distribution, invitations, references, and forced download are in [editor integration](editor-integration.md#api).
 
-## SSO、多身份绑定与注册审批
+## AI sessions and approval
 
-完整接口及策略见 [身份认证说明](authentication.md#http-接口)。新增 `/admin/auth`、`/auth/providers`、`/me/identities` 系列接口；公开注册响应带 status，pending 用户需管理员批准后重新登录。管理员用户列表可按 status 过滤。
-# 评论与用户范围增量
+`POST /api/v1/ai/sessions/:id/messages` may pass `currentResourceId`. `references` are only what the user attached. `scope=document` allows the current document, documents previously mentioned in the session, and approved documents. `scope=all` is still limited by the user's ACL. A retry keeps the server's original task scope.
 
-富评论、用户标识、用户搜索策略以及通知接口见 [评论与社区能力](./comments-and-community.md)。旧的纯文本评论请求保持兼容。
-# 本轮增量
+`POST /api/v1/ai/jobs/:id/approval` accepts `{approvalId, approved}`. Only the job's user may decide. A repeated identical decision is idempotent. A cancelled job or a conflicting decision is 409. Another user is 404. Actions include create, move, session document access, and requesting permission from a document manager. Create and move are bound to the original parameter summary. A session approval does not change the user's own permissions.
 
-文档体验、历史回滚与表格协议见 [文档交互设计](document-experience.md) 和 [编辑器接入说明](editor-integration.md)。
-# 用户卡片（2026-09-11）
-
-`GET /api/v1/user-card-settings` 读取全站卡片展示配置。`PUT /api/v1/admin/user-card-settings` 仅管理员可调用，接受 `{ enabled, text, style, url, revision }`，style 为 `primary | secondary | link`，返回新 revision；并发冲突返回 409。URL 中 `{userId}` 表示用户公开唯一标识，`{uid}` 表示内部 UUID，替换值做 URL 编码。仅允许 HTTP(S) 或站内相对路径，禁止脚本与协议相对地址。
-
-`scope=libraries` 仅返回自己拥有、或被直接授予整个知识库编辑/管理权限的知识库。仅单篇文档授权不返回父知识库；单篇文档仍可在 `scope=shared&kind=document` 中查询。对知识库新增评论返回 400。
-# 文档接入与主动展示
-
-新增授权/邀请、引用关系、强制下载接口及权限语义见 [文档接入说明](editor-integration.md#接口)。
-
-## AI 会话范围与审批（2026-09-16）
-
-`POST /api/v1/ai/sessions/:id/messages` 可传 `currentResourceId`（当前文档），`references` 仅代表用户主动引用。`scope=document` 允许当前文档、该会话历史 @ 文档和已批准文档；`scope=all` 仍受用户实际 ACL 约束。重试沿用服务端原任务范围，不能通过重试参数扩权。
-
-`POST /api/v1/ai/jobs/:id/approval` 接受严格结构 `{approvalId, approved:boolean}`，只允许任务所属用户决定，不能传替换目标或参数。重复相同决定幂等；任务已取消/决定冲突返回 409，其他用户返回 404。动作包括创建、移动、会话文档访问、向文档管理员申请权限；创建/移动按原参数摘要绑定，会话批准不改变用户本身的权限。
-
-模型工具 `document_request_access(resourceId, role:reader|editor, reason)` 在当前用户已有对应权限时申请会话授权；否则经用户确认调用平台权限申请。返回 `pending_document_owner` 不等于获准，任务展示“等待文档管理员审批”，后续仍需实际 ACL 通过才能读取或编辑。未开放 AI 删除资源工具。
+`document_request_access(resourceId, role:reader|editor, reason)` requests session authorization when the user already has that permission. Otherwise, after the user confirms, it calls the platform access request. `pending_document_owner` is not approval. There is no AI tool that deletes a resource.

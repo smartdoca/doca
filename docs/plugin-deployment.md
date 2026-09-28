@@ -1,25 +1,27 @@
-# 插件安装与部署
+# Install and deploy plugins
 
-插件来自独立 npm 安装目录。设置 `DOCA_PLUGINS_DIR=/var/lib/doca/plugins`，在该目录创建 package.json，使用 npm/pnpm 把插件安装为直接 dependencies。目录缺少清单时，Doca 以无业务插件状态启动。
+[中文](plugin-deployment.zh-CN.md)
 
-可直接在启动工作目录的 `.env` 中配置 `DOCA_PLUGINS_DIR`，启动入口通过 dotenv 加载。未设置、空值或纯空白均回退到 `${DOCA_DATA_DIR:-./data}/plugins`；相对路径按启动工作目录解析。修改后重启生效。Docker 中该路径是容器内路径，需挂载对应持久卷，不能填写仅存在于宿主机的路径。
+Plugins come from their own npm installation directory. Set `DOCA_PLUGINS_DIR=/var/lib/doca/plugins`, create a `package.json` there, and install plugins as direct dependencies with npm or pnpm. If that directory has no manifest, Doca starts with no business plugins.
 
-程序目录、插件安装目录和运行数据目录分别管理。启动时不执行安装，不扫描间接依赖，不读取仓库中的插件源码或同级项目。插件须提供静态 manifest、构建后的服务端 JavaScript 和可选浏览器资源。格式见 [开发规范](plugin-development.md)。
+`DOCA_PLUGINS_DIR` may be set in `.env` in the working directory. An unset, empty, or blank value falls back to `${DOCA_DATA_DIR:-./data}/plugins`. A relative path is resolved from the working directory. Restart after a change. Inside Docker the path is inside the container: mount a volume, and do not point at a path that exists only on the host.
 
-服务端先校验 SDK 范围和依赖，再执行生命周期。Web 通过 bootstrap 清单加载版本匹配的插件产物，不要求重新构建宿主。注册错误和加载超时按插件处理。
+Keep the program directory, the plugin install directory, and runtime data separate. Startup does not run install, does not scan transitive dependencies, and does not read plugin source from this repository. A plugin provides a static manifest, compiled server JavaScript, and optional browser assets. The package shape is in the [development guide](plugin-development.md).
 
-安装、升级和移除在停机后完成，重启生效；当前不承诺路由热卸载。核心升级不覆盖插件安装根或锁文件，插件是否兼容仍以 SDK 范围校验为准。业务插件自己管理业务数据和验证，不向宿主添加业务表、同级源码路径或全局桥接。
+The server checks the SDK range and dependencies, then runs the lifecycle. The web app loads the matching build from the bootstrap manifest and does not require a host rebuild. A registration error or load timeout is isolated to that plugin.
 
-开发库与新建库使用相同核心定义。项目未上线，废弃的会员、审核、邮件与旧存储字段已移除，不通过运行时兼容分支维护。正式插件生命周期的 dispose 只释放运行资源，不隐式删除数据。
+Install, upgrade, and remove while Doca is stopped, then restart. Hot removal of routes is not promised. A core upgrade does not overwrite the plugin root or its lockfile. Compatibility is still the SDK range check. A business plugin keeps its own data. It does not add business tables to the host, import host source, or use a global bridge.
 
-验证应覆盖独立包安装、无插件启动、依赖冲突、跨用户权限、实例隔离和关闭回收。邮件功能已从宿主移除，未来邮箱插件在自己的项目中独立验证。
+`dispose` releases runtime resources and does not delete stored data.
 
-插件在 initialize 中连接自己的全新当前基线数据库并注册清理，在 ready 中启动私有任务，dispose 排空并关闭。结构不匹配必须拒绝启动，不执行升级脚本。业务数据库和凭证不存入 Doca，安装包和私有数据目录必须分开。最新接入契约见 [邮箱插件交接](plugin-mail-handoff.md)。
+Test a standalone package install, startup with no plugins, dependency conflicts, cross-user denial, instance isolation, and cleanup on shutdown. Mail has been removed from the host. A future mail plugin is verified in its own project.
 
-## 交付与升级要求
+In `initialize`, connect the plugin's own empty current-baseline database and register cleanup. Start private jobs in `ready`. Drain and close them in `dispose`. A mismatched schema refuses to start. Do not run upgrade scripts. Do not store the business database or credentials inside Doca, and keep the package directory separate from private data. The latest integration notes are in the [mail handoff](plugin-mail-handoff.md).
 
-SDK 范围检查不替代插件数据库结构检查。插件只接受与当前包完全一致的空库基线；结构不一致时拒绝启动。项目正式上线前不保留包版本降级或数据库升级路径。
+## Delivery and upgrades
 
-禁用在停机修改配置并重启后生效：停止任务、注销来源并拒绝业务访问。卸载默认保留数据；显式清除须作为独立操作说明范围并确认，复核附件其他有效引用。管理页面尚未完整交付，不能据此承诺热卸载或自动清库。
+An SDK range check does not replace a schema check. A plugin accepts only an empty database that matches its current package. A mismatch refuses startup. There is no downgrade or database upgrade path.
 
-正式验收使用仓库外的实际宿主交付物、SDK 与插件 tgz，并预备完整依赖闭包；安装和启动不访问包仓库、不依赖源码链接或未声明缓存。保留版本、校验和、锁文件与验证结果，覆盖 Web 加载、业务流程、权限撤销、故障重试和重启恢复。已有 SDK 导入验证不等同完整业务验收。需求分级见 [邮箱交接](plugin-mail-handoff.md#调整后的接入需求与验收顺序)。
+Disabling takes effect after a stop, a config change, and a restart: jobs stop, sources unregister, and business access is denied. Uninstall keeps data by default. An explicit wipe is a separate operation that states its scope and asks for confirmation, and it rechecks other live references to attachments. The admin UI for this is not fully delivered, so do not promise hot unload or an automatic wipe.
+
+Acceptance uses a real host build, the SDK, and plugin tarballs outside this repository, with a complete dependency closure. Install and startup do not fetch from a package registry, follow source links, or use an undeclared cache. Keep versions, checksums, the lockfile, and results. Cover web loading, the business flow, revocation, retry, and restart. Importing the SDK is not end-to-end acceptance. The priority order is in the [mail handoff](plugin-mail-handoff.md#adjusted-acceptance-order).

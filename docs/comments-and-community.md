@@ -1,93 +1,74 @@
-# 评论、用户可见范围与通知
+# Comments, user visibility, and notifications
 
-## 数据
+[中文](comments-and-community.zh-CN.md)
 
-当前基线同时支持 SQLite / PostgreSQL：
+## Data
 
-- `users.public_id`：独立于内部 UUID 的唯一用户标识，创建时归一化为小写，3–160 位，允许英文字母、数字和 `._@+-`。数据库唯一索引约束。注册和管理员创建可指定 `publicId`，省略则使用 login。创建后不随昵称变化。
-- SSO 使用已验证身份中的 preferred_username（OIDC）、login（GitHub），否则使用 subject。若无效或本站已占用，则生成身份源命名空间下的标识。绝不因同名、同邮箱、同 public_id 合并账号；认证关联仍由 provider + subject 唯一确定。绑定新登录方式不修改原用户标识。
-- `users.directory_mode`：可空，空表示跟随站点 `settings.directory_mode`。
-- `comments.body_json`：当前富评论 JSON；`body` 是用于检索、摘要和通知的派生纯文本。未删除评论必须具有合法的 `body_json`。
-- `notifications` 增加 actor_id、comment_id、dedupe_key。事件与业务修改在同一事务落库；dedupe_key 唯一索引抵御重复事件。
+The current baseline supports SQLite and PostgreSQL:
 
-富评论结构：
+- `users.public_id` is a unique user id separate from the internal UUID. It is normalized to lowercase on create, 3–160 characters, letters, digits, and `._@+-`. A unique index enforces it. Registration and administrator creation may set `publicId`. If omitted, the login is used. It does not change when the display name changes.
+- SSO uses `preferred_username` from a verified OIDC identity, or `login` from GitHub, otherwise the subject. If that value is invalid or already taken, an identifier is generated in the provider namespace. Accounts are never merged because of the same name, email, or public id. The authentication link remains provider plus subject. Linking a new sign-in method does not change the original user id.
+- `users.directory_mode` may be null, which follows the site `settings.directory_mode`.
+- `comments.body_json` is the rich comment JSON. `body` is derived plain text for search, summaries, and notifications. A comment that is not deleted must have valid `body_json`.
+- `notifications` add `actor_id`, `comment_id`, and `dedupe_key`. The event and the business change commit together. The unique `dedupe_key` index stops duplicate events.
 
-```json
-{
-  "version": 1,
-  "blocks": [
-    {
-      "type": "paragraph",
-      "children": [
-        { "type": "text", "text": "请确认 " },
-        {
-          "type": "mention",
-          "userId": "内部UUID",
-          "label": "昵称",
-          "publicId": "alice"
-        }
-      ]
-    },
-    { "type": "image", "assetId": "附件UUID", "alt": "图片名称" }
-  ]
-}
-```
+A rich comment is version 1, with paragraph blocks of text and mention children, and image blocks. The server fills mention names and ids from the user table and does not trust the client label. One comment is at most 5,000 characters, 9 images, and 50 blocks. An image must belong to the current resource and be a valid `comment_image` or image attachment. Upload still uses private storage, image cleaning, and authorized download. A commenter may upload a comment image and cannot use that to upload or change a body attachment.
 
-后端从用户表填充提及名称和标识，不信任客户端 label。单条评论最多 5,000 字、9 张图片、50 个块；图片必须属于当前资源，且是有效的 comment_image 或 image attachment。上传后仍走原有私有存储、图片清洗和鉴权下载流程。评论者可以上传评论图片，但不能因此上传/修改正文附件。
+## Who can be found
 
-## 用户可见范围
+Administrators set user visibility, with a site default and a per-user override:
 
-管理员 → 用户可见范围，支持站点默认和单用户覆盖：
+| Mode | New-user candidates |
+| --- | --- |
+| all | Active users of the site |
+| related | Users who currently share an explicit permission on a document or library, including inheritance, library ownership, and valid link members |
+| none | No candidates. A user UUID cannot be typed in to add a permission or a mention |
 
-| 模式    | 新用户候选                                                                       |
-| ------- | -------------------------------------------------------------------------------- |
-| all     | 本站正常用户                                                                     |
-| related | 双方当前共同拥有显式权限的文档或知识库，包括权限继承、知识库拥有者和有效链接成员 |
-| none    | 无候选，不允许绕过界面直接填写用户 UUID 添加新权限或新提及                       |
+Public and signed-in visibility do not create a relationship. Revoking permission removes the relationship. Existing permissions can still be changed or revoked. Existing comments and body mentions do not disappear because the policy tightened. The administrator user list is not limited by this search policy.
 
-公开可见、登录可见不构成关联。权限撤销后关联消失。已有权限仍可修改/撤销，已有评论和正文提及不会因策略收紧而消失。管理员的用户管理列表不受该搜索策略限制。
+Routes are under `/api/v1`:
 
-接口（均以 `/api/v1` 为前缀）：
+- `GET /users/lookup?q=` searches active users in the caller's scope and returns id, public_id, display_name, and avatar fields. Account and id prefix match. Display name is a fuzzy match. At most 20 items. Search wildcards are ordinary text.
+- `GET /admin/directory-policy` returns `{mode, revision}`.
+- `PUT /admin/directory-policy` takes `{mode, revision}`. A version conflict is 409.
+- `PUT /admin/users/:id/directory` takes `{mode: "all" | "related" | "none" | null}`. null follows the site again.
+- `GET /me`, `GET /users/:id/profile`, and the administrator user list include `public_id`.
 
-- `GET /users/lookup?q=`：按当前操作者范围查询正常用户，返回 id、public_id、display_name、头像信息。账号/标识前缀匹配，昵称模糊匹配；最多 20 项，搜索通配符按普通文字处理。
-- `GET /admin/directory-policy` → `{mode, revision}`。
-- `PUT /admin/directory-policy`：`{mode, revision}`，版本冲突返回 409。
-- `PUT /admin/users/:id/directory`：`{mode: "all" | "related" | "none" | null}`，null 恢复跟随站点。
-- `GET /me`、`GET /users/:id/profile`、管理员用户列表包含 public_id。
+## Comment interaction
 
-## 内容评论交互
+Edit mode appends a comment icon at the end of the editor's floating selection toolbar. Readonly mode shows the comment icon alone, without formatting tools. Submitting requires commenter or higher.
 
-- 编辑模式在原编辑器浮动选区工具栏末尾追加评论图标；只读模式独立显示评论图标，无格式修改工具。需要 commenter 或更高权限才能提交。
-- 原生浏览器选区映射为 Slate 范围，再使用编辑器提供的 Yjs 相对位置锚点。当前包的锚点是**单段落/块内**，跨块选择会提示重新选择，不把不支持的范围静默截断。
-- 未解决且原文仍存在的根线程各自呈现为独立卡片。默认黄色下划线，点击原文/卡片双向联动黄色背景和卡片边框。滚动、缩放和协同更新时重新测量位置。
-- 原文被删空、锚点失效、根评论删除或解决后，卡片和高亮隐藏；数据库保留评论，以便历史/审计和未来恢复功能使用。撤销文本删除而恢复有效锚点时可重新显示未解决评论。
-- 全文评论和内容评论共用富评论输入器：@ 搜索、图片上传、编辑、回复、删除、解决等图标操作。编辑版本检查保留，提交失败不清除输入。
+The browser selection maps to a Slate range, then to the editor's Yjs relative-position anchor. The current anchor is inside one paragraph or block. A selection that crosses blocks asks the user to select again. It is not silently truncated.
 
-接口：
+Each unresolved root thread whose original text still exists is its own card. The default mark is a yellow underline. Clicking the text or the card highlights both. Position is measured again on scroll, zoom, and collaboration updates.
 
-- `POST /resources/:id/comments`：`{richBody, parentId, anchor?}`。回复继承根评论所属线程。
-- `PATCH /resources/:id/comments/:commentId`：`{version, richBody?, deleted?, resolved?}`。
-- `POST /assets?purpose=comment_image&resourceId=...&filename=...`：二进制上传，最多 5MB；后端执行图片验证和访问校验。
+If the original text is deleted, the anchor is invalid, or the root comment is deleted or resolved, the card and highlight hide. The database keeps the comment for history and audit. Undoing the deletion can show an unresolved comment again when the anchor is valid.
 
-正文 @ 使用编辑器 mentions 扩展，候选同样来自范围受限的 lookup。用户提及节点保留用户 UUID，而非仅存显示名字。
+Full-document comments and selection comments share the rich composer: @ search, image upload, edit, reply, delete, and resolve. The edit version check remains. A failed submit does not clear the input.
 
-## 通知
+- `POST /resources/:id/comments` takes `{richBody, parentId, anchor?}`. A reply stays in the root comment's thread.
+- `PATCH /resources/:id/comments/:commentId` takes `{version, richBody?, deleted?, resolved?}`.
+- `POST /assets?purpose=comment_image&resourceId=...&filename=...` uploads bytes, at most 5 MB. The server validates the image and access.
 
-支持 comment.created、comment.mentioned、document.mentioned、resource.permissions_changed（新增邀请）、like.added、favorite.added 以及已有所有权转移事件。
+An @ in the document body uses the editor mentions extension. Candidates come from the same scoped lookup. A mention node stores the user UUID, not only the display name.
 
-- 不通知操作者自己；同条评论中被提及的拥有者/被回复人只收到提及通知，不再叠加普通评论通知。
-- 提及不授予访问权限。接收者必须是正常用户，并且在提交时具有当前文档读取权限，否则跳过通知。
-- 正文新增提及按稳定的 mention 节点标识判断。同一用户在另一新节点再次被 @ 会有新通知；旧更新重放、普通文字修改不重复通知。
-- 查看通知列表时再次校验当前文档权限；撤销权限、文档删除后，相关通知不再展示，也不计入未读数。
-- WebSocket 推送 `notifications.changed` 失效通知，前端重新获取自己的列表；不会广播通知正文。离线用户的事件已在数据库中，重新连接后补拉。
-- `GET /notifications?offset=0` → `{items, unread, nextOffset}`，每页 50 项；包含操作者和文档标题。
-- `POST /notifications/read`：`{ids:[]}`，最多 100 项，仅更新操作者自己的通知。
-- `POST /notifications/read-all`：`{}`，将操作者自己的通知全部标为已读。
+## Notifications
 
-当前通知是站内通知，不发送邮件/短信/第三方推送。当前部署仍按单实例 WebSocket 模式运行，未引入多实例消息总线。
+Events include `comment.created`, `comment.mentioned`, `document.mentioned`, `resource.permissions_changed` for a new invitation, `like.added`, `favorite.added`, and ownership transfer.
 
-## 验证
+- The actor is not notified. Someone mentioned in the same comment who is also the owner or the person being replied to receives only the mention, not an extra ordinary comment notification.
+- A mention does not grant access. The recipient must be an active user and must be able to read the document when the comment is submitted. Otherwise the notification is skipped.
+- A new body mention is detected by the stable mention node id. Mentioning the same user on another new node notifies again. Replaying an old update or editing ordinary text does not.
+- Listing notifications checks document permission again. After revocation or deletion, related notifications are hidden and do not count as unread.
+- WebSocket sends `notifications.changed` as an invalidation. The client refetches its own list. The body is not broadcast. Offline events are already in the database and are fetched after reconnect.
+- `GET /notifications?offset=0` returns `{items, unread, nextOffset}`, 50 items per page, including the actor and document title.
+- `POST /notifications/read` takes `{ids:[]}`, at most 100, and updates only the caller's notifications.
+- `POST /notifications/read-all` takes `{}` and marks all of the caller's notifications read.
 
-测试覆盖用户标识冲突、SSO 标识、可见范围/单用户覆盖、公开文档非关联、权限绕过、结构化评论、图片资源隔离与评论者上传、通知去重、无权限跳过、撤销访问后的通知隐藏、只更新自己已读状态、协同更新重放和重复 @。
+These are in-app notifications. They do not send email, SMS, or a third-party push. A single-instance WebSocket deployment does not add a multi-instance bus by itself. Several replicas use the setup in [horizontal scaling](horizontal-scaling.md).
 
-浏览器使用内存文档和模拟用户做隔离验收，不向真实文档写入测试评论。确认工具栏末尾按钮、只读按钮、富评论提及、双向黄色高亮、解决隐藏和原文删空隐藏。
+## Verification
+
+Tests cover public-id conflicts, SSO identifiers, visibility and per-user overrides, public documents that are not related, permission bypass, structured comments, image isolation and commenter upload, notification deduplication, skipping users without access, hiding notifications after revocation, updating only one's own read state, collaboration replay, and a repeated @.
+
+Browser checks use an in-memory document and simulated users. They do not write test comments into a real document. They confirm the toolbar button, the readonly button, rich mentions, yellow highlight in both directions, hiding on resolve, and hiding when the original text is deleted.
