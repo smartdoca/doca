@@ -316,7 +316,7 @@ export function App() {
     }
   }
   const libraryIdFromDetail =
-    detail?.resource.id === resourceId
+    resourceId && detail?.resource?.id === resourceId
       ? detail.resource.kind === "library"
         ? detail.resource.id
         : (detail.resource.library_id ?? null)
