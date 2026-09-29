@@ -31,7 +31,7 @@ import type { StorageRuntime } from "../adapters/storage.js";
 import { waitFileExtract } from "../services/ai/file-extract.js";
 import { sweepKnowledgeFeedbackSchedules } from "@core/modules/knowledge/feedback-schedule.js";
 import { normalizeWebExclude, normalizeWebSites, searchWeb, type WebSearchConstraints } from "../services/ai/web-search.js";
-import { askKnowledgeLibrary, confirmKnowledgeSubscription, dismissKnowledgeSubscription, draftLibraryPresetForActor, draftSourcePresetForActor, getKnowledgeBot, knowledgeSchedule, listKnowledgeSubscriptions, runKnowledgeLibrary, saveKnowledgeBot, saveLibraryGuide, saveLibraryPreset, saveSourcePreset, setKnowledgeSchedule, setLibraryCuration, subscribeKnowledgeSource, updateKnowledgeSourceGroup, subscriptionKind, sweepKnowledgeSchedules } from "@core/modules/knowledge/subscriptions.js";
+import { askKnowledgeLibrary, confirmKnowledgeSubscription, dismissKnowledgeSubscription, draftLibraryPresetForActor, draftSourcePresetForActor, getKnowledgeBot, knowledgeSchedule, listKnowledgeSubscriptions, runKnowledgeLibrary, saveKnowledgeBot, saveLibraryGuide, saveLibraryPreset, saveSourcePreset, setKnowledgeSchedule, setLibraryCuration, subscribeKnowledgeSource, updateKnowledgeSourceGroup, deleteKnowledgeSourceGroup, subscriptionKind, sweepKnowledgeSchedules } from "@core/modules/knowledge/subscriptions.js";
 
 export function registerKnowledge(
   api: FastifyInstance,
@@ -128,6 +128,7 @@ export function registerKnowledge(
   );
 
   api.put<{Params:{id:string;groupId:string};Body:{title?:string;guide?:string;sourceIds?:string[];urls?:string[]}}>("/api/v1/knowledge/libraries/:id/source-groups/:groupId",{schema:{params:Type.Object({id:Type.String({format:"uuid"}),groupId:Type.String({format:"uuid"})}),body:Type.Object({guide:Type.Optional(Type.String({maxLength:20000})),title:Type.Optional(Type.String({minLength:1,maxLength:200})),sourceIds:Type.Optional(Type.Array(Type.String({format:"uuid"}),{minItems:1,maxItems:500})),urls:Type.Optional(Type.Array(Type.String({maxLength:500}),{minItems:1,maxItems:500}))})}},async req=>updateKnowledgeSourceGroup(db,auth(req),req.params.id,req.params.groupId,req.body));
+  api.delete<{Params:{id:string;groupId:string}}>("/api/v1/knowledge/libraries/:id/source-groups/:groupId",{schema:{params:Type.Object({id:Type.String({format:"uuid"}),groupId:Type.String({format:"uuid"})})}},async req=>deleteKnowledgeSourceGroup(db,auth(req),req.params.id,req.params.groupId));
 
   api.post<{ Params: { id: string; subscriptionId: string } }>(
     "/api/v1/knowledge/libraries/:id/subscriptions/:subscriptionId/confirm",

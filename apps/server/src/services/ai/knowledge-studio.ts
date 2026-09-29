@@ -1115,7 +1115,7 @@ export function createKnowledgeStudio(
         .where("id", "=", conversation.id)
         .execute();
       if (conversation.kind === "answer")
-        await answerTurn(actor, conversation.id);
+        await answerTurn(actor, conversation.id, task.id);
       else if (
         !(await curateTurn(
           actor,
@@ -1180,12 +1180,23 @@ export function createKnowledgeStudio(
         })
         .where("id", "=", task.id)
         .execute();
-      await appendKnowledgeMessage(
-        db,
-        task.conversation_id,
-        "error",
-        (error as Error).message,
-      );
+      const recorded = await db
+        .selectFrom("knowledge_messages")
+        .select("detail")
+        .where("conversation_id", "=", task.conversation_id)
+        .where("role", "=", "assistant")
+        .execute();
+      const alreadyShown = recorded.some((row) => {
+        const detail = JSON.parse(row.detail);
+        return detail.taskId === task.id && detail.status === "failed" && detail.error;
+      });
+      if (!alreadyShown)
+        await appendKnowledgeMessage(
+          db,
+          task.conversation_id,
+          "error",
+          (error as Error).message,
+        );
       await db
         .updateTable("knowledge_conversations")
         .set({ state: "failed" })
@@ -1195,11 +1206,13 @@ export function createKnowledgeStudio(
       clearInterval(heartbeat);
     }
   }
-  async function modelFor(actor: Actor, libraryId?: string) {
+  async function modelFor(actor: Actor, libraryId?: string, modelId?: string) {
     const config = await aiConfig(db);
-    const selected = libraryId
-      ? (await knowledgeInstructions(db, actor, libraryId)).settings.modelId
-      : "";
+    const selected =
+      modelId ||
+      (libraryId
+        ? (await knowledgeInstructions(db, actor, libraryId)).settings.modelId
+        : "");
     const id = selected || config.defaultModel;
     if (!id) fail(503, "请先配置 AI 模型");
     return meteredModel(db, actor.id, id, null);
@@ -1732,11 +1745,11 @@ export function createKnowledgeStudio(
     }
     return false;
   }
-  async function answerTurn(actor: Actor, id: string) {
+  async function answerTurn(actor: Actor, id: string, taskId: string) {
     const conversation = await conversationAccess(db, actor, id),
       bot = await knowledgeBot(db, actor, conversation.scope_id),
       context = await history(actor, id),
-      model = await modelFor(actor);
+      model = await modelFor(actor, undefined, knowledgeBotConfig(bot).modelId);
     const last = context.rows.filter((x) => x.role === "user").at(-1);
     if (!last) return;
     const attached = knowledgeBotConfig(bot).attachmentsEnabled
@@ -1812,21 +1825,40 @@ export function createKnowledgeStudio(
       return { libraryId, revision: p.revision, status: p.status, dirty: p.dirty };
     }));
     const result = await searchAnswer(actor, bot.id, query);
-    const message = await appendKnowledgeMessage(
-      db,
-      id,
-      "assistant",
-      "",
-      null,
-      "assistant",
-      {
-        status: "streaming",
-        citations: result.items,
-        query,
-        engine: result.engine,
-        botRevision: bot.revision,
-      },
+    const streaming = {
+      status: "streaming",
+      taskId,
+      citations: result.items,
+      query,
+      engine: result.engine,
+      botRevision: bot.revision,
+    };
+    const previous = await db
+      .selectFrom("knowledge_messages")
+      .selectAll()
+      .where("conversation_id", "=", id)
+      .where("role", "=", "assistant")
+      .execute();
+    const reusable = previous.find(
+      (row) => JSON.parse(row.detail).taskId === taskId,
     );
+    const message = reusable
+      ? reusable
+      : await appendKnowledgeMessage(
+          db,
+          id,
+          "assistant",
+          "",
+          null,
+          "assistant",
+          streaming,
+        );
+    if (reusable)
+      await db
+        .updateTable("knowledge_messages")
+        .set({ content: "", detail: JSON.stringify(streaming) })
+        .where("id", "=", reusable.id)
+        .execute();
     let answer = "",
       lastSaved = 0;
     try {
@@ -1984,7 +2016,14 @@ export function createKnowledgeStudio(
     } catch (error) {
       await db
         .updateTable("knowledge_messages")
-        .set({ content: "", detail: JSON.stringify({ status: "failed" }) })
+        .set({
+          content: "",
+          detail: JSON.stringify({
+            status: "failed",
+            taskId,
+            error: (error as Error).message.slice(0, 300),
+          }),
+        })
         .where("id", "=", message.id)
         .execute();
       throw error;

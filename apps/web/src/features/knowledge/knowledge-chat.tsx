@@ -81,6 +81,7 @@ type Message = {
       mime?: string;
       size?: number;
     }>;
+    error?: string;
     citations?: {
       id: string;
       documentId: string;
@@ -525,7 +526,9 @@ export function KnowledgeChat({
         message.content ||
         (status === "withdrawn"
           ? t("studio.withdrawn")
-          : t(status === "failed" ? "studio.failedAnswer" : "studio.thinking"));
+          : status === "failed"
+            ? message.detail.error || t("studio.failedAnswer")
+            : t("studio.thinking"));
       return {
         key: message.id,
         role: user ? "user" : "ai",

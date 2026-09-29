@@ -224,6 +224,12 @@ it("retries transient failures with bounded backoff but does not retry permissio
   expect(Date.parse(checkpoint.available_at)).toBeGreaterThan(Date.now());
   expect(await retryKnowledgeTask(db, job.id, { status: 403 })).toBe(false);
   expect(
+    await retryKnowledgeTask(db, job.id, new Error("模型认证失败（401），请检查厂商密钥")),
+  ).toBe(false);
+  expect(
+    await retryKnowledgeTask(db, job.id, new Error("模型输出中断")),
+  ).toBe(false);
+  expect(
     await retryKnowledgeTask(db, job.id, new Error("network timeout")),
   ).toBe(true);
   expect(
