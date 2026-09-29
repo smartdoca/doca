@@ -2,21 +2,16 @@
 
 [简体中文](CONTRIBUTING.zh-CN.md)
 
-Thank you for your interest in Doca. The project is preparing its public
-contribution process together with its AGPL and commercial dual-licensing model.
+Thank you for your interest in Doca. The project is licensed under the
+[MIT License](LICENSE).
 
 ## Current contribution status
 
-Issues, reproducible bug reports, design discussion, and documentation feedback
-are welcome. Before accepting substantive third-party code, the maintainers will
-publish a contributor agreement reviewed for the dual-licensing model. Until
-that agreement is available, do not submit code copied from another project and
-do not assume that a pull request can be merged.
+Issues, reproducible bug reports, design discussion, documentation feedback,
+and pull requests are welcome. A contribution is licensed under the MIT License.
 
-This temporary gate prevents the project from accepting code under terms that
-would later conflict with either the AGPL release or a separately negotiated
-commercial license. The contributor agreement must not remove the contributor’s
-right to use their own work.
+Do not submit code copied from another project unless you have the right to
+license that code under the MIT License.
 
 ## Development checks
 

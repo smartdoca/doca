@@ -2,7 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 
-const expectedLicense = "AGPL-3.0-only";
+const expectedLicense = "MIT";
 
 async function workspacePackageFiles(directory: "apps" | "packages") {
   const entries = await readdir(resolve(directory), { withFileTypes: true });
@@ -34,13 +34,13 @@ describe("repository licensing", () => {
     }
   });
 
-  test("the repository includes the complete AGPL notice and dual-license policy", async () => {
+  test("the repository includes the MIT license and licensing policy", async () => {
     const license = await readFile(resolve("LICENSE"), "utf8");
     const policy = await readFile(resolve("LICENSING.md"), "utf8");
 
-    expect(license).toContain("GNU AFFERO GENERAL PUBLIC LICENSE");
-    expect(license).toContain("Version 3, 19 November 2007");
-    expect(policy).toContain("AGPL-3.0-only");
-    expect(policy).toContain("commercial license");
+    expect(license).toContain("MIT License");
+    expect(license).toContain("Permission is hereby granted, free of charge");
+    expect(policy).toContain("MIT License");
+    expect(policy).not.toContain("AGPL-3.0-only");
   });
 });

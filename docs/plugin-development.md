@@ -6,7 +6,7 @@ The full target, including parts that are not implemented, is the [SDK contract]
 
 ## License
 
-Doca and the public plugin SDK are `AGPL-3.0-only`. There is no extra closed-source exception for dynamic linking or an npm plugin. Whether a plugin and the host form one combined work under the AGPL depends on the integration and on the law that applies. See [Licensing](../LICENSING.md).
+Doca and the public plugin SDK are [MIT](../LICENSE). A plugin may be open source or proprietary. See [Licensing](../LICENSING.md).
 
 Do not ship a dependency whose license is unknown, forbids redistribution, or conflicts with how you publish the plugin. Third-party notices stay the plugin author's obligation. Doca's license does not cover third-party material the author cannot license.
 
