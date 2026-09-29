@@ -189,7 +189,7 @@ GET /health（非/api/v1）查询数据库后返回{status:"ok",version:"0.1.0"}
 
 修改流程：GET最新对象 → 带version提交 → 成功刷新；409提示用户刷新，不自动强制覆盖。
 
-version仅用于元数据；不是正文Yjs状态或备份版本。富文本协同和外部 OIDC 登录已实现；Hook、备份、OIDC 提供方尚未实现。bootstrap.capabilities 按实际能力返回。
+version仅用于元数据；不是正文Yjs状态或备份版本。富文本协同和外部 OIDC 登录已实现。管理员可在 Hook 登记回调地址和请求头。投递正文见 [Webhook 投递](webhooks.zh-CN.md)。备份和作为 OIDC 提供方尚未实现。bootstrap.capabilities 按实际能力返回。
 
 ## SSO、多身份绑定与注册审批
 

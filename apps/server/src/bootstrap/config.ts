@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { resolve } from "node:path";
 import type { DatabaseConfig } from "@db/index.js";
+import { webhookDatabaseConfig } from "@db/webhook-database.js";
 export function assetBase(value: string | undefined) {
   const raw = value?.trim();
   if (!raw) return undefined;
@@ -56,10 +57,24 @@ export function config() {
       poolMax: port(process.env.DOCA_DATABASE_POOL_MAX, 10),
     };
   else throw new Error("Invalid database configuration");
+  const webhookUrl = process.env.DOCA_WEBHOOK_DATABASE_URL?.trim();
+  let webhookDatabase: DatabaseConfig;
+  if (webhookUrl) {
+    let url: URL;
+    try {
+      url = new URL(webhookUrl);
+    } catch {
+      throw new Error("DOCA_WEBHOOK_DATABASE_URL must be a PostgreSQL URL");
+    }
+    if (url.protocol !== "postgres:" && url.protocol !== "postgresql:")
+      throw new Error("DOCA_WEBHOOK_DATABASE_URL must be a PostgreSQL URL");
+    webhookDatabase = { driver: "postgres", url: webhookUrl, poolMax: 4 };
+  } else webhookDatabase = webhookDatabaseConfig(database);
   return {
     origin: origin.origin,
     assetBase: assetBase(process.env.DOCA_ASSET_BASE),
     database,
+    webhookDatabase,
     host: process.env.DOCA_HOST ?? "127.0.0.1",
     port: port(process.env.DOCA_PORT, 39120),
     webPort: port(process.env.DOCA_WEB_PORT, 39130),

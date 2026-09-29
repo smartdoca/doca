@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { createServer, type ViteDevServer } from "vite";
 import { openDatabase } from "@db/index.js";
+import { openWebhookDatabase, type WebhookDB } from "@db/webhook-database.js";
 import { createApp } from "./app/create-app.js";
 import { config } from "./bootstrap/config.js";
 
@@ -11,18 +12,23 @@ if (dev && process.env.NODE_ENV === "production")
 const db = await openDatabase(cfg.database);
 let api: Awaited<ReturnType<typeof createApp>> | undefined,
   web: ViteDevServer | undefined,
+  webhookDb: WebhookDB | undefined,
   stopping = false;
 async function stop() {
   if (stopping) return;
   stopping = true;
   await web?.close();
   await api?.close();
+  await webhookDb?.destroy();
   await db.destroy();
 }
 try {
+  webhookDb = await openWebhookDatabase(cfg.webhookDatabase);
   api = await createApp(db, {
     origin: cfg.origin,
     logging: true,
+    webhookDatabase: webhookDb,
+    webhookDispatch: true,
     redisUrl: cfg.redisUrl,
     redisPrefix: cfg.redisPrefix,
     instanceId: cfg.instanceId,

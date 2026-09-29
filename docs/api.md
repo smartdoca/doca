@@ -149,7 +149,7 @@ Avatar and cover uploads accept PNG, JPEG, WebP, and GIF, at most 5 MB. Attachme
 
 `GET /health` is not under `/api/v1`. It checks the database and returns `{status:"ok", version:"0.1.0"}`, and it also checks Host.
 
-The edit flow is GET the latest object, submit with version, and refresh on success. 409 asks the user to refresh. It does not overwrite. `version` is metadata only. It is not the Yjs state or a backup version. Rich text collaboration and external OIDC sign-in exist. Hook, backup, and acting as an OIDC provider do not. `bootstrap.capabilities` reports actual capabilities.
+The edit flow is GET the latest object, submit with version, and refresh on success. 409 asks the user to refresh. It does not overwrite. `version` is metadata only. It is not the Yjs state or a backup version. Rich text collaboration and external OIDC sign-in exist. Administrators register webhook URLs and request headers from Hook. The POST body is documented in [Webhook delivery](webhooks.md). Backup and acting as an OIDC provider do not. `bootstrap.capabilities` reports actual capabilities.
 
 WebSocket `/api/v1/ws` is specified in [collaboration](collaboration.md). Only document editing bytes use the socket. Management stays on HTTP.
 

@@ -4,7 +4,7 @@ import {
   type MessageValues,
 } from "@doca/i18n";
 import { useI18n } from "@web/shared/i18n.js";
-import { Switch } from "antd";
+import { AutoComplete, Select } from "antd";
 import { useEffect, useState } from "react";
 import {
   Boxes,
@@ -26,6 +26,33 @@ import { Feedback } from "@web/shared/components/feedback.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
 import { SettingsTabs } from "@web/features/settings/settings-tabs.js";
 import "@web/features/ai/ai.css";
+
+function Choice({
+  value,
+  disabled,
+  label,
+  options,
+  onChange,
+}: {
+  value: string;
+  disabled?: boolean;
+  label?: string;
+  options: { value: string; label: string; disabled?: boolean }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Select
+      showSearch
+      optionFilterProp="label"
+      className="ai-choice"
+      aria-label={label}
+      disabled={disabled}
+      value={value}
+      options={options}
+      onChange={onChange}
+    />
+  );
+}
 
 const formatIds = [
   "rich_text",
@@ -383,32 +410,32 @@ export function AIAdmin() {
               </div>
               <label>
                 {t("aiAdmin.tools.useModel")}
-                <select
-                  aria-label={t("aiAdmin.tools.imageModel")}
+                <Choice
+                  label={t("aiAdmin.tools.imageModel")}
                   disabled={busy}
                   value={config.imageModel ?? ""}
-                  onChange={(e) =>
-                    void save({ ...config, imageModel: e.target.value })
+                  onChange={(imageModel) =>
+                    void save({ ...config, imageModel })
                   }
-                >
-                  <option value="">{t("aiAdmin.tools.chooseImage")}</option>
-                  {config.models
-                    .filter(
-                      (m: any) =>
-                        m.enabled &&
-                        !m.embedding &&
-                        m.imageGeneration &&
-                        (!m.vendorId ||
-                          config.vendors.some(
-                            (v: any) => v.id === m.vendorId && v.enabled,
-                          )),
-                    )
-                    .map((m: any) => (
-                      <option key={m.id} value={m.id}>
-                        {m.alias || m.model}
-                      </option>
-                    ))}
-                </select>
+                  options={[
+                    { value: "", label: t("aiAdmin.tools.chooseImage") },
+                    ...config.models
+                      .filter(
+                        (m: any) =>
+                          m.enabled &&
+                          !m.embedding &&
+                          m.imageGeneration &&
+                          (!m.vendorId ||
+                            config.vendors.some(
+                              (v: any) => v.id === m.vendorId && v.enabled,
+                            )),
+                      )
+                      .map((m: any) => ({
+                        value: m.id,
+                        label: m.alias || m.model,
+                      })),
+                  ]}
+                />
               </label>
               <p className="subtle ai-tool-card-note">
                 {t("aiAdmin.tools.imageNote")}
@@ -428,32 +455,32 @@ export function AIAdmin() {
               </div>
               <label>
                 {t("aiAdmin.tools.useModel")}
-                <select
-                  aria-label={t("aiAdmin.tools.mediaModel")}
+                <Choice
+                  label={t("aiAdmin.tools.mediaModel")}
                   disabled={busy}
                   value={config.mediaModel ?? ""}
-                  onChange={(e) =>
-                    void save({ ...config, mediaModel: e.target.value })
+                  onChange={(mediaModel) =>
+                    void save({ ...config, mediaModel })
                   }
-                >
-                  <option value="">{t("aiAdmin.tools.mediaNone")}</option>
-                  {config.models
-                    .filter(
-                      (m: any) =>
-                        m.enabled &&
-                        !m.embedding &&
-                        m.vision &&
-                        (!m.vendorId ||
-                          config.vendors.some(
-                            (v: any) => v.id === m.vendorId && v.enabled,
-                          )),
-                    )
-                    .map((m: any) => (
-                      <option key={m.id} value={m.id}>
-                        {m.alias || m.model}
-                      </option>
-                    ))}
-                </select>
+                  options={[
+                    { value: "", label: t("aiAdmin.tools.mediaNone") },
+                    ...config.models
+                      .filter(
+                        (m: any) =>
+                          m.enabled &&
+                          !m.embedding &&
+                          m.vision &&
+                          (!m.vendorId ||
+                            config.vendors.some(
+                              (v: any) => v.id === m.vendorId && v.enabled,
+                            )),
+                      )
+                      .map((m: any) => ({
+                        value: m.id,
+                        label: m.alias || m.model,
+                      })),
+                  ]}
+                />
               </label>
               <p className="subtle ai-tool-card-note">
                 {t("aiAdmin.tools.mediaNote")}
@@ -882,10 +909,11 @@ export function AIAdmin() {
                 <>
                   <label>
                     {t("aiAdmin.vendorType")}
-                    <select
+                    <Choice
+                      label={t("aiAdmin.vendorType")}
                       value={d.provider}
-                      onChange={(e) => {
-                        const p = providerPreset(e.target.value);
+                      onChange={(provider) => {
+                        const p = providerPreset(provider);
                         change({
                           provider: p.id,
                           baseUrl: p.baseUrl,
@@ -895,13 +923,11 @@ export function AIAdmin() {
                           name: d.name || providerLabel(p.id),
                         });
                       }}
-                    >
-                      {aiProviders.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {providerLabel(p.id)}
-                        </option>
-                      ))}
-                    </select>
+                      options={aiProviders.map((p) => ({
+                        value: p.id,
+                        label: providerLabel(p.id),
+                      }))}
+                    />
                   </label>
                   <label>
                     {t("aiAdmin.vendorName")}
@@ -972,53 +998,54 @@ export function AIAdmin() {
                 <>
                   <label>
                     {t("aiAdmin.vendorOf")}
-                    <select
-                      required
+                    <Choice
+                      label={t("aiAdmin.vendorOf")}
                       value={d.vendorId}
-                      onChange={(e) => change({ vendorId: e.target.value })}
-                    >
-                      {config.vendors.map((v: any) => (
-                        <option key={v.id} value={v.id}>
-                          {v.name}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(vendorId) => change({ vendorId })}
+                      options={config.vendors.map((v: any) => ({
+                        value: v.id,
+                        label: v.name,
+                      }))}
+                    />
                   </label>
                   <label>
                     {modelVendor?.provider === "azure"
                       ? t("aiAdmin.azureDeployment")
                       : t("aiAdmin.modelId")}
-                    <input
-                      required
-                      maxLength={160}
-                      list="ai-vendor-model-list"
+                    <AutoComplete
+                      className="ai-choice"
                       value={d.model}
                       placeholder={t("aiAdmin.modelIdPlaceholder")}
-                      onChange={(e) => change({ model: e.target.value })}
+                      options={(catalogs[d.vendorId] ?? []).map((m) => ({
+                        value: m.id,
+                        label:
+                          m.name && m.name !== m.id
+                            ? `${m.id} (${m.name})`
+                            : m.id,
+                      }))}
+                      filterOption={(input, option) =>
+                        String(option?.label ?? "")
+                          .toLowerCase()
+                          .includes(input.trim().toLowerCase())
+                      }
+                      onChange={(model) => change({ model: model.slice(0, 160) })}
                     />
-                    <datalist id="ai-vendor-model-list">
-                      {catalogs[d.vendorId]?.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </datalist>
                   </label>
                   {supportsApiMode && (
                     <label>
                       {t("aiAdmin.protocol")}
-                      <select
+                      <Choice
+                        label={t("aiAdmin.protocol")}
                         value={d.apiMode ?? ""}
-                        onChange={(e) =>
-                          change({
-                            apiMode: e.target.value || undefined,
-                          })
+                        onChange={(apiMode) =>
+                          change({ apiMode: apiMode || undefined })
                         }
-                      >
-                        <option value="">{t("aiAdmin.protocolAuto")}</option>
-                        <option value="chat">Chat Completions</option>
-                        <option value="responses">Responses API</option>
-                      </select>
+                        options={[
+                          { value: "", label: t("aiAdmin.protocolAuto") },
+                          { value: "chat", label: "Chat Completions" },
+                          { value: "responses", label: "Responses API" },
+                        ]}
+                      />
                       <small>{t("aiAdmin.protocolHelp")}</small>
                     </label>
                   )}
@@ -1034,11 +1061,12 @@ export function AIAdmin() {
                   </label>
                   <label>
                     {t("aiAdmin.purpose")}
-                    <select
+                    <Choice
+                      label={t("aiAdmin.purpose")}
                       value={d.embedding ? "embedding" : "generation"}
-                      onChange={(e) =>
+                      onChange={(purpose) =>
                         change(
-                          e.target.value === "embedding"
+                          purpose === "embedding"
                             ? {
                                 embedding: true,
                                 tools: false,
@@ -1049,17 +1077,18 @@ export function AIAdmin() {
                             : { embedding: false, tools: true },
                         )
                       }
-                    >
-                      <option value="generation">
-                        {t("aiAdmin.purposeChat")}
-                      </option>
-                      <option
-                        value="embedding"
-                        disabled={!embeddingSource(modelVendor?.provider)}
-                      >
-                        {t("aiAdmin.cap.embedding")}
-                      </option>
-                    </select>
+                      options={[
+                        {
+                          value: "generation",
+                          label: t("aiAdmin.purposeChat"),
+                        },
+                        {
+                          value: "embedding",
+                          label: t("aiAdmin.cap.embedding"),
+                          disabled: !embeddingSource(modelVendor?.provider),
+                        },
+                      ]}
+                    />
                     {!embeddingSource(modelVendor?.provider) && (
                       <small>{t("aiAdmin.embeddingProviders")}</small>
                     )}
@@ -1068,28 +1097,33 @@ export function AIAdmin() {
                     <>
                       <label>
                         {t("aiAdmin.embeddingApi")}
-                        <select
+                        <Choice
+                          label={t("aiAdmin.embeddingApi")}
                           value={d.embeddingApi ?? "auto"}
-                          onChange={(e) =>
+                          onChange={(embeddingApiName) =>
                             change({
                               embeddingApi:
-                                e.target.value === "auto"
+                                embeddingApiName === "auto"
                                   ? undefined
-                                  : e.target.value,
+                                  : embeddingApiName,
                               embeddingDimensions: undefined,
                             })
                           }
-                        >
-                          <option value="auto">
-                            {t("aiAdmin.embeddingAuto")}
-                          </option>
-                          <option value="openai">
-                            {t("aiAdmin.embeddingOpenai")}
-                          </option>
-                          <option value="doubao-multimodal">
-                            {t("aiAdmin.embeddingDoubao")}
-                          </option>
-                        </select>
+                          options={[
+                            {
+                              value: "auto",
+                              label: t("aiAdmin.embeddingAuto"),
+                            },
+                            {
+                              value: "openai",
+                              label: t("aiAdmin.embeddingOpenai"),
+                            },
+                            {
+                              value: "doubao-multimodal",
+                              label: t("aiAdmin.embeddingDoubao"),
+                            },
+                          ]}
+                        />
                       </label>
                       <label>
                         {embeddingSource(modelVendor?.provider) === "openAi" &&
@@ -1302,27 +1336,21 @@ export function AIAdmin() {
                       onChange={(e) => change({ content: e.target.value })}
                     />
                   </label>
-                  <fieldset className="ai-field-wide">
-                    <legend>{t("aiAdmin.skillFormats")}</legend>
-                    <div className="ai-actions">
-                      {formatIds.map((id) => (
-                        <label key={id}>
-                          <input
-                            type="checkbox"
-                            checked={d.formats.includes(id)}
-                            onChange={(e) =>
-                              change({
-                                formats: e.target.checked
-                                  ? [...d.formats, id]
-                                  : d.formats.filter((x: string) => x !== id),
-                              })
-                            }
-                          />
-                          {t(formatKey[id])}
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
+                  <label className="ai-field-wide">
+                    {t("aiAdmin.skillFormats")}
+                    <Select
+                      mode="multiple"
+                      showSearch
+                      optionFilterProp="label"
+                      className="ai-choice"
+                      value={d.formats}
+                      options={formatIds.map((id) => ({
+                        value: id,
+                        label: t(formatKey[id]),
+                      }))}
+                      onChange={(formats) => change({ formats })}
+                    />
+                  </label>
                   <label>
                     <input
                       type="checkbox"
@@ -1347,29 +1375,32 @@ export function AIAdmin() {
                 <>
                   <label>
                     {t("aiAdmin.displayName")}
-                    <select
+                    <Choice
+                      label={t("aiAdmin.displayName")}
                       value={d.display}
-                      onChange={(e) => change({ display: e.target.value })}
-                    >
-                      <option value="alias">{t("aiAdmin.displayAlias")}</option>
-                      <option value="real">{t("aiAdmin.displayReal")}</option>
-                    </select>
+                      onChange={(display) => change({ display })}
+                      options={[
+                        { value: "alias", label: t("aiAdmin.displayAlias") },
+                        { value: "real", label: t("aiAdmin.displayReal") },
+                      ]}
+                    />
                   </label>
                   <label>
                     {t("aiAdmin.defaultModel")}
-                    <select
+                    <Choice
+                      label={t("aiAdmin.defaultModel")}
                       value={d.defaultModel}
-                      onChange={(e) => change({ defaultModel: e.target.value })}
-                    >
-                      <option value="">{t("aiAdmin.userChooses")}</option>
-                      {config.models
-                        .filter((m: any) => m.enabled && !m.embedding)
-                        .map((m: any) => (
-                          <option key={m.id} value={m.id}>
-                            {m.alias || m.model}
-                          </option>
-                        ))}
-                    </select>
+                      onChange={(defaultModel) => change({ defaultModel })}
+                      options={[
+                        { value: "", label: t("aiAdmin.userChooses") },
+                        ...config.models
+                          .filter((m: any) => m.enabled && !m.embedding)
+                          .map((m: any) => ({
+                            value: m.id,
+                            label: m.alias || m.model,
+                          })),
+                      ]}
+                    />
                   </label>
                   {(
                     [
@@ -1403,31 +1434,35 @@ export function AIAdmin() {
                       <legend>{t("chat.webSearch")}</legend>
                       <label>
                         {t("aiAdmin.searchService")}
-                        <select
+                        <Choice
+                          label={t("aiAdmin.searchService")}
                           value={d.webSearch?.provider ?? ""}
-                          onChange={(e) =>
+                          onChange={(provider) =>
                             change({
-                              webSearch: e.target.value
+                              webSearch: provider
                                 ? {
-                                    provider: e.target.value,
+                                    provider,
                                     apiKey: "",
-                                    ...(e.target.value === "searxng"
+                                    ...(provider === "searxng"
                                       ? { baseUrl: "" }
                                       : {}),
                                   }
                                 : undefined,
                             })
                           }
-                        >
-                          <option value="">
-                            {t("accountPolicy.notConfigured")}
-                          </option>
-                          <option value="tavily">Tavily</option>
-                          <option value="brave">Brave Search</option>
-                          <option value="searxng">
-                            {t("aiAdmin.tools.search.searxng")}
-                          </option>
-                        </select>
+                          options={[
+                            {
+                              value: "",
+                              label: t("accountPolicy.notConfigured"),
+                            },
+                            { value: "tavily", label: "Tavily" },
+                            { value: "brave", label: "Brave Search" },
+                            {
+                              value: "searxng",
+                              label: t("aiAdmin.tools.search.searxng"),
+                            },
+                          ]}
+                        />
                       </label>
                       {d.webSearch?.provider === "searxng" && (
                         <label>
@@ -1503,33 +1538,39 @@ export function AIAdmin() {
                       <legend>{t("aiAdmin.tools.fetch")}</legend>
                       <label>
                         {t("aiAdmin.fetchService")}
-                        <select
+                        <Choice
+                          label={t("aiAdmin.fetchService")}
                           value={d.webFetch?.provider ?? "builtin"}
-                          onChange={(e) =>
+                          onChange={(provider) =>
                             change({
                               webFetch: {
-                                provider: e.target.value,
+                                provider,
                                 apiKey: null,
-                                ...(e.target.value === "builtin"
+                                ...(provider === "builtin"
                                   ? {}
                                   : { baseUrl: "" }),
                               },
                             })
                           }
-                        >
-                          <option value="builtin">
-                            {t("aiAdmin.tools.fetchBuiltinFree")}
-                          </option>
-                          <option value="firecrawl">
-                            {t("aiAdmin.tools.fetch.firecrawl")}
-                          </option>
-                          <option value="jina">
-                            {t("aiAdmin.tools.fetch.jina")}
-                          </option>
-                          <option value="tavily">
-                            {t("aiAdmin.tools.fetch.tavily")}
-                          </option>
-                        </select>
+                          options={[
+                            {
+                              value: "builtin",
+                              label: t("aiAdmin.tools.fetchBuiltinFree"),
+                            },
+                            {
+                              value: "firecrawl",
+                              label: t("aiAdmin.tools.fetch.firecrawl"),
+                            },
+                            {
+                              value: "jina",
+                              label: t("aiAdmin.tools.fetch.jina"),
+                            },
+                            {
+                              value: "tavily",
+                              label: t("aiAdmin.tools.fetch.tavily"),
+                            },
+                          ]}
+                        />
                       </label>
                       {d.webFetch?.provider !== "builtin" && (
                         <>

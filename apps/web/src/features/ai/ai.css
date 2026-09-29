@@ -533,7 +533,9 @@ body.ai-panel-resizing {
 .ai-settings label:has(textarea),
 .ai-admin-grid > label,
 .ai-admin-general > label:has(select),
-.ai-settings > label:has(select) {
+.ai-settings > label:has(select),
+.ai-tool-card label,
+.ai-config-dialog label:has(.ai-choice) {
   flex-direction: column;
   align-items: stretch;
 }
@@ -758,8 +760,12 @@ body.ai-panel-resizing {
   margin: 0;
 }
 .ai-admin-grid input,
-.ai-admin-grid select {
+.ai-admin-grid select,
+.ai-choice {
   min-width: 0;
+}
+.ai-choice {
+  width: 100%;
 }
 
 /* Admin: compact summaries with focused editors. */
