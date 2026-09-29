@@ -74,7 +74,7 @@ function compactEditingGuide(format: string, skillId?: string) {
   const ops = commands[format as keyof typeof commands] ?? [];
   const extra =
     format === "rich_text"
-      ? "删除块用 {type:\"deleteBlock\",blockId}，不要用 remove。替换文字用 text，index/deleteCount 必须来自完整区域读取，不能猜长度。原生图用 insertBlock type:\"flowchart\" 或 mindmap，不要编造 node/graphic。单元格图片用 setCellContent，children 直接是 {type:\"image\",path:\"资产ID\",children:[{text:\"\"}]}，不要套 paragraph，不要写 assetId。"
+      ? "删除块用 {type:\"deleteBlock\",blockId}，不要用 remove。替换文字用 text，deleteCount 用读取到的 textLength（UTF-16，一个汉字算 1），不能猜。改表格文字用 setCellContent，cellId 用 cells[].id；局部修改才用 text，blockId 用该格 paragraphId。原生图用 insertBlock type:\"flowchart\" 或 mindmap，不要编造 node/graphic。单元格图片用 setCellContent，children 直接是 {type:\"image\",path:\"资产ID\",children:[{text:\"\"}]}，不要套 paragraph，不要写 assetId。"
       : format === "spreadsheet"
         ? "cells 必须带 sheetId。用 sheetOrder[0]；写 Sheet1 也会解析。常量只写 v，公式只写 f，不要写 f:null。"
         : format === "presentation"

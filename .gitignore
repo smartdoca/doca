@@ -52,6 +52,9 @@ pnpm-debug.log*
 *.tgz
 !/vendor/*.tgz
 
+# Local agent rule. The same rule lives in the user Cursor rules directory.
+.cursor/rules/no-forward-compatibility.mdc
+
 # OS/editor temporary files.
 .DS_Store
 ._*

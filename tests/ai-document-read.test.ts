@@ -1,7 +1,9 @@
 import { expect, it } from "vitest";
 import {
+  cellTargetId,
   documentReadPayload,
   documentOutline,
+  textTargetId,
 } from "../packages/core/src/modules/ai/document-read.js";
 import {
   documentReadCapabilities,
@@ -10,6 +12,45 @@ import {
 import { taskStateHint } from "../apps/server/src/services/ai/context-budget.js";
 
 const sheetId = "11111111-1111-4111-8111-111111111111";
+it("gives each table cell its paragraph id and character length", () => {
+  const value = [
+    {
+      id: "table",
+      type: "table",
+      children: [
+        {
+          id: "row",
+          type: "table-row",
+          children: [
+            {
+              id: "cell",
+              type: "table-cell",
+              children: [
+                {
+                  id: "para",
+                  type: "paragraph",
+                  children: [{ text: "网页钩子" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ];
+  const outline = documentOutline("rich_text", value) as any;
+  expect(outline.blocks[0].rows[0].cells[0]).toMatchObject({
+    id: "cell",
+    paragraphId: "para",
+    textLength: 4,
+  });
+  expect(textTargetId(value, "cell")).toBe("para");
+  expect(textTargetId(value, "para")).toBe("para");
+  expect(cellTargetId(value, "para")).toBe("cell");
+  expect(cellTargetId(value, "cell")).toBe("cell");
+  expect(cellTargetId(value, "missing")).toBe("missing");
+});
+
 it("reports full UTF-16 text length even when a rich-text preview is clipped", () => {
   const value = [{ id: "p", type: "paragraph", children: [
     { text: "正文".repeat(80) },

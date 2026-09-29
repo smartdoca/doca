@@ -2853,7 +2853,7 @@ export function createAIRunner(
               format === "spreadsheet"
                 ? "仅编辑表格。先 document_read，sheetId 用 outline.sheetOrder[0]。写 Sheet1 也会解析成第一张表，不要把说明文字写进 sheetId。命令必须带 sheetId 和 cells。常量只写 v，公式只写 f，不要写 f:null、省略号或 placeholder。一次调用写完整块，最多 80 条。"
                 : format === "rich_text"
-                  ? "仅编辑富文本。append 只写普通段落，禁止把 Markdown 原文写进正文：不要写 # 标题、- 列表、| 表格或代码围栏。标题用 insertBlock 创建 paragraph 并设置 title 为 h1 到 h5；列表使用 paragraph 的 list 属性（ul、ol 或 checkbox）；表格用 insertTable。一次调用尽量写完整篇，最多 80 条。"
+                  ? "仅编辑富文本。append 只写普通段落，禁止把 Markdown 原文写进正文：不要写 # 标题、- 列表、| 表格或代码围栏。标题用 insertBlock 创建 paragraph 并设置 title 为 h1 到 h5；列表使用 paragraph 的 list 属性（ul、ol 或 checkbox）；表格用 insertTable。改已有单元格用 setCellContent，cellId 用 outline 的 cells[].id，不要用格内段落 id，也不要为中文重算 deleteCount。一次调用尽量写完整篇，最多 80 条。"
                   : `仅编辑 ${format} 文档。先 document_read 取 seq/epochId 与 ID。完整手册 load_skill id=${documentCapabilities(format).loadSkill ?? format}。一次调用尽量写完整篇或完整一节，最多 80 条，工具内部保存。可用命令：${documentCapabilities(format).operations.join("、")}。`,
             ),
             inputSchema: editToolSchema(format),
