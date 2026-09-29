@@ -133,6 +133,6 @@ The specification, public services, and verification requirements are in [plugin
 
 ## License
 
-Doca is [AGPL-3.0-only](LICENSE). You may use it, including for commercial service, as long as the AGPL obligations are met. Offering a modified version to users over a network requires the corresponding source to stay available under the AGPL.
+Doca is [MIT](LICENSE). You may use, modify, and distribute it, including in commercial products and network services. Copies and substantial portions must keep the copyright notice and the MIT permission notice.
 
 The rich text, spreadsheet, Markdown, canvas, and slides editors use the same license and are published separately on npm.
