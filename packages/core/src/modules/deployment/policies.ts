@@ -12,6 +12,12 @@ export const distributionDefaults = {
   autoCollectOpened: false,
   defaultVisibility: "invited" as
     "invited" | "requestable" | "authenticated" | "public",
+  internetPublication: {
+    document: true,
+    library: true,
+    assistant: true,
+  } as Record<InternetPublicationKind, boolean>,
+  internetPublicationUsers: [] as string[],
 };
 export type ContentDistribution = Pick<
   typeof distributionDefaults,
@@ -28,6 +34,13 @@ export const publicResourceKinds = [
   "folder",
 ] as const;
 export type PublicResourceKind = (typeof publicResourceKinds)[number];
+export const internetPublicationKinds = [
+  "document",
+  "library",
+  "assistant",
+] as const;
+export type InternetPublicationKind =
+  (typeof internetPublicationKinds)[number];
 export type PublicMode = "link" | "discover" | "search";
 export function publicMode(
   policy: Distribution,
@@ -64,6 +77,17 @@ export function resourceDistribution(
     },
   };
 }
+export async function internetPublicationOpen(
+  db: DB | Transaction<Schema>,
+  actorId: string | undefined,
+  kind: InternetPublicationKind,
+) {
+  const policy = await distributionPolicy(db);
+  return (
+    policy.internetPublication[kind] ||
+    (!!actorId && policy.internetPublicationUsers.includes(actorId))
+  );
+}
 export async function distributionPolicy(
   db: DB | Transaction<Schema>,
   kind?: "document" | "library",
@@ -89,6 +113,12 @@ export async function distributionPolicy(
         ...distributionDefaults.ticketReviewers,
         ...configured.ticketReviewers,
       },
+      internetPublication: {
+        ...distributionDefaults.internetPublication,
+        ...configured.internetPublication,
+      },
+      internetPublicationUsers: configured.internetPublicationUsers ??
+        distributionDefaults.internetPublicationUsers,
       revision: row.revision,
     },
     kind,

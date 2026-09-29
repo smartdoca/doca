@@ -8,6 +8,7 @@ import {
 import { distributionPolicy } from "../deployment/policies.js";
 import { audienceDecision } from "../access/distribution-behavior.js";
 import {
+  assertInternetPublication,
   checkPublication,
   requireCapability,
 } from "../access/operation-policy.js";
@@ -2339,6 +2340,8 @@ export async function saveKnowledgeAssistant(
       current?.owner_id ?? actor.id,
       input.visibility,
     );
+    if (input.visibility === "public" && current?.visibility !== "public")
+      await assertInternetPublication(tx, "assistant", actor.id);
     await requireCapability(tx, actor.id, "sharing.invite");
     const allMembers = [...new Set([...input.memberIds, ...input.managerIds])];
     if (allMembers.length) {

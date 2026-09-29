@@ -3,7 +3,7 @@ import {
   policyFields,
   type PolicyField,
 } from "./inheritance.js";
-import { checkPublication } from "../access/operation-policy.js";
+import { assertInternetPublication, checkPublication } from "../access/operation-policy.js";
 import type { DB, Resource } from "../../../../db/src/index.js";
 import { fail } from "../../shared/errors.js";
 import { distributionPolicy } from "../deployment/policies.js";
@@ -116,6 +116,12 @@ export function createAccessManagement(
         ranks[before.public_role ?? "reader"]
     )
       await checkPublication(ctx.tx, actor.id, r.owner_id, after.visibility);
+    if (after.visibility === "public" && before.visibility !== "public")
+      await assertInternetPublication(
+        ctx.tx,
+        r.kind === "library" ? "library" : "document",
+        actor.id,
+      );
     if (mode === "inherit" && !r.parent_id && !r.library_id)
       fail(400, "根资源不能继承权限");
     const current = await ctx.tx

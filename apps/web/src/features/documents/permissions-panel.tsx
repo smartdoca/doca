@@ -55,6 +55,7 @@ type Overview = {
   inheritedFields: string[];
   visibility: string;
   effectiveVisibility: string;
+  internetPublication?: boolean;
   publicRole: string;
   requestsEnabled: boolean;
   effectiveRequestsEnabled: boolean;
@@ -812,6 +813,8 @@ export function PermissionDialog({
                 </label>
                 {isPublic ? (
                   <div className="permissions-public-options">
+                    {(data.internetPublication !== false ||
+                      data.effectiveVisibility === "public") && (
                     <label className="permissions-check">
                       <input
                         type="checkbox"
@@ -827,6 +830,7 @@ export function PermissionDialog({
                       />
                       {t("permissionsUi.publicWeb")}
                     </label>
+                    )}
                     <div className="permissions-option-row">
                       <span>
                         {t("permissionsUi.publicPermission")}
