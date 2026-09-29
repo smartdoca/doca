@@ -370,6 +370,7 @@ export function registerKnowledgeSystem(
       memberIds: string[];
       managerIds?:string[];
       attachmentsEnabled?:boolean;
+      modelId?: string;
       channels?:Array<"web"|"embed"|"api"|"mcp">;
       visibility?: "invited" | "authenticated" | "public";
       enabled: boolean;
@@ -397,6 +398,7 @@ export function registerKnowledgeSystem(
           ),
           managerIds:Type.Optional(Type.Array(Type.String({format:"uuid"}),{maxItems:100})),
           attachmentsEnabled:Type.Optional(Type.Boolean()),
+          modelId: Type.Optional(Type.String({ maxLength: 64 })),
           channels:Type.Optional(Type.Array(Type.Union([Type.Literal("web"),Type.Literal("embed"),Type.Literal("api"),Type.Literal("mcp")]))),
           enabled: Type.Boolean(),
         }),

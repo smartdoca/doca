@@ -245,6 +245,7 @@ export const assistantInput = z
     libraryIds: z.array(z.string().uuid()).max(20),
     managerIds: z.array(z.string().uuid()).max(100).default([]),
     attachmentsEnabled: z.boolean().default(false),
+    modelId: z.string().max(64).default(""),
     channels: z
       .array(z.enum(["web", "embed", "api", "mcp"]))
       .default(["web", "embed", "api", "mcp"]),
@@ -2385,6 +2386,7 @@ export async function saveKnowledgeAssistant(
       config: JSON.stringify({
         attachmentsEnabled: input.attachmentsEnabled,
         channels: [...new Set(input.channels)],
+        modelId: input.modelId,
       }),
       title: input.title,
       revision: input.expectedRevision + 1,
@@ -2817,8 +2819,9 @@ export function knowledgeBotConfig(bot: Schema["knowledge_assistants"]) {
   return {
     attachmentsEnabled: false,
     channels: ["web", "embed", "api", "mcp"],
+    modelId: "",
     ...JSON.parse(bot.config ?? "{}"),
-  } as { attachmentsEnabled: boolean; channels: string[] };
+  } as { attachmentsEnabled: boolean; channels: string[]; modelId: string };
 }
 export async function effectiveKnowledgeBotLibraries(
   db: DB,

@@ -1443,3 +1443,34 @@ export async function updateKnowledgeSourceGroup(
   };
   return db.isTransaction ? persist(db) : db.transaction().execute(persist);
 }
+
+export async function deleteKnowledgeSourceGroup(
+  db: DB,
+  actor: Actor,
+  libraryId: string,
+  groupId: string,
+) {
+  await authorize(db, actor, libraryId, 4);
+  const group = await db
+    .selectFrom("knowledge_source_groups")
+    .select("id")
+    .where("id", "=", groupId)
+    .where("library_id", "=", libraryId)
+    .executeTakeFirst();
+  if (!group) fail(404, "来源组不存在");
+  const persist = async (tx: DB) => {
+    await tx
+      .updateTable("knowledge_subscriptions")
+      .set({ status: "detached" })
+      .where("library_id", "=", libraryId)
+      .where("group_id", "=", groupId)
+      .where("status", "!=", "detached")
+      .execute();
+    await tx
+      .deleteFrom("knowledge_source_groups")
+      .where("id", "=", groupId)
+      .execute();
+    return { deleted: true };
+  };
+  return db.isTransaction ? persist(db) : db.transaction().execute(persist);
+}

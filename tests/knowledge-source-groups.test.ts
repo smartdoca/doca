@@ -8,6 +8,7 @@ import {
   subscribeKnowledgeSource,
   updateKnowledgeSourceGroup,
   listKnowledgeSubscriptions,
+  deleteKnowledgeSourceGroup,
 } from "@core/modules/knowledge/subscriptions.js";
 import { knowledgeSourceMembers } from "@core/modules/knowledge/source-members.js";
 import {
@@ -68,6 +69,18 @@ it("groups multiple links without losing individual provenance and rejects mixed
   expect(
     (await listKnowledgeSubscriptions(db, actor, library)).items,
   ).toHaveLength(2);
+});
+it("deletes a source group and keeps detached subscriptions out of curation", async () => {
+  const group = await subscribeKnowledgeSource(db, actor, library, {
+    sourceKind: "url",
+    title: "RFC",
+    urls: ["https://example.com/a"],
+  });
+  await deleteKnowledgeSourceGroup(db, actor, library, group.groupId!);
+  const listed = await listKnowledgeSubscriptions(db, actor, library);
+  expect(listed.groups).toHaveLength(0);
+  expect(listed.items.filter((item) => item.status !== "detached")).toHaveLength(0);
+  expect(listed.items).toHaveLength(1);
 });
 it("edits a group without erasing removed-source provenance and controls the whole group", async () => {
   const group = await subscribeKnowledgeSource(db, actor, library, {

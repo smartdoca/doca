@@ -45,7 +45,7 @@ export type BotInfo = {
   managerIds?: string[];
   memberNames?: Record<string, string>;
   creator: { id: string; displayName: string };
-  config: { attachmentsEnabled: boolean; channels: string[] };
+  config: { attachmentsEnabled: boolean; channels: string[]; modelId: string };
 };
 type Library = { id: string; title: string; role: string };
 export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
@@ -74,6 +74,9 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
     [copied, setCopied] = useState(false);
   const [keyName, setKeyName] = useState(""),
     [keyChannel, setKeyChannel] = useState("api");
+  const [models, setModels] = useState<Array<{ id: string; name: string }>>(
+    [],
+  );
   async function reload() {
     if (selected) {
       const value = await api<BotInfo>(`/knowledge/assistants/${selected}`);
@@ -135,6 +138,13 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
             )
           ).items,
         );
+        setModels(
+          (
+            await api<{ models: Array<{ id: string; name: string }> }>(
+              "/ai/options",
+            )
+          ).models,
+        );
       });
   }
   async function create() {
@@ -151,6 +161,7 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
           enabled: true,
           visibility: "invited",
           attachmentsEnabled: false,
+          modelId: "",
           channels: ["web", "embed", "api", "mcp"],
         },
       );
@@ -415,6 +426,33 @@ export function KnowledgeAssistants({ libraryId }: { libraryId?: string }) {
                 {t("bot.attachments")}
               </label>
               <small>{t("bot.attachmentsHint")}</small>
+              <label>
+                {t("bot.model")}
+                <Select
+                  aria-label={t("bot.model")}
+                  value={draft.config.modelId || ""}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      config: { ...draft.config, modelId: e.target.value },
+                    })
+                  }
+                >
+                  <option value="">{t("bot.defaultModel")}</option>
+                  {draft.config.modelId &&
+                    !models.some((model) => model.id === draft.config.modelId) && (
+                      <option value={draft.config.modelId}>
+                        {draft.config.modelId}
+                      </option>
+                    )}
+                  {models.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <small>{t("bot.modelHint")}</small>
               <fieldset>
                 <legend>{t("bot.channels")}</legend>
                 <div className="kb-channel-options">
