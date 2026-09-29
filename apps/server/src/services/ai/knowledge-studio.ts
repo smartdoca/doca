@@ -370,6 +370,80 @@ export async function libraryCases(db: DB, actor: Actor, libraryId: string) {
     : [];
 }
 
+const queryStop = new Set([
+  "的",
+  "了",
+  "和",
+  "或",
+  "与",
+  "及",
+  "在",
+  "是",
+  "有",
+  "请",
+  "把",
+  "将",
+  "什么",
+  "如何",
+  "怎么",
+  "哪些",
+  "这个",
+  "一个",
+  "方案",
+  "文档",
+]);
+function queryTerms(query: string) {
+  return [
+    ...new Intl.Segmenter("zh", { granularity: "word" }).segment(
+      query.toLowerCase(),
+    ),
+  ]
+    .filter((part) => part.isWordLike)
+    .map((part) => part.segment.trim())
+    .filter((term) => term.length >= 2 && !queryStop.has(term));
+}
+function keywordHits(
+  chunks: { id: string; title: string; heading: string; text: string }[],
+  query: string,
+) {
+  const terms = queryTerms(query);
+  if (!terms.length) return [];
+  return chunks.flatMap((chunk) => {
+    const heading = `${chunk.title} ${chunk.heading}`.toLowerCase();
+    const body = chunk.text.toLowerCase();
+    const headingHits = terms.filter((term) => heading.includes(term)).length;
+    const bodyHits = terms.filter((term) => body.includes(term)).length;
+    const score = headingHits * 100 + bodyHits;
+    return score > 0 ? [{ id: chunk.id, score }] : [];
+  });
+}
+function citedEvidence(
+  items: { title: string; heading: string; text: string }[],
+  question: string,
+) {
+  const terms = queryTerms(question);
+  if (!terms.length) return "";
+  const ranked = items
+    .map((item, index) => ({
+      item,
+      index,
+      score: terms.filter((term) =>
+        `${item.title}\n${item.heading}\n${item.text}`
+          .toLowerCase()
+          .includes(term),
+      ).length,
+    }))
+    .filter((hit) => hit.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+  if (!ranked.length) return "";
+  return ranked
+    .slice(0, 3)
+    .map(({ item, index }) => {
+      const body = item.text.trim().slice(0, 1200);
+      return `${item.title} · ${item.heading}[${index + 1}]\n${body}`;
+    })
+    .join("\n\n");
+}
 export function createKnowledgeStudio(
   db: DB,
   index?: AnswerIndex,
@@ -1824,7 +1898,12 @@ export function createKnowledgeStudio(
       const p = await publicationStatus(db, libraryId);
       return { libraryId, revision: p.revision, status: p.status, dirty: p.dirty };
     }));
-    const result = await searchAnswer(actor, bot.id, query);
+    const result = await searchAnswer(
+      actor,
+      bot.id,
+      last.content,
+      query === last.content ? "" : query,
+    );
     const streaming = {
       status: "streaming",
       taskId,
@@ -1987,10 +2066,14 @@ export function createKnowledgeStudio(
           .map((part) => part.text)
           .join("\n");
       }
+      if (result.items.length && !cited(answer)) {
+        const excerpt = citedEvidence(result.items, last.content);
+        if (excerpt) answer = excerpt;
+        else
+          answer =
+            "当前回答未能给出可核对的知识依据，已撤回未经引用支持的内容。请补充问题条件，或向管理员反馈需要完善的主题。";
+      }
       const hasEvidenceCitation = cited(answer);
-      if (result.items.length && !hasEvidenceCitation)
-        answer =
-          "当前回答未能给出可核对的知识依据，已撤回未经引用支持的内容。请补充问题条件，或向管理员反馈需要完善的主题。";
       const currentBot = await knowledgeBot(db, actor, bot.id);
       if (
         currentBot.revision !== bot.revision ||
@@ -2029,40 +2112,46 @@ export function createKnowledgeStudio(
       throw error;
     }
   }
-  async function searchAnswer(actor: Actor, botId: string, query: string) {
+  async function searchAnswer(
+    actor: Actor,
+    botId: string,
+    query: string,
+    alternate = "",
+  ) {
     const bot = await knowledgeBot(db, actor, botId),
       chunks = await publishedChunks(db, JSON.parse(bot.library_ids));
+    const queries = [
+      ...new Set(
+        [query, alternate].map((item) => item.trim()).filter(Boolean),
+      ),
+    ];
     let ranked: { id: string; score: number }[] | null = null,
       engine = "keyword";
     if (index && chunks.length) {
       ranked = await index.search(
         chunks.map((x) => x.id),
-        query,
+        queries.join("\n"),
       );
       if (ranked) engine = (await index.mode?.()) ?? "keyword";
     }
-    if (!ranked) {
-      const terms = [
-        ...new Intl.Segmenter("zh", { granularity: "word" }).segment(
-          query.toLowerCase(),
+    const lexical = queries.flatMap((item) => keywordHits(chunks, item));
+    const merged = new Map<string, number>();
+    for (const hit of lexical)
+      merged.set(hit.id, (merged.get(hit.id) ?? 0) + hit.score);
+    if (ranked)
+      ranked.forEach((hit, position) =>
+        merged.set(
+          hit.id,
+          (merged.get(hit.id) ?? 0) + Math.max(1, ranked!.length - position),
         ),
-      ]
-        .filter((x) => x.isWordLike)
-        .map((x) => x.segment);
-      ranked = chunks
-        .map((x) => ({
-          id: x.id,
-          score: terms.filter((t) =>
-            `${x.title} ${x.heading} ${x.text}`.toLowerCase().includes(t),
-          ).length,
-        }))
-        .filter((x) => x.score > 0)
-        .sort((a, b) => b.score - a.score);
-    }
+      );
+    const ordered = [...merged]
+      .map(([id, score]) => ({ id, score }))
+      .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
     const map = new Map(chunks.map((x) => [x.id, x]));
     return {
       engine,
-      items: ranked
+      items: ordered
         .slice(0, 12)
         .flatMap((x) =>
           map.has(x.id) ? [{ ...map.get(x.id)!, score: x.score }] : [],
