@@ -239,6 +239,34 @@ it("retries transient failures with bounded backoff but does not retry permissio
     await retryKnowledgeTask(db, job.id, new Error("network timeout")),
   ).toBe(false);
 });
+it("keeps a heading that names the question even when semantic search returns another section", async () => {
+  await createContent(db).create(actor, {
+    kind: "document",
+    format: "markdown",
+    libraryId: library,
+    title: "Doca手册",
+    markdown:
+      "# 快速开始\n\n五分钟快速部署完成\n\n# 容器部署（推荐）\n\nCompose 只把端口发布在 127.0.0.1:39120。DOCA_ORIGIN 必须是浏览器打开的 HTTPS 地址。",
+  });
+  await publishKnowledgeDocuments(db, actor, library);
+  const bot = await saveKnowledgeAssistant(db, actor, {
+    title: "手册",
+    libraryIds: [library],
+    memberIds: [],
+    enabled: true,
+    expectedRevision: 0,
+  });
+  const studio = createKnowledgeStudio(db, {
+    async search(ids) {
+      return [{ id: ids[0]!, score: 20 }];
+    },
+  });
+  const result = await studio.searchAnswer(actor, bot.id, "容器部署的方案");
+  expect(result.items.map((item) => item.heading)).toContain("容器部署（推荐）");
+  expect(result.items.some((item) => item.text.includes("127.0.0.1:39120"))).toBe(
+    true,
+  );
+});
 it.each([true, false])(
   "keeps cited answers and withdraws unsupported answers (cited=%s)",
   async (cited) => {
@@ -293,7 +321,9 @@ it.each([true, false])(
     if (cited) expect(message.content).toContain("[1]");
     else {
       expect(message.content).not.toContain("An unsupported statement");
-      expect(JSON.parse(message.detail).evidenceStatus).toBe("insufficient");
+      expect(message.content).toContain("DNS negative TTL");
+      expect(message.content).toContain("[1]");
+      expect(JSON.parse(message.detail).evidenceStatus).toBe("cited");
     }
     expect(JSON.parse(message.detail).citations.length).toBeGreaterThan(0);
     expect(await db.selectFrom("ai_sessions").selectAll().execute()).toEqual(
