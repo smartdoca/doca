@@ -40,6 +40,47 @@ function previewText(value: unknown, max = 80): string {
   return clip(parts.join(""), max);
 }
 
+function walkRich(
+  value: unknown,
+  visit: (node: Record<string, unknown>, parent: Record<string, unknown> | null) => void,
+  parent: Record<string, unknown> | null = null,
+) {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) walkRich(item, visit, parent);
+    return;
+  }
+  const node = value as Record<string, unknown>;
+  visit(node, parent);
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) walkRich(child, visit, node);
+  }
+}
+
+/** text 改的是段落。模型常把单元格 id 当成 blockId。 */
+export function textTargetId(value: unknown, blockId: string) {
+  let paragraphId = blockId;
+  walkRich(value, (node) => {
+    if (node.type === "table-cell" && node.id === blockId) {
+      const paragraph = (node.children as any[] | undefined)?.find(
+        (child) => child?.type === "paragraph" && child.id,
+      );
+      if (paragraph?.id) paragraphId = paragraph.id;
+    }
+  });
+  return paragraphId;
+}
+
+/** setCellContent 要单元格 id。模型常把格内段落 id 当成 cellId。 */
+export function cellTargetId(value: unknown, cellId: string) {
+  let resolved = cellId;
+  walkRich(value, (node, parent) => {
+    if (node.id === cellId && parent?.type === "table-cell" && parent.id)
+      resolved = String(parent.id);
+  });
+  return resolved;
+}
+
 function findById(value: unknown, id: string): unknown {
   if (!value || typeof value !== "object") return null;
   if (Array.isArray(value)) {
@@ -75,6 +116,10 @@ function richOutline(value: unknown) {
             id: cell?.id,
             rowId: cell?.rowId,
             columnId: cell?.columnId,
+            paragraphId: (cell?.children ?? []).find(
+              (child: any) => child?.type === "paragraph",
+            )?.id,
+            textLength: richTextLength(cell),
             preview: previewText(cell, 40),
           })),
         }));

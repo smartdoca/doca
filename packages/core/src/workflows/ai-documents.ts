@@ -21,6 +21,7 @@ import {
   repairRichTextValue,
   resolveSpreadsheetSheetId,
 } from "../modules/ai/edit-normalize.js";
+import { cellTargetId, textTargetId } from "../modules/ai/document-read.js";
 import {
   EditorController,
   readDocument,
@@ -186,6 +187,10 @@ export async function checkJob(db: DB, ctx: ToolContext) {
       fail(409, "任务执行权已失效");
   }
 }
+function tableRefError(op: { type?: string }, message: string) {
+  return `表格引用无效（${message}）。${op.type ?? "该命令"} 用了当前表里不存在的 id。整格改写用 setCellContent，cellId 取 document_read outline 的 cells[].id；只改几个字才用 text，blockId 取同一格的 paragraphId，deleteCount 取该格 textLength（一个汉字算 1，不要按字节或显示宽度估算）。不要把 cellId 和 paragraphId 对调，不要在 id 后拼接序号。本批次未保存。`;
+}
+
 async function sheetModel(loaded: Awaited<ReturnType<typeof restoreSurface>>) {
   if (!loaded.baseline) fail(409, "表格基线缺失");
   const bundle = {
@@ -534,14 +539,22 @@ export async function editAIDocument(
             validateRichNode(next);
           }
           if (op.type === "text") {
+            const blockId = textTargetId(l.runtime.getValue(), op.blockId);
             try {
-              l.runtime.editText(op.blockId, op.index, op.deleteCount, op.text);
+              l.runtime.editText(blockId, op.index, op.deleteCount, op.text);
             } catch (error) {
-              if (error instanceof Error && error.message === "Invalid text range") {
+              const message = error instanceof Error ? error.message : "";
+              if (message === "Invalid text range" || message === "Unknown text block") {
                 const entry = [...Node.nodes({ children: l.runtime.getValue() } as Node)]
-                  .find(([node]) => (node as any).id === op.blockId);
+                  .find(([node]) => (node as any).id === blockId);
                 const length = entry ? Node.string(entry[0]).length : null;
-                fail(400, `文字范围越界：blockId=${op.blockId}，index=${op.index}，deleteCount=${op.deleteCount}，当前块文字长度（UTF-16）=${length ?? "未知"}。请按 blockId 读取完整正文后定位；整块替换须 index=0、deleteCount=实际长度，不要猜测。本批次未保存。`);
+                const sample = entry ? Node.string(entry[0]).slice(0, 40) : "";
+                fail(
+                  400,
+                  message === "Unknown text block"
+                    ? `文字块不存在：blockId=${op.blockId}。表格里的 text 要用 outline 的 paragraphId，不要用 cellId。整格改写用 setCellContent 和 cells[].id。本批次未保存。`
+                    : `文字范围越界：blockId=${blockId}，index=${op.index}，deleteCount=${op.deleteCount}，当前文字「${sample}」长度=${length ?? "未知"}。一个汉字、字母、数字、空格都算 1，不要按字节或显示宽度重算。整段替换用 index=0、deleteCount=${length ?? "该段 textLength"}。整格改写优先 setCellContent，不必计算长度。本批次未保存。`,
+                );
               }
               throw error;
             }
@@ -749,8 +762,22 @@ export async function editAIDocument(
               "insertColumn",
               "deleteColumn",
             ].includes(op.type)
-          )
-            l.runtime.execute(op as any);
+          ) {
+            if (op.type === "setCellContent" && op.cellId)
+              op.cellId = cellTargetId(l.runtime.getValue(), op.cellId);
+            try {
+              l.runtime.execute(op as any);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "";
+              if (
+                message === "Unknown cell" ||
+                message === "Table identity mismatch" ||
+                message.startsWith("Unknown table identity")
+              )
+                fail(400, tableRefError(op, message));
+              throw error;
+            }
+          }
           else fail(400, "不支持的富文本命令");
         }
         const beforeRepair = l.runtime.getValue();

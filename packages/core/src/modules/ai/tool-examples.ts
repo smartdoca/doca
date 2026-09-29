@@ -269,6 +269,23 @@ export const TOOL_EXAMPLES: Record<string, Record<string, unknown>[]> = {
           children: [
             {
               id: "新唯一ID",
+              type: "paragraph",
+              children: [{ text: "替换后的整格文字" }],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      ...editBase,
+      operations: [
+        {
+          type: "setCellContent",
+          tableId: "已读取的表格ID",
+          cellId: "已读取的单元格ID",
+          children: [
+            {
+              id: "新唯一ID",
               type: "image",
               path: SAMPLE.asset,
               alt: "图片",

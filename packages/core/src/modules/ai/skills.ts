@@ -28,7 +28,7 @@ Markdown：
 
 富文本：
 - 追加普通段落：{type:"append",text:"第一段\\n第二段"}，必须提供text。append 只放普通段落，不要把 # 标题、- 列表、| 表格或 \`\`\` 代码原文写进去。标题用 insertBlock 创建 paragraph，并设置 title 为 h1 到 h5；列表使用 paragraph 的 list 属性（ul、ol 或 checkbox）；表格用 insertTable。如果 text 里仍出现这些 Markdown 记号，服务端会转成原生块，不要把转写后的原文留给用户。
-- 改块内文字：{type:"text",blockId,index,deleteCount,text}；index是该块内文字偏移。
+- 改块内文字：{type:"text",blockId,index,deleteCount,text}。blockId 是段落 id。index 和 deleteCount 是该段 UTF-16 长度：汉字、字母、数字、空格各算 1，用读取结果里的 textLength，不要按字节或显示宽度估算。整段替换用 index=0、deleteCount=textLength。
 - 局部样式：{type:"formatText",blockId,index,length,style:{bold:true,color:"#2563eb"},unset:["italic"]}。支持bold/italic/underline/strikethrough/code/fontSize/fontFamily/color/backgroundColor。不要跨原子卡片操作。
 - 超链接：{type:"link",blockId,index,length,url}给块内已读取的文字区间加或改链接，index/length是该块内文字偏移，url只接受http(s)、mailto、tel或站内地址；新段落中的链接用insertBlock，children写成[{text:"前缀"},{id:"新ID",type:"link",url:"https://…",children:[{text:"链接文字"}]},{text:"后缀"}]；append正文里的[文字](url)语法会转成原生链接。不要把链接写成formatText样式，不要整段重建已有文字。
 - 新段落：{type:"insertBlock",afterId,block:{id:"新唯一ID",type:"paragraph",children:[{text:"内容"}]}}。标题/列表/待办/代码等先参照读取的同类原生节点属性，保留children，不编造type。
@@ -36,7 +36,7 @@ Markdown：
 - 块样式：{type:"setBlock",blockId,properties:{...},unset:[...]}; 移动：{type:"moveBlock",blockId,parentId,afterId}; 删除用户明确指定的块：{type:"deleteBlock",blockId}。
 - 插入表格：{type:"insertTable",rows:3,columns:2,afterId}，然后重新读取真实tableId、rowId、columnId、cellId。
 - 表格命令均带tableId：insertRows/insertColumns带count、可选referenceId及side(before/after)；deleteRows/deleteColumns带ids；merge带rowIds/columnIds；split带mergeIds（不是cellId）。
-- 写表格单元格：{type:"setCellContent",tableId,cellId,children:[{id:"新ID",type:"paragraph",children:[{text:"内容"}]}]}。
+- 改表格已有文字优先整格替换：{type:"setCellContent",tableId,cellId,children:[{id:"新ID",type:"paragraph",children:[{text:"内容"}]}]}。cellId 用 outline 的 cells[].id。只改格内几个字时才用 text，blockId 用同一格的 paragraphId，不要把 cellId 传给 text，也不要把 paragraphId 传给 setCellContent。deleteCount 用该格 textLength，一个汉字算 1。
 - 单元格里放图片：children 直接放图片块，不要套 paragraph，用 path 不要写 assetId。例如 {type:"setCellContent",tableId,cellId,children:[{id:"新ID",type:"image",path:"已授权资产ID",alt:"说明",width:240,children:[{text:""}]}]}。插入列或行之后先 document_read，用读到的 cellId，不要拼接或猜测 id。
 - 单元格样式setCellStyle带cellIds、style:{align,verticalAlign,backgroundColor}；文字setTextStyle带cellIds、style、可选unset；resizeRow/resizeColumn带id和size(像素)；clearCells带cellIds；deleteTable仅在明确要求删除该表时使用。
 - 分栏：{type:"insertColumnsLayout",count:2或3或4,afterId}，读取真实分栏容器ID后插入内容。
