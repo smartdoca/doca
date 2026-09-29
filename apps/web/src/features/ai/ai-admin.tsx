@@ -4,7 +4,7 @@ import {
   type MessageValues,
 } from "@doca/i18n";
 import { useI18n } from "@web/shared/i18n.js";
-import { AutoComplete, Select } from "antd";
+import { AutoComplete, Select, Switch } from "antd";
 import { useEffect, useState } from "react";
 import {
   Boxes,
