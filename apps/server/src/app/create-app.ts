@@ -68,6 +68,10 @@ import { registerIdentity } from "../routes/identity.js";
 import { registerRegistrationReviews } from "../routes/registration-reviews.js";
 import type { SearchRuntime } from "../routes/search.js";
 import { registerWorkspace } from "../routes/workspace.js";
+import { registerWebhooks } from "../routes/webhooks.js";
+import { dispatchWebhooks } from "../services/webhooks/dispatch.js";
+import type { WebhookPost, WebhookResolve } from "../services/webhooks/http.js";
+import { openWebhookDatabase, type WebhookDB } from "@db/webhook-database.js";
 import { registerProfiles } from "../routes/profiles.js";
 import { registerStaticRoutes } from "../routes/static.js";
 import { registerTickets } from "../routes/tickets.js";
@@ -91,6 +95,10 @@ export interface CreateAppOptions {
   redisPrefix?: string;
   instanceId?: string;
   trustProxy?: string[];
+  webhookDatabase?: WebhookDB;
+  webhookDispatch?: boolean;
+  webhookResolve?: WebhookResolve;
+  webhookPost?: WebhookPost;
 }
 
 export async function createApp(db: DB, options: CreateAppOptions) {
@@ -434,6 +442,32 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   );
   api.addHook("preClose", async () => realtimeCluster.close());
   registerWorkspace(api, db, authenticated, admin, realtime.onlineUsers);
+  const webhookDb =
+    options.webhookDatabase ??
+    (await openWebhookDatabase({ driver: "sqlite", path: ":memory:" }));
+  const ownsWebhookDatabase = !options.webhookDatabase;
+  registerWebhooks(api, db, webhookDb, admin, options.webhookResolve);
+  let webhookDispatching: Promise<unknown> | undefined;
+  const webhookTimer = options.webhookDispatch
+    ? setInterval(() => {
+        if (webhookDispatching) return;
+        webhookDispatching = dispatchWebhooks(db, webhookDb, {
+          post: options.webhookPost,
+          resolve: options.webhookResolve,
+        })
+          .catch((error) => {
+            api.log.error({ err: error }, "Webhook dispatch failed");
+          })
+          .finally(() => {
+            webhookDispatching = undefined;
+          });
+      }, 1000)
+    : undefined;
+  api.addHook("preClose", async () => {
+    if (webhookTimer) clearInterval(webhookTimer);
+    await webhookDispatching;
+    if (ownsWebhookDatabase) await webhookDb.destroy();
+  });
   registerPageState(api, db, authenticated);
   const pluginComposition = await composeServerPlugins({
     api,
@@ -551,7 +585,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
           realtime: true,
           oidcClient: true,
           oidcProvider: false,
-          hooks: false,
+          hooks: true,
           integrationEventStream: true,
         },
         plugins: pluginComposition.plugins,
@@ -1483,6 +1517,9 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     await api.ready();
   } catch (error) {
     await pluginComposition.host.dispose();
+    if (webhookTimer) clearInterval(webhookTimer);
+    await webhookDispatching;
+    if (ownsWebhookDatabase) await webhookDb.destroy();
     throw error;
   }
   return api;

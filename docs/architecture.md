@@ -10,7 +10,7 @@ Version 0.1.0. This page describes the code as it is. Desktop and DSH remain pro
 
 The sidebar order is search, home, AI assistant, quick notes, libraries, and trash. Inside a library the sidebar becomes that library's table of contents. A personal document opens as its own page without that sidebar. A library document keeps the library contents. Home has four tabs: recent, owned by me, shared with me, and favorites, with type and time sorting. A creation calendar is not part of the core. A plugin may add that page later.
 
-A profile has a display name, a preset or uploaded avatar, and a password change. A library can have a cover. The document body and the admin pages share attachment upload and download. Admin navigation is separate: overview, users, sign-in and registration, file storage, document search, and Hook. The Hook entry is present and marked unavailable. Admin statistics are aggregate counts. An administrator does not gain the right to read private documents.
+A profile has a display name, a preset or uploaded avatar, and a password change. A library can have a cover. The document body and the admin pages share attachment upload and download. Admin navigation is separate: overview, users, sign-in and registration, file storage, document search, and Hook. Hook registers callback URLs for background delivery. Admin statistics are aggregate counts. An administrator does not gain the right to read private documents.
 
 Doca is a TypeScript modular monolith, not a set of microservices. The web app and the server live in one repository with separate directories and builds. Development uses two ports. The browser always uses one origin. In production the server can serve the built web app. Cordis owns the in-process context, services, effects, and lifecycle. The Doca SDK owns the stable contract.
 
@@ -103,7 +103,6 @@ Still needs deployment or an external integration:
 
 - A full desktop offline runtime. Rich text, Markdown, spreadsheets, canvas, and their collaboration protocols are connected.
 - Acting as an OIDC provider, SAML, and account recovery. External OIDC and social sign-in adapters exist. Live vendor credentials and deployment checks are still required.
-- Hook configuration and reliable delivery. Notifications already use a WebSocket invalidation plus an HTTP refetch.
 - Production AI providers, external MCP clients, and a Meilisearch cluster. AI, MCP, session events, import and export, attachments, and database search fallback exist in code.
 - Desktop, DSH, and device binding.
 
@@ -111,7 +110,7 @@ Comment detail currently returns at most the earliest 200 comments. The notifica
 
 ## 6. Later work
 
-Production acceptance of the editor packages, account recovery, live SSO, hardening, comment paging, and a Hook outbox come first. Desktop, DSH, and backups wait until the cloud deployment has been tested.
+Production acceptance of the editor packages, account recovery, live SSO, hardening, and comment paging come first. Desktop, DSH, and backups wait until the cloud deployment has been tested.
 
 ## Uploads, sign-in, and collaboration
 
@@ -125,4 +124,4 @@ Document collaboration uses WebSocket. Metadata stays on HTTP. The server valida
 
 The default deployment is one process without Redis. Broadcast, presence, and limits stay in that process. With Redis, the same interfaces use a cross-instance bus, presence, and global limits. Document updates are still committed in the database. Several replicas also require PostgreSQL and shared object storage. Schema creation and replica startup are separate. See [horizontal scaling](horizontal-scaling.md).
 
-A future Hook writes an outbox in the same transaction as the business change, then signs, retries, and audits delivery. Outbound addresses must resist SSRF. The business transaction does not call the network itself.
+Webhooks use a separate database for subscriptions and deliveries. The business transaction only appends the existing outbox. After commit, a background worker posts matching events with the headers configured for that callback, then retries and records the result. Callback URLs may be public or on the same machine and private network. The business transaction does not call the network.

@@ -33,13 +33,13 @@
 
 ## Hook 事件同步
 
-本轮提供持久的拉取式事件流，不是外部 Webhook 推送服务。
+投递正文、请求头和各事件字段见 [Webhook 投递](webhooks.zh-CN.md)。
 
-`GET /api/v1/admin/integration-events?after=0` 仅管理员可用，每次最多 100 条，返回 items、单调 cursor、hasMore。消费方成功处理后保存 cursor，下次续拉；按 id 去重。序号在业务事务内锁定分配，不用毫秒时间戳随机 ID 排序，以免并发事件漏读。
+业务事务把事件写入 outbox，提交后才发布为单调序号。`GET /api/v1/admin/integration-events?after=0` 仍可供管理员或插件按 cursor 拉取，每次最多 100 条。事件包含类型、资源/用户标识与通知跳转路径，不包含正文和密钥。
 
-事件随业务提交：文档/知识库创建、重命名、权限变化、移动、回收/恢复、互动等核心事件；notification.created 携带通知 ID、接收用户、事件类型、资源标识和跳转路径；申请/邀请决定也有事件。无文档正文、登录凭证、资产密钥。回滚事务不留下事件。
+管理员可以在 Hook 页面登记多个回调地址，并为每个地址选择事件和额外请求头。匹配事件由后台 POST 到该地址，请求头按登记内容原样发送，不占用业务事务。暂停的回调不再接收新事件。回调地址使用 HTTP(S)，可以指向公网、本机或内网的其他程序。
 
-管理员 Hook 页面可查看事件及接入方式。尚未提供：独立机器凭证、外部 HTTPS 签名推送、重试投递/死信、订阅配置、自动保留期清理。capabilities.integrationEventStream=true，hooks 仍为 false，避免将事件流冒充完整推送能力。
+订阅和投递记录在独立的 webhook 数据库中。SQLite 部署为数据目录下的 `webhooks.db`；PostgreSQL 部署为 `<主库名>_webhooks`，或由 `DOCA_WEBHOOK_DATABASE_URL` 指定。`capabilities.hooks=true`，`integrationEventStream=true`。
 
 ## 本轮验收
 

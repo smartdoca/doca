@@ -8,7 +8,7 @@ import { RegistrationReviews } from "@web/features/admin/registration-reviews.js
 import type { AccountOptions } from "@web/features/auth/account-fields.js";
 import { AdminAccountEditor } from "@web/features/account/account-settings.js";
 import { Feedback } from "@web/shared/components/feedback.js";
-import { HookEvents } from "@web/shared/hooks/hook-events.js";
+import { Webhooks } from "@web/features/admin/webhooks.js";
 import { useEffect, useState } from "react";
 import { Select } from "@web/shared/components/select.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
@@ -960,7 +960,7 @@ export function Admin({
               {accessTab === "directory" && <DirectorySettings />}
             </>
           )}
-          {tab === "hooks" && <HookEvents />}
+          {tab === "hooks" && <Webhooks />}
         </main>
       </div>
       {creating && (

@@ -1123,3 +1123,51 @@ input.switch-input[type="checkbox"]:checked:after {
   color: var(--muted);
   background: var(--surface-soft, #f7f8fa);
 }
+.admin-card label:has(.webhook-event-select) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.webhook-event-select {
+  width: 100%;
+  margin: 8px 0 16px;
+}
+.webhook-headers {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  border: 0;
+  padding: 0;
+}
+.webhook-headers legend {
+  font-size: 13px;
+  font-weight: 600;
+}
+.webhook-header-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.webhook-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.webhook-row {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.webhook-row small {
+  display: block;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+.webhook-deliveries {
+  display: grid;
+  gap: 8px;
+}
