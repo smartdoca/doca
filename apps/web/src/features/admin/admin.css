@@ -1023,6 +1023,31 @@ input.switch-input[type="checkbox"]:checked:after {
   font-size: 13px;
   margin: 22px 0 8px;
 }
+.admin-card .discovery-kind {
+  border-bottom: 1px solid #eff0f1;
+}
+.admin-card .discovery-kind > .policy-row {
+  border-bottom: 0;
+  padding-bottom: 8px;
+}
+.admin-card .discovery-kind > .setting-toggle {
+  padding: 0 0 18px;
+}
+.admin-card .discovery-exception {
+  padding-top: 22px;
+}
+.admin-card .discovery-exception strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+}
+.admin-card .discovery-exception small {
+  display: block;
+  margin: 6px 0 12px;
+  color: #8f959e;
+  font-size: 12px;
+  line-height: 1.6;
+}
 @media (max-width: 900px) {
   .distribution-cards {
     grid-template-columns: 1fr;

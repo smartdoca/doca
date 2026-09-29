@@ -191,7 +191,7 @@ export function DistributionSettings() {
         <h3>{t("policy.discovery")}</h3>
         <p>{t("discovery.policyHelp")}</p>
         {publicResourceKinds.map((kind) => (
-          <div key={kind}>
+          <div className="discovery-kind" key={kind}>
           <label className="policy-row">
             <strong>{t(`discovery.kind.${kind}`)}</strong>
             <Select
@@ -255,7 +255,7 @@ export function DistributionSettings() {
             )}
           </div>
         ))}
-        <div className="policy-row">
+        <div className="discovery-exception">
           <strong>{t("policy.internetPublicationUsers")}</strong>
           <small>{t("policy.internetPublicationUsersHelp")}</small>
         </div>
