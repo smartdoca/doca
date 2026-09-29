@@ -12,9 +12,11 @@ import { Type } from "@sinclair/typebox";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { respondInvitation } from "@core/modules/access/invitations.js";
 import {
+  distributionDefaults,
   distributionPolicy,
   publicMode,
   publicResourceKinds,
+  resourceDistribution,
   type Distribution,
 } from "@core/modules/deployment/policies.js";
 import { setEntry } from "@core/modules/discovery/entries.js";
@@ -177,9 +179,27 @@ export function registerDistribution(
       normalSearch: policy.normalSearch,
     };
   });
+  const publicationPeople = async (
+    policy: Awaited<ReturnType<typeof distributionPolicy>>,
+  ) => {
+    const ids = policy.internetPublicationUsers;
+    const people = ids.length
+      ? await db
+          .selectFrom("users")
+          .select(["id", "display_name", "public_id"])
+          .where("id", "in", ids)
+          .execute()
+      : [];
+    return {
+      ...policy,
+      internetPublicationPeople: ids.map(
+        (id) => people.find((person) => person.id === id) ?? { id, display_name: id, public_id: "" },
+      ),
+    };
+  };
   api.get("/api/v1/admin/distribution", async (req) => {
     admin(req);
-    return distributionPolicy(db);
+    return publicationPeople(await distributionPolicy(db));
   });
   api.put<{ Body: Distribution }>(
     "/api/v1/admin/distribution",
@@ -258,6 +278,28 @@ export function registerDistribution(
             defaultVisibility: Type.Optional(
               choice(["invited", "requestable", "authenticated", "public"]),
             ),
+            internetPublication: Type.Optional(
+              Type.Object(
+                {
+                  document: Type.Boolean(),
+                  library: Type.Boolean(),
+                  assistant: Type.Boolean(),
+                },
+                { additionalProperties: false },
+              ),
+            ),
+            internetPublicationUsers: Type.Optional(
+              Type.Array(Type.String({ format: "uuid" }), { maxItems: 200 }),
+            ),
+            internetPublicationPeople: Type.Optional(
+              Type.Array(
+                Type.Object({
+                  id: Type.String(),
+                  display_name: Type.String(),
+                  public_id: Type.Optional(Type.String()),
+                }),
+              ),
+            ),
           },
           { additionalProperties: false },
         ),
@@ -265,7 +307,40 @@ export function registerDistribution(
     },
     async (req) => {
       admin(req);
-      const { revision, ...config } = req.body;
+      const {
+        revision,
+        internetPublicationPeople: _people,
+        ...config
+      } = req.body as Distribution & { internetPublicationPeople?: unknown };
+      const merged = {
+        ...distributionDefaults,
+        ...config,
+        internetPublication: {
+          ...distributionDefaults.internetPublication,
+          ...config.internetPublication,
+        },
+        internetPublicationUsers: [
+          ...new Set(config.internetPublicationUsers ?? []),
+        ],
+        revision,
+      } satisfies Distribution;
+      if (merged.internetPublicationUsers.length) {
+        const found = await db
+          .selectFrom("users")
+          .select("id")
+          .where("id", "in", merged.internetPublicationUsers)
+          .where("status", "=", "active")
+          .execute();
+        if (found.length !== merged.internetPublicationUsers.length)
+          fail(400, "放行用户不存在或已停用");
+      }
+      for (const kind of ["document", "library"] as const)
+        if (
+          resourceDistribution(merged, kind).defaultVisibility === "public" &&
+          !merged.internetPublication[kind]
+        )
+          fail(400, "已关闭公网公开时，新建默认范围不能设为全网公开");
+      config.internetPublicationUsers = merged.internetPublicationUsers;
       const result = await db
         .updateTable("distribution_settings")
         .set({ config: JSON.stringify(config), revision: revision + 1 })
@@ -273,7 +348,7 @@ export function registerDistribution(
         .where("revision", "=", revision)
         .executeTakeFirst();
       if (!result.numUpdatedRows) fail(409, "设置已变化，请刷新后重试");
-      return { ...config, revision: revision + 1 };
+      return publicationPeople(await distributionPolicy(db));
     },
   );
   api.get("/api/v1/me/invitations", (req) => listInvitations(db, auth(req)));

@@ -5,6 +5,7 @@ import { transact } from "@db/transactions.js";
 import type { Actor } from "../identity/passwords.js";
 import { activeActor } from "../access/queries.js";
 import { requireCapability } from "../access/operation-policy.js";
+import { internetPublicationOpen } from "../deployment/policies.js";
 import { fail } from "../../shared/errors.js";
 import {
   canManageKnowledgeBot,
@@ -103,6 +104,7 @@ export async function knowledgePermissionOverview(
     inheritedFields: [],
     visibility: bot.visibility,
     effectiveVisibility: bot.visibility,
+    internetPublication: await internetPublicationOpen(db, actor.id, "assistant"),
     publicRole: "reader",
     requestsEnabled: false,
     effectiveRequestsEnabled: false,

@@ -1,4 +1,9 @@
-import type { DB, Resource } from "../../../../db/src/index.js";
+import type { DB, Resource, Schema } from "../../../../db/src/index.js";
+import type { Transaction } from "kysely";
+import {
+  distributionPolicy,
+  type InternetPublicationKind,
+} from "../deployment/policies.js";
 import { checkOperation } from "../../shared/plugin-services.js";
 import { fail } from "../../shared/errors.js";
 
@@ -22,6 +27,20 @@ export async function checkDocumentSize(db: DB, id: string, next: number) {
 }
 export async function checkPublication(db: DB, actorId: string, ownerId: string, visibility: string) {
   await checkOperation(db, actorId, "resources.publish", { ownerId, visibility });
+}
+/** Blocks a new anonymous publication. Resources that are already public stay public. */
+export async function assertInternetPublication(
+  db: DB | Transaction<Schema>,
+  kind: InternetPublicationKind,
+  actorId: string,
+) {
+  const policy = await distributionPolicy(db);
+  if (
+    policy.internetPublication[kind] ||
+    policy.internetPublicationUsers.includes(actorId)
+  )
+    return;
+  fail(403, "管理员已关闭此类内容的公网公开");
 }
 export async function checkMemberAdmission(db: DB, id: string, userId: string) {
   const resource = await db.selectFrom("resources").select("owner_id").where("id", "=", id).executeTakeFirstOrThrow();

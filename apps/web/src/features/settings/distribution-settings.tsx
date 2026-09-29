@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { Select } from "@web/shared/components/select.js";
 import { Feedback } from "@web/shared/components/feedback.js";
+import { PersonPicker } from "@web/features/documents/person-picker.js";
 import { realtime } from "@web/features/documents/realtime.js";
 import {
   resourceDistribution,
@@ -12,9 +13,16 @@ import {
   type Distribution,
   type ContentDistribution,
 } from "@core/modules/deployment/policies.js";
+type DistributionSettingsValue = Distribution & {
+  internetPublicationPeople?: {
+    id: string;
+    display_name: string;
+    public_id?: string;
+  }[];
+};
 export function DistributionSettings() {
   const { t } = useI18n();
-  const [value, setValue] = useState<Distribution | null>(null),
+  const [value, setValue] = useState<DistributionSettingsValue | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   useEffect(() => {
@@ -26,7 +34,10 @@ export function DistributionSettings() {
     if (!value || busy) return;
     setBusy(true);
     try {
-      setValue(await api("/admin/distribution", "PUT", { ...value, ...patch }));
+      const { internetPublicationPeople: _people, ...current } = value;
+      setValue(
+        await api("/admin/distribution", "PUT", { ...current, ...patch }),
+      );
       window.dispatchEvent(new Event("doca-discovery-policy"));
       setError("");
     } catch (e) {
@@ -94,7 +105,9 @@ export function DistributionSettings() {
             <option value="invited">{t("policy.private")}</option>
             <option value="requestable">{t("policy.requestable")}</option>
             <option value="authenticated">{t("policy.authenticated")}</option>
-            <option value="public">{t("policy.public")}</option>
+            {value?.internetPublication[kind] !== false && (
+              <option value="public">{t("policy.public")}</option>
+            )}
           </Select>
           <small>{t("policy.newHelp")}</small>
         </label>
@@ -178,7 +191,8 @@ export function DistributionSettings() {
         <h3>{t("policy.discovery")}</h3>
         <p>{t("discovery.policyHelp")}</p>
         {publicResourceKinds.map((kind) => (
-          <label className="policy-row" key={kind}>
+          <div key={kind}>
+          <label className="policy-row">
             <strong>{t(`discovery.kind.${kind}`)}</strong>
             <Select
               disabled={!value || busy}
@@ -202,7 +216,86 @@ export function DistributionSettings() {
               ))}
             </Select>
           </label>
+            {kind !== "folder" && (
+              <label className="setting-toggle">
+                <span>
+                  <strong>{t("policy.internetPublication")}</strong>
+                  <small>{t("policy.internetPublicationHelp")}</small>
+                </span>
+                <input
+                  type="checkbox"
+                  disabled={!value || busy}
+                  checked={value ? value.internetPublication[kind] : true}
+                  onChange={(e) => {
+                    if (!value) return;
+                    const allowed = e.target.checked;
+                    const patch: Partial<Distribution> = {
+                      internetPublication: {
+                        ...value.internetPublication,
+                        [kind]: allowed,
+                      },
+                    };
+                    if (
+                      !allowed &&
+                      (kind === "document" || kind === "library") &&
+                      resourceDistribution(value, kind).defaultVisibility ===
+                        "public"
+                    )
+                      patch.resourcePolicies = {
+                        ...value.resourcePolicies,
+                        [kind]: {
+                          ...value.resourcePolicies?.[kind],
+                          defaultVisibility: "authenticated",
+                        },
+                      };
+                    void save(patch);
+                  }}
+                />
+              </label>
+            )}
+          </div>
         ))}
+        <div className="policy-row">
+          <strong>{t("policy.internetPublicationUsers")}</strong>
+          <small>{t("policy.internetPublicationUsersHelp")}</small>
+        </div>
+        <PersonPicker
+          select={(person) => {
+            if (!value || value.internetPublicationUsers.includes(person.id))
+              return;
+            void save({
+              internetPublicationUsers: [
+                ...value.internetPublicationUsers,
+                person.id,
+              ],
+            });
+          }}
+        />
+        <ul className="discovery-list">
+          {value?.internetPublicationPeople?.map((person) => (
+            <li key={person.id}>
+              <div>
+                <strong>{person.display_name}</strong>
+                {person.public_id && <small>@{person.public_id}</small>}
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                aria-label={t("policy.internetPublicationRemove")}
+                onClick={() =>
+                  value &&
+                  void save({
+                    internetPublicationUsers: value.internetPublicationUsers.filter(
+                      (id) => id !== person.id,
+                    ),
+                  })
+                }
+              >
+                {t("policy.internetPublicationRemove")}
+              </button>
+            </li>
+          ))}
+        </ul>
       </section>
       <Feedback message={error} tone="error" />
     </>

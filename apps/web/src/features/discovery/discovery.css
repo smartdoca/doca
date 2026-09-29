@@ -4,6 +4,13 @@
   padding: 28px;
   box-sizing: border-box;
 }
+/* The workspace host clips overflow. This page is the scroll surface. */
+.dashboard-scroll-host:has(> .discovery-page) {
+  overflow: auto;
+  display: block;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
 .discovery-page header,
 .discovery-controls,
 .discovery-page footer {

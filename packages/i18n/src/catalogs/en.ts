@@ -1576,6 +1576,13 @@ export const en = {
   "policy.requestable": "Allow access requests",
   "policy.authenticated": "Visible to signed-in users",
   "policy.public": "Public on the web",
+  "policy.internetPublication": "Allow public web access",
+  "policy.internetPublicationHelp":
+    "When off, this type can no longer be opened to people who are not signed in. Content that is already public stays public.",
+  "policy.internetPublicationUsers": "Individual exceptions",
+  "policy.internetPublicationUsersHelp":
+    "After a type is closed, these people can still open that type to visitors who are not signed in.",
+  "policy.internetPublicationRemove": "Remove exception",
   "policy.newHelp":
     "Applies only to new content. Documents in libraries still inherit library settings.",
   "policy.grantMode": "Access for new collaborators",

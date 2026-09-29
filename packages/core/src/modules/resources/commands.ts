@@ -4,7 +4,7 @@ import {
   checkDocumentSize,
   checkStorage,
 } from "../access/operation-policy.js";
-import { checkPublication, checkTransfer } from "../access/operation-policy.js";
+import { assertInternetPublication, checkPublication, checkTransfer } from "../access/operation-policy.js";
 import { archiveInvitation, invitationState } from "../access/invitations.js";
 import { protectManagers } from "./context.js";
 import { randomUUID } from "node:crypto";
@@ -227,6 +227,8 @@ export function createResourceCommands(
           updated_at: now,
         };
         await checkPublication(ctx.tx, actor.id, actor.id, row.visibility);
+        if (row.visibility === "public")
+          await assertInternetPublication(ctx.tx, input.kind, actor.id);
         await ctx.tx.insertInto("resources").values(row).execute();
         if (input.initialContent !== undefined) {
           if (input.markdown !== undefined) fail(400, "不能同时导入两种内容");

@@ -6,7 +6,7 @@ import {
 } from "./inheritance.js";
 import type { DB, Resource } from "../../../../db/src/index.js";
 import type { Actor } from "../identity/passwords.js";
-import { distributionPolicy } from "../deployment/policies.js";
+import { distributionPolicy, internetPublicationOpen } from "../deployment/policies.js";
 import { accessContext } from "./queries.js";
 import {
   permission,
@@ -262,6 +262,11 @@ export async function permissionOverview(
     isOwner,
     administrators,
     members,
+    internetPublication: await internetPublicationOpen(
+      db,
+      actor?.id,
+      r.kind === "library" ? "library" : "document",
+    ),
     loginRequired: !actor && open.visibility === "authenticated",
     sources: [
       ...(isOwner ? ["owner"] : []),

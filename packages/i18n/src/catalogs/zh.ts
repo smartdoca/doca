@@ -1476,6 +1476,13 @@ export const zh = {
   "policy.requestable": "允许申请访问",
   "policy.authenticated": "站内公开",
   "policy.public": "全网公开",
+  "policy.internetPublication": "允许公网公开",
+  "policy.internetPublicationHelp":
+    "关闭后不能再把这类内容设为未登录可阅读。已经公开的保持不变。",
+  "policy.internetPublicationUsers": "单独放行",
+  "policy.internetPublicationUsersHelp":
+    "类型关闭后，这些用户仍可以把对应内容设为未登录可阅读。",
+  "policy.internetPublicationRemove": "取消放行",
   "policy.newHelp": "只影响新建内容，知识库中的文档仍按继承规则创建。",
   "policy.grantMode": "新协作者授权方式",
   "policy.direct": "直接生效",
