@@ -1,6 +1,12 @@
 import type { MessageKey } from "./en";
 
 export const zh = {
+  "personPicker.empty": "没有找到用户",
+  "personPicker.reselect": "重新选择协作者",
+  "personPicker.label": "查找用户",
+  "personPicker.shortPlaceholder": "搜索用户名或昵称",
+  "personPicker.placeholder": "输入至少2个字，或完整账号",
+  "personPicker.find": "查找",
   "content.chooseValue": "请选择",
   "content.enabled": "启用",
   "content.disabled": "禁用",
@@ -1120,6 +1126,7 @@ export const zh = {
   "ai.progress.phase.usingTool": "正在使用工具",
   "ai.progress.phase.reviewing": "正在验收已保存成果",
   "ai.progress.phase.completed": "已完成",
+  "ai.progress.event.richTextFallback": "已整理生成的富文本内容",
   "ai.progress.event.checkpointResumed": "已恢复执行检查点，正在核对已保存操作",
   "ai.progress.event.retryResumed": "从已保存的检查点继续原任务",
   "ai.progress.event.imageSaved": "图片已保存",

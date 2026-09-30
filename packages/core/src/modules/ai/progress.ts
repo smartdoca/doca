@@ -51,6 +51,7 @@ export type AIProgressEventCode =
   | "file_receipt_missing"
   | "secret_receipt_missing"
   | "spreadsheet_image_receipt_missing"
+  | "rich_text_fallback"
   | "document_receipt_missing"
   | "reviewing_delivery"
   | "review_passed"

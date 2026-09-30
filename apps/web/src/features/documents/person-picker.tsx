@@ -37,7 +37,7 @@ const { t } = useI18n();
       )
         .then((d) => {
           setItems(d.items);
-          setError(d.items.length ? "" : "没有找到用户");
+          setError(d.items.length ? "" : t("personPicker.empty"));
         })
         .catch((e) => {
           if (e.name !== "AbortError") setError(e.message);
@@ -47,7 +47,7 @@ const { t } = useI18n();
       clearTimeout(timer);
       c.abort();
     };
-  }, [q]);
+  }, [q, t]);
   return (
     <div
       className={"person-picker" + (actions ? " person-picker-compact" : "")}
@@ -56,16 +56,16 @@ const { t } = useI18n();
         {selected ? (
           <span className="person-picked">
             <UserBadge passive id={selected.id} name={selected.display_name} />
-            <button type="button" aria-label="重新选择协作者" onClick={clear}>
+            <button type="button" aria-label={t("personPicker.reselect")} onClick={clear}>
               ×
             </button>
           </span>
         ) : (
           <input
             autoFocus={autoFocus}
-            aria-label="查找用户"
+            aria-label={t("personPicker.label")}
             placeholder={
-              actions ? "搜索用户名或昵称" : "输入至少2个字，或完整账号"
+              actions ? t("personPicker.shortPlaceholder") : t("personPicker.placeholder")
             }
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -81,12 +81,12 @@ const { t } = useI18n();
               )
                 .then((d) => {
                   setItems(d.items);
-                  setError(d.items.length ? "" : "没有找到用户");
+                  setError(d.items.length ? "" : t("personPicker.empty"));
                 })
                 .catch((e) => setError(e.message))
             }
           >
-            查找
+            {t("personPicker.find")}
           </button>
         )}
       </div>

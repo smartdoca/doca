@@ -1,14 +1,14 @@
 # Production-oriented single-host deployment.
 # Put DOCA_ORIGIN=https://docs.example.com in .env.
 # Terminate TLS in a reverse proxy and forward to 127.0.0.1:39120.
-# The published image is docker.io/smartdoca/doca:0.1.0.
+# The published image is docker.io/smartdoca/doca:0.1.1.
 # `docker compose up -d` pulls that tag. Add `--build` to build from this checkout.
 services:
   doca:
     build:
       context: .
       dockerfile: Dockerfile
-    image: docker.io/smartdoca/doca:0.1.0
+    image: docker.io/smartdoca/doca:0.1.1
     pull_policy: always
     restart: unless-stopped
     init: true

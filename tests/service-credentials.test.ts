@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { openTestDatabase } from "./database.js";
 import { createApp } from "../apps/server/src/app/create-app.js";
@@ -11,6 +14,7 @@ let db: DB,
 const origin = "http://localhost:39131",
   password = "credentials-test-password";
 let runtime: IdentityRuntime;
+let databaseDirectory: string;
 const request = (method: any, path: string, cookie = admin, payload?: object) =>
   app.inject({
     method,
@@ -24,7 +28,8 @@ const read = async () => {
   return r.json();
 };
 beforeEach(async () => {
-  db = await openTestDatabase({ driver: "sqlite", path: ":memory:" });
+  databaseDirectory = await mkdtemp(join(tmpdir(), "doca-credentials-"));
+  db = await openTestDatabase({ driver: "sqlite", path: join(databaseDirectory, "test.db") });
   const owner = await createUser(
     db,
     { login: "admin", displayName: "Admin", password },
@@ -50,6 +55,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   await app.close();
   await db.destroy();
+  await rm(databaseDirectory, { recursive: true, force: true });
 });
 it("restricts credentials to admins and protects writes against cross-origin requests", async () => {
   expect(
@@ -191,7 +197,8 @@ it("rejects unsafe endpoint, malformed keys and unexpected configuration fields"
 });
 it("rotates verification gateway credentials live and refreshes another running instance", async () => {
   const otherRuntime: IdentityRuntime = { credentials: {}, allowedOrigins: [] };
-  const other = await createApp(db, { origin, identity: otherRuntime });
+  const otherDb = await openTestDatabase({ driver: "sqlite", path: join(databaseDirectory, "test.db") });
+  const other = await createApp(otherDb, { origin, identity: otherRuntime });
   try {
     const c = await read();
     c.config.identity.credentials.company = "rotated-client-secret";
@@ -229,5 +236,6 @@ it("rotates verification gateway credentials live and refreshes another running 
     );
   } finally {
     await other.close();
+    await otherDb.destroy();
   }
 });

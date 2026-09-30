@@ -31,6 +31,7 @@ const phaseKeys = {
 } as const satisfies Record<AIProgressPhase, MessageKey>;
 
 const eventKeys = {
+  rich_text_fallback: "ai.progress.event.richTextFallback",
   checkpoint_resumed: "ai.progress.event.checkpointResumed",
   retry_resumed: "ai.progress.event.retryResumed",
   image_saved: "ai.progress.event.imageSaved",

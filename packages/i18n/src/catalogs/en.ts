@@ -1,5 +1,11 @@
 /** English copy is the source catalog. Every other locale must provide these keys. */
 export const en = {
+  "personPicker.empty": "No users found",
+  "personPicker.reselect": "Choose another collaborator",
+  "personPicker.label": "Find people",
+  "personPicker.shortPlaceholder": "Search username or display name",
+  "personPicker.placeholder": "Enter at least 2 characters or a full account name",
+  "personPicker.find": "Find",
   "content.chooseValue": "Choose a value",
   "content.enabled": "Enabled",
   "content.disabled": "Disabled",
@@ -1185,6 +1191,7 @@ export const en = {
   "ai.progress.phase.usingTool": "Using a tool",
   "ai.progress.phase.reviewing": "Reviewing saved work",
   "ai.progress.phase.completed": "Completed",
+  "ai.progress.event.richTextFallback": "Normalized the generated rich-text content",
   "ai.progress.event.checkpointResumed":
     "Resumed from a checkpoint and checking saved work",
   "ai.progress.event.retryResumed":

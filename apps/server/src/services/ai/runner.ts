@@ -3571,6 +3571,8 @@ export function createAIRunner(
       );
       const decisions =
         progress.approvals?.filter((a) => a.state === "approved") ?? [];
+      // A retry/resume is a new execution, even when job and round are unchanged.
+      const executionId = randomUUID();
       let stepOrdinal = 0;
       let activeStepId: string | undefined;
       const stream = await agent.stream(
@@ -3595,6 +3597,8 @@ export function createAIRunner(
           abortSignal: signal,
           modelSettings: { maxOutputTokens: model.maxOutput, maxRetries: 0 },
           onStepFinish: async (step) => {
+            const finishedStepId = activeStepId;
+            activeStepId = undefined;
             const responseMessages = step.response.messages;
             if (
               responseMessages?.length &&
@@ -3620,19 +3624,18 @@ export function createAIRunner(
               .where("id", "=", job.id)
               .where("lease", "=", job.lease)
               .execute();
-            if (activeStepId) {
+            if (finishedStepId) {
               await sessionEvents.append({
                 sessionId: session.id,
-                id: `${activeStepId}:end`,
+                id: `${finishedStepId}:end`,
                 type: "step/end",
                 data: {
                   jobId: job.id,
-                  stepId: activeStepId,
+                  stepId: finishedStepId,
                   round: currentRound,
-                  status: "completed",
+                  status: step.finishReason === "error" ? "failed" : "completed",
                 },
               });
-              activeStepId = undefined;
             }
           },
         },
@@ -3641,7 +3644,7 @@ export function createAIRunner(
         for await (const chunk of stream.fullStream) {
           signal.throwIfAborted();
           if (chunk.type === "step-start") {
-            activeStepId = `${job.id}:step:${currentRound}:${stepOrdinal++}`;
+            activeStepId = `${job.id}:step:${executionId}:${currentRound}:${stepOrdinal++}`;
             await sessionEvents.append({
               sessionId: session.id,
               id: `${activeStepId}:start`,
@@ -3753,14 +3756,16 @@ export function createAIRunner(
           await publish();
         }
       } catch (error) {
-        if (activeStepId)
+        const failedStepId = activeStepId;
+        activeStepId = undefined;
+        if (failedStepId)
           await sessionEvents.append({
             sessionId: session.id,
-            id: `${activeStepId}:end`,
+            id: `${failedStepId}:end`,
             type: "step/end",
             data: {
               jobId: job.id,
-              stepId: activeStepId,
+              stepId: failedStepId,
               round: currentRound,
               status: signal.aborted ? "cancelled" : "failed",
             },
