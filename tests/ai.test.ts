@@ -211,7 +211,7 @@ it("retries failed tasks with original inputs, rejects foreign retries, and expo
     format: "markdown",
     markdown: "# 关联测试\n\n验收内容",
   });
-  let failOnce = true;
+  let failRequests = true;
   const fallback = mockAI({ chunkDelay: 5 });
   const origin = "http://localhost:39135";
   const app = await createApp(db, {
@@ -219,8 +219,7 @@ it("retries failed tasks with original inputs, rejects foreign retries, and expo
     ai: {
       memory: { driver: "sqlite", url: ":memory:" },
       fetch: async (...args) => {
-        if (failOnce) {
-          failOnce = false;
+        if (failRequests) {
           return Response.json(
             { error: { message: "transient failure", type: "server_error" } },
             { status: 500 },
@@ -272,6 +271,7 @@ it("retries failed tasks with original inputs, rejects foreign retries, and expo
       throw Error("job timeout");
     };
     expect((await wait(first)).jobs[0].status).toBe("failed");
+    failRequests = false;
     const retryPayload = {
       id: randomUUID(),
       retryOf: first,
@@ -2624,8 +2624,7 @@ it("rejects invalid native elements atomically and stores actual code blocks wit
   const before = await readAIDocument(db, { actor: owner }, resource.id);
   const version = { seq: before.seq, epochId: before.epochId! };
   for (const block of [
-    { id: "bad", type: "codeBlock", children: [{ text: "package main" }] },
-    { id: "bad", type: "code-block", children: [{ text: "package main" }] },
+    { id: "bad", type: "unsupported-block", children: [{ text: "package main" }] },
     {
       id: "bad",
       type: "paragraph",

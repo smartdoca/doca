@@ -305,31 +305,30 @@ export function createSearchReconciler(
             .orderBy("r.id")
             .limit(pageSize)
             .execute();
+          // Reconcile the page as a lightweight ID/fingerprint inventory.
+          // One batch lookup avoids a database round trip for every resource.
+          const indexedRows = rows.length
+            ? await tx
+                .selectFrom("search_reconcile_entries")
+                .select(["id", "content_hash"])
+                .where("id", "in", rows.map(row => row.id))
+                .execute()
+            : [];
+          const indexed = new Map(indexedRows.map(row => [row.id, row.content_hash]));
+          const unchanged: string[] = [];
+          const missing: string[] = [];
           for (const row of rows) {
-            const indexed = await tx
-              .selectFrom("search_reconcile_entries")
-              .selectAll()
-              .where("id", "=", row.id)
-              .executeTakeFirst();
-            if (
-              indexed &&
-              indexed.content_hash === searchDocument(row).content_hash
-            )
-              await tx
-                .deleteFrom("search_reconcile_entries")
-                .where("id", "=", row.id)
-                .execute();
-            else if (!indexed)
-              await tx
-                .insertInto("search_reconcile_entries")
-                .values({
-                  id: row.id,
-                  content_hash: null,
-                  round_id: state.round_id,
-                  pending: 0,
-                })
-                .execute();
+            if (!indexed.has(row.id)) missing.push(row.id);
+            else if (indexed.get(row.id) === searchDocument(row).content_hash)
+              unchanged.push(row.id);
           }
+          if (unchanged.length)
+            await tx.deleteFrom("search_reconcile_entries")
+              .where("id", "in", unchanged).execute();
+          if (missing.length)
+            await tx.insertInto("search_reconcile_entries").values(
+              missing.map(id => ({ id, content_hash: null, round_id: state.round_id, pending: 0 })),
+            ).execute();
           patch.scanned = state.scanned + rows.length;
           patch.cursor = rows.at(-1)?.id ?? state.cursor;
           if (rows.length < pageSize) {

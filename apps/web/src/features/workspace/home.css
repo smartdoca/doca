@@ -76,7 +76,10 @@
   font-weight: 500;
 }
 .workspace-recent small {
-  display: block;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   margin-top: 5px;
   color: var(--muted, #858b99);
   font-size: 12px;
@@ -182,3 +185,23 @@
 
 .workspace-home-scroll { display: block; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
 .workspace-columns > * { min-width: 0; }
+
+.workspace-recent-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  color: #8072ba;
+}
+.workspace-recent-source svg { flex-shrink: 0; }
+.workspace-recent-source span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-glyph-assistant { background: #7f6fff; }
+.workspace-glyph-folder { background: #cc8500; }
+.workspace-glyph-file { background: #6084a8; }
+
+.workspace-glyph-plugin { background: #6084a8; }

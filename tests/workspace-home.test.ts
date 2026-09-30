@@ -231,3 +231,21 @@ it("shows only current maintainers their human decisions and removes resolved wo
     [],
   );
 });
+it("returns document formats and permission-checked library sources", async () => {
+  const content = createContent(db);
+  const library = await content.create(owner, {
+    kind: "library", format: "markdown", title: "Team knowledge",
+  });
+  const document = await content.create(owner, {
+    kind: "document", format: "spreadsheet", title: "Budget", libraryId: library.id,
+  });
+  await content.visit(owner, document.id);
+  expect((await recentActivity(db, owner)).items.find(x => x.id === document.id))
+    .toMatchObject({ format: "spreadsheet", inLibrary: true, libraryName: "Team knowledge" });
+  await content.permissions(owner, document.id, {
+    version: document.version, visibility: "public", accessMode: "custom",
+  });
+  await content.visit(reader, document.id);
+  expect((await recentActivity(db, reader)).items.find(x => x.id === document.id))
+    .toMatchObject({ format: "spreadsheet", inLibrary: true, libraryName: null });
+});

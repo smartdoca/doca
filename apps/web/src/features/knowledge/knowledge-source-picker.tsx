@@ -1,3 +1,5 @@
+import { ContentSourceForm } from "./content-source-form.js";
+import type { ContentSourceDescriptor } from "@smartdoca/plugin-sdk/content";
 import {
   Link2,
   FileText,
@@ -44,7 +46,11 @@ export function SourcePicker({
   busy,
   bind,
   initial,
+  contentAdded,
+  contentInitial,
 }: {
+  contentInitial?: {groupId:string;sourceId:string;title:string;config:import("@smartdoca/plugin-sdk").JsonObject};
+  contentAdded?: (title:string)=>void;
   libraryId: string;
   locale: string;
   busy: boolean;
@@ -64,8 +70,10 @@ export function SourcePicker({
   };
 }) {
   const { t } = useI18n();
+  const [contentSources,setContentSources]=useState<ContentSourceDescriptor[]>([]);
+  useEffect(()=>{const controller=new AbortController();if(contentAdded) void api<{items:ContentSourceDescriptor[]}>("/content/sources?purpose=knowledge",undefined,undefined,controller.signal).then(result=>setContentSources(result.items.filter(source=>!source.id.startsWith("doca.documents.")&&!source.id.startsWith("doca.files.")))).catch(error=>{if(!controller.signal.aborted)setError(error.message);});return()=>controller.abort();},[!!contentAdded]);
   const sources = webPluginRegistry.knowledgeSources.list();
-  const [kind, setKind] = useState(initial?.sourceKind ?? ""),
+  const [kind, setKind] = useState(contentInitial?`content:${contentInitial.sourceId}`:initial?.sourceKind ?? ""),
     [name, setName] = useState(initial?.title ?? "");
   const [documents, setDocuments] = useState(
     initial?.sourceKind === "document" ? initial.sourceIds.join("\n") : "",
@@ -188,9 +196,12 @@ export function SourcePicker({
       "folder",
       "file",
       ...sources.map((x) => x.sourceKind),
+      ...contentSources.map(source=>`content:${source.id}`),
     ]),
   ];
   const label = (k: string) => {
+    const content=contentSources.find(source=>`content:${source.id}`===k);
+    if(content) return locale.startsWith("zh")?content.title.zh:content.title.en;
     const source = sources.find((x) => x.sourceKind === k);
     return k === "library"
       ? t("sourceGroup.libraries")
@@ -215,6 +226,8 @@ export function SourcePicker({
     folder: Folder,
     file: File,
   };
+  const content=contentSources.find(source=>`content:${source.id}`===kind);
+  if(content && contentAdded) return <ContentSourceForm key={content.id} initial={contentInitial} source={content} libraryId={libraryId} back={()=>setKind("")} added={contentAdded}/>;
   return (
     <div className="library-source-picker source-wizard">
       {!kind ? (

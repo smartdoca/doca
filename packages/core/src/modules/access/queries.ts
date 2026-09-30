@@ -1,3 +1,4 @@
+import { blockedContentDocuments } from "../knowledge/content-access.js";
 import { policyFields, type PolicyField } from "./inheritance.js";
 import { effectiveResource } from "../access/inheritance.js";
 import { sql, type RawBuilder, type Transaction } from "kysely";
@@ -155,7 +156,15 @@ export async function accessContext(
   subtrees: readonly string[] = [],
 ) {
   await activeActor(db, actor);
-  const resources = await loadResources(db, ids, subtrees);
+  let resources = await loadResources(db, ids, subtrees);
+  const blocked = await blockedContentDocuments(db, resources, actor);
+  // Descendants cannot bypass a suspended parent through an inherited route.
+  let expanded = true;
+  while (expanded) {
+    expanded = false;
+    for (const resource of resources) if (resource.parent_id && blocked.has(resource.parent_id) && !blocked.has(resource.id)) { blocked.add(resource.id); expanded = true; }
+  }
+  resources = resources.filter(resource => !blocked.has(resource.id));
   return {
     resources,
     grants: await effectiveGrants(

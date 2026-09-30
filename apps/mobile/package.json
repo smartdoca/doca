@@ -11,11 +11,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@smartdoca/web-plugin-registry": "workspace:*",
     "@expo/vector-icons": "^14.1.0",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@hookform/resolvers": "^5.2.1",
     "@shopify/flash-list": "1.7.6",
+    "@smartdoca/plugin-sdk": "workspace:*",
+    "@smartdoca/web-plugin-registry": "workspace:*",
     "@tanstack/react-query": "^5.85.5",
     "expo": "~53.0.20",
     "expo-camera": "~16.1.11",

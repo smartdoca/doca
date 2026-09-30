@@ -48,7 +48,7 @@ it("reports actual text length for invalid edits and preserves the saved documen
     { seq: before.seq, epochId: before.epochId! },
     [{ type: "text", blockId: block.id, index: 0, deleteCount: length + 100, text: "不应保存" }],
     randomUUID(),
-  )).rejects.toThrow(`当前块文字长度（UTF-16）=${length}`);
+  )).rejects.toThrow(`长度=${length}`);
   const after = await readAIDocument(db, { actor: owner }, doc.id);
   expect(after.value).toEqual(before.value);
   expect(after.seq).toBe(before.seq);

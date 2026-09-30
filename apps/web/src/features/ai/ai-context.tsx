@@ -12,7 +12,6 @@ import {
 import { AtSign } from "lucide-react";
 import { api, type FileItem, type Resource } from "@web/shared/api.js";
 import type { AIReference } from "@core/workflows/ai-documents.js";
-import type { NoteContent } from "@core/shared/quick-notes.js";
 import { usePendingSendRunner } from "@web/features/ai/ai-pending-runner.js";
 import {
   keepsAssistantSession,
@@ -32,13 +31,6 @@ type Bridge = {
   ready: () => boolean;
   flush?: () => void | Promise<void>;
 };
-export type QuickNoteReference = {
-  id: string;
-  label: string;
-  content: NoteContent;
-  attachments: { id: string; filename: string; mime: string; size: number }[];
-  createdAt: string;
-};
 export type AIFileContext = {
   type: "system" | "folder" | "document";
   id: string;
@@ -56,9 +48,6 @@ type AIContextValue = {
   setComposerDraft: (v: string | null) => void;
   references: AIReference[];
   setReferences: (v: AIReference[]) => void;
-  noteReferences: QuickNoteReference[];
-  setNoteReferences: (v: QuickNoteReference[]) => void;
-  addNotes: (notes: QuickNoteReference[]) => void;
   add: (anchor?: unknown) => void;
   addDocument: (resource: Resource) => void;
   fileContext: AIFileContext | null;
@@ -101,7 +90,6 @@ export function AIProvider({
       return null;
     }),
     [references, setReferences] = useState<AIReference[]>([]),
-    [noteReferences, setNoteReferences] = useState<QuickNoteReference[]>([]),
     [fileContext, setFileContext] = useState<AIFileContext | null>(null),
     [composerDraft, setComposerDraft] = useState<string | null>(null),
     [error, setError] = useState("");
@@ -179,7 +167,6 @@ export function AIProvider({
   const sessionSeen = useRef<string | null>(null);
   useEffect(() => {
     setReferences([]);
-    setNoteReferences([]);
     setPendingReference(null);
     setPendingStoredFiles([]);
     seenOperations.current.clear();
@@ -195,7 +182,6 @@ export function AIProvider({
     } else if (activeResourceId && activeResourceId !== previous.current) {
       setSessionId(null);
       setReferences([]);
-      setNoteReferences([]);
       resumeAttempt.current = null;
     }
     previous.current = activeResourceId;
@@ -318,18 +304,6 @@ export function AIProvider({
         setComposerDraft,
         references,
         setReferences,
-        noteReferences,
-        setNoteReferences,
-        addNotes: (notes) => {
-          if (!userId || !notes.length) return;
-          setNoteReferences(notes.slice(-20));
-          // 整理必须开启全新会话：在 /notes 路由上 selectSession 只清空 sessionId，不动 hash。
-          selectSession(null);
-          setComposerDraft(
-            "请阅读我引用的随手记，调用文档工具创建一份结构清晰的在线文档（标题自拟，必须是富文本格式，不是 Markdown）：合并重复内容，按主题组织，保留事实、时间和待办；缺失或矛盾处标为待确认，不要编造。不要在对话里直接输出文档正文或 Markdown，创建完成后告诉我文档标题即可。",
-          );
-          location.hash = "/ai";
-        },
         add,
         addDocument: (document) => {
           if (!userId || document.kind !== "document") return;

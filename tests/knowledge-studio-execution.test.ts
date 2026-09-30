@@ -257,6 +257,7 @@ it("keeps a heading that names the question even when semantic search returns an
     expectedRevision: 0,
   });
   const studio = createKnowledgeStudio(db, {
+    async prepare() {},
     async search(ids) {
       return [{ id: ids[0]!, score: 20 }];
     },

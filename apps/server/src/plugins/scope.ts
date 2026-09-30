@@ -72,6 +72,8 @@ export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {
       if (
         !value ||
         ![
+          "content.v1",
+          "activity.v1",
           "notifications.v1",
           "http.v1",
           "permissions.v1",
@@ -87,6 +89,16 @@ export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {
           const method = Reflect.get(target, property);
           if (typeof method !== "function") return method;
           return (...args: any[]) => {
+            if (token.id === "content.v1" && property === "register") {
+              owned(args[0].pluginId, true);
+              owned(args[0].id);
+              return context.effect(() => method.apply(target, args));
+            }
+            if (token.id === "activity.v1" && property === "register") {
+              owned(args[0].pluginId, true);
+              owned(args[0].id);
+              return context.effect(() => method.apply(target, args));
+            }
             if (token.id === "notifications.v1") owned(args[0], true);
             if (token.id === "http.v1" && property === "callbackUrl")
               owned(args[0], true);

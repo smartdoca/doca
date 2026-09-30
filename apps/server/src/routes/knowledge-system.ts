@@ -1,3 +1,5 @@
+import { createContentSubscription, updateContentSubscription } from "@core/modules/knowledge/content-subscriptions.js";
+import type { JsonObject } from "@smartdoca/plugin-sdk";
 import { registerKnowledgePermissions } from "./knowledge-permissions.js";
 import { randomUUID } from "node:crypto";
 import { createKnowledgeConversation, sendKnowledgeMessage } from "@core/modules/knowledge/conversations.js";
@@ -44,6 +46,10 @@ export function registerKnowledgeSystem(
   registerKnowledgePermissions(api, db, auth);
   const root = "/api/v1/knowledge/libraries/:id";
   const params = Type.Object({ id: Type.String({ format: "uuid" }) });
+  api.post<{Params:{id:string};Body:{sourceId:string;config:JsonObject;title:string}}>(`${root}/content-subscriptions`,{schema:{params,body:Type.Object({sourceId:Type.String({minLength:1,maxLength:200}),title:Type.String({minLength:1,maxLength:200}),config:Type.Record(Type.String(),Type.Unknown())},{additionalProperties:false})}},async req=>createContentSubscription(db,auth(req),req.params.id,req.body));
+  api.put<{Params:{id:string;groupId:string};Body:{sourceId:string;config:JsonObject;title:string}}>(`${root}/content-source-groups/:groupId`,{schema:{params:Type.Object({id:Type.String({format:"uuid"}),groupId:Type.String({format:"uuid"})}),body:Type.Object({sourceId:Type.String({minLength:1,maxLength:200}),title:Type.String({minLength:1,maxLength:200}),config:Type.Record(Type.String(),Type.Unknown())},{additionalProperties:false})}},async req=>updateContentSubscription(db,auth(req),req.params.id,req.params.groupId,req.body));
+
+
   api.get<{ Params: { id: string } }>(
     `${root}/system`,
     { schema: { params } },

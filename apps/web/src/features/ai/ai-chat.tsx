@@ -126,7 +126,7 @@ import type {
 } from "@ant-design/x/es/sender/interface";
 import type { AIReference } from "@core/workflows/ai-documents.js";
 import type { Attachment, AttachmentsRef } from "@ant-design/x/es/attachments";
-import { useAI, type QuickNoteReference } from "@web/features/ai/ai-context.js";
+import { useAI } from "@web/features/ai/ai-context.js";
 import {
   PANEL_WIDTH_MIN,
   clampPanelWidth,
@@ -139,7 +139,6 @@ import {
   AIReferenceTag,
   referenceLabel,
 } from "@web/features/ai/ai-reference-tag.js";
-import { QuickNoteTag } from "@web/features/ai/ai-note-tag.js";
 import { referenceTextParts } from "@web/features/ai/ai-reference-text.js";
 import { SearchPanel } from "@web/features/search/search.js";
 import { AIQuestionNav } from "@web/features/ai/ai-question-nav.js";
@@ -605,7 +604,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
   const composerSelection = useRef<Range | null>(null);
   const previousResource = useRef(ai.resource?.id);
   const referenceSlots = useRef(new Map<string, AIReference>());
-  const noteSlots = useRef(new Map<string, QuickNoteReference>());
   const referenceIdentity = (r: AIReference) =>
     JSON.stringify([r.resourceId, r.anchor, r.epochId, r.seq]);
   const tagCount = () =>
@@ -641,34 +639,10 @@ export function AIChat({ full = false }: { full?: boolean }) {
       "cursor",
     );
   };
-  const insertNoteReference = (n: QuickNoteReference) => {
-    if (tagCount() >= 20) {
-      ai.setError(t("chat.referenceLimit"));
-      return;
-    }
-    const key = `note-${crypto.randomUUID()}`;
-    noteSlots.current.set(key, n);
-    senderRef.current?.insert(
-      [
-        {
-          type: "tag",
-          key,
-          props: {
-            label: <QuickNoteTag label={n.label} note={n} />,
-            value: n.label,
-          },
-          formatResult: () => `@【${n.label}#${n.id}】`,
-        },
-        { type: "text", value: " " },
-      ],
-      "end",
-    );
-  };
   const skipReferenceInsert = useRef(false);
   const clearComposer = () => {
     composerSelection.current = null;
     referenceSlots.current.clear();
-    noteSlots.current.clear();
     senderRef.current?.clear();
     setHasDraft(false);
   };
@@ -1235,23 +1209,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
     senderRef.current?.focus();
     ai.setComposerDraft(null);
   }, [ai.composerDraft, full]);
-  // Declared after the composerDraft effect so organize drafts land before note tags.
-  useEffect(() => {
-    if (skipReferenceInsert.current) return;
-    const values = senderRef.current?.getValue().slotConfig ?? [];
-    const present = new Set(
-      values
-        .filter((slot) => slot.type === "tag")
-        .map((slot) => noteSlots.current.get(slot.key!))
-        .filter(Boolean)
-        .map((n) => n!.id),
-    );
-    for (const n of ai.noteReferences)
-      if (!present.has(n.id)) {
-        insertNoteReference(n);
-        present.add(n.id);
-      }
-  }, [ai.noteReferences]);
   useEffect(() => {
     setOptimistic(null);
     setOlder([]);
@@ -1455,7 +1412,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
     ai.setSessionId(null);
     if (!full) setList(false);
     ai.setReferences([]);
-    ai.setNoteReferences([]);
     clearComposer();
     replaceFiles([]);
     setFolderTargets([]);
@@ -1508,7 +1464,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
       attachments,
       files: targets,
       references: ai.references,
-      notes: ai.noteReferences,
       createdAt: new Date().toISOString(),
       modelId: model,
       scope: "all",
@@ -1530,7 +1485,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
     );
     setHasDraft(!!item.text.trim());
     ai.setReferences(item.references);
-    ai.setNoteReferences(item.notes);
     queueMicrotask(() => {
       skipReferenceInsert.current = false;
     });
@@ -1559,7 +1513,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
     setFolderTargets([]);
     clearComposer();
     ai.setReferences([]);
-    ai.setNoteReferences([]);
     pinToLatest();
   };
   const send = async (choice?: string) => {
@@ -1588,7 +1541,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
       return;
     }
     const refs = ai.references;
-    const notes = ai.noteReferences;
     const id = (requestId.current ??= crypto.randomUUID());
     submitting.current = true;
     setBusy(true);
@@ -1627,7 +1579,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
           ? { type: ai.fileContext.type, id: ai.fileContext.id }
           : undefined,
         references: refs,
-        ...(notes.length ? { quickNoteIds: notes.map((n) => n.id) } : {}),
         skillIds,
         webSearch: webSearch && !!options?.webSearchAvailable,
         skipApprovals,
@@ -1641,7 +1592,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
       setFolderTargets([]);
       clearComposer();
       ai.setReferences([]);
-      ai.setNoteReferences([]);
       void refresh();
     } catch (e) {
       ai.setError((e as Error).message);
@@ -1844,15 +1794,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
       sources?: { title: string; url: string }[];
     },
   ): BubbleItemType => {
-    // 随手记引用不随消息持久化：从文本里的序列化标记（@【标签#id】）恢复标签，
-    // 数据还在 ai.noteReferences 里时直接预览，否则按 id 拉取笔记内容。
-    const noteMarkers = [
-      ...new Map(
-        [
-          ...m.text.matchAll(/@【(随手记 [^】#]+?)(?:#([0-9a-f-]{36}))?】/g),
-        ].map((x) => [`${x[1]}#${x[2] ?? ""}`, { label: x[1]!, id: x[2] }]),
-      ).values(),
-    ];
     return {
       key: m.id,
       role: m.role === "user" ? "user" : "ai",
@@ -1959,22 +1900,9 @@ export function AIChat({ full = false }: { full?: boolean }) {
               {referenceTextParts(
                 m.text,
                 (m.references ?? []).map(referenceLabel),
-                noteMarkers,
               ).map((part, i) =>
                 "text" in part ? (
                   part.text
-                ) : "noteIndex" in part ? (
-                  <QuickNoteTag
-                    key={i}
-                    label={noteMarkers[part.noteIndex]!.label}
-                    note={ai.noteReferences.find(
-                      (n) =>
-                        n.id === noteMarkers[part.noteIndex]!.id ||
-                        (!noteMarkers[part.noteIndex]!.id &&
-                          n.label === noteMarkers[part.noteIndex]!.label),
-                    )}
-                    noteId={noteMarkers[part.noteIndex]!.id}
-                  />
                 ) : (
                   <AIReferenceTag
                     key={i}
@@ -2871,13 +2799,13 @@ export function AIChat({ full = false }: { full?: boolean }) {
                       disabled={!sessions.length}
                       onClick={() => setSelected(sessions.map((s) => s.id))}
                     >
-                      {t("notes.selectAll")}
+                      {t("common.selectAll")}
                     </button>
                     <button
                       disabled={!selected.length}
                       onClick={() => setSelected([])}
                     >
-                      {t("notes.clear")}
+                      {t("common.clearSelection")}
                     </button>
                     <button
                       className="primary"
@@ -2953,7 +2881,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
                   replaceFiles([]);
                   setFolderTargets([]);
                   ai.setReferences([]);
-                  ai.setNoteReferences([]);
                   ai.setError("");
                 }}
                 menu={(item) =>
@@ -3258,9 +3185,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
                   const active = tags
                     .map((slot) => referenceSlots.current.get(slot.key!))
                     .filter((r): r is AIReference => !!r);
-                  const activeNotes = tags
-                    .map((slot) => noteSlots.current.get(slot.key!))
-                    .filter((n): n is QuickNoteReference => !!n);
                   if (composerReady.current) {
                     const sameRefs =
                       active.length === ai.references.length &&
@@ -3270,12 +3194,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
                           referenceIdentity(ai.references[i]!),
                       );
                     if (!sameRefs) ai.setReferences(active);
-                    const sameNotes =
-                      activeNotes.length === ai.noteReferences.length &&
-                      activeNotes.every(
-                        (n, i) => n.id === ai.noteReferences[i]!.id,
-                      );
-                    if (!sameNotes) ai.setNoteReferences(activeNotes);
                   }
                 }}
                 onSubmit={(message) => {

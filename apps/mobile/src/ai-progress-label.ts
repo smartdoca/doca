@@ -13,6 +13,7 @@ function labelKey(keys: Readonly<Record<string, MessageKey>>, code: string) {
 }
 
 const eventKeys = {
+  rich_text_fallback: "ai.progress.event.richTextFallback",
   checkpoint_resumed: "ai.progress.event.checkpointResumed",
   retry_resumed: "ai.progress.event.retryResumed",
   image_saved: "ai.progress.event.imageSaved",
@@ -62,7 +63,6 @@ const toolKeys = {
   document_request_access: "ai.progress.tool.documentRequestAccess",
   document_read: "ai.progress.tool.documentRead",
   document_create: "ai.progress.tool.documentCreate",
-  quick_note_read: "ai.progress.tool.quickNoteRead",
   document_edit: "ai.progress.tool.documentEdit",
   rich_text_edit: "ai.progress.tool.richTextEdit",
   markdown_edit: "ai.progress.tool.markdownEdit",

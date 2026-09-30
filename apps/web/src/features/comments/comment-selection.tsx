@@ -124,7 +124,7 @@ export function SelectionCommentAction({
         attributeFilter: ["class"],
       });
     const chooseMedia = (event: Event) => {
-      const el = (event.target as HTMLElement | null)?.closest?.(
+      const el = (event.target as HTMLElement | null)?.closest?.<HTMLElement>(
         mediaSelector,
       );
       const h = host.current;

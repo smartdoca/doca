@@ -18,6 +18,8 @@ try {
       .concat(
         [
           "platform",
+          "content",
+          "native",
           "files",
           "ai",
           "testing",

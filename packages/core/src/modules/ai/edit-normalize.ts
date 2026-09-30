@@ -355,7 +355,7 @@ function leafText(node: unknown): string {
 
 function normalizeCodeBlock(node: Record<string, unknown>) {
   if (!codeBlockTypes.has(String(node.type))) return node;
-  const next = { ...node, type: "code-block" };
+  const next: Record<string, unknown> = { ...node, type: "code-block" };
   if (typeof next.lang === "string" && typeof next.language !== "string") {
     next.language = next.lang;
     delete next.lang;

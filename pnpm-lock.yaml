@@ -331,6 +331,9 @@ importers:
       '@shopify/flash-list':
         specifier: 1.7.6
         version: 1.7.6(@babel/runtime@8.0.5)(react-native@0.79.5(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.0.14)(react@19.0.0)(supports-color@8.1.1))(react@19.0.0)
+      '@smartdoca/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
       '@smartdoca/web-plugin-registry':
         specifier: workspace:*
         version: link:../../packages/web-plugin-registry
@@ -479,9 +482,15 @@ importers:
       '@smartdoca/search-host':
         specifier: workspace:*
         version: link:../../packages/search-host
+      '@smartdoca/web-plugin-registry':
+        specifier: workspace:*
+        version: link:../../packages/web-plugin-registry
 
   apps/web:
     dependencies:
+      '@smartdoca/plugin-contracts':
+        specifier: workspace:*
+        version: link:../../packages/plugin-contracts
       '@smartdoca/web-plugin-registry':
         specifier: workspace:*
         version: link:../../packages/web-plugin-registry

@@ -1,3 +1,4 @@
+import type { ContentItem, ContentSourceDescriptor } from "@smartdoca/plugin-sdk/content";
 import { htmlLang } from "@doca/i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import { UserBadge } from "@web/shared/components/user-badge.js";
@@ -203,19 +204,26 @@ export function SearchPanel({
     [error, setError] = useState(""),
     [aiUnavailable, setAiUnavailable] = useState(""),
     [loading, setLoading] = useState(false);
+  const [contentResults, setContentResults] = useState<ContentItem[]>([]);
+  const [contentSearchError, setContentSearchError] = useState("");
   const filtersId = useId();
   const resultList = useRef<HTMLDivElement>(null);
   const typeButtons = useRef<(HTMLButtonElement | null)[]>([]);
-  const types: { value: string; label: MessageKey }[] = [
+  const types: { value: "all" | "documents" | "files"; label: MessageKey }[] = [
     { value: "all", label: "search.type.all" },
+    { value: "documents", label: "workspace.kind.document" },
+    { value: "files", label: "search.type.files" },
+  ];
+  const documentTypes: { value: string; label: MessageKey }[] = [
+    { value: "", label: "doc.filter.all" },
     { value: "rich_text", label: "shell.type.rich" },
     { value: "markdown", label: "shell.type.markdown" },
     { value: "spreadsheet", label: "shell.type.sheet" },
     { value: "presentation", label: "shell.type.slides" },
     { value: "canvas", label: "search.type.canvas" },
-    { value: "files", label: "search.type.files" },
   ];
   const filterCount =
+    Number(format !== "") +
     Number(scope !== "all") +
     Number(location !== "all") +
     libraryIds.length +
@@ -224,6 +232,7 @@ export function SearchPanel({
     Number(likedOnly) +
     Number(favoritesOnly);
   function resetFilters() {
+    setFormat("");
     setScope("all");
     setLocation("all");
     setLibraryIds([]);
@@ -235,12 +244,7 @@ export function SearchPanel({
   const searchText = aiSearch ? submitted : q;
   const intent = searchIntent(searchText);
   const layout = searchResultLayout(intent, contentMode, format);
-  const selectedType =
-    contentMode === "all"
-      ? "all"
-      : contentMode === "files"
-        ? "files"
-        : layout.format || format;
+  const selectedType = contentMode;
   const retrievalText = intent.topic || searchText;
   const recent =
     !aiSearch &&
@@ -352,6 +356,28 @@ export function SearchPanel({
       c.abort();
     };
   }, [aiSearch, waitingForAiQuery, contentMode, query, searchAttempt, fileParams.toString()]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setContentResults([]);
+    setContentSearchError("");
+    if (compact || contentMode !== "all" || filterCount || !searchText.trim() || waitingForAiQuery) return () => controller.abort();
+    const timer = setTimeout(() => void (async () => {
+      const catalog = await api<{ items: ContentSourceDescriptor[] }>("/content/sources?purpose=search", "GET", undefined, controller.signal);
+      const results = await Promise.allSettled(catalog.items.filter(source => source.capabilities.search).map(source =>
+        api<{ items: ContentItem[] }>("/content/search", "POST", { sourceId: source.id, purpose: "search", config: {}, query: searchText, cursor: null, limit: 20 }, controller.signal)));
+      if (controller.signal.aborted) return;
+      setContentResults(results.flatMap(result => result.status === "fulfilled" ? result.value.items : []));
+      if (results.some(result => result.status === "rejected")) setContentSearchError(t("content.searchUnavailable"));
+    })().catch(() => { if (!controller.signal.aborted) setContentSearchError(t("content.searchUnavailable")); }), 180);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [compact, contentMode, filterCount, searchText, waitingForAiQuery, searchAttempt, t]);
+  async function openContent(item: ContentItem) {
+    try {
+      const target = await api<{ path: string; fingerprint: string } | null>("/content/resolve", "POST", { ref: item.ref, purpose: "search" });
+      if (!target) throw new Error(t("content.unavailable"));
+      window.location.hash = target.path;
+    } catch (reason) { setContentSearchError((reason as Error).message); }
+  }
   async function more() {
     if (data.nextCursor == null && data.nextOffset == null) return;
     setLoading(true);
@@ -398,7 +424,7 @@ export function SearchPanel({
         return !documentIdsOf(file).some((id) => filesByDocument.has(id));
       })
     : [];
-  const resultCount = data.items.length + leftoverFiles.length;
+  const resultCount = data.items.length + leftoverFiles.length + contentResults.length;
   return (
     <div className={`global-search ${compact ? "search-panel-compact" : ""} ${aiSearch ? "search-ai" : "search-keyword"}`}>
       <form
@@ -473,9 +499,8 @@ export function SearchPanel({
                 typeButtons.current[index] = el;
               }}
               onClick={() => {
-                if (type.value === "all") { setContentMode("all"); setFormat(""); }
-                else if (type.value === "files") { setContentMode("files"); setFormat(""); }
-                else { setContentMode("documents"); setFormat(type.value); }
+                setContentMode(type.value);
+                setFormat("");
               }}
               onKeyDown={(e) => {
                 const next =
@@ -491,9 +516,8 @@ export function SearchPanel({
                 if (next >= 0) {
                   e.preventDefault();
                   const value = types[next]!.value;
-                  if (value === "all") { setContentMode("all"); setFormat(""); }
-                  else if (value === "files") { setContentMode("files"); setFormat(""); }
-                  else { setContentMode("documents"); setFormat(value); }
+                  setContentMode(value);
+                  setFormat("");
                   typeButtons.current[next]?.focus();
                 }
               }}
@@ -551,6 +575,11 @@ export function SearchPanel({
                 {error}
               </p>
             )}
+            {contentSearchError && <p role="status">{contentSearchError}</p>}
+            {contentResults.map(item => <button className="search-content-result" key={JSON.stringify(item.ref)} onClick={() => void openContent(item)}>
+              <strong>{item.title}</strong>
+              <span><CompactResultText text={item.excerpt ?? ""} query={searchText} /></span>
+            </button>)}
             {aiUnavailable && (
               <div className="search-ai-empty" role="status">
                 <Sparkles size={22} />
@@ -691,6 +720,21 @@ export function SearchPanel({
               <X size={16} />
             </button>
           </div>
+          {contentMode !== "files" && (
+            <div className="search-filter-field">
+              <span>{t("doc.filterType")}</span>
+              <Select
+                aria-label={t("doc.filterType")}
+                value={layout.format || format}
+                onChange={(value) => {
+                  setFormat(value);
+                  if (value) setContentMode("documents");
+                }}
+                getPopupContainer={searchPopupContainer}
+                options={documentTypes.map(type => ({ value: type.value, label: t(type.label) }))}
+              />
+            </div>
+          )}
           <div className="search-filter-field">
             <span>{t("search.owner")}</span>
             <SearchOwnerFilter value={owners} onChange={setOwners} />

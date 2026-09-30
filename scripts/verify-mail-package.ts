@@ -12,7 +12,7 @@ if (!process.argv[2])
     "Usage: tsx scripts/verify-mail-package.ts <isolated-installation-directory>",
   );
 const packagePath = await realpath(
-  join(installation, "node_modules/@doca/plugin-mail"),
+  join(installation, "doca.mail"),
 );
 assert.ok(
   packagePath.startsWith(installation + sep),

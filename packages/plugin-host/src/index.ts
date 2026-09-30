@@ -9,7 +9,7 @@ import {
   type PluginManifest,
   type PluginRuntimePhase,
 } from "@smartdoca/plugin-contracts";
-import { Context, ContributionStore, PluginContext } from "@smartdoca/plugin-sdk";
+import { Context, ContributionStore, PluginContext, PLUGIN_SDK_VERSION } from "@smartdoca/plugin-sdk";
 
 export type PluginHostState =
   "idle" | "starting" | "running" | "disposing" | "disposed";
@@ -44,7 +44,7 @@ const serviceIdentifier = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export function validatePluginGraph(
   input: readonly PluginManifest[],
-  sdkVersion = "0.1.0",
+  sdkVersion = PLUGIN_SDK_VERSION,
 ): readonly PluginManifest[] {
   const manifests = input.map((manifest) => validatePluginManifest(manifest));
   const byId = new Map<string, PluginManifest>();
@@ -136,7 +136,7 @@ export class PluginHost {
     this.#root = options.context ?? new Context("plugins");
     this.#ownsRoot = !options.context;
     this.contributions = options.contributions ?? new ContributionStore();
-    this.#sdkVersion = options.sdkVersion ?? "0.1.0";
+    this.#sdkVersion = options.sdkVersion ?? PLUGIN_SDK_VERSION;
   }
 
   get state() {

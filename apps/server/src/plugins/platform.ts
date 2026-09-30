@@ -1,9 +1,14 @@
+import { registerContentRoutes } from "../routes/content.js";
+import { builtinContentSource } from "@core/modules/content/builtin.js";
+import { contentServiceToken } from "@smartdoca/plugin-sdk/content";
+import { createContentService } from "@core/modules/content/service.js";
+import { registerActivitySource } from "@core/modules/workspace/plugin-activity.js";
 import { publishPluginNotification, withdrawPluginNotification, pluginNotificationTarget } from "@core/modules/interactions/plugin-notifications.js";
 import { filesServiceToken, stableId } from "@smartdoca/plugin-sdk/files";
 import { Readable } from "node:stream";
 import { randomUUID } from "node:crypto";
 import {
-  notificationsServiceToken, eventsServiceToken, httpServiceToken, permissionsServiceToken, policiesServiceToken, usersServiceToken,
+  activityServiceToken, notificationsServiceToken, eventsServiceToken, httpServiceToken, permissionsServiceToken, policiesServiceToken, usersServiceToken,
   type PluginPrincipal, type PluginRequestContext, type PluginHttpResponse,
 } from "@smartdoca/plugin-sdk/platform";
 import type { PluginLifecycleContext } from "@smartdoca/plugin-sdk";
@@ -25,7 +30,12 @@ const actor = (p: PluginPrincipal) => ({ id: p.id, display_name: p.displayName, 
 export async function providePlatform(context: PluginLifecycleContext, runtime: ServerRuntimeService) {
   const { db, api } = runtime;
   const services = pluginServices(db);
-  context.effect(() => () => { services.directories.clear(); services.permissions.clear(); services.policies.clear(); services.skills.clear(); });
+  const content = createContentService(db);
+  context.provide(contentServiceToken, content);
+  registerContentRoutes(api, runtime.auth, content);
+  context.effect(() => content.register(builtinContentSource(db, "documents")));
+  context.effect(() => content.register(builtinContentSource(db, "files")));
+  context.effect(() => () => { services.content.clear(); services.activities.clear(); services.directories.clear(); services.permissions.clear(); services.policies.clear(); services.skills.clear(); });
   const verify = async (request: PluginRequestContext) => {
     await activeActor(db, actor(request.principal));
     return db.selectFrom("users").select(["id", "admin"]).where("id", "=", request.principal.id).executeTakeFirstOrThrow();
@@ -40,6 +50,9 @@ export async function providePlatform(context: PluginLifecycleContext, runtime: 
     const result = await context.inject(filesServiceToken).content.read!({ principalId: user.id, signal: controller.signal }, { fileId: stableId(binding.file_id, "file"), bindingId: stableId(binding.id, "file-binding") });
     reply.type(result.file.mime).header("Content-Disposition", `${request.query.download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(result.file.name)}`);
     return reply.send(Readable.from(result.body));
+  });
+  context.provide(activityServiceToken, {
+    register: source => registerActivitySource(db, source),
   });
   context.provide(notificationsServiceToken, {
     async publish(pluginId, input) {

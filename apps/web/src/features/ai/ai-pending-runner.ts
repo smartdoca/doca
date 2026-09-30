@@ -33,9 +33,6 @@ export async function sendPendingItem(
     currentResourceId: item.currentResourceId,
     currentFolder: item.currentFolder,
     references: item.references,
-    ...(item.notes.length
-      ? { quickNoteIds: item.notes.map((note) => note.id) }
-      : {}),
     skillIds: item.skillIds ?? [],
     webSearch: item.webSearch !== false,
     skipApprovals: item.skipApprovals,

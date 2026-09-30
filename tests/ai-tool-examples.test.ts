@@ -33,7 +33,6 @@ const required = [
   "document_read",
   "review_document_read",
   "submit_review",
-  "quick_note_read",
   "document_create",
   "resource_manage",
   ...documentFormats.map((format) => `${format}_edit`),

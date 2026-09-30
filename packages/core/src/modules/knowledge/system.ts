@@ -1,3 +1,11 @@
+import { withContentDocumentAccess } from "./content-access.js";
+import { contentSubscriptionConfig } from "./content-subscriptions.js";
+import { contentReferenceKey } from "../content/service.js";
+import {
+  prepareContentSubscription,
+  contentSubscriptionInventory,
+} from "./content-subscriptions.js";
+import type { ContentReference } from "@smartdoca/plugin-sdk/content";
 import { knowledgeLinkMemberships } from "./link-access.js";
 import { knowledgeSourceMembers } from "./source-members.js";
 import { knowledgeDocumentSnapshot } from "./document-snapshot.js";
@@ -674,6 +682,7 @@ export function effectiveKnowledgeSettings(
 }
 export type SourceRef = {
   subscriptionId: string;
+  contentRef?: ContentReference;
   version: string;
   title?: string;
 };
@@ -1193,6 +1202,21 @@ export async function reviewKnowledgeEntry(
   expectedRevision: number,
   action: "publish" | "keep" | "delete",
 ) {
+  if (action === "publish") {
+    const entry = await db
+      .selectFrom("knowledge_entries")
+      .selectAll()
+      .where("id", "=", id)
+      .where("library_id", "=", libraryId)
+      .executeTakeFirst();
+    if (entry && refsOf(entry).some((ref) => ref.contentRef)) {
+      if (
+        db.isTransaction ||
+        (await missingSources(db, actor, libraryId, entry)).length
+      )
+        fail(409, "内容来源不可用，请核对来源后再发布");
+    }
+  }
   return transact(db, async (tx) => {
     const bundle = await knowledgeInstructions(tx, actor, libraryId);
     const row = await tx
@@ -1303,6 +1327,15 @@ export async function sourceAvailable(
 ) {
   try {
     if (row.status === "detached") return false;
+    if (row.source_kind === "content") {
+      if (db.isTransaction) return false;
+      try {
+        await contentSubscriptionInventory(db, actor, row);
+        return true;
+      } catch {
+        return false;
+      }
+    }
     if (row.source_kind === "url") return row.status !== "missing";
     if (row.source_kind === "document" || row.source_kind === "library") {
       await authorize(db, actor, row.source_id, 1);
@@ -1425,6 +1458,27 @@ async function missingSources(
       .where("id", "=", ref.subscriptionId)
       .executeTakeFirst();
     const owner = source ? await sourceActor(db, source) : null;
+    if (source?.source_kind === "content" && owner && ref.contentRef) {
+      try {
+        const members = db.isTransaction
+          ? new Map(
+              (await contentSubscriptionConfig(db, source)).value.fingerprints,
+            )
+          : new Map(
+              (await contentSubscriptionInventory(db, owner, source)).items.map(
+                (item) => [contentReferenceKey(item.ref), item.fingerprint],
+              ),
+            );
+        if (
+          source.status === "detached" ||
+          members.get(contentReferenceKey(ref.contentRef)) !== ref.version
+        )
+          missing.push(ref.subscriptionId);
+      } catch {
+        missing.push(ref.subscriptionId);
+      }
+      continue;
+    }
     if (!source || !owner || !(await sourceAvailable(db, owner, source)))
       missing.push(ref.subscriptionId);
   }
@@ -1491,6 +1545,7 @@ export async function detachKnowledgeSource(
 
 export type CurationMaterial = {
   subscriptionId: string;
+  contentRef?: ContentReference;
   version: string;
   title: string;
   text: string;
@@ -1650,7 +1705,7 @@ export async function cancelKnowledgeCuration(
   return { canceled: true };
 }
 
-export async function executeKnowledgeCuration(
+async function executeKnowledgeCurationUnchecked(
   db: DB,
   runId: string,
   generate: CurationGenerator,
@@ -1692,6 +1747,7 @@ export async function executeKnowledgeCuration(
       .execute();
     const materials: CurationMaterial[] = [];
     const readGuards: ((connection: DB) => Promise<void>)[] = [];
+    const contentValidations: (() => Promise<void>)[] = [];
     const skipped: { id: string; reason: string }[] = [];
     for (const source of subscriptions) {
       if (
@@ -1719,6 +1775,34 @@ export async function executeKnowledgeCuration(
       }
       if (!(await sourceAvailable(db, actor, source))) {
         skipped.push({ id: source.id, reason: "unavailable" });
+        continue;
+      }
+      if (source.source_kind === "content") {
+        const prepared = await prepareContentSubscription(
+          db,
+          actor,
+          source,
+          bundle.hash,
+          bundle.settings.sourcePolicies[source.id]?.excludedResourceIds ?? [],
+        );
+        const settings = effectiveKnowledgeSettings(bundle.settings, [
+          source.id,
+        ]);
+        for (const block of prepared.delta.changed)
+          materials.push({
+            subscriptionId: source.id,
+            contentRef: block.ref,
+            version: block.fingerprint,
+            title: sanitizeKnowledge(block.title, settings),
+            text: sanitizeKnowledge(
+              [block.anchor?.heading, block.text].filter(Boolean).join("\n\n"),
+              settings,
+            ),
+          });
+        contentValidations.push(prepared.validate);
+        readGuards.push(prepared.commit);
+        if (materials.reduce((n, m) => n + m.text.length, 0) > 120000)
+          fail(413, "材料过长，请缩小本次来源范围");
         continue;
       }
       const policy = bundle.settings.sourcePolicies[source.id];
@@ -1971,7 +2055,7 @@ export async function executeKnowledgeCuration(
           observed.add(fingerprint);
     }
     const changedMaterials = materials.filter(
-      (material) => !observed.has(hash(material)),
+      (material) => !!material.contentRef || !observed.has(hash(material)),
     );
     const focus = detail.focus as KnowledgeFocus | undefined;
     const targets = focus?.title ? materials : changedMaterials;
@@ -1982,6 +2066,7 @@ export async function executeKnowledgeCuration(
           ? "没有可读取的来源，这条缺口还补不上。"
           : "",
     };
+    const entryMaterials = new Map<object, CurationMaterial>();
     // Each source is extracted in isolation. Another source's instructions never
     // see its raw material; shared guidance cannot override source-local limits.
     for (const material of targets) {
@@ -2047,11 +2132,13 @@ export async function executeKnowledgeCuration(
         )
       )
         fail(502, "AI 引用了本次未读取的来源");
+      for (const entry of local.entries) entryMaterials.set(entry, material);
       output.entries.push(...local.entries);
       output.notes = [output.notes, local.notes].filter(Boolean).join("\n\n");
       if (output.entries.length > 30 || output.notes.length > 8000)
         fail(413, "整理结果过多，请分批整理来源");
     }
+    for (const validate of contentValidations) await validate();
     await transact(db, async (tx) => {
       const fresh = await knowledgeInstructions(tx, actor, run.library_id);
       if (
@@ -2074,7 +2161,13 @@ export async function executeKnowledgeCuration(
           .where("id", "=", material.subscriptionId)
           .executeTakeFirst();
         const owner = source ? await sourceActor(tx, source) : null;
-        if (!source || !owner || !(await sourceAvailable(tx, owner, source)))
+        if (
+          !source ||
+          !owner ||
+          source.status === "detached" ||
+          (source.source_kind !== "content" &&
+            !(await sourceAvailable(tx, owner, source)))
+        )
           fail(409, "来源授权已变化，请重新整理");
       }
       for (const guard of readGuards) await guard(tx);
@@ -2155,13 +2248,21 @@ export async function executeKnowledgeCuration(
             ...new Map(
               [
                 ...(replacement ? refsOf(replacement) : []),
-                ...sourceIds.map((id) => ({
-                  subscriptionId: id,
-                  title: materials.find((m) => m.subscriptionId === id)!.title,
-                  version: materials.find((m) => m.subscriptionId === id)!
-                    .version,
-                })),
-              ].map((ref) => [ref.subscriptionId, ref]),
+                ...sourceIds.map((id) => {
+                  const material = entryMaterials.get(proposed)!;
+                  return {
+                    subscriptionId: id,
+                    title: material.title,
+                    version: material.version,
+                    ...(material.contentRef
+                      ? { contentRef: material.contentRef }
+                      : {}),
+                  };
+                }),
+              ].map((ref) => [
+                JSON.stringify([ref.subscriptionId, ref.contentRef ?? null]),
+                ref,
+              ]),
             ).values(),
           ]),
           instruction_hash: bundle.hash,
@@ -2198,6 +2299,12 @@ export async function executeKnowledgeCuration(
         const weighted =
           replacement &&
           bundle.settings.autoPublishWeighted &&
+          !sourceIds.some((id) =>
+            materials.some(
+              (material) =>
+                material.subscriptionId === id && material.contentRef,
+            ),
+          ) &&
           resolution?.mode === "weighted" &&
           resolution.incomingWeight > resolution.existingWeight &&
           resolution.ruleQuote.trim().length >= 10 &&
@@ -2226,6 +2333,7 @@ export async function executeKnowledgeCuration(
         const source = subscriptions.find(
           (row) => row.id === material.subscriptionId,
         )!;
+        if (source.source_kind === "content") continue;
         let sourceVersion = material.version;
         if (
           source.source_kind === "document" ||
@@ -2847,4 +2955,28 @@ export async function effectiveKnowledgeBotLibraries(
         throw error;
     }
   return ids;
+}
+
+export async function executeKnowledgeCuration(
+  db: DB,
+  runId: string,
+  generate: CurationGenerator,
+  readWeb?: (url: string) => Promise<{ title: string; text: string }>,
+) {
+  const run = await db
+    .selectFrom("knowledge_runs")
+    .select(["detail", "library_id"])
+    .where("id", "=", runId)
+    .executeTakeFirstOrThrow();
+  const actor = await db
+    .selectFrom("users")
+    .select(["id", "display_name", "admin"])
+    .where("id", "=", JSON.parse(run.detail).actorId)
+    .executeTakeFirstOrThrow();
+  return withContentDocumentAccess(
+    db,
+    actor,
+    () => executeKnowledgeCurationUnchecked(db, runId, generate, readWeb),
+    [run.library_id],
+  );
 }

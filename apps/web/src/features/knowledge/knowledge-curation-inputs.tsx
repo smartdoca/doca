@@ -64,6 +64,7 @@ export function CurationInputs({
           {error && <p role="alert">{error}</p>}
           {mode === "reference" ? (
             <SourcePicker
+              contentAdded={label=>{added(label);setMode(undefined);}}
               libraryId={libraryId}
               locale={locale}
               busy={busy}

@@ -1,5 +1,4 @@
 import { sessionResourceHistory } from "@core/modules/ai/session-resources.js";
-import { checkQuickNoteIds } from "../services/ai/quick-notes.js";
 import { defaultOfficialSkills } from "@core/modules/ai/skills.js";
 import { checkAttachments } from "../services/ai/attachments.js";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -1049,7 +1048,6 @@ export async function registerAI(
               const saved = explorerTargets(x.content.metadata?.explorer);
               return saved.length ? saved : (explorerByMessage.get(x.id) ?? []);
             })(),
-            quickNotes: x.content.metadata?.quickNotes ?? [],
             createdAt: x.createdAt,
           })),
         hasMore: history.hasMore,
@@ -1298,7 +1296,6 @@ export async function registerAI(
               )
               .max(20)
               .default([]),
-            quickNoteIds: z.array(id).max(20).default([]),
             skillIds: z.array(z.string().max(100)).max(20).default([]),
             webSearch: z.boolean().default(true),
             skipApprovals: z
@@ -1334,7 +1331,6 @@ export async function registerAI(
           references: original.references ?? [],
           attachments: original.attachments ?? [],
           files: original.files ?? [],
-          quickNoteIds: original.quickNoteIds ?? [],
           skillIds: original.skillIds ?? [],
           webSearch: original.webSearch ?? true,
           skipApprovals: original.skipApprovals,
@@ -1347,7 +1343,6 @@ export async function registerAI(
         ? config.models.find((item) => item.id === config.mediaModel)
         : undefined;
       await checkAttachments(db, actor.id, body.attachments, model, media);
-      await checkQuickNoteIds(db, actor.id, body.quickNoteIds);
       for (const ref of body.references) {
         const r = await readAIDocument(
           db,

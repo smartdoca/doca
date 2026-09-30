@@ -231,23 +231,28 @@ export class MeilisearchSearchProvider<
     const config = await this.#options.config();
     const physical = this.#physical(config, indexName);
     const changed: SearchProjection[] = [];
-    for (const projection of projections) {
-      const contentHash = projection.metadata?.content_hash;
-      if (typeof contentHash !== "string") {
-        changed.push(projection);
-        continue;
-      }
-      try {
-        const indexed = await this.#options.request(
-          config,
-          `/indexes/${encoded(physical)}/documents/${encoded(
-            projection.id,
-          )}?fields=id,content_hash`,
-        );
-        if (indexed?.content_hash !== contentHash) changed.push(projection);
-      } catch (error) {
-        if (this.#notFound(error)) changed.push(projection);
-        else throw error;
+    // Compare lightweight fingerprints concurrently, with a fixed bound so a
+    // large rebuild does not create one request per document at once. Preserve
+    // source order and finish the whole batch before propagating a read failure.
+    for (let offset = 0; offset < projections.length; offset += 8) {
+      const batch = projections.slice(offset, offset + 8);
+      const results = await Promise.allSettled(batch.map(async projection => {
+        const contentHash = projection.metadata?.content_hash;
+        if (typeof contentHash !== "string") return true;
+        try {
+          const indexed = await this.#options.request(
+            config,
+            `/indexes/${encoded(physical)}/documents/${encoded(projection.id)}?fields=id,content_hash`,
+          );
+          return indexed?.content_hash !== contentHash;
+        } catch (error) {
+          if (this.#notFound(error)) return true;
+          throw error;
+        }
+      }));
+      for (const [index, result] of results.entries()) {
+        if (result.status === "rejected") throw result.reason;
+        if (result.value) changed.push(batch[index]!);
       }
     }
     if (!changed.length) return;

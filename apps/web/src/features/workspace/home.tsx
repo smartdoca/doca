@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
   BookOpen,
-  FileText,
+  File,
+  Mail,
+  CalendarDays,
+  MessageSquare,
+  CheckSquare,
   Clock3,
   ListTodo,
   Sparkles,
@@ -15,8 +19,27 @@ import { useI18n } from "@web/shared/i18n.js";
 import { htmlLang } from "@doca/i18n";
 import { CollectionAction } from "@web/features/discovery/collection-action.js";
 import { listTime } from "@web/shared/utils/list-time.js";
-import type { RecentItem } from "@core/modules/workspace/activity.js";
+import type { WorkspaceActivityPage } from "@core/modules/workspace/plugin-activity.js";
+import { FileIcon } from "@web/features/documents/document-controls.js";
 import "./home.css";
+
+const activityIcons = {
+  file: File,
+  mail: Mail,
+  calendar: CalendarDays,
+  message: MessageSquare,
+  task: CheckSquare,
+  book: BookOpen,
+  folder: FolderOpen,
+};
+
+const formatLabels = {
+  rich_text: "shell.type.rich",
+  spreadsheet: "shell.type.sheet",
+  presentation: "shell.type.slides",
+  markdown: "shell.type.markdown",
+  canvas: "shell.type.canvas",
+} as const;
 type Overview = {
   ownedDocuments: number;
   libraries: number;
@@ -30,12 +53,11 @@ type Overview = {
 export function WorkspaceHome({ name }: { name: string }) {
   const { t, locale } = useI18n();
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [recent, setRecent] = useState<{
-    items: RecentItem[];
-    nextOffset: number | null;
-  } | null>(null);
+  const [recent, setRecent] = useState<WorkspaceActivityPage | null>(null);
+  const [sources, setSources] = useState<WorkspaceActivityPage["sources"]>([]);
   const [kind, setKind] = useState("");
-  const [offset, setOffset] = useState(0);
+  const [pages, setPages] = useState<(string | null)[]>([null]);
+  const cursor = pages[pages.length - 1];
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
   const [overviewError, setOverviewError] = useState("");
@@ -57,19 +79,30 @@ export function WorkspaceHome({ name }: { name: string }) {
     let active = true;
     setRecent(null);
     setError("");
-    void api<{ items: RecentItem[]; nextOffset: number | null }>(
-      `/workspace/recent?offset=${offset}${kind ? `&kind=${kind}` : ""}`,
+    const controller = new AbortController();
+    const query = new URLSearchParams();
+    if (cursor) query.set("cursor", cursor);
+    if (kind) query.set(kind.includes(".") ? "source" : "kind", kind);
+    void api<WorkspaceActivityPage>(
+      `/workspace/activity?${query}`,
+      "GET",
+      undefined,
+      controller.signal,
     )
       .then((x) => {
-        if (active) setRecent(x);
+        if (active) {
+          setRecent(x);
+          setSources(x.sources);
+        }
       })
       .catch((e) => {
         if (active) setError(e.message);
       });
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [kind, offset, revision]);
+  }, [kind, cursor, revision]);
   return (
     <section className="workspace-home">
       <header className="workspace-welcome">
@@ -87,7 +120,10 @@ export function WorkspaceHome({ name }: { name: string }) {
         <button
           className="icon"
           aria-label={t("workspace.refresh")}
-          onClick={() => setRevision((n) => n + 1)}
+          onClick={() => {
+            setPages([null]);
+            setRevision((n) => n + 1);
+          }}
         >
           <RefreshCw size={18} />
         </button>
@@ -110,7 +146,7 @@ export function WorkspaceHome({ name }: { name: string }) {
                   className={kind === k ? "active" : ""}
                   onClick={() => {
                     setKind(k);
-                    setOffset(0);
+                    setPages([null]);
                   }}
                 >
                   {t(
@@ -121,7 +157,26 @@ export function WorkspaceHome({ name }: { name: string }) {
                 </button>
               ),
             )}
+            {sources.map((source) => (
+              <button
+                key={source.id}
+                role="tab"
+                aria-selected={kind === source.id}
+                className={kind === source.id ? "active" : ""}
+                onClick={() => {
+                  setKind(source.id);
+                  setPages([null]);
+                }}
+              >
+                {source.title[locale]}
+              </button>
+            ))}
           </div>
+          {!!recent?.unavailableSources.length && (
+            <p role="status" className="subtle">
+              {t("workspace.recentUnavailable")}
+            </p>
+          )}
           {error && <p role="alert">{error}</p>}
           {!recent && !error && <p className="empty">{t("common.loading")}</p>}
           {recent?.items.length === 0 && (
@@ -130,32 +185,73 @@ export function WorkspaceHome({ name }: { name: string }) {
           <div className="workspace-recent">
             {recent?.items.map((item) => {
               const Icon =
-                item.kind === "library"
-                  ? BookOpen
-                  : item.kind === "assistant"
-                    ? Bot
-                    : item.kind === "folder"
-                      ? FolderOpen
-                      : FileText;
+                item.kind === "plugin"
+                  ? activityIcons[item.icon]
+                  : item.kind === "library"
+                    ? BookOpen
+                    : item.kind === "assistant"
+                      ? Bot
+                      : item.kind === "folder"
+                        ? FolderOpen
+                        : File;
               return (
-                <div key={`${item.kind}:${item.id}`}>
-                  <Icon size={19} />
+                <div
+                  key={JSON.stringify([
+                    item.kind === "plugin" ? item.sourceId : item.kind,
+                    item.id,
+                  ])}
+                >
+                  {(item.kind === "document" || item.kind === "library") &&
+                  item.format !== null ? (
+                    <FileIcon r={{ kind: item.kind, format: item.format }} />
+                  ) : (
+                    <span
+                      className={`file-glyph workspace-glyph-${item.kind}`}
+                      aria-hidden="true"
+                    >
+                      <Icon size={19} />
+                    </span>
+                  )}
                   <a href={item.href}>
                     <strong>{item.title}</strong>
                     <small>
-                      {t(`workspace.kind.${item.kind}`)} ·{" "}
-                      {listTime(item.visited_at, Date.now(), locale)}
+                      <span>
+                        {item.kind === "document" && item.format !== null
+                          ? t(formatLabels[item.format])
+                          : item.kind === "plugin"
+                            ? item.sourceTitle[locale]
+                            : t(`workspace.kind.${item.kind}`)}
+                      </span>
+                      {item.kind === "document" && item.inLibrary && (
+                        <span
+                          className="workspace-recent-source"
+                          title={item.libraryName ?? t("home.libraryDoc")}
+                        >
+                          <BookOpen size={12} aria-hidden="true" />
+                          <span>
+                            {item.libraryName ?? t("home.libraryDoc")}
+                          </span>
+                        </span>
+                      )}
+                      <span>
+                        {listTime(item.visited_at, Date.now(), locale)}
+                      </span>
                     </small>
                   </a>
-                  {item.public && item.kind !== "file" && (
-                    <CollectionAction
-                      id={item.id}
-                      kind={item.kind}
-                      collected={item.collected}
-                      changed={() => setRevision((n) => n + 1)}
-                      onError={setError}
-                    />
-                  )}
+                  {item.kind !== "plugin" &&
+                    item.public &&
+                    item.kind !== "file" && (
+                      <CollectionAction
+                        id={item.id}
+                        kind={item.kind}
+                        collected={item.collected}
+                        changed={() => {
+                          setPages([null]);
+                          setRevision((n) => n + 1);
+                        }}
+                        onError={setError}
+                      />
+                    )}
                   <a className="icon" href={item.href} aria-label={item.title}>
                     <ArrowUpRight size={16} />
                   </a>
@@ -163,17 +259,17 @@ export function WorkspaceHome({ name }: { name: string }) {
               );
             })}
           </div>
-          {recent && (offset > 0 || recent.nextOffset !== null) && (
+          {recent && (pages.length > 1 || recent.nextCursor !== null) && (
             <footer className="workspace-pagination">
               <button
-                disabled={!offset}
-                onClick={() => setOffset(Math.max(0, offset - 50))}
+                disabled={pages.length === 1}
+                onClick={() => setPages((old) => old.slice(0, -1))}
               >
                 {t("discovery.previous")}
               </button>
               <button
-                disabled={recent.nextOffset === null}
-                onClick={() => setOffset(recent.nextOffset!)}
+                disabled={recent.nextCursor === null}
+                onClick={() => setPages((old) => [...old, recent.nextCursor])}
               >
                 {t("discovery.next")}
               </button>

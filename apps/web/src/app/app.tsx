@@ -1,3 +1,5 @@
+import { MobilePluginPage } from "@web/plugins/mobile-page.js";
+import { NavigationArea, LeftNavigation, navigateToDefaultHome } from "@web/plugins/navigation.js";
 import { WorkspaceHome } from "@web/features/workspace/home.js";
 import { DiscoveryPage } from "@web/features/discovery/discovery.js";
 import { KnowledgePublicPage } from "@web/features/knowledge/knowledge-public-page.js";
@@ -52,7 +54,6 @@ import React, { lazy, Suspense, useEffect, useState, useRef, useMemo } from "rea
 import {
   BookOpen,
   Sparkles,
-  Feather,
   Plus,
   Search,
   Clock,
@@ -130,8 +131,6 @@ import { useDesktopNavigation, useNavigationCollapse } from "@web/features/works
 const DocumentEditor = lazy(() =>
   import("@web/features/documents/document-editor.js").then((m) => ({ default: m.DocumentEditor })),
 );
-const QuickNotes = lazy(() => import("@web/features/quick-notes/quick-notes.js").then(m => ({ default: m.QuickNotes })));
-const QuickNotesFloat = lazy(() => import("@web/features/quick-notes/quick-notes-float.js").then(m => ({ default: m.QuickNotesFloat })));
 
 const titleKeys: Record<string, MessageKey> = {
   home: "workspace.home",
@@ -142,7 +141,6 @@ const titleKeys: Record<string, MessageKey> = {
   tickets: "nav.tickets",
   ai: "nav.assistant",
   "knowledge-assistants": "knowledge.assistants",
-  notes: "nav.notes",
   preferences: "account.settings",
   shared: "nav.shared",
   favorites: "nav.favorites",
@@ -175,6 +173,10 @@ type ShareInvitation = {
   role: string;
 };
 export function App() {
+  if(location.hash.startsWith("#/m/plugins/")) return <MobilePluginPage/>;
+  return <WorkspaceApp/>;
+}
+function WorkspaceApp() {
   // Installed bundles finish loading before mount, after this module is imported.
   const pluginNavigation = useMemo(() => webPluginRegistry.navigation.list(), []);
   const pluginNavigationByScope = useMemo(
@@ -218,6 +220,7 @@ export function App() {
       parentId: string | null;
       libraryId: string | null;
     }>({ kind: "document", parentId: null, libraryId: null });
+  useEffect(()=>{const action=(event:Event)=>{if((event as CustomEvent).detail==="doca.search")setModal("search")};window.addEventListener("doca-navigation-action",action);return()=>window.removeEventListener("doca-navigation-action",action)},[]);
   useEffect(() => {
     const token = shareTokenFromHash(hash);
     if (token) {
@@ -670,7 +673,7 @@ export function App() {
     });
   }
   const pluginRoutePath = hash.replace(/^#/, "").split("?")[0] || "/home";
-  const matchedPluginRoute = webPluginRegistry.resolveRoute(pluginRoutePath);
+  const matchedPluginRoute = webPluginRegistry.resolveRoute(pluginRoutePath.startsWith("/m/plugins/") ? pluginRoutePath.slice(2) : pluginRoutePath);
   const pluginRoute =
     matchedPluginRoute &&
     activePluginIds.has(matchedPluginRoute.contribution.pluginId)
@@ -742,10 +745,11 @@ export function App() {
         logged={async () => {
           setBootstrap(await api("/bootstrap"));
           const token = rememberedShareToken();
-          location.hash = token ? "/s/" + token : "/home";
+          if(token) location.hash = "/s/" + token; else await navigateToDefaultHome().catch(()=>{location.hash="/home"});
         }}
       />
     );
+  if (hash.startsWith("#/m/plugins/") && bootstrap.user) return <main className="mobile-plugin-page">{renderedPluginRoute ?? <p>{t("navigation.unavailable")}</p>}</main>;
   if (shareInvitation)
     return (
       <main className="auth">
@@ -823,7 +827,7 @@ export function App() {
             <ArrowLeft size={18} /> {t("account.workspace")}
           </BackLink>
           <div className="global-header-tools">
-          <TodoIcon />
+          <NavigationArea slot="web.topRight" action="other"/>
           <Notifications />
           <LocaleSwitch />
           <AccountMenu
@@ -993,43 +997,7 @@ export function App() {
                 <span className="sidebar-create-label">{t("nav.create")}</span>
               </button>
               <PinnedDocuments refresh={refresh} />
-              {([
-                ...pluginNavigation
-                  .filter((item) => activePluginIds.has(item.pluginId))
-                  .map((item) => ({
-                  key: item.scope,
-                  label: item.labelKey,
-                  plugin: true as const,
-                  Icon: item.icon ?? Home,
-                  order: item.order ?? 0,
-                  path: item.path,
-                })),
-
-                { key: "home", label: "workspace.home", plugin: false as const, Icon: Home, order: 10, path: "/home" },
-                { key: "discover", label: "workspace.publicResources", plugin: false as const, Icon: Search, order: 75, path: "/discover" },
-                { key: "ai", label: "nav.assistant", plugin: false as const, Icon: Sparkles, order: 20, path: "/ai" },
-                { key: "notes", label: "nav.notes", plugin: false as const, Icon: Feather, order: 70, path: "/notes" },
-                { key: "trash", label: "nav.trash", plugin: false as const, Icon: Trash2, order: 80, path: "/trash" },
-              ])
-                .sort((left, right) => left.order - right.order || left.key.localeCompare(right.key))
-                .map(({ key, label, plugin, Icon, path }) => {
-                  const I = Icon as typeof Home;
-                  return (
-                    <button
-                      key={key}
-                      className={`${key === "ai" ? "ai-navigation-entry" : ""} ${key === "trash" ? "sidebar-trash-navigation-entry" : ""} ${!resourceId && scope === key ? "active" : ""}`}
-                      onClick={() => {
-                        navigate(key, path);
-                        if (key === "notes") window.dispatchEvent(new CustomEvent("doca-notes-float-attention"));
-                      }}
-                    >
-                      <I size={16} />
-                      {plugin
-                        ? pluginMessage(locale, label)
-                        : t(label as MessageKey)}
-                    </button>
-                  );
-                })}
+              <LeftNavigation />
             </nav>
           )}
           {currentLibraryId && <div className="sidebar-tree-heading">
@@ -1060,8 +1028,10 @@ export function App() {
         </aside>
       )}
       <main className="workspace">
+        {user && <NavigationArea slot="web.right"/>}
         <header className={`topbar ${documentHeader ? "" : "workspace-topbar"}`}>
           <div className="document-topbar-title">
+            {user && !resourceId && <NavigationArea slot="web.top"/>}
             {(user || currentLibraryId) && desktopNavigation && navigationCollapsed && (
               <button
                 className="icon navigation-toggle"
@@ -1086,13 +1056,6 @@ export function App() {
             {(librarySystemPage || libraryQaPage || (!resourceId && scope === "knowledge-assistants")) && <div className="files-topbar-title knowledge-topbar-title">{librarySystemPage ? <BookOpenCheck size={20}/> : <Bot size={20}/>}<h1>{t(librarySystemPage ? "nav.librarySystem" : "knowledge.assistants")}</h1>{librarySystemPage && detail && <KnowledgeCurationToggle detail={detail} changed={reload}/>}</div>}
             {!resourceId && scope === "ai" && <div id="ai-header-slot" />}
 
-            {!resourceId && scope === "notes" && user && (
-              <div className="files-topbar-title">
-                <Feather size={17} aria-hidden="true" />
-                <strong>{t("nav.notes")}</strong>
-                <span id="notes-header-slot" />
-              </div>
-            )}
             {!resourceId && (scope === "files" || scope === "shared-files") && user && (
               <div className="files-topbar-title">
                 {scope === "shared-files" ? <Users size={17} aria-hidden="true" /> : <FolderOpen size={17} aria-hidden="true" />}
@@ -1222,8 +1185,9 @@ export function App() {
               )}
             {user ? (
               <div className="global-header-tools">
+                <NavigationArea slot="web.topRight" action="other" />
                 {scope === "knowledge-assistants" && <span id="knowledge-share-slot" />}
-                <TodoIcon />
+
                 <Notifications />
                 <LocaleSwitch />
                 <AccountMenu
@@ -1275,15 +1239,13 @@ export function App() {
             renderedPluginRoute !== undefined ? (
             renderedPluginRoute
           ) : !resourceId && scope === "home" && user ? (
-            <WorkspaceHome name={user.display_name} />
+            <><NavigationArea slot="web.home"/><WorkspaceHome name={user.display_name} /></>
           ) : !resourceId && (scope === "discover" || scope === "collected") && user ? (
             <DiscoveryPage key={scope + hash} collected={scope === "collected"} />
           ) : !resourceId && scope === "knowledge-assistants" && user ? (
             <KnowledgeAssistants />
           ) : !resourceId && scope === "ai" ? (
             <AIChat full />
-          ) : !resourceId && scope === "notes" && user ? (
-            <Suspense fallback={<p className="empty">{t("shell.loadingNotes")}</p>}><QuickNotes key={user.id} userId={user.id} changed={() => setRefresh(n => n + 1)} /></Suspense>
           ) : ticketsPage ? (
             <Tickets ticketId={ticketId} />
           ) : resourceId ? (
@@ -1523,11 +1485,6 @@ export function App() {
           saved={reload}
         />
       )}
-      {user && !mobileShell && (
-        <Suspense fallback={null}>
-          <QuickNotesFloat userId={user.id} />
-        </Suspense>
-      )}
     </div>
     </AIProvider>
     </DocumentModeContext.Provider>
@@ -1741,6 +1698,7 @@ function Notifications() {
   async function load() {
     setData(await api("/notifications"));
   }
+  useEffect(()=>{const action=(event:Event)=>{if((event as CustomEvent).detail==="doca.notifications"){setOpen(true);void load().catch(e=>setError(e.message))}};window.addEventListener("doca-navigation-action",action);return()=>window.removeEventListener("doca-navigation-action",action)},[]);
   useEffect(() => {
     const dismiss = (e: Event) => {
       if (!panelRef.current?.contains(e.target as Node)) setOpen(false);
@@ -1769,6 +1727,7 @@ function Notifications() {
   return (
     <div className="notifications" ref={panelRef}>
       <button
+        hidden
         className="icon notification-trigger"
         title={t("shell.notifications")}
         aria-label={`${t("shell.notifications")} ${t("shell.unread", { count: data.unread })}`}

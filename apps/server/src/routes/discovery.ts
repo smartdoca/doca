@@ -1,3 +1,4 @@
+import { workspaceActivity, pluginActivityTarget } from "@core/modules/workspace/plugin-activity.js";
 import { recentActivity, recordActivity, setAssistantFavorite } from "@core/modules/workspace/activity.js";
 import { homeOverview } from "@core/modules/workspace/home.js";
 import { authorizeFileItem } from "@core/modules/access/file-access.js";
@@ -32,6 +33,31 @@ export function registerDistribution(
   admin: (r: FastifyRequest) => Actor,
 ) {
   api.get("/api/v1/workspace/overview", req => homeOverview(db, auth(req)));
+  api.get<{ Querystring: { kind?: string; source?: string; cursor?: string } }>("/api/v1/workspace/activity", {
+    schema: { querystring: Type.Object({
+      kind: Type.Optional(Type.Union(["document", "library", "assistant", "folder", "file"].map(k => Type.Literal(k)))),
+      source: Type.Optional(Type.String({ maxLength: 150 })),
+      cursor: Type.Optional(Type.String({ maxLength: 100000 })),
+    }, { additionalProperties: false }) },
+  }, async (req, reply) => {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    req.raw.once("aborted", abort);
+    reply.raw.once("close", abort);
+    try {
+      reply.header("Cache-Control", "no-store");
+      return await workspaceActivity(db, auth(req), { ...req.query, signal: controller.signal });
+    } finally {
+      req.raw.removeListener("aborted", abort);
+      reply.raw.removeListener("close", abort);
+    }
+  });
+  api.get<{ Querystring: { source: string; id: string } }>("/api/v1/workspace/activity/open", {
+    schema: { querystring: Type.Object({ source: Type.String({ maxLength: 150 }), id: Type.String({ minLength: 1, maxLength: 500 }) }, { additionalProperties: false }) },
+  }, async (req, reply) => {
+    const path = await pluginActivityTarget(db, auth(req), req.query.source, req.query.id);
+    return reply.header("Cache-Control", "no-store").redirect(`/#${path}`, 303);
+  });
   api.get<{Querystring:{kind?:string;publicOnly?:boolean;q?:string;offset?:number}}>("/api/v1/workspace/recent", {schema:{querystring:Type.Object({kind:Type.Optional(Type.Union(["document","library","assistant","folder","file"].map(k=>Type.Literal(k)))),publicOnly:Type.Optional(Type.Boolean()),q:Type.Optional(Type.String({maxLength:200})),offset:Type.Optional(Type.Integer({minimum:0,maximum:1000000}))},{additionalProperties:false})}}, req=>recentActivity(db,auth(req),req.query));
   api.post<{Params:{id:string}}>("/api/v1/workspace/files/:id/visit",{schema:{params:Type.Object({id:Type.String({format:"uuid"})})}},async req=>{const actor=auth(req);await authorizeFileItem(db,actor,req.params.id);await recordActivity(db,actor.id,"file",req.params.id);return {ok:true};});
   api.put<{Params:{id:string};Body:{favorite:boolean}}>("/api/v1/workspace/assistants/:id/favorite",{schema:{params:Type.Object({id:Type.String({format:"uuid"})}),body:Type.Object({favorite:Type.Boolean()},{additionalProperties:false})}},req=>setAssistantFavorite(db,auth(req),req.params.id,req.body.favorite));

@@ -139,3 +139,43 @@ export interface NotificationsServiceV1 {
   withdraw(pluginId: string, input: { recipientId: string; key: string }): Promise<void>;
 }
 export const notificationsServiceToken = defineService<NotificationsServiceV1>("notifications.v1");
+
+/** Plugin-owned visit records; registration never transfers their storage to Doca. */
+export type ActivityIcon = "file" | "mail" | "calendar" | "message" | "task" | "book" | "folder";
+export interface ActivityPosition {
+  readonly visitedAt: string;
+  readonly id: string;
+}
+export interface ActivityContext {
+  readonly principalId: string;
+  readonly signal: AbortSignal;
+}
+export interface ActivityEntry extends ActivityPosition {
+  readonly title: string;
+  /** Local application route, without an origin or hash. */
+  readonly path: string;
+}
+export interface ActivitySource {
+  /** Namespaced stable source id, e.g. example.mail.messages. */
+  readonly id: string;
+  readonly pluginId: string;
+  readonly schemaVersion: 1;
+  readonly resourceType: string;
+  readonly title: { readonly en: string; readonly zh: string };
+  readonly icon: ActivityIcon;
+  /** Current authorized visits: visitedAt DESC, id ASC (ASCII binary order).
+   * UTC ISO milliseconds; unique resource ids; visitedAt <= until; strictly after after.
+   * hasMore=true requires a non-empty page. The host may request the same page again.
+   */
+  list(context: ActivityContext, input: {
+    readonly until: string;
+    readonly after: ActivityPosition | null;
+    readonly limit: number;
+  }): Promise<{ readonly items: readonly ActivityEntry[]; readonly hasMore: boolean }>;
+  /** Recheck the current user's visit and resource access before opening. */
+  get(context: ActivityContext, id: string): Promise<ActivityEntry | null>;
+}
+export interface ActivityServiceV1 {
+  register(source: ActivitySource): () => void;
+}
+export const activityServiceToken = defineService<ActivityServiceV1>("activity.v1");

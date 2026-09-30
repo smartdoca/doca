@@ -1,3 +1,6 @@
+import { NavigationArea } from "@web/plugins/navigation.js";
+import { NavigationSettings } from "./navigation.js";
+import { Plugins } from "./plugins.js";
 import {
   loginMethodLabel,
   type LoginMethodLabel,
@@ -131,6 +134,8 @@ const sectionGroups: {
         order: 10,
         Icon: SettingsIcon,
       },
+      { id: "navigation", label: "navigation.title", order: 21, Icon: SettingsIcon },
+      { id: "plugins", label: "plugins.title", order: 20, Icon: SettingsIcon },
       { id: "hooks", label: "admin.hooks", order: 30, Icon: Webhook },
     ],
   },
@@ -382,35 +387,7 @@ export function Admin({
       </div>
       <div className="admin-layout">
         <nav className="admin-nav" aria-label={t("admin.nav")}>
-          {sectionGroups.map(({ group, items }) => (
-            <div className="admin-nav-group" key={group}>
-              <h2>{t(group)}</h2>
-              {items
-                .filter(({ id, plugin }) => {
-                  if (!plugin) return true;
-                  const panel =
-                    webPluginRegistry.adminPanels.getByConflictKey(id);
-                  return !!panel && activePluginIds.has(panel.pluginId);
-                })
-                .map(({ id, label, plugin, Icon }) => (
-                  <button
-                    key={id}
-                    aria-current={tab === id ? "page" : undefined}
-                    className={tab === id ? "active" : ""}
-                    onClick={() => {
-                      navigateAdmin({ tab: id });
-                      setError("");
-                      setMessage("");
-                    }}
-                  >
-                    <Icon size={18} />
-                    {plugin
-                      ? pluginMessage(locale, label)
-                      : t(label as MessageKey)}
-                  </button>
-                ))}
-            </div>
-          ))}
+          <NavigationArea slot="web.admin"/>
           <div className="admin-nav-note">
             <LockKeyhole size={16} />
             <p>{t("admin.navNote")}</p>
@@ -960,6 +937,8 @@ export function Admin({
               {accessTab === "directory" && <DirectorySettings />}
             </>
           )}
+          {tab === "plugins" && <Plugins />}
+          {tab === "navigation" && <NavigationSettings />}
           {tab === "hooks" && <Webhooks />}
         </main>
       </div>

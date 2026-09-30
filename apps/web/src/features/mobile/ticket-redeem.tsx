@@ -8,12 +8,12 @@ export function MobileTicketRedeem() {
     const params = new URLSearchParams(location.hash.split("?")[1] ?? "");
     const ticket = params.get("ticket") ?? "";
     const to = params.get("to") ?? "";
-    if (!/^[a-f0-9]{64}$/.test(ticket) || !documentPath.test(to)) {
+    if (!/^[a-f0-9]{64}$/.test(ticket) || !(documentPath.test(to) || /^\/m\/plugins\/[a-z][a-z0-9.-]*\/[a-zA-Z0-9/_-]*$/.test(to))) {
       setError("打开链接无效");
       return;
     }
     let active = true;
-    void fetch("/api/v1/auth/webview", {
+    void fetch(to.startsWith("/m/plugins/") ? "/api/v1/plugins-mobile/redeem" : "/api/v1/auth/webview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ticket }),

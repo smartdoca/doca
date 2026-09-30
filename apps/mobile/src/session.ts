@@ -1,3 +1,4 @@
+import { clearPluginCache } from "./plugins/native-storage";
 import * as SecureStore from "expo-secure-store";
 
 const indexKey = "doca.mobile.accounts";
@@ -82,6 +83,7 @@ export async function switchOrigin(origin: string) {
 export async function removeAccount(origin: string) {
   const vault = await loadVault();
   await SecureStore.deleteItemAsync(accountKey(origin));
+  await clearPluginCache(origin);
   const accounts = vault.accounts.filter(
     (account) => account.origin !== origin,
   );

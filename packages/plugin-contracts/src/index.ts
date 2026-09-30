@@ -781,6 +781,12 @@ function compareSemver(left: ParsedSemver, right: ParsedSemver) {
   return 0;
 }
 
+export function comparePluginVersions(left: string, right: string): number {
+  const a = parseSemver(left), b = parseSemver(right);
+  if (!a || !b) throw new Error("Invalid plugin version");
+  return compareSemver(a, b);
+}
+
 export function satisfiesPluginVersion(version: string, range: string) {
   if (range === "*") return !!parseSemver(version);
   const prefix = range[0] === "^" || range[0] === "~" ? range[0] : "";

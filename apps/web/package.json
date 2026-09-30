@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@smartdoca/plugin-contracts": "workspace:*",
     "@smartdoca/web-plugin-registry": "workspace:*"
   }
 }

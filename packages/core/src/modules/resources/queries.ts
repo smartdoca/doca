@@ -1,3 +1,4 @@
+import { withContentDocumentAccess } from "../knowledge/content-access.js";
 import { distributionBehavior } from "../access/distribution-behavior.js";
 import { policyFieldQuery } from "../access/queries.js";
 import { sql } from "kysely";
@@ -149,7 +150,7 @@ async function anonymousLibraryPage(db: DB, input: ResourceQuery) {
     const last = page.at(-1);
     if (treeMode) total = page.length;
     return {
-      items: page.map((r) => {
+      items: page.filter(r => ctx.resources.some(resource => resource.id === r.id)).map((r) => {
         const projected = redactClosed(
           projectResource(
             r,
@@ -183,7 +184,7 @@ async function anonymousLibraryPage(db: DB, input: ResourceQuery) {
   });
 }
 
-export async function queryResourcePage(
+async function queryResourcePageUnchecked(
   db: DB,
   actor: Actor | null,
   input: ResourceQuery,
@@ -448,7 +449,7 @@ export async function queryResourcePage(
     }
     const last = page.at(-1);
     return {
-      items: page.map(({ cursorValue, ...r }) => {
+      items: page.filter(r => ctx.resources.some(resource => resource.id === r.id)).map(({ cursorValue, ...r }) => {
         const projected = redactClosed(
           projectResource(
             r,
@@ -480,4 +481,8 @@ export async function queryResourcePage(
       truncated: treeMode && rows.length > 10000,
     };
   });
+}
+
+export async function queryResourcePage(db:DB, actor:Actor|null, input:ResourceQuery) {
+  return withContentDocumentAccess(db, actor, () => queryResourcePageUnchecked(db, actor, input), input.matchedIds ?? (input.libraryId ? [input.libraryId] : input.libraryIds));
 }
