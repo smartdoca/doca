@@ -1,11 +1,10 @@
 # Plugin SDK and core boundary
 
 
-> 2026-09-30：npm 分发、动态 App 页面与可配置导航的新增对接说明见 [邮箱插件对接手册 v1](plugin-mail-integration-v1.md)，远端 API 以 [商城协议 v1](plugin-store-protocol.md) 为准。移动端已增加受限会话与 WebView 页面，尚待真机及独立邮箱包联调。
 
 [中文](plugin-sdk-contract.zh-CN.md)
 
-Status: updated 2026-09-27. Plugins store their own business data. This document is the acceptance standard for the refactor. It does not mean every interface is implemented. The gap is in section 12. A development tutorial must not present a target interface as an export that exists today.
+Status: updated 2026-10-01 (host 0.1.1 / SDK 0.1.2). Plugins store their own business data. This document is the acceptance standard for the refactor. It does not mean every interface is implemented. The gap is in section 12. A development tutorial must not present a target interface as an export that exists today.
 
 ## 1. Decisions
 
@@ -24,7 +23,7 @@ Plugins run inside a trusted server process. This is an extension boundary, not 
 | Files | Folders, files, attachment bindings, upload and download, object storage, permissions | Business attachment references, importers, previewers, extractors |
 | Documents | Editor host, persistence, collaboration, history, comments, document permissions | New editor adapters, templates, import and export, document actions |
 | AI | Model execution, tool and skill registration, call context, raw usage ledger, token usage rated by model | Domain tools, skills, flows, membership quotas, prices, and charges |
-| Search and knowledge | Unified search and the global entry. Subscription model, scheduling, cursor commit, and derived-index cleanup. See section 12 for what exists | Register sources, projections and delete facts, current permission recheck, preview and pull. External accounts and business sync |
+| Search and knowledge | Unified search and the global entry. Explicit subscriptions, scheduling, block fingerprints and derived-content access control | Register content.v1 list/read/resolve and optional search, current permission checks; external accounts and business sync |
 | Jobs and events | Host fact events and plugin start and stop hooks | The plugin manages business jobs, its database, retry, and idempotence |
 | Interface | Shell, routes, navigation slots, theme, language, error boundaries | Business trees, pages, settings, admin, AI result cards |
 | Commercial policy | Generic operation policy extension and fact statistics | Levels, membership, points, plans, quotas, payment |
@@ -56,7 +55,7 @@ Services are identified by a stable string id and version, not by token object i
 
 Each registration returns a disposer owned by a context effect. Services, jobs, event subscriptions, and UI registrations belong to one host instance. Do not store them on `globalThis` or `Symbol.for`. Two test apps in one process must not affect each other.
 
-Target capabilities, some of which are not exported yet: files.v1, documents.v1, users.v1, permissions.v1, http.v1, ai.v1, ai-usage.v1, search.v1, knowledge.sources.v1, notifications.v1 (exported), events.v1, the plugin's private database, and policies.v1. Actual ids follow the current exports. A rename must be versioned. This table is not permission to pass an unimplemented interface to an existing plugin.
+Target capabilities, some of which are not exported yet: files.v1, documents.v1, users.v1, permissions.v1, http.v1, ai.v1, ai-usage.v1, search.v1, content.v1, activity.v1, notifications.v1 (exported), events.v1, the plugin's private database, and policies.v1. Actual ids follow the current exports. A rename must be versioned. This table is not permission to pass an unimplemented interface to an existing plugin.
 
 ## 5. User information and request context
 
@@ -102,11 +101,26 @@ The host reserves the object id and storage configuration, then writes bytes. Lo
 
 ### 7.2 Search and external knowledge
 
-`search.v1` is the shared search base for in-plugin search and global federated search. Those entries and AI retrieval enable sources separately. Registering a source does not turn on global display or AI. A public query capability does not mean those entries are connected.
+Use `@smartdoca/plugin-sdk@^0.1.2`. Import `contentServiceToken` and the `ContentSource` type from `@smartdoca/plugin-sdk/content`; declare the token in `injections.required` and register the source during mount. Sources belong to the registering plugin. Built-in documents and files use the same contract.
 
-The host persists the subscription, target library, source configuration reference, plugin, source, and record ids and versions, sync cursor, job status, and last error. It schedules pull and owns the derived index lifecycle. That is host knowledge data, not plugin database hosting. The plugin keeps external accounts, credentials, business data, its own sync cursor, and outbox, and provides preview, pull, delete facts, and a current authorization recheck.
+| Member | Contract |
+| --- | --- |
+| Declaration | `id`, `pluginId`, `version: 1`, localized `title`, `contentTypes`, `purposes`, `capabilities: {search}`, `configSchema` |
+| `list(ctx, {config, cursor, limit})` | Required. Return `{items, nextCursor, snapshot}`. Each item contains `ref: {sourceId, resourceId, blockId}`, `fingerprint`, `title`, optional `order`, `anchor`, `excerpt`; do not return full bodies here. |
+| `read(ctx, {config, ref, fingerprint})` | Required. Recheck permission and return the item plus `text`, or null when unavailable. A changed fingerprint is a conflict, never new text under an old fingerprint. |
+| `resolve(ctx, ref)` | Required. Recheck access and return `{path, fingerprint}` or null. `path` is a current in-app location. |
+| `search(ctx, {config, cursor, limit, query})` | Optional; declare and implement together. Return a lightweight page. Unsupported search does not fall back to a full scan. |
 
-The host advances the subscription cursor only after a batch is persisted. It supports replay, cancel, retry, and restart. A subscription constrained by source permission stops retrieval and AI use immediately when access is revoked, the source is disabled, or permission cannot be confirmed. Physical cleanup of derived content may retry asynchronously. Deleting a source propagates to derived records. An independent copy the user imported explicitly has its own authorization and lifecycle. This orchestration is not implied by a register call.
+`ctx` contains the authenticated `principalId`, `purpose` (`knowledge`, `analysis`, or `search`) and cancellation `signal`. The provider enforces current business permission on every call. A source supporting analysis can serve a future to-do plugin without a mail-specific API. Consumers use `sources(ctx, purpose)`, then service `list/read/search` with `sourceId` and `purpose`; service `resolve` takes `{ref, purpose}`. Only request a purpose declared by that source.
+
+Pagination starts and ends with null. All pages in a traversal must share a consistent snapshot; fail on expiry rather than silently continuing with different data. This cursor is for paginating the full authorized inventory, not a durable change log. `listChanges` and `readChanges` are not required or exported by this contract. The source may sync its business system internally, but Doca does not require that implementation.
+
+Knowledge uses the existing subscription and scheduling system. A user explicitly selects the source, library and configuration. The host stores references and block fingerprints, compares the complete inventory, and reads/analyzes only new or changed blocks. It does not keep an extra full source-body mirror. Unchanged blocks do not need to be read again. Only a complete, consistent inventory may establish removal; failed or partial runs do not acknowledge it. Stable block identity must not depend on a document's whole revision or positional paragraph index.
+
+On deletion, unbinding, revocation or an unavailable source, derived knowledge is withheld from new normal reads, lists, search and answer retrieval; content is retained for administrator handling, including manually edited results. Already delivered content and an already open collaboration connection are not retroactively revoked by this check. The configuration UI supports primitive fields, enums and string arrays; complex configuration belongs in the plugin's own UI. This integration adds no database schema migration, dual read/write or old-source adapter. The SDK still exports `knowledge.sources.v1`, but it is not the subscription entry for new integrations and is not automatically adapted to `content.v1`.
+
+Limits: 100 inventory items/page, 100,000 items/traversal, 2 million characters/body, 120,000 changed-body characters/analysis run and a 20-second source-call deadline. Oversized or incomplete work fails explicitly; do not truncate it and call it complete. HTTP endpoints are `/api/v1/content/sources` and `/api/v1/content/{list,read,resolve,search}`. See [exact protocol and limits](plugin-content.md) for request shapes and subscription routes.
+
 
 ## 8. AI tools, skills, and usage
 
@@ -155,7 +169,7 @@ Mail, calendar, membership, and moderation are business plugins. Quick notes hav
 
 ## 12. What exists
 
-Installation updated on 2026-09-30; other capability rows retain their previous verification dates. This is not a claim that the target above has landed.
+Updated 2026-10-01 against current exports and host implementation. Future targets above remain subject to the gaps below.
 
 | Item | Present | Still to do |
 | --- | --- | --- |
@@ -164,10 +178,10 @@ Installation updated on 2026-09-30; other capability rows retain their previous 
 | Files and documents | Public file contract, binding download authorization, durable create idempotence, SDK package build | Full acceptance of an independent document capability package. Spare file objects are reclaimed on a schedule |
 | Users | Paged calibration, user-create events in a transaction, status and some profile events | User deletion and async cleanup before a delete entry is opened. More profile entry checks |
 | Intersection | Paged relationship sources, current-fact recheck, timeout and sign-out denial | The plugin maintains its own incremental relationship index |
-| Client | Dynamic Web loading, scoped mobile WebView, configurable navigation, render error isolation | Generic tree slot; real-device mobile integration acceptance |
+| Client | Dynamic Web loading, scoped mobile WebView, configurable navigation, render isolation, persistent native cache and attachment save/share | Generic tree slot; independent client and real-device acceptance |
 | AI | Public tools and skills, raw usage, model-rate conversion, admission policy, durable settlement events | MCP alignment, reservation and failure compensation, more usage dimensions |
 | Recent activity | activity.v1 source registration, plugin-owned visits, merged cursor paging, permission-checked opening | Plugin-specific visit storage and cleanup belong to the plugin; see [integration](plugin-activity.md) |
-| Search and knowledge | search.v1 projection, rebuild, and authorization query. Knowledge registration contract is packaged | Global retrieval, durable knowledge subscription, scheduling, and revocation cleanup |
+| Search and knowledge | content.v1 sources, global content retrieval, existing knowledge subscriptions/scheduling, block fingerprints, source configuration UI and derived-content guards | Independent mail-source integration and acceptance; already open collaboration connections are outside immediate revocation |
 | Mail | Host source, bridge, database, tools, web and mobile entry, and business tests removed | A future mail plugin is developed and accepted on its own |
 | Membership | Backend, UI, and commercial data definitions removed | Combined verification |
 | Moderation | Routes, worker, business fields, and read restrictions removed | A future business plugin |
@@ -179,7 +193,7 @@ Interface increments and storage ownership on 2026-09-26 follow the [mail handof
 ## 13. Delivery grades
 
 - Near term: file-create idempotence the mail integration already has, and a real offline tarball acceptance. Search and knowledge follow section 7.2. The first delivery states disable, uninstall, data retention, and the current database baseline.
-- When the product promises it: automatic mail sync into a library needs the full host subscription orchestration. Global search needs the full global entry. Do not claim them before they exist, and do not treat them as unconditional blockers for a basic mail connection.
+- Host content subscriptions and global content retrieval are implemented. Each external plugin must implement the new contract and pass its own business-flow and revocation acceptance.
 - As the feature arrives: user deletion with the account-delete entry. Dynamic WebView with a mobile promise that does not require an app release.
 - Later operations: a default plugin data directory, redacted structured logs, health, recent job errors, and a backlog page for jobs and the outbox. The host summarizes through a public status interface. It does not query the plugin database. The default directory is a path convention. It does not host the database, credentials, or backups.
 
@@ -193,7 +207,7 @@ Explicitly not done: generic plugin SQL or data.v2, a distributed transaction ac
 
 `activity.v1` is exported through `activityServiceToken` in `plugin-sdk/platform`. A source supplies `list` and `get`, localized type labels, and a supported icon. The host does not persist plugin visits. Existing core visit stores stay in place. Registration is instance-scoped and disposed with the plugin; list and open require current `activity.read` authorization. The [activity contract](plugin-activity.md) defines strict keyset ordering, bounded queries, failure isolation, cursor behavior, and rollback without data migration.
 
-## Unified content implementation update
+## 15. Content and native implementation
 
 The source SDK exports `content.v1` through `plugin-sdk/content`: required list/read/resolve, optional search, complete inventory validation, and built-in document/file readers. Knowledge subscriptions reuse existing storage and scheduling, compare block fingerprints and read/analyze changed bodies only. Configuration UI and live derived-content guards cover new reads, lists and answer retrieval. No knowledge.sources.v1 adapter, database conversion or schema migration is added. Independent mail integration and native-device acceptance remain required. [Contract and implementation limits](plugin-content.md).
 

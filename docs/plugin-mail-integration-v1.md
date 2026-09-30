@@ -1,5 +1,7 @@
 # 邮箱插件对接手册：npm、Web、App 与导航 v1
 
+> 历史对接记录：当前开发以[插件开发指引](plugin-development.zh-CN.md)为入口（宿主 0.1.1 / SDK 0.1.2）。本文旧的 preview/pull/持久订阅游标及“尚未发布”状态不再作为新接入标准；内容使用 content.v1，原生能力使用 PluginWebHost.native。历史测试结论仅适用于当时的版本。
+
 2026-09-30。对接分支：`codex/plugin-store`。本手册描述本轮新增实现，远端商城接口见 [插件商城交互协议](plugin-store-protocol.md)。建议邮箱先完成收件箱、邮件正文、发送及附件的一条闭环，再扩展 AI、搜索和知识库。
 
 ## 1. 分发一个完整 npm 包

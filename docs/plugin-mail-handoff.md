@@ -1,5 +1,7 @@
 # Mail plugin handoff
 
+> 历史对接记录：当前开发以[插件开发指引](plugin-development.zh-CN.md)为入口（宿主 0.1.1 / SDK 0.1.2）。本文旧的 preview/pull/持久订阅游标及“尚未发布”状态不再作为新接入标准；内容使用 content.v1，原生能力使用 PluginWebHost.native。历史测试结论仅适用于当时的版本。
+
 
 > 2026-09-30：npm 分发、动态 App 页面与可配置导航的新增对接说明见 [邮箱插件对接手册 v1](plugin-mail-integration-v1.md)，远端 API 以 [商城协议 v1](plugin-store-protocol.md) 为准。移动端已增加受限会话与 WebView 页面，尚待真机及独立邮箱包联调。
 

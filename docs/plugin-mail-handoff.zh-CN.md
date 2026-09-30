@@ -1,5 +1,7 @@
 # 邮箱插件接入交接（2026-09-26）
 
+> 历史对接记录：当前开发以[插件开发指引](plugin-development.zh-CN.md)为入口（宿主 0.1.1 / SDK 0.1.2）。本文旧的 preview/pull/持久订阅游标及“尚未发布”状态不再作为新接入标准；内容使用 content.v1，原生能力使用 PluginWebHost.native。历史测试结论仅适用于当时的版本。
+
 [English](plugin-mail-handoff.md)
 
 本文件描述当前可用能力；不把目标规范等同于现有实现。邮箱侧原始需求见 `doca-mail/docs/PUBLIC_CAPABILITY_GAPS.md`，以本次边界决定修订该清单。
