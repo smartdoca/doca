@@ -63,7 +63,7 @@ VOLUME ["/data"]
 EXPOSE 39120
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD ["node", "--input-type=module", "-e", "fetch('http://127.0.0.1:39120/health', {headers: {host: new URL(process.env.DOCA_ORIGIN).host}}).then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+  CMD ["node", "--input-type=module", "-e", "import http from 'node:http'; http.get('http://127.0.0.1:39120/health', {headers: {host: new URL(process.env.DOCA_ORIGIN).host}}, r => { r.resume(); if (r.statusCode !== 200) process.exit(1) }).on('error', () => process.exit(1))"]
 
 # Start Node directly so it receives container shutdown signals.
 CMD ["node", "--import", "tsx", "apps/server/src/main.ts"]
