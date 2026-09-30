@@ -115,7 +115,6 @@ export async function saveChatMessage(
   attachments: import("./attachments.js").AIAttachment[] = [],
   reasoning?: string,
   promptContext?: string,
-  quickNotes: {id: string; label: string; version: number}[] = [],
   explorer: ExplorerMessageTarget[] = [],
 ) {
   await memory.saveMessages({
@@ -144,7 +143,6 @@ export async function saveChatMessage(
             references,
             attachments,
             ...(explorer.length ? { explorer } : {}),
-            ...(quickNotes.length ? {quickNotes} : {}),
             ...(promptContext ? { promptContext } : {}),
           },
         },

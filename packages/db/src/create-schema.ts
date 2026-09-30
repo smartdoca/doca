@@ -2,6 +2,11 @@ import type { Kysely } from "kysely";
 import { sql } from "kysely";
 
 const schemaStatements = [
+  `CREATE TABLE IF NOT EXISTS "plugin_webview_auth" ("id" varchar(64) primary key,"kind" varchar(16) not null,"plugin_id" varchar(100) not null,"parent_session" varchar(64) not null,"expires_at" varchar(32) not null);`,
+  `CREATE TABLE IF NOT EXISTS "navigation_settings" ("id" varchar(16) primary key, "revision" integer not null, "draft" text not null, "published" text not null);`,
+  `CREATE TABLE IF NOT EXISTS "plugin_registry" ("id" varchar(16) primary key, "revision" integer not null, "state" text not null);`,
+  `CREATE TABLE IF NOT EXISTS "plugin_archives" ("sha256" varchar(64) primary key, "plugin_id" varchar(160) not null, "version" varchar(100) not null, "content" text not null, "created_at" varchar(32) not null, unique ("plugin_id", "version"));`,
+
   `CREATE TABLE IF NOT EXISTS "users" ("id" varchar(36) primary key, "login" varchar(160) not null unique, "display_name" varchar(160) not null, "password_hash" text not null, "admin" integer not null, "status" varchar(16) not null, "created_at" varchar(32) not null, "last_login_at" varchar(32), "public_id" varchar(160), "directory_mode" varchar(16), "profile_metadata" text default '{}' not null, "profile_revision" integer default 1 not null);`,
   `CREATE TABLE IF NOT EXISTS "file_operation_receipts" ("plugin_id" varchar(160) not null, "user_id" varchar(36) not null, "operation" varchar(32) not null, "operation_key" varchar(200) not null, "request_hash" varchar(64) not null, "status" varchar(16) not null, "result" text, "object_id" varchar(36), "profile_id" varchar(36), "object_key" text, "cleanup_at" varchar(32), "created_at" varchar(32) not null, primary key ("plugin_id", "user_id", "operation", "operation_key"));`,
   `CREATE TABLE IF NOT EXISTS "user_page_state" ("user_id" varchar(36) not null references "users" ("id") on delete cascade, "key" varchar(160) not null, "value" text not null, "version" integer not null, "updated_at" varchar(32) not null, constraint "user_page_state_pk" primary key ("user_id", "key"), constraint "user_page_state_version" check (version > 0));`,
@@ -31,7 +36,7 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS "user_preferences" ("user_id" varchar(36) primary key references "users" ("id"), "avatar" varchar(24) not null, "theme" varchar(16) not null, "density" varchar(16) not null, "default_sort" varchar(24) not null, "sort_order" varchar(4) not null, "version" integer not null, "avatar_asset_id" varchar(36));`,
   `CREATE TABLE IF NOT EXISTS "user_presence" ("user_id" varchar(36) primary key references "users" ("id"), "last_seen_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "storage_profiles" ("id" varchar(36) primary key, "provider" varchar(16) not null, "config" text not null, "active" integer not null, "created_at" varchar(32) not null);`,
-  `CREATE TABLE IF NOT EXISTS "assets" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) references "resources" ("id"), "purpose" varchar(16) not null, "profile_id" varchar(36) not null references "storage_profiles" ("id"), "object_key" varchar(160) not null, "filename" varchar(255) not null, "mime" varchar(128) not null, "size" integer not null, "created_at" varchar(32) not null, "deleted_at" varchar(32), "uploaded_by" text, "note_id" varchar(36));`,
+  `CREATE TABLE IF NOT EXISTS "assets" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) references "resources" ("id"), "purpose" varchar(16) not null, "profile_id" varchar(36) not null references "storage_profiles" ("id"), "object_key" varchar(160) not null, "filename" varchar(255) not null, "mime" varchar(128) not null, "size" integer not null, "created_at" varchar(32) not null, "deleted_at" varchar(32), "uploaded_by" text);`,
   `CREATE INDEX "assets_resource" on "assets" ("resource_id", "deleted_at");`,
   `CREATE TABLE IF NOT EXISTS "document_states" ("resource_id" varchar(36) primary key references "resources" ("id"), "codec" varchar(64) not null, "checkpoint" text not null, "checkpoint_seq" integer not null, "seq" integer not null, "text" text not null, "updated_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "document_updates" ("resource_id" varchar(36) not null references "resources" ("id"), "seq" integer not null, "data" text not null, "author_id" varchar(36) not null references "users" ("id"), "created_at" varchar(32) not null, constraint "document_updates_pk" primary key ("resource_id", "seq"));`,
@@ -118,10 +123,6 @@ const schemaStatements = [
   `CREATE INDEX "ai_calls_user" on "ai_calls" ("user_id", "created_at");`,
   `CREATE TABLE IF NOT EXISTS "ai_skills" ("id" text primary key, "user_id" text not null, "name" text not null, "description" text not null, "content" text not null, "formats" text not null, "enabled" integer not null, "revision" integer not null, "updated_at" text not null);`,
   `CREATE TABLE IF NOT EXISTS "ai_mcp_keys" ("id" text primary key, "user_id" text not null references "users" ("id"), "name" text not null, "token_hash" text not null unique, "resource_ids" text not null, "writable" integer not null, "expires_at" text not null, "created_at" text not null);`,
-  `CREATE TABLE IF NOT EXISTS "quick_notes" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id"), "content" text not null, "plain_text" text not null, "asset_ids" text not null, "version" integer not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "deleted_at" varchar(32));`,
-  `CREATE INDEX "quick_notes_owner_created" on "quick_notes" ("owner_id", "deleted_at", "created_at", "id");`,
-  `CREATE TABLE IF NOT EXISTS "quick_note_compilations" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id"), "sources" text not null, "request_hash" text not null, "instruction" text not null, "model_id" text not null, "status" varchar(16) not null, "markdown" text not null, "error" text not null, "document_id" varchar(36) references "resources" ("id"), "created_at" varchar(32) not null, "updated_at" varchar(32) not null);`,
-  `CREATE INDEX "quick_note_compilations_owner" on "quick_note_compilations" ("owner_id", "created_at");`,
   `CREATE TABLE IF NOT EXISTS "grants" ("resource_id" varchar(36) not null references "resources" ("id") on delete cascade, "user_id" varchar(36) not null references "users" ("id") on delete cascade, "source_type" varchar(24) default 'direct' not null, "source_id" varchar(36) default '' not null, "source_resource_id" varchar(36) references "resources" ("id") on delete cascade, "role" varchar(16) not null, "include_descendants" integer default 1 not null, "status" varchar(16) default 'active' not null, "created_by" varchar(36), "created_at" varchar(32) default '' not null, "updated_at" varchar(32) default '' not null, constraint "grants_unified_pk" primary key ("resource_id", "user_id", "source_type", "source_id"), constraint "grants_unified_source" check (source_type in ('direct','link','parent_override')), constraint "grants_unified_status" check (status in ('active','disabled')), constraint "grants_unified_role" check (role in ('reader','commenter','editor','manager')));`,
   `CREATE INDEX "grants_by_user" on "grants" ("user_id", "resource_id", "status");`,
   `CREATE INDEX "grants_by_source" on "grants" ("resource_id", "source_type", "source_id", "status");`,
@@ -393,6 +394,7 @@ export async function validateSchema(db: Kysely<any>) {
 export async function createSchema(db: Kysely<any>) {
   if ((await db.introspection.getTables()).length > 0) {
     await validateSchema(db);
+    await createPluginSchema(db);
     return;
   }
 
@@ -438,4 +440,8 @@ async function createDiscoverySchema(db: Kysely<any>) {
   await sql`CREATE TABLE IF NOT EXISTS folder_entries (folder_id varchar(36) not null references file_folders(id) on delete cascade, user_id varchar(36) not null references users(id) on delete cascade, state varchar(16) not null, updated_at varchar(32) not null, primary key(folder_id, user_id))`.execute(
     db,
   );
+}
+
+async function createPluginSchema(db: Kysely<any>) {
+  for (const statement of schemaStatements.slice(0, 4)) await sql.raw(statement).execute(db);
 }

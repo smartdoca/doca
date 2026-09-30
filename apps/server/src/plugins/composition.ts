@@ -1,3 +1,7 @@
+import { registerPluginMobileSessions } from "./mobile-session.js";
+import { registerNavigation } from "../routes/navigation.js";
+import { PluginManager } from "./manager.js";
+import { registerPluginManagement } from "../routes/plugins.js";
 import { cleanupFileReceipts } from "./file-receipt-cleanup.js";
 import { searchServiceToken } from "@smartdoca/plugin-sdk/search";
 import { activeActor } from "@core/modules/access/queries.js";
@@ -32,11 +36,7 @@ import {
   createFileSource,
   createKnowledgeSource,
 } from "../services/search/sources.js";
-import {
-  discoverInstalledPlugins,
-  importInstalledPlugins,
-  pluginDirectory,
-} from "./installation.js";
+import { importInstalledPlugins, pluginDirectory } from "./installation.js";
 import { registerPluginAssets, pluginWebUrl } from "./web-assets.js";
 import { providePlatform } from "./platform.js";
 
@@ -155,13 +155,11 @@ function searchPlugin() {
             .searchHost.deleteProjections({ source, documentIds });
         },
         rebuild(source, signal) {
-          return service
-            .require()
-            .searchHost.rebuild({
-              source,
-              signal,
-              context: { kind: "system" },
-            });
+          return service.require().searchHost.rebuild({
+            source,
+            signal,
+            context: { kind: "system" },
+          });
         },
         async query(request, input) {
           const runtime = context.inject(serverRuntimeToken);
@@ -171,19 +169,17 @@ function searchPlugin() {
             public_id: request.principal.publicId,
             admin: Number(request.principal.admin),
           });
-          return service
-            .require()
-            .searchHost.query({
-              query: input.query,
-              sources: [input.source],
-              offset: input.offset,
-              limit: input.limit,
-              context: {
-                kind: "plugin",
-                principalId: request.principal.id,
-                signal: request.signal,
-              },
-            });
+          return service.require().searchHost.query({
+            query: input.query,
+            sources: [input.source],
+            offset: input.offset,
+            limit: input.limit,
+            context: {
+              kind: "plugin",
+              principalId: request.principal.id,
+              signal: request.signal,
+            },
+          });
         },
       });
       context.provide(searchSourceRegistryToken, {
@@ -368,10 +364,12 @@ export async function composeServerPlugins(
     aiPlugin(files),
     filesPlugin(runtime, files),
   ];
-  const installed = await discoverInstalledPlugins(
+  const manager = new PluginManager(
     runtime.options.pluginDirectory ?? pluginDirectory(),
-    { disabled: runtime.options.plugins },
+    plugins.map((p) => p.manifest),
+    runtime.db,
   );
+  const installed = await manager.prepare(runtime.options.plugins);
   plugins.push(
     ...(await importInstalledPlugins(
       installed,
@@ -391,7 +389,30 @@ export async function composeServerPlugins(
     };
   });
   await host.start();
-  registerPluginAssets(runtime.api, installed);
+  try {
+    await manager.confirm();
+  } catch (error) {
+    await host.dispose();
+    throw error;
+  }
+  registerPluginManagement(runtime.api, runtime.db, runtime.admin, manager);
+  registerPluginMobileSessions(
+    runtime.api,
+    runtime.db,
+    runtime.auth,
+    installed.flatMap((p) => p.navigation),
+    runtime.origin.protocol === "https:",
+  );
+  registerNavigation(
+    runtime.api,
+    runtime.db,
+    runtime.auth,
+    runtime.admin,
+    installed.flatMap((p) => p.navigation),
+  );
+  registerPluginAssets(runtime.api, installed, (id, version) =>
+    manager.assetPlugin(id, version),
+  );
   const search = host
     .context(searchManifest.id)!
     .inject(searchRegistrationToken)

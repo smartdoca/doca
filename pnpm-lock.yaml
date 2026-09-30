@@ -479,9 +479,15 @@ importers:
       '@smartdoca/search-host':
         specifier: workspace:*
         version: link:../../packages/search-host
+      '@smartdoca/web-plugin-registry':
+        specifier: workspace:*
+        version: link:../../packages/web-plugin-registry
 
   apps/web:
     dependencies:
+      '@smartdoca/plugin-contracts':
+        specifier: workspace:*
+        version: link:../../packages/plugin-contracts
       '@smartdoca/web-plugin-registry':
         specifier: workspace:*
         version: link:../../packages/web-plugin-registry

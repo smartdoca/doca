@@ -757,13 +757,13 @@ export function KnowledgeChat({
                           setSelectedSessions(threads.map((thread) => thread.id))
                         }
                       >
-                        {t("notes.selectAll")}
+                        {t("common.selectAll")}
                       </button>
                       <button
                         disabled={!selectedSessions.length}
                         onClick={() => setSelectedSessions([])}
                       >
-                        {t("notes.clear")}
+                        {t("common.clearSelection")}
                       </button>
                       <button
                         className="primary"

@@ -87,11 +87,6 @@ async function erasePurgedResources(ctx: Context, actor: Actor, ids: string[]) {
       .set({ resource_id: null })
       .where("resource_id", "in", batch)
       .execute();
-    await ctx.tx
-      .updateTable("quick_note_compilations")
-      .set({ document_id: null })
-      .where("document_id", "in", batch)
-      .execute();
     // Copies may share object keys. Revoke these attachment records, leave
     // physical object reclamation to storage GC rather than deleting live copies.
     await ctx.tx

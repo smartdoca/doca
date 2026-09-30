@@ -1,3 +1,4 @@
+import { MobileNavigationArea } from "../../src/plugins/navigation";
 import { useRouter } from "expo-router";
 import { Search } from "lucide-react-native";
 import { useState } from "react";
@@ -45,6 +46,7 @@ export default function Home() {
   const current = tabs.find((item) => item.key === tab) ?? tabs[0];
   return (
     <View style={styles.page}>
+      <MobileNavigationArea slot="mobile.home" horizontal/>
       <Pressable style={styles.search} onPress={() => router.push("/search")}>
         <Search color={colors.muted} size={16} />
         <Text style={styles.searchText}>搜索文档、文件和邮件</Text>

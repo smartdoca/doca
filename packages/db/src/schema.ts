@@ -64,32 +64,6 @@ export interface Schema {
     cleanup_at: string | null;
     created_at: string;
   };
-  quick_notes: {
-    id: string;
-    owner_id: string;
-    content: string;
-    plain_text: string;
-    asset_ids: string;
-    version: number;
-    created_at: string;
-    updated_at: string;
-    deleted_at: string | null;
-  };
-  quick_note_compilations: {
-    id: string;
-    owner_id: string;
-    sources: string;
-    request_hash: string;
-    instruction: string;
-    model_id: string;
-    status: string;
-    markdown: string;
-    error: string;
-    document_id: string | null;
-    created_at: string;
-    updated_at: string;
-  };
-
   ai_session_resources: {
     session_id: string;
     kind: string;
@@ -633,7 +607,6 @@ export interface Schema {
     revision: number;
   };
   assets: {
-    note_id?: string | null;
     uploaded_by?: string | null;
     id: string;
     owner_id: string;
@@ -672,6 +645,8 @@ export interface Schema {
     user_id: string;
     expires_at: string;
   };
+  plugin_webview_auth: {id:string;kind:string;plugin_id:string;parent_session:string;expires_at:string};
+  navigation_settings: { id: string; revision: number; draft: string; published: string };
   settings: {
     directory_mode?: string;
     id: string;
@@ -751,6 +726,8 @@ export interface Schema {
     read_at: string | null;
     created_at: string;
   };
+  plugin_registry: { id: string; revision: number; state: string };
+  plugin_archives: { sha256: string; plugin_id: string; version: string; content: string; created_at: string };
   audit_events: {
     id: string;
     actor_id: string;

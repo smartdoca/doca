@@ -46,7 +46,6 @@ function AppStack() {
         <Stack.Screen name="library/[id]" options={{ title: t("mobile.screen.library") }} />
         <Stack.Screen name="folder/[id]" options={{ title: t("mobile.screen.folder") }} />
         <Stack.Screen name="ai/[id]" options={{ title: t("mobile.screen.conversation") }} />
-        <Stack.Screen name="note/[id]" options={{ title: t("mobile.screen.note") }} />
         <Stack.Screen name="account" options={{ title: t("mobile.screen.account") }} />
       </Stack>
     </>

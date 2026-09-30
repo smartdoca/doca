@@ -1,5 +1,4 @@
 import type { AIReference } from "@core/workflows/ai-documents.js";
-import type { QuickNoteReference } from "@web/features/ai/ai-context.js";
 
 export const INITIAL_RENDER_QUESTIONS = 8;
 export const RENDER_EXPAND_QUESTIONS = 8;
@@ -58,7 +57,6 @@ export type PendingSendItem = {
   attachments: ChatFileSnapshot[];
   files?: ExplorerTarget[];
   references: AIReference[];
-  notes: QuickNoteReference[];
   createdAt: string;
   modelId?: string;
   scope?: "document" | "all";
@@ -165,19 +163,6 @@ function isReference(value: unknown): value is AIReference {
   return !!value && typeof value === "object" && typeof (value as AIReference).resourceId === "string";
 }
 
-function isNote(value: unknown): value is QuickNoteReference {
-  if (!value || typeof value !== "object") return false;
-  const note = value as QuickNoteReference;
-  return (
-    typeof note.id === "string" &&
-    typeof note.label === "string" &&
-    !!note.content &&
-    typeof note.content === "object" &&
-    Array.isArray(note.attachments) &&
-    typeof note.createdAt === "string"
-  );
-}
-
 function isPendingItem(value: unknown): value is PendingSendItem {
   if (!value || typeof value !== "object") return false;
   const item = value as PendingSendItem;
@@ -196,9 +181,7 @@ function isPendingItem(value: unknown): value is PendingSendItem {
             typeof file.id === "string",
         ))) &&
     Array.isArray(item.references) &&
-    item.references.every(isReference) &&
-    Array.isArray(item.notes) &&
-    item.notes.every(isNote)
+    item.references.every(isReference)
   );
 }
 

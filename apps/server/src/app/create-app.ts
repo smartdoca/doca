@@ -1,3 +1,4 @@
+import { pluginMobileActor } from "../plugins/mobile-session.js";
 import { emitIntegrationEvent } from "@core/modules/automation/events.js";
 import {
   bearerSession,
@@ -9,7 +10,6 @@ import {
 } from "./mobile-client.js";
 import { registerRuntimeSettings } from "../routes/runtime-settings.js";
 import type { registerAI } from "../routes/ai.js";
-import { registerQuickNotes } from "../routes/quick-notes.js";
 import { passwordIdentity } from "@core/modules/identity/accounts.js";
 import { registrationProfile } from "@core/modules/identity/accounts.js";
 import { profilePolicy } from "@core/modules/identity/naming.js";
@@ -166,6 +166,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   function cookie(token: string, maxAge = 28800) {
     return `doca_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${origin.protocol === "https:" ? "; Secure" : ""}`;
   }
+  const scopedPlugins = new WeakMap<FastifyRequest,string>();
   const sessionTokens = new WeakMap<FastifyRequest, string | null>();
   function cookieToken(req: FastifyRequest) {
     const token = req.headers.cookie
@@ -264,9 +265,15 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     const externalPlugin = (
       req.routeOptions.config as { docaPluginExternal?: boolean }
     ).docaPluginExternal;
-    const user = externalPlugin
+    let user = externalPlugin
       ? null
       : (bearerUser ?? (token ? await sessionUser(token) : null));
+    const scopedToken = /(?:^|;\s*)doca_plugin_session=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie ?? "")?.[1];
+    if(scopedToken && path.startsWith("/api/") && path!=="/api/v1/plugins-mobile/redeem") {
+      const scoped=await pluginMobileActor(db,scopedToken,pluginComposition.plugins.map(p=>p.id));
+      if (!(req.method==="GET" && (path==="/api/v1/bootstrap" || path.startsWith(`/api/v1/plugin-assets/${scoped.plugin_id}/`))) && !path.startsWith(`/api/v1/plugins/${scoped.plugin_id}/`)) fail(403,"Plugin session scope denied");
+      scopedPlugins.set(req,scoped.plugin_id);user={id:scoped.id,display_name:scoped.display_name,admin:scoped.admin,public_id:undefined};
+    }
     sessionTokens.set(req, user && token ? token : null);
     actors.set(req, user ?? null);
     const accountPath = req.url.split("?")[0]!;
@@ -485,7 +492,6 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   // disposed only from application close (or startup rollback below).
   api.addHook("preClose", async () => pluginComposition.host.dispose());
   const search = pluginComposition.search;
-  registerQuickNotes(api, db, authenticated, options.ai?.fetch);
   registerProfiles(api, db, authenticated);
   registerAssets(api, db, authenticated, actor, admin, runtime.storage, limit);
   const id = Type.String({ format: "uuid" }),
@@ -588,7 +594,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
           hooks: true,
           integrationEventStream: true,
         },
-        plugins: pluginComposition.plugins,
+        plugins: scopedPlugins.has(req) ? pluginComposition.plugins.filter(p=>p.id===scopedPlugins.get(req)) : pluginComposition.plugins,
       };
     },
   );

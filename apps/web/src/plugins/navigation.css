@@ -1,0 +1,16 @@
+.configured-navigation>div,.configured-navigation details{display:flex;gap:6px;flex-direction:column}
+.configured-navigation a{display:flex;align-items:center;gap:8px;color:inherit;text-decoration:none;border-radius:6px;padding:9px 12px;font-size:13px}
+.configured-navigation a:hover,.configured-navigation a.active{background:rgba(100,100,180,.09)}
+.nav-web-top>div,.nav-web-topRight>div,.nav-web-home>div{flex-direction:row;flex-wrap:wrap}
+.nav-web-right{position:fixed;right:10px;top:150px;z-index:20;background:var(--surface,#fff);border:1px solid var(--border,#ddd);border-radius:8px;max-width:150px}
+.navigation-more{position:relative;padding:8px;font-size:13px}
+.navigation-more[open] .configured-navigation{position:absolute;right:0;top:100%;background:var(--surface,#fff);border:1px solid var(--border,#ddd);min-width:180px;max-height:60vh;overflow:auto;z-index:100}
+.navigation-editor{padding:24px;max-width:1200px;margin:auto}.navigation-editor header{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.navigation-editor table{width:100%;border-collapse:collapse;margin:20px 0}.navigation-editor td,.navigation-editor th{padding:10px;border-bottom:1px solid var(--border,#ddd);text-align:left}.navigation-editor select,.navigation-editor input{max-width:180px;padding:6px}.navigation-editor .navigation-preview{padding:16px;border:1px dashed var(--border,#ddd);border-radius:8px;display:flex;gap:12px;flex-wrap:wrap}.navigation-editor fieldset{margin:16px 0;border:1px solid var(--border,#ddd)}
+.navigation-preview .nav-web-right {position:static;max-width:none;}
+.navigation-preview a {pointer-events:none;}
+.mobile-plugin-page {min-height:100dvh;padding:12px;box-sizing:border-box;overflow-wrap:anywhere;}
+
+.global-header-tools > .configured-navigation,.topbar .global-header-tools > .configured-navigation{width:auto;height:auto;flex-shrink:0}
+.global-header-tools .nav-web-topRight>div{flex-wrap:nowrap}
+.global-header-tools .configured-navigation a{white-space:nowrap}
+.notification-trigger[hidden]{display:none!important}

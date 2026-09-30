@@ -1,5 +1,8 @@
 # Mail plugin handoff
 
+
+> 2026-09-30：npm 分发、动态 App 页面与可配置导航的新增对接说明见 [邮箱插件对接手册 v1](plugin-mail-integration-v1.md)，远端 API 以 [商城协议 v1](plugin-store-protocol.md) 为准。移动端已增加受限会话与 WebView 页面，尚待真机及独立邮箱包联调。
+
 [中文](plugin-mail-handoff.zh-CN.md)
 
 This note records what a mail plugin can call today and what still waits on a product promise. It is not a new SDK export. The general boundary is sections 7 and 13 of the [SDK contract](plugin-sdk-contract.md).
@@ -15,7 +18,7 @@ The plugin owns its database, credentials, business sync cursors, and outbox. Th
 - Search from `@smartdoca/plugin-sdk/search`.
 - Knowledge sources from `@smartdoca/plugin-sdk/knowledge`.
 - Web from `@smartdoca/plugin-sdk/web`.
-- Native mobile code still ships with the app build. A dynamic WebView is not available.
+- Native mobile code still ships with the app build; dynamic plugin pages now use the scoped WebView shell (see the v1 integration guide).
 
 `notifications.v1` publishes and withdraws idempotently. The plugin registers `notification.read`. The host rechecks permission on publish, display, unread count, and click. A click goes through an authorization endpoint to an in-app path. Background jobs can recheck `users.status(userId)`. These are in-app notifications, not system mail or mobile push. Field limits are in the [development guide](plugin-development.md).
 
@@ -34,7 +37,7 @@ The plugin owns its database, credentials, business sync cursors, and outbox. Th
 | If the product promises it | Automatic knowledge subscription | Durable subscription, scheduling, batch and cursor consistency, restart recovery, source deletion, and immediate unsearchability after revocation. An independent copy is defined separately |
 | If the product promises it | Global federated search | Endpoint, source selection, sort and paging, timeout and partial failure, UI, and renderer fallback. AI sources are not turned on automatically |
 | With account deletion | User deletion and async cleanup | The host coordinates revocation and plugin cleanup. Disabled, uninstalled, and failed plugins are covered. A timeout is not success. There is no distributed two-phase commit |
-| With a no-rebuild mobile promise | Dynamic WebView shell | A short-lived one-time ticket exchanges for a restricted session. Origin, navigation, and the native bridge are limited. The current native build remains the first boundary |
+| With a no-rebuild mobile promise | Dynamic WebView shell | Implemented scoped tickets and WebView page shell; real-device acceptance remains. No general native bridge. |
 
 Not in scope: generic plugin SQL or data.v2, a distributed transaction across plugin databases, giving every search source to AI by default, and executing npm plugin code dynamically inside the native process.
 

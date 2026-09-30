@@ -2403,7 +2403,7 @@ export function FilesExplorer({
               </strong>
               <span>
                 {search
-                  ? t("notes.emptySearchHint")
+                  ? t("common.emptySearchHint")
                   : t("fileManager.emptyHelp")}
               </span>
             </div>

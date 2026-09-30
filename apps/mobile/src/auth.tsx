@@ -1,3 +1,5 @@
+import type { ResolvedNavigation } from "@smartdoca/web-plugin-registry";
+import { type Href } from "expo-router";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "expo-router";
 import { api, login as requestLogin, setUnauthorizedHandler } from "./api";
@@ -69,7 +71,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await saveSession({ origin: normalized, token: result.token, name: result.name });
     await applyVault();
     if (destination === "back" && router.canGoBack()) router.back();
-    else router.replace("/");
+    else {
+      try { const nav=await api<ResolvedNavigation>("/navigation");const entry=nav.entries.find(e=>e.id===nav.layout.home?.mobile);router.replace((entry?.pluginId?`/plugin/${entry.id}`:entry?.mobilePath??"/") as Href); } catch {router.replace("/");}
+    }
   }, [applyVault, router]);
 
   const switchServer = useCallback(async (origin: string) => {

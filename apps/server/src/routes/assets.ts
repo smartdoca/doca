@@ -185,7 +185,7 @@ export function registerAssets(
   });
   api.post<{
     Querystring: {
-      purpose: "avatar" | "cover" | "attachment" | "comment_image" | "ai_attachment" | "note_attachment";
+      purpose: "avatar" | "cover" | "attachment" | "comment_image" | "ai_attachment";
       resourceId?: string;
       filename: string;
     };
@@ -212,7 +212,6 @@ export function registerAssets(
               Type.Literal("attachment"),
               Type.Literal("comment_image"),
               Type.Literal("ai_attachment"),
-              Type.Literal("note_attachment"),
             ]),
             resourceId: Type.Optional(uuid),
             filename: Type.String({ minLength: 1, maxLength: 255 }),
@@ -226,11 +225,10 @@ export function registerAssets(
         q = req.query;
       if (!Buffer.isBuffer(req.body) || !req.body.length)
         fail(400, "请上传非空文件");
-      if (q.purpose !== "avatar" && q.purpose !== "ai_attachment" && q.purpose !== "note_attachment" && !q.resourceId)
+      if (q.purpose !== "avatar" && q.purpose !== "ai_attachment" && !q.resourceId)
         fail(400, "请指定所属文档或知识库");
       if (q.purpose === "ai_attachment") { await requireCapability(db,a.id,"ai.create"); if(q.resourceId) fail(400,"对话附件不能关联文档"); }
       if (q.purpose === "avatar" && q.resourceId) fail(400, "头像不属于文档");
-      if (q.purpose === "note_attachment" && q.resourceId) fail(400, "随手记附件不能关联文档");
       const recent = await db
         .selectFrom("assets")
         .select((eb) => eb.fn.countAll().as("count"))
@@ -265,7 +263,7 @@ export function registerAssets(
           filename = Array.from(q.filename.replace(/[\x00-\x1f\x7f/\\]/g, "_"))
             .slice(0, 240)
             .join("");
-        const imageRequired = q.purpose !== "attachment" && q.purpose !== "ai_attachment" && q.purpose !== "note_attachment";
+        const imageRequired = q.purpose !== "attachment" && q.purpose !== "ai_attachment";
         const raster =
           body
             .subarray(0, 8)
@@ -508,9 +506,7 @@ export function registerAssets(
           .where("id", "=", req.params.id)
           .$if(req.query.audit !== "1", q => q.where("deleted_at", "is", null))
           .executeTakeFirst();
-      if (!asset) fail(404, "文件不存在");
-      // Private notes never inherit the document/admin audit access path.
-      if (asset.purpose === "note_attachment" && (asset.owner_id !== a?.id || req.query.audit === "1")) fail(404, "文件不存在");
+      if (!asset || !["avatar", "cover", "attachment", "comment_image", "ai_attachment"].includes(asset.purpose)) fail(404, "文件不存在");
       const audit = req.query.audit === "1";
       if (audit) fail(404, "文件不存在");
       if (req.query.trashPreview || audit)
@@ -550,8 +546,8 @@ export function registerAssets(
           .executeTakeFirstOrThrow(),
         c = decode(p);
       const cdn = storage.cdnUrl(c, selected.object_key);
-      if(asset.purpose === "ai_attachment" || asset.purpose === "note_attachment") reply.header("Cache-Control","private, no-store");
-      if (cdn && !asset.resource_id && !audit && asset.purpose !== "ai_attachment" && asset.purpose !== "note_attachment" && req.query.download !== "1") return reply.redirect(cdn);
+      if(asset.purpose === "ai_attachment") reply.header("Cache-Control","private, no-store");
+      if (cdn && !asset.resource_id && !audit && asset.purpose !== "ai_attachment" && req.query.download !== "1") return reply.redirect(cdn);
       reply
         .header(
           "Content-Disposition",

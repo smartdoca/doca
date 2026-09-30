@@ -1,3 +1,4 @@
+import { NavigationArea } from "@web/plugins/navigation.js";
 import { useEffect, useRef, useState } from "react";
 import {
   UserRound,
@@ -80,20 +81,7 @@ export function AccountMenu({
           <strong className="account-menu-nickname">{displayName}</strong>
         </div>
         <nav aria-label={t("account.menuNav")}>
-          <a href="#/account" onClick={close}>
-            <UserRound size={16} />
-            {t("account.profile")}
-          </a>
-          <a href="#/preferences" onClick={close}>
-            <Settings size={16} />
-            {t("account.settings")}
-          </a>
-          {user.admin && (
-            <a href="#/admin" onClick={close}>
-              <ShieldCheck size={16} />
-              {t("account.admin")}
-            </a>
-          )}
+          <NavigationArea slot="web.user"/>
           {showWorkspaceLink && <a href="#/home" onClick={close}>
             <House size={16} />
             {t("account.workspace")}

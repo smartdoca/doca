@@ -207,14 +207,13 @@ export async function uploadFile(
     | "cover"
     | "attachment"
     | "comment_image"
-    | "ai_attachment"
-    | "note_attachment",
+    | "ai_attachment",
   resourceId?: string,
   signal?: AbortSignal,
   onProgress?: (progress: UploadProgress) => void,
 ) {
   const limit =
-    (["attachment", "ai_attachment", "note_attachment"].includes(purpose)
+    (["attachment", "ai_attachment"].includes(purpose)
       ? 20
       : 5) *
     1024 *

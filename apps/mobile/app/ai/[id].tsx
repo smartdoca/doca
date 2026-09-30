@@ -567,7 +567,6 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
           references: [],
           attachments: attachments.map((file) => file.id),
           files: [],
-          quickNoteIds: [],
           skillIds: [],
           webSearch: !!options.data?.webSearchAvailable,
         },

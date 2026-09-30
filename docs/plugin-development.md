@@ -1,5 +1,8 @@
 # Plugin development
 
+
+> 2026-09-30：npm 分发、动态 App 页面与可配置导航的新增对接说明见 [邮箱插件对接手册 v1](plugin-mail-integration-v1.md)，远端 API 以 [商城协议 v1](plugin-store-protocol.md) 为准。移动端已增加受限会话与 WebView 页面，尚待真机及独立邮箱包联调。
+
 [中文](plugin-development.zh-CN.md)
 
 The full target, including parts that are not implemented, is the [SDK contract](plugin-sdk-contract.md). Do not keep obsolete membership, moderation, or source-loading compatibility layers.
@@ -12,7 +15,7 @@ Do not ship a dependency whose license is unknown, forbids redistribution, or co
 
 ## Install and start
 
-The host reads only the direct dependencies of `DOCA_PLUGINS_DIR/package.json`. The default directory is `${DOCA_DATA_DIR:-./data}/plugins`. Install there with npm or pnpm, then restart Doca. Keep that directory outside the host release so a host upgrade does not overwrite plugins. The SDK version must still match.
+Install a complete prebuilt ZIP through Admin → Plugins, or drop a `<plugin-id>/` release directory into `DOCA_PLUGINS_DIR` while stopped. Restart each instance. The shared database holds desired selection and full archives; instance-local caches synchronize automatically at startup. There is no npm installation-directory compatibility path. See the [store protocol](plugin-store-protocol.md) and [deployment guide](plugin-deployment.md).
 
 ```json
 {
@@ -20,6 +23,7 @@ The host reads only the direct dependencies of `DOCA_PLUGINS_DIR/package.json`. 
   "version": "1.0.0",
   "type": "module",
   "doca": {
+    "dataVersion": "1",
     "manifest": "./manifest.json",
     "server": "./dist/server.js",
     "web": { "directory": "./web", "entry": "./index.js" }
@@ -40,7 +44,7 @@ The host reads only the direct dependencies of `DOCA_PLUGINS_DIR/package.json`. 
 }
 ```
 
-Only compiled JavaScript is loaded. Transitive dependencies are not scanned. Install does not run at startup. `doca.config.ts` and this repository's source tree are not used. Scoped packages and pnpm links are supported. Entrypoints, static assets, and real symlink targets must stay inside the package directory declared by the package. A dependency conflict fails before the plugin runs.
+Only compiled JavaScript is loaded. Bundle or vendor the complete dependency closure as real files. No install scripts, registry fetching or host compilation run. Paths stay inside the package root. `doca.dataVersion` is required and stays identical for v1 upgrades; plugin initialization checks the actual business schema.
 
 ## SDK and host services
 
@@ -102,7 +106,7 @@ Register an AI tool with `aiServiceToken.registerTool`: id, description, inputSc
 
 Doca does not include membership, prices, points, or business quotas. Model input and output rates, and tokens per image, convert a vendor's raw usage into tokens. They are not a price. Usage distinguishes an unconfirmed call from actual metrics. `ai.usage.recorded` is written inside the settlement transaction. Top-level `metrics` are the rated usage. `provider.metrics` keeps the vendor's raw facts. A plugin pulls events with `events.read(cursor, limit)`, stores its cursor, and handles each event id once. A policy check can refuse a call. Cross-plugin reservation, failure compensation, and money consistency do not yet have a full transaction protocol. One check is not a billing implementation.
 
-The plugin owns its database, credentials, business jobs, and outbox. The host does not offer data.v1 or data.v2. Use initialize, mount, ready, and dispose. The database must be a new current baseline. A mismatched schema refuses to start.
+The plugin owns its database, credentials, business jobs, and outbox. The host does not offer data.v1 or data.v2. Use initialize, mount, ready, and dispose. The database must match the declared data version; compatible existing data is accepted. A mismatched schema refuses to start.
 
 ## Web
 
@@ -124,7 +128,7 @@ HTTP callbacks, attachment binding, user calibration, search and knowledge, and 
 
 Acceptance installs a real host build, the SDK, and the business plugin tarball outside this repository. Prepare the full dependency closure. Do not depend on a source link, an undeclared cache, or a registry fetch during install or startup. Verify web assets, the business flow, revocation, retry, and restart. Building the SDK is not end-to-end acceptance.
 
-Disable, uninstall, and data retention are fixed at first delivery. A plugin database accepts only the current empty baseline. A mismatch refuses startup. There is no upgrade or downgrade script. A user-deletion protocol and a dynamic WebView are not available. Do not show them as callable examples. The default data directory and job status do not let the host read the plugin database.
+Disable, uninstall, and data retention are fixed at first delivery. A plugin database must match its declared data version. A mismatch refuses startup. There is no upgrade or downgrade script. A user-deletion protocol is not available. The dynamic mobile WebView contract is documented in the mail integration v1 guide. The default data directory and job status do not let the host read the plugin database.
 
 ## Background identity checks and notifications
 

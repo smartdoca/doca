@@ -1,5 +1,8 @@
 # Plugin SDK and core boundary
 
+
+> 2026-09-30：npm 分发、动态 App 页面与可配置导航的新增对接说明见 [邮箱插件对接手册 v1](plugin-mail-integration-v1.md)，远端 API 以 [商城协议 v1](plugin-store-protocol.md) 为准。移动端已增加受限会话与 WebView 页面，尚待真机及独立邮箱包联调。
+
 [中文](plugin-sdk-contract.zh-CN.md)
 
 Status: updated 2026-09-27. Plugins store their own business data. This document is the acceptance standard for the refactor. It does not mean every interface is implemented. The gap is in section 12. A development tutorial must not present a target interface as an export that exists today.
@@ -29,24 +32,17 @@ Plugins run inside a trusted server process. This is an extension boundary, not 
 
 Do not remove a core capability only because it could be a plugin. Documents, files, users, and grants must run with no business plugin installed. Files and documents using an internal plugin lifecycle is a core implementation detail. It is not the business plugin install channel.
 
-## 3. Discovery
+## 3. Installation and discovery
 
-```text
-/opt/doca/                       replaceable Doca release
-/var/lib/doca/plugins/
-  package.json                   direct plugin dependencies
-  pnpm-lock.yaml
-  node_modules/
-/var/lib/doca/plugin-data/       plugin runtime data
-```
+The shared host database holds the global desired plugin registry and complete immutable ZIP archives. Each instance synchronizes a private `DOCA_PLUGINS_DIR` (default `<data-root>/plugins`) before loading. It checks all cached files and repairs missing or corrupt files from the shared archive. Startup does not contact the store, run npm install or compile TypeScript.
 
-The host configures one install root, default `<data-root>/plugins`. Installing a plugin does not change the host package.json, TypeScript config, Vite config, or source. The scan reads direct dependencies, resolves them with Node package rules, and reads the package `doca` field. It does not walk `node_modules`, scan transitive dependencies, or run npm install at startup. A missing manifest is an empty install. A declared package that cannot be resolved is an install error.
+Admin → Plugins installs from the official HTTPS store or local uploads, stages upgrades, enables, disables and uninstalls. The default store is `https://store.smartdoca.cc`, overridden by `DOCA_PLUGIN_STORE_URL`. Operations use revision-checked writes and take effect after each instance restarts. The UI distinguishes global desired selection from the answering instance's running selection. No hot removal of Fastify routes is promised.
 
-The `doca` field contains manifest, server, and optional web or mobile entries. A release package ships built JavaScript, type declarations, and browser assets. The host does not compile plugin TypeScript. The manifest is static data checked before the plugin runs. Check the SDK range, duplicate ids, dependencies, entries, and asset directories. Entries are package-relative. URLs, absolute paths, and paths outside the package root are rejected. A dev link is resolved to the real package root before the boundary check.
+Prebuilt releases declare `doca.manifest`, `doca.server`, optional `doca.web` and mandatory `doca.dataVersion` in package.json. The static manifest declares an SDK range. Package-relative entry paths, dependency graph, SDK, archive hash and data version are validated before code runs. V1 upgrades require an unchanged data version; private business schema verification remains the plugin's responsibility. Uninstall preserves business data and the data version marker.
 
-Enable and disable apply only to packages the scan found. They cannot name an arbitrary code path. Business plugins come from this directory. There is no business plugin import list in `doca.config.ts`.
+Offline folders `<install-root>/<plugin-id>/` are published to the shared registry at startup and moved into `.imports/`. Runtime files live in `.releases/<sha256>/`. No root npm manifest, source links or legacy discovery path is supported. Program files and plugin business data stay separate. Host source, package.json and Vite configuration are never changed by installation.
 
-Install, update, and delete happen while the process is stopped, or in a staging directory that is then switched. The first version takes effect on restart. Hot removal of Fastify routes is not promised. A duplicate package or an incompatible required dependency fails before the service accepts traffic.
+The [store protocol](plugin-store-protocol.md) defines package layout, remote endpoints, limits and multi-instance semantics. See [deployment](plugin-deployment.md) for restart and failure recovery.
 
 ## 4. Lifecycle
 
@@ -90,7 +86,7 @@ Being searchable grants no business permission and does not expose the full prof
 
 Plugins use injected files.v1 and store stable ids. An attachment binding is `(ownerPlugin, ownerType, ownerId, role)`. Do not build a private attachment store or save a temporary signed URL as a permanent reference. An owner binding is ownership, not access. Reading an attachment through mail rechecks the mailbox and the binding. Opening the original file still follows that file's ACL.
 
-Business data, credentials, jobs, and the outbox live in the plugin database. Doca does not offer business storage, SQL, or data.v1 or data.v2. initialize, mount, ready, and dispose are the lifecycle. A plugin accepts only its current empty baseline. Another structure refuses startup. Uninstall does not delete the plugin database. The package directory and the data directory are separate.
+Business data, credentials, jobs, and the outbox live in the plugin database. Doca does not offer business storage, SQL, or data.v1 or data.v2. initialize, mount, ready, and dispose are the lifecycle. A plugin accepts its declared data structure, including existing compatible data. Another structure refuses startup. Uninstall does not delete the plugin database. The package directory and the data directory are separate.
 
 Across databases and the file service, use idempotence, compensation, and calibration. There is no shared transaction.
 
@@ -134,7 +130,7 @@ A business plugin may contribute global navigation, its own tree or sidebar, pag
 
 The web target is a browser ESM, styles, and assets built by the plugin. The host loads a versioned URL from the active manifest. The build must not import `@web/*`, local host source, or unresolved bare imports. The host serves the declared static directory, not the whole npm package. A server and client version mismatch makes that plugin's page unavailable. A missing renderer keeps a generic historical display. A web registration error stays inside the plugin boundary.
 
-http.v1 registers `/api/v1/plugins/<plugin-id>/...` and reuses host authentication, Origin and Host checks, request schema, error format, rate limit, and cancellation. A public webhook must declare how external identity is verified. Native mobile code still ships with the app build. A dynamic WebView is a later capability and is not provided now.
+http.v1 registers `/api/v1/plugins/<plugin-id>/...` and reuses host authentication, Origin and Host checks, request schema, error format, rate limit, and cancellation. A public webhook must declare how external identity is verified. Native code still ships with the App build. Mobile-capable plugins now use the scoped WebView shell described in the mail integration v1 guide.
 
 ## 10. Removing membership and moderation
 
@@ -142,7 +138,7 @@ Removing membership includes admin pages, level display, plan and grant APIs, id
 
 Removing content moderation includes report entry points, the review admin, vendors, scan jobs, and dedicated review calls in host flows. Administrator approval of registration is account policy. Security audit is core. Neither is deleted because content moderation is removed.
 
-Mail, calendar, membership, and moderation are business plugins. Quick notes, tickets, third-party sync, recognizers, and notification channels are candidates to split later, only after the same SDK, data, and client acceptance. Do not leave a wrapper that still imports a private host implementation.
+Mail, calendar, membership, and moderation are business plugins. Quick notes have been removed from the core and may return as a future independent plugin. Tickets, third-party sync, recognizers, and notification channels are candidates to split later, only after the same SDK, data, and client acceptance. Do not leave a wrapper that still imports a private host implementation.
 
 ## 11. Development and acceptance
 
@@ -154,21 +150,21 @@ Mail, calendar, membership, and moderation are business plugins. Quick notes, ti
 - Verify two host instances do not share plugin services, user events, or tool registrations.
 - Verify related and none policy, relationship revocation, plugin disable, source failure, file binding, and the same permission in search and AI.
 - Verify concurrent AI calls, failure and cancel, missing usage, settlement replay, and a failed control plugin, without double metering.
-- Verify a host upgrade does not change the plugin lockfile, business data, or attachments. With plugins disabled, core documents and files still run.
+- Verify a host upgrade does not change the plugin registry or immutable archives, business data, or attachments. With plugins disabled, core documents and files still run.
 - Interface copy follows [interface languages](i18n.md). Editor extensions follow the collaboration and editor integration documents.
 
 ## 12. What exists
 
-Checked against the repository on 2026-09-25. This is not a claim that the target above has landed.
+Installation updated on 2026-09-30; other capability rows retain their previous verification dates. This is not a claim that the target above has landed.
 
 | Item | Present | Still to do |
 | --- | --- | --- |
-| Discovery | Separate install root, direct dependencies, static manifest checks | Acceptance of an independent package set |
+| Discovery | Shared registry and full archives, instance cache synchronization, directory/ZIP import, admin store, static manifest checks | Acceptance of an independent package set |
 | Injection | Services, effects, public SDK build, public service catalog | More business capabilities as services |
 | Files and documents | Public file contract, binding download authorization, durable create idempotence, SDK package build | Full acceptance of an independent document capability package. Spare file objects are reclaimed on a schedule |
 | Users | Paged calibration, user-create events in a transaction, status and some profile events | User deletion and async cleanup before a delete entry is opened. More profile entry checks |
 | Intersection | Paged relationship sources, current-fact recheck, timeout and sign-out denial | The plugin maintains its own incremental relationship index |
-| Client | Dynamic load, web host interface, render error isolation | Generic tree slot, native mobile build integration |
+| Client | Dynamic Web loading, scoped mobile WebView, configurable navigation, render error isolation | Generic tree slot; real-device mobile integration acceptance |
 | AI | Public tools and skills, raw usage, model-rate conversion, admission policy, durable settlement events | MCP alignment, reservation and failure compensation, more usage dimensions |
 | Search and knowledge | search.v1 projection, rebuild, and authorization query. Knowledge registration contract is packaged | Global retrieval, durable knowledge subscription, scheduling, and revocation cleanup |
 | Mail | Host source, bridge, database, tools, web and mobile entry, and business tests removed | A future mail plugin is developed and accepted on its own |
@@ -186,7 +182,7 @@ Interface increments and storage ownership on 2026-09-26 follow the [mail handof
 - As the feature arrives: user deletion with the account-delete entry. Dynamic WebView with a mobile promise that does not require an app release.
 - Later operations: a default plugin data directory, redacted structured logs, health, recent job errors, and a backlog page for jobs and the outbox. The host summarizes through a public status interface. It does not query the plugin database. The default directory is a path convention. It does not host the database, credentials, or backups.
 
-After disable, jobs are stopped and drained, sources unregister, and business access is denied. The first version still changes configuration while stopped and takes effect on restart. Uninstall keeps business data. An explicit wipe is a separate operation with a stated scope and a confirmation. Attachment cleanup rechecks ownership and other live references.
+After disable, jobs are stopped and drained, sources unregister, and business access is denied. The first version stages changes through administration and applies them on each instance restart. Uninstall keeps business data. An explicit wipe is a separate operation with a stated scope and a confirmation. Attachment cleanup rechecks ownership and other live references.
 
 The SDK range check stays. A plugin database accepts only the current structure. A mismatch refuses startup. There is no upgrade or downgrade script.
 

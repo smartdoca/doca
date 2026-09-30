@@ -1,5 +1,10 @@
 export type * from "@smartdoca/web-plugin-registry";
-export interface PluginFileReference { readonly id: string; readonly name: string; readonly mime: string; readonly size: number }
+export interface PluginFileReference {
+  readonly id: string;
+  readonly name: string;
+  readonly mime: string;
+  readonly size: number;
+}
 export interface PluginFilePickerProps {
   close(): void;
   select?(file: PluginFileReference): void | Promise<void>;
@@ -7,10 +12,17 @@ export interface PluginFilePickerProps {
   accept?(file: PluginFileReference): boolean;
 }
 /** Host-injected React is the only supported renderer instance. */
-export interface PluginWebHost<ReactRuntime = unknown, Component = (props: PluginFilePickerProps) => any> {
+export interface PluginWebHost<
+  ReactRuntime = unknown,
+  Component = (props: PluginFilePickerProps) => any,
+> {
   readonly React: ReactRuntime;
   readonly apiBase: string;
-  useEnvironment(): { locale: "zh" | "en"; theme: "light" | "soft" };
+  useEnvironment(): {
+    locale: "zh" | "en";
+    theme: "light" | "soft";
+    target: "web" | "mobile";
+  };
   navigate(path: string): void;
   toast(message: string, tone?: "info" | "success" | "warning" | "error"): void;
   confirm(message: string): Promise<boolean>;

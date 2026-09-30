@@ -137,11 +137,6 @@ export const TOOL_EXAMPLES: Record<string, Record<string, unknown>[]> = {
     { action: "get", key: "ui.filesView" },
     { action: "set", key: "ui.filesView", value: "list" },
     { action: "set", key: "ui.locale", value: "en" },
-    {
-      action: "set",
-      key: "ui.notesFloat",
-      value: { open: true, collapsed: false, x: 24, y: 80, width: 380, height: 560 },
-    },
     { action: "set", key: "ai.model", value: "model-id" },
   ],
   document_read: [
@@ -176,7 +171,6 @@ export const TOOL_EXAMPLES: Record<string, Record<string, unknown>[]> = {
       ],
     },
   ],
-  quick_note_read: [{ noteId: SAMPLE.note, offset: 0, limit: 6000 }],
   document_create: [
     { title: "项目计划", kind: "document", format: "rich_text" },
     { title: "预算表", kind: "document", format: "spreadsheet" },

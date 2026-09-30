@@ -89,7 +89,6 @@ it("persists pending messages per session and adopts the draft queue", () => {
     text: `草稿 ${id}`,
     attachments: [],
     references: [{ resourceId: "doc-1", label: "文档" }],
-    notes: [],
     createdAt: "2026-09-21T00:00:00Z",
     modelId: "model-1",
     scope: "document",
@@ -110,7 +109,6 @@ it("promotes a queued item and ignores draft keys when listing sessions", () => 
     text: "先发",
     attachments: [],
     references: [],
-    notes: [],
     createdAt: "2026-09-21T00:00:00Z",
   };
   const second = { ...first, id: "b", text: "插队" };

@@ -1,5 +1,8 @@
 # Doca 插件开发规范
 
+
+> 2026-09-30：npm 分发、动态 App 页面与可配置导航的新增对接说明见 [邮箱插件对接手册 v1](plugin-mail-integration-v1.md)，远端 API 以 [商城协议 v1](plugin-store-protocol.md) 为准。移动端已增加受限会话与 WebView 页面，尚待真机及独立邮箱包联调。
+
 [English](plugin-development.md)
 
 完整目标及尚未实现部分见 [SDK 契约](plugin-sdk-contract.zh-CN.md)。项目尚未上线，删除不合理的旧接口，不维护旧会员、审核或源码加载兼容层。
@@ -15,7 +18,7 @@ Doca 及公开插件 SDK 采用 [MIT](../LICENSE)。插件可以开源，也可�
 
 ## 安装与启动
 
-宿主只读取 `DOCA_PLUGINS_DIR/package.json` 的直接 dependencies。默认目录是 `${DOCA_DATA_DIR:-./data}/plugins`。在这个独立目录执行 npm/pnpm 安装，重启 Doca 生效。安装目录应位于宿主发布目录之外，升级宿主不会覆盖插件；SDK 版本仍须匹配。
+通过「管理 → 插件商店」上传完整的预构建 ZIP，或停机后放入 `DOCA_PLUGINS_DIR/<plugin-id>/`。每个实例重启生效，共享数据库保存全站清单和完整归档，各实例启动自动校验并补齐本地缓存。不保留 npm 安装目录兼容路径。详见 [商店协议](plugin-store-protocol.md) 与 [部署说明](plugin-deployment.zh-CN.md)。
 
 插件包的 package.json：
 
@@ -25,6 +28,7 @@ Doca 及公开插件 SDK 采用 [MIT](../LICENSE)。插件可以开源，也可�
   "version": "1.0.0",
   "type": "module",
   "doca": {
+    "dataVersion": "1",
     "manifest": "./manifest.json",
     "server": "./dist/server.js",
     "web": { "directory": "./web", "entry": "./index.js" }
@@ -45,7 +49,7 @@ manifest.json 必须为静态 JSON，版本与 package.json 一致：
 }
 ```
 
-仅加载已编译 JavaScript，不扫描间接依赖，不运行安装命令，不使用 doca.config.ts 或仓库源码目录。支持 scoped 包和 pnpm 链接。入口、静态资源和真实符号链接路径必须位于包声明的目录内。依赖冲突在执行插件前报错。
+仅加载已编译 JavaScript。依赖必须打包或随包以真实文件提供，不运行安装脚本、访问依赖源或编译插件。入口必须在包内。`doca.dataVersion` 必填，首版升级要求值相同；插件初始化时检查实际业务数据库结构。
 
 ## SDK 与宿主文件服务
 
@@ -107,7 +111,7 @@ AI 工具通过 `aiServiceToken.registerTool` 注册，包含 id、description�
 
 Doca 不内置会员、货币价格、积分或业务额度。模型管理中的输入/输出速率和每张图片 Token 只负责把厂商原始用量统一折算为 Token，不是最终售价。用量记录区分未确认调用与实际指标；`ai.usage.recorded` 在结算事务内写入持久事件，顶层 `metrics` 是已折算用量，`provider.metrics` 保留厂商原始事实。插件通过 events.read(cursor, limit) 拉取，持久保存消费位置并按事件 ID 幂等处理。策略 check 可以拒绝调用；跨插件预留、失败补偿和资金一致性尚未提供完整事务协议，不能将一次 check 当作完整计费实现。
 
-插件自管独立数据库、凭证、业务任务和 outbox。宿主不提供 data.v1/data.v2。使用 initialize/mount/ready/dispose 初始化和清理。数据库必须按插件当前基线新建；结构不匹配时拒绝启动。
+插件自管独立数据库、凭证、业务任务和 outbox。宿主不提供 data.v1/data.v2。使用 initialize/mount/ready/dispose 初始化和清理。数据库必须符合声明的 dataVersion，可复用结构相同的已有数据；结构不匹配时拒绝启动。
 
 ## Web
 
@@ -129,7 +133,7 @@ HTTP 回调、附件绑定授权、用户校准、搜索与知识接口，以及
 
 交付验收需用实际宿主交付物、SDK 和业务插件 tgz，在仓库外的隔离环境安装启动。预备完整依赖闭包，禁止依赖源码链接、未声明缓存或安装/启动时访问包仓库；实际验证 Web 资源加载、业务流程、撤权、失败重试和重启恢复。SDK 构建及导入成功仅是基础验证，不可替代端到端验收。
 
-禁用、卸载和数据保留行为在首次交付确定。插件数据库只接受当前空库基线，结构不匹配时拒绝启动，不运行升级或降级脚本。用户删除协议与动态 WebView 尚未提供，不要将其写成可调用示例。默认数据目录和任务状态管理不会赋予宿主访问插件数据库的权限。
+禁用、卸载和数据保留行为在首次交付确定。插件数据库只接受声明的结构版本（包括已有兼容数据），结构不匹配时拒绝启动，不运行升级或降级脚本。用户删除协议尚未提供。动态 WebView 的受限会话与实际可用接口见邮箱插件对接手册 v1。默认数据目录和任务状态管理不会赋予宿主访问插件数据库的权限。
 
 ## 后台身份复核与通知
 

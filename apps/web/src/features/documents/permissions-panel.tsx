@@ -901,7 +901,7 @@ export function PermissionDialog({
           </div>
         )}
         <div className="permissions-status" role="status">
-          {busy ? t("notes.saving") : notice}
+          {busy ? t("common.savingChanges") : notice}
         </div>
       </div>
     </div>

@@ -1,7 +1,8 @@
+import { MobileNavigationArea } from "../../src/plugins/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Drawer } from "react-native-drawer-layout";
 import { Tabs, useRouter, useSegments } from "expo-router";
-import { BookOpen, ChevronRight, FolderOpen, Home, Settings, Sparkles, StickyNote } from "lucide-react-native";
+import { BookOpen, ChevronRight, FolderOpen, Home, Settings, Sparkles } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { IconButton } from "react-native-paper";
@@ -44,12 +45,8 @@ function AccountMenu({ close }: { close: () => void }) {
         </View>
         <ChevronRight color={colors.muted} size={18} />
       </Pressable>
-      <Text style={styles.section}>账户</Text>
-
-      <Pressable style={styles.item} onPress={() => open("/settings")}>
-        <Settings color={colors.accent} size={18} />
-        <Text style={styles.itemText}>设置</Text>
-      </Pressable>
+      <MobileNavigationArea slot="mobile.account" close={close}/>
+      <MobileNavigationArea slot="mobile.drawer" close={close}/>
     </View>
   );
 }
@@ -95,6 +92,7 @@ function SessionMenu({ close }: { close: () => void }) {
 
   return (
     <View style={[styles.menu, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 12 }]}>
+      <MobileNavigationArea slot="mobile.drawer" close={close}/>
       <View style={styles.sessionHead}>
         <Text style={styles.section}>对话</Text>
         <Pressable onPress={() => void createSession()}>
@@ -135,6 +133,7 @@ export default function TabsLayout() {
       }
     >
       <Tabs
+        tabBar={() => <View style={{backgroundColor:"white",paddingBottom:8}}><MobileNavigationArea slot="mobile.bottom" horizontal/></View>}
         screenOptions={{
           headerTintColor: colors.ink,
           headerStyle: { backgroundColor: "#fff" },
@@ -143,6 +142,7 @@ export default function TabsLayout() {
           tabBarActiveTintColor: colors.accent,
           tabBarInactiveTintColor: colors.muted,
           tabBarStyle: { backgroundColor: "#fff", borderTopColor: colors.lineSoft },
+          headerRight: () => <MobileNavigationArea slot="mobile.topRight" horizontal/>,
           headerLeft: () => <IconButton icon="menu" onPress={() => setOpen(true)} />,
         }}
       >
@@ -160,13 +160,6 @@ export default function TabsLayout() {
               ? mobilePluginMessage(locale, librariesTab.labelKey)
               : "知识库",
             tabBarIcon: ({ color, size }) => <BookOpen color={color} size={size} />,
-          }}
-        />
-        <Tabs.Screen
-          name="notes"
-          options={{
-            title: "随手记",
-            tabBarIcon: ({ color, size }) => <StickyNote color={color} size={size} />,
           }}
         />
         <Tabs.Screen

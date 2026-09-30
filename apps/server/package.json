@@ -13,6 +13,7 @@
     "@doca/plugin-files": "workspace:*",
     "@doca/plugin-host": "workspace:*",
     "@smartdoca/plugin-sdk": "workspace:*",
-    "@smartdoca/search-host": "workspace:*"
+    "@smartdoca/search-host": "workspace:*",
+    "@smartdoca/web-plugin-registry": "workspace:*"
   }
 }

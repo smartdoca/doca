@@ -89,7 +89,6 @@ const toolKeys = {
   document_request_access: "ai.progress.tool.documentRequestAccess",
   document_read: "ai.progress.tool.documentRead",
   document_create: "ai.progress.tool.documentCreate",
-  quick_note_read: "ai.progress.tool.quickNoteRead",
   document_edit: "ai.progress.tool.documentEdit",
   rich_text_edit: "ai.progress.tool.richTextEdit",
   markdown_edit: "ai.progress.tool.markdownEdit",

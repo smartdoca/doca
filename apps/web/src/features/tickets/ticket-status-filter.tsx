@@ -73,7 +73,7 @@ export function TicketStatusFilter({
           <div className="ticket-status-menu-heading">
             <span>{t("ticket.statusHeading")}</span>
             <button type="button" onClick={() => onChange([])}>
-              {t("notes.clear")}
+              {t("common.clearSelection")}
             </button>
           </div>
           {options.map(([key, name]) => (
