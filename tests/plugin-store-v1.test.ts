@@ -151,3 +151,64 @@ it("batches update requests and rejects missing or wrong installed-version resul
     ]),
   ).rejects.toThrow("Invalid update");
 });
+
+it("preserves official identity and per-version release notes from the store", async () => {
+  const plugin = {
+    id: "example.mail",
+    name: "Mail",
+    summary: "Mail integration",
+    official: true,
+    author: { name: "Admin", url: null },
+    categoryId: "integration",
+    icon: null,
+    detailPath: "/plugins/example.mail",
+    targets: ["web"],
+    review: "approved",
+    latestVersion: "1.0.0",
+    downloads: { count: null, period: "last30Days", source: "npm", asOf: null },
+    likes: { count: 1, asOf: null },
+    updatedAt: "2026-09-30T00:00:00Z",
+  };
+  const release = {
+    pluginId: plugin.id,
+    version: "1.0.0",
+    changelog: "New inbox\nImproved search",
+    sdkRange: "^0.1.0",
+    dataVersion: "1",
+    targets: ["web"],
+    dependencies: [],
+    review: "approved",
+    reviewedAt: plugin.updatedAt,
+    publishedAt: plugin.updatedAt,
+    npm: {
+      registry: "https://registry.npmjs.org",
+      name: "@example/mail",
+      version: "1.0.0",
+      integrity: `sha512-${Buffer.alloc(64).toString("base64")}`,
+      size: 100,
+    },
+  };
+  const page = { nextCursor: null, total: 1, snapshotAt: plugin.updatedAt };
+  const store = new PluginStore("https://store.example", (async (url: any) =>
+    Response.json(
+      String(url).includes("/releases")
+        ? { protocolVersion: 1, items: [release], page }
+        : String(url).includes("/example.mail")
+          ? {
+              protocolVersion: 1,
+              plugin,
+              description: { format: "doca-slate", version: 1, nodes: [] },
+            }
+          : { protocolVersion: 1, items: [plugin], page },
+    )) as typeof fetch);
+  expect((await store.catalog()).items[0]?.official).toBe(true);
+  expect((await store.detail(plugin.id)).plugin.official).toBe(true);
+  expect((await store.releases(plugin.id)).items[0]?.changelog).toBe(
+    release.changelog,
+  );
+  Reflect.deleteProperty(plugin, "official");
+  await expect(store.catalog()).rejects.toThrow();
+  await expect(store.detail(plugin.id)).rejects.toThrow();
+  Reflect.deleteProperty(release, "changelog");
+  await expect(store.releases(plugin.id)).rejects.toThrow();
+});

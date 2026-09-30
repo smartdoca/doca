@@ -1,3 +1,4 @@
+import type { PluginNativeCapabilities } from "./native.js";
 export type * from "@smartdoca/web-plugin-registry";
 export interface PluginFileReference {
   readonly id: string;
@@ -18,6 +19,7 @@ export interface PluginWebHost<
 > {
   readonly React: ReactRuntime;
   readonly apiBase: string;
+  readonly native: PluginNativeCapabilities | null;
   useEnvironment(): {
     locale: "zh" | "en";
     theme: "light" | "soft";

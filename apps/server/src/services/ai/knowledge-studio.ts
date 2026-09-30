@@ -1090,6 +1090,7 @@ export function createKnowledgeStudio(
               JSON.parse(
                 (await knowledgeBot(db, actor, item.bot_id)).library_ids,
               ),
+              actor,
             ),
           ),
         };
@@ -1122,7 +1123,7 @@ export function createKnowledgeStudio(
             !validation?.passed ||
             validation.basis !==
               fingerprint(
-                await publishedChunks(db, JSON.parse(bot.library_ids)),
+                await publishedChunks(db, JSON.parse(bot.library_ids), actor),
               )
           )
             fail(409, "先对当前生效知识执行案例回归并通过，再标记解决");
@@ -2119,7 +2120,7 @@ export function createKnowledgeStudio(
     alternate = "",
   ) {
     const bot = await knowledgeBot(db, actor, botId),
-      chunks = await publishedChunks(db, JSON.parse(bot.library_ids));
+      chunks = await publishedChunks(db, JSON.parse(bot.library_ids), actor);
     const queries = [
       ...new Set(
         [query, alternate].map((item) => item.trim()).filter(Boolean),

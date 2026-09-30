@@ -202,6 +202,10 @@ it("protects management endpoints and removes notes from new deployments", async
     expect(
       (await app.inject({ url: "/api/v1/admin/plugins", headers })).statusCode,
     ).toBe(401);
+    expect(
+      (await app.inject({ url: "/api/v1/admin/plugins/operations", headers }))
+        .statusCode,
+    ).toBe(401);
     await createUser(
       db,
       {
@@ -226,6 +230,33 @@ it("protects management endpoints and removes notes from new deployments", async
     });
     expect(upload.statusCode, upload.body).toBe(200);
     expect(upload.json().restartRequired).toBe(true);
+    const history = await app.inject({
+      url: "/api/v1/admin/plugins/operations",
+      headers: { ...headers, cookie },
+    });
+    expect(history.statusCode).toBe(200);
+    expect(
+      history
+        .json()
+        .items.every(
+          (item: { pluginId: string }) => item.pluginId === "example.demo",
+        ),
+    ).toBe(true);
+    expect(
+      history.json().items.map((item: { stage: string }) => item.stage),
+    ).toEqual(["staged", "requested"]);
+    const failed = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/plugins/upload",
+      headers: { ...headers, cookie, "content-type": "application/zip" },
+      payload: Buffer.from("invalid archive"),
+    });
+    expect(failed.statusCode).toBe(400);
+    const afterFailure = await app.inject({
+      url: "/api/v1/admin/plugins/operations",
+      headers: { ...headers, cookie },
+    });
+    expect(afterFailure.json().items[0].stage).toBe("failed");
     expect(
       (
         await app.inject({

@@ -166,6 +166,7 @@ Installation updated on 2026-09-30; other capability rows retain their previous 
 | Intersection | Paged relationship sources, current-fact recheck, timeout and sign-out denial | The plugin maintains its own incremental relationship index |
 | Client | Dynamic Web loading, scoped mobile WebView, configurable navigation, render error isolation | Generic tree slot; real-device mobile integration acceptance |
 | AI | Public tools and skills, raw usage, model-rate conversion, admission policy, durable settlement events | MCP alignment, reservation and failure compensation, more usage dimensions |
+| Recent activity | activity.v1 source registration, plugin-owned visits, merged cursor paging, permission-checked opening | Plugin-specific visit storage and cleanup belong to the plugin; see [integration](plugin-activity.md) |
 | Search and knowledge | search.v1 projection, rebuild, and authorization query. Knowledge registration contract is packaged | Global retrieval, durable knowledge subscription, scheduling, and revocation cleanup |
 | Mail | Host source, bridge, database, tools, web and mobile entry, and business tests removed | A future mail plugin is developed and accepted on its own |
 | Membership | Backend, UI, and commercial data definitions removed | Combined verification |
@@ -187,3 +188,13 @@ After disable, jobs are stopped and drained, sources unregister, and business ac
 The SDK range check stays. A plugin database accepts only the current structure. A mismatch refuses startup. There is no upgrade or downgrade script.
 
 Explicitly not done: generic plugin SQL or data.v2, a distributed transaction across plugin databases, giving every plugin search source to AI by default, and executing npm plugin code dynamically in the native process.
+
+## 14. Plugin-owned recent activity
+
+`activity.v1` is exported through `activityServiceToken` in `plugin-sdk/platform`. A source supplies `list` and `get`, localized type labels, and a supported icon. The host does not persist plugin visits. Existing core visit stores stay in place. Registration is instance-scoped and disposed with the plugin; list and open require current `activity.read` authorization. The [activity contract](plugin-activity.md) defines strict keyset ordering, bounded queries, failure isolation, cursor behavior, and rollback without data migration.
+
+## Unified content implementation update
+
+The source SDK exports `content.v1` through `plugin-sdk/content`: required list/read/resolve, optional search, complete inventory validation, and built-in document/file readers. Knowledge subscriptions reuse existing storage and scheduling, compare block fingerprints and read/analyze changed bodies only. Configuration UI and live derived-content guards cover new reads, lists and answer retrieval. No knowledge.sources.v1 adapter, database conversion or schema migration is added. Independent mail integration and native-device acceptance remain required. [Contract and implementation limits](plugin-content.md).
+
+The native container now provides per-origin/user/plugin persistent storage and authenticated attachment save/share through `PluginWebHost.native`. Native verification and an independently rebuilt mail client are still required. [Native contract](plugin-native.md).

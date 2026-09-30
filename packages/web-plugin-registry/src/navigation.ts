@@ -46,15 +46,9 @@ export interface NavigationLayout {
   placements: NavigationPlacement[];
   home?: { web?: string; mobile?: string };
 }
-export interface NavigationRule {
-  id: string;
-  priority: number;
-  audience: "all" | "admin" | "member" | "users";
-  userIds?: string[];
-  layout: NavigationLayout;
-}
 export interface NavigationConfig {
-  rules: NavigationRule[];
+  schemaVersion: 1;
+  layout: NavigationLayout;
 }
 export interface ResolvedNavigation {
   revision: number;
@@ -77,7 +71,7 @@ export const builtinNavigation: NavigationEntry[] = [
     undefined,
     45,
   ],
-  ["files", "Files", "文件", "/files", "/files", 50],
+  ["files", "Folders", "文件夹", "/files", "/files", 50],
   [
     "shared-files",
     "Shared folders",
@@ -156,31 +150,39 @@ for (const [key, zh, en] of [
     title: { zh: zh!, en: en! },
     icon: "preferences",
     webPath: `/admin?tab=${key}`,
-    allowedSlots: navigationSlots.filter((s) => s.startsWith("web.")),
+    allowedSlots: ["web.admin"],
     defaults: ["web.admin"],
     order: builtinNavigation.length,
     adminOnly: true,
   });
+/** Admin pages and user pages have disjoint placement surfaces. */
+export function isAdminNavigationEntry(entry: NavigationEntry): boolean {
+  return (
+    entry.id.startsWith("doca.admin.") ||
+    entry.defaults.includes("web.admin") ||
+    (entry.adminOnly === true && entry.allowedSlots.includes("web.admin"))
+  );
+}
+export function allowedNavigationSlots(
+  entry: NavigationEntry,
+): NavigationSlot[] {
+  return entry.allowedSlots.filter((slot) =>
+    isAdminNavigationEntry(entry) ? slot === "web.admin" : slot !== "web.admin",
+  );
+}
 export function resolveNavigation(
   entries: NavigationEntry[],
   config: NavigationConfig,
   actor: { id: string; admin: boolean },
   revision = 0,
 ): ResolvedNavigation {
-  const available = entries.filter((e) => !e.adminOnly || actor.admin);
-  const rule = config.rules
-    .filter(
-      (r) =>
-        r.audience === "all" ||
-        (r.audience === "admin" && actor.admin) ||
-        (r.audience === "member" && !actor.admin) ||
-        (r.audience === "users" && r.userIds?.includes(actor.id)),
-    )
-    .sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))[0];
+  const available = entries.filter(
+    (e) => (!e.adminOnly && !isAdminNavigationEntry(e)) || actor.admin,
+  );
   const defaults: NavigationPlacement[] = available.flatMap((e) =>
     e.defaults.map((slot) => ({ entryId: e.id, slot, order: e.order })),
   );
-  const configured = (rule?.layout.placements ?? []).map((p) => ({ ...p }));
+  const configured = config.layout.placements.map((p) => ({ ...p }));
   const edited = new Set(configured.map((p) => p.entryId));
   const placements = [
     ...defaults.filter((p) => !edited.has(p.entryId)),
@@ -188,7 +190,9 @@ export function resolveNavigation(
   ]
     .filter((p) => {
       const entry = available.find((e) => e.id === p.entryId);
-      return entry && entry.allowedSlots.includes(p.slot) && !p.hidden;
+      return (
+        entry && allowedNavigationSlots(entry).includes(p.slot) && !p.hidden
+      );
     })
     .sort((a, b) => a.order - b.order || a.entryId.localeCompare(b.entryId));
   // Overflow remains reachable through More. Reserve one native bottom item for More.
@@ -205,23 +209,34 @@ export function resolveNavigation(
   for (const e of available.filter((e) => e.pluginId))
     for (const slot of ["web.more", "mobile.more"] as const) {
       if (
-        e.allowedSlots.includes(slot) &&
-        !placements.some((p) => p.entryId === e.id && p.slot === slot)
+        allowedNavigationSlots(e).includes(slot) &&
+        !placements.some(
+          (p) =>
+            p.entryId === e.id && p.slot.startsWith(slot.split(".")[0] + "."),
+        )
       )
         placements.push({ entryId: e.id, slot, order: e.order });
     }
   const unique = placements.filter(
     (p, i) =>
+      (!(p.slot === "web.more" || p.slot === "mobile.more") ||
+        !placements.some(
+          (other) =>
+            other.entryId === p.entryId &&
+            other.slot !== p.slot &&
+            other.slot.startsWith(p.slot.split(".")[0] + "."),
+        )) &&
       placements.findIndex(
         (x) => x.entryId === p.entryId && x.slot === p.slot,
       ) === i,
   );
-  const home = { ...rule?.layout.home };
+  const home = { ...config.layout.home };
   for (const target of ["web", "mobile"] as const)
     if (
       !available.some(
         (e) =>
           e.id === home[target] &&
+          !isAdminNavigationEntry(e) &&
           placements.some(
             (p) => p.entryId === e.id && p.slot.startsWith(`${target}.`),
           ),

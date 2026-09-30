@@ -7,6 +7,22 @@ import type { Actor } from "@core/modules/identity/passwords.js";
 import { fail } from "@core/shared/errors.js";
 import type { PluginManager } from "../plugins/manager.js";
 import { MAX_PLUGIN_BYTES, StoreCursorExpired } from "../plugins/store.js";
+import { unpack } from "../plugins/archive.js";
+
+function archivePluginId(bytes: Uint8Array): string | undefined {
+  try {
+    const files = unpack(bytes);
+    const pkg = JSON.parse(Buffer.from(files["package.json"]!).toString());
+    const manifest = JSON.parse(
+      Buffer.from(
+        files[String(pkg.doca.manifest).replace(/^\.\//, "")]!,
+      ).toString(),
+    );
+    return typeof manifest.id === "string" ? manifest.id : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function registerPluginManagement(
   api: FastifyInstance,
@@ -15,15 +31,46 @@ export function registerPluginManagement(
   manager: PluginManager,
 ) {
   const base = "/api/v1/admin/plugins";
-  const audit = async (actor: Actor, action: string) => {
+  api.get(`${base}/operations`, async (req) => {
+    admin(req);
+    const items = await db
+      .selectFrom("security_audit")
+      .select(["id", "created_at", "details"])
+      .where("action", "=", "plugins.operation.v1")
+      .orderBy("created_at", "desc")
+      .orderBy("id", "desc")
+      .limit(100)
+      .execute();
+    return {
+      items: items.map(({ details, ...item }) => ({
+        ...item,
+        ...JSON.parse(details),
+      })),
+    };
+  });
+  const audit = async (
+    actor: Actor,
+    operationId: string,
+    operation: string,
+    stage: "requested" | "staged" | "failed",
+    metadata: { pluginId?: string; packageName?: string },
+  ) => {
     await db
-      .insertInto("audit_events")
+      .insertInto("security_audit")
       .values({
         id: randomUUID(),
         actor_id: actor.id,
-        resource_id: null,
-        action: `plugins.${action}`.slice(0, 64),
+        user_id: null,
+        action: "plugins.operation.v1",
         created_at: new Date().toISOString(),
+        details: JSON.stringify({
+          schemaVersion: 1,
+          operationId,
+          operation,
+          stage,
+          pluginId: metadata.pluginId ?? null,
+          packageName: metadata.packageName ?? null,
+        }),
       })
       .execute();
   };
@@ -31,15 +78,17 @@ export function registerPluginManagement(
     actor: Actor,
     action: string,
     run: () => Promise<T>,
+    metadata: { pluginId?: string; packageName?: string } = {},
   ) {
-    await audit(actor, `requested.${action}`);
+    const operationId = randomUUID();
+    await audit(actor, operationId, action, "requested", metadata);
     try {
       const result = await run();
-      await audit(actor, `staged.${action}`);
+      await audit(actor, operationId, action, "staged", metadata);
       return result;
     } catch (error) {
       api.log.warn({ err: error }, "Plugin management operation failed");
-      await audit(actor, `failed.${action}`);
+      await audit(actor, operationId, action, "failed", metadata);
       fail(
         400,
         error instanceof Error ? error.message : "Plugin operation failed",
@@ -55,7 +104,8 @@ export function registerPluginManagement(
     try {
       return await manager.store.catalog(req.query);
     } catch (error) {
-      if (error instanceof StoreCursorExpired) fail(410, "Plugin store cursor expired");
+      if (error instanceof StoreCursorExpired)
+        fail(410, "Plugin store cursor expired");
       api.log.warn({ err: error }, "Plugin store unavailable");
       fail(502, "Plugin store unavailable");
     }
@@ -96,11 +146,22 @@ export function registerPluginManagement(
   });
   api.post<{ Body: { name: string; version: string } }>(
     `${base}/npm`,
-    async (req) =>
-      operation(admin(req), "npm", async () => {
-        const result = await downloadNpm(req.body.name, req.body.version);
-        return manager.install(result.bytes, "npm", undefined, result.npm);
-      }),
+    async (req) => {
+      const metadata = {
+        packageName: req.body.name,
+        pluginId: undefined as string | undefined,
+      };
+      return operation(
+        admin(req),
+        "npm",
+        async () => {
+          const result = await downloadNpm(req.body.name, req.body.version);
+          metadata.pluginId = archivePluginId(result.bytes);
+          return manager.install(result.bytes, "npm", undefined, result.npm);
+        },
+        metadata,
+      );
+    },
   );
   api.post<{ Body: { id: string; version: string } }>(
     `${base}/install`,
@@ -116,13 +177,18 @@ export function registerPluginManagement(
       },
     },
     async (req) =>
-      operation(admin(req), `install.${req.body.id}`, async () => {
-        const { bytes, release } = await manager.store.download(
-          req.body.id,
-          req.body.version,
-        );
-        return manager.install(bytes, "store", { id: req.body.id, release });
-      }),
+      operation(
+        admin(req),
+        "install",
+        async () => {
+          const { bytes, release } = await manager.store.download(
+            req.body.id,
+            req.body.version,
+          );
+          return manager.install(bytes, "store", { id: req.body.id, release });
+        },
+        { pluginId: req.body.id },
+      ),
   );
   // Scoped parser: no change to content handling in the rest of the host.
   api.register(async (upload) => {
@@ -140,8 +206,11 @@ export function registerPluginManagement(
         },
       },
       async (req) =>
-        operation(admin(req), "upload", () =>
-          manager.install(req.body, "local"),
+        operation(
+          admin(req),
+          "upload",
+          () => manager.install(req.body, "local"),
+          { pluginId: archivePluginId(req.body) },
         ),
     );
   });
@@ -168,8 +237,11 @@ export function registerPluginManagement(
       },
     },
     async (req) =>
-      operation(admin(req), `${req.body.action}.${req.params.id}`, () =>
-        manager.change(req.params.id, req.body.action),
+      operation(
+        admin(req),
+        req.body.action,
+        () => manager.change(req.params.id, req.body.action),
+        { pluginId: req.params.id },
       ),
   );
 }

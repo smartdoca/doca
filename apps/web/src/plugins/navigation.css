@@ -13,4 +13,26 @@
 .global-header-tools > .configured-navigation,.topbar .global-header-tools > .configured-navigation{width:auto;height:auto;flex-shrink:0}
 .global-header-tools .nav-web-topRight>div{flex-wrap:nowrap}
 .global-header-tools .configured-navigation a{white-space:nowrap}
+.global-header-tools .nav-web-topRight a[data-display="icon"]{box-sizing:border-box;width:34px;height:34px;min-width:34px;padding:0;justify-content:center}
+.topbar .global-header-tools .nav-web-topRight a[data-display="icon"]{width:30px;height:30px;min-width:30px}
 .notification-trigger[hidden]{display:none!important}
+.global-header-tools>.notifications{width:0!important;min-width:0!important;height:0!important;margin-left:-10px!important}
+.global-header-tools .nav-web-topRight>div{gap:10px}
+.global-header-tools .nav-web-topRight a[data-display="icon"] svg{width:20px;height:20px}
+.sidebar .navigation-more{padding:0}
+.sidebar .navigation-more>summary{padding:9px 12px;cursor:pointer;border-radius:6px;font-size:13px}
+.sidebar .navigation-more>summary{display:flex;align-items:center;gap:8px;list-style:none}
+.sidebar .navigation-more>summary::-webkit-details-marker{display:none}
+.sidebar .configured-navigation a svg{flex-shrink:0}
+.sidebar .navigation-more[open] .configured-navigation{position:static;border:0;background:transparent;min-width:0;max-height:none;overflow:visible;margin-left:12px}
+.sidebar .nav-web-left a[data-entry-id="doca.trash"]{margin-top:8px;padding-top:19px;border-top:1px solid var(--line,#dee0e3);border-radius:0}
+.sidebar .nav-web-left a[data-entry-id="doca.ai"]{color:#7859b8;font-weight:600}
+.sidebar .nav-web-left a[data-entry-id="doca.ai"]:hover{background:#eee8f8}
+.sidebar .nav-web-left a[data-entry-id="doca.ai"].active{color:#6944ad;background:#e8def7}
+@media(max-width:1200px){
+  .app-shell:not(.navigation-expanded)>.sidebar .configured-navigation a>span,
+  .app-shell:not(.navigation-expanded)>.sidebar .navigation-more>summary>span{display:none}
+  .app-shell:not(.navigation-expanded)>.sidebar .configured-navigation a,
+  .app-shell:not(.navigation-expanded)>.sidebar .navigation-more>summary{justify-content:center;padding-left:10px;padding-right:10px}
+  .app-shell:not(.navigation-expanded)>.sidebar .navigation-more[open] .configured-navigation{margin-left:0}
+}

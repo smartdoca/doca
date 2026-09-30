@@ -6,6 +6,7 @@ export interface NpmRelease {
   size: number;
 }
 export interface StoreRelease {
+  changelog: string;
   pluginId: string;
   version: string;
   sdkRange: string;
@@ -19,6 +20,7 @@ export interface StoreRelease {
   npm: NpmRelease;
 }
 export interface StorePlugin {
+  official: boolean;
   id: string;
   name: string;
   summary: string;

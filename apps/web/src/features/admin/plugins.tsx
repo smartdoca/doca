@@ -1,5 +1,26 @@
 import { useEffect, useRef, useState } from "react";
-import { Package, RefreshCw, Upload, X, Search, Download, Heart, LayoutGrid, Code2, Users, Sparkles, Blocks } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Drawer, Select, Button, Modal } from "antd";
+import {
+  Package,
+  RefreshCw,
+  Upload,
+  ArrowLeft,
+  Search,
+  Download,
+  Heart,
+  LayoutGrid,
+  Code2,
+  Users,
+  Sparkles,
+  Blocks,
+  X,
+  CircleCheck,
+  CircleAlert,
+  Power,
+  Trash2,
+  Play,
+} from "lucide-react";
 import {
   comparePluginVersions,
   satisfiesPluginVersion,
@@ -17,12 +38,33 @@ import { api } from "@web/shared/api.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { PluginDescription } from "./plugin-description.js";
 import "./plugins.css";
-const categoryIcons: Record<string, typeof Package> = {productivity: Sparkles, collaboration: Users, content: Package, integration: Blocks, developer: Code2, other: LayoutGrid};
+const categoryIcons: Record<string, typeof Package> = {
+  productivity: Sparkles,
+  collaboration: Users,
+  content: Package,
+  integration: Blocks,
+  developer: Code2,
+  other: LayoutGrid,
+};
 export function Plugins() {
   const { t, locale } = useI18n();
+  const [modal, modalContext] = Modal.useModal();
+  const confirmAction = (content: string, destructive = false) =>
+    modal.confirm({
+      title: t(destructive ? "plugins.remove" : "common.confirm"),
+      content,
+      okText: t(destructive ? "plugins.remove" : "common.confirm"),
+      cancelText: t("common.cancel"),
+      okButtonProps: { danger: destructive },
+      centered: true,
+      autoFocusButton: "cancel",
+      closable: true,
+    });
   const [inventory, setInventory] = useState<PluginInventory | null>(null),
     [catalog, setCatalog] = useState<StoreCatalog | null>(null),
-    [categories, setCategories] = useState<{ id: string; name: string; count?: number | null }[]>([]),
+    [categories, setCategories] = useState<
+      { id: string; name: string; count?: number | null }[]
+    >([]),
     [tab, setTab] = useState<"all" | "installed" | "upgrades" | "settings">(
       "all",
     ),
@@ -37,12 +79,78 @@ export function Plugins() {
     [categoryError, setCategoryError] = useState(false),
     [updatesError, setUpdatesError] = useState(""),
     [updates, setUpdates] = useState<StoreUpdate[]>([]),
-    [detail, setDetail] = useState<string | null>(null),
+    [detail, setDetail] = useState<string | null>(() =>
+      new URLSearchParams(location.hash.split("?")[1]).get("plugin"),
+    ),
     [remoteDetail, setRemoteDetail] = useState<StoreDetail | null>(null),
     [releases, setReleases] = useState<StorePage<StoreRelease> | null>(null),
     [detailError, setDetailError] = useState(""),
     [npmName, setNpmName] = useState(""),
     [npmVersion, setNpmVersion] = useState("");
+  const openDetail = (id: string | null) => {
+    const params = new URLSearchParams(location.hash.split("?")[1]);
+    if (id) params.set("plugin", id);
+    else params.delete("plugin");
+    location.hash = `/admin?${params}`;
+    setDetail(id);
+  };
+  useEffect(() => {
+    const sync = () =>
+      setDetail(new URLSearchParams(location.hash.split("?")[1]).get("plugin"));
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+  const [operations, setOperations] = useState<
+    {
+      id: string;
+      operation: string;
+      stage: "requested" | "staged" | "failed";
+      operationId: string;
+      created_at: string;
+      pluginId: string | null;
+      packageName: string | null;
+    }[]
+  >([]);
+  const [historyError, setHistoryError] = useState(false);
+  const [completed, setCompleted] = useState(false);
+  const [operationError, setOperationError] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+  const [activeAction, setActiveAction] = useState("");
+  const acting = useRef(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyPlugin, setHistoryPlugin] = useState("");
+  const openHistory = () => {
+    setHistoryPlugin(detail ?? "");
+    setHistoryOpen(true);
+    void loadOperations();
+  };
+  const loadOperations = async () => {
+    try {
+      setOperations(
+        (await api<{ items: typeof operations }>("/admin/plugins/operations"))
+          .items,
+      );
+      setHistoryError(false);
+    } catch {
+      setHistoryError(true);
+    }
+  };
+  useEffect(() => {
+    void loadOperations();
+  }, []);
+  useEffect(() => {
+    if (!busy) return;
+    const start = Date.now();
+    const timer = setInterval(
+      () => setElapsed(Math.floor((Date.now() - start) / 1000)),
+      1000,
+    );
+    const poll = setInterval(() => void loadOperations(), 3000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(poll);
+    };
+  }, [busy]);
   const generation = useRef(0),
     detailGeneration = useRef(0);
   const refresh = async () => {
@@ -96,7 +204,11 @@ export function Plugins() {
           : result,
       );
     } catch (e) {
-      if (cursor && (e as {status?: number}).status === 410 && generation.current === expectedGeneration) {
+      if (
+        cursor &&
+        (e as { status?: number }).status === 410 &&
+        generation.current === expectedGeneration
+      ) {
         setCatalog(null);
         await loadCatalog(undefined, expectedGeneration);
         return;
@@ -127,9 +239,14 @@ export function Plugins() {
       `/admin/plugins/categories?locale=${locale}`,
     )
       .then((r) => {
-        if (active) { setCategories(r.items); setCategoryError(false); }
+        if (active) {
+          setCategories(r.items);
+          setCategoryError(false);
+        }
       })
-      .catch(() => { if (active) setCategoryError(true); });
+      .catch(() => {
+        if (active) setCategoryError(true);
+      });
     return () => {
       active = false;
     };
@@ -164,17 +281,31 @@ export function Plugins() {
       detailGeneration.current++;
     };
   }, [detail, locale]);
-  const act = async (run: () => Promise<PluginInventory>) => {
+  const act = async (
+    run: () => Promise<PluginInventory>,
+    confirmation?: string,
+    actionKey = "",
+  ) => {
+    if (acting.current) return;
+    if (confirmation && !(await confirmAction(confirmation))) return;
+    acting.current = true;
+    setActiveAction(actionKey);
+    setCompleted(false);
+    setOperationError("");
+    setElapsed(0);
     setBusy(true);
     setError("");
     try {
       setInventory(await run());
+      setCompleted(true);
       setUpdates([]);
       void checkUpdates();
     } catch (e) {
-      setError((e as Error).message);
+      setOperationError((e as Error).message);
     } finally {
       setBusy(false);
+      acting.current = false;
+      void loadOperations();
     }
   };
   const installed = inventory?.plugins ?? [];
@@ -202,10 +333,22 @@ export function Plugins() {
         local.dataVersion === r.dataVersion &&
         comparePluginVersions(r.version, local.version) > 0));
   const change = (id: string, action: string) =>
-    void act(() =>
-      api<PluginInventory>(`/admin/plugins/${encodeURIComponent(id)}`, "POST", {
-        action,
-      }),
+    void act(
+      () =>
+        api<PluginInventory>(
+          `/admin/plugins/${encodeURIComponent(id)}`,
+          "POST",
+          {
+            action,
+          },
+        ),
+      action === "remove"
+        ? undefined
+        : t("plugins.confirmOperation", {
+            action: t(`plugins.${action}` as Parameters<typeof t>[0]),
+            name: installed.find((p) => p.id === id)?.name ?? id,
+          }),
+      action,
     );
   const visible =
     tab === "all"
@@ -233,30 +376,60 @@ export function Plugins() {
       setDetailError((e as Error).message);
     }
   };
+  const historyName = (id: string) =>
+    installed.find((p) => p.id === id)?.name ??
+    catalog?.items.find((p) => p.id === id)?.name ??
+    (id === "unidentified" ? t("plugins.historyUnidentified") : id);
+  const historyGroups = [
+    ...operations.reduce((groups, item) => {
+      const id = item.pluginId || item.packageName || "unidentified";
+      const records = groups.get(id) ?? [];
+      records.push(item);
+      groups.set(id, records);
+      return groups;
+    }, new Map<string, typeof operations>()),
+  ];
   return (
     <section className="plugin-manager">
-      <header className="plugin-store-hero">
-        <h2>
-          <Package size={24} />
-          {t("plugins.title")}
-        </h2>
-        <p>{t("plugins.intro")}</p>
-        {tab !== "settings" && <label className="plugin-hero-search"><Search size={22}/><input aria-label={t("plugins.search")} placeholder={t("plugins.search")} value={query} onChange={(e) => setQuery(e.target.value)}/></label>}
-      </header>
-      <div className="plugin-manager-tabs">
-        {(["all", "installed", "upgrades", "settings"] as const).map((key) => (
-          <button
-            key={key}
-            aria-pressed={tab === key}
-            onClick={() => setTab(key)}
-          >
-            {t(`plugins.${key}`)}
-            {key === "upgrades" && available.length > 0 && (
-              <span className="plugin-count">{available.length}</span>
+      {modalContext}
+      {!detail && (
+        <>
+          <header className="plugin-store-hero">
+            <h2>
+              <Package size={24} />
+              {t("plugins.title")}
+            </h2>
+            <p>{t("plugins.intro")}</p>
+          </header>
+          <div className="plugin-manager-tabs">
+            {(["all", "installed", "upgrades", "settings"] as const).map(
+              (key) => (
+                <button
+                  key={key}
+                  aria-pressed={tab === key}
+                  onClick={() => setTab(key)}
+                >
+                  {t(`plugins.${key}`)}
+                  {key === "upgrades" && available.length > 0 && (
+                    <span className="plugin-count">{available.length}</span>
+                  )}
+                </button>
+              ),
             )}
-          </button>
-        ))}
-      </div>
+          </div>
+          {tab !== "settings" && (
+            <label className="plugin-hero-search">
+              <Search size={22} />
+              <input
+                aria-label={t("plugins.search")}
+                placeholder={t("plugins.search")}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+          )}
+        </>
+      )}
       {inventory?.restartRequired && (
         <div className="plugin-restart">
           <strong>{t("plugins.restart")}</strong>
@@ -265,87 +438,93 @@ export function Plugins() {
           <p>{t("plugins.restartOther")}</p>
         </div>
       )}
+      {(busy || completed || operationError) &&
+        createPortal(
+          <aside
+            className="plugin-progress-toast"
+            data-status={
+              busy ? "running" : operationError ? "failed" : "completed"
+            }
+            role={operationError ? "alert" : "status"}
+            aria-live={operationError ? "assertive" : "polite"}
+          >
+            {busy ? (
+              <RefreshCw className="plugin-spinner" size={20} />
+            ) : operationError ? (
+              <CircleAlert size={20} />
+            ) : (
+              <CircleCheck size={20} />
+            )}
+            <div>
+              <strong>
+                {t(
+                  busy
+                    ? "plugins.working"
+                    : operationError
+                      ? "plugins.failed"
+                      : "plugins.completed",
+                )}
+              </strong>
+              {(busy || operationError) && (
+                <p>
+                  {busy
+                    ? t("plugins.elapsed", { seconds: elapsed })
+                    : operationError}
+                </p>
+              )}
+              <button className="plugin-progress-history" onClick={openHistory}>
+                {t("plugins.history")}
+              </button>
+            </div>
+            {!busy && (
+              <button
+                aria-label={t("plugins.close")}
+                onClick={async () => {
+                  setCompleted(false);
+                  setOperationError("");
+                }}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </aside>,
+          document.body,
+        )}
       {error && (
         <p role="alert" className="plugin-error">
           {error}
         </p>
       )}
-      {tab === "settings" ? (
-        <div className="plugin-settings">
-          <h3>{t("plugins.store")}</h3>
-          <p>{inventory?.storeUrl}</p>
-          <p>{t("plugins.storeSettings")}</p>
-          <p>{t("plugins.localHelp")}</p>
-          <h3>{t("plugins.npmInstall")}</h3>
-          <p>{t("plugins.unreviewed")}</p>
-          <input
-            aria-label={t("plugins.packageName")}
-            placeholder="@scope/plugin"
-            value={npmName}
-            onChange={(e) => setNpmName(e.target.value)}
-          />
-          <input
-            aria-label={t("plugins.version")}
-            placeholder="1.0.0"
-            value={npmVersion}
-            onChange={(e) => setNpmVersion(e.target.value)}
-          />
-          <button
-            disabled={busy || !npmName || !npmVersion}
-            onClick={() =>
-              void act(() =>
-                api<PluginInventory>("/admin/plugins/npm", "POST", {
-                  name: npmName,
-                  version: npmVersion,
-                }),
-              )
-            }
-          >
-            {t("plugins.install")}
-          </button>
-        </div>
-      ) : (
-        <div className={`plugin-market-layout ${tab === "all" ? "with-categories" : ""}`}>
-          {tab === "all" && (
-            <div className="plugin-categories">
-              <button aria-pressed={!category} onClick={() => setCategory("")}>
-                <LayoutGrid size={18}/>{t("plugins.all")}
-              </button>
-              {categoryError && <small role="alert">{t("plugins.categoriesFailed")}</small>}
-              {categories.map((c) => {
-                const Icon = categoryIcons[c.id] ?? Package;
-                return <button
-                  key={c.id}
-                  aria-pressed={category === c.id}
-                  onClick={() => setCategory(c.id)}
-                >
-                  <Icon size={18}/><span>{c.name}</span>{c.count != null && <small>{c.count}</small>}
-                </button>;
-              })}
-            </div>
-          )}
-          <div className="plugin-store-panel">
-            <div className="plugin-results-heading"><h3>{category ? categories.find(c => c.id === category)?.name : t(`plugins.${tab}`)} {tab === "all" && catalog?.page.total != null && <span>{catalog.page.total}</span>}</h3></div>
-            <div className="plugin-toolbar">
-              <button
-                disabled={busy || loading}
-                onClick={() => {
-                  void refresh();
-                  void checkUpdates();
-                  void loadCatalog();
-                }}
-              >
+      {!detail &&
+        (tab === "settings" ? (
+          <div className="plugin-settings">
+            <div className="plugin-results-heading">
+              <h3>{t("plugins.settings")}</h3>
+              <button disabled={busy} onClick={() => void refresh()}>
                 <RefreshCw size={16} />
                 {t("plugins.refresh")}
               </button>
+            </div>
+            <section className="plugin-settings-section">
+              <h3>{t("plugins.store")}</h3>
+              <p>{inventory?.storeUrl}</p>
+              <p>{t("plugins.storeSettings")}</p>
+            </section>
+            <section className="plugin-settings-section">
+              <h3>{t("plugins.upload")}</h3>
+              <p>{t("plugins.localHelp")}</p>
               <label className="plugin-upload">
-                <Upload size={16} />
+                {busy && activeAction === "upload" ? (
+                  <RefreshCw className="plugin-spinner" size={16} />
+                ) : (
+                  <Upload size={16} />
+                )}
                 {t("plugins.upload")}
                 <input
                   type="file"
                   accept=".zip"
                   disabled={busy}
-                  onChange={(event) => {
+                  onChange={async (event) => {
                     const file = event.target.files?.[0];
                     event.target.value = "";
                     if (!file) return;
@@ -353,257 +532,483 @@ export function Plugins() {
                       setError(t("plugins.uploadLimit"));
                       return;
                     }
-                    void act(async () => {
-                      const response = await fetch(
-                        "/api/v1/admin/plugins/upload",
-                        {
-                          method: "POST",
-                          headers: { "Content-Type": "application/zip" },
-                          body: file,
-                        },
-                      );
-                      const data = await response.json();
-                      if (!response.ok) throw new Error(data.message);
-                      return data;
-                    });
+                    if (
+                      !(await confirmAction(
+                        t("plugins.confirmOperation", {
+                          action: t("plugins.install"),
+                          name: file.name,
+                        }),
+                      ))
+                    )
+                      return;
+                    void act(
+                      async () => {
+                        const response = await fetch(
+                          "/api/v1/admin/plugins/upload",
+                          {
+                            method: "POST",
+                            headers: { "Content-Type": "application/zip" },
+                            body: file,
+                          },
+                        );
+                        const data = await response.json();
+                        if (!response.ok) throw new Error(data.message);
+                        return data;
+                      },
+                      undefined,
+                      "upload",
+                    );
                   }}
                 />
               </label>
-              <div className="plugin-filters">
-                {tab === "all" && (
-                  <>
-                    <select
-                      aria-label={t("plugins.sort")}
-                      value={sort}
-                      onChange={(e) => setSort(e.target.value)}
-                    >
-                      {["updated", "downloads", "likes", "name"].map((s) => (
-                        <option key={s} value={s}>
-                          {t(`plugins.sort.${s}` as Parameters<typeof t>[0])}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      aria-label={t("plugins.platform")}
-                      value={target}
-                      onChange={(e) => setTarget(e.target.value)}
-                    >
-                      <option value="">{t("plugins.allPlatforms")}</option>
-                      <option value="web">Web</option>
-                      <option value="mobile">App</option>
-                    </select>
-                  </>
-                )}
-
+            </section>
+            <section className="plugin-settings-section">
+              <h3>{t("plugins.npmInstall")}</h3>
+              <p>{t("plugins.unreviewed")}</p>
+              <div className="plugin-npm-form">
+                <label>
+                  <span>{t("plugins.packageName")}</span>
+                  <input
+                    aria-label={t("plugins.packageName")}
+                    placeholder="@scope/plugin"
+                    value={npmName}
+                    onChange={(e) => setNpmName(e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>{t("plugins.version")}</span>
+                  <input
+                    aria-label={t("plugins.version")}
+                    placeholder="1.0.0"
+                    value={npmVersion}
+                    onChange={(e) => setNpmVersion(e.target.value)}
+                  />
+                </label>
+                <Button
+                  loading={busy && activeAction === "npm"}
+                  disabled={busy || !npmName || !npmVersion}
+                  onClick={async () => {
+                    if (
+                      !(await confirmAction(
+                        t("plugins.confirmOperation", {
+                          action: t("plugins.install"),
+                          name: `${npmName}@${npmVersion}`,
+                        }),
+                      ))
+                    )
+                      return;
+                    void act(
+                      () =>
+                        api<PluginInventory>("/admin/plugins/npm", "POST", {
+                          name: npmName,
+                          version: npmVersion,
+                        }),
+                      undefined,
+                      "npm",
+                    );
+                  }}
+                >
+                  {t("plugins.install")}
+                </Button>
               </div>
-            </div>
-            {tab === "all" && storeError && (
-              <p role="alert" className="plugin-error">
-                {t("plugins.unavailable")} {storeError}
-              </p>
+            </section>
+          </div>
+        ) : (
+          <div
+            className={`plugin-market-layout ${tab === "all" ? "with-categories" : ""}`}
+          >
+            {tab === "all" && (
+              <div className="plugin-categories">
+                <button
+                  aria-pressed={!category}
+                  onClick={() => setCategory("")}
+                >
+                  <LayoutGrid size={18} />
+                  {t("plugins.all")}
+                </button>
+                {categoryError && (
+                  <small role="alert">{t("plugins.categoriesFailed")}</small>
+                )}
+                {categories.map((c) => {
+                  const Icon = categoryIcons[c.id] ?? Package;
+                  return (
+                    <button
+                      key={c.id}
+                      aria-pressed={category === c.id}
+                      onClick={() => setCategory(c.id)}
+                    >
+                      <Icon size={18} />
+                      <span>{c.name}</span>
+                      {c.count != null && <small>{c.count}</small>}
+                    </button>
+                  );
+                })}
+              </div>
             )}
-            {tab !== "all" && updatesError && (
-              <p role="alert" className="plugin-error">
-                {t("plugins.updateFailed")}
-              </p>
-            )}
-            <p className="plugin-notice">{t("plugins.storeHint")}</p>
-            <div className="plugin-grid">
-              {visible.map((p) => {
-                const remote = "summary" in p ? (p as StorePlugin) : null,
-                  installedItem = installed.find((x) => x.id === p.id);
-                const Icon = categoryIcons[remote?.categoryId ?? ""] ?? Package;
-                return (
-                  <article className="plugin-card" key={p.id}>
-                    <div className="plugin-card-top"><div className="plugin-icon">
-                      {remote?.icon ? (
-                        <img src={remote.icon} alt="" />
-                      ) : (
-                        <Icon size={34} />
-                      )}
-                    </div>
-                    <span className="plugin-version">{remote?.latestVersion || installedItem?.version ? `v${remote?.latestVersion ?? installedItem?.version}` : "—"}</span></div>
-                    <div className="plugin-card-content">
-                      <div className="plugin-card-title">
-                        <h3>{p.name}</h3>
-                        {installedItem && (
-                          <span className="plugin-badge">
-                            {t(
-                              installedItem.pending
-                                ? "plugins.pending"
-                                : "plugins.installed",
-                            )}
-                          </span>
+            <div className="plugin-store-panel">
+              <div className="plugin-results-heading">
+                <h3>
+                  {category
+                    ? categories.find((c) => c.id === category)?.name
+                    : t(`plugins.${tab}`)}{" "}
+                  {tab === "all" && catalog?.page.total != null && (
+                    <span>{catalog.page.total}</span>
+                  )}
+                </h3>{" "}
+                <div className="plugin-results-controls">
+                  {tab === "all" && (
+                    <>
+                      <Select
+                        aria-label={t("plugins.sort")}
+                        value={sort}
+                        onChange={setSort}
+                        options={["updated", "downloads", "likes", "name"].map(
+                          (value) => ({
+                            value,
+                            label: t(
+                              `plugins.sort.${value}` as Parameters<
+                                typeof t
+                              >[0],
+                            ),
+                          }),
                         )}
-                      </div>
-                      <p className="plugin-description">
-                        {remote?.summary ??
-                          ("description" in p ? p.description : "")}
-                      </p>
-                      {remote && <small className="plugin-author">{remote.author.name}</small>}
-                      <div className="plugin-card-footer">
-                        <span className="plugin-category">
-                          {remote
-                            ? (categories.find(
-                                (c) => c.id === remote.categoryId,
-                              )?.name ?? remote.categoryId)
-                            : installedItem?.source === "store"
-                              ? t("plugins.official")
-                              : installedItem?.source === "npm"
-                                ? "npm"
-                                : t("plugins.local")}
-                        </span>
-                        {remote && <span className="plugin-stats"><span title={t("plugins.downloads", {count: remote.downloads.count ?? "—"})}><Download size={15}/>{remote.downloads.count ?? "—"}</span><span title={t("plugins.likes", {count: remote.likes.count ?? "—"})}><Heart size={15}/>{remote.likes.count ?? "—"}</span></span>}
-                        <button className="plugin-card-open" onClick={() => setDetail(p.id)}>
-                          {t(
-                            available.some((x) => x.id === p.id)
-                              ? "plugins.upgrade"
-                              : installedItem
-                                ? "plugins.manage"
-                                : "plugins.details",
+                      />
+                      <Select
+                        aria-label={t("plugins.platform")}
+                        value={target}
+                        onChange={setTarget}
+                        options={[
+                          { value: "", label: t("plugins.allPlatforms") },
+                          { value: "web", label: "Web" },
+                          { value: "mobile", label: "App" },
+                        ]}
+                      />
+                    </>
+                  )}
+                  <button
+                    disabled={busy || loading}
+                    onClick={async () => {
+                      void refresh();
+                      void checkUpdates();
+                      void loadCatalog();
+                    }}
+                  >
+                    <RefreshCw
+                      size={16}
+                      className={loading ? "plugin-spinner" : undefined}
+                    />
+                    {t("plugins.refresh")}
+                  </button>
+                </div>
+              </div>
+              {tab === "all" && storeError && (
+                <p role="alert" className="plugin-error">
+                  {t("plugins.unavailable")} {storeError}
+                </p>
+              )}
+              {tab !== "all" && updatesError && (
+                <p role="alert" className="plugin-error">
+                  {t("plugins.updateFailed")}
+                </p>
+              )}
+              <p className="plugin-notice">{t("plugins.storeHint")}</p>
+              <div className="plugin-grid">
+                {visible.map((p) => {
+                  const remote = "summary" in p ? (p as StorePlugin) : null,
+                    installedItem = installed.find((x) => x.id === p.id);
+                  const Icon =
+                    categoryIcons[remote?.categoryId ?? ""] ?? Package;
+                  return (
+                    <article className="plugin-card" key={p.id}>
+                      <div className="plugin-card-top">
+                        <div className="plugin-icon">
+                          {remote?.icon ? (
+                            <img src={remote.icon} alt="" />
+                          ) : (
+                            <Icon size={34} />
                           )}
-                        </button>
+                        </div>
+                        <span className="plugin-version">
+                          {remote?.latestVersion || installedItem?.version
+                            ? `v${remote?.latestVersion ?? installedItem?.version}`
+                            : "—"}
+                        </span>
                       </div>
-                    </div>
-                  </article>
-                );
-              })}
+                      <div className="plugin-card-content">
+                        <div className="plugin-card-title">
+                          <h3>{p.name}</h3>
+                          {remote?.official === true && (
+                            <span className="plugin-badge plugin-official-badge">
+                              {t("plugins.officialBadge")}
+                            </span>
+                          )}
+                          {installedItem && (
+                            <span className="plugin-badge">
+                              {t(
+                                installedItem.pending &&
+                                  installedItem.runningVersion &&
+                                  installedItem.version !==
+                                    installedItem.runningVersion
+                                  ? "plugins.pendingUpgrade"
+                                  : available.some(
+                                        (update) => update.id === p.id,
+                                      )
+                                    ? "plugins.pendingUpgrade"
+                                    : "plugins.installed",
+                              )}
+                            </span>
+                          )}
+                          {installedItem?.pending &&
+                            !installedItem.runningVersion && (
+                              <span className="plugin-badge">
+                                {t("plugins.pending")}
+                              </span>
+                            )}
+                        </div>
+                        <p className="plugin-description">
+                          {remote?.summary ??
+                            ("description" in p ? p.description : "")}
+                        </p>
+                        {remote && (
+                          <small className="plugin-author">
+                            {remote.author.name}
+                          </small>
+                        )}
+                        <div className="plugin-card-footer">
+                          <span className="plugin-category">
+                            {remote
+                              ? (categories.find(
+                                  (c) => c.id === remote.categoryId,
+                                )?.name ?? remote.categoryId)
+                              : installedItem?.source === "store"
+                                ? t("plugins.official")
+                                : installedItem?.source === "npm"
+                                  ? "npm"
+                                  : t("plugins.local")}
+                          </span>
+                          {remote && (
+                            <span className="plugin-stats">
+                              <span
+                                title={t("plugins.downloads", {
+                                  count: remote.downloads.count ?? "—",
+                                })}
+                              >
+                                <Download size={15} />
+                                {remote.downloads.count ?? "—"}
+                              </span>
+                              <span
+                                title={t("plugins.likes", {
+                                  count: remote.likes.count ?? "—",
+                                })}
+                              >
+                                <Heart size={15} />
+                                {remote.likes.count ?? "—"}
+                              </span>
+                            </span>
+                          )}
+                          <button
+                            className="plugin-card-open"
+                            onClick={() => openDetail(p.id)}
+                          >
+                            {t(
+                              available.some((x) => x.id === p.id)
+                                ? "plugins.upgrade"
+                                : installedItem
+                                  ? "plugins.manage"
+                                  : "plugins.details",
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+              {loading && <p role="status">{t("plugins.loading")}</p>}
+              {!loading && !visible.length && (
+                <p className="plugin-empty">{t("plugins.noResults")}</p>
+              )}
+              {tab === "all" && catalog?.page.nextCursor && (
+                <button
+                  disabled={loading}
+                  onClick={() => void loadCatalog(catalog.page.nextCursor!)}
+                >
+                  {t("plugins.loadMore")}
+                </button>
+              )}
             </div>
-            {loading && <p role="status">{t("plugins.loading")}</p>}
-            {!loading && !visible.length && (
-              <p className="plugin-empty">{t("plugins.noResults")}</p>
+          </div>
+        ))}
+      {detail && (
+        <section className="plugin-detail">
+          <button
+            className="plugin-detail-back"
+            onClick={() => openDetail(null)}
+          >
+            <ArrowLeft size={18} />
+            {t("plugins.title")}
+          </button>
+          <div className="plugin-info-card">
+            <div className="plugin-detail-title">
+              <h3>{remoteDetail?.plugin.name ?? local?.name ?? detail}</h3>
+              {remoteDetail?.plugin.official === true && (
+                <span className="plugin-badge plugin-official-badge">
+                  {t("plugins.officialBadge")}
+                </span>
+              )}
+            </div>
+            {error && <p role="alert">{error}</p>}
+            {detailError && <p role="alert">{t("plugins.unavailable")}</p>}
+            {remoteDetail && (
+              <>
+                <p>
+                  {remoteDetail.plugin.author.name} ·{" "}
+                  {t("plugins.downloads", {
+                    count: remoteDetail.plugin.downloads.count ?? "—",
+                  })}{" "}
+                  ·{" "}
+                  {t("plugins.likes", {
+                    count: remoteDetail.plugin.likes.count ?? "—",
+                  })}
+                </p>
+                <p>{remoteDetail.plugin.targets.join(" / ")}</p>
+                <button
+                  onClick={async () => {
+                    if (
+                      inventory &&
+                      (await confirmAction(t("plugins.likeExternal")))
+                    )
+                      window.open(
+                        new URL(
+                          remoteDetail.plugin.detailPath,
+                          inventory.storeUrl,
+                        ).href,
+                        "_blank",
+                        "noopener,noreferrer",
+                      );
+                  }}
+                >
+                  {t("plugins.visitStore")}
+                </button>
+                <PluginDescription description={remoteDetail.description} />
+              </>
             )}
-            {tab === "all" && catalog?.page.nextCursor && (
-              <button
-                disabled={loading}
-                onClick={() => void loadCatalog(catalog.page.nextCursor!)}
-              >
-                {t("plugins.loadMore")}
-              </button>
+            {local && (
+              <>
+                <dl>
+                  <dt>{t("plugins.version")}</dt>
+                  <dd>{local.version}</dd>
+                  <dt>{t("plugins.running")}</dt>
+                  <dd>{local.runningVersion ?? t("plugins.inactive")}</dd>
+                </dl>
+                {local.source !== "store" && <p>{t("plugins.unreviewed")}</p>}
+                <div className="plugin-actions">
+                  {!local.removing && (
+                    <>
+                      <Button
+                        className={
+                          local.enabled
+                            ? "plugin-disable-button"
+                            : "plugin-enable-button"
+                        }
+                        icon={
+                          local.enabled ? (
+                            <Power size={16} />
+                          ) : (
+                            <Play size={16} />
+                          )
+                        }
+                        loading={
+                          busy &&
+                          activeAction ===
+                            (local.enabled ? "disable" : "enable")
+                        }
+                        disabled={busy}
+                        onClick={() =>
+                          change(local.id, local.enabled ? "disable" : "enable")
+                        }
+                      >
+                        {t(
+                          local.enabled ? "plugins.disable" : "plugins.enable",
+                        )}
+                      </Button>
+                      <Button
+                        danger
+                        className="plugin-remove-button"
+                        icon={<Trash2 size={16} />}
+                        loading={busy && activeAction === "remove"}
+                        disabled={busy}
+                        onClick={async () => {
+                          if (
+                            await confirmAction(
+                              t("plugins.removeConfirm", { name: local.name }),
+                              true,
+                            )
+                          )
+                            change(local.id, "remove");
+                        }}
+                      >
+                        {t("plugins.remove")}
+                      </Button>
+                    </>
+                  )}
+                  {local.pending && (
+                    <Button
+                      loading={busy && activeAction === "cancel"}
+                      disabled={busy}
+                      onClick={() => change(local.id, "cancel")}
+                    >
+                      {t("plugins.cancel")}
+                    </Button>
+                  )}
+                </div>
+              </>
             )}
           </div>
-        </div>
-      )}
-      {detail && (
-        <dialog
-          className="plugin-detail"
-          ref={(node) => {
-            if (node && !node.open) node.showModal();
-          }}
-          onCancel={() => setDetail(null)}
-        >
-          <button
-            className="plugin-detail-close"
-            aria-label={t("plugins.close")}
-            onClick={() => setDetail(null)}
-          >
-            <X size={18} />
-          </button>
-          <h3>{remoteDetail?.plugin.name ?? local?.name ?? detail}</h3>
-          {error && <p role="alert">{error}</p>}
-          {detailError && <p role="alert">{t("plugins.unavailable")}</p>}
-          {remoteDetail && (
-            <>
-              <p>
-                {remoteDetail.plugin.author.name} ·{" "}
-                {t("plugins.downloads", {
-                  count: remoteDetail.plugin.downloads.count ?? "—",
-                })}{" "}
-                ·{" "}
-                {t("plugins.likes", {
-                  count: remoteDetail.plugin.likes.count ?? "—",
-                })}
-              </p>
-              <p>{remoteDetail.plugin.targets.join(" / ")}</p>
-              <button
-                onClick={() => {
-                  if (inventory && confirm(t("plugins.likeExternal")))
-                    window.open(
-                      new URL(
-                        remoteDetail.plugin.detailPath,
-                        inventory.storeUrl,
-                      ).href,
-                      "_blank",
-                      "noopener,noreferrer",
-                    );
-                }}
-              >
-                {t("plugins.visitStore")}
-              </button>
-              <PluginDescription description={remoteDetail.description} />
-            </>
-          )}
-          {local && (
-            <>
-              <dl>
-                <dt>{t("plugins.version")}</dt>
-                <dd>{local.version}</dd>
-                <dt>{t("plugins.running")}</dt>
-                <dd>{local.runningVersion ?? t("plugins.inactive")}</dd>
-              </dl>
-              {local.source !== "store" && <p>{t("plugins.unreviewed")}</p>}
-              <div className="plugin-actions">
-                {!local.removing && (
-                  <>
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        change(local.id, local.enabled ? "disable" : "enable")
-                      }
-                    >
-                      {t(local.enabled ? "plugins.disable" : "plugins.enable")}
-                    </button>
-                    <button
-                      disabled={busy}
-                      onClick={() => {
-                        if (
-                          confirm(
-                            t("plugins.removeConfirm", { name: local.name }),
-                          )
-                        )
-                          change(local.id, "remove");
-                      }}
-                    >
-                      {t("plugins.remove")}
-                    </button>
-                  </>
-                )}
-                {local.pending && (
-                  <button
-                    disabled={busy}
-                    onClick={() => change(local.id, "cancel")}
-                  >
-                    {t("plugins.cancel")}
-                  </button>
-                )}
-              </div>
-            </>
-          )}
           {releases?.items.map((r) => (
             <div className="plugin-release" key={r.version}>
               <strong>{r.version}</strong>
+              <div className="plugin-release-notes">
+                <h4>{t("plugins.changelog")}</h4>
+                <p>{r.changelog?.trim() || t("plugins.noChangelog")}</p>
+              </div>
               <small>
                 SDK {r.sdkRange} · {t("plugins.dataVersion")}: {r.dataVersion}
               </small>
-              <button
+              <Button
+                loading={busy && activeAction === `release:${r.version}`}
                 disabled={busy || !compatible(r)}
-                onClick={() => {
+                onClick={async () => {
                   if (
                     local &&
                     local.source !== "store" &&
-                    !confirm(t("plugins.switchSource"))
+                    !(await confirmAction(t("plugins.switchSource")))
                   )
                     return;
-                  void act(() =>
-                    api<PluginInventory>("/admin/plugins/install", "POST", {
-                      id: detail,
-                      version: r.version,
-                    }),
+                  if (
+                    !(await confirmAction(
+                      t("plugins.confirmOperation", {
+                        action: t(
+                          local ? "plugins.upgrade" : "plugins.install",
+                        ),
+                        name: `${remoteDetail?.plugin.name ?? detail}@${r.version}`,
+                      }),
+                    ))
+                  )
+                    return;
+                  void act(
+                    () =>
+                      api<PluginInventory>("/admin/plugins/install", "POST", {
+                        id: detail,
+                        version: r.version,
+                      }),
+                    undefined,
+                    `release:${r.version}`,
                   );
                 }}
               >
                 {t(local ? "plugins.upgrade" : "plugins.install")}
-              </button>
+              </Button>
               {!compatible(r) && <small>{t("plugins.incompatible")}</small>}
             </div>
           ))}
@@ -612,8 +1017,76 @@ export function Plugins() {
               {t("plugins.loadMore")}
             </button>
           )}
-        </dialog>
+        </section>
       )}
+      <button className="plugin-history-entry" onClick={openHistory}>
+        {t("plugins.history")}
+      </button>
+      <Drawer
+        title={t("plugins.history")}
+        placement="right"
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        size={520}
+      >
+        <div className="plugin-history-toolbar">
+          <Select
+            aria-label={t("plugins.history")}
+            value={historyPlugin}
+            onChange={setHistoryPlugin}
+            options={[
+              { value: "", label: t("plugins.all") },
+              ...historyGroups.map(([id]) => ({
+                value: id,
+                label: historyName(id),
+              })),
+            ]}
+          />
+          <button onClick={() => void loadOperations()}>
+            <RefreshCw size={16} />
+            {t("plugins.refresh")}
+          </button>
+        </div>
+        {historyError && <p role="alert">{t("plugins.historyFailed")}</p>}
+        {historyGroups.filter(([id]) => !historyPlugin || id === historyPlugin)
+          .length === 0 && <p>{t("plugins.historyEmpty")}</p>}
+        {historyGroups
+          .filter(([id]) => !historyPlugin || id === historyPlugin)
+          .map(([id, records]) => (
+            <section className="plugin-history-group" key={id}>
+              <h3>{historyName(id)}</h3>
+              <ol>
+                {records.map((item) => {
+                  const { stage, operation } = item;
+                  const actionKey =
+                    operation === "npm"
+                      ? "plugins.npmInstall"
+                      : operation === "upload"
+                        ? "plugins.upload"
+                        : `plugins.${operation}`;
+                  return (
+                    <li key={item.id}>
+                      <time dateTime={item.created_at}>
+                        {new Date(item.created_at).toLocaleString(
+                          locale === "zh" ? "zh-CN" : "en-US",
+                        )}
+                      </time>
+                      <span>
+                        {t(actionKey as Parameters<typeof t>[0])}{" "}
+                        {item.pluginId ?? item.packageName}
+                      </span>
+                      <strong data-status={stage}>
+                        {["requested", "staged", "failed"].includes(stage)
+                          ? t(`plugins.${stage}` as Parameters<typeof t>[0])
+                          : stage}
+                      </strong>
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          ))}
+      </Drawer>
     </section>
   );
 }

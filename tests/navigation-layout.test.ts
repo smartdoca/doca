@@ -10,7 +10,7 @@ import {
 import { registerNavigation } from "@server/routes/navigation.js";
 import { openTestDatabase } from "./database.js";
 import Fastify from "fastify";
-it("selects rules, preserves admin boundaries and does not mutate published configuration during overflow", () => {
+it("uses one global layout, preserves admin boundaries and does not mutate published configuration during overflow", () => {
   const entries: NavigationEntry[] = Array.from({ length: 8 }, (_, i) => ({
     id: `example.p${i}`,
     pluginId: "example",
@@ -23,19 +23,12 @@ it("selects rules, preserves admin boundaries and does not mutate published conf
     order: i,
   }));
   const config: NavigationConfig = {
-    rules: [
-      { id: "all", priority: 0, audience: "all", layout: { placements: [] } },
-      {
-        id: "admin",
-        priority: 10,
-        audience: "admin",
-        layout: {
-          placements: [
-            { entryId: "doca.files", slot: "web.left", order: 1, hidden: true },
-          ],
-        },
-      },
-    ],
+    schemaVersion: 1,
+    layout: {
+      placements: [
+        { entryId: "doca.files", slot: "web.left", order: 1, hidden: true },
+      ],
+    },
   };
   const before = JSON.stringify(config);
   const user = resolveNavigation([...builtinNavigation, ...entries], config, {
@@ -61,11 +54,9 @@ it("keeps drafts private and uses revision checks across service instances", asy
   const db = await openTestDatabase({ driver: "sqlite", path: ":memory:" }),
     app = Fastify();
   app.setErrorHandler((error, _req, reply) =>
-    reply
-      .code(error instanceof AppError ? error.status : 500)
-      .send({
-        message: error instanceof Error ? error.message : "Unknown error",
-      }),
+    reply.code(error instanceof AppError ? error.status : 500).send({
+      message: error instanceof Error ? error.message : "Unknown error",
+    }),
   );
   const created = await createUser(
     db,
@@ -89,19 +80,40 @@ it("keeps drafts private and uses revision checks across service instances", asy
       await app.inject({ url: "/api/v1/admin/navigation" })
     ).json();
     const config = {
-      rules: [
-        {
-          id: "everyone",
-          priority: 1,
-          audience: "all",
-          layout: {
-            placements: [
-              { entryId: "doca.ai", slot: "web.left", order: 1, hidden: true },
-            ],
-          },
-        },
-      ],
+      schemaVersion: 1,
+      layout: {
+        placements: [
+          { entryId: "doca.ai", slot: "web.left", order: 1, hidden: true },
+        ],
+      },
     };
+    for (const placements of [
+      [{ entryId: "doca.home", slot: "web.admin", order: 1 }],
+      [{ entryId: "doca.admin.users", slot: "web.left", order: 1 }],
+    ]) {
+      const invalid = await app.inject({
+        method: "POST",
+        url: "/api/v1/admin/navigation",
+        payload: {
+          revision: before.revision,
+          action: "save",
+          config: { schemaVersion: 1, layout: { placements } },
+        },
+      });
+      expect(invalid.statusCode).toBe(400);
+    }
+    const multiple = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/navigation",
+      payload: {
+        revision: before.revision,
+        action: "save",
+        config: {
+          rules: [],
+        },
+      },
+    });
+    expect(multiple.statusCode).toBe(400);
     const saved = await app.inject({
       method: "POST",
       url: "/api/v1/admin/navigation",
@@ -137,4 +149,44 @@ it("keeps drafts private and uses revision checks across service instances", asy
     await app.close();
     await db.destroy();
   }
+});
+
+it("uses More only when no visible placement exists on the same platform", () => {
+  const entry: NavigationEntry = {
+    id: "example.mail",
+    pluginId: "example.mail",
+    title: { en: "Mail", zh: "邮箱" },
+    icon: "mail",
+    webPath: "/mail",
+    mobile: true,
+    allowedSlots: ["web.left", "web.more", "mobile.more"],
+    defaults: ["web.left"],
+    order: 1,
+  };
+  const resolve = (config: NavigationConfig) =>
+    resolveNavigation([entry], config, { id: "u", admin: false }).layout
+      .placements;
+  expect(resolve({ schemaVersion: 1, layout: { placements: [] } })).toEqual([
+    { entryId: entry.id, slot: "web.left", order: 1 },
+    { entryId: entry.id, slot: "mobile.more", order: 1 },
+  ]);
+  const configured = resolve({
+    schemaVersion: 1,
+    layout: {
+      placements: [
+        { entryId: entry.id, slot: "web.left", order: 1 },
+        { entryId: entry.id, slot: "web.more", order: 2 },
+      ],
+    },
+  });
+  expect(configured.some((p) => p.slot === "web.more")).toBe(false);
+  const fallback = resolve({
+    schemaVersion: 1,
+    layout: {
+      placements: [
+        { entryId: entry.id, slot: "web.left", order: 1, hidden: true },
+      ],
+    },
+  });
+  expect(fallback.some((p) => p.slot === "web.more")).toBe(true);
 });

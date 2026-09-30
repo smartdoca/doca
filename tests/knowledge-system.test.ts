@@ -535,12 +535,43 @@ it("segments Chinese questions without reading any source", async () => {
 it("all library managers can edit shared sources while ordinary readers cannot", async () => {
   const source = await subscribe();
   const path = `sources/${source.id}/SOURCE.md`;
-  await expect(saveKnowledgeInstruction(db,bob,library,{path,markdown:"unauthorized",expectedRevision:0})).rejects.toMatchObject({status:404});
-  await db.insertInto("grants").values({resource_id:library,user_id:bob.id,role:"manager",status:"active",source_type:"direct",source_id:bob.id,include_descendants:1}).execute();
-  await saveKnowledgeInstruction(db,bob,library,{path,markdown:"Shared administrator instructions",expectedRevision:0});
-  await saveKnowledgeSettings(db,bob,library,0,{sourcePolicies:{[source.id]:{redactContacts:true}}});
-  await detachKnowledgeSource(db,bob,library,source.id);
-  expect((await db.selectFrom("knowledge_subscriptions").select("status").where("id","=",source.id).executeTakeFirstOrThrow()).status).toBe("detached");
+  await expect(
+    saveKnowledgeInstruction(db, bob, library, {
+      path,
+      markdown: "unauthorized",
+      expectedRevision: 0,
+    }),
+  ).rejects.toMatchObject({ status: 404 });
+  await db
+    .insertInto("grants")
+    .values({
+      resource_id: library,
+      user_id: bob.id,
+      role: "manager",
+      status: "active",
+      source_type: "direct",
+      source_id: bob.id,
+      include_descendants: 1,
+    })
+    .execute();
+  await saveKnowledgeInstruction(db, bob, library, {
+    path,
+    markdown: "Shared administrator instructions",
+    expectedRevision: 0,
+  });
+  await saveKnowledgeSettings(db, bob, library, 0, {
+    sourcePolicies: { [source.id]: { redactContacts: true } },
+  });
+  await detachKnowledgeSource(db, bob, library, source.id);
+  expect(
+    (
+      await db
+        .selectFrom("knowledge_subscriptions")
+        .select("status")
+        .where("id", "=", source.id)
+        .executeTakeFirstOrThrow()
+    ).status,
+  ).toBe("detached");
 });
 
 it("shared instructions remain editable while each source's private material and local rules are isolated", async () => {
@@ -689,7 +720,10 @@ it("separates URL citation access from independent answers and protects creator-
   const { listKnowledgeSubscriptions } =
     await import("@core/modules/knowledge/subscriptions.js");
   const sourceCards = await listKnowledgeSubscriptions(db, bob, library);
-  expect(sourceCards.items[0]?.creator).toMatchObject({ id: alice.id, displayName: "alice" });
+  expect(sourceCards.items[0]?.creator).toMatchObject({
+    id: alice.id,
+    displayName: "alice",
+  });
   expect(sourceCards.items[0]?.canEdit).toBe(true);
   expect(JSON.stringify(sourceCards)).toContain("creator-private-token");
   expect(
@@ -742,13 +776,24 @@ it("connects bots according to common distribution policy and explicit user pref
   await visitKnowledgeAssistant(db, bob, bot.id);
   const visited = (await listKnowledgeAssistants(db, bob))[0]!;
   expect(visited.connected).toBe(false);
-  const {collectPublicResource}=await import("@core/modules/discovery/catalog.js");
-  await collectPublicResource(db,bob,"assistant",bot.id,true);
-  expect((await listKnowledgeAssistants(db,bob))[0]!.connected).toBe(false);
-  expect((await searchConnectedKnowledge(db,bob,"DNS")).results).toHaveLength(0);
-  await collectPublicResource(db,bob,"assistant",bot.id,false);
-  expect((await searchConnectedKnowledge(db,bob,"DNS")).results).toHaveLength(0);
-  await saveKnowledgeAssistantConnection(db, bob, bot.id, "enabled", visited.preferenceRevision);
+  const { collectPublicResource } =
+    await import("@core/modules/discovery/catalog.js");
+  await collectPublicResource(db, bob, "assistant", bot.id, true);
+  expect((await listKnowledgeAssistants(db, bob))[0]!.connected).toBe(false);
+  expect((await searchConnectedKnowledge(db, bob, "DNS")).results).toHaveLength(
+    0,
+  );
+  await collectPublicResource(db, bob, "assistant", bot.id, false);
+  expect((await searchConnectedKnowledge(db, bob, "DNS")).results).toHaveLength(
+    0,
+  );
+  await saveKnowledgeAssistantConnection(
+    db,
+    bob,
+    bot.id,
+    "enabled",
+    visited.preferenceRevision,
+  );
   const connected = (await listKnowledgeAssistants(db, bob))[0]!;
   expect(connected.connected).toBe(true);
   expect(
@@ -1203,57 +1248,173 @@ it("uses the same shared-folder permissions for original file citations and file
 });
 
 it("retrieves a relevant passage beyond the beginning of a long independent summary", async () => {
-  const draft = await saveHumanKnowledge(db, alice, library, {expectedRevision: 0, title: "DNS manual", markdown: "Background material. ".repeat(180) + "\n\nThe negative-cache TTL for demo.example is 600 seconds."});
-  await reviewKnowledgeEntry(db, alice, library, draft.id, draft.revision, "publish");
-  const bot = await saveKnowledgeAssistant(db, alice, {expectedRevision: 0, title: "DNS", libraryIds: [library], memberIds: [bob.id], enabled: true});
-  const result = await searchKnowledgeAssistant(db, bob, bot.id, "What is the negative-cache TTL for demo.example?");
+  const draft = await saveHumanKnowledge(db, alice, library, {
+    expectedRevision: 0,
+    title: "DNS manual",
+    markdown:
+      "Background material. ".repeat(180) +
+      "\n\nThe negative-cache TTL for demo.example is 600 seconds.",
+  });
+  await reviewKnowledgeEntry(
+    db,
+    alice,
+    library,
+    draft.id,
+    draft.revision,
+    "publish",
+  );
+  const bot = await saveKnowledgeAssistant(db, alice, {
+    expectedRevision: 0,
+    title: "DNS",
+    libraryIds: [library],
+    memberIds: [bob.id],
+    enabled: true,
+  });
+  const result = await searchKnowledgeAssistant(
+    db,
+    bob,
+    bot.id,
+    "What is the negative-cache TTL for demo.example?",
+  );
   expect(result.items[0]!.excerpt).toContain("600 seconds");
 });
 
 it("provides actual library configuration and subscriptions to read-only AI review", async () => {
-  const { knowledgeReviewSnapshot } = await import("../apps/server/src/services/ai/knowledge-review.js");
-  const source = await subscribe("Do not include this original source body in review");
-  await saveKnowledgeInstruction(db, alice, library, { path: "KNOWLEDGE.md", markdown: "# Build independently useful knowledge", expectedRevision: 0 });
-  await db.updateTable("knowledge_subscriptions").set({ source_version: "outdated" }).where("id", "=", source.id).execute();
+  const { knowledgeReviewSnapshot } =
+    await import("../apps/server/src/services/ai/knowledge-review.js");
+  const source = await subscribe(
+    "Do not include this original source body in review",
+  );
+  await saveKnowledgeInstruction(db, alice, library, {
+    path: "KNOWLEDGE.md",
+    markdown: "# Build independently useful knowledge",
+    expectedRevision: 0,
+  });
+  await db
+    .updateTable("knowledge_subscriptions")
+    .set({ source_version: "outdated" })
+    .where("id", "=", source.id)
+    .execute();
   const snapshot = await knowledgeReviewSnapshot(db, alice, library);
-  expect(snapshot.instructions.files.find(file => file.path === "KNOWLEDGE.md")?.revision).toBe(1);
+  expect(
+    snapshot.instructions.files.find((file) => file.path === "KNOWLEDGE.md")
+      ?.revision,
+  ).toBe(1);
   expect(snapshot.sources.items[0]?.sourceId).toBe(source.sourceId);
-  expect(JSON.stringify(snapshot)).not.toContain("Do not include this original source body");
-  expect((await db.selectFrom("knowledge_subscriptions").select("status").where("id", "=", source.id).executeTakeFirstOrThrow()).status).toBe("active");
+  expect(JSON.stringify(snapshot)).not.toContain(
+    "Do not include this original source body",
+  );
+  expect(
+    (
+      await db
+        .selectFrom("knowledge_subscriptions")
+        .select("status")
+        .where("id", "=", source.id)
+        .executeTakeFirstOrThrow()
+    ).status,
+  ).toBe("active");
   await expect(knowledgeReviewSnapshot(db, bob, library)).rejects.toThrow();
 });
-
 
 it("keeps a conflict candidate matching a superseded fact, but does not resurrect a rejected candidate", async () => {
   const source = await subscribe("TTL is 600 seconds");
   const original = await generate(source.id, "TTL is 600 seconds");
-  await reviewKnowledgeEntry(db, alice, library, original.id, original.revision, "publish");
-  const revised = await saveHumanKnowledge(db, alice, library, { id: original.id, expectedRevision: original.revision + 1, title: original.title, markdown: "TTL is 180 seconds" });
-  await reviewKnowledgeEntry(db, alice, library, revised.id, revised.revision, "publish");
-  const generator: CurationGenerator = async () => ({ entries: [{ title: original.title, markdown: original.markdown, sourceIds: [source.id], reason: "Source differs from human amendment", replacesId: revised.id }], notes: "" });
+  await reviewKnowledgeEntry(
+    db,
+    alice,
+    library,
+    original.id,
+    original.revision,
+    "publish",
+  );
+  const revised = await saveHumanKnowledge(db, alice, library, {
+    id: original.id,
+    expectedRevision: original.revision + 1,
+    title: original.title,
+    markdown: "TTL is 180 seconds",
+  });
+  await reviewKnowledgeEntry(
+    db,
+    alice,
+    library,
+    revised.id,
+    revised.revision,
+    "publish",
+  );
+  const generator: CurationGenerator = async () => ({
+    entries: [
+      {
+        title: original.title,
+        markdown: original.markdown,
+        sourceIds: [source.id],
+        reason: "Source differs from human amendment",
+        replacesId: revised.id,
+      },
+    ],
+    notes: "",
+  });
   const run = await queueKnowledgeCuration(db, alice, library);
   await executeKnowledgeCuration(db, run.id, generator);
   const entries = await knowledgeEntries(db, alice, library);
-  const candidate = entries.find(entry => entry.status === "draft" && entry.reviewState.replaces === revised.id);
+  const candidate = entries.find(
+    (entry) =>
+      entry.status === "draft" && entry.reviewState.replaces === revised.id,
+  );
   expect(candidate?.markdown).toBe("TTL is 600 seconds");
-  expect(entries.find(entry => entry.id === revised.id)?.status).toBe("published");
-  await reviewKnowledgeEntry(db, alice, library, candidate!.id, candidate!.revision, "delete");
-  await saveKnowledgeInstruction(db, alice, library, { path: "guides/recheck.md", expectedRevision: 0, markdown: "Check sources again without reviving rejected candidates." });
+  expect(entries.find((entry) => entry.id === revised.id)?.status).toBe(
+    "published",
+  );
+  await reviewKnowledgeEntry(
+    db,
+    alice,
+    library,
+    candidate!.id,
+    candidate!.revision,
+    "delete",
+  );
+  await saveKnowledgeInstruction(db, alice, library, {
+    path: "guides/recheck.md",
+    expectedRevision: 0,
+    markdown: "Check sources again without reviving rejected candidates.",
+  });
   const next = await queueKnowledgeCuration(db, alice, library);
   await executeKnowledgeCuration(db, next.id, generator);
-  expect((await knowledgeEntries(db, alice, library)).filter(entry => entry.status === "draft")).toHaveLength(0);
+  expect(
+    (await knowledgeEntries(db, alice, library)).filter(
+      (entry) => entry.status === "draft",
+    ),
+  ).toHaveLength(0);
 });
-
 
 it("keeps instruction history without listing guides for removed pending subscriptions", async () => {
   const source = await subscribe();
-  await db.updateTable("knowledge_subscriptions").set({ status: "pending" }).where("id", "=", source.id).execute();
+  await db
+    .updateTable("knowledge_subscriptions")
+    .set({ status: "pending" })
+    .where("id", "=", source.id)
+    .execute();
   const path = `sources/${source.id}/SOURCE.md`;
-  await saveKnowledgeInstruction(db, alice, library, { path, expectedRevision: 0, markdown: "Source boundary" });
-  const { dismissKnowledgeSubscription } = await import("@core/modules/knowledge/subscriptions.js");
+  await saveKnowledgeInstruction(db, alice, library, {
+    path,
+    expectedRevision: 0,
+    markdown: "Source boundary",
+  });
+  const { dismissKnowledgeSubscription } =
+    await import("@core/modules/knowledge/subscriptions.js");
   await dismissKnowledgeSubscription(db, alice, library, source.id);
-  expect((await knowledgeInstructions(db, alice, library)).files.some(file => file.path === path)).toBe(false);
-  expect(await db.selectFrom("knowledge_instructions").select("path").where("library_id", "=", library).where("path", "=", path).execute()).toHaveLength(1);
+  expect(
+    (await knowledgeInstructions(db, alice, library)).files.some(
+      (file) => file.path === path,
+    ),
+  ).toBe(false);
+  expect(
+    await db
+      .selectFrom("knowledge_instructions")
+      .select("path")
+      .where("library_id", "=", library)
+      .where("path", "=", path)
+      .execute(),
+  ).toHaveLength(1);
 });
 
 it("places a published entry three levels deep in the library tree", async () => {
@@ -1263,7 +1424,14 @@ it("places a published entry three levels deep in the library tree", async () =>
     path: ["技术", "递归解析"],
     expectedRevision: 0,
   });
-  await reviewKnowledgeEntry(db, alice, library, draft.id, draft.revision, "publish");
+  await reviewKnowledgeEntry(
+    db,
+    alice,
+    library,
+    draft.id,
+    draft.revision,
+    "publish",
+  );
   const docs = await db
     .selectFrom("resources")
     .select(["id", "title", "parent_id", "format"])
@@ -1272,39 +1440,322 @@ it("places a published entry three levels deep in the library tree", async () =>
     .where("deleted_at", "is", null)
     .execute();
   const first = docs.find((doc) => doc.title === "技术" && !doc.parent_id);
-  const second = docs.find((doc) => doc.title === "递归解析" && doc.parent_id === first?.id);
-  const leaf = docs.find((doc) => doc.title === "DNS 递归链路" && doc.parent_id === second?.id);
+  const second = docs.find(
+    (doc) => doc.title === "递归解析" && doc.parent_id === first?.id,
+  );
+  const leaf = docs.find(
+    (doc) => doc.title === "DNS 递归链路" && doc.parent_id === second?.id,
+  );
   expect(first?.format).toBe("rich_text");
   expect(second?.format).toBe("rich_text");
   expect(leaf?.format).toBe("rich_text");
-  const text = await db.selectFrom("document_states").select(["text", "codec"]).where("resource_id", "=", leaf!.id).executeTakeFirst();
+  const text = await db
+    .selectFrom("document_states")
+    .select(["text", "codec"])
+    .where("resource_id", "=", leaf!.id)
+    .executeTakeFirst();
   expect(text?.codec).toBe("slate-kit");
   expect(text?.text).toContain("递归解析器");
-  const stored = await db.selectFrom("knowledge_entries").select("review_state").where("id", "=", draft.id).executeTakeFirstOrThrow();
+  const stored = await db
+    .selectFrom("knowledge_entries")
+    .select("review_state")
+    .where("id", "=", draft.id)
+    .executeTakeFirstOrThrow();
   const state = JSON.parse(stored.review_state);
-  state.figures = [{
-    type: "flowchart",
-    nodes: [
-      { id: "ask", label: "解析器节点", shape: "terminator" },
-      { id: "resolve", label: "递归解析", shape: "process" },
-    ],
-    edges: [{ source: "ask", target: "resolve" }],
-  }];
+  state.figures = [
+    {
+      type: "flowchart",
+      nodes: [
+        { id: "ask", label: "解析器节点", shape: "terminator" },
+        { id: "resolve", label: "递归解析", shape: "process" },
+      ],
+      edges: [{ source: "ask", target: "resolve" }],
+    },
+  ];
   delete state.projectedHash;
-  await db.updateTable("knowledge_entries").set({ review_state: JSON.stringify(state) }).where("id", "=", draft.id).execute();
+  await db
+    .updateTable("knowledge_entries")
+    .set({ review_state: JSON.stringify(state) })
+    .where("id", "=", draft.id)
+    .execute();
   await projectPublishedKnowledge(db, alice, library);
-  const drawn = await db.selectFrom("document_states").select("text").where("resource_id", "=", leaf!.id).executeTakeFirst();
+  const drawn = await db
+    .selectFrom("document_states")
+    .select("text")
+    .where("resource_id", "=", leaf!.id)
+    .executeTakeFirst();
   expect(drawn?.text).toContain("解析器节点");
 });
 
 it("lists guide topics that published knowledge does not cover", () => {
-  const gaps = knowledgeOutlineGaps("范围包括“缓存与记录”。缓存如何影响查询？", [
-    { status: "published", title: "查询入口", markdown: "工作站发起查询。", path: ["技术"] },
-  ]);
+  const gaps = knowledgeOutlineGaps(
+    "范围包括“缓存与记录”。缓存如何影响查询？",
+    [
+      {
+        status: "published",
+        title: "查询入口",
+        markdown: "工作站发起查询。",
+        path: ["技术"],
+      },
+    ],
+  );
   expect(gaps.map((gap) => gap.title)).toContain("缓存与记录");
   expect(gaps.some((gap) => gap.title.includes("缓存如何影响"))).toBe(false);
   const missed = knowledgeOutlineGaps("量子中继何时落地？", [
-    { status: "published", title: "查询入口", markdown: "工作站发起查询。", path: ["技术"] },
+    {
+      status: "published",
+      title: "查询入口",
+      markdown: "工作站发起查询。",
+      path: ["技术"],
+    },
   ]);
   expect(missed.map((gap) => gap.title)).toContain("量子中继何时落地");
+});
+
+it("consumes plugin content by block fingerprint, retaining only metadata between runs", async () => {
+  const { createContentService } =
+    await import("@core/modules/content/service.js");
+  const { createContentSubscription } =
+    await import("@core/modules/knowledge/content-subscriptions.js");
+  let text = "Mail content",
+    version = "1",
+    reads = 0;
+  const ref = {
+    sourceId: "example.mail",
+    resourceId: "message",
+    blockId: "body",
+  };
+  createContentService(db).register({
+    id: "example.mail",
+    pluginId: "example",
+    version: 1,
+    title: { zh: "邮箱", en: "Mail" },
+    contentTypes: ["mail"],
+    purposes: ["knowledge"],
+    configSchema: {},
+    capabilities: { search: false },
+    async list(ctx) {
+      expect(ctx.principalId).toBe(alice.id);
+      return {
+        items: [{ ref, title: "Mail", fingerprint: version }],
+        nextCursor: null,
+        snapshot: version,
+      };
+    },
+    async read() {
+      reads++;
+      return { ref, title: "Mail", fingerprint: version, text };
+    },
+    async resolve() {
+      return { path: "/plugins/example/mail", fingerprint: version };
+    },
+  });
+  const subscription = await createContentSubscription(db, alice, library, {
+    sourceId: "example.mail",
+    config: {},
+    title: "Mail",
+  });
+  const generator = vi.fn<CurationGenerator>(async ({ materials }) => ({
+    entries: [
+      {
+        title: "Mail knowledge",
+        markdown: materials[0]!.text,
+        sourceIds: [subscription.id],
+        reason: "Extract mail",
+      },
+    ],
+    notes: "",
+  }));
+  const execute = async () => {
+    const run = await queueKnowledgeCuration(db, alice, library);
+    await executeKnowledgeCuration(db, run.id, generator);
+    const saved = await db
+      .selectFrom("knowledge_runs")
+      .selectAll()
+      .where("id", "=", run.id)
+      .executeTakeFirstOrThrow();
+    expect(saved.status, saved.detail).not.toBe("failed");
+  };
+  await execute();
+  expect(reads).toBe(1);
+  expect(generator).toHaveBeenCalledTimes(1);
+  await execute();
+  expect(reads).toBe(1);
+  expect(generator).toHaveBeenCalledTimes(1);
+  text = "Updated mail";
+  version = "2";
+  await execute();
+  expect(reads).toBe(2);
+  expect(generator).toHaveBeenCalledTimes(2);
+  const state = await db
+    .selectFrom("knowledge_source_groups")
+    .select("config")
+    .where("id", "=", subscription.groupId)
+    .executeTakeFirstOrThrow();
+  expect(state.config).not.toContain(text);
+  const entries = await db
+    .selectFrom("knowledge_entries")
+    .selectAll()
+    .where("library_id", "=", library)
+    .execute();
+  expect(JSON.parse(entries[0]!.source_refs)[0].contentRef).toEqual(ref);
+  version = "3";
+  text = "Retry this block";
+  const failed = await queueKnowledgeCuration(db, alice, library);
+  await executeKnowledgeCuration(db, failed.id, async () => {
+    throw new Error("model unavailable");
+  });
+  expect(
+    (
+      await db
+        .selectFrom("knowledge_runs")
+        .select("status")
+        .where("id", "=", failed.id)
+        .executeTakeFirstOrThrow()
+    ).status,
+  ).toBe("failed");
+  expect(
+    (
+      await db
+        .selectFrom("knowledge_source_groups")
+        .select("config")
+        .where("id", "=", subscription.groupId)
+        .executeTakeFirstOrThrow()
+    ).config,
+  ).toBe(state.config);
+  await execute();
+  expect(generator).toHaveBeenCalledTimes(3);
+});
+
+it("suspends plugin-derived documents and answers on revocation while retaining editable knowledge", async () => {
+  const { createContentService } =
+    await import("@core/modules/content/service.js");
+  const { createContentSubscription } =
+    await import("@core/modules/knowledge/content-subscriptions.js");
+  const { createContent } = await import("@core/workflows/resources.js");
+  const { authorize } = await import("@core/modules/access/queries.js");
+  const { publishedChunks } =
+    await import("@core/modules/knowledge/publications.js");
+  let allowed = true;
+  const ref = {
+    sourceId: "example.mail",
+    resourceId: "message",
+    blockId: "body",
+  };
+  createContentService(db).register({
+    id: "example.mail",
+    pluginId: "example",
+    version: 1,
+    title: { zh: "邮箱", en: "Mail" },
+    contentTypes: ["mail"],
+    purposes: ["knowledge"],
+    configSchema: {},
+    capabilities: { search: false },
+    async list(ctx) {
+      return {
+        items:
+          allowed && ctx.principalId === alice.id
+            ? [{ ref, title: "Mail", fingerprint: "1" }]
+            : [],
+        snapshot: allowed ? "1" : "2",
+        nextCursor: null,
+      };
+    },
+    async read() {
+      return allowed
+        ? { ref, title: "Mail", fingerprint: "1", text: "Private mail" }
+        : null;
+    },
+    async resolve() {
+      return allowed
+        ? { path: "/plugins/example/mail", fingerprint: "1" }
+        : null;
+    },
+  });
+  const source = await createContentSubscription(db, alice, library, {
+    sourceId: "example.mail",
+    config: {},
+    title: "Mail",
+  });
+  const entry = await generate(source.id, "Derived mail knowledge");
+  const published = await reviewKnowledgeEntry(
+    db,
+    alice,
+    library,
+    entry.id,
+    entry.revision,
+    "publish",
+  );
+  const nodeId = published.reviewState.nodeId;
+  expect(nodeId).toBeTruthy();
+  await authorize(db, alice, nodeId, 1);
+  expect(
+    (await createContent(db).list(alice, { libraryId: library })).items.some(
+      (item) => item.id === nodeId,
+    ),
+  ).toBe(true);
+  await db
+    .insertInto("knowledge_publications")
+    .values({
+      library_id: library,
+      revision: 1,
+      fingerprint: "snapshot",
+      documents: JSON.stringify([
+        {
+          id: nodeId,
+          title: "Derived",
+          markdown: "Private derived text",
+          seq: 1,
+          version: 1,
+        },
+      ]),
+      status: "ready",
+      error: "",
+      updated_at: now(),
+    })
+    .execute();
+  expect(await publishedChunks(db, [library], alice)).not.toHaveLength(0);
+  await db
+    .insertInto("grants")
+    .values({
+      resource_id: library,
+      user_id: bob.id,
+      role: "reader",
+      status: "active",
+      source_type: "direct",
+      source_id: bob.id,
+      include_descendants: 1,
+    })
+    .execute();
+  await expect(authorize(db, bob, nodeId, 1)).rejects.toThrow();
+  expect(await publishedChunks(db, [library], bob)).toHaveLength(0);
+
+  allowed = false;
+  await expect(authorize(db, alice, nodeId, 1)).rejects.toThrow();
+  expect(
+    (await createContent(db).list(alice, { libraryId: library })).items.some(
+      (item) => item.id === nodeId,
+    ),
+  ).toBe(false);
+  expect(await publishedChunks(db, [library], alice)).toHaveLength(0);
+  const retained = (await knowledgeEntries(db, alice, library)).find(
+    (item) => item.id === entry.id,
+  );
+  expect(retained?.markdown).toBe("Derived mail knowledge");
+  await db
+    .updateTable("resources")
+    .set({ library_id: null, parent_id: null })
+    .where("id", "=", nodeId)
+    .execute();
+  await expect(authorize(db, alice, nodeId, 1)).rejects.toThrow();
+
+  expect(
+    (
+      await db
+        .selectFrom("resources")
+        .select("deleted_at")
+        .where("id", "=", nodeId)
+        .executeTakeFirstOrThrow()
+    ).deleted_at,
+  ).toBeNull();
 });

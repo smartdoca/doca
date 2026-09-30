@@ -141,3 +141,13 @@ The resource type is registered in permissions.v1 and implements `notification.r
 Publishing on this instance refreshes the web app immediately. The web app reconciles other instances every 30 seconds. These are in-app notifications. They are not SMTP, mobile push, or desktop notifications.
 
 HTTP registration limits the body to 1 MiB by default. A route that needs a larger body, such as an attachment, may set `bodyLimit` in bytes, at most 32 MiB. The plugin still checks attachment count, decoded size, and business totals.
+
+## Recent activity
+
+`activityServiceToken` from `@smartdoca/plugin-sdk/platform` exposes `activity.v1`. Plugins register paginated recent-activity sources and own visit storage, deletion cleanup, and business authorization. The host merges sources, renders their labels/icons, and rechecks `activity.read` before display and opening. Declare the required service; an older host without it refuses the plugin instead of adapting private storage. See the [integration contract and example](plugin-activity.md).
+
+## Unified content and native client capabilities (source implementation)
+
+`plugin-sdk/content` exports `contentServiceToken` (`content.v1`). Sources implement `list`/`read`/`resolve` and optionally declare `search`. Calls preserve the authenticated principal and purpose. Built-in documents/files use the same registry. Knowledge subscriptions compare lightweight block inventories and read/analyze changed blocks only. The source picker supports primitive JSON-schema fields and string arrays. New document reads, lists and answer retrieval withhold derived content when its source is unavailable; administrators retain access to the knowledge entries. See the [content contract and limits](plugin-content.md).
+
+`PluginWebHost.native` exposes scoped persistent storage and authenticated attachment save/share in the native container; it is null on Web. Plugins must explicitly use it; IndexedDB is not automatically migrated. See [native contract](plugin-native.md). SDK 0.1.2 is published on npm. Independent mail-client integration and real-device acceptance remain pending.

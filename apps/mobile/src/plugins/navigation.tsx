@@ -45,7 +45,7 @@ export function useMobileNavigation() {
       query.data ??
       resolveNavigation(
         builtinNavigation,
-        { rules: [] },
+        {schemaVersion:1,layout:{placements:[]}},
         { id: "", admin: false },
       ),
   };

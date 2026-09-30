@@ -1,5 +1,5 @@
 import { MobilePluginPage } from "@web/plugins/mobile-page.js";
-import { NavigationArea, MoreNavigation, navigateToDefaultHome } from "@web/plugins/navigation.js";
+import { NavigationArea, LeftNavigation, navigateToDefaultHome } from "@web/plugins/navigation.js";
 import { WorkspaceHome } from "@web/features/workspace/home.js";
 import { DiscoveryPage } from "@web/features/discovery/discovery.js";
 import { KnowledgePublicPage } from "@web/features/knowledge/knowledge-public-page.js";
@@ -827,7 +827,7 @@ function WorkspaceApp() {
             <ArrowLeft size={18} /> {t("account.workspace")}
           </BackLink>
           <div className="global-header-tools">
-          <NavigationArea slot="web.topRight"/>
+          <NavigationArea slot="web.topRight" action="other"/>
           <Notifications />
           <LocaleSwitch />
           <AccountMenu
@@ -997,7 +997,7 @@ function WorkspaceApp() {
                 <span className="sidebar-create-label">{t("nav.create")}</span>
               </button>
               <PinnedDocuments refresh={refresh} />
-              <NavigationArea slot="web.left" />
+              <LeftNavigation />
             </nav>
           )}
           {currentLibraryId && <div className="sidebar-tree-heading">
@@ -1142,7 +1142,6 @@ function WorkspaceApp() {
             </div>}
           </div>
           <div className="inline document-topbar-actions">
-            {user && <><NavigationArea slot="web.topRight"/><MoreNavigation/></>}
 
             {!resourceId && scope === "shared-files" && sharedFolderId && <span id="files-header-actions" />}
             {resourceId &&
@@ -1186,6 +1185,7 @@ function WorkspaceApp() {
               )}
             {user ? (
               <div className="global-header-tools">
+                <NavigationArea slot="web.topRight" action="other" />
                 {scope === "knowledge-assistants" && <span id="knowledge-share-slot" />}
 
                 <Notifications />

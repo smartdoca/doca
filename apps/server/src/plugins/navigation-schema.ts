@@ -41,8 +41,11 @@ const layout = z
             title: title.optional(),
             group: z.string().max(80).optional(),
             collapsed: z.boolean().optional(),
-            icon: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/).optional(),
-        display: z.enum(["both", "icon", "text"]).optional(),
+            icon: z
+              .string()
+              .regex(/^[a-z][a-z0-9-]{0,39}$/)
+              .optional(),
+            display: z.enum(["both", "icon", "text"]).optional(),
           })
           .strict(),
       )
@@ -54,19 +57,5 @@ const layout = z
   })
   .strict();
 export const navigationConfigSchema = z
-  .object({
-    rules: z
-      .array(
-        z
-          .object({
-            id,
-            priority: z.number().int().min(0).max(10000),
-            audience: z.enum(["all", "admin", "member", "users"]),
-            userIds: z.array(z.string().uuid()).max(1000).optional(),
-            layout,
-          })
-          .strict(),
-      )
-      .max(50),
-  })
+  .object({ schemaVersion: z.literal(1), layout })
   .strict();

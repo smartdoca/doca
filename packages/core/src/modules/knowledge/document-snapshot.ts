@@ -1,3 +1,4 @@
+import { blockedContentDocuments } from "./content-access.js";
 import { exportMarkdown } from "@smartdoca/slate/conversion";
 import { createHash } from "node:crypto";
 import type { DB } from "@db/index.js";
@@ -32,8 +33,9 @@ async function documentRows(db: DB, libraryId: string) {
         .execute()
     ).map((x) => x.resource_id),
   );
+  const blocked = await blockedContentDocuments(db, rows.map(row => ({id:row.id,library_id:libraryId})));
   return rows.filter(
-    (row) => !directories.has(row.id) || row.text.trim().length > 100,
+    (row) => !blocked.has(row.id) && (!directories.has(row.id) || row.text.trim().length > 100),
   );
 }
 /** Cheap revision check; canonical editor state is exported only when it changes. */

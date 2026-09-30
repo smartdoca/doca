@@ -1,3 +1,5 @@
+/** Public SDK version implemented by this release. */
+export const PLUGIN_SDK_VERSION = "0.1.2";
 import {
   PluginContractError,
   validatePluginManifest,

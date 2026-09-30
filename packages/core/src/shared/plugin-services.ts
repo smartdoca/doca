@@ -1,10 +1,13 @@
+import type { ContentSource } from "@smartdoca/plugin-sdk/content";
 import type { PluginAISkill } from "@smartdoca/plugin-sdk/ai";
-import type { DirectorySource, OperationPolicy, PermissionSource } from "@smartdoca/plugin-sdk/platform";
+import type { ActivitySource, DirectorySource, OperationPolicy, PermissionSource } from "@smartdoca/plugin-sdk/platform";
 import type { JsonObject } from "@smartdoca/plugin-sdk";
 import type { DB } from "../../../db/src/index.js";
 import { databaseRuntimeScope } from "../../../db/src/runtime-scope.js";
 
 export interface PluginServices {
+  readonly content: Map<string, ContentSource>;
+  readonly activities: Map<string, ActivitySource>;
   readonly skills: Map<string, PluginAISkill>;
   readonly directories: Map<string, DirectorySource>;
   readonly permissions: Map<string, PermissionSource>;
@@ -14,7 +17,7 @@ export function pluginServices(db: DB): PluginServices {
   const scope = databaseRuntimeScope(db);
   let services = scope.get("plugin-services") as PluginServices | undefined;
   if (!services) {
-    services = { skills: new Map(), directories: new Map(), permissions: new Map(), policies: new Map() };
+    services = { content: new Map(), activities: new Map(), skills: new Map(), directories: new Map(), permissions: new Map(), policies: new Map() };
     scope.set("plugin-services", services);
   }
   return services;

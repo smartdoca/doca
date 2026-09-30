@@ -14,6 +14,18 @@ import {
   ShieldCheck,
   Menu,
   Mail,
+  ClipboardList,
+  ChartNoAxesCombined,
+  LogIn,
+  Users,
+  UserCheck,
+  PanelsTopLeft,
+  ScanText,
+  Server,
+  Blocks,
+  Compass,
+  Webhook,
+  Bot,
 } from "lucide-react";
 import {
   builtinNavigation,
@@ -41,7 +53,7 @@ export function useNavigationLayout() {
   const [data, setData] = useState<ResolvedNavigation>(() =>
     resolveNavigation(
       builtinNavigation,
-      { rules: [] },
+      {schemaVersion:1,layout:{placements:[]}},
       { id: "", admin: false },
     ),
   );
@@ -81,18 +93,41 @@ const icons: Record<string, typeof Package> = {
   notifications: Bell,
   admin: ShieldCheck,
   menu: Menu,
+  tickets: ClipboardList,
+  knowledge: Bot,
+  "shared-files": Users,
+};
+const adminIcons: Record<string, typeof Package> = {
+  "doca.admin.overview": ChartNoAxesCombined,
+  "doca.admin.login": LogIn,
+  "doca.admin.users": Users,
+  "doca.admin.registration": UserCheck,
+  "doca.admin.access": ShieldCheck,
+  "doca.admin.templates": PanelsTopLeft,
+  "doca.admin.ai": Sparkles,
+  "doca.admin.file-recognition": ScanText,
+  "doca.admin.platform": Server,
+  "doca.admin.plugins": Blocks,
+  "doca.admin.navigation": Compass,
+  "doca.admin.hooks": Webhook,
 };
 export function NavigationArea({
   slot,
   data: provided,
+  action,
 }: {
   slot: NavigationSlot;
   data?: ResolvedNavigation;
+  action?: "search" | "other";
 }) {
   const loaded = useNavigationLayout(),
     data = provided ?? loaded;
   const { locale } = useI18n();
-  const placements = data.layout.placements.filter((p) => p.slot === slot);
+  const placements = data.layout.placements.filter(
+    (p) =>
+      p.slot === slot &&
+      (!action || (p.entryId === "doca.search") === (action === "search")),
+  );
   const groups = [...new Set(placements.map((p) => p.group ?? ""))];
   const render = (group: string) =>
     placements
@@ -100,8 +135,19 @@ export function NavigationArea({
       .map((p) => {
         const entry = data.entries.find((e) => e.id === p.entryId);
         if (!entry?.webPath) return null;
-        const Icon = icons[p.icon ?? entry.icon] ?? Package,
+        const Icon =
+            (p.icon
+              ? icons[p.icon]
+              : (adminIcons[entry.id] ?? icons[entry.icon])) ?? Package,
           title = (p.title ?? entry.title)[locale];
+        const display =
+          p.display ??
+          (slot === "web.topRight" &&
+          ["doca.search", "doca.tickets", "doca.notifications"].includes(
+            entry.id,
+          )
+            ? "icon"
+            : "both");
         return (
           <a
             key={`${p.entryId}:${slot}`}
@@ -121,6 +167,8 @@ export function NavigationArea({
             }}
             title={title}
             aria-label={title}
+            data-display={display}
+            data-entry-id={entry.id}
             className={
               (entry.webPath.includes("?")
                 ? location.hash
@@ -129,8 +177,8 @@ export function NavigationArea({
                 : ""
             }
           >
-            {p.display !== "text" && <Icon size={16} />}{" "}
-            {p.display !== "icon" && <span>{title}</span>}
+            {display !== "text" && <Icon size={16} />}
+            {display !== "icon" && <span>{title}</span>}
           </a>
         );
       });
@@ -152,12 +200,46 @@ export function NavigationArea({
     </nav>
   );
 }
-export function MoreNavigation() {
+export function LeftNavigation() {
+  const data = useNavigationLayout();
+  const section = (trash: boolean): ResolvedNavigation => ({
+    ...data,
+    layout: {
+      ...data.layout,
+      placements: data.layout.placements.filter(
+        (p) => (p.entryId === "doca.trash") === trash,
+      ),
+    },
+  });
+  return (
+    <>
+      <NavigationArea slot="web.left" data={section(false)} />
+      <MoreNavigation data={data} />
+      <NavigationArea slot="web.left" data={section(true)} />
+    </>
+  );
+}
+export function MoreNavigation({
+  data: provided,
+}: { data?: ResolvedNavigation } = {}) {
   const { t } = useI18n();
+  const loaded = useNavigationLayout();
+  const data = provided ?? loaded;
+  const hasEntries = data.layout.placements.some(
+    (placement) =>
+      placement.slot === "web.more" &&
+      data.entries.some(
+        (entry) => entry.id === placement.entryId && !!entry.webPath,
+      ),
+  );
+  if (!hasEntries) return null;
   return (
     <details className="navigation-more">
-      <summary>{t("navigation.more")}</summary>
-      <NavigationArea slot="web.more" />
+      <summary title={t("navigation.more")} aria-label={t("navigation.more")}>
+        <Menu size={18} />
+        <span>{t("navigation.more")}</span>
+      </summary>
+      <NavigationArea slot="web.more" data={data} />
     </details>
   );
 }

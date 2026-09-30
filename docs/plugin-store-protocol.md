@@ -326,3 +326,9 @@ HTTP：400 invalid_request/cursor_mismatch，404 not_found，410 cursor_expired�
 当前辅助列表为 `/categories`，不是自由多标签系统；插件使用单一 `categoryId`。分类数量为全商城已上架插件数量，不随当前搜索条件变化；列表 `page.total` 为当前查询快照数量。未知下载/点赞数量显示破折号，零显示 0。
 
 商城审核需检查与宿主一致的静态导航字段：双语 title（各 1–80 字符）、icon、order、非空 allowedSlots 及合法 defaults，拒绝未知字段；server 必须为已构建 JS/mjs/cjs 文件，Web 入口为 JS，manifest 为静态 JSON。审核与安装均不得执行包内安装脚本。
+
+### 官方身份和版本说明显示
+
+`PluginSummary.official`（列表和详情的 `plugin`）为必填布尔值，表示商城标注的官方插件身份，与版本审核状态分开。客户端仅在值为 `true` 时展示“官方插件”，不能根据安装来源推断；缺失字段的响应视为协议错误。
+
+`Release.changelog` 为必填字符串，表示该版本的纯文本更新说明，版本列表及单版本接口均须返回。空字符串表示未提供，客户端按纯文本保留换行展示，不执行 HTML。Doca 接收长度上限为 100000 字符。

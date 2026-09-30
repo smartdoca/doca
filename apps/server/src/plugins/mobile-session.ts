@@ -1,3 +1,4 @@
+import { validateNativeRequest } from "@smartdoca/plugin-sdk/native";
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { DB } from "@db/index.js";
@@ -11,6 +12,58 @@ export function registerPluginMobileSessions(
   entries: NavigationEntry[],
   secure: boolean,
 ) {
+  api.post<{
+    Body: { pluginId: string; path: string; name: string; mime: string };
+  }>(
+    "/api/v1/plugins-mobile/attachment",
+    { bodyLimit: 10000 },
+    async (req, reply) => {
+      const actor = auth(req);
+      const pluginId = req.body?.pluginId;
+      if (
+        !entries.some(
+          (entry) =>
+            entry.pluginId === pluginId &&
+            entry.mobile &&
+            (!entry.adminOnly || actor.admin),
+        )
+      )
+        fail(404, "Mobile plugin unavailable");
+      if (!/^Bearer [a-f0-9]{64}$/.test(req.headers.authorization ?? ""))
+        fail(403, "Native session required");
+      try {
+        validateNativeRequest(
+          {
+            version: 1,
+            id: "attachment",
+            pluginId,
+            operation: "attachment.save",
+            input: req.body,
+          },
+          pluginId,
+        );
+      } catch {
+        fail(400, "Invalid attachment request");
+      }
+      // Internal dispatch never follows redirects, and the native token is never sent to a plugin-selected external URL.
+      const response = await api.inject({
+        method: "GET",
+        url: `/api/v1/plugins/${pluginId}${req.body.path}`,
+        headers: { authorization: req.headers.authorization! },
+      });
+      if (response.statusCode < 200 || response.statusCode >= 300)
+        fail(
+          response.statusCode >= 300 && response.statusCode < 400
+            ? 400
+            : response.statusCode,
+          "Attachment unavailable",
+        );
+      if (response.rawPayload.length > 32 * 1024 * 1024)
+        fail(413, "Attachment exceeds download limit");
+      reply.header("Cache-Control", "no-store");
+      return { base64: response.rawPayload.toString("base64") };
+    },
+  );
   api.post<{ Body: { entryId: string } }>(
     "/api/v1/plugins-mobile/ticket",
     async (req) => {

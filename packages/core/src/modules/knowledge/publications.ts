@@ -1,3 +1,4 @@
+import { blockedContentDocuments } from "./content-access.js";
 import {
   knowledgeDocumentSnapshot,
   knowledgeDocumentFingerprint,
@@ -146,7 +147,7 @@ export async function publicationStatus(db: DB, libraryId: string) {
       (await knowledgeDocumentFingerprint(db, libraryId)),
   };
 }
-export async function publishedChunks(db: DB, libraryIds: string[]) {
+export async function publishedChunks(db: DB, libraryIds: string[], actor: Actor | null = null) {
   const chunks: (KnowledgeChunk & {
     libraryId: string;
     publication: number;
@@ -187,9 +188,10 @@ export async function publishedChunks(db: DB, libraryIds: string[]) {
           .execute()
       ).map((x) => x.id),
     );
+    const blocked = await blockedContentDocuments(db, [...liveIds].map(id => ({id,library_id:libraryId})), actor);
     const docs = (
       JSON.parse(publication.documents) as PublishedDocument[]
-    ).filter((x) => liveIds.has(x.id));
+    ).filter((x) => liveIds.has(x.id) && !blocked.has(x.id));
     // Apply current masking before indexing results enter the model, even for old releases.
     for (const chunk of answerChunks(docs))
       chunks.push({

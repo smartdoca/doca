@@ -1,3 +1,4 @@
+import { nativeCapabilities } from "./native.js";
 import * as React from "react";
 import { FolderFilePicker } from "@web/features/files/files.js";
 import { notifyFeedback } from "@web/shared/components/feedback.js";
@@ -11,6 +12,9 @@ export function createWebHost(
   return Object.freeze({
     React,
     apiBase,
+    get native() {
+      return nativeCapabilities(pluginId);
+    },
     FilePicker: FolderFilePicker,
     useEnvironment() {
       const { locale } = useI18n();

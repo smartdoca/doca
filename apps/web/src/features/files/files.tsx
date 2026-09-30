@@ -1705,6 +1705,8 @@ export function FilesExplorer({
   }
   function startMarquee(event: MouseEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
+    // Let the rename input blur and save before starting another selection.
+    if (renaming) return;
     if (
       (event.target as Element).closest(
         ".file-entry, .files-context-menu, input, textarea, .file-preview-panel",

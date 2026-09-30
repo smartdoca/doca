@@ -1,3 +1,4 @@
+import { PLUGIN_SDK_VERSION } from "@smartdoca/plugin-sdk";
 import { z } from "zod";
 import { downloadNpm } from "./npm.js";
 export class StoreCursorExpired extends Error {}
@@ -21,6 +22,7 @@ const targets = z
   .min(1)
   .max(2);
 export const releaseSchema = z.object({
+  changelog: z.string().max(100000),
   pluginId: id,
   version,
   sdkRange: z.string().min(1).max(100),
@@ -48,6 +50,7 @@ export const releaseSchema = z.object({
   }),
 });
 const plugin = z.object({
+  official: z.boolean(),
   id,
   name: z.string().min(1).max(160),
   summary: z.string().max(300),
@@ -252,7 +255,7 @@ export class PluginStore {
         .parse(
           await this.json("/updates/check", {
             protocolVersion: 1,
-            host: { sdkVersion: "0.1.0", mobileHostVersion: "1.0.0" },
+            host: { sdkVersion: PLUGIN_SDK_VERSION, mobileHostVersion: "1.0.0" },
             plugins: batch,
           }),
         );

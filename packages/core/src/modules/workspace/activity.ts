@@ -1,5 +1,6 @@
 import { sql } from "kysely";
 import type { DB } from "@db/index.js";
+import type { Resource } from "@db/schema.js";
 import type { Actor } from "../identity/passwords.js";
 import {
   activeActor,
@@ -77,6 +78,9 @@ export type RecentItem = {
   collected: boolean;
   public: boolean;
   href: string;
+  format: Resource["format"] | null;
+  inLibrary: boolean;
+  libraryName: string | null;
 };
 export async function recentActivity(
   db: DB,
@@ -86,6 +90,10 @@ export async function recentActivity(
     publicOnly?: boolean;
     q?: string;
     offset?: number;
+    signal?: AbortSignal;
+    until?: string;
+    after?: { visitedAt: string; id: string } | null;
+    limit?: number;
   } = {},
 ) {
   await activeActor(db, actor);
@@ -100,20 +108,37 @@ export async function recentActivity(
     accepted = 0,
     done = false;
   const offset = input.offset ?? 0;
-  while (items.length < 51 && !done) {
+  const limit = input.limit ?? 50;
+  while (items.length < limit + 1 && !done) {
+    input.signal?.throwIfAborted();
     const rows = await sql<
-      Omit<RecentItem, "collected" | "public" | "href">
-    >`select * from (${union}) v where lower(title) like ${pattern} escape '!' ${input.kind ? sql`and kind=${input.kind}` : sql``} order by visited_at desc,kind,id limit 100 offset ${scan}`.execute(
+      Omit<RecentItem, "collected" | "public" | "href" | "format" | "inLibrary" | "libraryName">
+    >`select * from (${union}) v where lower(title) like ${pattern} escape '!' ${input.kind ? sql`and kind=${input.kind}` : sql``} ${input.until ? sql`and visited_at <= ${input.until}` : sql``} ${input.after ? sql`and (visited_at < ${input.after.visitedAt} or (visited_at = ${input.after.visitedAt} and (kind || ':' || id) > ${input.after.id}))` : sql``} order by visited_at desc,kind,id limit 100 offset ${scan}`.execute(
       db,
     );
     scan += rows.rows.length;
     done = rows.rows.length < 100;
     for (const row of rows.rows) {
+      input.signal?.throwIfAborted();
       let isPublic = false;
+      let format: RecentItem["format"] = null;
+      let inLibrary = false;
+      let libraryName: string | null = null;
       let href = `#/r/${row.id}`;
       try {
         if (row.kind === "document" || row.kind === "library") {
-          await authorize(db, actor, row.id);
+          const { resource } = await authorize(db, actor, row.id);
+          format = resource.format;
+          inLibrary = !!resource.library_id;
+          if (resource.library_id) {
+            const library = await db
+              .selectFrom("resources as r")
+              .select("r.title")
+              .where("r.id", "=", resource.library_id)
+              .where(accessibleQuery(sql.ref("r.id"), actor))
+              .executeTakeFirst();
+            libraryName = library?.title ?? null;
+          }
           const visibility = await sql<{
             v: string;
           }>`select ${policyFieldQuery(sql.val(row.id) as ReturnType<typeof sql.ref>, "visibility")} as v`.execute(
@@ -206,13 +231,13 @@ export async function recentActivity(
               .where("resource_kind", "=", row.kind)
               .where("resource_id", "=", row.id)
               .executeTakeFirst();
-      items.push({ ...row, collected: !!saved, public: isPublic, href });
-      if (items.length === 51) break;
+      items.push({ ...row, collected: !!saved, public: isPublic, href, format, inLibrary, libraryName });
+      if (items.length === limit + 1) break;
     }
   }
   return {
-    items: items.slice(0, 50),
+    items: items.slice(0, limit),
     total: null,
-    nextOffset: items.length > 50 ? offset + 50 : null,
+    nextOffset: items.length > limit ? offset + limit : null,
   };
 }

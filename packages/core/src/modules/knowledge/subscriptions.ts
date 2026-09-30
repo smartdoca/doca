@@ -1080,6 +1080,7 @@ async function sourceTitle(
   db: DB,
   row: { source_kind: string; source_id: string; url: string },
 ) {
+  if (row.source_kind === "content") return (await db.selectFrom("knowledge_source_groups").select("title").where("id","=",row.source_id).executeTakeFirst())?.title ?? "";
   if (row.url) return row.url;
   if (row.source_kind === "document" || row.source_kind === "library") {
     const resource = await db
@@ -1118,6 +1119,7 @@ async function subscriptionStatus(
     status: string;
   },
 ) {
+  if (row.source_kind === "content") return row.status;
   if (row.source_kind === "url")
     return row.status === "missing" ? "missing" : "active";
   if (row.source_kind === "document" || row.source_kind === "library") {
