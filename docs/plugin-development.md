@@ -114,12 +114,9 @@ The plugin owns its database, credentials, business jobs, and outbox. The host d
 
 The business database, credentials, jobs, and outbox belong in the plugin's own data directory. They do not belong in the installation directory.
 
-Resolve the root in this order:
+A plugin reads only `DOCA_PLUGINS_DATA_DIR` and uses only `<DOCA_PLUGINS_DATA_DIR>/<its own plugin id>/`. A relative path is relative to the process working directory. The plugin does not invent a default path, and it does not define a data-directory environment variable of its own. Without this variable, the plugin has no directory to guess.
 
-1. Use `DOCA_PLUGINS_DATA_DIR` when it is set. A relative path is relative to the process working directory.
-2. Otherwise use `${DOCA_DATA_DIR:-./data}/plugin-data`. The local default is `data/plugin-data`.
-
-Each plugin uses only `<root>/<its own plugin id>/`. The plugin reads `DOCA_PLUGINS_DATA_DIR` and uses the default root when that variable is absent. Do not define a data-directory environment variable for one plugin.
+The installation configuration supplies the value. Docker Compose passes `/data/plugin-data` when it is unset.
 
 The host does not create or open the database in this directory. The plugin creates its own subdirectory the first time it needs it. `uninstall` deletes that plugin's subdirectory and does not delete another plugin's directory. Instances that share one business database use the same root. Each instance still keeps its own plugin installation cache.
 

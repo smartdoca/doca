@@ -10,7 +10,7 @@ DOCA_PLUGINS_DIR=/data/plugins
 DOCA_PLUGINS_DATA_DIR=/data/plugin-data
 ```
 
-The store address is a configurable HTTPS origin. It is not deployed yet; an unavailable store leaves local upload and installed plugins usable. Empty `DOCA_PLUGINS_DIR` falls back to `${DOCA_DATA_DIR:-./data}/plugins`. Empty `DOCA_PLUGINS_DATA_DIR` falls back to `${DOCA_DATA_DIR:-./data}/plugin-data`. Relative paths use the working directory. Docker uses container paths. The supplied Compose file places both directories under the `/data` volume.
+The store address is a configurable HTTPS origin. It is not deployed yet; an unavailable store leaves local upload and installed plugins usable. Empty `DOCA_PLUGINS_DIR` falls back to `${DOCA_DATA_DIR:-./data}/plugins`, relative to the working directory. Plugin business data comes only from `DOCA_PLUGINS_DATA_DIR`. The supplied Compose file passes `/data/plugin-data` when that variable is unset, on the `/data` volume.
 
 For the supplied Compose deployment, execute in the deployment directory:
 
