@@ -7,9 +7,10 @@
 ```dotenv
 DOCA_PLUGIN_STORE_URL=https://store.smartdoca.cc
 DOCA_PLUGINS_DIR=/data/plugins
+DOCA_PLUGINS_DATA_DIR=/data/plugin-data
 ```
 
-商店地址必须是 HTTPS origin，不带路径、查询参数或凭据。目前默认商店尚未部署；连接失败不影响本地上传和已有插件。插件目录留空时使用 `${DOCA_DATA_DIR:-./data}/plugins`，相对路径基于工作目录。Docker 配置使用容器内路径，仓库 Compose 默认存放在 `/data` 卷中。
+商店地址必须是 HTTPS origin，不带路径、查询参数或凭据。目前默认商店尚未部署；连接失败不影响本地上传和已有插件。插件安装目录留空时使用 `${DOCA_DATA_DIR:-./data}/plugins`。业务数据根目录留空时使用 `${DOCA_DATA_DIR:-./data}/plugin-data`。相对路径基于工作目录。Docker 配置使用容器内路径，仓库 Compose 默认存放在 `/data` 卷中。
 
 仓库的 Docker Compose 部署，在部署目录执行：
 
@@ -28,7 +29,7 @@ docker compose restart doca
   .releases/<sha256>/       已校验插件文件
   .staging/                解压暂存
   .imports/                已导入的手动安装目录
-/data/plugin-data/         建议的独立插件业务数据目录
+/data/plugin-data/<plugin-id>/   该插件的业务库、凭证和任务
 ```
 
 启动时对照数据库归档逐文件校验，缺失或损坏就自动补齐，然后加载插件。禁用插件也会同步。无需访问官方商店、安装依赖或编译源码。共享归档缺失或损坏时明确拒绝启动。宿主数据库是安装分发的事实来源，应备份；插件业务数据库与凭据单独备份。

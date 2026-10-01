@@ -16,6 +16,7 @@
 DOCA_PLUGIN_STORE_URL=https://store.smartdoca.cc
 DOCA_PLUGIN_NPM_REGISTRY=https://registry.npmjs.org
 DOCA_PLUGINS_DIR=/data/plugins
+DOCA_PLUGINS_DATA_DIR=/data/plugin-data
 ```
 
 两个地址都是 HTTPS origin，不允许凭据、路径前缀、query 或 fragment。空值使用默认值。首版不支持私有 registry 登录。Doca 服务端代理全部商城 API 请求，不向远端转发浏览器 Cookie、Authorization、用户 ID 或业务数据；远端无需开放浏览器 CORS。

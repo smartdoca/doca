@@ -108,7 +108,20 @@ Register an AI tool with `aiServiceToken.registerTool`: id, description, inputSc
 
 Doca does not include membership, prices, points, or business quotas. Model input and output rates, and tokens per image, convert a vendor's raw usage into tokens. They are not a price. Usage distinguishes an unconfirmed call from actual metrics. `ai.usage.recorded` is written inside the settlement transaction. Top-level `metrics` are the rated usage. `provider.metrics` keeps the vendor's raw facts. A plugin pulls events with `events.read(cursor, limit)`, stores its cursor, and handles each event id once. A policy check can refuse a call. Cross-plugin reservation, failure compensation, and money consistency do not yet have a full transaction protocol. One check is not a billing implementation.
 
-The plugin owns its database, credentials, business jobs, and outbox. The host does not offer data.v1 or data.v2 and does not open the plugin database. The database must match the declared data version; compatible existing data is accepted. A mismatched schema refuses to start. Uninstall is specified below.
+The plugin owns its database, credentials, business jobs, and outbox. The host does not offer data.v1 or data.v2 and does not open the plugin database. The database must match the declared data version; compatible existing data is accepted. A mismatched schema refuses to start. Store that data in the business data directory below. Uninstall is specified below.
+
+## Business data directory
+
+The business database, credentials, jobs, and outbox belong in the plugin's own data directory. They do not belong in the installation directory.
+
+Resolve the root in this order:
+
+1. Use `DOCA_PLUGINS_DATA_DIR` when it is set. A relative path is relative to the process working directory.
+2. Otherwise use `${DOCA_DATA_DIR:-./data}/plugin-data`. The local default is `data/plugin-data`.
+
+Each plugin uses only `<root>/<its own plugin id>/`. The plugin reads `DOCA_PLUGINS_DATA_DIR` and uses the default root when that variable is absent. Do not define a data-directory environment variable for one plugin.
+
+The host does not create or open the database in this directory. The plugin creates its own subdirectory the first time it needs it. `uninstall` deletes that plugin's subdirectory and does not delete another plugin's directory. Instances that share one business database use the same root. Each instance still keeps its own plugin installation cache.
 
 ## Data structure
 

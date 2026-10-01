@@ -24,6 +24,7 @@ services:
       DOCA_UPLOAD_DIR: /data/uploads
       DOCA_DATA_DIR: /data
       DOCA_PLUGINS_DIR: "${DOCA_PLUGINS_DIR:-/data/plugins}"
+      DOCA_PLUGINS_DATA_DIR: "${DOCA_PLUGINS_DATA_DIR:-/data/plugin-data}"
       DOCA_PLUGIN_NPM_REGISTRY: ${DOCA_PLUGIN_NPM_REGISTRY:-https://registry.npmjs.org}
       DOCA_PLUGIN_STORE_URL: "${DOCA_PLUGIN_STORE_URL:-https://store.smartdoca.cc}"
       DOCA_ASSET_BASE: "${DOCA_ASSET_BASE:-}"

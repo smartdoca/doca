@@ -7,9 +7,10 @@ Administrators use **Admin → Plugins** to browse the official store, upload a 
 ```dotenv
 DOCA_PLUGIN_STORE_URL=https://store.smartdoca.cc
 DOCA_PLUGINS_DIR=/data/plugins
+DOCA_PLUGINS_DATA_DIR=/data/plugin-data
 ```
 
-The store address is a configurable HTTPS origin. It is not deployed yet; an unavailable store leaves local upload and installed plugins usable. Empty `DOCA_PLUGINS_DIR` falls back to `${DOCA_DATA_DIR:-./data}/plugins`, relative to the working directory. Docker uses container paths. The supplied Compose file places the directory under the `/data` volume.
+The store address is a configurable HTTPS origin. It is not deployed yet; an unavailable store leaves local upload and installed plugins usable. Empty `DOCA_PLUGINS_DIR` falls back to `${DOCA_DATA_DIR:-./data}/plugins`. Empty `DOCA_PLUGINS_DATA_DIR` falls back to `${DOCA_DATA_DIR:-./data}/plugin-data`. Relative paths use the working directory. Docker uses container paths. The supplied Compose file places both directories under the `/data` volume.
 
 For the supplied Compose deployment, execute in the deployment directory:
 
@@ -28,7 +29,7 @@ All instances use the same host database. PostgreSQL is the distributed deployme
   .releases/<sha256>/          verified immutable releases
   .staging/                   temporary extraction
   .imports/                   retained offline folder imports
-/data/plugin-data/            suggested separate plugin-owned business data
+/data/plugin-data/<plugin-id>/  that plugin's database, credentials, and jobs
 ```
 
 Startup checks every file against the shared archive, restores missing or corrupted files and only then imports plugins. It never installs npm dependencies, compiles source or contacts the store. A missing or corrupt shared archive refuses startup. Back up the shared database as the plugin distribution source of truth. Plugin-owned databases and credentials have their own backups.
