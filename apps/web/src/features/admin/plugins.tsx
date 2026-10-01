@@ -25,6 +25,7 @@ import {
   comparePluginVersions,
   satisfiesPluginVersion,
 } from "@smartdoca/plugin-contracts";
+import { PLUGIN_SDK_VERSION } from "@smartdoca/plugin-sdk/version";
 import type {
   PluginInventory,
   StoreCatalog,
@@ -109,6 +110,9 @@ export function Plugins() {
       created_at: string;
       pluginId: string | null;
       packageName: string | null;
+      version: string | null;
+      error: string | null;
+      active: boolean;
     }[]
   >([]);
   const [historyError, setHistoryError] = useState(false);
@@ -117,6 +121,7 @@ export function Plugins() {
   const [elapsed, setElapsed] = useState(0);
   const [activeAction, setActiveAction] = useState("");
   const acting = useRef(false);
+  const seenActive = useRef<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyPlugin, setHistoryPlugin] = useState("");
   const openHistory = () => {
@@ -138,19 +143,6 @@ export function Plugins() {
   useEffect(() => {
     void loadOperations();
   }, []);
-  useEffect(() => {
-    if (!busy) return;
-    const start = Date.now();
-    const timer = setInterval(
-      () => setElapsed(Math.floor((Date.now() - start) / 1000)),
-      1000,
-    );
-    const poll = setInterval(() => void loadOperations(), 3000);
-    return () => {
-      clearInterval(timer);
-      clearInterval(poll);
-    };
-  }, [busy]);
   const generation = useRef(0),
     detailGeneration = useRef(0);
   const refresh = async () => {
@@ -170,6 +162,73 @@ export function Plugins() {
       setUpdatesError((e as Error).message);
     }
   };
+  const stageRank = { requested: 0, staged: 1, failed: 1 };
+  const latestOperations = new Map<string, (typeof operations)[number]>();
+  for (const item of operations) {
+    const current = latestOperations.get(item.operationId);
+    if (
+      !current ||
+      item.created_at > current.created_at ||
+      (item.created_at === current.created_at &&
+        stageRank[item.stage] > stageRank[current.stage])
+    )
+      latestOperations.set(item.operationId, item);
+  }
+  const activeOperation = [...latestOperations.values()].find(
+    (item) => item.active && item.stage === "requested",
+  );
+  const operationLocked = busy || Boolean(activeOperation);
+  const operationPending = (
+    operation: string,
+    pluginId?: string | null,
+    version?: string | null,
+  ) =>
+    Boolean(
+      (activeOperation?.operation === operation &&
+        (pluginId == null || activeOperation.pluginId === pluginId) &&
+        (version == null || activeOperation.version === version)) ||
+        (busy &&
+          activeAction ===
+            (operation === "install" && version != null
+              ? `release:${version}`
+              : operation)),
+    );
+  useEffect(() => {
+    if (!busy && !activeOperation) return;
+    const origin =
+      busy || !activeOperation
+        ? Date.now()
+        : new Date(activeOperation.created_at).getTime();
+    const tick = () =>
+      setElapsed(Math.max(0, Math.floor((Date.now() - origin) / 1000)));
+    tick();
+    const timer = setInterval(tick, 1000);
+    const poll = setInterval(() => void loadOperations(), 3000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(poll);
+    };
+  }, [busy, activeOperation?.operationId, activeOperation?.created_at]);
+  useEffect(() => {
+    if (activeOperation) {
+      seenActive.current = activeOperation.operationId;
+      return;
+    }
+    const id = seenActive.current;
+    if (!id) return;
+    const latest = latestOperations.get(id);
+    if (!latest || latest.stage === "requested") return;
+    seenActive.current = null;
+    if (busy) return;
+    if (latest.stage === "failed")
+      setOperationError(latest.error || t("plugins.failed"));
+    else {
+      setCompleted(true);
+      setUpdates([]);
+      void refresh();
+      void checkUpdates();
+    }
+  }, [operations, busy, activeOperation, t]);
   const loadCatalog = async (
     cursor?: string,
     expectedGeneration = generation.current,
@@ -286,7 +345,7 @@ export function Plugins() {
     confirmation?: string,
     actionKey = "",
   ) => {
-    if (acting.current) return;
+    if (acting.current || activeOperation) return;
     if (confirmation && !(await confirmAction(confirmation))) return;
     acting.current = true;
     setActiveAction(actionKey);
@@ -319,7 +378,7 @@ export function Plugins() {
       u.release &&
       u.release.review === "approved" &&
       u.release.dataVersion === p.dataVersion &&
-      satisfiesPluginVersion("0.1.0", u.release.sdkRange) &&
+      satisfiesPluginVersion(PLUGIN_SDK_VERSION, u.release.sdkRange) &&
       comparePluginVersions(u.release.version, p.version) > 0
     );
   };
@@ -327,7 +386,7 @@ export function Plugins() {
     local = installed.find((p) => p.id === detail);
   const compatible = (r: StoreRelease) =>
     r.review === "approved" &&
-    satisfiesPluginVersion("0.1.0", r.sdkRange) &&
+    satisfiesPluginVersion(PLUGIN_SDK_VERSION, r.sdkRange) &&
     (!local ||
       (!local.removing &&
         local.dataVersion === r.dataVersion &&
@@ -438,17 +497,17 @@ export function Plugins() {
           <p>{t("plugins.restartOther")}</p>
         </div>
       )}
-      {(busy || completed || operationError) &&
+      {(operationLocked || completed || operationError) &&
         createPortal(
           <aside
             className="plugin-progress-toast"
             data-status={
-              busy ? "running" : operationError ? "failed" : "completed"
+              operationLocked ? "running" : operationError ? "failed" : "completed"
             }
             role={operationError ? "alert" : "status"}
             aria-live={operationError ? "assertive" : "polite"}
           >
-            {busy ? (
+            {operationLocked ? (
               <RefreshCw className="plugin-spinner" size={20} />
             ) : operationError ? (
               <CircleAlert size={20} />
@@ -458,16 +517,16 @@ export function Plugins() {
             <div>
               <strong>
                 {t(
-                  busy
+                  operationLocked
                     ? "plugins.working"
                     : operationError
                       ? "plugins.failed"
                       : "plugins.completed",
                 )}
               </strong>
-              {(busy || operationError) && (
+              {(operationLocked || operationError) && (
                 <p>
-                  {busy
+                  {operationLocked
                     ? t("plugins.elapsed", { seconds: elapsed })
                     : operationError}
                 </p>
@@ -476,7 +535,7 @@ export function Plugins() {
                 {t("plugins.history")}
               </button>
             </div>
-            {!busy && (
+            {!operationLocked && (
               <button
                 aria-label={t("plugins.close")}
                 onClick={async () => {
@@ -500,7 +559,7 @@ export function Plugins() {
           <div className="plugin-settings">
             <div className="plugin-results-heading">
               <h3>{t("plugins.settings")}</h3>
-              <button disabled={busy} onClick={() => void refresh()}>
+              <button disabled={operationLocked} onClick={() => void refresh()}>
                 <RefreshCw size={16} />
                 {t("plugins.refresh")}
               </button>
@@ -514,7 +573,7 @@ export function Plugins() {
               <h3>{t("plugins.upload")}</h3>
               <p>{t("plugins.localHelp")}</p>
               <label className="plugin-upload">
-                {busy && activeAction === "upload" ? (
+                {operationPending("upload") ? (
                   <RefreshCw className="plugin-spinner" size={16} />
                 ) : (
                   <Upload size={16} />
@@ -523,7 +582,7 @@ export function Plugins() {
                 <input
                   type="file"
                   accept=".zip"
-                  disabled={busy}
+                  disabled={operationLocked}
                   onChange={async (event) => {
                     const file = event.target.files?.[0];
                     event.target.value = "";
@@ -585,8 +644,8 @@ export function Plugins() {
                   />
                 </label>
                 <Button
-                  loading={busy && activeAction === "npm"}
-                  disabled={busy || !npmName || !npmVersion}
+                  loading={operationPending("npm")}
+                  disabled={operationLocked || !npmName || !npmVersion}
                   onClick={async () => {
                     if (
                       !(await confirmAction(
@@ -686,7 +745,7 @@ export function Plugins() {
                     </>
                   )}
                   <button
-                    disabled={busy || loading}
+                    disabled={operationLocked || loading}
                     onClick={async () => {
                       void refresh();
                       void checkUpdates();
@@ -764,6 +823,11 @@ export function Plugins() {
                                 {t("plugins.pending")}
                               </span>
                             )}
+                          {activeOperation?.pluginId === p.id && (
+                            <span className="plugin-badge">
+                              {t("plugins.installing")}
+                            </span>
+                          )}
                         </div>
                         <p className="plugin-description">
                           {remote?.summary ??
@@ -856,6 +920,9 @@ export function Plugins() {
                   {t("plugins.officialBadge")}
                 </span>
               )}
+              {activeOperation?.pluginId === detail && (
+                <span className="plugin-badge">{t("plugins.installing")}</span>
+              )}
             </div>
             {error && <p role="alert">{error}</p>}
             {detailError && <p role="alert">{t("plugins.unavailable")}</p>}
@@ -918,12 +985,11 @@ export function Plugins() {
                             <Play size={16} />
                           )
                         }
-                        loading={
-                          busy &&
-                          activeAction ===
-                            (local.enabled ? "disable" : "enable")
-                        }
-                        disabled={busy}
+                        loading={operationPending(
+                          local.enabled ? "disable" : "enable",
+                          local.id,
+                        )}
+                        disabled={operationLocked}
                         onClick={() =>
                           change(local.id, local.enabled ? "disable" : "enable")
                         }
@@ -936,8 +1002,8 @@ export function Plugins() {
                         danger
                         className="plugin-remove-button"
                         icon={<Trash2 size={16} />}
-                        loading={busy && activeAction === "remove"}
-                        disabled={busy}
+                        loading={operationPending("remove", local.id)}
+                        disabled={operationLocked}
                         onClick={async () => {
                           if (
                             await confirmAction(
@@ -954,8 +1020,8 @@ export function Plugins() {
                   )}
                   {local.pending && (
                     <Button
-                      loading={busy && activeAction === "cancel"}
-                      disabled={busy}
+                      loading={operationPending("cancel", local.id)}
+                      disabled={operationLocked}
                       onClick={() => change(local.id, "cancel")}
                     >
                       {t("plugins.cancel")}
@@ -976,8 +1042,8 @@ export function Plugins() {
                 SDK {r.sdkRange} · {t("plugins.dataVersion")}: {r.dataVersion}
               </small>
               <Button
-                loading={busy && activeAction === `release:${r.version}`}
-                disabled={busy || !compatible(r)}
+                loading={operationPending("install", detail, r.version)}
+                disabled={operationLocked || !compatible(r)}
                 onClick={async () => {
                   if (
                     local &&
@@ -1073,13 +1139,18 @@ export function Plugins() {
                       </time>
                       <span>
                         {t(actionKey as Parameters<typeof t>[0])}{" "}
-                        {item.pluginId ?? item.packageName}
+                        {[item.pluginId ?? item.packageName, item.version]
+                          .filter(Boolean)
+                          .join(" ")}
                       </span>
                       <strong data-status={stage}>
                         {["requested", "staged", "failed"].includes(stage)
                           ? t(`plugins.${stage}` as Parameters<typeof t>[0])
                           : stage}
                       </strong>
+                      {stage === "failed" && item.error && (
+                        <p className="plugin-history-error">{item.error}</p>
+                      )}
                     </li>
                   );
                 })}

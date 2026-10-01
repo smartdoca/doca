@@ -1,5 +1,3 @@
-/** Public SDK version implemented by this release. */
-export const PLUGIN_SDK_VERSION = "0.1.2";
 import {
   PluginContractError,
   validatePluginManifest,
@@ -28,6 +26,7 @@ import {
   type Fiber as CordisFiber,
 } from "@deepseek-ai/cordis";
 
+export { PLUGIN_SDK_VERSION } from "./version.js";
 export * from "@smartdoca/plugin-contracts";
 
 const contractIdentifier = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;

@@ -29,12 +29,12 @@ export async function registerStaticRoutes(
   );
   api.get("/live", { schema: { hide: true } }, async () => ({
     status: "ok",
-    version: "0.1.1",
+    version: "0.1.2",
   }));
   const ready = async () => {
     await db.selectFrom("settings").select("id").executeTakeFirstOrThrow();
     if (!realtimeReady()) fail(503, "实时集群尚未就绪");
-    return { status: "ok", version: "0.1.1" };
+    return { status: "ok", version: "0.1.2" };
   };
   api.get("/ready", { schema: { hide: true } }, ready);
   api.get("/health", { schema: { hide: true } }, ready);

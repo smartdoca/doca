@@ -183,7 +183,7 @@ items 为 PluginSummary[]，不超过 limit。total 为匹配总数或 null；ne
 2. 从 registry 获取精确包版本元数据：`GET /<encodeURIComponent(packageName)>/<encodeURIComponent(version)>`，不解析 latest/tag/range。
 3. 验证 registry 元数据 name/version、dist.integrity 与商城审核的 SRI 一致；下载 dist.tarball。
 4. tarball 必须 HTTPS 且同 registry origin，无凭据、fragment；不跟随重定向。元数据不超过 2 MiB，15 秒；下载不超过 32 MiB，120 秒，校验大小和 SHA-512。
-5. 安全解包 npm tgz，要求根目录 `package/`，剥离一次；只接受普通文件/目录，拒绝符号链接、硬链接、设备、绝对路径、穿越、重复路径。最大 10000 项、128 MiB 展开量；流式限制解压大小。
+5. 安全解包 npm tgz，要求根目录 `package/`，剥离一次；只接受普通文件/目录，拒绝符号链接、硬链接、设备、绝对路径、穿越、重复路径。POSIX pax 扩展头（typeflag `x`/`g`，macOS libarchive 与 npm 用来写 mtime、xattr）跳过，不作为文件解出，也不采用其中的 path 覆盖，下一则 ustar 头的路径才参与校验。最大 10000 项、128 MiB 展开量；流式限制解压大小。
 6. 核对 package / manifest / 审核元数据，发布完整归档和目标状态。npm 生命周期脚本一律不运行，不执行 npm install，也不下载缺失运行依赖。
 
 手动 npm 安装使用相同校验流程，摘要取配置 registry 的精确版本元数据，但没有官方审核背书。商城首页故障不影响手动安装；已安装包的启动不依赖 npm 或商城在线。
@@ -270,7 +270,7 @@ npm tgz 内 `package/package.json`；本地 ZIP 内直接为 `package.json`，�
 }
 ```
 
-插件必须预编译并打包完整运行依赖，不允许宿主源代码别名、全局桥接或 pnpm 符号链接树。服务端默认导出插件工厂；Web 默认导出 `host => bundle`，React 使用宿主注入。业务数据库由插件自己管理，卸载不删除。
+插件必须预编译并打包完整运行依赖，不允许宿主源代码别名、全局桥接或 pnpm 符号链接树。服务端默认导出插件工厂；Web 默认导出 `host => bundle`，React 使用宿主注入。业务数据库由插件自己管理。已安装插件必须实现 uninstall；宿主在卸载时调用它，由插件删除自己的数据库。调用失败则保持已安装。
 
 导航由静态 package.json 声明，id 必须在插件命名空间内，webPath 必须位于 `/plugins/<plugin-id>/`；对应页面仍须在 Web bundle 注册。navigation 最多 30 项，allowedSlots/defaults 去重，defaults 是 allowedSlots 子集。无 mobile 声明不得出现 mobile 槽；声明 mobile 必须提供 Web 页面及 mobileHostRange。
 
@@ -300,7 +300,7 @@ HTTP：400 invalid_request/cursor_mismatch，404 not_found，410 cursor_expired�
 
 安装、升级、启用、禁用、卸载需逐个重启实例。管理页展示响应实例的运行版本，不宣称集群全部生效。建议 Docker Compose：`docker compose restart doca`；Kubernetes 等由运维逐实例滚动重启，API 不兼容时需排空旧实例流量。
 
-历史版本 Web 静态资源可从共享归档补齐，不等于不同版本业务 API 兼容。导航布局发布后客户端刷新生效，无需重启；插件能力声明变更属于包升级，仍需重启。卸载保留业务数据、不可变归档及数据版本标记。
+历史版本 Web 静态资源可从共享归档补齐，不等于不同版本业务 API 兼容。导航布局发布后客户端刷新生效，无需重启；插件能力声明变更属于包升级，仍需重启。卸载调用插件的 uninstall 删除其业务数据库，并保留不可变归档。成功后宿主清除数据版本标记。
 
 ## 11. 联调交付清单
 

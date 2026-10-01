@@ -17,6 +17,7 @@ try {
       .map((name) => resolve(`packages/${name}/src/index.ts`))
       .concat(
         [
+          "version",
           "platform",
           "content",
           "native",
@@ -33,6 +34,7 @@ try {
       module: ts.ModuleKind.ESNext,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
       strict: true,
+      resolveJsonModule: true,
       skipLibCheck: true,
       declaration: true,
       rootDir: resolve("packages"),

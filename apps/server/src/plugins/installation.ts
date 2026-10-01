@@ -162,6 +162,26 @@ export async function inspectPlugin(
     dataVersion: pkg.doca.dataVersion,
   };
 }
+export async function instantiateInstalledPlugin(
+  descriptor: InstalledPlugin,
+): Promise<DocaPlugin> {
+  const loaded = await import(pathToFileURL(descriptor.server).href);
+  if (typeof loaded.default !== "function")
+    throw new Error(`${descriptor.packageName} must export a plugin factory`);
+  const plugin = loaded.default() as DocaPlugin;
+  if (
+    !isDeepStrictEqual(
+      validatePluginManifest(plugin.manifest),
+      descriptor.manifest,
+    )
+  )
+    throw new Error(
+      `Runtime manifest differs from static manifest: ${descriptor.packageName}`,
+    );
+  if (typeof plugin.uninstall !== "function")
+    throw new Error(`Plugin ${descriptor.manifest.id} must implement uninstall`);
+  return scopeInstalledPlugin(plugin);
+}
 export async function importInstalledPlugins(
   installed: readonly InstalledPlugin[],
   core: readonly PluginManifest[] = [],
@@ -174,20 +194,7 @@ export async function importInstalledPlugins(
   for (const manifest of order) {
     const descriptor = installed.find((p) => p.manifest.id === manifest.id);
     if (!descriptor) continue;
-    const loaded = await import(pathToFileURL(descriptor.server).href);
-    if (typeof loaded.default !== "function")
-      throw new Error(`${descriptor.packageName} must export a plugin factory`);
-    const plugin = loaded.default() as DocaPlugin;
-    if (
-      !isDeepStrictEqual(
-        validatePluginManifest(plugin.manifest),
-        descriptor.manifest,
-      )
-    )
-      throw new Error(
-        `Runtime manifest differs from static manifest: ${descriptor.packageName}`,
-      );
-    plugins.push(scopeInstalledPlugin(plugin));
+    plugins.push(await instantiateInstalledPlugin(descriptor));
   }
   return plugins;
 }

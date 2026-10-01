@@ -19,7 +19,7 @@ it("delivers scoped idempotent notifications, checks current authorization and g
     const manifest = { schemaVersion: 1, id: "example.notifications", version: "1.0.0", displayName: "Notifications", sdkRange: "^0.1.0" };
     await writeFile(join(pkg, "package.json"), JSON.stringify({name:"example-notifications",version:"1.0.0",type:"module",doca:{dataVersion:"1",manifest:"./manifest.json",server:"./server.js"}}));
     await writeFile(join(pkg, "manifest.json"), JSON.stringify(manifest));
-    await writeFile(join(pkg, "server.js"), `export default () => ({manifest:${JSON.stringify(manifest)}, async mount(ctx) {
+    await writeFile(join(pkg, "server.js"), `export default () => ({manifest:${JSON.stringify(manifest)}, async uninstall() {}, async mount(ctx) {
       ctx.inject({id:'permissions.v1'}).register({pluginId:'example.notifications',resourceType:'mailbox',async authorize(user,id,action){const current=await ctx.inject({id:'users.v1'}).status(user);return current?.status==='active' && user===id && action==='notification.read'}});
       const notifications=ctx.inject({id:'notifications.v1'});
       await ctx.inject({id:'http.v1'}).register('example.notifications', [{method:'POST',path:'/publish',handle(req){return notifications.publish(req.body.pluginId ?? 'example.notifications',{recipientId:req.principal.id,key:req.body.key??'mail:1',title:req.body.title??'New mail',body:'Message received',path:req.body.path??'/mail/inbox?message=1',resource:{type:'mailbox',id:req.principal.id}})}},{method:'POST',path:'/withdraw',async handle(req){await notifications.withdraw('example.notifications',{recipientId:req.principal.id,key:'mail:1'});return {ok:true}}}]);

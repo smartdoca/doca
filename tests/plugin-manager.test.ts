@@ -34,6 +34,7 @@ function bundle(
   dataVersion = "1",
   id = "example.demo",
   dependencies: any[] = [],
+  uninstall = "async uninstall() {}",
 ) {
   const manifest = {
     schemaVersion: 1,
@@ -60,7 +61,7 @@ function bundle(
       ),
       "manifest.json": strToU8(JSON.stringify(manifest)),
       "server.js": strToU8(
-        `export default () => ({ manifest: ${JSON.stringify(manifest)} });`,
+        `export default () => ({ manifest: ${JSON.stringify(manifest)}${uninstall ? `, ${uninstall}` : ""} });`,
       ),
       "web/index.js": strToU8(
         `export default () => ({manifest: { pluginId: '${id}', version: '${version}', targets:['web']}});`,
@@ -105,7 +106,7 @@ it("synchronizes uploads to a second empty instance and repairs partial/corrupt 
     new PluginManager(await directory(), [], db).prepare(),
   ).rejects.toThrow("checksum");
 });
-it("upgrades without touching running code and retains data compatibility after uninstall", async () => {
+it("upgrades without touching running code and clears the structure number on uninstall", async () => {
   const db = await database(),
     dir = await directory();
   const installer = new PluginManager(dir, [], db);
@@ -121,7 +122,7 @@ it("upgrades without touching running code and retains data compatibility after 
   });
   expect(await readFile(old!.server, "utf8")).toContain('"version":"1.0.0"');
   await expect(running.install(bundle("1.2.0", "2"), "local")).rejects.toThrow(
-    "data structure",
+    "Incompatible data structure for example.demo: package 1.2.0 declares 2, but the installed structure is 1.",
   );
   await expect(running.install(bundle("1.0.0"), "local")).rejects.toThrow();
   const newInstance = new PluginManager(await directory(), [], db);
@@ -135,12 +136,56 @@ it("upgrades without touching running code and retains data compatibility after 
   expect(await emptyInstance.prepare()).toEqual([]);
   await emptyInstance.confirm();
   expect((await emptyInstance.inventory()).plugins).toEqual([]);
-  await expect(
-    emptyInstance.install(bundle("2.0.0", "2"), "local"),
-  ).rejects.toThrow("data structure");
+  expect(
+    JSON.parse(
+      (await db.selectFrom("plugin_registry").select("state").executeTakeFirstOrThrow()).state,
+    ).dataVersions,
+  ).toEqual({});
+  expect((await emptyInstance.install(bundle("2.0.0", "2"), "local")).plugins[0]).toMatchObject({
+    version: "2.0.0",
+    dataVersion: "2",
+  });
   expect(
     await db.selectFrom("plugin_archives").selectAll().execute(),
-  ).toHaveLength(2);
+  ).toHaveLength(3);
+});
+it("keeps the install when the plugin uninstall method fails", async () => {
+  const db = await database();
+  const manager = new PluginManager(await directory(), [], db);
+  await manager.install(
+    bundle(
+      "1.0.0",
+      "1",
+      "example.demo",
+      [],
+      "async uninstall() { throw new Error('database busy') }",
+    ),
+    "local",
+  );
+  await manager.prepare();
+  await manager.confirm();
+  await expect(manager.change("example.demo", "remove")).rejects.toThrow(
+    "database busy",
+  );
+  const state = JSON.parse(
+    (
+      await db
+        .selectFrom("plugin_registry")
+        .select("state")
+        .executeTakeFirstOrThrow()
+    ).state,
+  );
+  expect(state.desired["example.demo"].dataVersion).toBe("1");
+  expect(state.dataVersions["example.demo"]).toBe("1");
+});
+it("rejects an install that does not implement uninstall", async () => {
+  const db = await database();
+  await expect(
+    new PluginManager(await directory(), [], db).install(
+      bundle("1.0.0", "1", "example.demo", [], ""),
+      "local",
+    ),
+  ).rejects.toThrow("Plugin example.demo must implement uninstall");
 });
 it("validates enabled dependency graphs and refuses concurrent lost updates", async () => {
   const db = await database();
@@ -235,16 +280,22 @@ it("protects management endpoints and removes notes from new deployments", async
       headers: { ...headers, cookie },
     });
     expect(history.statusCode).toBe(200);
-    expect(
-      history
-        .json()
-        .items.every(
-          (item: { pluginId: string }) => item.pluginId === "example.demo",
-        ),
-    ).toBe(true);
-    expect(
-      history.json().items.map((item: { stage: string }) => item.stage),
-    ).toEqual(["staged", "requested"]);
+    expect(history.json().items).toEqual([
+      expect.objectContaining({
+        stage: "staged",
+        pluginId: "example.demo",
+        version: "1.0.0",
+        error: null,
+        active: false,
+      }),
+      expect.objectContaining({
+        stage: "requested",
+        pluginId: "example.demo",
+        version: "1.0.0",
+        error: null,
+        active: false,
+      }),
+    ]);
     const failed = await app.inject({
       method: "POST",
       url: "/api/v1/admin/plugins/upload",
@@ -256,7 +307,14 @@ it("protects management endpoints and removes notes from new deployments", async
       url: "/api/v1/admin/plugins/operations",
       headers: { ...headers, cookie },
     });
-    expect(afterFailure.json().items[0].stage).toBe("failed");
+    expect(afterFailure.json().items[0]).toMatchObject({
+      stage: "failed",
+      pluginId: null,
+      version: null,
+      error: expect.any(String),
+      active: false,
+    });
+    expect(afterFailure.json().items[0].error.length).toBeGreaterThan(0);
     expect(
       (
         await app.inject({

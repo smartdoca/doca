@@ -47,7 +47,7 @@ it("binds mobile tickets to one plugin, denies replay and host APIs, and revokes
   await writeFile(join(pkg, "manifest.json"), JSON.stringify(manifest));
   await writeFile(
     join(pkg, "server.js"),
-    `export default()=>({manifest:${JSON.stringify(manifest)}})`,
+    `export default()=>({manifest:${JSON.stringify(manifest)},async uninstall(){}})`,
   );
   await writeFile(join(pkg, "web/index.js"), "export default()=>({})");
   const app = await createApp(db, {

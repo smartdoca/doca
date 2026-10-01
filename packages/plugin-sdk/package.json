@@ -1,10 +1,11 @@
 {
   "name": "@smartdoca/plugin-sdk",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "MIT",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./version": "./src/version.ts",
     "./testing": "./src/testing.ts",
     "./platform": "./src/platform.ts",
     "./files": "./src/files.ts",
@@ -32,6 +33,10 @@
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
+      },
+      "./version": {
+        "types": "./dist/version.d.ts",
+        "import": "./dist/version.js"
       },
       "./testing": {
         "types": "./dist/testing.d.ts",

@@ -1,6 +1,6 @@
 # Plugin development
 
-Updated 2026-10-01 for host image 0.1.1 and public SDK 0.1.2. This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
+Updated 2026-10-01 for host image 0.1.2 and public SDK 0.1.3. This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
 
 [中文](plugin-development.zh-CN.md)
 
@@ -38,12 +38,12 @@ Install a complete prebuilt ZIP through Admin → Plugins, or drop a `<plugin-id
   "id": "example.attachments",
   "version": "1.0.0",
   "displayName": "Attachments",
-  "sdkRange": "^0.1.2",
+  "sdkRange": "^0.1.3",
   "dependencies": [{ "id": "doca.files", "range": "^0.1.0" }]
 }
 ```
 
-Only compiled JavaScript is loaded. Bundle or vendor the complete dependency closure as real files. No install scripts, registry fetching or host compilation run. Paths stay inside the package root. `doca.dataVersion` is required and stays identical for v1 upgrades; plugin initialization checks the actual business schema.
+Only compiled JavaScript is loaded. Bundle or vendor the complete dependency closure as real files. No install scripts, registry fetching or host compilation run. Paths stay inside the package root. `doca.dataVersion` is required. Whether that structure number may change is specified in [Data structure](#data-structure) below.
 
 ## SDK and host services
 
@@ -108,7 +108,41 @@ Register an AI tool with `aiServiceToken.registerTool`: id, description, inputSc
 
 Doca does not include membership, prices, points, or business quotas. Model input and output rates, and tokens per image, convert a vendor's raw usage into tokens. They are not a price. Usage distinguishes an unconfirmed call from actual metrics. `ai.usage.recorded` is written inside the settlement transaction. Top-level `metrics` are the rated usage. `provider.metrics` keeps the vendor's raw facts. A plugin pulls events with `events.read(cursor, limit)`, stores its cursor, and handles each event id once. A policy check can refuse a call. Cross-plugin reservation, failure compensation, and money consistency do not yet have a full transaction protocol. One check is not a billing implementation.
 
-The plugin owns its database, credentials, business jobs, and outbox. The host does not offer data.v1 or data.v2. Use initialize, mount, ready, and dispose. The database must match the declared data version; compatible existing data is accepted. A mismatched schema refuses to start.
+The plugin owns its database, credentials, business jobs, and outbox. The host does not offer data.v1 or data.v2 and does not open the plugin database. The database must match the declared data version; compatible existing data is accepted. A mismatched schema refuses to start. Uninstall is specified below.
+
+## Data structure
+
+`doca.dataVersion` is the structure number of the plugin's private database. It is not a version number that can be compared by magnitude.
+
+When a new release is planned to keep using data that is already installed, the structure number must stay the same. If a dependency library needs to be upgraded, the plugin prepares that upgrade itself and brings the existing database to a state the new library can read. The host does not call this upgrade, and a dependency-library change does not change the structure number.
+
+Changing the structure number means the release is no longer compatible with the previous version's data. The old version must be uninstalled first. After `uninstall` deletes the old database and the host clears the old structure number, a release that declares the new structure number can be installed. The host does not migrate the old database to the new structure.
+
+## Uninstall
+
+An installed plugin must implement `uninstall(context)`. The host rejects installation and does not load a package whose factory omits it.
+
+When an administrator uninstalls a plugin, the host calls `uninstall` first. The plugin deletes its own database, credentials, jobs, and outbox. After that call succeeds, the host clears the structure marker and removes the installation. The host does not open or delete the plugin database.
+
+- A different structure number means the old structure is incompatible. `uninstall` deletes the current database. It does not migrate the old database into the new structure.
+- A repeated call must succeed when the data is already gone.
+- If the method is missing or throws, uninstall does not finish: the plugin stays installed and the structure marker stays.
+- `initialize`, `mount`, `ready`, and `dispose` manage connections, timers, and registrations for the current process. Do not delete the database in `dispose`.
+- Attachments stored through the host file service are not deleted automatically. Before a plugin removes its own bindings, it must check that no other business still uses those files.
+
+An upgrade that keeps the installed data must leave `doca.dataVersion` unchanged and perform any dependency-library upgrade inside the plugin. A release that changes the structure number must uninstall the old version first. See [Data structure](#data-structure) above.
+
+```ts
+export default () =>
+  definePlugin({
+    manifest,
+    async uninstall() {
+      await removeOwnDatabase();
+    },
+  });
+```
+
+`removeOwnDatabase` is the plugin's own function. It deletes the database where that plugin stores its business data. The host does not provide this function.
 
 ## Web
 
@@ -130,7 +164,7 @@ HTTP callbacks, attachment binding, user calibration, search and knowledge, and 
 
 Acceptance installs a real host build, the SDK, and the business plugin tarball outside this repository. Prepare the full dependency closure. Do not depend on a source link, an undeclared cache, or a registry fetch during install or startup. Verify web assets, the business flow, revocation, retry, and restart. Building the SDK is not end-to-end acceptance.
 
-Disable, uninstall, and data retention are fixed at first delivery. A plugin database must match its declared data version. A mismatch refuses startup. There is no upgrade or downgrade script. A user-deletion protocol is not available. The dynamic mobile WebView contract is documented in the mail integration v1 guide. The default data directory and job status do not let the host read the plugin database.
+A plugin database must match its declared data version. A mismatch refuses startup. There is no upgrade or downgrade script. Uninstall requirements are in [Uninstall](#uninstall) above. A user-deletion protocol is not available. The dynamic mobile WebView contract is documented in the mail integration v1 guide. The default data directory and job status do not let the host read the plugin database.
 
 ## Background identity checks and notifications
 
@@ -150,7 +184,7 @@ HTTP registration limits the body to 1 MiB by default. A route that needs a larg
 
 ## Unified content: reading, search and knowledge subscriptions
 
-Use `@smartdoca/plugin-sdk@^0.1.2`. Import `contentServiceToken` and the `ContentSource` type from `@smartdoca/plugin-sdk/content`; declare the token in `injections.required` and register the source during mount. Sources belong to the registering plugin. Built-in documents and files use the same contract.
+Use `@smartdoca/plugin-sdk@^0.1.3`. Import `contentServiceToken` and the `ContentSource` type from `@smartdoca/plugin-sdk/content`; declare the token in `injections.required` and register the source during mount. Sources belong to the registering plugin. Built-in documents and files use the same contract.
 
 | Member | Contract |
 | --- | --- |
@@ -179,10 +213,10 @@ Use the same Web bundle on Web and in the scoped mobile WebView. `PluginWebHost`
 - Android save returns completed/canceled. iOS save and system sharing may report presented, which does not prove a user completed the action. Account switching or page disposal cancels outstanding requests.
 - Mail account binding belongs on Web. Native OAuth is outside this delivery.
 
-SDK 0.1.2 is published. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
+The current public SDK package version is 0.1.3. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
 
 ## Distribution and navigation
 
-A complete npm tgz is used for store publication or exact package/version installation in Plugins → Settings. Local upload takes a ZIP with package.json at its root, not a tgz. Both contain compiled artifacts and the full runtime dependency closure; the host does not run npm install or package scripts. Install, upgrade, disable and uninstall take effect after each instance restarts; uninstall retains business data.
+A complete npm tgz is used for store publication or exact package/version installation in Plugins → Settings. Local upload takes a ZIP with package.json at its root, not a tgz. Both contain compiled artifacts and the full runtime dependency closure; the host does not run npm install or package scripts. Install, upgrade, disable and uninstall take effect after each instance restarts. Uninstall behavior is specified in [Uninstall](#uninstall) above.
 
 Global navigation has Web user, App user and Web administrator scopes. Declare page purpose and platforms; never offer a user page as an administrator page. Plugin pages are labeled by origin, and an entry should not appear in both the sidebar and More. See [distribution, WebView and navigation](plugin-mail-integration-v1.md) and [store protocol](plugin-store-protocol.md).

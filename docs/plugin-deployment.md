@@ -2,7 +2,7 @@
 
 [中文](plugin-deployment.zh-CN.md)
 
-Administrators use **Admin → Plugins** to browse the official store, upload a local ZIP, install, upgrade, enable, disable or uninstall plugins. Changes are saved as the desired installation and take effect on each instance's next restart. The page shows the answering instance's running version separately from the global target. Uninstall preserves business data; only upgrades with the same `doca.dataVersion` are accepted. Plugins check their actual database structure during initialization.
+Administrators use **Admin → Plugins** to browse the official store, upload a local ZIP, install, upgrade, enable, disable or uninstall plugins. Changes are saved as the desired installation and take effect on each instance's next restart. The page shows the answering instance's running version separately from the global target. Uninstall calls the plugin's required uninstall method so the plugin deletes its own business data, then clears the data version marker. A later install may use another structure. If uninstall fails, the plugin stays installed. Upgrades of an installed plugin still require the same `doca.dataVersion`. Plugins check their actual database structure during initialization.
 
 ```dotenv
 DOCA_PLUGIN_STORE_URL=https://store.smartdoca.cc

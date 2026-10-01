@@ -182,5 +182,8 @@ export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {
     dispose: plugin.dispose
       ? (context) => plugin.dispose!(scope(context))
       : undefined,
+    uninstall: plugin.uninstall
+      ? (context) => plugin.uninstall!(scope(context))
+      : undefined,
   };
 }

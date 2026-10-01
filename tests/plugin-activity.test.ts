@@ -385,7 +385,7 @@ it("loads an installed provider through the public service and serves authentica
     await writeFile(join(pkg, "manifest.json"), JSON.stringify(manifest));
     await writeFile(
       join(pkg, "server.js"),
-      `export default () => ({ manifest: ${JSON.stringify(manifest)}, injections: {required:[{id:'activity.v1'},{id:'permissions.v1'}]}, mount(ctx) {
+      `export default () => ({ manifest: ${JSON.stringify(manifest)}, async uninstall() {}, injections: {required:[{id:'activity.v1'},{id:'permissions.v1'}]}, mount(ctx) {
       ctx.inject({id:'permissions.v1'}).register({pluginId:'example.activity',resourceType:'message',async authorize(user,id,action){return user===id && action==='activity.read'}});
       const make = id => ({id,title:'Plugin-owned message',visitedAt:'2026-01-01T00:00:00.000Z',path:'/mail/'+id});
       ctx.inject({id:'activity.v1'}).register({id:'example.activity.messages',pluginId:'example.activity',schemaVersion:1,resourceType:'message',title:{en:'Mail',zh:'邮件'},icon:'mail',async list(ctx,input){return {items:input.after?[]:[make(ctx.principalId)],hasMore:false}},async get(ctx,id){return id===ctx.principalId?make(id):null}});

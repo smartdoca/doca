@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { unpackNpm, downloadNpm } from "@server/plugins/npm.js";
 import { PluginStore } from "@server/plugins/store.js";
 import { unpack } from "@server/plugins/archive.js";
-function tar(name: string, content: string, type = "0") {
+function tarEntry(name: string, content: string, type = "0") {
   const bytes = Buffer.from(content),
     h = Buffer.alloc(512);
   h.write(name, 0);
@@ -19,11 +19,19 @@ function tar(name: string, content: string, type = "0") {
   h.write("00", 263);
   const sum = h.reduce((a, b) => a + b, 0);
   h.write(sum.toString(8).padStart(6, "0") + "\0 ", 148);
+  return Buffer.concat([
+    h,
+    bytes,
+    Buffer.alloc((512 - (bytes.length % 512)) % 512),
+  ]);
+}
+function tar(name: string, content: string, type = "0") {
+  return gzipSync(Buffer.concat([tarEntry(name, content, type), Buffer.alloc(1024)]));
+}
+function tarEntries(entries: Array<[string, string, string?]>) {
   return gzipSync(
     Buffer.concat([
-      h,
-      bytes,
-      Buffer.alloc((512 - (bytes.length % 512)) % 512),
+      ...entries.map(([name, content, type]) => tarEntry(name, content, type)),
       Buffer.alloc(1024),
     ]),
   );
@@ -79,6 +87,37 @@ it("verifies exact npm bytes and refuses foreign tarballs, links, traversal and 
   ).rejects.toThrow("Untrusted");
   expect(() => unpackNpm(tar("package/../escape", "x"))).toThrow("path");
   expect(() => unpackNpm(tar("package/link", "x", "2"))).toThrow("Links");
+});
+it("skips libarchive pax headers and still checks the following ustar path", () => {
+  const pax = "30 mtime=1790863819.111169654\n";
+  const pkg = JSON.stringify({ name: "@example/mail", version: "1.0.0" });
+  const files = unpackNpm(
+    tarEntries([
+      ["PaxHeader/package", pax, "x"],
+      ["package/", "", "5"],
+      ["package/PaxHeader/package.json", pax, "x"],
+      ["package/package.json", pkg],
+      ["package/PaxHeader/LICENSE", pax, "g"],
+      ["package/LICENSE", "mit"],
+    ]),
+  );
+  expect(Object.keys(files).sort()).toEqual(["LICENSE", "package.json"]);
+  expect(() =>
+    unpackNpm(
+      tarEntries([
+        ["PaxHeader/package", pax, "x"],
+        ["package/../escape", "x"],
+      ]),
+    ),
+  ).toThrow("path");
+  expect(() =>
+    unpackNpm(
+      tarEntries([
+        ["package/PaxHeader/link", pax, "x"],
+        ["package/link", "x", "2"],
+      ]),
+    ),
+  ).toThrow("Links");
 });
 it("forwards search and cursor queries and does not expand the catalog", async () => {
   const calls: string[] = [];
