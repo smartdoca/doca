@@ -9,7 +9,7 @@ import type { PluginManager } from "../plugins/manager.js";
 import { MAX_PLUGIN_BYTES, StoreCursorExpired } from "../plugins/store.js";
 import { unpack } from "../plugins/archive.js";
 
-function archivePluginId(bytes: Uint8Array): string | undefined {
+function archiveIdentity(bytes: Uint8Array) {
   try {
     const files = unpack(bytes);
     const pkg = JSON.parse(Buffer.from(files["package.json"]!).toString());
@@ -18,9 +18,13 @@ function archivePluginId(bytes: Uint8Array): string | undefined {
         files[String(pkg.doca.manifest).replace(/^\.\//, "")]!,
       ).toString(),
     );
-    return typeof manifest.id === "string" ? manifest.id : undefined;
+    return {
+      pluginId: typeof manifest.id === "string" ? manifest.id : undefined,
+      version:
+        typeof manifest.version === "string" ? manifest.version : undefined,
+    };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -31,6 +35,7 @@ export function registerPluginManagement(
   manager: PluginManager,
 ) {
   const base = "/api/v1/admin/plugins";
+  const activeOperations = new Set<string>();
   api.get(`${base}/operations`, async (req) => {
     admin(req);
     const items = await db
@@ -42,10 +47,18 @@ export function registerPluginManagement(
       .limit(100)
       .execute();
     return {
-      items: items.map(({ details, ...item }) => ({
-        ...item,
-        ...JSON.parse(details),
-      })),
+      items: items.map(({ details, ...item }) => {
+        const parsed = JSON.parse(details);
+        return {
+          ...item,
+          ...parsed,
+          version: typeof parsed.version === "string" ? parsed.version : null,
+          error: typeof parsed.error === "string" ? parsed.error : null,
+          active:
+            parsed.stage === "requested" &&
+            activeOperations.has(parsed.operationId),
+        };
+      }),
     };
   });
   const audit = async (
@@ -53,7 +66,8 @@ export function registerPluginManagement(
     operationId: string,
     operation: string,
     stage: "requested" | "staged" | "failed",
-    metadata: { pluginId?: string; packageName?: string },
+    metadata: { pluginId?: string; packageName?: string; version?: string },
+    error?: string,
   ) => {
     await db
       .insertInto("security_audit")
@@ -70,6 +84,8 @@ export function registerPluginManagement(
           stage,
           pluginId: metadata.pluginId ?? null,
           packageName: metadata.packageName ?? null,
+          version: metadata.version ?? null,
+          error: stage === "failed" ? (error ?? null) : null,
         }),
       })
       .execute();
@@ -78,21 +94,30 @@ export function registerPluginManagement(
     actor: Actor,
     action: string,
     run: () => Promise<T>,
-    metadata: { pluginId?: string; packageName?: string } = {},
+    metadata: { pluginId?: string; packageName?: string; version?: string } = {},
   ) {
     const operationId = randomUUID();
-    await audit(actor, operationId, action, "requested", metadata);
+    activeOperations.add(operationId);
     try {
+      await audit(actor, operationId, action, "requested", metadata);
       const result = await run();
       await audit(actor, operationId, action, "staged", metadata);
       return result;
     } catch (error) {
       api.log.warn({ err: error }, "Plugin management operation failed");
-      await audit(actor, operationId, action, "failed", metadata);
-      fail(
-        400,
-        error instanceof Error ? error.message : "Plugin operation failed",
+      const message =
+        error instanceof Error ? error.message : "Plugin operation failed";
+      await audit(
+        actor,
+        operationId,
+        action,
+        "failed",
+        metadata,
+        message.slice(0, 500),
       );
+      fail(400, message);
+    } finally {
+      activeOperations.delete(operationId);
     }
   }
   api.get(base, async (req) => {
@@ -149,6 +174,7 @@ export function registerPluginManagement(
     async (req) => {
       const metadata = {
         packageName: req.body.name,
+        version: req.body.version,
         pluginId: undefined as string | undefined,
       };
       return operation(
@@ -156,7 +182,7 @@ export function registerPluginManagement(
         "npm",
         async () => {
           const result = await downloadNpm(req.body.name, req.body.version);
-          metadata.pluginId = archivePluginId(result.bytes);
+          metadata.pluginId = archiveIdentity(result.bytes).pluginId;
           return manager.install(result.bytes, "npm", undefined, result.npm);
         },
         metadata,
@@ -187,7 +213,7 @@ export function registerPluginManagement(
           );
           return manager.install(bytes, "store", { id: req.body.id, release });
         },
-        { pluginId: req.body.id },
+        { pluginId: req.body.id, version: req.body.version },
       ),
   );
   // Scoped parser: no change to content handling in the rest of the host.
@@ -210,7 +236,7 @@ export function registerPluginManagement(
           admin(req),
           "upload",
           () => manager.install(req.body, "local"),
-          { pluginId: archivePluginId(req.body) },
+          archiveIdentity(req.body),
         ),
     );
   });

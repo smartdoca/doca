@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { satisfiesPluginVersion } from "../packages/plugin-contracts/src/index.js";
 import {
   Context,
   ContributionStore,
@@ -7,10 +9,21 @@ import {
   defineEvent,
   defineService,
   plugin,
+  PLUGIN_SDK_VERSION,
 } from "../packages/plugin-sdk/src/index.js";
+import { PLUGIN_SDK_VERSION as publishedSdkVersion } from "../packages/plugin-sdk/src/version.js";
 import { runPluginContractHarness } from "../packages/plugin-sdk/src/testing.js";
 
 describe("plugin SDK context", () => {
+  it("reads the host SDK version from the SDK package", () => {
+    const packageVersion = JSON.parse(
+      readFileSync(new URL("../packages/plugin-sdk/package.json", import.meta.url), "utf8"),
+    ).version;
+    expect(PLUGIN_SDK_VERSION).toBe(packageVersion);
+    expect(publishedSdkVersion).toBe(packageVersion);
+    expect(satisfiesPluginVersion(PLUGIN_SDK_VERSION, `^${PLUGIN_SDK_VERSION}`)).toBe(true);
+  });
+
   it("defines one build-time plugin list and rejects duplicate packages", () => {
     expect(
       defineDocaConfig({

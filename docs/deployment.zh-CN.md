@@ -2,7 +2,7 @@
 
 [English](deployment.md)
 
-一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.1.1`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
+一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.1.2`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
 
 ## 条件
 
@@ -39,7 +39,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker compose up -d` 会拉取 `docker.io/smartdoca/doca:0.1.1`。只有要从当前检出构建镜像时才加 `--build`。
+`docker compose up -d` 会拉取 `docker.io/smartdoca/doca:0.1.2`。只有要从当前检出构建镜像时才加 `--build`。
 
 检查容器：
 

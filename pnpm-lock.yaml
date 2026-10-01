@@ -491,6 +491,9 @@ importers:
       '@smartdoca/plugin-contracts':
         specifier: workspace:*
         version: link:../../packages/plugin-contracts
+      '@smartdoca/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
       '@smartdoca/web-plugin-registry':
         specifier: workspace:*
         version: link:../../packages/web-plugin-registry

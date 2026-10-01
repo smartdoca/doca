@@ -44,7 +44,15 @@ export function unpackNpm(bytes: Uint8Array) {
     const prefix = string(offset + 345, 155),
       name = (prefix ? prefix + "/" : "") + string(offset, 100),
       size = octal(124, 12),
-      type = string(offset + 156, 1);
+      type = string(offset + 156, 1),
+      end = offset + 512 + size;
+    if (end > tar.length) throw new Error("Truncated npm archive");
+    // macOS libarchive and npm write a pax header (mtime, xattrs) before each
+    // file. Those records are not package files; the next ustar header is.
+    if (type === "x" || type === "g") {
+      offset += 512 + Math.ceil(size / 512) * 512;
+      continue;
+    }
     if (
       ++count > 10000 ||
       !name.startsWith("package/") ||
@@ -55,8 +63,6 @@ export function unpackNpm(bytes: Uint8Array) {
       throw new Error("Invalid npm archive path");
     if (!["", "0", "5"].includes(type))
       throw new Error("Links and special tar entries are forbidden");
-    const end = offset + 512 + size;
-    if (end > tar.length) throw new Error("Truncated npm archive");
     if (type !== "5") {
       const key = name.slice(8);
       if (!key || Object.hasOwn(files, key))

@@ -954,5 +954,12 @@ export interface DocaPlugin<Config extends JsonObject = JsonObject> {
   initialize?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
   mount?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
   ready?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
+  /** Process shutdown only. Installed plugins must not delete their database here. */
   dispose?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
+  /**
+   * Required for an installed plugin. The host calls it when an administrator
+   * uninstalls the plugin. Delete the plugin's own database and private state.
+   * The method must succeed on a repeated call after the data is already gone.
+   */
+  uninstall?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
 }

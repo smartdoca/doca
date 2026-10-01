@@ -3,7 +3,7 @@ import { mkdir, rename, readdir } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { validatePluginGraph } from "@doca/plugin-host";
+import { runPluginUninstall, validatePluginGraph } from "@doca/plugin-host";
 import {
   comparePluginVersions,
   validatePluginManifest,
@@ -14,7 +14,7 @@ import type {
   PluginInventory,
   StoreRelease,
 } from "@core/shared/plugin-store.js";
-import { inspectPlugin } from "./installation.js";
+import { inspectPlugin, instantiateInstalledPlugin } from "./installation.js";
 import { PluginStore } from "./store.js";
 import { digest, materialize, pack, unpack } from "./archive.js";
 
@@ -120,7 +120,9 @@ export class PluginManager {
         state.dataVersions[id] &&
         state.dataVersions[id] !== entry.dataVersion
       )
-        throw new Error(`Incompatible data structure: ${id}`);
+        throw new Error(
+          `Incompatible data structure for ${id}: package ${entry.manifest.version} declares ${entry.dataVersion}, but the installed structure is ${state.dataVersions[id]}. An upgrade must keep the same structure; uninstall clears it.`,
+        );
     }
     validatePluginGraph([...this.core, ...all.map((p) => p.manifest)]);
     validatePluginGraph([
@@ -262,6 +264,7 @@ export class PluginManager {
     if (Object.values(this.running).some((p) => p.sha256 === hash))
       throw new Error("Plugin release already running");
     const plugin = await this.materialize(hash, bytes);
+    await instantiateInstalledPlugin(plugin);
     const id = plugin.manifest.id;
     if (
       expected &&
@@ -294,6 +297,7 @@ export class PluginManager {
       comparePluginVersions(plugin.manifest.version, old.manifest.version) <= 0
     )
       throw new Error("Plugin version must increase");
+    if (!old) delete state.dataVersions[id];
     state.desired[id] = {
       sha256: hash,
       enabled: old?.enabled ?? true,
@@ -333,11 +337,18 @@ export class PluginManager {
     if (!Object.hasOwn(state.desired, id) && !Object.hasOwn(this.running, id))
       throw new Error("Plugin not found");
     if (action === "cancel") {
-      if (this.running[id])
+      if (this.running[id]) {
         state.desired[id] = structuredClone(this.running[id]!);
-      else delete state.desired[id];
-    } else if (action === "remove") delete state.desired[id];
-    else {
+        state.dataVersions[id] = this.running[id]!.dataVersion;
+      } else delete state.desired[id];
+    } else if (action === "remove") {
+      const entry = state.desired[id] ?? this.running[id];
+      if (!entry) throw new Error("Plugin not found");
+      const installed = await instantiateInstalledPlugin(await this.ensure(entry));
+      await runPluginUninstall(installed);
+      delete state.desired[id];
+      delete state.dataVersions[id];
+    } else {
       if (!state.desired[id]) throw new Error("Plugin pending removal");
       state.desired[id]!.enabled = action === "enable";
     }

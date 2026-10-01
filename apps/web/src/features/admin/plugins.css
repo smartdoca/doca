@@ -738,6 +738,13 @@
 .plugin-history-group [data-status="failed"] {
   color: #b42318;
 }
+.plugin-history-group .plugin-history-error {
+  width: 100%;
+  margin: 0;
+  color: #b42318;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .plugin-history-group [data-status="staged"] {
   color: #166534;
 }

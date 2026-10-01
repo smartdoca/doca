@@ -6,6 +6,7 @@
   "type": "module",
   "dependencies": {
     "@smartdoca/plugin-contracts": "workspace:*",
+    "@smartdoca/plugin-sdk": "workspace:*",
     "@smartdoca/web-plugin-registry": "workspace:*"
   }
 }

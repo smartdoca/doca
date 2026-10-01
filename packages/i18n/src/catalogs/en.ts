@@ -139,6 +139,7 @@ export const en = {
   "plugins.local": "Local",
   "plugins.removing": "Removal pending restart",
   "plugins.pending": "Pending restart",
+  "plugins.installing": "Installing",
   "plugins.enabled": "Enabled",
   "plugins.disabled": "Disabled",
   "plugins.enable": "Enable",

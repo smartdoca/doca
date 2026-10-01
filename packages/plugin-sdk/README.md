@@ -2,6 +2,11 @@
 
 Doca's public plugin SDK. Plugins declare service requirements and own their business implementation and storage. They must not import host source paths or use private runtime bridges.
 
+## Public capabilities added in 0.1.3
+
+- Installed plugins must implement `uninstall(context)`. The host calls it when an administrator uninstalls the plugin. The plugin deletes its own database and private state. The call must succeed again when that data is already gone. `dispose` only releases process resources and does not delete the database.
+- `PLUGIN_SDK_VERSION` is this package's version. Import it from `@smartdoca/plugin-sdk` or `@smartdoca/plugin-sdk/version`.
+
 ## Public capabilities added in 0.1.2
 
 - `@smartdoca/plugin-sdk/content`: `contentServiceToken` / `content.v1`. Required source methods are `list`, `read`, and `resolve`; `search` is optional and must match its declaration. `list` returns lightweight block references and fingerprints, never full bodies. Consumers enumerate a complete snapshot, read changed blocks with the expected fingerprint, and acknowledge consumption only after successful work. Current identity, source scope and authorization apply to every call. Cursor or snapshot failure must never be treated as a completed empty inventory.

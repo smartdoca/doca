@@ -136,6 +136,7 @@ export const zh = {
   "plugins.local": "本地",
   "plugins.removing": "待卸载，重启后生效",
   "plugins.pending": "待重启",
+  "plugins.installing": "安装中",
   "plugins.enabled": "已启用",
   "plugins.disabled": "已禁用",
   "plugins.enable": "启用",

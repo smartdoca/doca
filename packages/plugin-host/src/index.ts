@@ -346,3 +346,29 @@ export class PluginHost {
     return this.#disposePromise;
   }
 }
+
+/** Call an installed plugin's required uninstall method once, then release the temporary context. */
+export async function runPluginUninstall(plugin: DocaPlugin<JsonObject>) {
+  if (typeof plugin.uninstall !== "function")
+    throw new Error(`Plugin ${plugin.manifest.id} must implement uninstall`);
+  const root = new Context("plugin-uninstall");
+  try {
+    const scope = await root.createFiberScope(
+      `plugin.${plugin.manifest.id}.uninstall`,
+    );
+    const contributions = new ContributionStore();
+    const context = new PluginContext(
+      scope,
+      plugin.manifest,
+      {},
+      contributions.forContext(scope, plugin.manifest.id),
+    );
+    try {
+      await plugin.uninstall(context);
+    } finally {
+      await context.dispose();
+    }
+  } finally {
+    await root.dispose();
+  }
+}
