@@ -2,7 +2,7 @@
 
 [中文](deployment.zh-CN.md)
 
-One server can run the published image `docker.io/smartdoca/doca:0.1.6`. A single container uses SQLite and does not need PostgreSQL or Redis. Use those only when you run more than one application replica. See [single instance and horizontal scaling](horizontal-scaling.md).
+One server can run the published image `docker.io/smartdoca/doca:0.1.7`. A single container uses SQLite and does not need PostgreSQL or Redis. Use those only when you run more than one application replica. See [single instance and horizontal scaling](horizontal-scaling.md).
 
 ## Requirements
 
@@ -39,7 +39,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker compose up -d` pulls `docker.io/smartdoca/doca:0.1.6`. Add `--build` only when you want an image built from this checkout.
+`docker compose up -d` pulls `docker.io/smartdoca/doca:0.1.7`. Add `--build` only when you want an image built from this checkout.
 
 Check the container:
 
@@ -48,7 +48,7 @@ docker compose ps
 curl -fsS http://127.0.0.1:39120/health
 ```
 
-A healthy process returns `{"status":"ok","version":"0.1.6"}`.
+A healthy process returns `{"status":"ok","version":"0.1.7"}`.
 
 SQLite, uploaded files, and the AI database are stored in the `doca_data` volume. The database must be empty on first start. A non-empty database whose schema is not the current baseline is refused. Do not delete a database that already contains users.
 

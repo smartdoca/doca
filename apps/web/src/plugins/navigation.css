@@ -17,6 +17,13 @@
 .global-header-tools .configured-navigation a{white-space:nowrap}
 .global-header-tools .nav-web-topRight a[data-display="icon"]{box-sizing:border-box;width:34px;height:34px;min-width:34px;padding:0;justify-content:center}
 .notification-trigger[hidden]{display:none!important}
+.global-header-tools>.navigation-more{position:relative;flex-shrink:0}
+.global-header-tools>.navigation-more>summary{display:flex;align-items:center;justify-content:center;cursor:pointer;list-style:none;width:34px;height:34px;border-radius:6px}
+.global-header-tools>.navigation-more>summary::-webkit-details-marker{display:none}
+.global-header-tools>.navigation-more>summary>span{display:none}
+.navigation-more-panel{position:absolute;top:calc(100% + 8px);right:0;z-index:100;min-width:240px;max-width:min(400px,calc(100vw - 24px));max-height:65vh;overflow:auto;background:var(--surface,#fff);border:1px solid var(--line,#dee0e3);border-radius:10px;padding:10px;box-shadow:0 8px 28px #0002}
+.navigation-more-panel .configured-navigation{position:static;border:0;box-shadow:none;min-width:0}
+.navigation-more-panel .plugin-slot{flex-direction:column}
 .global-header-tools>.notifications{width:0!important;min-width:0!important;height:0!important;margin-left:-10px!important}
 .global-header-tools .nav-web-topRight>div{gap:10px}
 .global-header-tools .nav-web-topRight a[data-display="icon"] svg{width:20px;height:20px}

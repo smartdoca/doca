@@ -22,7 +22,7 @@ it("merges live plugin relations only in related mode and isolates host instance
   await db.updateTable("settings").set({ directory_mode: "none" }).where("id", "=", "system").execute();
   expect(await directoryIds(db, user)).toEqual(new Set());
   const other = await openTestDatabase({ driver: "sqlite", path: ":memory:" });
-  try { expect(pluginServices(other).directories.size).toBe(0); } finally { await other.destroy(); }
+  try { expect([...pluginServices(other).directories.keys()]).toEqual(["doca.documents.directory", "doca.files.directory"]); } finally { await other.destroy(); }
 });
 it("runs plugin operation policy inside resource transactions and rolls back denied creation", async () => {
   const user = { ...await createUser(db, { login: "owner", displayName: "Owner", password: "test-password-2026" }, { bootstrap: true }), admin: 1 };

@@ -1,3 +1,5 @@
+import { extensionSlots, extensionMatches, type ExtensionCommand, type ExtensionView, type ExtensionPlacement, type ExtensionContext, type ExtensionSlot } from "./extensions.js";
+export * from "./extensions.js";
 export type ClientPluginTarget = "web" | "mobile";
 export type PluginLocale = "zh" | "en";
 export type RegistryDisposer = () => void;
@@ -330,6 +332,9 @@ export type DefaultWebPluginTypes = {
 
 export interface WebPluginBundle<T extends WebPluginTypes = DefaultWebPluginTypes> {
   readonly manifest: ClientPluginManifest;
+  readonly commands?: readonly ExtensionCommand[];
+  readonly views?: readonly ExtensionView<T["View"]>[];
+  readonly placements?: readonly ExtensionPlacement[];
   readonly routes?: readonly WebRouteContribution<
     T["RouteContext"],
     T["View"]
@@ -395,9 +400,25 @@ function interpolate(message: string, values?: Readonly<Record<string, unknown>>
   );
 }
 
+function validateExtension(item: ExtensionCommand | ExtensionView, method: unknown) {
+  if (!item.title || typeof item.title.zh !== "string" || !item.title.zh.trim() || typeof item.title.en !== "string" || !item.title.en.trim() ||
+      !Array.isArray(item.supportedContexts) || !item.supportedContexts.length ||
+      item.supportedContexts.some(scope => !["global", "home", "document", "library", "folder", "resources"].includes(scope)) || typeof method !== "function")
+    throw new RegistryConflictError("INVALID_CONTRIBUTION", "invalid extension definition", item.id);
+}
+
 export class WebPluginRegistry<
   T extends WebPluginTypes = DefaultWebPluginTypes,
 > {
+  readonly commands = new EffectRegistry<ExtensionCommand>("web command");
+  readonly views = new EffectRegistry<ExtensionView<T["View"]>>("web view");
+  readonly placements = new EffectRegistry<ExtensionPlacement>("web placement");
+
+  extensions(slot: ExtensionSlot, context: ExtensionContext): readonly ExtensionPlacement[] {
+    return this.placements.list().filter(item => item.slot === slot && extensionMatches(item.conditions, context) &&
+      (item.commandId ? this.commands.get(item.commandId) : this.views.get(item.viewId!))?.supportedContexts.includes(context.scope));
+  }
+
   readonly routes = new EffectRegistry<
     WebRouteContribution<T["RouteContext"], T["View"]>
   >("web route", (route) =>
@@ -441,6 +462,21 @@ export class WebPluginRegistry<
     const effects: RegistryDisposer[] = [];
     try {
       const pluginId = bundle.manifest.pluginId;
+      for (const item of bundle.commands ?? []) validateExtension(item, item.execute);
+      for (const item of bundle.views ?? []) validateExtension(item, item.render);
+      registerOwned(this.commands, bundle.commands, pluginId, effects);
+      registerOwned(this.views, bundle.views, pluginId, effects);
+      for (const item of bundle.placements ?? []) {
+        const reference = item.commandId ? this.commands.get(item.commandId) : this.views.get(item.viewId!);
+        if (!extensionSlots.includes(item.slot) || !!item.commandId === !!item.viewId || !reference || reference.pluginId !== pluginId ||
+            (item.presentation && (!!item.commandId || !["dialog", "drawer", "sidebar"].includes(item.presentation))) ||
+            (item.conditions?.targets && (!Array.isArray(item.conditions.targets) || item.conditions.targets.some(target => !["web", "mobile"].includes(target)))) ||
+            (item.conditions?.resourceKinds && (!Array.isArray(item.conditions.resourceKinds) || item.conditions.resourceKinds.some(kind => typeof kind !== "string"))) ||
+            (item.conditions?.formats && (!Array.isArray(item.conditions.formats) || item.conditions.formats.some(format => typeof format !== "string"))) ||
+            (item.conditions?.capabilities && (!Array.isArray(item.conditions.capabilities) || item.conditions.capabilities.some(capability => typeof capability !== "string"))))
+          throw new RegistryConflictError("INVALID_CONTRIBUTION", "invalid extension placement or reference", item.id);
+      }
+      registerOwned(this.placements, bundle.placements, pluginId, effects);
       registerOwned(this.routes, bundle.routes, pluginId, effects);
       registerOwned(this.navigation, bundle.navigation, pluginId, effects);
       registerOwned(this.adminPanels, bundle.adminPanels, pluginId, effects);

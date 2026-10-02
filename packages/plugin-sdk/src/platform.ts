@@ -20,14 +20,13 @@ export interface PluginUser extends PluginPrincipal {
   readonly profileRevision: number;
   readonly contacts: readonly { kind: string; value: string; verified: boolean }[];
 }
-export interface DirectoryUser {
-  readonly id: string;
-  readonly display_name: string;
-  readonly public_id: string | null;
-  readonly avatar: string | null;
-  readonly avatar_asset_id: string | null;
-}
+export type { DirectoryUser, DirectoryMode, DirectoryRelation, DirectorySource, DirectorySearchInput, DirectoryPage } from "@smartdoca/plugin-contracts";
+import type { DirectoryUser, DirectorySource, DirectorySearchInput, DirectoryPage } from "@smartdoca/plugin-contracts";
 export interface UsersServiceV1 {
+  me(context: PluginRequestContext): Promise<PluginUser>;
+  searchPage(context: PluginRequestContext, input: DirectorySearchInput): Promise<DirectoryPage>;
+  resolveDirectory(context: PluginRequestContext, input: { ids: readonly string[] }): Promise<readonly DirectoryUser[]>;
+  validateSelection(context: PluginRequestContext, input: { ids: readonly string[] }): Promise<void>;
   /** Trusted server task revalidation; does not grant access to business resources. */
   status(id: string): Promise<{ readonly id: string; readonly status: string } | null>;
   get(context: PluginRequestContext, id: string): Promise<PluginUser | null>;
@@ -44,19 +43,6 @@ export interface PermissionSource {
   readonly pluginId: string;
   readonly resourceType: string;
   authorize(principalId: string, resourceId: string, action: string): Promise<boolean>;
-}
-export interface DirectoryRelation {
-  readonly userId: string;
-  readonly relationId: string;
-  readonly revision: string;
-}
-export interface DirectorySource {
-  readonly id: string;
-  readonly schemaVersion: 1;
-  /** Indexed current relations from the plugin's own database. */
-  related(principalId: string, input: { cursor: string | null; limit: number; signal: AbortSignal }): Promise<{ items: readonly DirectoryRelation[]; cursor: string | null }>;
-  /** Recheck candidates against current sharing, returning only still-visible user IDs. */
-  verify(principalId: string, candidates: readonly DirectoryRelation[], signal: AbortSignal): Promise<readonly string[]>;
 }
 export interface PermissionsServiceV1 {
   register(source: PermissionSource): () => void;

@@ -592,7 +592,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
   currentAI.current = ai;
   const [modal, modalContext] = Modal.useModal();
   const [files, setFiles] = useState<Attachment<ChatFile>[]>([]);
-  const [filePickerOpen, setFilePickerOpen] = useState(false);
+  const [filePickerOpen, setFilePickerOpen] = useState<boolean | "materials">(false);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [fileSourceOpen, setFileSourceOpen] = useState(false);
   const filesRef = useRef<Attachment<ChatFile>[]>([]);
@@ -3492,6 +3492,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
         )}
         {filePickerOpen && (
           <FolderFilePicker
+            initialSource={filePickerOpen === "materials" ? "materials" : "folders"}
             close={() => setFilePickerOpen(false)}
             select={chooseStoredFile}
           />
@@ -3506,7 +3507,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
           <FileSourceDialog
             title={t("chat.addFiles")}
             close={() => setFileSourceOpen(false)}
-            chooseDoca={() => setFilePickerOpen(true)}
+            chooseDoca={source => setFilePickerOpen(source ?? true)}
             chooseFolder={() => setFolderPickerOpen(true)}
             chooseLocal={() =>
               attachmentRef.current?.select({ multiple: true })

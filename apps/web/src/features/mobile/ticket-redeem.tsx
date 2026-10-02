@@ -8,6 +8,7 @@ export function MobileTicketRedeem() {
     const params = new URLSearchParams(location.hash.split("?")[1] ?? "");
     const ticket = params.get("ticket") ?? "";
     const to = params.get("to") ?? "";
+    const find = params.get("find")?.trim();
     if (!/^[a-f0-9]{64}$/.test(ticket) || !(documentPath.test(to) || /^\/m\/plugins\/[a-z][a-z0-9.-]*\/[a-zA-Z0-9/_-]*$/.test(to))) {
       setError("打开链接无效");
       return;
@@ -24,7 +25,10 @@ export function MobileTicketRedeem() {
           throw new Error(data.message ?? "无法打开文档");
         }
         if (!active) return;
-        location.replace(`${location.pathname}${location.search}#${to}`);
+        const target = documentPath.test(to) && find
+          ? `${to}?${new URLSearchParams({ find })}`
+          : to;
+        location.replace(`${location.pathname}${location.search}#${target}`);
         location.reload();
       })
       .catch((reason) => {

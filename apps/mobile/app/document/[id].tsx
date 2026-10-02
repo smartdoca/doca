@@ -10,7 +10,7 @@ import { DocumentPanel } from "../../src/document-panel";
 import { mobileEditorScript } from "../../src/mobile-editor-css";
 
 export default function Document() {
-  const { id, title } = useLocalSearchParams<{ id: string; title?: string }>();
+  const { id, title, find } = useLocalSearchParams<{ id: string; title?: string; find?: string }>();
   const navigation = useNavigation();
   const { session } = useAuth();
   const [heading, setHeading] = useState(title || "文档");
@@ -41,6 +41,7 @@ export default function Document() {
   const url = `${session.origin}/#/m/auth?${new URLSearchParams({
     ticket: ticket.data.ticket,
     to: `/m/r/${id}`,
+    ...(find?.trim() ? { find: find.trim() } : {}),
   })}`;
   return (
     <View style={styles.page}>

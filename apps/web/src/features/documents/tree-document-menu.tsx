@@ -1,3 +1,4 @@
+import { PluginSlot } from "@web/plugins/extensions.js";
 import { useAI } from "@web/features/ai/ai-context.js";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
@@ -145,6 +146,7 @@ export function TreeDocumentMenu({
         }
       }}
     >
+      <PluginSlot slot="library.nodeMenu" scope="library" resource={resource} />
       {ai?.userId && resource.kind === "document" && (
         <button
           role="menuitem"

@@ -1,3 +1,5 @@
+import { MaterialPicker } from "@web/features/creation-resources/pickers.js";
+import { PluginSlot } from "@web/plugins/extensions.js";
 import { CollectionAction } from "@web/features/discovery/collection-action.js";
 import { fileLocationLabel } from "@web/shared/utils/system-labels.js";
 import type { Locale } from "@doca/i18n";
@@ -2053,6 +2055,8 @@ export function FilesExplorer({
     >
 
 
+      <PluginSlot slot="folder.toolbar" scope="folder" resource={{ id: location.id, kind: location.type }} />
+      {selectedValues.length > 0 && <PluginSlot slot="resource.bulkActions" scope="resources" resources={selectedValues.map(item => ({ id: item.value.id, kind: item.kind, title: item.value.name }))} />}
       <header className="files-toolbar">
         <div className="files-toolbar-actions">
           <button
@@ -2512,6 +2516,7 @@ export function FilesExplorer({
         >
           {contextMenu.target ? (
             <>
+              <PluginSlot slot="folder.rowMenu" scope="folder" resource={{ id: contextMenu.target.value.id, kind: contextMenu.target.kind, title: contextMenu.target.value.name }} />
               <button onClick={() => void showInfo(contextMenu.target!)}>
                 {contextMenu.target.kind === "folder" ? (
                   <Folder size={14} />
@@ -3470,16 +3475,35 @@ export function SharedFoldersPage() {
   );
 }
 
-export function FolderFilePicker({
+export function FolderFilePicker(props: {
+  close: () => void;
+  select?: (file: FileItem) => Promise<void> | void;
+  selectFolder?: (folder: {id:string;name:string}) => Promise<void> | void;
+  accept?: (file: FileItem) => boolean;
+  initialSource?: "folders" | "materials";
+}) {
+  const {t}=useI18n();
+  const [source,setSource]=useState(props.initialSource??"folders");
+  if(source==="materials" && props.select) return <MaterialPicker close={props.close} select={async file=>{
+    const item=await api<FileInfo>(`/files/items/${file.id}/info`);
+    if(props.accept&&!props.accept(item))throw new Error(t("fileManager.selectionFailed"));
+    await props.select!(item);
+  }}/>;
+  return <FolderBrowserPicker {...props} chooseMaterials={props.select?()=>setSource("materials"):undefined}/>;
+}
+
+function FolderBrowserPicker({
   close,
   select,
   selectFolder,
   accept,
+  chooseMaterials,
 }: {
   close: () => void;
   select?: (file: FileItem) => Promise<void> | void;
   selectFolder?: (folder: { id: string; name: string }) => Promise<void> | void;
   accept?: (file: FileItem) => boolean;
+  chooseMaterials?: () => void;
 }) {
   const { t, locale } = useI18n();
 
@@ -3634,6 +3658,7 @@ export function FolderFilePicker({
           </button>
         </header>
         <div className="folder-file-picker-toolbar">
+          {chooseMaterials && <button onClick={chooseMaterials}>{t("resources.materials")}</button>}
           <button
             className="icon"
             disabled={trail.length <= 1}
@@ -3983,7 +4008,7 @@ export function FileSourceDialog({
   title?: string;
   close: () => void;
   chooseLocal: () => void;
-  chooseDoca: () => void;
+  chooseDoca: (source?: "materials") => void;
   chooseFolder?: () => void;
   chooseLocalFolder?: () => void;
 }) {
@@ -4023,6 +4048,11 @@ export function FileSourceDialog({
               <small>{t("fileManager.browseHelp")}</small>
             </span>
             <ChevronDown size={16} />
+          </button>
+          <button onClick={() => {close();chooseDoca("materials");}}>
+            <span className="source-icon doca"><LayoutGrid size={24}/></span>
+            <span><strong>{t("resources.materials")}</strong><small>{t("resources.materialHelp")}</small></span>
+            <ChevronDown size={16}/>
           </button>
           {chooseFolder && (
             <button

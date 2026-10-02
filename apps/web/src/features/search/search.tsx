@@ -1,3 +1,5 @@
+import { openSearchDocument } from "./document-search-navigation.js";
+import { searchableSources, contentQuerySources } from "./content-search.js";
 import type { ContentItem, ContentSourceDescriptor } from "@smartdoca/plugin-sdk/content";
 import { htmlLang } from "@doca/i18n";
 import { useEffect, useId, useRef, useState } from "react";
@@ -137,7 +139,7 @@ type SearchPanelProps = {
   initialLibraryIds?: string[];
   initialLocation?: "all" | "personal" | "library";
   initialQuery?: string;
-  select: (resource: Resource) => void;
+  select: (resource: Resource, query: string) => void;
   compact?: boolean;
 };
 
@@ -154,9 +156,9 @@ export function GlobalSearch({
     <Dialog title={t("search.title")} close={close} className="search-dialog">
       <SearchPanel
         {...props}
-        select={(resource) => {
+        select={(resource, query) => {
           if (select) select(resource);
-          else window.location.hash = "/r/" + resource.id;
+          else openSearchDocument(resource, query);
           close();
         }}
       />
@@ -206,13 +208,34 @@ export function SearchPanel({
     [loading, setLoading] = useState(false);
   const [contentResults, setContentResults] = useState<ContentItem[]>([]);
   const [contentSearchError, setContentSearchError] = useState("");
+  const [contentSources, setContentSources] = useState<ContentSourceDescriptor[]>([]);
+  const [contentCatalogError, setContentCatalogError] = useState("");
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [contentLoading, setContentLoading] = useState(false);
+  const searchLoading = loading || contentLoading;
+  useEffect(() => {
+    if (compact) return;
+    const controller = new AbortController();
+    setContentCatalogError("");
+    void api<{ items: ContentSourceDescriptor[] }>("/content/sources?purpose=search", "GET", undefined, controller.signal)
+      .then(catalog => {
+        if (!controller.signal.aborted) {
+          const sources = searchableSources(catalog.items);
+          setContentSources(sources);
+          setSelectedSourceId(current => sources.some(source => source.id === current) ? current : null);
+        }
+      })
+      .catch(() => { if (!controller.signal.aborted) setContentCatalogError(t("content.searchUnavailable")); });
+    return () => controller.abort();
+  }, [compact, searchAttempt, t]);
   const filtersId = useId();
   const resultList = useRef<HTMLDivElement>(null);
   const typeButtons = useRef<(HTMLButtonElement | null)[]>([]);
-  const types: { value: "all" | "documents" | "files"; label: MessageKey }[] = [
-    { value: "all", label: "search.type.all" },
-    { value: "documents", label: "workspace.kind.document" },
-    { value: "files", label: "search.type.files" },
+  const types: { value: string; label: string; sourceId?: string }[] = [
+    { value: "all", label: t("search.type.all") },
+    { value: "documents", label: t("workspace.kind.document") },
+    { value: "files", label: t("search.type.files") },
+    ...contentSources.map(source => ({ value: `source:${source.id}`, sourceId: source.id, label: locale === "zh" ? source.title.zh : source.title.en })),
   ];
   const documentTypes: { value: string; label: MessageKey }[] = [
     { value: "", label: "doc.filter.all" },
@@ -243,10 +266,22 @@ export function SearchPanel({
   }
   const searchText = aiSearch ? submitted : q;
   const intent = searchIntent(searchText);
-  const layout = searchResultLayout(intent, contentMode, format);
-  const selectedType = contentMode;
+  const layout = selectedSourceId
+    ? { nestFiles: false, showDocuments: false, showFileHits: false, format: "", formatConflict: false }
+    : searchResultLayout(intent, contentMode, format);
+  const selectedType = selectedSourceId ? `source:${selectedSourceId}` : contentMode;
+  function selectType(type: (typeof types)[number]) {
+    setSelectedSourceId(type.sourceId ?? null);
+    setContentMode(type.sourceId ? "all" : type.value as "all" | "documents" | "files");
+    setFormat("");
+    if (type.sourceId) {
+      resetFilters();
+      setFiltersOpen(false);
+    }
+  }
   const retrievalText = intent.topic || searchText;
   const recent =
+    !selectedSourceId &&
     !aiSearch &&
     !searchText.trim() &&
     !format &&
@@ -355,22 +390,24 @@ export function SearchPanel({
       clearTimeout(timer);
       c.abort();
     };
-  }, [aiSearch, waitingForAiQuery, contentMode, query, searchAttempt, fileParams.toString()]);
+  }, [aiSearch, waitingForAiQuery, contentMode, selectedSourceId, query, searchAttempt, fileParams.toString()]);
   useEffect(() => {
     const controller = new AbortController();
     setContentResults([]);
     setContentSearchError("");
-    if (compact || contentMode !== "all" || filterCount || !searchText.trim() || waitingForAiQuery) return () => controller.abort();
+    setContentLoading(false);
+    const sources = contentQuerySources(contentSources, { compact, contentMode, selectedSourceId, filterCount });
+    if (!sources.length || !searchText.trim() || waitingForAiQuery) return () => controller.abort();
+    setContentLoading(true);
     const timer = setTimeout(() => void (async () => {
-      const catalog = await api<{ items: ContentSourceDescriptor[] }>("/content/sources?purpose=search", "GET", undefined, controller.signal);
-      const results = await Promise.allSettled(catalog.items.filter(source => source.capabilities.search).map(source =>
+      const results = await Promise.allSettled(sources.map(source =>
         api<{ items: ContentItem[] }>("/content/search", "POST", { sourceId: source.id, purpose: "search", config: {}, query: searchText, cursor: null, limit: 20 }, controller.signal)));
       if (controller.signal.aborted) return;
       setContentResults(results.flatMap(result => result.status === "fulfilled" ? result.value.items : []));
       if (results.some(result => result.status === "rejected")) setContentSearchError(t("content.searchUnavailable"));
-    })().catch(() => { if (!controller.signal.aborted) setContentSearchError(t("content.searchUnavailable")); }), 180);
+    })().catch(() => { if (!controller.signal.aborted) setContentSearchError(t("content.searchUnavailable")); }).finally(() => { if (!controller.signal.aborted) setContentLoading(false); }), 180);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [compact, contentMode, filterCount, searchText, waitingForAiQuery, searchAttempt, t]);
+  }, [compact, contentMode, selectedSourceId, contentSources, filterCount, searchText, waitingForAiQuery, searchAttempt, t]);
   async function openContent(item: ContentItem) {
     try {
       const target = await api<{ path: string; fingerprint: string } | null>("/content/resolve", "POST", { ref: item.ref, purpose: "search" });
@@ -431,7 +468,7 @@ export function SearchPanel({
         className="search-input"
         onSubmit={(e) => {
           e.preventDefault();
-          if (q.trim() && !loading) {
+          if (q.trim() && !searchLoading) {
             setSubmitted(q.trim());
             setSearchAttempt((n) => n + 1);
           }
@@ -476,7 +513,7 @@ export function SearchPanel({
         <button
           type="submit"
           className="primary"
-          disabled={!q.trim() || loading}
+          disabled={!q.trim() || searchLoading}
         >
           {t("search.ai")}
         </button>
@@ -499,8 +536,7 @@ export function SearchPanel({
                 typeButtons.current[index] = el;
               }}
               onClick={() => {
-                setContentMode(type.value);
-                setFormat("");
+                selectType(type);
               }}
               onKeyDown={(e) => {
                 const next =
@@ -515,18 +551,16 @@ export function SearchPanel({
                           : -1;
                 if (next >= 0) {
                   e.preventDefault();
-                  const value = types[next]!.value;
-                  setContentMode(value);
-                  setFormat("");
+                  selectType(types[next]!);
                   typeButtons.current[next]?.focus();
                 }
               }}
             >
-              {t(type.label)}
+              {type.label}
             </button>
           ))}
         </div>
-        <button
+        {!selectedSourceId && <button
           className="search-filter-toggle"
           aria-expanded={filtersOpen}
           aria-controls={filtersId}
@@ -534,23 +568,23 @@ export function SearchPanel({
         >
           <SlidersHorizontal size={15} />
           {filterCount ? t("search.filtersCount", { count: filterCount }) : t("search.filters")}
-        </button>
+        </button>}
       </div>
-      <div className="search-body">
+      <div className={`search-body ${selectedSourceId ? "search-source-body" : ""}`}>
         <div className="search-main">
           <div className="search-result-heading" role="status">
             <span>
               {waitingForAiQuery
                 ? t("search.lookingAi")
-                : loading && !data.items.length && !fileResults.length
+                : searchLoading && !resultCount
                   ? t("search.looking")
                   : recent
                     ? t("search.recentHeading")
-                  : leftoverFiles.length && data.items.length
+                  : !contentResults.length && leftoverFiles.length && data.items.length
                     ? t("search.foundMixed", { documents: data.items.length, files: leftoverFiles.length })
-                  : layout.showDocuments && !layout.showFileHits && data.items.length
+                  : !contentResults.length && layout.showDocuments && !layout.showFileHits && data.items.length
                     ? t("search.foundDocs", { count: data.items.length })
-                  : layout.showFileHits && !layout.showDocuments && leftoverFiles.length
+                  : !contentResults.length && layout.showFileHits && !layout.showDocuments && leftoverFiles.length
                     ? t("search.foundFiles", { count: leftoverFiles.length })
                     : t("search.foundItems", { count: resultCount })}
             </span>
@@ -567,7 +601,7 @@ export function SearchPanel({
           <div
             className="search-results"
             ref={resultList}
-            aria-busy={loading}
+            aria-busy={searchLoading}
             aria-label={t("search.results")}
           >
             {error && (
@@ -575,6 +609,7 @@ export function SearchPanel({
                 {error}
               </p>
             )}
+            {contentCatalogError && <p role="status">{contentCatalogError}</p>}
             {contentSearchError && <p role="status">{contentSearchError}</p>}
             {contentResults.map(item => <button className="search-content-result" key={JSON.stringify(item.ref)} onClick={() => void openContent(item)}>
               <strong>{item.title}</strong>
@@ -619,7 +654,7 @@ export function SearchPanel({
                   <button
                     className="search-result"
                     onClick={() => {
-                      select(r);
+                      select(r, aiSearch ? "" : searchText.trim());
                     }}
                   >
                     <SearchDocumentIcon resource={r} />
@@ -680,13 +715,13 @@ export function SearchPanel({
               <div className="search-file-locations"><span>{t("search.locations")}</span>{file.locations.map((location) => <button key={location.id} onClick={() => openFileLocation(location)} title={location.navigation.map((item) => item.name).join(" / ")}><Folder size={12} />{location.navigation.map((item) => item.name).join(" / ") || location.name}</button>)}</div>
             </div>)}</div>}
 
-            {!loading &&
+            {!searchLoading &&
               !error &&
               !waitingForAiQuery &&
               !aiUnavailable &&
-              !data.items.length &&
-              !leftoverFiles.length &&
- (
+              !contentCatalogError &&
+              !contentSearchError &&
+              !resultCount && (
               <p className="empty">
                 {aiSearch
                   ? t("search.emptyAi")
@@ -704,7 +739,7 @@ export function SearchPanel({
             )}
           </div>
         </div>
-        <aside
+        {!selectedSourceId && <aside
           id={filtersId}
           className={`search-sidebar ${filtersOpen ? "is-open" : ""}`}
           aria-label={t("search.extraFilters")}
@@ -868,7 +903,7 @@ export function SearchPanel({
               {t("search.favorited")}
             </label>
           </fieldset>
-        </aside>
+        </aside>}
       </div>
     </div>
   );

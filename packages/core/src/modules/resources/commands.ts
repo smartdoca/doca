@@ -4,7 +4,11 @@ import {
   checkDocumentSize,
   checkStorage,
 } from "../access/operation-policy.js";
-import { assertInternetPublication, checkPublication, checkTransfer } from "../access/operation-policy.js";
+import {
+  assertInternetPublication,
+  checkPublication,
+  checkTransfer,
+} from "../access/operation-policy.js";
 import { archiveInvitation, invitationState } from "../access/invitations.js";
 import { protectManagers } from "./context.js";
 import { randomUUID } from "node:crypto";
@@ -37,7 +41,12 @@ import {
 import { DocaYjsDocument as YjsDocument } from "../documents/codecs/rich-runtime.js";
 import { copySurface } from "../documents/codecs/surfaces.js";
 import { importInitialContent } from "../documents/import.js";
-import { applyTemplateContent } from "../templates/templates.js";
+import {
+  prepareDocumentTemplate,
+  initializeDocumentTemplate,
+  type PreparedDocumentTemplate,
+} from "../creation-resources/document-template.js";
+import type { TemplateSelection } from "@smartdoca/plugin-contracts";
 import type { Actor } from "../identity/passwords.js";
 import {
   check,
@@ -147,7 +156,7 @@ export function createResourceCommands(
   run: ReturnType<typeof createResourceRunner>,
 ) {
   return {
-    create(
+    async create(
       actor: Actor,
       input: {
         title: string;
@@ -157,11 +166,43 @@ export function createResourceCommands(
         parentId?: string | null;
         markdown?: string;
         initialContent?: unknown;
-        templateId?: string | null;
+        template?: TemplateSelection;
         private?: boolean;
       },
+      signal?: AbortSignal,
+      preparedTemplate?: PreparedDocumentTemplate,
     ) {
+      if ("templateId" in input)
+        fail(400, "Legacy templates are no longer supported");
+      if (
+        input.template &&
+        (input.kind !== "document" ||
+          input.initialContent !== undefined ||
+          input.markdown !== undefined)
+      )
+        fail(
+          400,
+          "Template cannot be combined with import or library creation",
+        );
+      if (
+        preparedTemplate &&
+        (preparedTemplate.context.principal.id !== actor.id ||
+          JSON.stringify(preparedTemplate.selection) !==
+            JSON.stringify(input.template))
+      )
+        fail(400, "Prepared template does not match creation request");
+      const prepared = input.template
+        ? (preparedTemplate ??
+          (await prepareDocumentTemplate(
+            db,
+            actor,
+            input.format,
+            input.template,
+            signal,
+          )))
+        : undefined;
       return run(actor, [input.parentId, input.libraryId], async (ctx) => {
+        signal?.throwIfAborted();
         let libraryId = input.libraryId ?? null,
           parentId = input.parentId ?? null;
         if (
@@ -231,28 +272,8 @@ export function createResourceCommands(
         }
         if (input.markdown !== undefined)
           await storeNewMarkdown(ctx.tx, row.id, input.markdown, now);
-        if (input.templateId) {
-          if (input.kind !== "document") fail(400, "只有文档可以使用模板");
-          if (
-            input.initialContent !== undefined ||
-            input.markdown !== undefined
-          )
-            fail(400, "不能同时使用模板和导入内容");
-          const template = await ctx.tx
-            .selectFrom("document_templates")
-            .selectAll()
-            .where("id", "=", input.templateId)
-            .executeTakeFirst();
-          if (!template) fail(404, "模板不存在");
-          if (template.format !== row.format) fail(400, "模板与文档类型不一致");
-          let content: unknown;
-          try {
-            content = JSON.parse(template.content);
-          } catch {
-            fail(400, "模板内容损坏");
-          }
-          await applyTemplateContent(ctx.tx, row, content);
-        }
+        if (prepared)
+          await initializeDocumentTemplate(ctx.tx, actor, row, prepared);
         await event(ctx, row, `${row.kind}.created`);
         return row;
       });

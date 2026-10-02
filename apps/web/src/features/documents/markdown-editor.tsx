@@ -688,7 +688,7 @@ export default function MarkdownDocument({
           createPortal(<span role="status">{status}</span>, liveSlot)}
         <Feedback message={error} tone="error" />
         {ready && (
-          <ModelFind handle={handle} revision={revision} canEdit={canEdit} />
+          <ModelFind documentId={detail.resource.id} handle={handle} revision={revision} canEdit={canEdit} />
         )}
         <div className="doca-markdown markdown-sdk-container">
           <CollaborativeMarkdownEditor

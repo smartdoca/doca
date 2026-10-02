@@ -115,6 +115,19 @@ it("binds mobile tickets to one plugin, denies replay and host APIs, and revokes
     expect(bootstrap.json().plugins.map((p: any) => p.id)).toEqual([
       "example.mail",
     ]);
+    const publicCall = (pluginId: string, operation: string, payload: Record<string, unknown> = {}) => app.inject({
+      method: "POST", url: `/api/v1/plugin-platform/${pluginId}/${operation}`, headers: { ...headers, cookie }, payload,
+    });
+    const self = await publicCall("example.mail", "users.me");
+    expect(self.statusCode, self.body).toBe(200);
+    expect(self.json()).toMatchObject({ login: "mobile-admin" });
+    expect(self.body).not.toContain("password_hash");
+    const search = await publicCall("example.mail", "users.searchPage", { query: "" });
+    expect(search.statusCode, search.body).toBe(200);
+    expect(search.headers["cache-control"]).toBe("no-store");
+    expect((await publicCall("other.plugin", "users.me")).statusCode).toBe(403);
+    expect((await publicCall("example.mail", "users.list")).statusCode).toBe(404);
+    expect((await publicCall("example.mail", "users.searchPage", { query: "", principal: { id: "other" } })).statusCode).toBe(400);
     await app.inject({
       method: "POST",
       url: "/api/v1/auth/logout",

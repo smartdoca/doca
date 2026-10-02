@@ -1,6 +1,6 @@
 {
   "name": "doca",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -49,6 +49,7 @@
     "@smartdoca/files-capability": "workspace:*",
     "@smartdoca/knowledge-capability": "workspace:*",
     "@smartdoca/plugin-sdk": "workspace:*",
+    "@smartdoca/plugin-contracts": "workspace:*",
     "@smartdoca/search-host": "workspace:*",
     "@smartdoca/sheet": "0.2.0-rc.17",
     "@open-file-viewer/core": "0.1.47",

@@ -1,3 +1,7 @@
+import { createPublicDocumentReads } from "@core/modules/documents/public-read.js";
+import { createContent } from "@core/workflows/resources.js";
+import { createDocuments } from "@core/modules/collaboration/documents.js";
+import { MARKDOWN_CODEC } from "@core/modules/documents/codecs/markdown.js";
 import { createUser } from "@core/modules/identity/passwords.js";
 import { mkdtemp, mkdir, writeFile, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
@@ -17,7 +21,7 @@ async function fixture(options: { range?: string; server?: string } = {}) {
   await writeFile(join(pkg, "package.json"), JSON.stringify({ name: "@example/demo", version: "1.0.0", type: "module", doca: { dataVersion: "1", manifest: "./manifest.json", server: options.server ?? "./server.js", web: { directory: "./web", entry: "./index.js" } } }));
   await writeFile(join(pkg, "manifest.json"), JSON.stringify(manifest));
   await writeFile(join(pkg, "web/index.js"), "export default ({React}) => ({manifest: {pluginId: 'example.demo', version: '1.0.0', targets: ['web']}});");
-  await writeFile(join(pkg, "server.js"), `export default () => ({ manifest: ${JSON.stringify(manifest)}, async uninstall() {}, async mount(ctx) { const http = ctx.inject({id: 'http.v1'}); await ctx.effectAsync(() => http.register('example.demo', [{method:'POST',path:'/large',bodyLimit:2097152,handle(req){return {length:req.rawBody.length}}},{method:'GET',path:'/me',async handle(req) {const profile = await ctx.inject({id:'users.v1'}).get(req,req.principal.id); const folders = await ctx.inject({id:'files.v1'}).folders.list({principalId:req.principal.id,signal:req.signal},{parentId:null}); return {profile,folders}}},{method:'GET',path:'/callback',auth:'external',verify(req) { return req.query.state === 'valid' }, handle(req,res) {res.header('Set-Cookie','demo=ok; HttpOnly; SameSite=Lax'); res.redirect(http.callbackUrl('example.demo','/me'));}},{method:'POST',path:'/hook',auth:'external',verify(req) {return req.headers['x-signature'] === 'test-signature' && new TextDecoder().decode(req.rawBody) === '{\"event\":1}'}, handle(req,res) {res.status(202); return {received:true, anonymous:req.principal===null}}}])); } });`);
+  await writeFile(join(pkg, "server.js"), `export default () => ({ manifest: ${JSON.stringify(manifest)}, async uninstall() {}, async mount(ctx) { const http = ctx.inject({id: 'http.v1'}); await ctx.effectAsync(() => http.register('example.demo', [{method:'GET',path:'/snapshot',async handle(req){return ctx.inject({id:'documents.read.v1'}).readSnapshot(req,{documentId:req.query.id})}},{method:'POST',path:'/large',bodyLimit:2097152,handle(req){return {length:req.rawBody.length}}},{method:'GET',path:'/me',async handle(req) {const profile = await ctx.inject({id:'users.v1'}).get(req,req.principal.id); const folders = await ctx.inject({id:'files.v1'}).folders.list({principalId:req.principal.id,signal:req.signal},{parentId:null}); return {profile,folders}}},{method:'GET',path:'/callback',auth:'external',verify(req) { return req.query.state === 'valid' }, handle(req,res) {res.header('Set-Cookie','demo=ok; HttpOnly; SameSite=Lax'); res.redirect(http.callbackUrl('example.demo','/me'));}},{method:'POST',path:'/hook',auth:'external',verify(req) {return req.headers['x-signature'] === 'test-signature' && new TextDecoder().decode(req.rawBody) === '{\"event\":1}'}, handle(req,res) {res.status(202); return {received:true, anonymous:req.principal===null}}}])); } });`);
   return { root, pkg };
 }
 it("discovers only direct packages and validates their static manifests before importing", async () => {
@@ -52,6 +56,24 @@ it("mounts an independently installed JS plugin, serves only its Web root and re
       expect(result.json()).toMatchObject({ profile: { id: user.id, login: "plugin-owner", profile: {} }, folders: { items: [] } });
       expect(result.body).not.toContain("password_hash");
     }
+    const actor = { ...user, admin: 1 };
+    const doc = await createContent(db).create(actor, { kind: "document", format: "markdown", title: "Public snapshot" });
+    await createDocuments(db).exchange(actor, doc.id, MARKDOWN_CODEC);
+    const call = (operation: string, payload: Record<string, unknown> = {}) => app.inject({ method: "POST", url: `/api/v1/plugin-platform/example.demo/${operation}`, headers: { ...headers, origin: "http://127.0.0.1:39130", cookie }, payload });
+    const snapshot = await call("documents.readSnapshot", { documentId: doc.id });
+    expect(snapshot.statusCode, snapshot.body).toBe(200);
+    const expected = await createPublicDocumentReads(db).readSnapshot({ requestId: "test", principal: { id: user.id, publicId: "", displayName: user.display_name, admin: true }, signal: new AbortController().signal }, { documentId: doc.id });
+    expect(snapshot.json()).toEqual(expected);
+    const injected = await app.inject({ url: `/api/v1/plugins/example.demo/snapshot?id=${doc.id}`, headers: { ...headers, cookie } });
+    expect(injected.statusCode, injected.body).toBe(200);
+    expect(injected.json()).toEqual(expected);
+    expect((await call("documents.readSnapshot", { documentId: doc.id, expectedRevision: "old" })).statusCode).toBe(409);
+    expect((await call("files.folders.list", { parentId: null })).json()).toEqual({ items: [], cursor: null });
+    expect((await call("libraries.list")).statusCode).toBe(200);
+    expect((await call("users.searchPage", { query: "", mode: "all" })).statusCode).toBe(400);
+    expect((await call("documents.purge", { documentId: doc.id })).statusCode).toBe(404);
+    expect((await app.inject({ method: "POST", url: "/api/v1/plugin-platform/example.demo/users.me", headers: { ...headers, origin: "http://127.0.0.1:39130" }, payload: {} })).statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: "/api/v1/plugin-platform/unknown.plugin/users.me", headers: { ...headers, origin: "http://127.0.0.1:39130", cookie }, payload: {} })).statusCode).toBe(404);
     const large = await app.inject({method:"POST",url:"/api/v1/plugins/example.demo/large",headers:{...headers,origin:"http://127.0.0.1:39130",cookie,"content-type":"text/plain"},payload:"a".repeat(1500000)});
     expect(large.statusCode,large.body).toBe(200);expect(large.json().length).toBe(1500000);
     const callback = await app.inject({ url: "/api/v1/plugins/example.demo/callback?state=valid", headers });

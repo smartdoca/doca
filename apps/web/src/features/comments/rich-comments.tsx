@@ -177,7 +177,7 @@ export function CommentComposer({
     } | null>(null),
     [users, setUsers] = useState<MentionUser[]>([]),
     [index, setIndex] = useState(0),
-    [folderPicker, setFolderPicker] = useState(false),
+    [folderPicker, setFolderPicker] = useState<boolean | "materials">(false),
     [sourcePicker, setSourcePicker] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -419,6 +419,7 @@ export function CommentComposer({
         />
         {folderPicker && (
           <FolderFilePicker
+            initialSource={folderPicker === "materials" ? "materials" : "folders"}
             accept={(item) => item.mime.startsWith("image/")}
             close={() => setFolderPicker(false)}
             select={async (item: FileItem) => {
@@ -444,7 +445,7 @@ export function CommentComposer({
           <FileSourceDialog
             title={t("comment.addImage")}
             close={() => setSourcePicker(false)}
-            chooseDoca={() => setFolderPicker(true)}
+            chooseDoca={source => setFolderPicker(source ?? true)}
             chooseLocal={() => file.current?.click()}
           />
         )}

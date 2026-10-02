@@ -379,7 +379,7 @@ export default function PresentationDocument({
         <p className="empty">正在加载演示文稿…</p>
       )}
       {handle && !presenting && (
-        <ModelFind handle={find} revision={sync.revision} canEdit={editable} />
+        <ModelFind documentId={detail.resource.id} handle={find} revision={sync.revision} canEdit={editable} />
       )}
       {!presenting && (
         <RegionComments

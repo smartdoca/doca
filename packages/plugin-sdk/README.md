@@ -2,6 +2,13 @@
 
 Doca's public plugin SDK. Plugins declare service requirements and own their business implementation and storage. They must not import host source paths or use private runtime bridges.
 
+## Public capabilities added in 0.1.4
+
+- `users.v1` adds `me`, policy-aware `searchPage`, `resolveDirectory` and `validateSelection`. Internal document/file relationships and plugin sources share the directory registry; none/all skip relationship sources.
+- `@smartdoca/plugin-sdk/documents` exports `documentReadServiceToken` (`documents.read.v1`) and `librariesServiceToken` (`libraries.v1`). Read persisted native content with a revision, current authorization and an explicit size limit; traverse authorized library structure. The separate `content.v1` remains for plain content.
+- `@smartdoca/plugin-sdk/web` adds `PluginWebHost.platform`, a typed public client, and `PluginWebHost.ui.openView`. `WebPluginBundle` accepts optional commands/views/placements. Current Web slots cover global more, home, documents, libraries and files. No registration is required for existing page plugins.
+- See `docs/plugin-extensions.md` in the host repository for exact methods, supported positions and limits. New methods require a host implementing SDK 0.1.4; there is no missing-method adapter. Source implementation does not imply npm publication or native-device acceptance.
+
 ## Public capabilities added in 0.1.3
 
 - Installed plugins must implement `uninstall(context)`. The host calls it when an administrator uninstalls the plugin. The plugin deletes its own database and private state. The call must succeed again when that data is already gone. `dispose` only releases process resources and does not delete the database.
@@ -15,3 +22,7 @@ Doca's public plugin SDK. Plugins declare service requirements and own their bus
 - `@smartdoca/plugin-sdk/native`: native request types and validation. The host handles system file dialogs and sharing; the plugin must not interpret `presented` as proof the user completed sharing.
 
 The source types and generated declarations define exact request/response fields. The Doca repository's `docs/plugin-development.md` is the development entry point, with `docs/plugin-content.md`, `docs/plugin-activity.md`, and `docs/plugin-native.md` describing integration and limits. A source must implement the current protocol; the host does not convert the earlier knowledge source protocol.
+
+## Template and material providers (SDK 0.1.5)
+
+`@smartdoca/plugin-sdk/creation-resources` exports `templatesServiceToken` (`templates.v1`) and `materialsServiceToken` (`materials.v1`). Register providers/consumers through injected services; plugin lifecycle owns disposers. `host.platform.templates/materials` and injected `host.TemplatePicker/MaterialPicker` share the same authenticated services. No providers are installed by default. See [resource contract](../../docs/creation-resources.md).

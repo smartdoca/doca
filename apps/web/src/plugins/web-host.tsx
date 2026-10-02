@@ -1,21 +1,37 @@
+import { CreationTemplatePicker, MaterialPicker, type ResourceRequest } from "@web/features/creation-resources/pickers.js";
+import { openExtensionView } from "./extension-ui.js";
 import { nativeCapabilities } from "./native.js";
 import * as React from "react";
 import { FolderFilePicker } from "@web/features/files/files.js";
 import { notifyFeedback } from "@web/shared/components/feedback.js";
 import { useI18n } from "@web/shared/i18n.js";
+import { createPluginPlatformClient } from "@smartdoca/plugin-sdk/web";
 import type { PluginWebHost } from "@smartdoca/plugin-sdk/web";
 
 export function createWebHost(
   pluginId: string,
 ): PluginWebHost<typeof React, typeof FolderFilePicker> {
   const apiBase = `/api/v1/plugins/${pluginId}`;
+  const resourceRequest:ResourceRequest = async(operation,input,signal) => {
+    const response = await fetch(`/api/v1/plugin-platform/${pluginId}/${operation}`, {method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify(input),signal});
+    const body = await response.json().catch(()=>null); if(!response.ok)throw Object.assign(new Error(body?.message??response.statusText),{status:response.status}); return body;
+  };
   return Object.freeze({
     React,
     apiBase,
+    ui: { openView: (input: Parameters<PluginWebHost["ui"]["openView"]>[0]) => openExtensionView(pluginId, input) },
+    platform: createPluginPlatformClient(async <T,>(operation: string, input: unknown, signal?: AbortSignal): Promise<T> => {
+      const response = await fetch(`/api/v1/plugin-platform/${pluginId}/${operation}`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(input), signal });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw Object.assign(new Error(body?.message ?? response.statusText), { status: response.status, requestId: body?.requestId });
+      return body as T;
+    }),
     get native() {
       return nativeCapabilities(pluginId);
     },
     FilePicker: FolderFilePicker,
+    TemplatePicker: (props: import("@smartdoca/plugin-sdk/web").PluginTemplatePickerProps) => React.createElement(CreationTemplatePicker, {...props, request:resourceRequest}),
+    MaterialPicker: (props: import("@smartdoca/plugin-sdk/web").PluginMaterialPickerProps) => React.createElement(MaterialPicker, {...props, request:resourceRequest}),
     useEnvironment() {
       const { locale } = useI18n();
       const theme = React.useSyncExternalStore(
@@ -113,6 +129,7 @@ export function isolatePluginBundle<T extends Record<string, any>>(
   const result = { ...bundle } as Record<string, any>;
   for (const key of [
     "routes",
+    "views",
     "adminPanels",
     "settingsFields",
     "aiBlocks",

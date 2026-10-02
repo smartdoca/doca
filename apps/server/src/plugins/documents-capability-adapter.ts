@@ -11,10 +11,11 @@ import {
   stableId,
   type FilesServiceV1,
 } from "@smartdoca/files-capability";
-import { authorize } from "@core/modules/access/queries.js";
+import { authorize, accessibleQuery } from "@core/modules/access/queries.js";
 import { createDocuments } from "@core/modules/collaboration/documents.js";
 import type { Actor } from "@core/modules/identity/passwords.js";
-import { fail } from "@core/shared/errors.js";
+import { sql } from "kysely";
+import { fail, AppError } from "@core/shared/errors.js";
 import { createContent } from "@core/workflows/resources.js";
 import type { DB, Schema } from "@db/index.js";
 import { transact } from "@db/transactions.js";
@@ -147,8 +148,8 @@ export function createServerDocumentsCapability(
           .selectFrom("resources")
           .selectAll()
           .where("deleted_at", "is", null)
-          .orderBy("id")
-          .limit(limit * 4 + 1);
+          .where(accessibleQuery(sql.ref("resources.id"), actor, 1))
+          .orderBy("id");
         if (input.parentId !== undefined)
           query =
             input.parentId === null
@@ -161,14 +162,22 @@ export function createServerDocumentsCapability(
               : query.where("library_id", "=", input.libraryId);
         if (input.cursor) query = query.where("id", ">", input.cursor);
         const visible: Schema["resources"][] = [];
-        for (const row of await query.execute()) {
-          try {
-            await authorize(db, actor, row.id, 1);
-            visible.push(row);
-            if (visible.length > limit) break;
-          } catch {
-            // Authorization deliberately hides inaccessible candidates.
+        let scan = input.cursor;
+        while (visible.length <= limit) {
+          context.signal?.throwIfAborted();
+          const batch = await (scan ? query.where("id", ">", scan) : query).limit(200).execute();
+          if (!batch.length) break;
+          for (const row of batch) {
+            try {
+              await authorize(db, actor, row.id, 1);
+              visible.push(row);
+              if (visible.length > limit) break;
+            } catch (error) {
+              if (!(error instanceof AppError && [403, 404].includes(error.status))) throw error;
+            }
           }
+          scan = batch[batch.length - 1]!.id;
+          if (batch.length < 200) break;
         }
         return {
           items: visible.slice(0, limit).map(documentResource),

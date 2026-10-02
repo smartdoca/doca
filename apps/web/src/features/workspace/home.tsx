@@ -1,3 +1,4 @@
+import { PluginSlot } from "@web/plugins/extensions.js";
 import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
@@ -128,6 +129,8 @@ export function WorkspaceHome({ name }: { name: string }) {
           <RefreshCw size={18} />
         </button>
       </header>
+      <PluginSlot slot="home.actions" scope="home" />
+      <PluginSlot slot="home.cards" scope="home" />
       <div className="workspace-columns">
         <section className="workspace-panel">
           <header>

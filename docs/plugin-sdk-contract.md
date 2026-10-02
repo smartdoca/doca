@@ -4,7 +4,9 @@
 
 [中文](plugin-sdk-contract.zh-CN.md)
 
-Status: updated 2026-10-02 (host 0.1.4 / SDK 0.1.3). Plugins store their own business data. This document is the acceptance standard for the refactor. It does not mean every interface is implemented. The gap is in section 12. A development tutorial must not present a target interface as an export that exists today.
+Status: updated 2026-10-02 (source host 0.1.7 / SDK 0.1.5; production deployment not verified). Plugins store their own business data. This document is the acceptance standard for the refactor. It does not mean every interface is implemented. The gap is in section 12. A development tutorial must not present a target interface as an export that exists today.
+
+The [public capabilities and UI extension refactor plan](plugin-sdk-expansion.md) records the agreed additive direction, current implementation inventory, proposed interfaces and acceptance batches. A–D are now implemented; the [implemented methods and slots](plugin-extensions.md) record exact exports and limits. E/F remain future work.
 
 ## 1. Decisions
 
@@ -169,16 +171,16 @@ Mail, calendar, membership, and moderation are business plugins. Quick notes hav
 
 ## 12. What exists
 
-Updated 2026-10-01 against current exports and host implementation. Future targets above remain subject to the gaps below.
+Updated 2026-10-02 against current exports and host implementation. Future targets above remain subject to the gaps below.
 
 | Item | Present | Still to do |
 | --- | --- | --- |
 | Discovery | Shared registry and full archives, instance cache synchronization, directory/ZIP import, admin store, static manifest checks | Acceptance of an independent package set |
 | Injection | Services, effects, public SDK build, public service catalog | More business capabilities as services |
-| Files and documents | Public file contract, binding download authorization, durable create idempotence, SDK package build | Full acceptance of an independent document capability package. Spare file objects are reclaimed on a schedule |
-| Users | Paged calibration, user-create events in a transaction, status and some profile events | User deletion and async cleanup before a delete entry is opened. More profile entry checks |
-| Intersection | Paged relationship sources, current-fact recheck, timeout and sign-out denial | The plugin maintains its own incremental relationship index |
-| Client | Dynamic Web loading, scoped mobile WebView, configurable navigation, render isolation, persistent native cache and attachment save/share | Generic tree slot; independent client and real-device acceptance |
+| Files and documents | Public native snapshot and library traversal reads, permission-aware resource pagination, public file contract, binding download authorization, durable create idempotence, SDK package build | Full acceptance of an independent document capability package. Spare file objects are reclaimed on a schedule |
+| Users | Policy-aware directory search/resolve/selection validation and self reads, paged calibration, user-create events in a transaction, status and some profile events | User deletion and async cleanup before a delete entry is opened. More profile entry checks |
+| Intersection | Shared internal/plugin relationship registry, paged relationship sources, current-fact recheck, timeout and sign-out denial | The plugin maintains its own incremental relationship index |
+| Client | Optional commands/views/placements, typed public client, dialogs/drawers/sidebar and Web home/document/library/file slots, dynamic Web loading, scoped mobile WebView, configurable navigation, render isolation, persistent native cache and attachment save/share | Selection/insertion/theme contracts; independent client and real-device acceptance |
 | AI | Public tools and skills, raw usage, model-rate conversion, admission policy, durable settlement events | MCP alignment, reservation and failure compensation, more usage dimensions |
 | Recent activity | activity.v1 source registration, plugin-owned visits, merged cursor paging, permission-checked opening | Plugin-specific visit storage and cleanup belong to the plugin; see [integration](plugin-activity.md) |
 | Search and knowledge | content.v1 sources, global content retrieval, existing knowledge subscriptions/scheduling, block fingerprints, source configuration UI and derived-content guards | Independent mail-source integration and acceptance; already open collaboration connections are outside immediate revocation |
@@ -212,3 +214,7 @@ Explicitly not done: generic plugin SQL or data.v2, a distributed transaction ac
 The source SDK exports `content.v1` through `plugin-sdk/content`: required list/read/resolve, optional search, complete inventory validation, and built-in document/file readers. Knowledge subscriptions reuse existing storage and scheduling, compare block fingerprints and read/analyze changed bodies only. Configuration UI and live derived-content guards cover new reads, lists and answer retrieval. No knowledge.sources.v1 adapter, database conversion or schema migration is added. Independent mail integration and native-device acceptance remain required. [Contract and implementation limits](plugin-content.md).
 
 The native container now provides per-origin/user/plugin persistent storage and authenticated attachment save/share through `PluginWebHost.native`. Native verification and an independently rebuilt mail client are still required. [Native contract](plugin-native.md).
+
+## Creation resources (SDK 0.1.5)
+
+[Template/material contract](creation-resources.md) defines the implemented zero-default provider registries, versioned consumer matching, tags/search/pagination, material import, document initialization, public clients and injected pickers. The retired template table is retained without migration or default registration; old template APIs and templateId creation are removed under the agreed plan. External providers and store resource management remain separate work.
