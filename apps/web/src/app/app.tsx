@@ -4,6 +4,7 @@ import { isAdminNavigationPath } from "@smartdoca/web-plugin-registry";
 import { WorkspaceHome } from "@web/features/workspace/home.js";
 import { DiscoveryPage } from "@web/features/discovery/discovery.js";
 import { KnowledgePublicPage } from "@web/features/knowledge/knowledge-public-page.js";
+import { pluginRouteScope } from "./plugin-route-scope.js";
 import { KnowledgeCurationToggle } from "@web/features/documents/library-relations.js";
 import { KnowledgeAssistants } from "@web/features/knowledge/knowledge-assistants.js";
 import type { MessageKey } from "@doca/i18n";
@@ -203,12 +204,11 @@ function WorkspaceApp() {
     [refresh, setRefresh] = useState(0),
     [scope, setScope] = useState(() => {
       const path = location.hash.replace(/^#/, "").split("?")[0] || "/home";
-      if (
-        webPluginRegistry.resolveRoute(
-          path.startsWith("/m/plugins/") ? path.slice(2) : path,
-        )
-      )
-        return "plugin";
+      const matchedRoute = webPluginRegistry.resolveRoute(
+        path.startsWith("/m/plugins/") ? path.slice(2) : path,
+      );
+      if (matchedRoute)
+        return pluginRouteScope(matchedRoute.contribution.id);
       const route = path.slice(1).split(/[/?]/)[0]!;
       if (route === "knowledge") return "libraries";
       return titleKeys[route] || pluginNavigationByScope.has(route)
@@ -545,12 +545,11 @@ function WorkspaceApp() {
       setNavigationOpen(false);
       setModal("");
       const path = location.hash.replace(/^#/, "").split("?")[0] || "/home";
-      if (
-        webPluginRegistry.resolveRoute(
-          path.startsWith("/m/plugins/") ? path.slice(2) : path,
-        )
-      ) {
-        setScope("plugin");
+      const matchedRoute = webPluginRegistry.resolveRoute(
+        path.startsWith("/m/plugins/") ? path.slice(2) : path,
+      );
+      if (matchedRoute) {
+        setScope(pluginRouteScope(matchedRoute.contribution.id));
         setError("");
         return;
       }
@@ -1108,7 +1107,7 @@ function WorkspaceApp() {
             {(librarySystemPage || libraryQaPage || (!resourceId && scope === "knowledge-assistants")) && <div className="files-topbar-title knowledge-topbar-title">{librarySystemPage ? <BookOpenCheck size={20}/> : <Bot size={20}/>}<h1>{t(librarySystemPage ? "nav.librarySystem" : "knowledge.assistants")}</h1>{librarySystemPage && detail && <KnowledgeCurationToggle detail={detail} changed={reload}/>}</div>}
             {!resourceId && scope === "ai" && <div id="ai-header-slot" />}
 
-            {!resourceId && !pluginRoute && (scope === "files" || scope === "shared-files") && user && (
+            {!resourceId && pluginRoute && (scope === "files" || scope === "shared-files") && user && (
               <div className="files-topbar-title">
                 {scope === "shared-files" ? <Users size={17} aria-hidden="true" /> : <FolderOpen size={17} aria-hidden="true" />}
                 <strong>{scope === "shared-files" ? (sharedFolderId ? sharedFolderName : t("nav.sharedFiles")) : t("nav.files")}</strong>
