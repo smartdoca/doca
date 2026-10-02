@@ -228,7 +228,7 @@
 @media(max-width:900px) {
   .topbar .knowledge-topbar-title { flex:1; }
   .topbar .knowledge-topbar-title h1 { max-width:32vw; font-size:16px; }
-  .topbar .global-header-tools > #knowledge-share-slot .share-trigger { width:30px; min-width:30px; height:30px; padding:0; font-size:0; }
+  .topbar .global-header-tools > #knowledge-share-slot .share-trigger { width:34px; min-width:34px; height:34px; padding:0; font-size:0; }
 }
 
 /* Source controls keep their intrinsic size instead of stretching with card actions. */

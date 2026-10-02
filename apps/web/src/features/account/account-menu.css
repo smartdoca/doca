@@ -183,10 +183,6 @@
   font-size: 13px;
   white-space: nowrap;
 }
-.topbar .locale-switch > summary,
-.topbar .global-header-tools > .locale-switch > summary {
-  height: 30px;
-}
 .locale-switch > summary::-webkit-details-marker {
   display: none;
 }

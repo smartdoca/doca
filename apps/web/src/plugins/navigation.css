@@ -9,12 +9,13 @@
 .navigation-preview .nav-web-right {position:static;max-width:none;}
 .navigation-preview a {pointer-events:none;}
 .mobile-plugin-page {min-height:100dvh;padding:12px;box-sizing:border-box;overflow-wrap:anywhere;}
+.plugin-scroll-host{overflow:hidden;display:flex;flex-direction:column}
+.plugin-scroll-host>*{flex:1 1 auto;min-width:0;min-height:0;width:100%}
 
 .global-header-tools > .configured-navigation,.topbar .global-header-tools > .configured-navigation{width:auto;height:auto;flex-shrink:0}
 .global-header-tools .nav-web-topRight>div{flex-wrap:nowrap}
 .global-header-tools .configured-navigation a{white-space:nowrap}
 .global-header-tools .nav-web-topRight a[data-display="icon"]{box-sizing:border-box;width:34px;height:34px;min-width:34px;padding:0;justify-content:center}
-.topbar .global-header-tools .nav-web-topRight a[data-display="icon"]{width:30px;height:30px;min-width:30px}
 .notification-trigger[hidden]{display:none!important}
 .global-header-tools>.notifications{width:0!important;min-width:0!important;height:0!important;margin-left:-10px!important}
 .global-header-tools .nav-web-topRight>div{gap:10px}

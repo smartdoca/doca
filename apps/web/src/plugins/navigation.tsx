@@ -140,14 +140,7 @@ export function NavigationArea({
               ? icons[p.icon]
               : (adminIcons[entry.id] ?? icons[entry.icon])) ?? Package,
           title = (p.title ?? entry.title)[locale];
-        const display =
-          p.display ??
-          (slot === "web.topRight" &&
-          ["doca.search", "doca.tickets", "doca.notifications"].includes(
-            entry.id,
-          )
-            ? "icon"
-            : "both");
+        const display = slot === "web.topRight" ? "icon" : (p.display ?? "both");
         return (
           <a
             key={`${p.entryId}:${slot}`}
@@ -177,7 +170,7 @@ export function NavigationArea({
                 : ""
             }
           >
-            {display !== "text" && <Icon size={16} />}
+            {display !== "text" && <Icon size={slot === "web.topRight" ? 20 : 16} />}
             {display !== "icon" && <span>{title}</span>}
           </a>
         );

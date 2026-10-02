@@ -82,22 +82,10 @@
   opacity: 1;
   cursor: default;
 }
-.app-shell .document-topbar-actions,
-.topbar .global-header-tools {
-  gap: 10px;
-}
 .topbar .share-button {
   height: 30px;
   font-size: 12px;
   padding: 0 10px;
-}
-.topbar .global-header-tools > *,
-.topbar .global-header-tools .notification-trigger,
-.topbar .global-header-tools > details > summary,
-.topbar .global-header-tools > a.todo-icon {
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
 }
 
 /* Home has one scroll surface: actions leave first, then the list tabs stick. */
