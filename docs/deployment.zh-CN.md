@@ -2,7 +2,7 @@
 
 [English](deployment.md)
 
-一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.1.4`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
+一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.1.5`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
 
 ## 条件
 
@@ -39,7 +39,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker compose up -d` 会拉取 `docker.io/smartdoca/doca:0.1.4`。只有要从当前检出构建镜像时才加 `--build`。
+`docker compose up -d` 会拉取 `docker.io/smartdoca/doca:0.1.5`。只有要从当前检出构建镜像时才加 `--build`。
 
 检查容器：
 
@@ -48,7 +48,7 @@ docker compose ps
 curl -fsS http://127.0.0.1:39120/health
 ```
 
-健康的进程返回 `{"status":"ok","version":"0.1.4"}`。
+健康的进程返回 `{"status":"ok","version":"0.1.5"}`。
 
 SQLite、上传文件和 AI 数据库保存在 `doca_data` 卷。首次启动时数据库必须是空的。非空且结构不是当前基线的数据库会被拒绝。不要删除已经有用户的数据库。
 
