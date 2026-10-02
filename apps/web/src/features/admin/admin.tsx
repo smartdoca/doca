@@ -35,7 +35,6 @@ import {
   LockKeyhole,
   Settings as SettingsIcon,
   ScanText,
-  LayoutTemplate,
 } from "lucide-react";
 import { api } from "@web/shared/api.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
@@ -46,7 +45,6 @@ import { DirectorySettings } from "@web/features/settings/directory-settings.js"
 import { UserCardSettings } from "@web/features/settings/user-card-settings.js";
 import { DistributionSettings } from "@web/features/settings/distribution-settings.js";
 import { FileRecognitionSettings } from "@web/features/admin/file-recognition-settings.js";
-import { TemplateSettings } from "@web/features/admin/template-settings.js";
 import { useI18n } from "@web/shared/i18n.js";
 import type { MessageKey } from "@doca/i18n";
 import { pluginMessage, webPluginRegistry } from "@web/plugins/registry.js";
@@ -113,7 +111,6 @@ const sectionGroups: {
     group: "admin.group.content" as MessageKey,
     items: [
       { id: "access", label: "admin.access", Icon: LockKeyhole },
-      { id: "templates", label: "admin.templates", Icon: LayoutTemplate },
     ],
   },
   {
@@ -586,7 +583,6 @@ export function Admin({
               </div>
             </>
           )}
-          {tab === "templates" && <TemplateSettings />}
           {tab === "registration" && <RegistrationReviews />}
           {tab === "users" && (
             <>

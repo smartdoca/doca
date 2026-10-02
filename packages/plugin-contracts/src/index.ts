@@ -963,3 +963,8 @@ export interface DocaPlugin<Config extends JsonObject = JsonObject> {
    */
   uninstall?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
 }
+
+export type * from "./directory.js";
+export type * from "./documents.js";
+
+export type * from "./creation-resources.js";

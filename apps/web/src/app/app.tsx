@@ -1,5 +1,7 @@
+import { PluginSlot } from "@web/plugins/extensions.js";
+import { extensionViews } from "@web/plugins/extension-ui.js";
 import { MobilePluginPage } from "@web/plugins/mobile-page.js";
-import { NavigationArea, LeftNavigation, navigateToDefaultHome, useNavigationLayout } from "@web/plugins/navigation.js";
+import { NavigationArea, MoreNavigation, LeftNavigation, navigateToDefaultHome, useNavigationLayout } from "@web/plugins/navigation.js";
 import { isAdminNavigationPath } from "@smartdoca/web-plugin-registry";
 import { WorkspaceHome } from "@web/features/workspace/home.js";
 import { DiscoveryPage } from "@web/features/discovery/discovery.js";
@@ -521,6 +523,7 @@ function WorkspaceApp() {
     setRefresh((n) => n + 1);
   };
   const signedIn = !!bootstrap?.user;
+  useEffect(() => { extensionViews.close(); }, [bootstrap?.user?.id]);
   useEffect(() => {
     const shortcut = (e: KeyboardEvent) => {
       if (!signedIn) return;
@@ -851,6 +854,7 @@ function WorkspaceApp() {
           </BackLink>
           <div className="global-header-tools">
           <NavigationArea slot="web.topRight" action="other"/>
+          <MoreNavigation />
           <Notifications />
           <LocaleSwitch />
           <AccountMenu
@@ -1237,6 +1241,7 @@ function WorkspaceApp() {
             {user ? (
               <div className="global-header-tools">
                 <NavigationArea slot="web.topRight" action="other" />
+                <MoreNavigation />
                 {scope === "knowledge-assistants" && <span id="knowledge-share-slot" />}
 
                 <Notifications />
@@ -1270,7 +1275,10 @@ function WorkspaceApp() {
           }
         >
         {resourceId && <div id="editor-toolbar-slot" hidden={documentMode.readOnly} />}
+        {user && detail?.resource.kind === "document" && <PluginSlot slot="document.toolbar" scope="document" resource={detail.resource} />}
+        {user && libraryInfo && <PluginSlot slot="library.toolbar" scope="library" resource={libraryInfo} />}
         {error && <Feedback message={error} tone="error" />}
+        <div className="plugin-content-layout">
         <div
           className={
             "main-scroll" +
@@ -1335,6 +1343,10 @@ function WorkspaceApp() {
                   </Suspense>
                 )}
 
+                {user && detail.resource.kind === "document" && <>
+                  <PluginSlot slot="document.status" scope="document" resource={detail.resource} />
+                  <PluginSlot slot="resource.details" scope="document" resource={detail.resource} />
+                </>}
                 {detail.resource.kind === "document" &&
                   !["spreadsheet", "canvas", "presentation"].includes(
                     detail.resource.format,
@@ -1372,6 +1384,8 @@ function WorkspaceApp() {
               changed={() => setRefresh((n) => n + 1)}
             />
           )}
+        </div>
+        {user && !loading && detail?.resource.kind === "document" && <PluginSlot slot="document.sidebar" scope="document" resource={detail.resource} />}
         </div>
         </AIDocumentLayout>
       </main>

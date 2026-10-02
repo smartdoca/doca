@@ -92,7 +92,7 @@ export function Profile({
     [busy, setBusy] = useState(false),
     [editingName, setEditingName] = useState(false),
     [sourceOpen, setSourceOpen] = useState(false),
-    [folderPicker, setFolderPicker] = useState(false),
+    [folderPicker, setFolderPicker] = useState<boolean | "materials">(false),
     [passwordEnabled, setPasswordEnabled] = useState(false);
   const upload = useRef<HTMLInputElement>(null);
   const saving = useRef(false);
@@ -252,12 +252,13 @@ export function Profile({
           <FileSourceDialog
             title={t("profile.chooseAvatar")}
             close={() => setSourceOpen(false)}
-            chooseDoca={() => setFolderPicker(true)}
+            chooseDoca={source => setFolderPicker(source ?? true)}
             chooseLocal={() => upload.current?.click()}
           />
         )}
         {folderPicker && (
           <FolderFilePicker
+            initialSource={folderPicker === "materials" ? "materials" : "folders"}
             accept={(item) => item.mime.startsWith("image/")}
             close={() => setFolderPicker(false)}
             select={async (item: FileItem) => {

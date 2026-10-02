@@ -1,3 +1,4 @@
+import { PluginSlot } from "@web/plugins/extensions.js";
 import { htmlLang, type Locale } from "@doca/i18n";
 import { useI18n } from "@web/shared/i18n.js";
 import type { MessageKey, MessageValues } from "@doca/i18n";
@@ -215,7 +216,7 @@ export function CreatePopover({
   const [importing, setImporting] = useState(false);
   const [target, setTarget] = useState<keyof typeof importFormats | null>(null);
   const [sourceOpen, setSourceOpen] = useState(false);
-  const [folderPicker, setFolderPicker] = useState(false);
+  const [folderPicker, setFolderPicker] = useState<boolean | "materials">(false);
   const importInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const fn = (e: Event) => {
@@ -344,8 +345,8 @@ export function CreatePopover({
           {t("create.import")}
         </button>
       )}
-      {sourceOpen && <FileSourceDialog title={t("create.importAs", { name: t(createTypeKey[target!]) })} close={() => setSourceOpen(false)} chooseLocal={() => importInput.current?.click()} chooseDoca={() => setFolderPicker(true)} />}
-      {folderPicker && <FolderFilePicker close={() => setFolderPicker(false)} select={async (item: FileItem) => { const response = await fetch(fileUrl(item.id)); if (!response.ok) throw new Error(t("create.readFailed")); choose(target!, new File([await response.blob()], item.name, { type: item.mime })); }} />}
+      {sourceOpen && <FileSourceDialog title={t("create.importAs", { name: t(createTypeKey[target!]) })} close={() => setSourceOpen(false)} chooseLocal={() => importInput.current?.click()} chooseDoca={source => setFolderPicker(source ?? true)} />}
+      {folderPicker && <FolderFilePicker initialSource={folderPicker === "materials" ? "materials" : "folders"} close={() => setFolderPicker(false)} select={async (item: FileItem) => { const response = await fetch(fileUrl(item.id)); if (!response.ok) throw new Error(t("create.readFailed")); choose(target!, new File([await response.blob()], item.name, { type: item.mime })); }} />}
     </div>,
     document.body,
   );
@@ -447,6 +448,7 @@ export function DocumentMore({
           <MoreHorizontal size={20} />
         </summary>
         <div className="document-more-menu">
+          <PluginSlot slot="document.menu" scope="document" resource={r} />
           {r.format === "rich_text" && <div id="document-page-width-slot" />}
           <button
             onClick={() => {

@@ -44,6 +44,7 @@ import { AppError, fail } from "../shared/errors.js";
 import { authorize } from "../modules/access/queries.js";
 import type { Actor } from "../modules/identity/passwords.js";
 import { createContent } from "./resources.js";
+import { prepareDocumentTemplate, type PreparedDocumentTemplate } from "../modules/creation-resources/document-template.js";
 import {
   b64,
   createDocuments,
@@ -1091,7 +1092,8 @@ export async function createAIDocument(
   input: Parameters<ReturnType<typeof createContent>["create"]>[1],
   operationId: string,
 ) {
-  const result = await transact(db, async (tx) => {
+  let preparedTemplate: PreparedDocumentTemplate | undefined;
+  async function authorizeCreation(tx: DB) {
     if (ctx.writable === false) fail(403, "凭据仅允许读取");
     await checkJob(tx, ctx);
     for (const id of [input.libraryId, input.parentId].filter(Boolean))
@@ -1103,6 +1105,26 @@ export async function createAIDocument(
       !input.parentId
     )
       fail(403, "必须在授权知识库内创建");
+  }
+  // Plugin reads/imports can use other services and must run outside the write transaction.
+  if (input.template) {
+    await authorizeCreation(db);
+    const previous = await db
+      .selectFrom("ai_operations")
+      .selectAll()
+      .where("id", "=", operationId)
+      .executeTakeFirst();
+    if (previous) {
+      if (previous.user_id !== ctx.actor.id || previous.digest !== digest(input))
+        fail(409, "重复请求内容不同");
+      return JSON.parse(previous.result);
+    }
+    preparedTemplate = await prepareDocumentTemplate(
+      db, ctx.actor, input.format, input.template,
+    );
+  }
+  const result = await transact(db, async (tx) => {
+    await authorizeCreation(tx);
     const previous = await tx
         .selectFrom("ai_operations")
         .selectAll()
@@ -1121,7 +1143,9 @@ export async function createAIDocument(
       const seen = new Set<string>();
       value.children.forEach((node) => validateRichNode(node, seen));
     }
-    const created = await createContent(tx).create(ctx.actor, input);
+    const created = await createContent(tx).create(
+      ctx.actor, input, undefined, preparedTemplate,
+    );
     await tx
       .insertInto("ai_operations")
       .values({

@@ -59,7 +59,7 @@ curl -fsS http://127.0.0.1:39120/health
 bash scripts/bootstrap-admin.sh
 ```
 
-健康检查返回 `{"status":"ok","version":"0.1.0"}`。SQLite、上传文件和 AI 数据库放在 `doca_data` 卷里。第一次使用的数据库必须是空的。结构不是当前基线的非空数据库会拒绝启动。
+健康检查返回 `{"status":"ok","version":"0.1.7"}`。SQLite、上传文件和 AI 数据库放在 `doca_data` 卷里。第一次使用的数据库必须是空的。结构不是当前基线的非空数据库会拒绝启动。
 
 `DOCA_ASSET_BASE` 可选。留空时，JavaScript 和 CSS 由容器提供。填写后，HTML 仍由 Doca 返回，只改写其中的 `/assets/` 地址。生产环境的前缀必须是 HTTPS，并且允许跨源读取 ES module。
 

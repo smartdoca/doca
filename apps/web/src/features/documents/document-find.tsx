@@ -4,6 +4,8 @@ import { Search, ChevronUp, ChevronDown, X, Replace } from "lucide-react";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { findTextOffsets } from "@web/shared/utils/find-text.js";
+import { composingKey } from "@web/features/search/composition.js";
+import { useFindQuery } from "@web/features/search/use-find-query.js";
 type Match = {
   range?: Range;
   element: HTMLElement;
@@ -30,14 +32,15 @@ export function DocumentFind({
 }) {
   const { t } = useI18n();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
-  const [open, setOpen] = useState(false),
-    [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const { query, composing, gate, inputProps } = useFindQuery();
   const [matches, setMatches] = useState<Match[]>([]),
     [index, setIndex] = useState(0);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false),
     [replacement, setReplacement] = useState("");
   const [replaceRevision, setReplaceRevision] = useState(0);
+  useEffect(() => setIndex(0), [query]);
   const performReplace = (all: boolean) => {
     try {
       replace?.(query, replacement, all, index);
@@ -72,6 +75,7 @@ export function DocumentFind({
   };
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      if (composingKey(e)) return;
       if (
         !(e.ctrlKey || e.metaKey) ||
         e.altKey ||
@@ -96,6 +100,7 @@ export function DocumentFind({
     const h = host.current;
     let timer: ReturnType<typeof setTimeout>;
     const collect = () => {
+      if (gate.composing) return;
       const found: Match[] = [];
       if (query) {
         // Join leaves within a block so mixed bold/colour text remains searchable.
@@ -166,7 +171,7 @@ export function DocumentFind({
       observer.disconnect();
       h.removeEventListener("input", schedule);
     };
-  }, [query, open, host, replaceRevision]);
+  }, [query, composing, open, host, replaceRevision, gate]);
   useEffect(() => {
     const css = CSS as typeof CSS & { highlights?: Map<string, unknown> };
     if (!open) return;
@@ -227,6 +232,7 @@ export function DocumentFind({
             role="search"
             aria-label={t("doc.find")}
             onKeyDown={(e) => {
+              if (gate.composing || composingKey(e.nativeEvent)) return;
               if (e.key === "Escape") {
                 e.stopPropagation();
                 setOpen(false);
@@ -252,11 +258,7 @@ export function DocumentFind({
               ref={input}
               aria-label={t("doc.findQuery")}
               placeholder={t("doc.findQuery")}
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setIndex(0);
-              }}
+              {...inputProps}
             />
             <span role="status">
               {matches.length ? `${index + 1}/${matches.length}` : "0/0"}
@@ -264,7 +266,7 @@ export function DocumentFind({
             <button
               className="icon"
               aria-label={t("doc.findPrevious")}
-              disabled={!matches.length}
+              disabled={composing || !matches.length}
               onClick={() => move(-1)}
             >
               <ChevronUp size={16} />
@@ -272,7 +274,7 @@ export function DocumentFind({
             <button
               className="icon"
               aria-label={t("doc.findNext")}
-              disabled={!matches.length}
+              disabled={composing || !matches.length}
               onClick={() => move(1)}
             >
               <ChevronDown size={16} />
@@ -292,6 +294,7 @@ export function DocumentFind({
                   value={replacement}
                   onChange={(e) => setReplacement(e.target.value)}
                   onKeyDown={(e) => {
+                    if (composingKey(e.nativeEvent)) return;
                     if (e.key === "Enter") {
                       e.stopPropagation();
                       e.preventDefault();
@@ -300,13 +303,13 @@ export function DocumentFind({
                   }}
                 />
                 <button
-                  disabled={!query || !matches.length}
+                  disabled={composing || !query || !matches.length}
                   onClick={() => performReplace(false)}
                 >
                   {t("doc.replace")}
                 </button>
                 <button
-                  disabled={!query || !matches.length}
+                  disabled={composing || !query || !matches.length}
                   onClick={() => performReplace(true)}
                 >
                   {t("doc.replaceAll")}

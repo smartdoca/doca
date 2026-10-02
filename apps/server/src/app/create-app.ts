@@ -1,3 +1,4 @@
+import { createUserDirectory } from "@core/modules/discovery/users.js";
 import { pluginMobileActor } from "../plugins/mobile-session.js";
 import { emitIntegrationEvent } from "@core/modules/automation/events.js";
 import {
@@ -63,7 +64,6 @@ import { type StorageRuntime } from "../adapters/storage.js";
 import { registerAssets } from "../routes/assets.js";
 import { registerPageState } from "../routes/page-state.js";
 import { registerExperience } from "../routes/experience.js";
-import { registerTemplates } from "../routes/templates.js";
 import { registerIdentity } from "../routes/identity.js";
 import { registerRegistrationReviews } from "../routes/registration-reviews.js";
 import type { SearchRuntime } from "../routes/search.js";
@@ -129,7 +129,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     openapi: {
       info: {
         title: "Doca Cloud API",
-        version: "0.1.6",
+        version: "0.1.7",
         description:
           "No spaces or organizations. Browser writes require the configured Origin and a host-only session cookie. Mobile clients send Authorization: Bearer with the same session token. Rich text uses the authenticated /api/v1/ws Yjs channel.",
       },
@@ -271,10 +271,14 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     const scopedToken = /(?:^|;\s*)doca_plugin_session=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie ?? "")?.[1];
     if(scopedToken && path.startsWith("/api/") && path!=="/api/v1/plugins-mobile/redeem") {
       const scoped=await pluginMobileActor(db,scopedToken,pluginComposition.plugins.map(p=>p.id));
-      if (!(req.method==="GET" && (path==="/api/v1/bootstrap" || path.startsWith(`/api/v1/plugin-assets/${scoped.plugin_id}/`))) && !path.startsWith(`/api/v1/plugins/${scoped.plugin_id}/`)) fail(403,"Plugin session scope denied");
+      if (!(req.method==="GET" && (path==="/api/v1/bootstrap" || path.startsWith(`/api/v1/plugin-assets/${scoped.plugin_id}/`))) && !path.startsWith(`/api/v1/plugins/${scoped.plugin_id}/`) && !(req.method === "POST" && path.startsWith(`/api/v1/plugin-platform/${scoped.plugin_id}/`))) fail(403,"Plugin session scope denied");
       scopedPlugins.set(req,scoped.plugin_id);user={id:scoped.id,display_name:scoped.display_name,admin:scoped.admin,public_id:undefined};
     }
     sessionTokens.set(req, user && token ? token : null);
+    if (path.startsWith("/api/v1/plugin-platform/")) {
+      const pluginId = path.split("/")[4];
+      if (!pluginComposition.plugins.some(plugin => plugin.id === pluginId)) fail(404, "Plugin unavailable");
+    }
     actors.set(req, user ?? null);
     const accountPath = req.url.split("?")[0]!;
     const forcedLoginMethod = user
@@ -503,7 +507,6 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     Type.Object(properties, { additionalProperties: false });
   const optional = <T extends TSchema>(schema: T) => Type.Optional(schema);
   registerExperience(api, db, actor, authenticated);
-  registerTemplates(api, db, authenticated, admin);
   const role = Type.Union(
     ["reader", "commenter", "editor", "manager"].map((x) => Type.Literal(x)),
   );
@@ -797,6 +800,21 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       return { ok: true };
     },
   );
+  const userDirectory = createUserDirectory(db);
+  api.get<{ Querystring: { query?: string; cursor?: string; limit?: number } }>(
+    "/api/v1/users/directory", {
+      schema: { querystring: object({ query: optional(Type.String({ maxLength: 160 })), cursor: optional(Type.String({ maxLength: 2048 })), limit: optional(Type.Integer({ minimum: 1, maximum: 100 })) }) },
+    }, async req => userDirectory.search(authenticated(req), { ...req.query, query: req.query.query ?? "" }),
+  );
+  for (const action of ["resolve", "validate"] as const)
+    api.post<{ Body: { ids: string[] } }>(`/api/v1/users/directory/${action}`, {
+      schema: { body: object({ ids: Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 100 }) }) },
+    }, async req => {
+      const actor = authenticated(req);
+      if (action === "resolve") return { items: await userDirectory.resolve(actor, req.body) };
+      await userDirectory.validate(actor, req.body);
+      return { valid: true };
+    });
   api.get<{ Querystring: { q: string } }>(
     "/api/v1/users/lookup",
     {
@@ -1206,7 +1224,10 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       kind: Type.Union([Type.Literal("document"), Type.Literal("library")]),
       markdown: optional(Type.String({ maxLength: 524288 })),
       initialContent: optional(Type.Unknown()),
-      templateId: optional(id),
+      template: optional(object({
+        ref: object({ providerId: name, id: name, revision: name }),
+        parameters: Type.Record(Type.String(), Type.Unknown()),
+      })),
       format: Type.Union(
         ["rich_text", "spreadsheet", "presentation", "markdown", "canvas"].map(
           (x) => Type.Literal(x),

@@ -72,6 +72,8 @@ export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {
       if (
         !value ||
         ![
+          "templates.v1",
+          "materials.v1",
           "content.v1",
           "activity.v1",
           "notifications.v1",
@@ -89,6 +91,14 @@ export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {
           const method = Reflect.get(target, property);
           if (typeof method !== "function") return method;
           return (...args: any[]) => {
+            if (
+              ["templates.v1", "materials.v1"].includes(token.id) &&
+              ["register", "registerConsumer"].includes(String(property))
+            ) {
+              owned(args[0].pluginId, true);
+              owned(args[0].id);
+              return context.effect(() => method.apply(target, args));
+            }
             if (token.id === "content.v1" && property === "register") {
               owned(args[0].pluginId, true);
               owned(args[0].id);

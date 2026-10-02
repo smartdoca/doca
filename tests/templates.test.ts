@@ -1,3 +1,9 @@
+import { installTemplate } from "./creation-resource-fixtures.js";
+import {
+  createTemplatesService,
+  createMaterialsService,
+} from "@core/modules/creation-resources/service.js";
+import { resourceRequest } from "@core/modules/creation-resources/document-template.js";
 import { openTestDatabase } from "./database.js";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import type { DB } from "@db/index.js";
@@ -12,8 +18,6 @@ import { projectExlsxWorkbook } from "@smartdoca/sheet/model";
 import * as Y from "yjs";
 import {
   blankTemplateContent,
-  createTemplates,
-  templatePreviewLines,
 } from "@core/modules/templates/templates.js";
 
 let db: DB, admin: Actor, member: Actor;
@@ -22,7 +26,11 @@ beforeEach(async () => {
   admin = {
     ...(await createUser(
       db,
-      { login: "templates-admin", displayName: "模板管理员", password: "template-admin-2026" },
+      {
+        login: "templates-admin",
+        displayName: "模板管理员",
+        password: "template-admin-2026",
+      },
       { bootstrap: true },
     )),
     admin: 1,
@@ -42,171 +50,120 @@ beforeEach(async () => {
 });
 afterEach(() => db.destroy());
 
-it("lets every user create a document from an admin-managed template", async () => {
-  const templates = createTemplates(db);
-  const content = createContent(db);
-  const markdown = await templates.create(admin, {
-    format: "markdown",
-    title: "周报",
-    content: "# 周报\n\n本周完成",
-    preview: "",
-  });
-  const rich = await templates.create(admin, {
-    format: "rich_text",
-    title: "纪要",
-    content: [
-      {
-        id: "11111111-1111-4111-8111-111111111111",
-        type: "paragraph",
-        children: [{ text: "会议纪要" }],
-      },
-    ],
-  });
-  await expect(
-    templates.create(member, {
+it("starts with empty providers and preserves retired template rows", async () => {
+  await db
+    .insertInto("document_templates")
+    .values({
+      id: crypto.randomUUID(),
       format: "markdown",
-      title: "越权",
-      content: "no",
-    }),
-  ).rejects.toThrow("需要系统管理员权限");
-
-  const listed = await templates.list("markdown");
-  expect(listed.items.map((item) => item.title)).toEqual(["周报"]);
-  expect(listed.items[0]).not.toHaveProperty("content");
-
-  const fromMarkdown = await content.create(member, {
-    kind: "document",
-    format: "markdown",
-    title: markdown.title,
-    templateId: markdown.id,
-  });
-  const loadedMarkdown = await restoreMarkdown(db, fromMarkdown.id);
-  try {
-    expect(loadedMarkdown.doc.getText("markdown").toString()).toContain("本周完成");
-  } finally {
-    loadedMarkdown.destroy();
-  }
-
-  const fromRich = await content.create(member, {
-    kind: "document",
-    format: "rich_text",
-    title: rich.title,
-    templateId: rich.id,
-  });
-  const loadedRich = await restoreDocument(db, fromRich.id);
-  try {
-    expect(JSON.stringify(loadedRich.runtime.getValue())).toContain("会议纪要");
-  } finally {
-    loadedRich.destroy();
-  }
-
-  await templates.update(admin, markdown.id, { title: "周报模板" });
-  expect((await templates.get(markdown.id)).title).toBe("周报模板");
-  await templates.remove(admin, markdown.id);
-  await expect(templates.get(markdown.id)).rejects.toThrow("模板不存在");
+      title: "Old",
+      content: JSON.stringify("old"),
+      preview: "",
+      created_by: admin.id,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .execute();
+  expect(
+    (await createTemplatesService(db).search(resourceRequest(member), {}))
+      .items,
+  ).toEqual([]);
+  expect(
+    await createMaterialsService(db).providers(resourceRequest(member), {}),
+  ).toEqual([]);
+  expect(
+    await db.selectFrom("document_templates").selectAll().execute(),
+  ).toHaveLength(1);
   await expect(
-    content.create(member, {
+    createContent(db).create(member, {
       kind: "document",
       format: "markdown",
-      title: "缺失",
-      templateId: markdown.id,
-    }),
-  ).rejects.toThrow("模板不存在");
+      title: "Old",
+      templateId: "old",
+    } as any),
+  ).rejects.toThrow("Legacy templates");
 });
-
-it("copies spreadsheet, canvas and presentation templates into new documents", async () => {
-  const templates = createTemplates(db);
-  const content = createContent(db);
-  const sheet = blankTemplateContent("spreadsheet") as {
-    sheetOrder: string[];
-    sheets: Record<string, { cellData: Record<string, Record<string, { v: string }>> }>;
-  };
-  sheet.sheets[sheet.sheetOrder[0]!]!.cellData = { 0: { 0: { v: "预算" } } };
-  const savedSheet = await templates.create(admin, {
-    format: "spreadsheet",
-    title: "预算表",
-    content: sheet,
-  });
-  const sheetDoc = await content.create(member, {
-    kind: "document",
-    format: "spreadsheet",
-    title: "预算表",
-    templateId: savedSheet.id,
-  });
-  const loadedSheet = await restoreSurface(db, sheetDoc.id, "spreadsheet");
-  const projected = await projectExlsxWorkbook({
-    baseline: loadedSheet.baseline!,
-    update: loadedSheet.update,
-    checkpointSeq: 0,
-  });
-  expect(JSON.stringify(projected)).toContain("预算");
-
-  const canvas = await templates.create(admin, {
-    format: "canvas",
-    title: "空白画板",
-    content: blankTemplateContent("canvas"),
-  });
-  const canvasDoc = await content.create(member, {
-    kind: "document",
-    format: "canvas",
-    title: canvas.title,
-    templateId: canvas.id,
-  });
-  const loadedCanvas = await restoreSurface(db, canvasDoc.id, "canvas");
-  const model = CanvasModel.restore({
-    codec: "aidcanvas-yjs",
-    schemaVersion: 1,
-    epochId: loadedCanvas.epochId,
-    update: loadedCanvas.update,
-  });
-  try {
-    expect(model.getValue().scene.children).toEqual([]);
-  } finally {
-    model.dispose();
-  }
-
-  const deck = await templates.create(admin, {
-    format: "presentation",
-    title: "立项",
-    content: blankTemplateContent("presentation"),
-  });
-  const deckDoc = await content.create(member, {
-    kind: "document",
-    format: "presentation",
-    title: "立项",
-    templateId: deck.id,
-  });
-  const loadedDeck = await restoreSurface(db, deckDoc.id, "presentation");
-  const doc = new Y.Doc();
-  try {
-    Y.applyUpdate(doc, loadedDeck.update);
-    expect(readDocument(doc).title).toBe("立项");
-  } finally {
-    doc.destroy();
-  }
-  expect(templatePreviewLines("spreadsheet", sheet).join(" ")).toContain("预算");
-});
-
-it("rejects a template whose type does not match the new document", async () => {
-  const templates = createTemplates(db);
-  const saved = await templates.create(admin, {
-    format: "markdown",
-    title: "笔记",
-    content: "正文",
-  });
+it.each([
+  "markdown",
+  "rich_text",
+  "spreadsheet",
+  "canvas",
+  "presentation",
+] as const)(
+  "initializes a new %s document from a plugin template",
+  async (format) => {
+    const native =
+      format === "markdown"
+        ? "# 周报\n\n本周完成"
+        : blankTemplateContent(format);
+    const template = installTemplate(db, format, native);
+    const resource = await createContent(db).create(member, {
+      kind: "document",
+      format,
+      title: "周报",
+      template: template.selection,
+    });
+    const state = await db
+      .selectFrom("document_states")
+      .selectAll()
+      .where("resource_id", "=", resource.id)
+      .executeTakeFirst();
+    expect(state).toBeTruthy();
+    if (format === "markdown") {
+      const loaded = await restoreMarkdown(db, resource.id);
+      try {
+        expect(loaded.doc.getText("markdown").toString()).toContain("本周完成");
+      } finally {
+        loaded.destroy();
+      }
+    }
+    if (format === "rich_text") {
+      const loaded = await restoreDocument(db, resource.id);
+      try {
+        expect(loaded.runtime.getValue()).toHaveLength(1);
+      } finally {
+        loaded.destroy();
+      }
+    }
+    if (format === "spreadsheet") {
+      const loaded = await restoreSurface(db, resource.id, format);
+      expect(
+        await projectExlsxWorkbook({
+          baseline: loaded.baseline!,
+          update: loaded.update,
+          checkpointSeq: 0,
+        }),
+      ).toBeTruthy();
+    }
+    template.dispose();
+    expect(
+      (await createTemplatesService(db).search(resourceRequest(member), {}))
+        .items,
+    ).toEqual([]);
+    expect(
+      await db
+        .selectFrom("document_states")
+        .selectAll()
+        .where("resource_id", "=", resource.id)
+        .executeTakeFirst(),
+    ).toBeTruthy();
+  },
+);
+it("rejects incompatible templates and leaves no partial document", async () => {
+  const template = installTemplate(db, "markdown", "hello");
   await expect(
     createContent(db).create(member, {
       kind: "document",
       format: "rich_text",
-      title: "笔记",
-      templateId: saved.id,
+      title: "Wrong",
+      template: template.selection,
     }),
-  ).rejects.toThrow("模板与文档类型不一致");
-  await expect(
-    templates.create(admin, {
-      format: "rich_text",
-      title: "坏模板",
-      content: { text: "不是文档节点" },
-    }),
-  ).rejects.toThrow("文档模板内容无效");
+  ).rejects.toThrow("format");
+  expect(
+    await db
+      .selectFrom("resources")
+      .selectAll()
+      .where("title", "=", "Wrong")
+      .execute(),
+  ).toEqual([]);
 });

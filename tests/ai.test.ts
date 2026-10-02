@@ -30,6 +30,7 @@ import {
   saveChatMessage,
 } from "../apps/server/src/services/ai/memory.js";
 import { mockAI, completionResponse } from "./ai-mock.js";
+import { pluginServices } from "@core/shared/plugin-services.js";
 import {
   surfaceCodec,
   DEFAULT_SPREADSHEET_SCHEMA,
@@ -60,6 +61,38 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks();
   await db.destroy();
+});
+it("completes chat with a namespaced plugin skill and preserves its public lookup ID", async () => {
+  await configured();
+  const origin = "http://localhost:39133";
+  let modelCalls = 0;
+  const app = await createApp(db, {
+    origin,
+    ai: {
+      memory: { driver: "sqlite", url: ":memory:" },
+      fetch: mockAI({ record: () => modelCalls++ }),
+    },
+  });
+  const skill = { id: "doca.mail.skill", name: "Doca Mail", description: "查询邮件", content: "使用邮件插件工具查询邮件。", formats: ["chat"] };
+  pluginServices(db).skills.set(skill.id, skill);
+  const request = (method: any, path: string, cookie: string, payload?: any) => app.inject({ method, url: "/api/v1" + path, headers: { host: "localhost:39133", origin, cookie }, payload });
+  try {
+    const cookie = String((await request("POST", "/auth/login", "", { login: "owner", password })).headers["set-cookie"]).split(";")[0]!;
+    const sid = (await request("POST", "/ai/sessions", cookie, { modelId: "test", resourceIds: [] })).json().id;
+    const sent = await request("POST", `/ai/sessions/${sid}/messages`, cookie, { id: randomUUID(), text: "你好", modelId: "test", scope: "all", references: [], skillIds: [] });
+    expect(sent.statusCode, sent.body).toBe(200);
+    let job: any;
+    for (let i = 0; i < 100; i++) {
+      job = (await request("GET", `/ai/sessions/${sid}`, cookie)).json().jobs[0];
+      if (job && !["queued", "running"].includes(job.status)) break;
+      await new Promise(r => setTimeout(r, 30));
+    }
+    expect(job?.status, job?.error).toBe("completed");
+    expect(modelCalls).toBeGreaterThan(0);
+    expect(pluginServices(db).skills.get(skill.id)).toBe(skill);
+  } finally {
+    await app.close();
+  }
 });
 it("enables personal memory by default while preserving user opt-out", async () => {
   expect(aiDefaults.memoryEnabled).toBe(true);

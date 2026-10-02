@@ -20,6 +20,8 @@ try {
           "version",
           "platform",
           "content",
+          "documents",
+          "creation-resources",
           "native",
           "files",
           "ai",

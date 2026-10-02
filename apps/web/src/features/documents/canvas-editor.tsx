@@ -367,7 +367,7 @@ export default function CanvasDocument({
         <p className="empty">正在加载画布…</p>
       )}
       {handle && (
-        <ModelFind handle={ref} revision={sync.revision} canEdit={editable} />
+        <ModelFind documentId={detail.resource.id} handle={ref} revision={sync.revision} canEdit={editable} />
       )}
       <RegionComments
         createAction={createComment}

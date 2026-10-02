@@ -19,7 +19,7 @@ const { t } = useI18n();
 
   const [assetId, setAssetId] = useState(resource.cover_asset_id ?? null),
     [busy, setBusy] = useState(false),
-    [picking, setPicking] = useState(false),
+    [picking, setPicking] = useState<boolean | "materials">(false),
     [sourceOpen, setSourceOpen] = useState(false),
     [error, setError] = useState("");
   const localInput = useRef<HTMLInputElement>(null);
@@ -77,8 +77,8 @@ const { t } = useI18n();
       {error && (
         <Feedback message={error} tone="error" />
       )}
-      {picking && <FolderFilePicker accept={(file) => file.mime.startsWith("image/")} close={() => setPicking(false)} select={async (file: FileItem) => { const response = await fetch(`/api/v1/files/items/${file.id}/content`); if (!response.ok) throw new Error(t("library.coverReadFailed")); const selected = new File([await response.blob()], file.name, { type: file.mime }); setAssetId((await uploadFile(selected, "cover", resource.id)).id); }} />}
-      {sourceOpen && <FileSourceDialog title={t("library.chooseCover")} close={() => setSourceOpen(false)} chooseDoca={() => setPicking(true)} chooseLocal={() => localInput.current?.click()} />}
+      {picking && <FolderFilePicker initialSource={picking === "materials" ? "materials" : "folders"} accept={(file) => file.mime.startsWith("image/")} close={() => setPicking(false)} select={async (file: FileItem) => { const response = await fetch(`/api/v1/files/items/${file.id}/content`); if (!response.ok) throw new Error(t("library.coverReadFailed")); const selected = new File([await response.blob()], file.name, { type: file.mime }); setAssetId((await uploadFile(selected, "cover", resource.id)).id); }} />}
+      {sourceOpen && <FileSourceDialog title={t("library.chooseCover")} close={() => setSourceOpen(false)} chooseDoca={source => setPicking(source ?? true)} chooseLocal={() => localInput.current?.click()} />}
       <footer>
         <button disabled={busy} onClick={close}>{t("common.cancel")}</button>
         <button
@@ -205,7 +205,7 @@ const { t } = useI18n();
 
   const [items, setItems] = useState<Asset[]>([]),
     [busy, setBusy] = useState(false),
-    [picking, setPicking] = useState(false),
+    [picking, setPicking] = useState<boolean | "materials">(false),
     [sourceOpen, setSourceOpen] = useState(false),
     [error, setError] = useState("");
   const localInput = useRef<HTMLInputElement>(null);
@@ -287,7 +287,7 @@ const { t } = useI18n();
         ))
       )}
     </section>
-    {picking && <FolderFilePicker close={() => setPicking(false)} select={async (file: FileItem) => { setBusy(true); try { await api(`/files/items/${file.id}/attach`, "POST", { purpose: "attachment", resourceId: resource.id }); await load(); } finally { setBusy(false); } }} />}
-    {sourceOpen && <FileSourceDialog title={t("toolbar.addAttachment")} close={() => setSourceOpen(false)} chooseDoca={() => setPicking(true)} chooseLocal={() => localInput.current?.click()} />}
+    {picking && <FolderFilePicker initialSource={picking === "materials" ? "materials" : "folders"} close={() => setPicking(false)} select={async (file: FileItem) => { setBusy(true); try { await api(`/files/items/${file.id}/attach`, "POST", { purpose: "attachment", resourceId: resource.id }); await load(); } finally { setBusy(false); } }} />}
+    {sourceOpen && <FileSourceDialog title={t("toolbar.addAttachment")} close={() => setSourceOpen(false)} chooseDoca={source => setPicking(source ?? true)} chooseLocal={() => localInput.current?.click()} />}
   </>;
 }

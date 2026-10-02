@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { PluginSlot, useExtensionContext } from "./extensions.js";
+import { webPluginRegistry } from "./registry.js";
+import { useEffect, useRef, useState } from "react";
 import {
   Package,
   Home,
@@ -12,14 +14,13 @@ import {
   Trash2,
   Bell,
   ShieldCheck,
-  Menu,
+  LayoutGrid, Menu,
   Mail,
   ClipboardList,
   ChartNoAxesCombined,
   LogIn,
   Users,
   UserCheck,
-  PanelsTopLeft,
   ScanText,
   Server,
   Blocks,
@@ -103,7 +104,6 @@ const adminIcons: Record<string, typeof Package> = {
   "doca.admin.users": Users,
   "doca.admin.registration": UserCheck,
   "doca.admin.access": ShieldCheck,
-  "doca.admin.templates": PanelsTopLeft,
   "doca.admin.ai": Sparkles,
   "doca.admin.file-recognition": ScanText,
   "doca.admin.platform": Server,
@@ -207,7 +207,6 @@ export function LeftNavigation() {
   return (
     <>
       <NavigationArea slot="web.left" data={section(false)} />
-      <MoreNavigation data={data} />
       <NavigationArea slot="web.left" data={section(true)} />
     </>
   );
@@ -218,6 +217,22 @@ export function MoreNavigation({
   const { t } = useI18n();
   const loaded = useNavigationLayout();
   const data = provided ?? loaded;
+  const context = useExtensionContext("global");
+  const panel = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const close = () => { if (panel.current) panel.current.open = false; };
+    const outside = (event: Event) => { if (!panel.current?.contains(event.target as Node)) close(); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    window.addEventListener("hashchange", close);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+      window.removeEventListener("hashchange", close);
+    };
+  }, []);
+  const hasExtensions = webPluginRegistry.extensions("global.more", context).length > 0;
   const hasEntries = data.layout.placements.some(
     (placement) =>
       placement.slot === "web.more" &&
@@ -225,14 +240,14 @@ export function MoreNavigation({
         (entry) => entry.id === placement.entryId && !!entry.webPath,
       ),
   );
-  if (!hasEntries) return null;
+  if (!hasEntries && !hasExtensions) return null;
   return (
-    <details className="navigation-more">
+    <details ref={panel} className="navigation-more" onClick={event => { if ((event.target as Element).closest("button,a")) event.currentTarget.open = false; }}>
       <summary title={t("navigation.more")} aria-label={t("navigation.more")}>
-        <Menu size={18} />
+        <LayoutGrid size={18} />
         <span>{t("navigation.more")}</span>
       </summary>
-      <NavigationArea slot="web.more" data={data} />
+      <div className="navigation-more-panel"><NavigationArea slot="web.more" data={data} /><PluginSlot slot="global.more" scope="global" /></div>
     </details>
   );
 }

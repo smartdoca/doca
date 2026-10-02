@@ -1,6 +1,6 @@
 # Plugin development
 
-Updated 2026-10-02 for host image 0.1.4 and public SDK 0.1.3. This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
+Updated 2026-10-02 for source host 0.1.7 and public SDK 0.1.5 (production deployment not verified). This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
 
 [中文](plugin-development.zh-CN.md)
 
@@ -156,9 +156,9 @@ export default () =>
 
 ## Web
 
-The optional web build default-exports `async host => bundle`. `host` provides React, apiBase, useEnvironment, navigate, toast, confirm, request, and FilePicker. React comes from the host so there is one renderer. Other dependencies are bundled. The host does not resolve bare npm imports. The bundle follows `WebPluginBundle` exported by `@smartdoca/plugin-sdk/web`. `manifest.pluginId` and version match the server. Pages, navigation, admin, and settings contributions are supported.
+The optional web build default-exports `async host => bundle`. `host` provides React, apiBase, useEnvironment, navigate, toast, confirm, request, FilePicker, platform, and ui. React comes from the host so there is one renderer. Other dependencies are bundled. The host does not resolve bare npm imports. The bundle follows `WebPluginBundle` exported by `@smartdoca/plugin-sdk/web`. `manifest.pluginId` and version match the server. Pages, navigation, admin, and settings contributions are supported.
 
-The host serves the declared directory at `/api/v1/plugin-assets/{id}/{version}/` and loads registrations before startup. Load errors are isolated and logged. Server package files are not exposed. Contribution render has an error boundary. A generic tree slot is not finished.
+The host serves the declared directory at `/api/v1/plugin-assets/{id}/{version}/` and loads registrations before startup. Load errors are isolated and logged. Server package files are not exposed. Contribution render has an error boundary. Optional commands/views/placements support current Web home, document, library and file positions. Selection, insertion, theme and native positions remain future work; see [exact methods and slots](plugin-extensions.md).
 
 ## Build and verify
 
@@ -223,10 +223,18 @@ Use the same Web bundle on Web and in the scoped mobile WebView. `PluginWebHost`
 - Android save returns completed/canceled. iOS save and system sharing may report presented, which does not prove a user completed the action. Account switching or page disposal cancels outstanding requests.
 - Mail account binding belongs on Web. Native OAuth is outside this delivery.
 
-The current public SDK package version is 0.1.3. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
+The current public SDK package version is 0.1.5. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
 
 ## Distribution and navigation
 
 A complete npm tgz is used for store publication or exact package/version installation in Plugins → Settings. Local upload takes a ZIP with package.json at its root, not a tgz. Both contain compiled artifacts and the full runtime dependency closure; the host does not run npm install or package scripts. Install, upgrade, disable and uninstall take effect after each instance restarts. Uninstall behavior is specified in [Uninstall](#uninstall) above.
 
 Global navigation has Web user, App user and Web administrator scopes. Declare page purpose and platforms; never offer a user page as an administrator page. Plugin pages are labeled by origin, and an entry should not appear in both the sidebar and More. See [distribution, WebView and navigation](plugin-mail-integration-v1.md) and [store protocol](plugin-store-protocol.md).
+
+## Public reading and UI extensions (SDK 0.1.4)
+
+[Implemented interfaces](plugin-extensions.md) describe user directory policy, native document snapshots, library traversal, `host.platform`, `host.ui` and optional commands/views/placements. Plugins using new methods declare `sdkRange: "^0.1.4"`; existing page-only plugins need no new registration.
+
+## Template and material plugins
+
+SDK 0.1.5 adds optional creation-resource providers and consumers, `host.platform.templates/materials`, and injected `TemplatePicker/MaterialPicker`. See [exact resource protocol](creation-resources.md). Providers have no default installation. Register under your namespace and current lifecycle; business consumers authorize their own actions.

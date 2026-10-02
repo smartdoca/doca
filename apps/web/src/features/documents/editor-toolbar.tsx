@@ -53,7 +53,7 @@ export function EditorToolbar({
   const file = useRef<HTMLInputElement>(null);
   const [tableSize, setTableSize] = useState({ rows: 0, columns: 0 });
   const [fileKind, setFileKind] = useState<"media" | "attachment">("media");
-  const [folderPicker, setFolderPicker] = useState(false);
+  const [folderPicker, setFolderPicker] = useState<boolean | "materials">(false);
   const [sourcePicker, setSourcePicker] = useState(false);
   const [width, setWidth] = useState(1000),
     [error, setError] = useState("");
@@ -656,7 +656,7 @@ export function EditorToolbar({
         }}
       />
       {error && <Feedback message={error} tone="error" />}
-      {folderPicker && <FolderFilePicker close={() => setFolderPicker(false)} select={async (item: FileItem) => {
+      {folderPicker && <FolderFilePicker initialSource={folderPicker === "materials" ? "materials" : "folders"} close={() => setFolderPicker(false)} select={async (item: FileItem) => {
         if (!handle || disabled) return;
         const response = await fetch(fileUrl(item.id));
         if (!response.ok) throw new Error("文件读取失败");
@@ -665,7 +665,7 @@ export function EditorToolbar({
         if (svg || item.mime.startsWith("image/") || item.mime.startsWith("video/")) await handle.commands.uploadMedia(selected);
         else await handle.commands.uploadAttachment(selected);
       }} />}
-      {sourcePicker && <FileSourceDialog title={fileKind === "media" ? tr("toolbar.addMedia") : tr("toolbar.addAttachment")} close={() => setSourcePicker(false)} chooseDoca={() => setFolderPicker(true)} chooseLocal={() => requestAnimationFrame(() => file.current?.click())} />}
+      {sourcePicker && <FileSourceDialog title={fileKind === "media" ? tr("toolbar.addMedia") : tr("toolbar.addAttachment")} close={() => setSourcePicker(false)} chooseDoca={source => setFolderPicker(source ?? true)} chooseLocal={() => requestAnimationFrame(() => file.current?.click())} />}
     </div>
   );
 }

@@ -27,7 +27,7 @@ import {
   type User,
 } from "@web/shared/api.js";
 import { realtime } from "@web/features/documents/realtime.js";
-import { DocumentFind } from "@web/features/documents/document-find.js";
+import { SheetFind } from "@web/features/search/sheet-find.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { useSurfaceSync, type SurfaceFactory } from "@web/features/documents/surface-sync.js";
 import { RegionComments, type RegionController } from "@web/features/comments/region-comments.js";
@@ -290,31 +290,7 @@ export default function SheetDocument({
         />
       )}
       {handle && (
-        <DocumentFind
-          openNative={async () => {
-            const api = handle.getRuntime()?.univerAPI;
-            if (
-              !api ||
-              (await api.executeCommand("ui.operation.open-find-dialog")) ===
-                false
-            )
-              throw Error("无法打开表格查找");
-          }}
-          openReplace={
-            editable
-              ? async () => {
-                  const api = handle.getRuntime()?.univerAPI;
-                  if (
-                    !api ||
-                    (await api.executeCommand(
-                      "ui.operation.open-replace-dialog",
-                    )) === false
-                  )
-                    throw Error("无法打开表格替换");
-                }
-              : undefined
-          }
-        />
+        <SheetFind documentId={id} handle={handle} revision={sync.revision} canEdit={editable} />
       )}
       {session ? (
         <SpreadsheetEditor

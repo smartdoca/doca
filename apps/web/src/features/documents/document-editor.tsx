@@ -941,7 +941,7 @@ function RichDocument({
           minWidth: mobileEditor ? 0 : pageLayout.paper ? pageLayout.paper + 40 + (outlineInline ? 216 : 0) + (commentsOpen && !compact ? 296 : 0) : 0,
         }}>
         {ready && (
-          <ModelFind handle={handle} revision={revision} canEdit={editable} />
+          <ModelFind documentId={detail.resource.id} handle={handle} revision={revision} canEdit={editable} />
         )}
         {ready && (
           <DocumentMentions

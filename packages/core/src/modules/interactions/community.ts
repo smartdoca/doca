@@ -8,6 +8,7 @@ import { permission } from "../access/policy.js";
 import { accessContext, accessibleQuery } from "../access/queries.js";
 import { emitIntegrationEvent } from "../automation/events.js";
 import { queueMobilePush } from "../mobile/push.js";
+import { createUserDirectory } from "../discovery/users.js";
 import { directoryIds } from "../discovery/directory.js";
 import type { Actor } from "../identity/passwords.js";
 
@@ -63,42 +64,7 @@ export function documentMentions(value: unknown): Map<string, string> {
   return result;
 }
 export async function visibleUsers(db: DB, actor: Actor, q: string) {
-  const allowed = await directoryIds(db, actor);
-  if (allowed && !allowed.size) return [];
-  let query = db
-    .selectFrom("users")
-    .leftJoin("user_preferences", "user_preferences.user_id", "users.id")
-    .select([
-      "users.id",
-      "users.display_name",
-      "users.public_id",
-      "user_preferences.avatar",
-      "user_preferences.avatar_asset_id",
-    ])
-    .where("users.status", "=", "active");
-  if (allowed) query = query.where("users.id", "in", [...allowed]);
-  const text = q
-    .trim()
-    .toLowerCase()
-    .replaceAll("!", "!!")
-    .replaceAll("%", "!%")
-    .replaceAll("_", "!_");
-  if (text)
-    query = query.where((eb) =>
-      eb.or([
-        sql<boolean>`lower(users.public_id) like ${text + "%"} escape '!'`,
-        sql<boolean>`lower(users.display_name) like ${"%" + text + "%"} escape '!'`,
-      ]),
-    );
-  const rows = await query
-    .orderBy("users.display_name")
-    .orderBy("users.id")
-    .limit(20)
-    .execute();
-  return rows.map((u) => ({
-    ...u,
-    display_name: u.display_name?.trim() || u.public_id || u.id,
-  }));
+  return [...(await createUserDirectory(db).search(actor, { query: q, limit: 20 })).items];
 }
 export async function validateNewMentions(
   db: DB,
@@ -109,18 +75,7 @@ export async function validateNewMentions(
   const added = [...next].filter((id) => !old.has(id));
   if (!added.length) return;
   if (added.length > 100) fail(400, "一次最多提及 100 位用户");
-  const allowed = await directoryIds(db, actor);
-  const users = await db
-    .selectFrom("users")
-    .select("id")
-    .where("id", "in", added)
-    .where("status", "=", "active")
-    .execute();
-  if (
-    users.length !== added.length ||
-    (allowed && added.some((id) => !allowed.has(id)))
-  )
-    fail(403, "包含当前不可选择的用户");
+  await createUserDirectory(db).validate(actor, { ids: added });
 }
 export async function normalizeComment(
   db: DB,

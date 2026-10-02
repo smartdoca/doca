@@ -1,3 +1,4 @@
+import { PluginExtensionHost } from "../plugins/extensions.js";
 import { createRoot } from "react-dom/client";
 import { App } from "./app.js";
 import { FeedbackViewport } from "@web/shared/components/feedback.js";
@@ -8,6 +9,7 @@ void loadWebPlugins().catch(error => console.error("Plugin discovery failed", er
 createRoot(document.getElementById("root")!).render(
   <LocaleProvider>
     <App />
+    <PluginExtensionHost />
     <FeedbackViewport />
   </LocaleProvider>,
 );

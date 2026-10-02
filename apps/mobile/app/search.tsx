@@ -137,7 +137,7 @@ export default function SearchScreen() {
             onPress={() =>
               item.kind === "library"
                 ? router.push({ pathname: "/library/[id]", params: { id: item.id, title: item.title } })
-                : router.push({ pathname: "/document/[id]", params: { id: item.id, title: item.title } })
+                : router.push({ pathname: "/document/[id]", params: { id: item.id, title: item.title, ...(mode === "keyword" && active ? { find: active } : {}) } })
             }
           >
             <Text style={styles.cardTitle}>{item.title || "未命名"}</Text>

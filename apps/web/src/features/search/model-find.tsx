@@ -1,31 +1,60 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Search, ChevronUp, ChevronDown, Replace, X } from "lucide-react";
+import { Feedback } from "@web/shared/components/feedback.js";
 import { useI18n } from "@web/shared/i18n.js";
-export interface FindHandle<M> { find(query: string): M[]; reveal(match: M): unknown; replace(match: M, text: string): unknown; replaceAll(query: string, text: string): unknown; }
+import { composingKey } from "./composition.js";
+import { useDocumentSearchRequest } from "./use-document-search-request.js";
+import { useFindQuery } from "./use-find-query.js";
+export interface FindHandle<M> { find(query: string): M[] | Promise<M[]>; reveal(match: M): unknown; replace(match: M, text: string): unknown; replaceAll(query: string, text: string): unknown; }
 
 /** Platform search UI; SDK enumerates, locates and mutates the model, never DOM text. */
 export function ModelFind<M>({
+  documentId,
   handle,
   revision,
   canEdit,
+  openNative,
+  openReplace,
 }: {
+  documentId: string;
   handle: RefObject<FindHandle<M> | null>;
+  openNative?: () => Promise<unknown>;
+  openReplace?: () => Promise<unknown>;
   revision: number;
   canEdit: boolean;
 }) {
   const { t } = useI18n();
   const [slot, setSlot] = useState<HTMLElement | null>(null),
     [open, setOpen] = useState(false),
-    [query, setQuery] = useState(""),
     [replacement, setReplacement] = useState(""),
     [expanded, setExpanded] = useState(false),
     [matches, setMatches] = useState<M[]>([]),
     [index, setIndex] = useState(0);
+  const { query, setQuery, composing, gate, inputProps } = useFindQuery();
+  const request = useDocumentSearchRequest(documentId);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState("");
+  const native = useRef({ openNative, openReplace });
+  native.current = { openNative, openReplace };
+  useEffect(() => {
+    if (!request) return;
+    setQuery(request.query);
+    setIndex(0);
+    setExpanded(false);
+    setOpen(true);
+  }, [request, setQuery]);
   const input = useRef<HTMLInputElement>(null);
   const editable = useRef(canEdit);
   editable.current = canEdit;
   const show = (replace = false) => {
+    const opener = replace ? native.current.openReplace : native.current.openNative;
+    if (opener) {
+      setOpen(false);
+      setError("");
+      void opener().catch((e) => setError((e as Error).message));
+      return;
+    }
     if (replace && editable.current) setExpanded(true);
     setOpen(true);
     requestAnimationFrame(() => input.current?.focus());
@@ -33,6 +62,7 @@ export function ModelFind<M>({
   useEffect(() => {
     setSlot(document.getElementById("document-search-slot"));
     const key = (e: KeyboardEvent) => {
+      if (composingKey(e)) return;
       if (
         !(e.metaKey || e.ctrlKey) ||
         e.altKey ||
@@ -50,22 +80,52 @@ export function ModelFind<M>({
     return () => window.removeEventListener("keydown", key, true);
   }, []);
   useEffect(() => {
-    const found = open ? (handle.current?.find(query) ?? []) : [];
-    setMatches(found);
-    setIndex(0);
-    if (found[0]) {
-      const focus = document.activeElement as HTMLElement | null;
-      handle.current?.reveal(found[0]);
-      focus?.focus({ preventScroll: true });
+    if (composing || gate.composing) return;
+    if (!open || !query) {
+      setSearching(false);
+      setMatches([]);
+      setIndex(0);
+      return;
     }
-  }, [query, open, revision, handle]);
+    let cancelled = false;
+    setSearching(true);
+    setMatches([]);
+    setError("");
+    void (async () => {
+      try {
+        const found = await handle.current?.find(query) ?? [];
+        if (cancelled) return;
+        setSearching(false);
+        setMatches(found);
+        setIndex(0);
+        if (found[0]) {
+          const focus = document.activeElement as HTMLElement | null;
+          handle.current?.reveal(found[0]);
+          if (document.activeElement !== focus) focus?.focus({ preventScroll: true });
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setSearching(false);
+          setError((e as Error).message);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [query, composing, open, revision, handle, gate, request]);
+
   const move = (delta: number) => {
+    if (!matches.length || gate.composing) return;
     const next = (index + delta + matches.length) % matches.length;
     setIndex(next);
-    if (matches[next]) handle.current?.reveal(matches[next]);
+    if (matches[next]) {
+      const focus = document.activeElement as HTMLElement | null;
+      handle.current?.reveal(matches[next]);
+      if (document.activeElement !== focus) focus?.focus({ preventScroll: true });
+    }
   };
   return (
     <>
+      <Feedback message={error} tone="error" />
       {slot &&
         createPortal(
           <button
@@ -85,6 +145,7 @@ export function ModelFind<M>({
             role="search"
             aria-label={t("doc.find")}
             onKeyDown={(e) => {
+              if (gate.composing || composingKey(e.nativeEvent)) return;
               if (e.key === "Escape") setOpen(false);
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -106,15 +167,14 @@ export function ModelFind<M>({
               ref={input}
               aria-label={t("doc.findQuery")}
               placeholder={t("doc.findQuery")}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              {...inputProps}
             />
             <span role="status">
-              {matches.length ? `${index + 1}/${matches.length}` : "0/0"}
+              {error || (searching ? "…" : matches.length ? `${index + 1}/${matches.length}` : query ? t("doc.findNoMatches") : "0/0")}
             </span>
             <button
               className="icon"
-              disabled={!matches.length}
+              disabled={composing || !matches.length}
               aria-label={t("doc.findPrevious")}
               onClick={() => move(-1)}
             >
@@ -122,7 +182,7 @@ export function ModelFind<M>({
             </button>
             <button
               className="icon"
-              disabled={!matches.length}
+              disabled={composing || !matches.length}
               aria-label={t("doc.findNext")}
               onClick={() => move(1)}
             >
@@ -144,7 +204,7 @@ export function ModelFind<M>({
                   onChange={(e) => setReplacement(e.target.value)}
                 />
                 <button
-                  disabled={!matches.length}
+                  disabled={composing || !matches.length}
                   onClick={() => {
                     const match = matches[index];
                     if (match) handle.current?.replace(match, replacement);
@@ -153,7 +213,7 @@ export function ModelFind<M>({
                   {t("doc.replace")}
                 </button>
                 <button
-                  disabled={!matches.length}
+                  disabled={composing || !matches.length}
                   onClick={() => handle.current?.replaceAll(query, replacement)}
                 >
                   {t("doc.replaceAll")}
