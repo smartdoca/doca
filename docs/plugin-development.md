@@ -1,6 +1,6 @@
 # Plugin development
 
-Updated 2026-10-02 for host image 0.1.3 and public SDK 0.1.3. This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
+Updated 2026-10-02 for host image 0.1.4 and public SDK 0.1.3. This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
 
 [中文](plugin-development.zh-CN.md)
 

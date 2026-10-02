@@ -1,5 +1,6 @@
 import { MobilePluginPage } from "@web/plugins/mobile-page.js";
-import { NavigationArea, LeftNavigation, navigateToDefaultHome } from "@web/plugins/navigation.js";
+import { NavigationArea, LeftNavigation, navigateToDefaultHome, useNavigationLayout } from "@web/plugins/navigation.js";
+import { isAdminNavigationPath } from "@smartdoca/web-plugin-registry";
 import { WorkspaceHome } from "@web/features/workspace/home.js";
 import { DiscoveryPage } from "@web/features/discovery/discovery.js";
 import { KnowledgePublicPage } from "@web/features/knowledge/knowledge-public-page.js";
@@ -69,6 +70,7 @@ import {
   ArrowLeft,
   Home,
   PanelLeft,
+  LockKeyhole,
   UserRound,
   BookOpenCheck,
   Bot,
@@ -184,6 +186,7 @@ function WorkspaceApp() {
     [pluginNavigation],
   );
   const { locale, t, reloadLocale } = useI18n();
+  const navigationLayout = useNavigationLayout();
   const [navigationCollapsed, setNavigationCollapsed] = useNavigationCollapse("doca.navigation.collapsed");
   const [adminNavigationCollapsed, setAdminNavigationCollapsed] = useNavigationCollapse("doca.admin-navigation.collapsed");
   const desktopNavigation = useDesktopNavigation();
@@ -698,6 +701,10 @@ function WorkspaceApp() {
       : undefined;
   const unavailablePluginRoute =
     !!matchedPluginRoute && !pluginRoute;
+  const adminPluginPage = isAdminNavigationPath(
+    navigationLayout.entries,
+    pluginRoutePath,
+  );
   const renderedPluginRoute = pluginRoute?.contribution.render(
       {
         sharedFolderName,
@@ -822,7 +829,7 @@ function WorkspaceApp() {
   if (
     bootstrap.user &&
     bootstrap.needsProfile &&
-    (!adminPage || !!bootstrap.forcedLoginMethod)
+    (!(adminPage || adminPluginPage) || !!bootstrap.forcedLoginMethod)
   )
     return (
       <AccountOnboarding
@@ -835,11 +842,11 @@ function WorkspaceApp() {
   const user = bootstrap.user;
 
   const displayName = user?.display_name || user?.public_id || user?.id || "用户";
-  if (user && (adminPage || accountPage || preferencesPage))
+  if (user && (adminPage || adminPluginPage || accountPage || preferencesPage))
     return (
-      <div className={`settings-shell ${adminPage && adminNavigationCollapsed ? "admin-navigation-collapsed" : ""}`}>
+      <div className={`settings-shell ${(adminPage || adminPluginPage) && adminNavigationCollapsed ? "admin-navigation-collapsed" : ""}`}>
         <header className="settings-shell-header">
-          {adminPage && <button className="icon" title={adminNavigationCollapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")} aria-label={adminNavigationCollapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")} aria-expanded={!adminNavigationCollapsed} onClick={() => setAdminNavigationCollapsed(!adminNavigationCollapsed)}><PanelLeft size={19} /></button>}
+          {(adminPage || adminPluginPage) && <button className="icon" title={adminNavigationCollapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")} aria-label={adminNavigationCollapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")} aria-expanded={!adminNavigationCollapsed} onClick={() => setAdminNavigationCollapsed(!adminNavigationCollapsed)}><PanelLeft size={19} /></button>}
           <BackLink fallback="/home" className="settings-back">
             <ArrowLeft size={18} /> {t("account.workspace")}
           </BackLink>
@@ -867,6 +874,34 @@ function WorkspaceApp() {
         {adminPage ? (
           user.admin ? (
             <Admin activePluginIds={activePluginIds} />
+          ) : (
+            <section className="empty">
+              {t("shell.adminOnly")}<a href="#/home">{t("shell.homeLink")}</a>
+            </section>
+          )
+        ) : adminPluginPage ? (
+          user.admin ? (
+            <section className="admin-console">
+              <div className="admin-layout">
+                <nav className="admin-nav" aria-label={t("admin.nav")}>
+                  <NavigationArea slot="web.admin" />
+                  <div className="admin-nav-note">
+                    <LockKeyhole size={16} />
+                    <p>{t("admin.navNote")}</p>
+                  </div>
+                </nav>
+                <main className="admin-content">
+                  {unavailablePluginRoute ? (
+                    <section className="empty">
+                      <p>{t("shell.pluginUnavailable")}</p>
+                      <a href="#/admin">{t("admin.title")}</a>
+                    </section>
+                  ) : (
+                    renderedPluginRoute
+                  )}
+                </main>
+              </div>
+            </section>
           ) : (
             <section className="empty">
               {t("shell.adminOnly")}<a href="#/home">{t("shell.homeLink")}</a>
