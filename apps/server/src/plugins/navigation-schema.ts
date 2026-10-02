@@ -20,8 +20,8 @@ export const pluginNavigationSchema = z
           .regex(/^\/plugins\/[a-z][a-z0-9.-]*\/[a-zA-Z0-9/_-]*$/)
           .max(300),
         mobile: z.boolean().optional(),
-        allowedSlots: z.array(slot).min(1).max(14),
-        defaults: z.array(slot).max(14),
+        allowedSlots: z.array(slot).min(1).max(navigationSlots.length),
+        defaults: z.array(slot).max(navigationSlots.length),
         order: z.number().int().min(-10000).max(10000),
         adminOnly: z.boolean().optional(),
       })

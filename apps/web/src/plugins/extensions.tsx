@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { Drawer, Modal } from "antd";
+import { Drawer, Modal, Tooltip } from "antd";
+import { Package } from "lucide-react";
 import type {
   ExtensionContext,
   ExtensionResource,
@@ -71,11 +72,13 @@ export function PluginSlot({
   scope,
   resource,
   resources,
+  display = "both",
 }: {
   slot: ExtensionSlot;
   scope: ExtensionScope;
   resource?: ExtensionResource;
   resources?: readonly ExtensionResource[];
+  display?: "both" | "icon";
 }) {
   const context = useExtensionContext(scope, resource, resources);
   const [running, setRunning] = useState<string[]>([]);
@@ -85,7 +88,9 @@ export function PluginSlot({
   const placements = webPluginRegistry.extensions(slot, context);
   if (!placements.length) return null;
   return (
-    <div className={`plugin-slot plugin-slot-${slot.replaceAll(".", "-")}`}>
+    <div
+      className={`plugin-slot plugin-slot-${slot.replaceAll(".", "-")} plugin-slot-display-${display}`}
+    >
       {placements.map((placement) => {
         const command = placement.commandId
           ? webPluginRegistry.commands.get(placement.commandId)
@@ -94,59 +99,92 @@ export function PluginSlot({
           ? webPluginRegistry.views.get(placement.viewId)
           : undefined;
         if (view && !placement.presentation)
-          return (
-            <section className="plugin-view" key={placement.id}>
-              <header>{view.title[context.locale]}</header>
-              {view.render(context)}
-            </section>
-          );
+          if (display === "icon")
+            return (
+              <details className="plugin-inline-view" key={placement.id}>
+                <Tooltip
+                  title={view.title[context.locale]}
+                  placement="bottom"
+                  mouseEnterDelay={0.3}
+                >
+                  <summary aria-label={view.title[context.locale]}>
+                    <Package size={20} />
+                  </summary>
+                </Tooltip>
+                <section className="plugin-view">
+                  <header>{view.title[context.locale]}</header>
+                  {view.render(context)}
+                </section>
+              </details>
+            );
+          else
+            return (
+              <section className="plugin-view" key={placement.id}>
+                <header>{view.title[context.locale]}</header>
+                {view.render(context)}
+              </section>
+            );
         const title = command?.title ?? view?.title;
         return (
-          <button
+          <Tooltip
             key={placement.id}
-            disabled={running.includes(placement.id)}
-            onClick={() => {
-              if (context.signal.aborted) return;
-              if (view && placement.presentation) {
-                try {
-                  openExtensionView(view.pluginId, {
-                    viewId: view.id,
-                    presentation: placement.presentation,
-                    context,
-                  });
-                } catch (error) {
-                  notifyFeedback(
-                    error instanceof Error ? error.message : String(error),
-                    "error",
-                  );
-                }
-                return;
-              }
-              if (command) {
-                setRunning((ids) => [...ids, placement.id]);
-                Promise.resolve()
-                  .then(() => {
-                    context.signal.throwIfAborted();
-                    return command.execute(context);
-                  })
-                  .catch((error) => {
-                    if (!context.signal.aborted)
-                      notifyFeedback(
-                        error instanceof Error ? error.message : String(error),
-                        "error",
-                      );
-                  })
-                  .finally(() => {
-                    if (!context.signal.aborted)
-                      setRunning((ids) =>
-                        ids.filter((id) => id !== placement.id),
-                      );
-                  });
-              }
-            }}
+            title={display === "icon" ? title?.[context.locale] : undefined}
+            placement="bottom"
+            mouseEnterDelay={0.3}
           >
-            {title?.[context.locale]}
-          </button>
+            <button
+              type="button"
+              aria-label={title?.[context.locale]}
+              disabled={running.includes(placement.id)}
+              onClick={() => {
+                if (context.signal.aborted) return;
+                if (view && placement.presentation) {
+                  try {
+                    openExtensionView(view.pluginId, {
+                      viewId: view.id,
+                      presentation: placement.presentation,
+                      context,
+                    });
+                  } catch (error) {
+                    notifyFeedback(
+                      error instanceof Error ? error.message : String(error),
+                      "error",
+                    );
+                  }
+                  return;
+                }
+                if (command) {
+                  setRunning((ids) => [...ids, placement.id]);
+                  Promise.resolve()
+                    .then(() => {
+                      context.signal.throwIfAborted();
+                      return command.execute(context);
+                    })
+                    .catch((error) => {
+                      if (!context.signal.aborted)
+                        notifyFeedback(
+                          error instanceof Error
+                            ? error.message
+                            : String(error),
+                          "error",
+                        );
+                    })
+                    .finally(() => {
+                      if (!context.signal.aborted)
+                        setRunning((ids) =>
+                          ids.filter((id) => id !== placement.id),
+                        );
+                    });
+                }
+              }}
+            >
+              {display === "icon" ? (
+                <Package size={20} />
+              ) : (
+                title?.[context.locale]
+              )}
+            </button>
+          </Tooltip>
         );
       })}
     </div>

@@ -59,7 +59,7 @@ curl -fsS http://127.0.0.1:39120/health
 bash scripts/bootstrap-admin.sh
 ```
 
-A healthy process returns `{"status":"ok","version":"0.1.7"}`. SQLite, uploads, and the AI database stay in the `doca_data` volume. The first database must be empty. Doca refuses a non-empty database whose schema is not the current baseline.
+A healthy process returns `{"status":"ok","version":"0.1.8"}`. SQLite, uploads, and the AI database stay in the `doca_data` volume. The first database must be empty. Doca refuses a non-empty database whose schema is not the current baseline.
 
 `DOCA_ASSET_BASE` is optional. Leave it empty to serve JavaScript and CSS from the container. When it is set, Doca still returns the HTML and only rewrites `/assets/` URLs in that HTML. The prefix must be HTTPS in production and must allow cross-origin reads of ES modules.
 

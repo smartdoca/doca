@@ -1,6 +1,7 @@
 import { PluginSlot, useExtensionContext } from "./extensions.js";
 import { webPluginRegistry } from "./registry.js";
 import { useEffect, useRef, useState } from "react";
+import { Tooltip } from "antd";
 import {
   Package,
   Home,
@@ -14,7 +15,10 @@ import {
   Trash2,
   Bell,
   ShieldCheck,
-  LayoutGrid, Menu,
+  LayoutGrid,
+  MoreHorizontal,
+  ChevronDown,
+  Menu,
   Mail,
   ClipboardList,
   ChartNoAxesCombined,
@@ -54,7 +58,7 @@ export function useNavigationLayout() {
   const [data, setData] = useState<ResolvedNavigation>(() =>
     resolveNavigation(
       builtinNavigation,
-      {schemaVersion:1,layout:{placements:[]}},
+      { schemaVersion: 1, layout: { placements: [] } },
       { id: "", admin: false },
     ),
   );
@@ -140,39 +144,55 @@ export function NavigationArea({
               ? icons[p.icon]
               : (adminIcons[entry.id] ?? icons[entry.icon])) ?? Package,
           title = (p.title ?? entry.title)[locale];
-        const display = slot === "web.topRight" ? "icon" : (p.display ?? "both");
+        const display =
+          slot === "web.topRight" || slot === "web.more"
+            ? "icon"
+            : slot === "web.leftMore"
+              ? "both"
+              : (p.display ?? "both");
         return (
-          <a
+          <Tooltip
             key={`${p.entryId}:${slot}`}
-            href={`#${entry.webPath}`}
-            onClick={(event) => {
-              if (
-                entry.id === "doca.search" ||
-                entry.id === "doca.notifications"
-              ) {
-                event.preventDefault();
-                window.dispatchEvent(
-                  new CustomEvent("doca-navigation-action", {
-                    detail: entry.id,
-                  }),
-                );
-              }
-            }}
             title={title}
-            aria-label={title}
-            data-display={display}
-            data-entry-id={entry.id}
-            className={
-              (entry.webPath.includes("?")
-                ? location.hash
-                : location.hash.split("?")[0]) === `#${entry.webPath}`
-                ? "active"
-                : ""
-            }
+            placement="bottom"
+            mouseEnterDelay={0.3}
           >
-            {display !== "text" && <Icon size={slot === "web.topRight" ? 20 : 16} />}
-            {display !== "icon" && <span>{title}</span>}
-          </a>
+            <a
+              href={`#${entry.webPath}`}
+              onClick={(event) => {
+                if (
+                  entry.id === "doca.search" ||
+                  entry.id === "doca.notifications"
+                ) {
+                  event.preventDefault();
+                  window.dispatchEvent(
+                    new CustomEvent("doca-navigation-action", {
+                      detail: entry.id,
+                    }),
+                  );
+                }
+              }}
+              aria-label={title}
+              data-display={display}
+              data-entry-id={entry.id}
+              className={
+                (entry.webPath.includes("?")
+                  ? location.hash
+                  : location.hash.split("?")[0]) === `#${entry.webPath}`
+                  ? "active"
+                  : ""
+              }
+            >
+              {display !== "text" && (
+                <Icon
+                  size={
+                    slot === "web.topRight" || slot === "web.more" ? 20 : 16
+                  }
+                />
+              )}
+              {display !== "icon" && <span>{title}</span>}
+            </a>
+          </Tooltip>
         );
       });
   return (
@@ -207,22 +227,41 @@ export function LeftNavigation() {
   return (
     <>
       <NavigationArea slot="web.left" data={section(false)} />
+      <MoreNavigation position="left" data={data} />
       <NavigationArea slot="web.left" data={section(true)} />
     </>
   );
 }
 export function MoreNavigation({
   data: provided,
-}: { data?: ResolvedNavigation } = {}) {
+  position = "topRight",
+  showExtensions = true,
+}: {
+  data?: ResolvedNavigation;
+  position?: "left" | "topRight";
+  showExtensions?: boolean;
+} = {}) {
   const { t } = useI18n();
   const loaded = useNavigationLayout();
   const data = provided ?? loaded;
+  const slot = position === "left" ? "web.leftMore" : "web.more";
+  const extensionSlot = position === "left" ? "global.leftMore" : "global.more";
+  const title = t(`navigation.slot.${slot}`);
   const context = useExtensionContext("global");
   const panel = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
-    const close = () => { if (panel.current) panel.current.open = false; };
-    const outside = (event: Event) => { if (!panel.current?.contains(event.target as Node)) close(); };
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
+    const close = () => {
+      if (panel.current) panel.current.open = false;
+    };
+    const outside = (event: Event) => {
+      if (!panel.current?.contains(event.target as Node)) close();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && panel.current?.open) {
+        close();
+        panel.current.querySelector("summary")?.focus();
+      }
+    };
     document.addEventListener("pointerdown", outside);
     document.addEventListener("keydown", escape);
     window.addEventListener("hashchange", close);
@@ -232,22 +271,53 @@ export function MoreNavigation({
       window.removeEventListener("hashchange", close);
     };
   }, []);
-  const hasExtensions = webPluginRegistry.extensions("global.more", context).length > 0;
+  const hasExtensions =
+    showExtensions &&
+    webPluginRegistry.extensions(extensionSlot, context).length > 0;
   const hasEntries = data.layout.placements.some(
     (placement) =>
-      placement.slot === "web.more" &&
+      placement.slot === slot &&
       data.entries.some(
         (entry) => entry.id === placement.entryId && !!entry.webPath,
       ),
   );
   if (!hasEntries && !hasExtensions) return null;
   return (
-    <details ref={panel} className="navigation-more" onClick={event => { if ((event.target as Element).closest("button,a")) event.currentTarget.open = false; }}>
-      <summary title={t("navigation.more")} aria-label={t("navigation.more")}>
-        <LayoutGrid size={18} />
-        <span>{t("navigation.more")}</span>
-      </summary>
-      <div className="navigation-more-panel"><NavigationArea slot="web.more" data={data} /><PluginSlot slot="global.more" scope="global" /></div>
+    <details
+      ref={panel}
+      className={`navigation-more navigation-more-${position}`}
+      onClick={(event) => {
+        const target = event.target as Element;
+        if (
+          target.closest("button,a") &&
+          !target.closest(".plugin-inline-view")
+        )
+          event.currentTarget.open = false;
+      }}
+    >
+      <Tooltip title={title} placement="bottom" mouseEnterDelay={0.3}>
+        <summary aria-label={title}>
+          {position === "left" ? (
+            <MoreHorizontal size={18} />
+          ) : (
+            <LayoutGrid size={18} />
+          )}
+          <span>{t("navigation.more")}</span>
+          {position === "left" && (
+            <ChevronDown size={14} className="navigation-more-chevron" />
+          )}
+        </summary>
+      </Tooltip>
+      <div className="navigation-more-panel">
+        <NavigationArea slot={slot} data={data} />
+        {showExtensions && (
+          <PluginSlot
+            slot={extensionSlot}
+            scope="global"
+            display={position === "left" ? "both" : "icon"}
+          />
+        )}
+      </div>
     </details>
   );
 }

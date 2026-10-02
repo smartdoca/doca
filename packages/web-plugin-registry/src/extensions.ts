@@ -5,6 +5,7 @@ import type {
 } from "./index.js";
 export const extensionSlots = [
   "global.more",
+  "global.leftMore",
   "home.cards",
   "home.actions",
   "document.toolbar",

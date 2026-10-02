@@ -44,13 +44,16 @@ try {
   await symlink(cordis, join(fixture, "node_modules/@deepseek-ai/cordis"));
   const source = `import { templatesServiceToken, materialsServiceToken, type TemplateProvider } from '@smartdoca/plugin-sdk/creation-resources';
 import { documentReadServiceToken, librariesServiceToken } from '@smartdoca/plugin-sdk/documents';
-import { createPluginPlatformClient, type WebPluginBundle, type PluginWebHost } from '@smartdoca/plugin-sdk/web';
+import { createPluginPlatformClient, type NavigationSlot, type ExtensionSlot, type WebPluginBundle, type PluginWebHost } from '@smartdoca/plugin-sdk/web';
 import { usersServiceToken, type DirectorySource } from '@smartdoca/plugin-sdk/platform';
-import { WebPluginRegistry } from '@smartdoca/web-plugin-registry';
+import { WebPluginRegistry, navigationSlots, extensionSlots } from '@smartdoca/web-plugin-registry';
 const ids = [documentReadServiceToken.id, librariesServiceToken.id, usersServiceToken.id];
 if (ids.join(',') !== 'documents.read.v1,libraries.v1,users.v1') throw Error('public tokens');
 const bundle: WebPluginBundle = { manifest: {pluginId:'example.consumer',version:'1.0.0',targets:['web']}, commands: [{id:'example.consumer.read',pluginId:'example.consumer',title:{zh:'读取',en:'Read'},supportedContexts:['document'],execute(context){context.signal.throwIfAborted();}}], placements:[{id:'example.consumer.menu',pluginId:'example.consumer',slot:'document.menu',commandId:'example.consumer.read'}] };
 const registry = new WebPluginRegistry(); registry.register(bundle)();
+const sidebar: NavigationSlot = 'web.leftMore'; const globalSidebar: ExtensionSlot = 'global.leftMore';
+if (!navigationSlots.includes(sidebar) || !extensionSlots.includes(globalSidebar)) throw Error('public sidebar More slots');
+registry.register({manifest:{pluginId:'example.sidebar',version:'1.0.0',targets:['web']},commands:[{id:'example.sidebar.open',pluginId:'example.sidebar',title:{zh:'打开',en:'Open'},supportedContexts:['global'],execute(){}}],placements:[{id:'example.sidebar.menu',pluginId:'example.sidebar',slot:globalSidebar,commandId:'example.sidebar.open'}]})();
 const calls: string[] = [];
 const client = createPluginPlatformClient(async <T,>(operation: string) => {calls.push(operation);return {} as T});
 await client.documents.readSnapshot({documentId:'doc'}); await client.users.me();

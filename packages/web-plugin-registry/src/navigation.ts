@@ -7,6 +7,7 @@ export const navigationSlots = [
   "web.user",
   "web.home",
   "web.more",
+  "web.leftMore",
   "web.admin",
   "mobile.drawer",
   "mobile.bottom",
@@ -246,6 +247,7 @@ export function resolveNavigation(
           (other) =>
             other.entryId === p.entryId &&
             other.slot !== p.slot &&
+            !(p.slot === "web.more" && other.slot === "web.leftMore") &&
             other.slot.startsWith(p.slot.split(".")[0] + "."),
         )) &&
       placements.findIndex(

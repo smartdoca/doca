@@ -1,5 +1,6 @@
 import { localeLabel, locales } from "@doca/i18n";
 import { useEffect, useRef } from "react";
+import { Tooltip } from "antd";
 import { useI18n } from "@web/shared/i18n.js";
 
 export function LocaleSwitch() {
@@ -10,7 +11,8 @@ export function LocaleSwitch() {
   };
   useEffect(() => {
     const outside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !root.current?.contains(event.target)) close();
+      if (event.target instanceof Node && !root.current?.contains(event.target))
+        close();
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key === "Escape" && root.current?.open) {
@@ -27,10 +29,20 @@ export function LocaleSwitch() {
   }, []);
   return (
     <details className="locale-switch" ref={root}>
-      <summary aria-label={t("settings.language")} title={t("settings.language")}>
-        {t(localeLabel[locale])}
-      </summary>
-      <div className="locale-switch-menu" role="listbox" aria-label={t("settings.language")}>
+      <Tooltip
+        title={t("settings.language")}
+        placement="bottom"
+        mouseEnterDelay={0.3}
+      >
+        <summary aria-label={t("settings.language")}>
+          {t(localeLabel[locale])}
+        </summary>
+      </Tooltip>
+      <div
+        className="locale-switch-menu"
+        role="listbox"
+        aria-label={t("settings.language")}
+      >
         {locales.map((code) => (
           <button
             key={code}

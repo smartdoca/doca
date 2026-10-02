@@ -14,7 +14,7 @@ import {
 } from "@smartdoca/web-plugin-registry";
 import { api } from "@web/shared/api.js";
 import { useI18n } from "@web/shared/i18n.js";
-import { NavigationArea } from "@web/plugins/navigation.js";
+import { MoreNavigation, NavigationArea } from "@web/plugins/navigation.js";
 import "./navigation.css";
 type State = {
   revision: number;
@@ -313,7 +313,18 @@ export function NavigationSettings() {
                             <span>{t("navigation.display")}</span>
                             <Select
                               aria-label={t("navigation.display")}
-                              value={p.display ?? "both"}
+                              disabled={[
+                                "web.topRight",
+                                "web.more",
+                                "web.leftMore",
+                              ].includes(p.slot)}
+                              value={
+                                ["web.topRight", "web.more"].includes(p.slot)
+                                  ? "icon"
+                                  : p.slot === "web.leftMore"
+                                    ? "both"
+                                    : (p.display ?? "both")
+                              }
                               options={(["both", "icon", "text"] as const).map(
                                 (value) => ({
                                   value,
@@ -413,7 +424,15 @@ export function NavigationSettings() {
               <div className="navigation-preview-card" key={slot}>
                 <strong>{t(`navigation.slot.${slot}`)}</strong>
                 {target === "web" ? (
-                  <NavigationArea slot={slot} data={resolved} />
+                  slot === "web.more" || slot === "web.leftMore" ? (
+                    <MoreNavigation
+                      data={resolved}
+                      showExtensions={false}
+                      position={slot === "web.leftMore" ? "left" : "topRight"}
+                    />
+                  ) : (
+                    <NavigationArea slot={slot} data={resolved} />
+                  )
                 ) : (
                   resolved.layout.placements
                     .filter((p) => p.slot === slot)

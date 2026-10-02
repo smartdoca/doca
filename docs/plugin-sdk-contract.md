@@ -4,7 +4,7 @@
 
 [中文](plugin-sdk-contract.zh-CN.md)
 
-Status: updated 2026-10-02 (source host 0.1.7 / SDK 0.1.5; production deployment not verified). Plugins store their own business data. This document is the acceptance standard for the refactor. It does not mean every interface is implemented. The gap is in section 12. A development tutorial must not present a target interface as an export that exists today.
+Status: updated 2026-10-02 (source host 0.1.8 / SDK 0.1.5; production deployment not verified). Plugins store their own business data. This document is the acceptance standard for the refactor. It does not mean every interface is implemented. The gap is in section 12. A development tutorial must not present a target interface as an export that exists today.
 
 The [public capabilities and UI extension refactor plan](plugin-sdk-expansion.md) records the agreed additive direction, current implementation inventory, proposed interfaces and acceptance batches. A–D are now implemented; the [implemented methods and slots](plugin-extensions.md) record exact exports and limits. E/F remain future work.
 
