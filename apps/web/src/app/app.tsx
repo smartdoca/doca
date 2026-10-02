@@ -199,7 +199,14 @@ function WorkspaceApp() {
     [hash, setHash] = useState(location.hash),
     [refresh, setRefresh] = useState(0),
     [scope, setScope] = useState(() => {
-      const route = location.hash.slice(2).split(/[/?]/)[0]!;
+      const path = location.hash.replace(/^#/, "").split("?")[0] || "/home";
+      if (
+        webPluginRegistry.resolveRoute(
+          path.startsWith("/m/plugins/") ? path.slice(2) : path,
+        )
+      )
+        return "plugin";
+      const route = path.slice(1).split(/[/?]/)[0]!;
       if (route === "knowledge") return "libraries";
       return titleKeys[route] || pluginNavigationByScope.has(route)
         ? route
@@ -534,7 +541,17 @@ function WorkspaceApp() {
       setHash(location.hash);
       setNavigationOpen(false);
       setModal("");
-      const route = location.hash.slice(2).split(/[/?]/)[0]!;
+      const path = location.hash.replace(/^#/, "").split("?")[0] || "/home";
+      if (
+        webPluginRegistry.resolveRoute(
+          path.startsWith("/m/plugins/") ? path.slice(2) : path,
+        )
+      ) {
+        setScope("plugin");
+        setError("");
+        return;
+      }
+      const route = path.slice(1).split(/[/?]/)[0]!;
       if (route === "knowledge") {
         location.hash = "/libraries";
         setScope("libraries");
@@ -1056,7 +1073,7 @@ function WorkspaceApp() {
             {(librarySystemPage || libraryQaPage || (!resourceId && scope === "knowledge-assistants")) && <div className="files-topbar-title knowledge-topbar-title">{librarySystemPage ? <BookOpenCheck size={20}/> : <Bot size={20}/>}<h1>{t(librarySystemPage ? "nav.librarySystem" : "knowledge.assistants")}</h1>{librarySystemPage && detail && <KnowledgeCurationToggle detail={detail} changed={reload}/>}</div>}
             {!resourceId && scope === "ai" && <div id="ai-header-slot" />}
 
-            {!resourceId && (scope === "files" || scope === "shared-files") && user && (
+            {!resourceId && !pluginRoute && (scope === "files" || scope === "shared-files") && user && (
               <div className="files-topbar-title">
                 {scope === "shared-files" ? <Users size={17} aria-hidden="true" /> : <FolderOpen size={17} aria-hidden="true" />}
                 <strong>{scope === "shared-files" ? (sharedFolderId ? sharedFolderName : t("nav.sharedFiles")) : t("nav.files")}</strong>
@@ -1223,7 +1240,13 @@ function WorkspaceApp() {
         <div
           className={
             "main-scroll" +
-            (!resourceId && scope === "home" ? " workspace-home-scroll" : !resourceId && scope !== "trash" ? " dashboard-scroll-host" : "")
+            (pluginRoute
+              ? " plugin-scroll-host"
+              : !resourceId && scope === "home"
+                ? " workspace-home-scroll"
+                : !resourceId && scope !== "trash"
+                  ? " dashboard-scroll-host"
+                  : "")
           }
         >
           {user && <SubscribeLibraryHost />}

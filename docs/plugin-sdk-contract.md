@@ -4,7 +4,7 @@
 
 [中文](plugin-sdk-contract.zh-CN.md)
 
-Status: updated 2026-10-01 (host 0.1.2 / SDK 0.1.3). Plugins store their own business data. This document is the acceptance standard for the refactor. It does not mean every interface is implemented. The gap is in section 12. A development tutorial must not present a target interface as an export that exists today.
+Status: updated 2026-10-02 (host 0.1.3 / SDK 0.1.3). Plugins store their own business data. This document is the acceptance standard for the refactor. It does not mean every interface is implemented. The gap is in section 12. A development tutorial must not present a target interface as an export that exists today.
 
 ## 1. Decisions
 
