@@ -79,10 +79,11 @@ export function PluginDescription({
       case "image":
         if (
           typeof n.src === "string" &&
-          n.src.length < 350000 &&
-          /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(
+          n.src.length <= 4 * Math.ceil((1024 * 1024) / 3) + 23 &&
+          /^data:image\/(png|jpeg|webp);base64,(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
             n.src,
-          )
+          ) &&
+          atob(n.src.slice(n.src.indexOf(",") + 1)).length <= 1024 * 1024
         )
           return (
             <img

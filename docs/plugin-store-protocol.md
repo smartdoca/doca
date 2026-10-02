@@ -163,7 +163,7 @@ items 为 PluginSummary[]，不超过 limit。total 为匹配总数或 null；ne
 - blockquote：`{type:"blockquote",children:Block[]}`。
 - bulleted-list / numbered-list：`{type:...,children:ListItem[]}`；list-item：`{type:"list-item",children:Block[]}`。
 - code-block：`{type:"code-block",language?:string,children:Text[]}`，纯文本呈现，不执行代码。
-- image：`{type:"image",src:string,alt:string,children:[{text:""}]}`。src 是 PNG/JPEG/WebP data URL，单张解码后最多 256 KiB；拒绝 SVG、远程 URL，避免私有地址请求与追踪。
+- image：`{type:"image",src:string,alt:string,children:[{text:""}]}`。src 是 PNG/JPEG/WebP data URL，单张解码后最多 1 MiB（1,048,576 字节）；拒绝 SVG、远程 URL，避免私有地址请求与追踪。Doca 0.1.5 及更早版本仍受原 256 KiB 上限限制，较大图片需要更新客户端后显示；此调整不迁移或转换已有数据，回滚客户端会恢复原显示限制。详情响应总计仍不得超过 2 MiB。
 - divider：`{type:"divider",children:[{text:""}]}`。
 
 不支持的节点保留安全的文本子节点并提示部分内容无法显示；未知 format/version 给出明确提示和远端详情页链接，不执行 HTML/JSX。不接受原始 HTML、自定义脚本、iframe、可执行组件、事件处理字段。正文最多 5000 节点、16 层、200000 文本字符，详情响应总计最多 2 MiB。远端负责转换表格等尚未支持的类型为段落或图片。新增节点需协调协议与渲染器。
