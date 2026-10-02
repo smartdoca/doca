@@ -6,6 +6,7 @@ import {
   allowedNavigationSlots,
   isAdminNavigationEntry,
   resolveNavigation,
+  supportedPlacements,
   type NavigationConfig,
   type NavigationEntry,
   type NavigationSlot,
@@ -36,7 +37,21 @@ export function NavigationSettings() {
       : slot !== "web.admin" && slot.startsWith(`${target}.`);
   const load = () =>
     api<State>("/admin/navigation")
-      .then(setState)
+      .then((next) =>
+        setState({
+          ...next,
+          draft: {
+            ...next.draft,
+            layout: {
+              ...next.draft.layout,
+              placements: supportedPlacements(
+                next.entries,
+                next.draft.layout.placements,
+              ),
+            },
+          },
+        }),
+      )
       .catch((e) => setError(e.message));
   useEffect(() => {
     void load();
@@ -50,13 +65,23 @@ export function NavigationSettings() {
   };
   const save = async (action: "save" | "publish" | "reset") => {
     if (!state || busy) return;
+    const next = {
+      ...config,
+      layout: {
+        ...config.layout,
+        placements: supportedPlacements(
+          state.entries,
+          config.layout.placements,
+        ),
+      },
+    };
     setBusy(action);
     setError("");
     try {
       await api("/admin/navigation", "POST", {
         revision: state.revision,
         action,
-        config,
+        config: next,
       });
       await load();
       window.dispatchEvent(new Event("doca-navigation"));

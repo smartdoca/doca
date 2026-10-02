@@ -4,6 +4,8 @@ import { expect, it } from "vitest";
 import {
   builtinNavigation,
   resolveNavigation,
+  isAdminNavigationPath,
+  supportedPlacements,
   type NavigationConfig,
   type NavigationEntry,
 } from "../packages/web-plugin-registry/src/index.js";
@@ -149,6 +151,62 @@ it("keeps drafts private and uses revision checks across service instances", asy
     await app.close();
     await db.destroy();
   }
+});
+
+it("treats an admin plugin path as an admin page", () => {
+  const admin: NavigationEntry = {
+    id: "doca.mail.admin",
+    pluginId: "doca.mail",
+    title: { en: "Mail administration", zh: "邮箱管理" },
+    icon: "mail",
+    webPath: "/plugins/doca.mail/admin",
+    allowedSlots: ["web.admin"],
+    defaults: ["web.admin"],
+    order: 71,
+    adminOnly: true,
+  };
+  const inbox: NavigationEntry = {
+    ...admin,
+    id: "doca.mail.inbox",
+    webPath: "/plugins/doca.mail/inbox",
+    allowedSlots: ["web.left"],
+    defaults: ["web.left"],
+    adminOnly: false,
+  };
+  expect(
+    isAdminNavigationPath([admin, inbox], "/plugins/doca.mail/admin"),
+  ).toBe(true);
+  expect(
+    isAdminNavigationPath([admin, inbox], "/plugins/doca.mail/inbox"),
+  ).toBe(false);
+});
+
+it("drops a placement the current entry no longer allows", () => {
+  const admin: NavigationEntry = {
+    id: "doca.mail.admin",
+    pluginId: "doca.mail",
+    title: { en: "Mail administration", zh: "邮箱管理" },
+    icon: "mail",
+    webPath: "/plugins/doca.mail/admin",
+    allowedSlots: ["web.admin"],
+    defaults: ["web.admin"],
+    order: 71,
+    adminOnly: true,
+  };
+  expect(
+    supportedPlacements(
+      [admin],
+      [
+        {
+          entryId: "doca.mail.admin",
+          slot: "web.user",
+          order: 71,
+          hidden: true,
+        },
+        { entryId: "doca.mail.inbox", slot: "web.topRight", order: 70 },
+      ],
+    ),
+  ).toEqual([{ entryId: "doca.mail.inbox", slot: "web.topRight", order: 70 }]);
 });
 
 it("uses More only when no visible placement exists on the same platform", () => {

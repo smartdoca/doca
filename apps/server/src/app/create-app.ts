@@ -129,7 +129,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     openapi: {
       info: {
         title: "Doca Cloud API",
-        version: "0.1.3",
+        version: "0.1.4",
         description:
           "No spaces or organizations. Browser writes require the configured Origin and a host-only session cookie. Mobile clients send Authorization: Bearer with the same session token. Rich text uses the authenticated /api/v1/ws Yjs channel.",
       },

@@ -26,7 +26,8 @@ RUN --mount=type=cache,id=pnpm-${TARGETARCH},target=/pnpm/store,sharing=locked \
     pnpm fetch --reporter=append-only
 
 # Manifests only, so editing application source does not reinstall dependencies.
-# Keep dev dependencies: the server entry point imports vite and uses tsx.
+# The web build needs the full workspace install, including dev dependencies.
+# The runtime stage keeps only modules the production server loads.
 COPY --parents apps/*/package.json packages/*/package.json ./
 RUN --mount=type=cache,id=pnpm-${TARGETARCH},target=/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile --offline --reporter=append-only \
@@ -35,9 +36,13 @@ RUN --mount=type=cache,id=pnpm-${TARGETARCH},target=/pnpm/store,sharing=locked \
 COPY tsconfig.json ./
 COPY apps ./apps
 COPY packages ./packages
-RUN pnpm build
+COPY docker/prune-runtime-modules.mjs docker/prune-runtime-modules.mjs
+RUN pnpm build \
+    && node docker/prune-runtime-modules.mjs --apply /app
 
-FROM base AS runtime
+FROM ${NODE_IMAGE} AS runtime
+
+WORKDIR /app
 
 ENV NODE_ENV=production \
     DOCA_HOST=0.0.0.0 \

@@ -163,12 +163,34 @@ export function isAdminNavigationEntry(entry: NavigationEntry): boolean {
     (entry.adminOnly === true && entry.allowedSlots.includes("web.admin"))
   );
 }
+export function isAdminNavigationPath(
+  entries: readonly NavigationEntry[],
+  path: string,
+): boolean {
+  const normalized = path.split("?")[0] || "/";
+  return entries.some(
+    (entry) =>
+      !!entry.webPath &&
+      entry.webPath === normalized &&
+      isAdminNavigationEntry(entry),
+  );
+}
 export function allowedNavigationSlots(
   entry: NavigationEntry,
 ): NavigationSlot[] {
   return entry.allowedSlots.filter((slot) =>
     isAdminNavigationEntry(entry) ? slot === "web.admin" : slot !== "web.admin",
   );
+}
+/** Drop placements a current entry no longer allows, so an old slot cannot block saving the layout. */
+export function supportedPlacements(
+  entries: readonly NavigationEntry[],
+  placements: readonly NavigationPlacement[],
+): NavigationPlacement[] {
+  return placements.filter((placement) => {
+    const entry = entries.find((item) => item.id === placement.entryId);
+    return !entry || allowedNavigationSlots(entry).includes(placement.slot);
+  });
 }
 export function resolveNavigation(
   entries: NavigationEntry[],

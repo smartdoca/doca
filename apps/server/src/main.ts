@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { createServer, type ViteDevServer } from "vite";
+import type { ViteDevServer } from "vite";
 import { openDatabase } from "@db/index.js";
 import { openWebhookDatabase, type WebhookDB } from "@db/webhook-database.js";
 import { createApp } from "./app/create-app.js";
@@ -36,7 +36,8 @@ try {
     ...(!dev ? { staticDirectory: resolve("apps/web/dist") } : {}),
     assetBase: cfg.assetBase,
   });
-  if (dev)
+  if (dev) {
+    const { createServer } = await import("vite");
     web = await createServer({
       configFile: resolve("apps/web/vite.config.ts"),
       server: {
@@ -57,6 +58,7 @@ try {
         },
       },
     });
+  }
   await api.listen({ host: cfg.host, port: cfg.port });
   await web?.listen();
   process.once("SIGINT", () => void stop());
