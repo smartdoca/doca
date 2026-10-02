@@ -1,6 +1,6 @@
 # Plugin development
 
-Updated 2026-10-02 for source host 0.1.7 and public SDK 0.1.5 (production deployment not verified). This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
+Updated 2026-10-02 for source host 0.1.8 and public SDK 0.1.5 (production deployment not verified). This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
 
 [中文](plugin-development.zh-CN.md)
 

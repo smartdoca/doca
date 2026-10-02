@@ -7,6 +7,7 @@ Doca's public plugin SDK. Plugins declare service requirements and own their bus
 - `users.v1` adds `me`, policy-aware `searchPage`, `resolveDirectory` and `validateSelection`. Internal document/file relationships and plugin sources share the directory registry; none/all skip relationship sources.
 - `@smartdoca/plugin-sdk/documents` exports `documentReadServiceToken` (`documents.read.v1`) and `librariesServiceToken` (`libraries.v1`). Read persisted native content with a revision, current authorization and an explicit size limit; traverse authorized library structure. The separate `content.v1` remains for plain content.
 - `@smartdoca/plugin-sdk/web` adds `PluginWebHost.platform`, a typed public client, and `PluginWebHost.ui.openView`. `WebPluginBundle` accepts optional commands/views/placements. Current Web slots cover global more, home, documents, libraries and files. No registration is required for existing page plugins.
+  Source now also exports optional `web.leftMore` navigation and `global.leftMore` UI placements for the sidebar dropdown. Existing `web.more` / `global.more` remain the top-right icon menu. These new slots require an SDK release containing this increment; the previously published 0.1.5 package does not include them.
 - See `docs/plugin-extensions.md` in the host repository for exact methods, supported positions and limits. New methods require a host implementing SDK 0.1.4; there is no missing-method adapter. Source implementation does not imply npm publication or native-device acceptance.
 
 ## Public capabilities added in 0.1.3

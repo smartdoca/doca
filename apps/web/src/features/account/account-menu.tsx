@@ -1,12 +1,7 @@
 import { NavigationArea } from "@web/plugins/navigation.js";
 import { useEffect, useRef, useState } from "react";
-import {
-  UserRound,
-  Settings,
-  ShieldCheck,
-  House,
-  LogOut,
-} from "lucide-react";
+import { Tooltip } from "antd";
+import { UserRound, Settings, ShieldCheck, House, LogOut } from "lucide-react";
 import { api, type Me, type User } from "@web/shared/api.js";
 import { Avatar } from "@web/features/account/profile.js";
 import { htmlLang } from "@doca/i18n";
@@ -62,14 +57,20 @@ export function AccountMenu({
           void refresh().catch((e) => onError(e.message));
       }}
     >
-      <summary aria-label={t("account.menu")} title={t("account.menu")}>
-        <Avatar
-          name={displayName}
-          avatar={me?.preferences.avatar}
-          assetId={me?.preferences.avatar_asset_id}
-          sourceUrl={me?.avatarUrl}
-        />
-      </summary>
+      <Tooltip
+        title={t("account.menu")}
+        placement="bottom"
+        mouseEnterDelay={0.3}
+      >
+        <summary aria-label={t("account.menu")}>
+          <Avatar
+            name={displayName}
+            avatar={me?.preferences.avatar}
+            assetId={me?.preferences.avatar_asset_id}
+            sourceUrl={me?.avatarUrl}
+          />
+        </summary>
+      </Tooltip>
       <div className="account-menu-panel">
         <div className="account-menu-profile">
           <Avatar
@@ -81,11 +82,13 @@ export function AccountMenu({
           <strong className="account-menu-nickname">{displayName}</strong>
         </div>
         <nav aria-label={t("account.menuNav")}>
-          <NavigationArea slot="web.user"/>
-          {showWorkspaceLink && <a href="#/home" onClick={close}>
-            <House size={16} />
-            {t("account.workspace")}
-          </a>}
+          <NavigationArea slot="web.user" />
+          {showWorkspaceLink && (
+            <a href="#/home" onClick={close}>
+              <House size={16} />
+              {t("account.workspace")}
+            </a>
+          )}
           <button
             type="button"
             onClick={() => {

@@ -12,6 +12,10 @@ import {
 import { registerNavigation } from "@server/routes/navigation.js";
 import { openTestDatabase } from "./database.js";
 import Fastify from "fastify";
+import {
+  pluginNavigationSchema,
+  navigationConfigSchema,
+} from "@server/plugins/navigation-schema.js";
 it("uses one global layout, preserves admin boundaries and does not mutate published configuration during overflow", () => {
   const entries: NavigationEntry[] = Array.from({ length: 8 }, (_, i) => ({
     id: `example.p${i}`,
@@ -86,6 +90,7 @@ it("keeps drafts private and uses revision checks across service instances", asy
       layout: {
         placements: [
           { entryId: "doca.ai", slot: "web.left", order: 1, hidden: true },
+          { entryId: "doca.home", slot: "web.leftMore", order: 2 },
         ],
       },
     };
@@ -138,6 +143,12 @@ it("keeps drafts private and uses revision checks across service instances", asy
         .json()
         .layout.placements.some((p: any) => p.entryId === "doca.ai"),
     ).toBe(false);
+    expect(
+      (await app.inject({ url: "/api/v1/navigation" }))
+        .json()
+        .layout.placements.filter((p: any) => p.entryId === "doca.home")
+        .map((p: any) => p.slot),
+    ).toEqual(["web.leftMore"]);
     expect(
       (
         await app.inject({
@@ -247,4 +258,58 @@ it("uses More only when no visible placement exists on the same platform", () =>
     },
   });
   expect(fallback.some((p) => p.slot === "web.more")).toBe(true);
+});
+
+it("keeps sidebar More opt-in and independently configures both More surfaces", () => {
+  const entry: NavigationEntry = {
+    id: "example.tools.home",
+    pluginId: "example.tools",
+    title: { en: "Tools", zh: "工具" },
+    icon: "menu",
+    webPath: "/plugins/example.tools/home",
+    allowedSlots: ["web.left", "web.more", "web.leftMore"],
+    defaults: ["web.more"],
+    order: 1,
+  };
+  const resolve = (placements: NavigationConfig["layout"]["placements"]) =>
+    resolveNavigation(
+      [entry],
+      { schemaVersion: 1, layout: { placements } },
+      { id: "u", admin: false },
+    ).layout.placements;
+  expect(resolve([]).map((p) => p.slot)).toEqual(["web.more"]);
+  expect(
+    resolve([{ entryId: entry.id, slot: "web.leftMore", order: 1 }]).map(
+      (p) => p.slot,
+    ),
+  ).toEqual(["web.leftMore"]);
+  expect(
+    resolve([
+      { entryId: entry.id, slot: "web.more", order: 1 },
+      { entryId: entry.id, slot: "web.leftMore", order: 2 },
+    ]).map((p) => p.slot),
+  ).toEqual(["web.more", "web.leftMore"]);
+  // An old plugin does not acquire new placement permissions from the host.
+  expect(
+    resolveNavigation(
+      [{ ...entry, allowedSlots: ["web.more"] }],
+      {
+        schemaVersion: 1,
+        layout: {
+          placements: [{ entryId: entry.id, slot: "web.leftMore", order: 1 }],
+        },
+      },
+      { id: "u", admin: false },
+    ).layout.placements.map((p) => p.slot),
+  ).toEqual(["web.more"]);
+  const { pluginId, ...manifestEntry } = entry;
+  expect(pluginNavigationSchema.safeParse([manifestEntry]).success).toBe(true);
+  expect(
+    navigationConfigSchema.safeParse({
+      schemaVersion: 1,
+      layout: {
+        placements: [{ entryId: entry.id, slot: "web.leftMore", order: 1 }],
+      },
+    }).success,
+  ).toBe(true);
 });

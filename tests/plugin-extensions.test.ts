@@ -35,6 +35,37 @@ const context = (signal = new AbortController().signal): ExtensionContext => ({
   capabilities: ["resource.read"],
   signal,
 });
+it("registers the two global More locations independently and disposes them", () => {
+  const registry = new WebPluginRegistry();
+  const globalCommand = { ...command, supportedContexts: ["global"] as const };
+  const dispose = registry.register({
+    manifest,
+    commands: [globalCommand],
+    placements: ["global.more", "global.leftMore"].map((slot, i) => ({
+      id: `example.tools.global${i}`,
+      pluginId: manifest.pluginId,
+      slot: slot as "global.more" | "global.leftMore",
+      commandId: command.id,
+    })),
+  });
+  const globalContext = { ...context(), scope: "global" as const };
+  expect(
+    registry.extensions("global.more", globalContext).map((p) => p.id),
+  ).toEqual(["example.tools.global0"]);
+  expect(
+    registry.extensions("global.leftMore", globalContext).map((p) => p.id),
+  ).toEqual(["example.tools.global1"]);
+  expect(registry.extensions("global.leftMore", context())).toEqual([]);
+  expect(
+    registry.extensions("global.leftMore", {
+      ...globalContext,
+      signal: AbortSignal.abort(),
+    }),
+  ).toEqual([]);
+  dispose();
+  expect(registry.extensions("global.more", globalContext)).toEqual([]);
+  expect(registry.extensions("global.leftMore", globalContext)).toEqual([]);
+});
 it("allows a command in multiple optional slots, filters conditions and cleans all contributions", () => {
   const registry = new WebPluginRegistry();
   const dispose = registry.register({

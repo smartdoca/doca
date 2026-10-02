@@ -57,7 +57,8 @@ title 为 `{zh,en}`；ID 必须属于插件命名空间。supportedContexts 为 
 
 | 已接入 Web 位置 | 上下文 |
 | --- | --- |
-| global.more | 全局操作；与原 web.more 导航共用右上角应用图标；二者过滤后均为空则隐藏 |
+| global.more | 全局操作；与 web.more 导航共用右上角应用图标；操作和视图入口显示为图标，悬浮在下方显示名称；二者过滤后均为空则隐藏 |
+| global.leftMore | 全局操作；与 web.leftMore 导航共用左侧“更多”下拉列表；二者过滤后均为空则隐藏 |
 | home.cards / home.actions | 主页卡片、快捷操作 |
 | document.toolbar / document.menu | 文档 ID/格式/当前权限；一个操作可同时放两处 |
 | document.sidebar / document.status | 文档侧栏、状态内容；窄屏侧栏排列到正文下方 |
@@ -66,6 +67,10 @@ title 为 `{zh,en}`；ID 必须属于插件命名空间。supportedContexts 为 
 | resource.bulkActions / resource.details | 选中集合（非空时挂载）、文档详情扩展 |
 
 上下文包含 scope/target/locale/resource?/resources?/capabilities/signal，不默认包含正文或整个用户目录。宿主提供 resource.read/comment/edit/manage 展示能力；文件位置暂未提供统一操作能力投影，不要由 capability 缺失推断访问授权。
+
+导航管理将 `web.more` 标为“右上角更多”，`web.leftMore` 标为“左侧更多”。插件在服务端导航声明的 allowedSlots 中明确加入 `web.leftMore` 后，管理员才可将该页面放入左侧下拉列表；内置用户入口支持两个位置。`global.leftMore` 是独立的可选客户端操作/视图注册位置，支持 global 上下文。未指定 presentation 的视图仍在当前菜单内展开，未转换为弹窗。
+
+2026-10-02 已确认的增量规则：`web.more` 和 `global.more` 保持原注册名称与右上角归属；旧配置不迁移，旧插件不自动获得左侧位置。左侧更多仅由明确声明/配置产生，不参与自动溢出。两个更多可显式同时配置同一入口，其余既有去重/溢出规则保持。导航持久化仍使用 schemaVersion=1；回退至不支持新位置的宿主前，须先取消并发布所有 web.leftMore 配置，旧版严格校验不会自动转换它。插件使用新客户端位置或服务端导航位置时也须撤回新位置声明，或回退到未使用它的插件版本。
 
 下面是浏览器 ESM 注册示例，不依赖宿主源码路径：
 
