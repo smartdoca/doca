@@ -2,6 +2,7 @@ import {
   templatesServiceToken,
   materialsServiceToken,
   type CreationResourceCard,
+  type MaterialCard,
 } from "@smartdoca/plugin-sdk/creation-resources";
 import { filesServiceToken } from "@smartdoca/plugin-sdk/files";
 import type { PluginLifecycleContext } from "@smartdoca/plugin-sdk";
@@ -21,8 +22,9 @@ export function registerResources(
     license: "MIT",
     preview: preview.dataUrl,
   };
-  const material: CreationResourceCard = {
+  const material: MaterialCard = {
     ...common,
+    collections: [],
     ref: { providerId: pluginId + ".images", id: "sample", revision: "1" },
     title: "SDK sample image",
     summary: "Imported through files.v1",
@@ -32,7 +34,8 @@ export function registerResources(
   ctx.inject(materialsServiceToken).register({
     id: material.ref.providerId,
     pluginId,
-    version: 1,
+    version: 2,
+    collections: null,
     title: { zh: "SDK 验收素材", en: "SDK acceptance materials" },
     contracts: [material.contract],
     contentTypes: [material.contentType],

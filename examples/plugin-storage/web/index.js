@@ -87,7 +87,7 @@ export default (host) => {
   return {
     manifest: {
       pluginId: "example.storage",
-      version: "1.0.4",
+      version: "1.0.5",
       targets: ["web"],
     },
     routes: [
