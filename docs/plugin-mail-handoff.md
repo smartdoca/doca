@@ -1,6 +1,6 @@
 # Mail plugin handoff
 
-> Storage update 2026-10-02: the self-managed database/directory and uninstall guidance below is historical and superseded by the [approved managed-storage contract](plugin-horizontal-scaling.md). New packages declare `doca.storage: "host"`; missing/other values fail before import. SQL/private-object/credential services are not exported yet. Historical acceptance is not acceptance of this baseline.
+> Storage update 2026-10-02: the self-managed database/directory and uninstall guidance below is historical and superseded by the [approved managed-storage contract](plugin-horizontal-scaling.md). New packages declare `doca.storage: "host"`; missing/other values fail before import. SQL/private objects are exported in SDK 0.1.7; credentials are implemented in SDK source 0.1.8 / host source 0.1.10 (this revision is unpublished). The plugin should require ^0.1.8, inject pluginCredentialToken and have the deployer set DOCA_CREDENTIAL_MASTER_KEY. See [credential API](plugin-credentials.md). Historical acceptance is not acceptance of this baseline.
 
 > 历史对接记录：当前开发以[插件开发指引](plugin-development.zh-CN.md)为入口（宿主 0.1.1 / SDK 0.1.2）。本文旧的 preview/pull/持久订阅游标及“尚未发布”状态不再作为新接入标准；内容使用 content.v1，原生能力使用 PluginWebHost.native。历史测试结论仅适用于当时的版本。
 

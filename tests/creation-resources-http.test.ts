@@ -1,6 +1,7 @@
 import { it, expect } from "vitest";
 import { openTestDatabase } from "./database.js";
 import { createApp } from "@server/app/create-app.js";
+import { installMaterialCollections } from "./material-collection-fixtures.js";
 import { installTemplate } from "./creation-resource-fixtures.js";
 import { createUser } from "@core/modules/identity/passwords.js";
 it("serves authenticated empty registries, retires old endpoints and creates only after selection", async () => {
@@ -161,7 +162,63 @@ it("serves authenticated empty registries, retires old endpoints and creates onl
       payload: { query: "背景图" },
     });
     expect(materialEmpty.statusCode).toBe(200);
-    expect(materialEmpty.json().items).toEqual([]);
+    expect(materialEmpty.json().materials.items).toEqual([]);
+    expect(materialEmpty.json().collections.items).toEqual([]);
+    const materials = installMaterialCollections(db);
+    for (const prefix of [
+      "/api/v1/creation-resources/materials/",
+      "/api/v1/plugin-platform/doca.ai/materials.",
+    ]) {
+      const post = (operation: string, payload: object) =>
+        app.inject({
+          method: "POST",
+          url: prefix + operation,
+          headers: { host: "localhost", cookie, origin: "http://localhost" },
+          payload,
+        });
+      const page = await post("search", { limit: 1 });
+      expect(page.statusCode, page.body).toBe(200);
+      expect(page.json().collections.items[0]).not.toHaveProperty("items");
+      expect(page.json().materials.nextCursor).toBeTruthy();
+      const collection = await post(
+        "collectionDescribe",
+        materials.groups[0]!.ref,
+      );
+      expect(collection.statusCode, collection.body).toBe(200);
+      expect(collection.json().source.id).toBe(materials.provider.id);
+      const members = await post("collectionItems", {
+        ref: materials.groups[0]!.ref,
+        limit: 1,
+      });
+      expect(members.statusCode, members.body).toBe(200);
+      expect(members.json().items[0].collections).toHaveLength(2);
+      const retrieve = await post("retrieve", { query: "palette", topK: 1 });
+      expect(retrieve.statusCode, retrieve.body).toBe(200);
+      expect(retrieve.json().materials.items).toHaveLength(1);
+      expect(retrieve.json().collections.items).toHaveLength(1);
+      expect(
+        (await post("search", { cursor: page.json().materials.nextCursor }))
+          .statusCode,
+      ).toBe(400);
+      expect(
+        (
+          await post("collectionItems", {
+            ref: materials.groups[0]!.ref,
+            providerIds: [],
+          })
+        ).statusCode,
+      ).toBe(400);
+    }
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/v1/creation-resources/materials/collectionItems",
+          headers: { host: "localhost", origin: "http://localhost" },
+          payload: { ref: materials.groups[0]!.ref },
+        })
+      ).statusCode,
+    ).toBe(401);
   } finally {
     await app.close();
     await db.destroy();

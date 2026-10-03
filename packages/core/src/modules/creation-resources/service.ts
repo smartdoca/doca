@@ -9,19 +9,24 @@ import type {
   MaterialProvider,
   TemplateConsumer,
   TemplatesServiceV1,
-  MaterialsServiceV1,
+  MaterialsServiceV2,
 } from "@smartdoca/plugin-sdk/creation-resources";
 import {
   validatePluginManifest,
   validatePluginConfig,
   type PluginManifest,
   type ResourceFilter,
+  type ResourceRetrievalHit,
+  type MaterialCard,
+  type MaterialCollectionCard,
+  type MaterialRetrievalHit,
+  type MaterialCollectionRetrievalHit,
+  type MaterialFilter,
+  type MaterialQueryFilter,
   type ResourceSearch,
   type CreationResourceCard,
-  type CreationResourceResult,
   type ResourceRetrieval,
   type ResourceRetrievalPage,
-  type ResourceRetrievalResult,
   type ResourceSourceInfo,
   type CreationResourceRef,
   type ResourceProviderDescriptor,
@@ -57,6 +62,41 @@ export const resourceRetrievalSchema = resourceFilterSchema
     mode: z.enum(["auto", "keyword", "semantic", "hybrid"]).optional(),
     topK: z.number().int().min(1).max(20).optional(),
   });
+export const materialFilterSchema = resourceFilterSchema.extend({
+  collectionRefs: z.array(resourceRefSchema).max(20).optional(),
+});
+export const materialQueryFilterSchema = materialFilterSchema.extend({
+  collectionTags: z.array(id).max(30).optional(),
+});
+export const materialSearchSchema = materialQueryFilterSchema.extend({
+  target: z.enum(["all", "materials", "collections"]).optional(),
+  cursors: z
+    .object({
+      materials: id.nullable().optional(),
+      collections: id.nullable().optional(),
+    })
+    .strict()
+    .optional(),
+  limit: z.number().int().min(1).max(48).optional(),
+});
+export const materialRetrievalSchema = materialQueryFilterSchema
+  .omit({ query: true, sort: true })
+  .extend({
+    query: z.string().trim().min(1).max(1000),
+    mode: z.enum(["auto", "keyword", "semantic", "hybrid"]).optional(),
+    topK: z.number().int().min(1).max(20).optional(),
+    target: z.enum(["all", "materials", "collections"]).optional(),
+  });
+export const materialCollectionItemsSchema = resourceSearchSchema.extend({
+  ref: resourceRefSchema,
+});
+const materialDirectorySearchSchema = materialFilterSchema.extend({
+  cursor: id.nullable().optional(),
+  limit: z.number().int().min(1).max(48).optional(),
+});
+const materialDirectoryRetrievalSchema = resourceRetrievalSchema.extend({
+  collectionRefs: z.array(resourceRefSchema).max(20).optional(),
+});
 const retrievalModeSchema = z.enum(["keyword", "semantic", "hybrid"]);
 const retrievalHitSchema = z
   .object({
@@ -82,7 +122,7 @@ const sorts = z.enum(["updated", "name", "usage", "popular"]);
 const descriptorSchema = z.object({
   id,
   pluginId: id,
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   title: localized,
   contracts: z.array(resourceTypeSchema).min(1).max(50),
   contentTypes: z.array(resourceTypeSchema).min(1).max(50),
@@ -119,6 +159,31 @@ const cardSchema = z
     license: z.string().max(2000),
   })
   .strict();
+const materialCardSchema = cardSchema.extend({
+  collections: z.array(resourceRefSchema).max(100),
+});
+const collectionCardSchema = cardSchema
+  .omit({ contract: true, contentType: true, parameters: true, license: true })
+  .extend({
+    contracts: z.array(resourceTypeSchema).min(1).max(50),
+    contentTypes: z.array(resourceTypeSchema).min(1).max(50),
+    count: z.number().int().nonnegative().optional(),
+  });
+const materialHitSchema = retrievalHitSchema.extend({
+  collections: z.array(resourceRefSchema).max(100),
+});
+const collectionHitSchema = retrievalHitSchema
+  .omit({ contract: true, contentType: true })
+  .extend({
+    contracts: z.array(resourceTypeSchema).min(1).max(50),
+    contentTypes: z.array(resourceTypeSchema).min(1).max(50),
+    count: z.number().int().nonnegative().optional(),
+  });
+type CatalogCard = CreationResourceCard | MaterialCard | MaterialCollectionCard;
+type CatalogHit =
+  ResourceRetrievalHit | MaterialRetrievalHit | MaterialCollectionRetrievalHit;
+type WithSource<C> = C & { source: ResourceSourceInfo };
+type WithRank<H> = WithSource<H> & { rank: number };
 const sameType = (
   a: { id: string; version: number },
   b: { id: string; version: number },
@@ -141,21 +206,21 @@ function bounded(value: unknown, limit: number) {
   if (Buffer.byteLength(JSON.stringify(value)) > limit)
     fail(413, "Creation resource payload too large");
 }
-interface Stream {
+interface Stream<C extends CatalogCard> {
   id: string;
   cursor: string | null;
   done: boolean;
-  buffer: CreationResourceResult[];
+  buffer: WithSource<C>[];
   seenCursors: string[];
   seenIds: string[];
-  last?: CreationResourceCard;
+  last?: C;
 }
-interface Session {
+interface Session<C extends CatalogCard> {
   user: string;
   key: string;
   generation: number;
   expires: number;
-  streams: Stream[];
+  streams: Stream<C>[];
   failures: string[];
 }
 function sourceInfo(p: ResourceProviderDescriptor): ResourceSourceInfo {
@@ -166,13 +231,17 @@ function sourceInfo(p: ResourceProviderDescriptor): ResourceSourceInfo {
     ...(p.description ? { description: p.description } : {}),
   };
 }
-function directory<P extends ResourceProvider>(db: DB, kind: string) {
+function directory<
+  C extends CatalogCard,
+  H extends CatalogHit,
+  P extends ResourceProvider<C, H, MaterialFilter>,
+>(db: DB, kind: "templates" | "materials" | "collections") {
   const scope = databaseRuntimeScope(db);
   let state = scope.get(`creation-resources:${kind}`) as
     | {
         providers: Map<string, P>;
         generation: number;
-        sessions: Map<string, Session>;
+        sessions: Map<string, Session<C>>;
       }
     | undefined;
   if (!state) {
@@ -180,10 +249,16 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
     scope.set(`creation-resources:${kind}`, state);
   }
   const store = state;
-  function selectedProviders(f: ResourceFilter) {
+  function selectedProviders(f: MaterialFilter) {
     if (f.providerIds?.some((providerId) => !store.providers.has(providerId)))
       fail(404, "Resource source unavailable");
-    return [...store.providers.values()].filter((p) => matches(p, f));
+    return [...store.providers.values()].filter(
+      (p) =>
+        matches(p, f) &&
+        (kind !== "materials" ||
+          !f.collectionRefs ||
+          f.collectionRefs.some((r) => r.providerId === p.id)),
+    );
   }
   async function identity(c: PluginRequestContext) {
     c.signal.throwIfAborted();
@@ -224,48 +299,92 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
       signal.removeEventListener("abort", abort);
     }
   }
-  function card(
+  function validateRecord(
     p: P,
-    value: unknown,
-    f?: ResourceFilter,
-  ): CreationResourceResult {
-    const result = parsed(cardSchema, value, 502) as CreationResourceCard;
-    if (kind === "templates" && !result.preview)
-      fail(502, "Template card must include a style preview image");
-    try {
-      validatePluginManifest({
-        schemaVersion: 1,
-        id: p.pluginId,
-        version: "1.0.0",
-        displayName: p.id,
-        config: result.parameters,
-      });
-    } catch {
-      fail(502, "Invalid template parameter schema");
-    }
+    result: CatalogCard | CatalogHit,
+    f?: MaterialFilter,
+  ) {
+    const contracts =
+      "contract" in result ? [result.contract] : result.contracts;
+    const contentTypes =
+      "contentType" in result ? [result.contentType] : result.contentTypes;
     if (
+      result.ref.providerId !== p.id ||
+      contracts.some((t) => !p.contracts.some((x) => sameType(x, t))) ||
+      contentTypes.some((t) => !p.contentTypes.some((x) => sameType(x, t))) ||
+      (f?.contract && !contracts.some((t) => sameType(f.contract!, t))) ||
+      (f?.contentType &&
+        !contentTypes.some((t) => sameType(f.contentType!, t))) ||
+      f?.tags?.some((tag) => !result.tags.includes(tag)) ||
       result.tags.some(
         (tag) =>
           !tag.startsWith("doca.tag.") && !tag.startsWith(p.pluginId + "."),
       )
     )
-      fail(502, "Invalid resource tag namespace");
-    if (
-      result.ref.providerId !== p.id ||
-      !matches(p, {
-        contract: result.contract,
-        contentType: result.contentType,
-      }) ||
-      (f?.contract && !sameType(f.contract, result.contract)) ||
-      (f?.contentType && !sameType(f.contentType, result.contentType)) ||
-      f?.tags?.some((tag) => !result.tags.includes(tag))
-    )
       fail(502, "Provider returned an incompatible resource");
+    if ("collections" in result) {
+      if (
+        ("collections" in p &&
+          p.collections === null &&
+          result.collections.length > 0) ||
+        result.collections.some((r) => r.providerId !== p.id) ||
+        new Set(result.collections.map((r) => r.id)).size !==
+          result.collections.length ||
+        (f?.collectionRefs &&
+          !f.collectionRefs.some((r) =>
+            result.collections.some(
+              (x) =>
+                x.providerId === r.providerId &&
+                x.id === r.id &&
+                x.revision === r.revision,
+            ),
+          ))
+      )
+        fail(502, "Invalid material collection membership");
+    }
+  }
+  function card(p: P, value: unknown, f?: MaterialFilter): WithSource<C> {
+    const schema =
+      kind === "collections"
+        ? collectionCardSchema
+        : kind === "materials"
+          ? materialCardSchema
+          : cardSchema;
+    const result = parsed(schema as z.ZodType<CatalogCard>, value, 502) as C;
+    if (kind === "templates" && !result.preview)
+      fail(502, "Template card must include a style preview image");
+    if ("parameters" in result) {
+      try {
+        validatePluginManifest({
+          schemaVersion: 1,
+          id: p.pluginId,
+          version: "1.0.0",
+          displayName: p.id,
+          config: result.parameters,
+        });
+      } catch {
+        fail(502, "Invalid template parameter schema");
+      }
+    }
+    validateRecord(p, result, f);
     return { ...result, source: sourceInfo(p) };
   }
+  function providerFilter(p: P, f: MaterialFilter): MaterialFilter {
+    return {
+      ...f,
+      providerIds: [p.id],
+      ...(f.collectionRefs
+        ? {
+            collectionRefs: f.collectionRefs.filter(
+              (r) => r.providerId === p.id,
+            ),
+          }
+        : {}),
+    };
+  }
   const compare = (
-    a: CreationResourceCard,
-    b: CreationResourceCard,
+    a: CatalogCard,
+    b: CatalogCard,
     sort: ResourceFilter["sort"],
   ) => {
     let n =
@@ -285,6 +404,8 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
   const service = {
     register(p: P) {
       parsed(descriptorSchema, p);
+      if (p.version !== (kind === "templates" ? 1 : 2))
+        fail(400, "Unsupported resource provider version");
       if (
         !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(p.pluginId) ||
         !p.id.startsWith(p.pluginId + ".") ||
@@ -299,7 +420,11 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
           "search",
           "tags",
           "describe",
-          kind === "templates" ? "read" : "import",
+          ...(kind === "templates"
+            ? ["read"]
+            : kind === "materials"
+              ? ["import"]
+              : []),
         ].some((k) => typeof (p as any)[k] !== "function")
       )
         fail(400, "Invalid or duplicate resource provider");
@@ -319,22 +444,28 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
       const f = parsed(resourceFilterSchema, filter);
       return selectedProviders(f).map((p) => descriptorSchema.parse(p));
     },
-    async tags(c: PluginRequestContext, filter: ResourceFilter) {
+    async tags(c: PluginRequestContext, filter: MaterialFilter) {
       await identity(c);
-      const f = parsed(resourceFilterSchema, filter),
+      const f = parsed(
+          kind === "materials" ? materialFilterSchema : resourceFilterSchema,
+          filter,
+        ),
         tags = new Map<
           string,
           { id: string; title: { zh: string; en: string } }
         >(),
         failures: string[] = [];
+      const providers = selectedProviders(f),
+        generation = store.generation;
       const results = await Promise.allSettled(
-        selectedProviders(f).map(async (p) => ({
+        providers.map(async (p) => ({
           id: p.id,
-          items: await invoke(c, p.id, (p, c) => p.tags(c, f)),
+          items: await invoke(c, p.id, (p, c) =>
+            p.tags(c, providerFilter(p, f)),
+          ),
         })),
       );
       let i = 0;
-      const providers = selectedProviders(f);
       for (const result of results) {
         const provider = providers[i++]!;
         if (result.status === "rejected") {
@@ -360,6 +491,9 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
           failures.push(provider.id);
         }
       }
+      await identity(c);
+      if (generation !== store.generation)
+        fail(409, "Resource providers changed");
       return {
         items: [...tags.values()].sort((a, b) => a.id.localeCompare(b.id)),
         complete: !failures.length,
@@ -379,10 +513,15 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
     },
     async retrieve(
       context: PluginRequestContext,
-      input: ResourceRetrieval,
-    ): Promise<ResourceRetrievalPage> {
+      input: ResourceRetrieval & MaterialFilter,
+    ): Promise<ResourceRetrievalPage<WithRank<H>>> {
       await identity(context);
-      const normalized = parsed(resourceRetrievalSchema, input),
+      const normalized = parsed(
+          kind === "materials"
+            ? materialDirectoryRetrievalSchema
+            : resourceRetrievalSchema,
+          input,
+        ) as ResourceRetrieval & MaterialFilter,
         topK = normalized.topK ?? 8,
         mode = normalized.mode ?? "auto";
       const filter = {
@@ -402,7 +541,7 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
           signal: AbortSignal.any([context.signal, deadline]),
         };
       const results: {
-        items: ResourceRetrievalResult[];
+        items: WithRank<H>[];
         source?: ResourceRetrievalPage["sources"][number];
         failure?: ResourceRetrievalPage["failures"][number];
       }[] = new Array(providers.length);
@@ -430,8 +569,8 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
               provider.id,
               async (p, c) => {
                 const value = await p.retrieve!(c, {
-                  ...filter,
-                  providerIds: [p.id],
+                  ...providerFilter(p, filter),
+                  query: filter.query,
                   mode,
                   topK: perProvider,
                 });
@@ -439,7 +578,15 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
                 const page = parsed(
                   z
                     .object({
-                      items: z.array(retrievalHitSchema).max(perProvider),
+                      items: z
+                        .array(
+                          (kind === "collections"
+                            ? collectionHitSchema
+                            : kind === "materials"
+                              ? materialHitSchema
+                              : retrievalHitSchema) as unknown as z.ZodType<H>,
+                        )
+                        .max(perProvider),
                       mode: retrievalModeSchema,
                       hasMore: z.boolean(),
                     })
@@ -454,56 +601,65 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
                   fail(502, "Invalid resource retrieval mode");
                 const seen = new Set<string>();
                 for (const hit of page.items) {
-                  if (
-                    hit.ref.providerId !== p.id ||
-                    seen.has(hit.ref.id) ||
-                    !matches(p, {
-                      contract: hit.contract,
-                      contentType: hit.contentType,
-                    }) ||
-                    (filter.contract &&
-                      !sameType(filter.contract, hit.contract)) ||
-                    (filter.contentType &&
-                      !sameType(filter.contentType, hit.contentType)) ||
-                    filter.tags.some((tag) => !hit.tags.includes(tag)) ||
-                    hit.tags.some(
-                      (tag) =>
-                        !tag.startsWith("doca.tag.") &&
-                        !tag.startsWith(p.pluginId + "."),
-                    )
-                  )
-                    fail(502, "Invalid resource retrieval hit");
+                  if (seen.has(hit.ref.id))
+                    fail(502, "Duplicate resource retrieval hit");
+                  validateRecord(p, hit, filter);
                   seen.add(hit.ref.id);
                 }
                 return page;
               },
             );
-            const items: ResourceRetrievalResult[] = [];
+            const items: WithRank<H>[] = [];
             for (let rank = 0; rank < result.items.length; rank++) {
               const hit = result.items[rank]!;
               try {
                 const current = await service.describe(workContext, hit.ref);
-                if (
-                  !sameType(current.contract, hit.contract) ||
-                  !sameType(current.contentType, hit.contentType) ||
-                  filter.tags.some((tag) => !current.tags.includes(tag))
-                )
-                  fail(409, "Resource metadata changed");
-                // Use current metadata and source identity; never forward thumbnails to AI.
-                items.push({
-                  ...hit,
+                validateRecord(provider, current, filter);
+                const base = {
+                  ref: current.ref,
                   title: current.title,
                   summary: current.summary,
                   tags: current.tags,
+                };
+                const metadata: CatalogCard = current;
+                const lightweight: CatalogHit =
+                  "contract" in metadata
+                    ? {
+                        ...base,
+                        contract: metadata.contract,
+                        contentType: metadata.contentType,
+                        ...("collections" in metadata
+                          ? { collections: metadata.collections }
+                          : {}),
+                      }
+                    : {
+                        ...base,
+                        contracts: metadata.contracts,
+                        contentTypes: metadata.contentTypes,
+                        ...(metadata.count !== undefined
+                          ? { count: metadata.count }
+                          : {}),
+                      };
+                if (
+                  "contract" in hit &&
+                  "contract" in metadata &&
+                  (!sameType(hit.contract, metadata.contract) ||
+                    !sameType(hit.contentType, metadata.contentType))
+                )
+                  fail(409, "Resource metadata changed");
+                items.push({
+                  ...lightweight,
                   source: current.source,
+                  ...(hit.matchText ? { matchText: hit.matchText } : {}),
                   rank: rank + 1,
-                });
+                } as unknown as WithRank<H>);
               } catch (error) {
                 context.signal.throwIfAborted();
                 if ((error as any).status === 404) continue;
                 throw error;
               }
             }
+            bounded(items, 100000);
             results[index] = {
               items,
               source: {
@@ -553,16 +709,38 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
           sources.some((source) => source.truncated),
       };
     },
-    async search(c: PluginRequestContext, input: ResourceSearch) {
+    async search(
+      c: PluginRequestContext,
+      input: ResourceSearch & MaterialFilter,
+    ) {
       c = {
         ...c,
         signal: AbortSignal.any([c.signal, AbortSignal.timeout(30000)]),
       };
       await identity(c);
-      const normalized = parsed(resourceSearchSchema, input);
+      const normalized = parsed(
+        kind === "materials"
+          ? materialDirectorySearchSchema
+          : resourceSearchSchema,
+        input,
+      ) as ResourceSearch & MaterialFilter;
       const { cursor, limit = 24, ...rest } = normalized;
-      const f: ResourceFilter = {
+      const f: MaterialFilter = {
         ...rest,
+        ...(rest.collectionRefs
+          ? {
+              collectionRefs: [
+                ...new Map(
+                  rest.collectionRefs.map((r) => [JSON.stringify(r), r]),
+                ).values(),
+              ].sort(
+                (a, b) =>
+                  a.providerId.localeCompare(b.providerId) ||
+                  a.id.localeCompare(b.id) ||
+                  a.revision.localeCompare(b.revision),
+              ),
+            }
+          : {}),
         query: rest.query?.trim() ?? "",
         tags: [...new Set(rest.tags ?? [])].sort(),
         ...(rest.providerIds
@@ -582,7 +760,7 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
       const now = Date.now();
       for (const [id, s] of store.sessions)
         if (s.expires < now) store.sessions.delete(id);
-      let session: Session;
+      let session: Session<C>;
       if (cursor) {
         const old = store.sessions.get(cursor);
         if (!old || old.expires < now) fail(410, "Resource cursor expired");
@@ -609,7 +787,7 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
           })),
           failures: [],
         };
-      const items: CreationResourceResult[] = [];
+      const items: WithSource<C>[] = [];
       let calls = 0;
       while (items.length < limit) {
         for (const stream of session.streams) {
@@ -620,7 +798,7 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
                 fail(502, "Resource pagination budget exceeded");
               const page = await invoke(c, stream.id, async (p, c) => {
                 const result = await p.search(c, {
-                  ...f,
+                  ...providerFilter(p, f),
                   cursor: stream.cursor,
                   limit: 24,
                 });
@@ -658,7 +836,12 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
             // Buffered entries are never authority: check current visibility/revision on every page.
             while (stream.buffer.length) {
               try {
-                await service.describe(c, stream.buffer[0]!.ref);
+                const current = await service.describe(
+                  c,
+                  stream.buffer[0]!.ref,
+                );
+                validateRecord(store.providers.get(stream.id)!, current, f);
+                stream.buffer[0] = current;
                 break;
               } catch (error) {
                 c.signal.throwIfAborted();
@@ -705,10 +888,248 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
   };
   return { service, invoke, identity, store };
 }
-export function createMaterialsService(db: DB): MaterialsServiceV1 {
-  const { service, invoke } = directory<MaterialProvider>(db, "materials");
+export function createMaterialsService(db: DB): MaterialsServiceV2 {
+  const assets = directory<
+    MaterialCard,
+    MaterialRetrievalHit,
+    MaterialProvider
+  >(db, "materials");
+  type CollectionProvider = ResourceProvider<
+    MaterialCollectionCard,
+    MaterialCollectionRetrievalHit
+  >;
+  const groups = directory<
+    MaterialCollectionCard,
+    MaterialCollectionRetrievalHit,
+    CollectionProvider
+  >(db, "collections");
+  const emptyPage = () => ({
+    items: [],
+    nextCursor: null,
+    complete: true,
+    failures: [],
+  });
+  const emptyRetrieval = () => ({
+    items: [],
+    sources: [],
+    complete: true,
+    truncated: false,
+    failures: [],
+  });
+  // A rejected group must not leave its sibling using the database after return.
+  async function catalogPair<A, B>(
+    left: A | Promise<A>,
+    right: B | Promise<B>,
+  ): Promise<[A, B]> {
+    const [first, second] = await Promise.allSettled([left, right] as const);
+    if (first.status === "rejected") throw first.reason;
+    if (second.status === "rejected") throw second.reason;
+    return [first.value, second.value];
+  }
+  async function filters(c: PluginRequestContext, f: MaterialQueryFilter) {
+    // Always validate selected source IDs in the full directory before narrowing.
+    const generation = assets.store.generation,
+      collectionGeneration = groups.store.generation;
+    const checkRegistration = () => {
+      if (
+        generation !== assets.store.generation ||
+        collectionGeneration !== groups.store.generation
+      )
+        fail(409, "Resource providers changed");
+    };
+    const sources = await assets.service.providers(
+      c,
+      (({ collectionRefs: _refs, collectionTags: _tags, ...rest }) => rest)(f),
+    );
+    if (
+      f.collectionRefs?.some(
+        (r) => f.providerIds && !f.providerIds.includes(r.providerId),
+      )
+    )
+      fail(400, "Collection outside selected sources");
+    if (f.collectionRefs)
+      await Promise.all(
+        f.collectionRefs.map((r) => groups.service.describe(c, r)),
+      );
+    checkRegistration();
+    const collectionIds = sources
+      .filter((p) => assets.store.providers.get(p.id)!.collections !== null)
+      .map((p) => p.id);
+    const { collectionRefs, collectionTags, tags, ...common } = f;
+    return {
+      checkRegistration,
+      materials: { ...common, tags, collectionRefs },
+      collections: {
+        ...common,
+        tags: collectionTags,
+        providerIds: collectionIds,
+      },
+    };
+  }
+  async function checkScopes(c: PluginRequestContext, f: MaterialFilter) {
+    if (f.collectionRefs)
+      await Promise.all(
+        f.collectionRefs.map((r) => groups.service.describe(c, r)),
+      );
+  }
   return {
-    ...service,
+    register(p) {
+      if (
+        p.collections === undefined ||
+        (p.collections !== null && typeof p.collections !== "object")
+      )
+        fail(400, "Explicit collection capability required");
+      if (
+        p.collections &&
+        Object.keys(p.collections).some(
+          (k) =>
+            !["search", "describe", "tags", "retrieve", "retrieval"].includes(
+              k,
+            ),
+        )
+      )
+        fail(400, "Invalid collection capability");
+      const disposeAssets = assets.service.register(p);
+      let disposeGroups: (() => void) | undefined;
+      try {
+        if (p.collections !== null) {
+          const { retrieval: _retrieval, ...descriptor } =
+            descriptorSchema.parse(p);
+          disposeGroups = groups.service.register({
+            ...descriptor,
+            ...p.collections,
+          });
+        }
+      } catch (error) {
+        disposeAssets();
+        throw error;
+      }
+      return () => {
+        disposeGroups?.();
+        disposeAssets();
+      };
+    },
+    async providers(c, f) {
+      const sources = await assets.service.providers(c, f);
+      return sources.map((p) => ({
+        ...p,
+        version: 2 as const,
+        collections:
+          assets.store.providers.get(p.id)!.collections === null
+            ? null
+            : {
+                ...(assets.store.providers.get(p.id)!.collections!.retrieval
+                  ? {
+                      retrieval: assets.store.providers.get(p.id)!.collections!
+                        .retrieval,
+                    }
+                  : {}),
+              },
+      }));
+    },
+    async tags(c, input) {
+      const f = parsed(materialQueryFilterSchema, input),
+        scoped = await filters(c, f);
+      const [materials, collections] = await catalogPair(
+        assets.service.tags(c, scoped.materials),
+        groups.service.tags(c, scoped.collections),
+      );
+      await checkScopes(c, f);
+      scoped.checkRegistration();
+      return { materials, collections };
+    },
+    async search(c, input) {
+      c = {
+        ...c,
+        signal: AbortSignal.any([c.signal, AbortSignal.timeout(30000)]),
+      };
+      const {
+          target = "all",
+          cursors,
+          limit,
+          ...f
+        } = parsed(materialSearchSchema, input),
+        scoped = await filters(c, f);
+      if (f.collectionRefs && target !== "materials")
+        fail(400, "Collection membership query must target materials");
+      const [materials, collections] = await catalogPair(
+        target === "collections"
+          ? emptyPage()
+          : assets.service.search(c, {
+              ...scoped.materials,
+              cursor: cursors?.materials,
+              limit,
+            }),
+        target === "materials"
+          ? emptyPage()
+          : groups.service.search(c, {
+              ...scoped.collections,
+              cursor: cursors?.collections,
+              limit,
+            }),
+      );
+      await checkScopes(c, f);
+      scoped.checkRegistration();
+      return { materials, collections };
+    },
+    async retrieve(c, input) {
+      c = {
+        ...c,
+        signal: AbortSignal.any([c.signal, AbortSignal.timeout(15000)]),
+      };
+      const {
+          target = "all",
+          topK,
+          mode,
+          ...f
+        } = parsed(materialRetrievalSchema, input),
+        scoped = await filters(c, f);
+      if (f.collectionRefs && target !== "materials")
+        fail(400, "Collection membership query must target materials");
+      const [materials, collections] = await catalogPair(
+        target === "collections"
+          ? emptyRetrieval()
+          : assets.service.retrieve(c, {
+              ...scoped.materials,
+              query: f.query,
+              topK,
+              mode,
+            }),
+        target === "materials"
+          ? emptyRetrieval()
+          : groups.service.retrieve(c, {
+              ...scoped.collections,
+              query: f.query,
+              topK,
+              mode,
+            }),
+      );
+      await checkScopes(c, f);
+      scoped.checkRegistration();
+      return { materials, collections };
+    },
+    describe: assets.service.describe,
+    collectionDescribe: groups.service.describe,
+    async collectionItems(c, input) {
+      c = {
+        ...c,
+        signal: AbortSignal.any([c.signal, AbortSignal.timeout(30000)]),
+      };
+      const { ref, cursor, limit, ...f } = parsed(
+        materialCollectionItemsSchema,
+        input,
+      );
+      const scope = { ...f, collectionRefs: [ref] },
+        scoped = await filters(c, scope);
+      const page = await assets.service.search(c, {
+        ...scoped.materials,
+        cursor,
+        limit,
+      });
+      await checkScopes(c, scope);
+      scoped.checkRegistration();
+      return page;
+    },
     async import(c, input) {
       parsed(resourceRefSchema, input.ref);
       if (
@@ -717,8 +1138,8 @@ export function createMaterialsService(db: DB): MaterialsServiceV1 {
         /[\x00-\x1f]/.test(input.operationKey)
       )
         fail(400, "Invalid material operation key");
-      const descriptor = await service.describe(c, input.ref);
-      const result = await invoke(c, input.ref.providerId, (p, c) =>
+      const descriptor = await assets.service.describe(c, input.ref);
+      const result = await assets.invoke(c, input.ref.providerId, (p, c) =>
         p.import(c, input),
       );
       const file = await authorizeFileItem(
@@ -727,6 +1148,7 @@ export function createMaterialsService(db: DB): MaterialsServiceV1 {
         parsed(z.object({ fileId: z.string().uuid() }).strict(), result, 502)
           .fileId,
       );
+      await assets.service.describe(c, input.ref);
       return {
         source: descriptor.source,
         fileId: file.id,
@@ -749,10 +1171,11 @@ export function templateProviderGuard(db: DB, providerId: string) {
   };
 }
 export function createTemplatesService(db: DB): TemplatesServiceV1 {
-  const { service, invoke, identity } = directory<TemplateProvider>(
-      db,
-      "templates",
-    ),
+  const { service, invoke, identity } = directory<
+      CreationResourceCard,
+      ResourceRetrievalHit,
+      TemplateProvider
+    >(db, "templates"),
     scope = databaseRuntimeScope(db);
   let consumers = scope.get("creation-resource-consumers") as
     Map<string, TemplateConsumer> | undefined;

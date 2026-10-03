@@ -1,14 +1,14 @@
 # Production-oriented single-host deployment.
 # Put DOCA_ORIGIN=https://docs.example.com in .env.
 # Terminate TLS in a reverse proxy and forward to 127.0.0.1:39120.
-# The published image is docker.io/smartdoca/doca:0.1.9.
+# The published image is docker.io/smartdoca/doca:0.1.10.
 # `docker compose up -d` pulls that tag. Add `--build` to build from this checkout.
 services:
   doca:
     build:
       context: .
       dockerfile: Dockerfile
-    image: docker.io/smartdoca/doca:0.1.9
+    image: docker.io/smartdoca/doca:0.1.10
     pull_policy: always
     restart: unless-stopped
     init: true
@@ -18,7 +18,14 @@ services:
       DOCA_ORIGIN: "${DOCA_ORIGIN:?Set the public HTTPS origin in .env}"
       DOCA_HOST: 0.0.0.0
       DOCA_PORT: "39120"
-      DOCA_DATABASE: sqlite
+      DOCA_DATABASE: "${DOCA_DATABASE:-sqlite}"
+      DOCA_DATABASE_URL: "${DOCA_DATABASE_URL:-}"
+      DOCA_DATABASE_POOL_MAX: "${DOCA_DATABASE_POOL_MAX:-10}"
+      DOCA_WEBHOOK_DATABASE_URL: "${DOCA_WEBHOOK_DATABASE_URL:-}"
+      DOCA_REDIS_URL: "${DOCA_REDIS_URL:-}"
+      DOCA_REDIS_PREFIX: "${DOCA_REDIS_PREFIX:-doca}"
+      DOCA_INSTANCE_ID: "${DOCA_INSTANCE_ID:-}"
+      DOCA_TRUST_PROXY: "${DOCA_TRUST_PROXY:-}"
       DOCA_SQLITE_PATH: /data/doca.db
       DOCA_AI_SQLITE_PATH: /data/ai.db
       DOCA_FILE_STORE_ID: "${DOCA_FILE_STORE_ID:?Set the shared file store ID}"

@@ -9,6 +9,8 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS "plugin_archives" ("sha256" varchar(64) primary key, "plugin_id" varchar(160) not null, "version" varchar(100) not null, "store_id" varchar(64) not null, "object_key" text not null, "size" integer not null, "file_index" text not null, "created_at" varchar(32) not null, unique ("plugin_id", "version"));`,
 
   `CREATE TABLE "plugin_storage_namespaces" ("plugin_id" varchar(100) primary key, "namespace" varchar(120) not null unique, "data_version" varchar(100) not null, "generation" integer not null, "state" varchar(16) not null, "definition" text, "created_at" varchar(32) not null);`,
+  `CREATE TABLE "plugin_credential_keys" ("id" varchar(16) primary key, "fingerprint" varchar(64) not null, "created_at" varchar(32) not null);`,
+  `CREATE TABLE "plugin_credentials" ("plugin_id" varchar(100) not null references "plugin_storage_namespaces" ("plugin_id"), "namespace" varchar(120) not null, "generation" integer not null, "id" varchar(36) not null, "revision" integer not null check ("revision" > 0), "sealed" text not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, primary key ("namespace", "generation", "id"));`,
   `CREATE TABLE "plugin_object_garbage" ("id" varchar(36) primary key, "store_id" varchar(64) not null, "object_key" text not null unique, "created_at" varchar(32) not null);`,
   `CREATE TABLE "plugin_private_objects" ("plugin_id" varchar(100) not null references "plugin_storage_namespaces" ("plugin_id"), "generation" integer not null, "id" varchar(36) not null, "store_id" varchar(64) not null, "object_key" text not null unique, "mime" varchar(160) not null, "size" integer not null, "sha256" varchar(64) not null, "created_at" varchar(32) not null, primary key ("plugin_id", "generation", "id"));`,
 
@@ -360,7 +362,7 @@ async function createKnowledgeStudioSchema(db: Kysely<any>) {
     await sql.raw(statement).execute(db);
 }
 
-export const CURRENT_SCHEMA_BASELINE = "doca-2026-10-03-storage-v1";
+export const CURRENT_SCHEMA_BASELINE = "doca-2026-10-03-credentials-v2";
 
 async function createSystemSchema(db: Kysely<any>) {
   await sql
@@ -414,6 +416,17 @@ export async function validateSchema(db: Kysely<any>) {
       "created_at",
     ],
     plugin_object_garbage: ["id", "store_id", "object_key", "created_at"],
+    plugin_credential_keys: ["id", "fingerprint", "created_at"],
+    plugin_credentials: [
+      "plugin_id",
+      "namespace",
+      "generation",
+      "id",
+      "revision",
+      "sealed",
+      "created_at",
+      "updated_at",
+    ],
     plugin_private_objects: [
       "plugin_id",
       "generation",

@@ -1,6 +1,7 @@
 import {
   pluginDatabaseToken,
   pluginObjectStorageToken,
+  pluginCredentialToken,
 } from "@smartdoca/plugin-sdk/storage";
 import { httpServiceToken } from "@smartdoca/plugin-sdk/platform";
 import { filesServiceToken } from "@smartdoca/plugin-sdk/files";
@@ -11,11 +12,26 @@ import { validatePluginManifest } from "@smartdoca/plugin-sdk";
 import type { DocaPlugin } from "@smartdoca/plugin-sdk";
 export default (): DocaPlugin => ({
   manifest: validatePluginManifest(manifest),
+  injections: {
+    required: [
+      pluginDatabaseToken,
+      pluginObjectStorageToken,
+      pluginCredentialToken,
+    ],
+  },
   async initialize(ctx) {
     const database = ctx.inject(pluginDatabaseToken);
     await database.defineSchema({
       version: 1,
       tables: {
+        credential_refs: {
+          columns: {
+            user_id: { type: "text", nullable: false },
+            credential_id: { type: "text", nullable: false },
+          },
+          primaryKey: ["user_id"],
+          unique: [],
+        },
         notes: {
           columns: {
             id: { type: "text", nullable: false },
@@ -98,8 +114,84 @@ export default (): DocaPlugin => ({
   async mount(ctx) {
     const db = ctx.inject(pluginDatabaseToken),
       objects = ctx.inject(pluginObjectStorageToken),
+      credentials = ctx.inject(pluginCredentialToken),
       files = ctx.inject(filesServiceToken);
+    const credentialFor = async (principalId: string) => {
+      const ref = (
+        await db.select("credential_refs", {
+          where: [{ column: "user_id", operator: "=", value: principalId }],
+        })
+      )[0];
+      return ref ? credentials.get(String(ref.credential_id)) : null;
+    };
     await ctx.inject(httpServiceToken).register(manifest.id, [
+      {
+        method: "POST",
+        path: "/credential/create",
+        async handle(req) {
+          const existing = await credentialFor(req.principal.id);
+          if (existing) return existing.credential;
+          const created = await credentials.create({
+            value: "sdk-test-password",
+          });
+          try {
+            await db.insert("credential_refs", [
+              { user_id: req.principal.id, credential_id: created.id },
+            ]);
+          } catch (error) {
+            await credentials.remove({
+              id: created.id,
+              expectedRevision: created.revision,
+            });
+            throw error;
+          }
+          return created;
+        },
+      },
+      {
+        method: "GET",
+        path: "/credential/check",
+        async handle(req) {
+          const stored = await credentialFor(req.principal.id);
+          return stored
+            ? {
+                credential: stored.credential,
+                verified: ["sdk-test-password", "sdk-test-refreshed"].includes(
+                  stored.value,
+                ),
+              }
+            : { credential: null };
+        },
+      },
+      {
+        method: "POST",
+        path: "/credential/refresh",
+        async handle(req) {
+          const stored = await credentialFor(req.principal.id);
+          if (!stored) throw Error("Create a credential first");
+          return credentials.update({
+            id: stored.credential.id,
+            expectedRevision: stored.credential.revision,
+            value: "sdk-test-refreshed",
+          });
+        },
+      },
+      {
+        method: "POST",
+        path: "/credential/remove",
+        async handle(req) {
+          const stored = await credentialFor(req.principal.id);
+          if (stored)
+            await credentials.remove({
+              id: stored.credential.id,
+              expectedRevision: stored.credential.revision,
+            });
+          await db.remove("credential_refs", [
+            { column: "user_id", operator: "=", value: req.principal.id },
+          ]);
+          return { removed: true };
+        },
+      },
       {
         method: "GET",
         path: "/notes",

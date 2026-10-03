@@ -39,6 +39,13 @@ export function scopeInstalledPlugin(
         throw new Error(
           `Private host service is unavailable to plugins: ${token.id}`,
         );
+      if (token.id === "storage.credentials.v1") {
+        if (storage?.credentials) return storage.credentials as T;
+        if (optional) return undefined;
+        throw new Error(
+          "Plugin credentials require DOCA_CREDENTIAL_MASTER_KEY in the host environment",
+        );
+      }
       if (["storage.sql.v1", "storage.objects.v1"].includes(token.id)) {
         if (!storage)
           throw new Error("Plugin storage is unavailable in this host context");
@@ -84,7 +91,7 @@ export function scopeInstalledPlugin(
         !value ||
         ![
           "templates.v1",
-          "materials.v1",
+          "materials.v2",
           "content.v1",
           "activity.v1",
           "notifications.v1",
@@ -103,7 +110,7 @@ export function scopeInstalledPlugin(
           if (typeof method !== "function") return method;
           return (...args: any[]) => {
             if (
-              ["templates.v1", "materials.v1"].includes(token.id) &&
+              ["templates.v1", "materials.v2"].includes(token.id) &&
               ["register", "registerConsumer"].includes(String(property))
             ) {
               owned(args[0].pluginId, true);
@@ -183,6 +190,11 @@ export function scopeInstalledPlugin(
           return <T>(token: ServiceToken<T>) => inject(token, false)!;
         if (property === "injectOptional")
           return <T>(token: ServiceToken<T>) => inject(token, true);
+        if (property === "has")
+          return (token: ServiceToken<unknown>) =>
+            token.id === "storage.credentials.v1"
+              ? !!storage?.credentials
+              : target.has(token);
         const value = Reflect.get(target, property);
         return typeof value === "function" ? value.bind(target) : value;
       },

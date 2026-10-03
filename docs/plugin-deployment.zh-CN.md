@@ -2,7 +2,7 @@
 
 [English](plugin-deployment.md)
 
-已确认的[托管存储规范](plugin-horizontal-scaling.zh-CN.md)要求 `doca.storage: "host"`，持久化归宿主。静态拒绝、托管 SQL 与内部对象已实现；托管凭证、临时工作区与集群业务任务排空仍待实现。插件不选择本地/远端后端，也不接收业务数据目录。
+已确认的[托管存储规范](plugin-horizontal-scaling.zh-CN.md)要求 `doca.storage: "host"`，持久化归宿主。静态拒绝、托管 SQL 与内部对象已实现；托管凭证已在 SDK 源码 0.1.8 实现；临时工作区与集群业务任务排空仍待实现。插件不选择本地/远端后端，也不接收业务数据目录。
 
 管理员通过「管理 → 插件商店」浏览官方插件、上传本地 ZIP、安装、升级、启用、禁用和卸载。操作先保存为全站期望配置，每个实例重启后生效。页面分别显示全站目标版本与响应当前请求的实例运行版本，不代表全站所有实例均已更新。
 
@@ -21,9 +21,9 @@ docker compose restart doca
 
 多实例需逐个重启；其他部署使用对应进程管理器。页面不执行重启。滚动重启期间若插件 API 新旧版本不兼容，应摘除流量或使用会话亲和，不承诺跨版本零停机。
 
-## 已实现存储修订（2026-10-03，SDK 源码 0.1.7）
+## 已实现存储修订（2026-10-03，SDK 源码 0.1.8）
 
-`@smartdoca/plugin-sdk/storage` 已导出安装身份绑定的 `pluginDatabaseToken`（`storage.sql.v1`）和 `pluginObjectStorageToken`（`storage.objects.v1`）。关系库支持显式 version 1 结构声明、text/int32/双精度列、主键/唯一约束、结构化查询/写入/删除，以及回调只执行一次的事务。联表、外键、通用 SQL、upsert、托管凭据和临时工作区尚未导出。当前 SDK 通过宿主编译的查询和宿主连接中的命名空间表隔离；独立 PostgreSQL 角色与进程隔离是更强的待实现边界。
+`@smartdoca/plugin-sdk/storage` 已导出安装身份绑定的 `pluginDatabaseToken`（`storage.sql.v1`）和 `pluginObjectStorageToken`（`storage.objects.v1`）。关系库支持显式 version 1 结构声明、text/int32/双精度列、主键/唯一约束、结构化查询/写入/删除，以及回调只执行一次的事务。SDK 源码 0.1.8 另导出 `pluginCredentialToken`（`storage.credentials.v1`），提供服务端加密凭证 CRUD、元数据与修订号检查，见[凭证接口](plugin-credentials.md)。联表、外键、通用 SQL、upsert 和临时工作区尚未导出。当前 SDK 通过宿主编译的查询和宿主连接中的命名空间表隔离；独立 PostgreSQL 角色与进程隔离是更强的待实现边界。
 
 逻辑库为 `plugin:<pluginId>`，用户文件归属及私有对象使用 `plugins/<pluginId>`，发行包使用 `host/plugin-releases/<sha256>.zip`。ZIP 字节进入环境变量配置的文件存储，共享数据库只保存 version 2 清单、归档引用和可信文件哈希索引。有效缓存无需重新下载 ZIP。全部实例由运维逐个重启。新宿主基线拒绝旧数据库/格式/SDK 包，原数据保留，不提供迁移或 fallback。详见[准确实现与限制](unified-storage-implementation.md)。
 

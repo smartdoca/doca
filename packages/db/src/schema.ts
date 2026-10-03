@@ -752,6 +752,17 @@ export interface Schema {
     object_key: string;
     created_at: string;
   };
+  plugin_credential_keys: { id: string; fingerprint: string; created_at: string };
+  plugin_credentials: {
+    plugin_id: string;
+    namespace: string;
+    generation: number;
+    id: string;
+    revision: number;
+    sealed: string;
+    created_at: string;
+    updated_at: string;
+  };
   plugin_private_objects: {
     plugin_id: string;
     generation: number;

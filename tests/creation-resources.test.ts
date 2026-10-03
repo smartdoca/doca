@@ -10,6 +10,7 @@ import {
 import { installTemplate } from "./creation-resource-fixtures.js";
 import type {
   CreationResourceCard,
+  MaterialCard,
   JsonValue,
 } from "@smartdoca/plugin-contracts";
 import { scopeInstalledPlugin } from "@server/plugins/scope.js";
@@ -297,7 +298,8 @@ it("imports materials with current file permissions and binds template assets du
     id: "image",
     revision: "1",
   };
-  const card: CreationResourceCard = {
+  const card: MaterialCard = {
+    collections: [],
     ref: materialRef,
     title: "Image",
     summary: "Test",
@@ -312,7 +314,8 @@ it("imports materials with current file permissions and binds template assets du
   const dispose = createMaterialsService(db).register({
     id: materialRef.providerId,
     pluginId: "example.materials",
-    version: 1,
+    version: 2,
+    collections: null,
     title: { zh: "图", en: "Image" },
     contracts: [card.contract],
     contentTypes: [card.contentType],
@@ -405,7 +408,8 @@ it("imports materials with current file permissions and binds template assets du
   createMaterialsService(db).register({
     id: materialRef.providerId,
     pluginId: "example.materials",
-    version: 1,
+    version: 2,
+    collections: null,
     title: { zh: "图", en: "Image" },
     contracts: [card.contract],
     contentTypes: [card.contentType],

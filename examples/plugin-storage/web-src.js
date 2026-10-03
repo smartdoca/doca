@@ -56,6 +56,26 @@ export default (host) => {
         { onClick: () => run("/sources") },
         "Discover content sources",
       ),
+      h(
+        "button",
+        { onClick: () => run("/credential/create", "POST") },
+        "Create credential",
+      ),
+      h(
+        "button",
+        { onClick: () => run("/credential/check") },
+        "Check credential",
+      ),
+      h(
+        "button",
+        { onClick: () => run("/credential/refresh", "POST") },
+        "Refresh credential",
+      ),
+      h(
+        "button",
+        { onClick: () => run("/credential/remove", "POST") },
+        "Remove credential",
+      ),
       error && h("p", { role: "alert" }, error),
       h(
         "pre",

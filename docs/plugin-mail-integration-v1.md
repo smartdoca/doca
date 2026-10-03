@@ -1,6 +1,6 @@
 # 邮箱插件对接手册：npm、Web、App 与导航 v1
 
-> 历史对接记录：当前开发以[插件开发指引](plugin-development.zh-CN.md)为入口（宿主 0.1.1 / SDK 0.1.2）。本文旧的 preview/pull/持久订阅游标及“尚未发布”状态不再作为新接入标准；内容使用 content.v1，原生能力使用 PluginWebHost.native。历史测试结论仅适用于当时的版本。
+> 历史对接记录：当前开发以[插件开发指引](plugin-development.zh-CN.md)为入口（当前源码宿主 0.1.10 / SDK 0.1.8，本次版本未发布）。本文旧的 preview/pull/持久订阅游标及“尚未发布”状态不再作为新接入标准；内容使用 content.v1，原生能力使用 PluginWebHost.native。历史测试结论仅适用于当时的版本。
 
 2026-09-30。对接分支：`codex/plugin-store`。本手册描述本轮新增实现，远端商城接口见 [插件商城交互协议](plugin-store-protocol.md)。建议邮箱先完成收件箱、邮件正文、发送及附件的一条闭环，再扩展 AI、搜索和知识库。
 
@@ -19,7 +19,7 @@ manifest 必须含 schemaVersion=1、id、version、displayName、sdkRange；ver
 - 管理后台上传本地 ZIP；ZIP 根目录直接为 package.json，不能直接上传 npm tgz。
 - 停止实例后放入 `<DOCA_PLUGINS_DIR>/<plugin-id>/`，启动时导入共享归档。
 
-所有包变更需重启各实例，目录缺失自动从共享宿主数据库补齐。邮箱定义业务模型、队列与 outbox 语义，持久化与账号凭证完全依赖宿主；不选择本地/远端、不自建持久库或目录。多实例同步通过托管事务协调租约与幂等，所需 SQL/凭证能力尚未导出，不能以插件私有存储替代。
+所有包变更需重启各实例，目录缺失自动根据数据库清单从宿主文件存储补齐。邮箱定义业务模型、队列与 outbox 语义，持久化与账号凭证完全依赖宿主；不选择本地/远端、不自建持久库或目录。多实例同步通过托管事务协调租约与幂等，SQL/内部对象已在 SDK 0.1.7 导出，凭证已在 SDK 源码 0.1.8 导出，不能以插件私有存储替代。见[凭证接口与配置](plugin-credentials.md)。
 
 ## 2. 服务端接口
 
@@ -27,7 +27,7 @@ manifest 必须含 schemaVersion=1、id、version、displayName、sdkRange；ver
 
 注册的 `/messages` 实际为 `/api/v1/plugins/example.mail/messages`。用户身份来自 request.principal。每次读取正文、下载附件、发送或后台同步都重新检查邮箱业务权限及用户状态，隐藏入口不代表撤销权限。
 
-账号、邮件索引、发件幂等记录和同步游标归插件业务模型，通过宿主托管关系服务持久化，逻辑库绑定插件 ID；凭据归宿主托管凭证能力。附件通过 files.v1 与 owner binding 管理，保存稳定 ID，不存临时 URL。跨服务用 outbox、幂等和补偿，不提供跨库事务。关系库/凭证等新增能力当前未导出，交付须按[存储规范](plugin-horizontal-scaling.zh-CN.md)完成宿主能力和独立验收。
+账号、邮件索引、发件幂等记录和同步游标归插件业务模型，通过宿主托管关系服务持久化，逻辑库绑定插件 ID；凭据归宿主托管凭证能力。附件通过 files.v1 与 owner binding 管理，保存稳定 ID，不存临时 URL。跨服务用 outbox、幂等和补偿，不提供跨库事务。关系库已在 SDK 0.1.7 导出，凭证在 SDK 源码 0.1.8 导出；邮箱仍须基于实际子集完成独立联调，见[凭证接口](plugin-credentials.md)和[存储规范](plugin-horizontal-scaling.zh-CN.md)。
 
 参考已有 [邮箱能力交接](plugin-mail-handoff.md)，其中 AI、目录交集、通知和文件接口仍有效。全局搜索接入、自动知识库订阅、用户删除协同仍须单独验收，不应因服务 token 存在就宣称完整业务已实现。
 

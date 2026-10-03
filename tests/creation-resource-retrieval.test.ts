@@ -281,6 +281,7 @@ it("supports material retrieval without importing files, and AI tools expose bot
     ...template.card,
     ref: { ...template.card.ref, providerId: "example.images.web" },
     preview: undefined,
+    collections: [],
   };
   const {
     preview: _preview,
@@ -293,6 +294,9 @@ it("supports material retrieval without importing files, and AI tools expose bot
   const provider: MaterialProvider = {
     ...template.provider,
     id: card.ref.providerId,
+    version: 2,
+    collections: null,
+    search: async () => ({ items: [card], nextCursor: null }),
     pluginId: "example.images",
     title: { zh: "网络图片", en: "Web images" },
     retrieve: vi.fn(async () => ({
@@ -317,10 +321,10 @@ it("supports material retrieval without importing files, and AI tools expose bot
     input,
     {} as any,
   )) as any;
-  expect(result.items[0].source.title.zh).toBe("网络图片");
+  expect(result.materials.items[0].source.title.zh).toBe("网络图片");
   expect(importer).not.toHaveBeenCalled();
   expect(template.provider.retrieve).not.toHaveBeenCalled();
-  expect(result.items[0]).not.toHaveProperty("preview");
+  expect(result.materials.items[0]).not.toHaveProperty("preview");
   const templateResult = (await tools.creation_resource_retrieve.execute!(
     {
       kind: "templates",

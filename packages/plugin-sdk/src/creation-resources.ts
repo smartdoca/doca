@@ -2,6 +2,21 @@ import { defineService } from "./index.js";
 import type { PluginRequestContext } from "./platform.js";
 import type {
   JsonValue,
+  MaterialCard,
+  MaterialResult,
+  MaterialRetrievalHit,
+  MaterialCollectionCard,
+  MaterialCollectionRetrievalHit,
+  MaterialCollectionResult,
+  MaterialFilter,
+  MaterialQueryFilter,
+  MaterialSearch,
+  MaterialSearchPage,
+  MaterialRetrieval,
+  MaterialRetrievalPage,
+  MaterialTagPage,
+  MaterialCollectionItems,
+  MaterialProviderDescriptor,
   ResourceProviderDescriptor,
   ResourceFilter,
   ResourceSearch,
@@ -21,43 +36,59 @@ import type {
   ResourceConsumerDescriptor,
 } from "@smartdoca/plugin-contracts";
 export type * from "@smartdoca/plugin-contracts";
-export interface ResourceProvider extends ResourceProviderDescriptor {
+export interface ResourceProvider<
+  C = CreationResourceCard,
+  H = ResourceRetrievalHit,
+  F extends ResourceFilter = ResourceFilter,
+> extends ResourceProviderDescriptor {
   /** Optional indexed/remote retrieval; host never emulates it by paging search. */
   retrieve?(
     context: PluginRequestContext,
-    input: ResourceRetrieval & {
-      topK: number;
-      mode: "auto" | ResourceRetrievalMode;
-    },
+    input: Omit<F, "query" | "sort"> &
+      ResourceRetrieval & {
+        topK: number;
+        mode: "auto" | ResourceRetrievalMode;
+      },
   ): Promise<{
-    items: readonly ResourceRetrievalHit[];
+    items: readonly H[];
     mode: ResourceRetrievalMode;
     hasMore: boolean;
   }>;
   tags(
     context: PluginRequestContext,
-    filter: ResourceFilter,
+    filter: F,
   ): Promise<readonly ResourceTag[]>;
   search(
     context: PluginRequestContext,
-    input: ResourceFilter & { cursor: string | null; limit: number },
+    input: F & { cursor: string | null; limit: number },
   ): Promise<{
-    items: readonly CreationResourceCard[];
+    items: readonly C[];
     nextCursor: string | null;
   }>;
   /** Current permission check; return null when hidden/deleted. No body here. */
   describe(
     context: PluginRequestContext,
     ref: CreationResourceRef,
-  ): Promise<CreationResourceCard | null>;
+  ): Promise<C | null>;
 }
 export interface TemplateProvider extends ResourceProvider {
+  readonly version: 1;
   read(
     context: PluginRequestContext,
     input: TemplateSelection,
   ): Promise<TemplatePayload>;
 }
-export interface MaterialProvider extends ResourceProvider {
+export type MaterialCollectionMethods = Pick<
+  ResourceProvider<MaterialCollectionCard, MaterialCollectionRetrievalHit>,
+  "tags" | "search" | "describe" | "retrieve" | "retrieval"
+>;
+export interface MaterialProvider extends ResourceProvider<
+  MaterialCard,
+  MaterialRetrievalHit,
+  MaterialFilter
+> {
+  readonly version: 2;
+  readonly collections: MaterialCollectionMethods | null;
   /** Import through files.v1 with this operationKey as its idempotencyKey. */
   import(
     context: PluginRequestContext,
@@ -119,7 +150,36 @@ export interface TemplatesServiceV1 extends ResourceDirectoryV1<TemplateProvider
     },
   ): Promise<JsonValue>;
 }
-export interface MaterialsServiceV1 extends ResourceDirectoryV1<MaterialProvider> {
+export interface MaterialsServiceV2 {
+  register(provider: MaterialProvider): () => void;
+  providers(
+    context: PluginRequestContext,
+    filter: ResourceFilter,
+  ): Promise<readonly MaterialProviderDescriptor[]>;
+  tags(
+    context: PluginRequestContext,
+    filter: MaterialQueryFilter,
+  ): Promise<MaterialTagPage>;
+  search(
+    context: PluginRequestContext,
+    input: MaterialSearch,
+  ): Promise<MaterialSearchPage>;
+  retrieve(
+    context: PluginRequestContext,
+    input: MaterialRetrieval,
+  ): Promise<MaterialRetrievalPage>;
+  describe(
+    context: PluginRequestContext,
+    ref: CreationResourceRef,
+  ): Promise<MaterialResult>;
+  collectionDescribe(
+    context: PluginRequestContext,
+    ref: CreationResourceRef,
+  ): Promise<MaterialCollectionResult>;
+  collectionItems(
+    context: PluginRequestContext,
+    input: MaterialCollectionItems,
+  ): Promise<ResourcePage<MaterialResult>>;
   import(
     context: PluginRequestContext,
     input: { ref: CreationResourceRef; operationKey: string },
@@ -134,4 +194,4 @@ export interface MaterialsServiceV1 extends ResourceDirectoryV1<MaterialProvider
 export const templatesServiceToken =
   defineService<TemplatesServiceV1>("templates.v1");
 export const materialsServiceToken =
-  defineService<MaterialsServiceV1>("materials.v1");
+  defineService<MaterialsServiceV2>("materials.v2");

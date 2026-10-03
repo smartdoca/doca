@@ -1,6 +1,6 @@
-# 插件模板与素材资源（SDK 0.1.6 源码）
+# 插件模板与素材资源（SDK 0.1.9 源码）
 
-状态：源码已实现，未发布 npm 或部署；契约包 0.1.6 源码。在线文档创建、插件公共客户端、宿主选择器和 AI 使用同一套资源服务。
+状态：源码已实现，未发布 npm 或部署；契约包 0.1.7 源码。在线文档创建、插件公共客户端、宿主选择器和 AI 使用同一套资源服务。
 
 ## 本轮已确认的数据处理
 
@@ -10,10 +10,10 @@
 
 ## 服务与公共边界
 
-从 `@smartdoca/plugin-sdk/creation-resources` 导入 `templatesServiceToken` (`templates.v1`)、`materialsServiceToken` (`materials.v1`) 及提供者/消费者类型。在 manifest 声明包含当前修订的最低 SDK 版本 `^0.1.6`，通过 `injections.required` 注入。轻量数据契约在 plugin-contracts；宿主业务服务在 core 的 creation-resources 模块。
+从 `@smartdoca/plugin-sdk/creation-resources` 导入 `templatesServiceToken` (`templates.v1`)、`materialsServiceToken` (`materials.v2`) 及提供者/消费者类型。在 manifest 声明包含当前修订的最低 SDK 版本 `^0.1.9`，通过 `injections.required` 注入。轻量数据契约在 plugin-contracts；宿主业务服务在 core 的 creation-resources 模块。
 
 - 模板：register / providers / tags / search / retrieve / describe / read / registerConsumer / consumers / consume。
-- 素材：register / providers / tags / search / retrieve / describe / import。
+- 素材：register / providers / tags / search / retrieve / describe / collectionDescribe / collectionItems / import。
 - 服务端注册在 mount 中执行，返回 disposer，由 scoped lifecycle 自动持有；贡献 id 为 `${pluginId}.…`。零来源是正常情况。
 - 服务按数据库 runtime scope 隔离，事务继承同一 scope。来源卸载/停止时释放贡献，不清理已消费文档和文件。
 - 消费者声明消费契约和内容类型的精确版本组合、inputSchema 和 execute。模板消费者负责实际业务权限和副作用；宿主校验匹配、参数与账户状态。邮件发送/发布等动作由业务插件自己的授权流程处理。
@@ -22,7 +22,7 @@
 
 ## 提供者契约
 
-提供者声明 id/pluginId/version:1/title/可支持 contracts/contentTypes/sorts；实现 tags、search、describe，以及模板的 read 或素材的 import。每次调用获得宿主身份 principal、requestId 和取消 signal。
+模板提供者声明 version:1，素材提供者声明 version:2 及 collections 能力，其余为 id/pluginId/title/可支持 contracts/contentTypes/sorts；实现 tags、search、describe，以及模板的 read 或素材的 import。每次调用获得宿主身份 principal、requestId 和取消 signal。
 
 `search` 入参是 contract/contentType/query/tags/providerIds/sort/cursor/limit。query 最多 1000 字符。提供者负责关键词匹配与所有标签的 AND 过滤、当前可发现权限及按指定排序返回轻量元数据；不得返回正文。`describe` 再次检查资源访问和 revision，隐藏/删除返回 null。标签也只能包含调用者可发现资源的标签。
 
@@ -94,6 +94,48 @@ AI 使用 creation_resource_providers / creation_resource_retrieve / creation_re
 
 一次每个所选来源最多调用一次 retrieve，无游标遍历。单来源最多取 topK，多来源每个最多取 min(topK,5)。最多 4 个来源并发、整体 15 秒预算、每来源响应最多 100000 字节。跨来源按本地 rank 与稳定 ID 均衡展示，不比较不同引擎分数，也不声称统一全局相关性。最终不超过 topK 项；sources 记录成功来源、实际模式、候选数和是否还有候选。failures 用稳定 unsupported/failed/timeout 代码报告失败来源。complete 表示所选来源是否均成功，truncated 表示有未展示候选；空结果不扩大来源范围。
 
-基础选择器提供关键词搜索和智能搜索；空查询继续分页浏览。智能搜索展示有限候选并按需获取卡片预览，不自动导入素材。失败来源和结果上限明确提示。来源可多选或清空，标签仅来自所选来源。两类选择器接受 providerIds 初始选择及 onSourcesChange 回调（undefined 表示全部，[] 表示无来源），插件可把用户选择传给自己的 AI/业务查询。
+基础选择器顶部平铺来源、标签两行，默认选中“全部”；来源支持多选，标签单选，选项过多时行内横向滚动。标签行末尾的筛选图标展开关键词/智能搜索与排序，搜索提交后收起面板，结果标题旁展示可清除的搜索词。空查询继续分页浏览。智能搜索展示有限候选并按需获取卡片预览，不自动导入素材。失败来源和结果上限明确提示。来源可多选或清空，标签仅来自所选来源。两类选择器接受 providerIds 初始选择及 onSourcesChange 回调（undefined 表示全部，[] 表示无来源），插件可把用户选择传给自己的 AI/业务查询。
 
 AI 先用 creation_resource_providers 按名称解析来源 ID，再用 creation_resource_retrieve 传关键词或完整需求句。两类资源共用工具和当前身份。AI 的检索结果没有缩略图，浏览工具还移除参数 schema；选中后用 describe/read/import 取详情。检索测试覆盖来源排除、空结果、不支持、失败、取消、权限复核、游标绑定、HTTP、插件公共通道与实际 AI 工具调用。
+
+
+## 素材集修订（2026-10-03，SDK 0.1.9 / 契约 0.1.7 源码）
+
+用户确认功能尚未使用，不保留旧素材查询协议。素材服务改为 `materials.v2` / `MaterialsServiceV2`，素材提供者必须声明 `version:2` 和 `collections`。旧 `materials.v1` token、素材提供者 version:1、缺少 collections 声明、旧素材查询单值 cursor 均拒绝，没有适配器、补默认值、双读或转换。模板仍是 templates.v1。文件、文档内容和资源 ref 不变；不新增宿主素材业务表、不迁移或删除原表和数据。回退时宿主、SDK、选择器、AI 工具一起回退，实例内游标重新查询。
+
+素材可以属于零个或多个同来源素材集，用 ref 引用，不复制文件。集和单项各自打标签，不继承；批量上传、管理集合、维护成员关系、授权和业务数据由提供者实现，通过当前公共托管 SQL/对象/文件服务持久化，不能自选数据库或绕过安装目录加载。跨来源归并集合不在本协议内。
+
+素材卡片 / 检索候选增加必填 `collections: CreationResourceRef[]`（空数组表示没有集合）。提供者仅返回当前调用者可见的集合引用。集合 metadata 为 ref/title/summary/tags/updatedAt/contracts/contentTypes，可有 preview、count、usage、popularity；count 若提供，必须是当前调用者可见成员数，不是总库存。集合不含正文、parameters、license 或内嵌 items。集合检索候选去掉 preview/updatedAt/usage/popularity，可有 matchText。宿主统一附加 source；检索结果再附加来源内 rank。
+
+提供者 `collections: null` 明确表示只提供单项素材；支持集合时提供 `{tags, search, describe, retrieval?, retrieve?}`。这些方法接受当前身份及 signal；列表和集合检索能力独立声明，不能以素材检索代替集合检索。集合的 contracts/contentTypes 声明所含成员可消费类型；类型筛选按任一匹配，其他标签 AND，成员 collectionRefs 按 OR。同一集合成员变化必须更新集合 revision，并同步素材卡片的集合引用。集合 describe 负责当前权限/版本；宿主在成员查询前后及续页时复核集合，也复核返回的成员归属、当前权限和 revision。
+
+公共查询示例：
+
+```ts
+const page = await host.platform.materials.search({
+  query: "夏日配色", providerIds: ["example.palette.library"],
+  tags: ["doca.tag.color"],           // 只筛素材
+  collectionTags: ["doca.tag.theme"], // 只筛素材集
+  target: "all",                    // all（默认）| materials | collections
+  limit: 24,                        // 各组独立上限，最多 48
+  cursors: { materials: null, collections: null },
+});
+// { materials: {items,nextCursor,complete,failures}, collections: {...} }
+const members = await host.platform.materials.collectionItems({
+  ref: page.collections.items[0].ref, limit: 24, cursor: null,
+  query: "红色", tags: ["doca.tag.color"],
+}); // 单一素材分页，不内嵌后续成员
+const related = await host.platform.materials.retrieve({
+  query: "适合夏日海报的暖色背景", target: "materials",
+  collectionRefs: [page.collections.items[0].ref], topK: 8,
+});
+```
+
+`search` / `retrieve` 返回固定 materials、collections 两组，各自完成状态、失败和游标/截断标识，不混排也不重复内嵌成员。target 指定一组时另一组为空且完整；不会调用另一组搜索。两组游标互不可用，可用 target 只续一组；limit/topK 分别作用于每组，不是二者合并上限。省略 collectionRefs 查所有素材，[] 查零素材；使用 collectionRefs 时必须显式 target:materials。明确的 providerIds 不能排除集合所属来源，否则 400；未知来源 404。`tags` 返回 `{materials,collections}` 两组独立标签页。`collectionDescribe(ref)` 只取元数据，`collectionItems({ref,...})` 返回单组素材页；query/tags/contract/contentType/providerIds/sort/cursor/limit 同基础浏览契约。
+
+`retrieve` 支持相同来源、类型、素材/集合标签筛选，以及 query/mode/topK/target/collectionRefs。每个结果组仍只调用各来源一次、最多 4 并发，双组最多 8 并发，各组最终最多 20；当前 describe 刷新后的单来源候选也校验 100000 字节上限，防止元数据膨胀；整体 15 秒（含集合前后复核）。集合不支持检索时该组报告 unsupported，不调用列表遍历。搜索及成员分页整体 30 秒。两个组各自持有查询会话及预算，不声称跨资源类型的统一相关性。
+
+基础素材选择器提供素材 / 素材集两页签；打开集合后显示来源与集合名，分页加载成员，可继续关键词/智能查询并返回集合。浏览、预览不导入文件，实际选择单个素材才调用 import。素材详情显示集合归属数量。AI 统一检索返回两组；成套主题优先看集合，精确单项直接看素材，由任务决定，不强制两次查询。新增 `material_collection_describe` / `material_collection_items`，集合内找相关素材仍用检索工具传 collectionRefs，不翻遍成员列表。
+
+
+本轮隔离验证包括多集/零集归属、双组游标、独立标签、来源排除、成员筛选、集合权限及版本变化、错误提供者声明、成员归属复核、有界检索及无遍历降级、双目录卸载、AI 工具、两个 HTTP 通道和独立 SDK 制品。素材选择器在隔离测试页面确认集合卡片、成员浏览、集合内智能查询与返回行为；无用户文档编辑。
