@@ -9,19 +9,6 @@ type Config = {
     credentials: Record<string, string | null>;
     allowedOrigins: string[];
   };
-  storage: {
-    credentials: Record<
-      string,
-      {
-        accessKeyId: string;
-        secretAccessKey: string | null;
-        sessionToken: string | null;
-      }
-    >;
-    endpointHosts: string[];
-    cdnKeyPairId: string;
-    cdnPrivateKey: string | null;
-  };
   messaging: { endpoint: string; secret: string | null; channels: string[] };
   search: { apiKey: string | null; allowedOrigins: string[] };
 };
@@ -99,20 +86,15 @@ export function ServiceCredentials({
   onlySearch = false,
   onlyIdentity = false,
   onlyMessaging = false,
-  onlyStorage = false,
-  onlyCdn = false,
   onSearchSaved,
 }: {
   onlySearch?: boolean;
   onlyIdentity?: boolean;
   onlyMessaging?: boolean;
-  onlyStorage?: boolean;
-  onlyCdn?: boolean;
   onSearchSaved?: (config: Config["search"]) => void;
 } = {}) {
   const { t } = useI18n();
-  const embedded =
-      onlySearch || onlyIdentity || onlyMessaging || onlyStorage || onlyCdn,
+  const embedded = onlySearch || onlyIdentity || onlyMessaging,
     [data, setData] = useState<{ revision: number; config: Config } | null>(
       null,
     ),
@@ -123,11 +105,7 @@ export function ServiceCredentials({
           ? "identity"
           : onlyMessaging
             ? "messaging"
-            : onlyStorage
-              ? "storage"
-              : onlyCdn
-                ? "cdn"
-                : "identity",
+            : "identity",
     ),
     [ref, setRef] = useState(""),
     [busy, setBusy] = useState(false),
@@ -166,20 +144,13 @@ export function ServiceCredentials({
       setError(t("credentials.invalidName"));
       return;
     }
-    const entries =
-      tab === "identity" ? c.identity.credentials : c.storage.credentials;
+    const entries = c.identity.credentials;
     if (Object.hasOwn(entries, id)) {
       setError(t("credentials.duplicateName"));
       return;
     }
     change((v) => {
-      if (tab === "identity") v.identity.credentials[id] = "";
-      else
-        v.storage.credentials[id] = {
-          accessKeyId: "",
-          secretAccessKey: "",
-          sessionToken: "",
-        };
+      v.identity.credentials[id] = "";
     });
     setRef("");
     setError("");
@@ -204,9 +175,7 @@ export function ServiceCredentials({
             ? "SSO Client Secret"
             : onlyMessaging
               ? t("credentials.gateway")
-              : onlyStorage
-                ? t("credentials.storageKeys")
-                : t("credentials.cdnKeys")}
+              : t("credentials.title")}
         </h3>
       )}
       {!embedded && (
@@ -216,8 +185,6 @@ export function ServiceCredentials({
           items={[
             ["identity", t("credentials.sso")],
             ["messaging", t("credentials.gateway")],
-            ["storage", t("credentials.storage")],
-            ["cdn", t("credentials.cdn")],
             ["search", t("credentials.search")],
           ]}
           onChange={(v) => {
@@ -235,9 +202,6 @@ export function ServiceCredentials({
           try {
             const config = structuredClone(c);
             config.identity.allowedOrigins = config.identity.allowedOrigins
-              .map((s) => s.trim())
-              .filter(Boolean);
-            config.storage.endpointHosts = config.storage.endpointHosts
               .map((s) => s.trim())
               .filter(Boolean);
             config.search.allowedOrigins = config.search.allowedOrigins
@@ -308,69 +272,7 @@ export function ServiceCredentials({
               />
             </>
           )}
-          {tab === "storage" && (
-            <>
-              <p className="admin-field-help">{t("credentials.storageHelp")}</p>
-              {Object.entries(c.storage.credentials).map(([id, value]) => (
-                <div className="service-credential-row" key={id}>
-                  <header>
-                    <strong>{id}</strong>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        change((v) => {
-                          delete v.storage.credentials[id];
-                        })
-                      }
-                    >
-                      {t("credentials.remove")}
-                    </button>
-                  </header>
-                  <label>
-                    Access Key ID
-                    <input
-                      value={value.accessKeyId}
-                      onChange={(e) =>
-                        change((v) => {
-                          v.storage.credentials[id]!.accessKeyId =
-                            e.target.value;
-                        })
-                      }
-                    />
-                  </label>
-                  <SecretField
-                    label="Secret Access Key"
-                    value={value.secretAccessKey}
-                    onChange={(value) =>
-                      change((v) => {
-                        v.storage.credentials[id]!.secretAccessKey = value;
-                      })
-                    }
-                  />
-                  <SecretField
-                    label={t("credentials.sessionToken")}
-                    value={value.sessionToken}
-                    onChange={(value) =>
-                      change((v) => {
-                        v.storage.credentials[id]!.sessionToken = value;
-                      })
-                    }
-                  />
-                </div>
-              ))}
-              <Origins
-                label={t("credentials.storageHosts")}
-                values={c.storage.endpointHosts}
-                onChange={(values) =>
-                  change((v) => {
-                    v.storage.endpointHosts = values;
-                  })
-                }
-                placeholder="s3.example.com"
-              />
-            </>
-          )}
-          {(tab === "identity" || tab === "storage") && (
+          {tab === "identity" && (
             <div className="service-credential-add">
               <input
                 aria-label={t("credentials.newName")}
@@ -431,31 +333,6 @@ export function ServiceCredentials({
                 ))}
               </div>
               <p className="admin-field-help">{t("credentials.gatewayHelp")}</p>
-            </>
-          )}
-          {tab === "cdn" && (
-            <>
-              <label>
-                {t("credentials.cloudfrontId")}
-                <input
-                  value={c.storage.cdnKeyPairId}
-                  onChange={(e) =>
-                    change((v) => {
-                      v.storage.cdnKeyPairId = e.target.value;
-                    })
-                  }
-                />
-              </label>
-              <SecretField
-                label={t("credentials.privateKey")}
-                multiline
-                value={c.storage.cdnPrivateKey}
-                onChange={(value) =>
-                  change((v) => {
-                    v.storage.cdnPrivateKey = value;
-                  })
-                }
-              />
             </>
           )}
           {tab === "search" && (

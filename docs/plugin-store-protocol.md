@@ -16,7 +16,6 @@
 DOCA_PLUGIN_STORE_URL=https://store.smartdoca.cc
 DOCA_PLUGIN_NPM_REGISTRY=https://registry.npmjs.org
 DOCA_PLUGINS_DIR=/data/plugins
-DOCA_PLUGINS_DATA_DIR=/data/plugin-data
 ```
 
 两个地址都是 HTTPS origin，不允许凭据、路径前缀、query 或 fragment。空值使用默认值。首版不支持私有 registry 登录。Doca 服务端代理全部商城 API 请求，不向远端转发浏览器 Cookie、Authorization、用户 ID 或业务数据；远端无需开放浏览器 CORS。
@@ -252,6 +251,7 @@ npm tgz 内 `package/package.json`；本地 ZIP 内直接为 `package.json`，�
   "files": ["manifest.json", "dist", "web"],
   "doca": {
     "dataVersion": "1",
+    "storage": "host",
     "manifest": "./manifest.json",
     "server": "./dist/server.js",
     "web": {"directory":"./web","entry":"./index.js"},
@@ -271,7 +271,7 @@ npm tgz 内 `package/package.json`；本地 ZIP 内直接为 `package.json`，�
 }
 ```
 
-插件必须预编译并打包完整运行依赖，不允许宿主源代码别名、全局桥接或 pnpm 符号链接树。服务端默认导出插件工厂；Web 默认导出 `host => bundle`，React 使用宿主注入。业务数据库由插件自己管理。已安装插件必须实现 uninstall；宿主在卸载时调用它，由插件删除自己的数据库。调用失败则保持已安装。
+插件必须预编译并打包完整运行依赖，不允许宿主源码别名、全局桥接或 pnpm 符号链接树。package.json 必须声明 `doca.storage: "host"`，缺失/其他值在 ZIP/npm/商店、目录导入和启动恢复时于导入代码前拒绝，不补默认值或适配。服务端默认导出工厂；Web 默认导出 `host => bundle`，React 由宿主注入。持久化全部依赖宿主，插件不选择本地/远端、不自建库或持久目录。已安装插件必须实现业务清理 uninstall，不能自行删除宿主磁盘路径；失败保持安装。托管存储能力及尚未实现的清理协调见[存储规范](plugin-horizontal-scaling.zh-CN.md)。
 
 导航由静态 package.json 声明，id 必须在插件命名空间内，webPath 必须位于 `/plugins/<plugin-id>/`；对应页面仍须在 Web bundle 注册。navigation 最多 30 项，allowedSlots/defaults 去重，defaults 是 allowedSlots 子集。无 mobile 声明不得出现 mobile 槽；声明 mobile 必须提供 Web 页面及 mobileHostRange。
 
@@ -301,7 +301,7 @@ HTTP：400 invalid_request/cursor_mismatch，404 not_found，410 cursor_expired�
 
 安装、升级、启用、禁用、卸载需逐个重启实例。管理页展示响应实例的运行版本，不宣称集群全部生效。建议 Docker Compose：`docker compose restart doca`；Kubernetes 等由运维逐实例滚动重启，API 不兼容时需排空旧实例流量。
 
-历史版本 Web 静态资源可从共享归档补齐，不等于不同版本业务 API 兼容。导航布局发布后客户端刷新生效，无需重启；插件能力声明变更属于包升级，仍需重启。卸载调用插件的 uninstall 删除其业务数据库，并保留不可变归档。成功后宿主清除数据版本标记。
+历史版本 Web 静态资源可从共享归档补齐，不等于不同版本业务 API 兼容。导航布局发布后客户端刷新生效，无需重启；插件能力声明变更属于包升级，仍需重启。当前卸载调用业务清理 uninstall，成功后清数据版本标记，保留不可变归档；宿主托管库/内部对象清理与集群 fencing 仍待实现，不由插件删除目录。
 
 ## 11. 联调交付清单
 

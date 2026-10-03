@@ -1,4 +1,5 @@
 import { createUserDirectory } from "@core/modules/discovery/users.js";
+import { HOST_VERSION } from "../version.js";
 import { pluginMobileActor } from "../plugins/mobile-session.js";
 import { emitIntegrationEvent } from "@core/modules/automation/events.js";
 import {
@@ -129,7 +130,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     openapi: {
       info: {
         title: "Doca Cloud API",
-        version: "0.1.8",
+        version: HOST_VERSION,
         description:
           "No spaces or organizations. Browser writes require the configured Origin and a host-only session cookie. Mobile clients send Authorization: Bearer with the same session token. Rich text uses the authenticated /api/v1/ws Yjs channel.",
       },

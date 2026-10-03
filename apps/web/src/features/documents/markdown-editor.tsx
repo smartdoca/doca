@@ -18,9 +18,6 @@ import { createPortal } from "react-dom";
 import * as Y from "yjs";
 import {
   CollaborativeMarkdownEditor,
-  createHostMarkdownSession,
-  initializeMarkdownDocument,
-  updateHostMarkdownSession,
   observeLocalMarkdownUpdates,
   applyRemoteMarkdownUpdate,
   MARKDOWN_HOST_CAPABILITIES,
@@ -41,7 +38,12 @@ import {
   type Detail,
   type User,
 } from "@web/shared/api.js";
-import { realtime, fromBase64, toBase64 } from "@web/features/documents/realtime.js";
+import {
+  realtime,
+  fromBase64,
+  toBase64,
+} from "@web/features/documents/realtime.js";
+import { createMarkdownReplica } from "./markdown-replica.js";
 import { openReplica } from "@web/features/documents/offline-replica.js";
 import { UpdateOutbox } from "@web/features/documents/update-outbox.js";
 import { Feedback } from "@web/shared/components/feedback.js";
@@ -118,18 +120,7 @@ export default function MarkdownDocument({
     }, 2000);
     return () => clearTimeout(timer);
   }, [detail.resource.title]);
-  const model = useMemo(() => {
-    const doc = new Y.Doc();
-    // The session asserts codec metadata immediately. An empty replica has none
-    // until the server checkpoint arrives, so stamp the supported codec first.
-    initializeMarkdownDocument(doc, "");
-    return createHostMarkdownSession({
-      doc,
-      state: "loading",
-      saveState: "unavailable",
-      ready: false,
-    });
-  }, [id]);
+  const model = useMemo(createMarkdownReplica, [id]);
   const handle = useRef<CollaborativeMarkdownEditorHandle>(null);
   const [active, setActive] = useState<string | null>(null);
   const [ready, setReady] = useState(false),
@@ -159,26 +150,28 @@ export default function MarkdownDocument({
   editable.current = canEdit;
   const session = useMemo(
     () =>
-      updateHostMarkdownSession(model, {
-        ready,
-        state: blocked
-          ? "error"
-          : online
-            ? "ready"
-            : ready
-              ? "disconnected"
-              : "loading",
-        saveState: blocked
-          ? "error"
-          : dirty
-            ? online
-              ? "saving"
-              : "dirty"
-            : online
-              ? "clean"
-              : "unavailable",
-        epochId: epoch.current,
-      }),
+      ready
+        ? model.session({
+            ready,
+            state: blocked
+              ? "error"
+              : online
+                ? "ready"
+                : ready
+                  ? "disconnected"
+                  : "loading",
+            saveState: blocked
+              ? "error"
+              : dirty
+                ? online
+                  ? "saving"
+                  : "dirty"
+                : online
+                  ? "clean"
+                  : "unavailable",
+            epochId: epoch.current,
+          })
+        : undefined,
     [model, ready, online, blocked, dirty],
   );
   useEffect(
@@ -398,8 +391,7 @@ export default function MarkdownDocument({
       realtime.send({ type: "leave" });
       release();
       void storing.finally(() => replica?.close());
-      model.dispose?.();
-      model.doc.destroy();
+      model.dispose();
       window.removeEventListener("beforeunload", guard);
     };
   }, [model, id, user?.id]);
@@ -687,42 +679,49 @@ export default function MarkdownDocument({
         {liveSlot &&
           createPortal(<span role="status">{status}</span>, liveSlot)}
         <Feedback message={error} tone="error" />
-        {ready && (
-          <ModelFind documentId={detail.resource.id} handle={handle} revision={revision} canEdit={canEdit} />
+        {session && (
+          <ModelFind
+            documentId={detail.resource.id}
+            handle={handle}
+            revision={revision}
+            canEdit={canEdit}
+          />
         )}
         <div className="doca-markdown markdown-sdk-container">
-          <CollaborativeMarkdownEditor
-            locale={locale}
-            ref={handle}
-            roomId={id}
-            collaboration={session}
-            mode={canEdit ? "edit" : "readonly"}
-            selectionToolbar
-            selectionActions={[
-              {
-                id: "doca.ai",
-                title: t("editor.citeAi"),
-                icon: <AtSign size={17} />,
-                disabled: !user,
-                onClick: () => ai?.add(),
-              },
-              {
-                id: "doca.comment",
-                title: t("editor.commentSelection"),
-                icon: <MessageSquare size={20} />,
-                disabled:
-                  !online ||
-                  blocked ||
-                  Math.min(serverRank, roleRank(detail.resource.role)) < 2,
-                onClick: () => createComment.current(),
-              },
-            ]}
-            components={components}
-            resources={resources}
-            title={detail.resource.title}
-            onChange={contentChanged}
-            height="100%"
-          />
+          {session && (
+            <CollaborativeMarkdownEditor
+              locale={locale}
+              ref={handle}
+              roomId={id}
+              collaboration={session}
+              mode={canEdit ? "edit" : "readonly"}
+              selectionToolbar
+              selectionActions={[
+                {
+                  id: "doca.ai",
+                  title: t("editor.citeAi"),
+                  icon: <AtSign size={17} />,
+                  disabled: !user,
+                  onClick: () => ai?.add(),
+                },
+                {
+                  id: "doca.comment",
+                  title: t("editor.commentSelection"),
+                  icon: <MessageSquare size={20} />,
+                  disabled:
+                    !online ||
+                    blocked ||
+                    Math.min(serverRank, roleRank(detail.resource.role)) < 2,
+                  onClick: () => createComment.current(),
+                },
+              ]}
+              components={components}
+              resources={resources}
+              title={detail.resource.title}
+              onChange={contentChanged}
+              height="100%"
+            />
+          )}
         </div>
         <RegionComments
           createAction={createComment}

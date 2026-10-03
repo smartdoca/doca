@@ -19,7 +19,13 @@ export interface PluginPlatformClient {
   readonly templates: WithoutContext<
     Pick<
       TemplatesServiceV1,
-      "providers" | "tags" | "search" | "describe" | "read" | "consume"
+      | "providers"
+      | "tags"
+      | "search"
+      | "retrieve"
+      | "describe"
+      | "read"
+      | "consume"
     >
   > & {
     consumers(options?: {
@@ -29,7 +35,7 @@ export interface PluginPlatformClient {
   readonly materials: WithoutContext<
     Pick<
       MaterialsServiceV1,
-      "providers" | "tags" | "search" | "describe" | "import"
+      "providers" | "tags" | "search" | "retrieve" | "describe" | "import"
     >
   >;
   readonly users: {
@@ -74,6 +80,7 @@ export function createPluginPlatformClient(
       providers: call("templates.providers"),
       tags: call("templates.tags"),
       search: call("templates.search"),
+      retrieve: call("templates.retrieve"),
       describe: call("templates.describe"),
       read: call("templates.read"),
       consume: call("templates.consume"),
@@ -84,6 +91,7 @@ export function createPluginPlatformClient(
       providers: call("materials.providers"),
       tags: call("materials.tags"),
       search: call("materials.search"),
+      retrieve: call("materials.retrieve"),
       describe: call("materials.describe"),
       import: call("materials.import"),
     }),

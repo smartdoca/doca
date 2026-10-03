@@ -1,3 +1,4 @@
+import { currentSchemaTables } from "./introspection.js";
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
 
@@ -5,10 +6,14 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS "plugin_webview_auth" ("id" varchar(64) primary key,"kind" varchar(16) not null,"plugin_id" varchar(100) not null,"parent_session" varchar(64) not null,"expires_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "navigation_settings" ("id" varchar(16) primary key, "revision" integer not null, "draft" text not null, "published" text not null);`,
   `CREATE TABLE IF NOT EXISTS "plugin_registry" ("id" varchar(16) primary key, "revision" integer not null, "state" text not null);`,
-  `CREATE TABLE IF NOT EXISTS "plugin_archives" ("sha256" varchar(64) primary key, "plugin_id" varchar(160) not null, "version" varchar(100) not null, "content" text not null, "created_at" varchar(32) not null, unique ("plugin_id", "version"));`,
+  `CREATE TABLE IF NOT EXISTS "plugin_archives" ("sha256" varchar(64) primary key, "plugin_id" varchar(160) not null, "version" varchar(100) not null, "store_id" varchar(64) not null, "object_key" text not null, "size" integer not null, "file_index" text not null, "created_at" varchar(32) not null, unique ("plugin_id", "version"));`,
+
+  `CREATE TABLE "plugin_storage_namespaces" ("plugin_id" varchar(100) primary key, "namespace" varchar(120) not null unique, "data_version" varchar(100) not null, "generation" integer not null, "state" varchar(16) not null, "definition" text, "created_at" varchar(32) not null);`,
+  `CREATE TABLE "plugin_object_garbage" ("id" varchar(36) primary key, "store_id" varchar(64) not null, "object_key" text not null unique, "created_at" varchar(32) not null);`,
+  `CREATE TABLE "plugin_private_objects" ("plugin_id" varchar(100) not null references "plugin_storage_namespaces" ("plugin_id"), "generation" integer not null, "id" varchar(36) not null, "store_id" varchar(64) not null, "object_key" text not null unique, "mime" varchar(160) not null, "size" integer not null, "sha256" varchar(64) not null, "created_at" varchar(32) not null, primary key ("plugin_id", "generation", "id"));`,
 
   `CREATE TABLE IF NOT EXISTS "users" ("id" varchar(36) primary key, "login" varchar(160) not null unique, "display_name" varchar(160) not null, "password_hash" text not null, "admin" integer not null, "status" varchar(16) not null, "created_at" varchar(32) not null, "last_login_at" varchar(32), "public_id" varchar(160), "directory_mode" varchar(16), "profile_metadata" text default '{}' not null, "profile_revision" integer default 1 not null);`,
-  `CREATE TABLE IF NOT EXISTS "file_operation_receipts" ("plugin_id" varchar(160) not null, "user_id" varchar(36) not null, "operation" varchar(32) not null, "operation_key" varchar(200) not null, "request_hash" varchar(64) not null, "status" varchar(16) not null, "result" text, "object_id" varchar(36), "profile_id" varchar(36), "object_key" text, "cleanup_at" varchar(32), "created_at" varchar(32) not null, primary key ("plugin_id", "user_id", "operation", "operation_key"));`,
+  `CREATE TABLE IF NOT EXISTS "file_operation_receipts" ("plugin_id" varchar(160) not null, "user_id" varchar(36) not null, "operation" varchar(32) not null, "operation_key" varchar(200) not null, "request_hash" varchar(64) not null, "status" varchar(16) not null, "result" text, "object_id" varchar(36), "profile_id" varchar(64), "object_key" text, "cleanup_at" varchar(32), "created_at" varchar(32) not null, primary key ("plugin_id", "user_id", "operation", "operation_key"));`,
   `CREATE TABLE IF NOT EXISTS "user_page_state" ("user_id" varchar(36) not null references "users" ("id") on delete cascade, "key" varchar(160) not null, "value" text not null, "version" integer not null, "updated_at" varchar(32) not null, constraint "user_page_state_pk" primary key ("user_id", "key"), constraint "user_page_state_version" check (version > 0));`,
   `CREATE TABLE IF NOT EXISTS "sessions" ("id" varchar(64) primary key, "user_id" varchar(36) not null references "users" ("id"), "expires_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "settings" ("id" varchar(16) primary key, "registration" integer not null, "revision" integer not null, "site_name" varchar(160) not null, "registration_review" integer default 0 not null, "sso_registration" varchar(16) default 'closed' not null, "social_registration" varchar(16) default 'closed' not null, "directory_mode" varchar(16) default 'all' not null, "default_locale" varchar(16) default 'zh' not null, "default_timezone" varchar(100) default 'Asia/Shanghai' not null);`,
@@ -35,8 +40,8 @@ const schemaStatements = [
   `CREATE INDEX "visits_recent_page" on "resource_visits" ("user_id", "visited_at" desc, "resource_id");`,
   `CREATE TABLE IF NOT EXISTS "user_preferences" ("user_id" varchar(36) primary key references "users" ("id"), "avatar" varchar(24) not null, "theme" varchar(16) not null, "density" varchar(16) not null, "default_sort" varchar(24) not null, "sort_order" varchar(4) not null, "version" integer not null, "avatar_asset_id" varchar(36));`,
   `CREATE TABLE IF NOT EXISTS "user_presence" ("user_id" varchar(36) primary key references "users" ("id"), "last_seen_at" varchar(32) not null);`,
-  `CREATE TABLE IF NOT EXISTS "storage_profiles" ("id" varchar(36) primary key, "provider" varchar(16) not null, "config" text not null, "active" integer not null, "created_at" varchar(32) not null);`,
-  `CREATE TABLE IF NOT EXISTS "assets" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) references "resources" ("id"), "purpose" varchar(16) not null, "profile_id" varchar(36) not null references "storage_profiles" ("id"), "object_key" varchar(160) not null, "filename" varchar(255) not null, "mime" varchar(128) not null, "size" integer not null, "created_at" varchar(32) not null, "deleted_at" varchar(32), "uploaded_by" text);`,
+  `CREATE TABLE IF NOT EXISTS "storage_profiles" ("id" varchar(64) primary key, "active" integer not null, "created_at" varchar(32) not null);`,
+  `CREATE TABLE IF NOT EXISTS "assets" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id"), "resource_id" varchar(36) references "resources" ("id"), "purpose" varchar(16) not null, "profile_id" varchar(64) not null references "storage_profiles" ("id"), "object_key" varchar(512) not null, "filename" varchar(255) not null, "mime" varchar(128) not null, "size" integer not null, "created_at" varchar(32) not null, "deleted_at" varchar(32), "uploaded_by" text);`,
   `CREATE INDEX "assets_resource" on "assets" ("resource_id", "deleted_at");`,
   `CREATE TABLE IF NOT EXISTS "document_states" ("resource_id" varchar(36) primary key references "resources" ("id"), "codec" varchar(64) not null, "checkpoint" text not null, "checkpoint_seq" integer not null, "seq" integer not null, "text" text not null, "updated_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "document_updates" ("resource_id" varchar(36) not null references "resources" ("id"), "seq" integer not null, "data" text not null, "author_id" varchar(36) not null references "users" ("id"), "created_at" varchar(32) not null, constraint "document_updates_pk" primary key ("resource_id", "seq"));`,
@@ -133,16 +138,16 @@ const schemaStatements = [
 // kept separate from the document tables because the file module owns its own
 // logical entries and storage-object metadata.
 const fileSchemaStatements = [
-  `CREATE TABLE IF NOT EXISTS "file_storage_objects" ("id" varchar(36) primary key, "profile_id" varchar(36) not null references "storage_profiles" ("id"), "object_key" varchar(160) not null unique, "sha256" varchar(64) not null, "size" bigint not null, "mime" varchar(160) not null, "category" varchar(16) default 'other' not null, "ai_description" text, "ai_status" varchar(20) default 'pending' not null, "ai_model" varchar(160), "ai_generated_at" varchar(32), "created_at" varchar(32) not null, constraint "file_object_size" check (size >= 0));`,
-  `CREATE TABLE IF NOT EXISTS "file_derivatives" ("id" varchar(36) primary key, "source_id" varchar(36) not null references "file_storage_objects" ("id"), "profile_id" varchar(36) not null references "storage_profiles" ("id"), "object_key" varchar(160) not null unique, "kind" varchar(32) not null, "recipe" varchar(40) not null, "mime" varchar(160) not null, "size" bigint not null, "created_at" varchar(32) not null, constraint "file_derivative_recipe" unique ("source_id", "kind", "recipe"));`,
+  `CREATE TABLE IF NOT EXISTS "file_storage_objects" ("id" varchar(36) primary key, "profile_id" varchar(64) not null references "storage_profiles" ("id"), "object_key" varchar(512) not null unique, "sha256" varchar(64) not null, "size" bigint not null, "mime" varchar(160) not null, "category" varchar(16) default 'other' not null, "ai_description" text, "ai_status" varchar(20) default 'pending' not null, "ai_model" varchar(160), "ai_generated_at" varchar(32), "created_at" varchar(32) not null, constraint "file_object_size" check (size >= 0));`,
+  `CREATE TABLE IF NOT EXISTS "file_derivatives" ("id" varchar(36) primary key, "source_id" varchar(36) not null references "file_storage_objects" ("id"), "profile_id" varchar(64) not null references "storage_profiles" ("id"), "object_key" varchar(512) not null unique, "kind" varchar(32) not null, "recipe" varchar(40) not null, "mime" varchar(160) not null, "size" bigint not null, "created_at" varchar(32) not null, constraint "file_derivative_recipe" unique ("source_id", "kind", "recipe"));`,
   `CREATE TABLE IF NOT EXISTS "file_extracts" ("storage_object_id" varchar(36) primary key references "file_storage_objects" ("id") on delete cascade, "status" varchar(16) not null, "result" text not null, "error" text, "updated_at" varchar(32) not null);`,
   `CREATE INDEX IF NOT EXISTS "file_objects_sha" on "file_storage_objects" ("sha256", "size");`,
-  `CREATE TABLE IF NOT EXISTS "file_folders" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id") on delete cascade, "parent_id" varchar(36), "name" varchar(255) not null, "version" integer default 1 not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "deleted_at" varchar(32), "delete_batch" varchar(36), constraint "file_folder_version" check (version > 0));`,
+  `CREATE TABLE IF NOT EXISTS "file_folders" ("id" varchar(36) primary key, "storage_namespace" varchar(120) default 'host' not null, "owner_id" varchar(36) not null references "users" ("id") on delete cascade, "parent_id" varchar(36), "name" varchar(255) not null, "version" integer default 1 not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "deleted_at" varchar(32), "delete_batch" varchar(36), constraint "file_folder_version" check (version > 0));`,
   `CREATE INDEX IF NOT EXISTS "file_folders_parent" on "file_folders" ("owner_id", "parent_id", "deleted_at", "name");`,
   `CREATE TABLE IF NOT EXISTS "file_folder_shares" ("folder_id" varchar(36) not null references "file_folders" ("id") on delete cascade, "user_id" varchar(36) not null references "users" ("id") on delete cascade, "role" varchar(16) not null, "version" integer default 1 not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, constraint "file_folder_shares_pk" primary key ("folder_id", "user_id"), constraint "file_folder_share_role" check (role in ('admin','reader')), constraint "file_folder_share_version" check (version > 0));`,
   `CREATE INDEX IF NOT EXISTS "file_folder_shares_user" on "file_folder_shares" ("user_id", "folder_id", "role");`,
   `CREATE TABLE IF NOT EXISTS "file_folder_share_links" ("folder_id" varchar(36) primary key references "file_folders" ("id") on delete cascade, "token" varchar(64) not null unique, "token_hash" varchar(64) not null unique, "role" varchar(16) default 'reader' not null, "enabled" integer default 1 not null, "created_by" varchar(36) not null references "users" ("id"), "created_at" varchar(32) not null, "updated_at" varchar(32) not null, constraint "file_folder_link_role" check (role in ('admin','reader')));`,
-  `CREATE TABLE IF NOT EXISTS "file_items" ("id" varchar(36) primary key, "owner_id" varchar(36) not null references "users" ("id") on delete cascade, "parent_type" varchar(16) not null, "parent_id" varchar(36) not null, "storage_object_id" varchar(36) not null references "file_storage_objects" ("id"), "name" varchar(255) not null, "mime" varchar(160) not null, "size" bigint not null, "metadata" text default '{}' not null, "ai_description_override" text, "locked" integer default 0 not null, "version" integer default 1 not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "deleted_at" varchar(32), "delete_batch" varchar(36), constraint "file_item_parent_type" check (parent_type in ('system','folder','document')), constraint "file_item_size" check (size >= 0), constraint "file_item_version" check (version > 0));`,
+  `CREATE TABLE IF NOT EXISTS "file_items" ("id" varchar(36) primary key, "storage_namespace" varchar(120) default 'host' not null, "owner_id" varchar(36) not null references "users" ("id") on delete cascade, "parent_type" varchar(16) not null, "parent_id" varchar(36) not null, "storage_object_id" varchar(36) not null references "file_storage_objects" ("id"), "name" varchar(255) not null, "mime" varchar(160) not null, "size" bigint not null, "metadata" text default '{}' not null, "ai_description_override" text, "locked" integer default 0 not null, "version" integer default 1 not null, "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "deleted_at" varchar(32), "delete_batch" varchar(36), constraint "file_item_parent_type" check (parent_type in ('system','folder','document')), constraint "file_item_size" check (size >= 0), constraint "file_item_version" check (version > 0));`,
   `CREATE INDEX IF NOT EXISTS "file_items_parent" on "file_items" ("owner_id", "parent_type", "parent_id", "deleted_at", "name");`,
   `CREATE INDEX IF NOT EXISTS "file_items_storage" on "file_items" ("storage_object_id", "deleted_at");`,
   `CREATE TABLE IF NOT EXISTS "file_bindings" ("id" varchar(36) primary key, "file_id" varchar(36) not null references "file_items" ("id") on delete cascade, "owner_plugin" varchar(160) not null, "owner_type" varchar(120) not null, "owner_id" varchar(160) not null, "role" varchar(120) not null, "created_at" varchar(32) not null, constraint "file_bindings_owner" unique ("file_id", "owner_plugin", "owner_type", "owner_id", "role"));`,
@@ -182,9 +187,7 @@ async function seedSystemRows(db: Kysely<any>) {
   await db
     .insertInto("storage_profiles")
     .values({
-      id: "local",
-      provider: "local",
-      config: "{}",
+      id: requiredFileStoreId(),
       active: 1,
       created_at: now,
     })
@@ -357,7 +360,7 @@ async function createKnowledgeStudioSchema(db: Kysely<any>) {
     await sql.raw(statement).execute(db);
 }
 
-export const CURRENT_SCHEMA_BASELINE = "doca-2026-09-27";
+export const CURRENT_SCHEMA_BASELINE = "doca-2026-10-03-storage-v1";
 
 async function createSystemSchema(db: Kysely<any>) {
   await sql
@@ -373,7 +376,7 @@ async function createSystemSchema(db: Kysely<any>) {
 }
 
 export async function validateSchema(db: Kysely<any>) {
-  const hasSchema = (await db.introspection.getTables()).some(
+  const hasSchema = (await currentSchemaTables(db)).some(
     (table) => table.name === "schema_baseline",
   );
   if (!hasSchema)
@@ -389,12 +392,57 @@ export async function validateSchema(db: Kysely<any>) {
     throw new Error(
       "Database baseline is not supported; create a new database",
     );
+  const required: Record<string, readonly string[]> = {
+    plugin_archives: [
+      "sha256",
+      "plugin_id",
+      "version",
+      "store_id",
+      "object_key",
+      "size",
+      "file_index",
+      "created_at",
+    ],
+    storage_profiles: ["id", "active", "created_at"],
+    plugin_storage_namespaces: [
+      "plugin_id",
+      "namespace",
+      "data_version",
+      "generation",
+      "state",
+      "definition",
+      "created_at",
+    ],
+    plugin_object_garbage: ["id", "store_id", "object_key", "created_at"],
+    plugin_private_objects: [
+      "plugin_id",
+      "generation",
+      "id",
+      "store_id",
+      "object_key",
+      "mime",
+      "size",
+      "sha256",
+      "created_at",
+    ],
+  };
+  const tables = await currentSchemaTables(db);
+  for (const [name, columns] of Object.entries(required)) {
+    const table = tables.find((t) => t.name === name);
+    if (
+      !table ||
+      table.columns.length !== columns.length ||
+      columns.some((c) => !table.columns.some((v) => v.name === c))
+    )
+      throw new Error(
+        "Current database storage structure is incomplete or unsupported; restore a complete database",
+      );
+  }
 }
 
 export async function createSchema(db: Kysely<any>) {
-  if ((await db.introspection.getTables()).length > 0) {
+  if ((await currentSchemaTables(db)).length > 0) {
     await validateSchema(db);
-    await createPluginSchema(db);
     return;
   }
 
@@ -442,6 +490,9 @@ async function createDiscoverySchema(db: Kysely<any>) {
   );
 }
 
-async function createPluginSchema(db: Kysely<any>) {
-  for (const statement of schemaStatements.slice(0, 4)) await sql.raw(statement).execute(db);
+function requiredFileStoreId() {
+  const id = process.env.DOCA_FILE_STORE_ID;
+  if (!id || !/^[A-Za-z0-9_-]{1,64}$/.test(id))
+    throw new Error("DOCA_FILE_STORE_ID is required");
+  return id;
 }

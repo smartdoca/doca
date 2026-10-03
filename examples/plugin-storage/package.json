@@ -1,0 +1,39 @@
+{
+  "name": "@example/doca-storage",
+  "version": "1.0.3",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "manifest.json",
+    "server.js",
+    "web"
+  ],
+  "doca": {
+    "dataVersion": "1",
+    "storage": "host",
+    "manifest": "./manifest.json",
+    "server": "./server.js",
+    "web": {
+      "directory": "./web",
+      "entry": "./index.js"
+    },
+    "navigation": [
+      {
+        "id": "example.storage.page",
+        "title": {
+          "zh": "存储 SDK 验收",
+          "en": "Storage SDK acceptance"
+        },
+        "icon": "database",
+        "webPath": "/plugins/example.storage/",
+        "allowedSlots": [
+          "web.left"
+        ],
+        "defaults": [
+          "web.left"
+        ],
+        "order": 50
+      }
+    ]
+  }
+}

@@ -1,12 +1,17 @@
 import type {
   ResourceType,
   TemplateSelection,
+  CreationResourceResult,
+  ResourceSourceInfo,
 } from "@smartdoca/plugin-contracts";
 import type { PluginExtensionUI } from "@smartdoca/web-plugin-registry";
 export { createPluginPlatformClient } from "./client.js";
 export type { PluginPlatformClient } from "./client.js";
 import type { PluginPlatformClient } from "./client.js";
 import type { PluginNativeCapabilities } from "./native.js";
+import type { PluginAssistantClient } from "./assistant.js";
+export { createPluginAssistantClient, validateAssistantOpenInput } from "./assistant.js";
+export type { PluginAssistantClient, PluginAssistantOpenInput, PluginAssistantOpenResult, AssistantLaunchDraft } from "./assistant.js";
 export type * from "@smartdoca/web-plugin-registry";
 export interface PluginFileReference {
   readonly id: string;
@@ -20,17 +25,27 @@ export interface PluginFilePickerProps {
   selectFolder?(folder: { id: string; name: string }): void | Promise<void>;
   accept?(file: PluginFileReference): boolean;
 }
-export interface PluginTemplatePickerProps {
+export interface PluginResourceSourceSelection {
+  /** Initial selection; omitted means all sources, [] means none. */
+  providerIds?: readonly string[];
+  onSourcesChange?(providerIds: readonly string[] | undefined): void;
+}
+export interface PluginTemplatePickerProps extends PluginResourceSourceSelection {
   close(): void;
   contract: ResourceType;
   contentType?: ResourceType;
-  select(selection: TemplateSelection): void | Promise<void>;
+  select(
+    selection: TemplateSelection,
+    resource: CreationResourceResult,
+  ): void | Promise<void>;
   blank?(): void | Promise<void>;
 }
-export interface PluginMaterialPickerProps {
+export interface PluginMaterialPickerProps extends PluginResourceSourceSelection {
   close(): void;
   contentType?: ResourceType;
-  select(file: PluginFileReference): void | Promise<void>;
+  select(
+    file: PluginFileReference & { source: ResourceSourceInfo },
+  ): void | Promise<void>;
   accept?(file: PluginFileReference): boolean;
 }
 /** Host-injected React is the only supported renderer instance. */
@@ -42,6 +57,7 @@ export interface PluginWebHost<
   readonly apiBase: string;
   readonly platform: PluginPlatformClient;
   readonly ui: PluginExtensionUI;
+  readonly ai: PluginAssistantClient;
   readonly native: PluginNativeCapabilities | null;
   useEnvironment(): {
     locale: "zh" | "en";

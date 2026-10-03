@@ -1,3 +1,4 @@
+import type { PluginStorageServices } from "../services/plugin-storage.js";
 import { pluginNavigationSchema } from "./navigation-schema.js";
 import type { NavigationEntry } from "@smartdoca/web-plugin-registry";
 import { isDeepStrictEqual } from "node:util";
@@ -7,6 +8,7 @@ import { pathToFileURL } from "node:url";
 import {
   validatePluginManifest,
   satisfiesPluginVersion,
+  comparePluginVersions,
   type DocaPlugin,
   type PluginManifest,
 } from "@smartdoca/plugin-sdk";
@@ -91,6 +93,10 @@ export async function inspectPlugin(
     !/^[a-zA-Z0-9._-]{1,80}$/.test(pkg.doca.dataVersion)
   )
     throw new Error("doca.dataVersion is required");
+  if (pkg.doca.storage !== "host")
+    throw new Error(
+      'doca.storage must be "host": plugins must use host-managed storage',
+    );
   const manifestFile = await packageFile(root, pkg.doca.manifest);
   if (!manifestFile.endsWith(".json"))
     throw new Error("Plugin manifest must be static JSON");
@@ -100,6 +106,12 @@ export async function inspectPlugin(
   if (Object.hasOwn(Object.prototype, manifest.id))
     throw new Error("Reserved plugin identifier");
   if (!manifest.sdkRange) throw new Error("sdkRange is required");
+  const sdkFloor = manifest.sdkRange.replace(/^[~^]/, "");
+  if (
+    !/^\d+\.\d+\.\d+$/.test(sdkFloor) ||
+    comparePluginVersions(sdkFloor, "0.1.7") < 0
+  )
+    throw new Error("Installed plugins must require SDK 0.1.7 or newer");
   if (manifest.version !== pkg.version)
     throw new Error(`Plugin version mismatch: ${packageName}`);
   const server = await packageFile(root, pkg.doca.server);
@@ -164,6 +176,7 @@ export async function inspectPlugin(
 }
 export async function instantiateInstalledPlugin(
   descriptor: InstalledPlugin,
+  storage?: PluginStorageServices,
 ): Promise<DocaPlugin> {
   const loaded = await import(pathToFileURL(descriptor.server).href);
   if (typeof loaded.default !== "function")
@@ -179,12 +192,15 @@ export async function instantiateInstalledPlugin(
       `Runtime manifest differs from static manifest: ${descriptor.packageName}`,
     );
   if (typeof plugin.uninstall !== "function")
-    throw new Error(`Plugin ${descriptor.manifest.id} must implement uninstall`);
-  return scopeInstalledPlugin(plugin);
+    throw new Error(
+      `Plugin ${descriptor.manifest.id} must implement uninstall`,
+    );
+  return scopeInstalledPlugin(plugin, storage);
 }
 export async function importInstalledPlugins(
   installed: readonly InstalledPlugin[],
   core: readonly PluginManifest[] = [],
+  storageFor?: (plugin: InstalledPlugin) => Promise<PluginStorageServices>,
 ): Promise<DocaPlugin[]> {
   const order = validatePluginGraph([
     ...core,
@@ -194,7 +210,12 @@ export async function importInstalledPlugins(
   for (const manifest of order) {
     const descriptor = installed.find((p) => p.manifest.id === manifest.id);
     if (!descriptor) continue;
-    plugins.push(await instantiateInstalledPlugin(descriptor));
+    plugins.push(
+      await instantiateInstalledPlugin(
+        descriptor,
+        await storageFor?.(descriptor),
+      ),
+    );
   }
   return plugins;
 }

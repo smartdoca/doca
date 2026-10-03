@@ -1,7 +1,14 @@
 import { enqueueProjection } from "@core/modules/automation/jobs.js";
-import { objectKey, detectBufferMime, uploadLimits } from "../services/storage-policy.js";
+import {
+  objectKey,
+  detectBufferMime,
+  uploadLimits,
+} from "../services/storage-policy.js";
 import { readUploadBuffer } from "../services/upload-stream.js";
-import { registerStoredObject, thumbnailFor } from "../services/stored-objects.js";
+import {
+  registerStoredObject,
+  thumbnailFor,
+} from "../services/stored-objects.js";
 import { sendFileContent } from "../services/file-content.js";
 import { attachmentMime } from "../services/ai/attachments.js";
 import {
@@ -25,33 +32,12 @@ import type { DB, Schema } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import {
   createStorage,
-  storageDefaults,
-  validateStorage,
+  storageConfigForProfile,
   type StorageConfig,
   type StorageRuntime,
 } from "../adapters/storage.js";
 
 const uuid = Type.String({ format: "uuid" });
-const configSchema = Type.Object(
-  {
-    provider: Type.Union([Type.Literal("local"), Type.Literal("s3")]),
-    bucket: Type.String({ maxLength: 63 }),
-    region: Type.String({
-      minLength: 1,
-      maxLength: 64,
-      pattern: "^[a-zA-Z0-9-]+$",
-    }),
-    endpoint: Type.String({ maxLength: 300 }),
-    forcePathStyle: Type.Boolean(),
-    credentialRef: Type.String({
-      minLength: 1,
-      maxLength: 64,
-      pattern: "^[a-zA-Z0-9_-]+$",
-    }),
-    cdnDomain: Type.String({ maxLength: 300 }),
-  },
-  { additionalProperties: false },
-);
 export function registerAssets(
   api: FastifyInstance,
   db: DB,
@@ -63,11 +49,7 @@ export function registerAssets(
 ) {
   const storage = createStorage(runtime);
   const decode = (p: Schema["storage_profiles"]) =>
-    ({
-      ...storageDefaults,
-      ...JSON.parse(p.config),
-      provider: p.provider,
-    }) as StorageConfig;
+    storageConfigForProfile(runtime, p);
   async function access(
     tx: DB,
     a: Actor | null,
@@ -103,81 +85,33 @@ export function registerAssets(
         .executeTakeFirstOrThrow();
       return {
         id: p.id,
-        config: decode(p),
+        config: (() => {
+          const { root, cdnPrivateKey, cdnKeyPairId, ...publicConfig } =
+            decode(p);
+          return publicConfig;
+        })(),
+        managedBy: "environment",
         credentialRefs: Object.keys(runtime.credentials),
         cdnSigningReady: !!runtime.cdnKeyPairId && !!runtime.cdnPrivateKey,
         maxUploadBytes: 20 * 1024 * 1024,
       };
     },
   );
-  api.put<{ Body: { expectedId: string; config: StorageConfig } }>(
-    "/api/v1/admin/storage",
-    {
-      schema: {
-        tags: ["Storage"],
-        summary: "切换新上传文件的存储配置；保留历史文件存储位置",
-        body: Type.Object(
-          { expectedId: Type.String({ maxLength: 36 }), config: configSchema },
-          { additionalProperties: false },
-        ),
-      },
-    },
-    async (req) => {
-      const a = admin(req),
-        c = req.body.config;
-      validateStorage(c, runtime);
-      return transact(db, async (tx) => {
-        await lock(tx, a);
-        const user = await tx
-          .selectFrom("users")
-          .select("admin")
-          .where("id", "=", a.id)
-          .executeTakeFirstOrThrow();
-        if (!user.admin) fail(403, "需要管理员权限");
-        const old = await tx
-          .selectFrom("storage_profiles")
-          .selectAll()
-          .where("active", "=", 1)
-          .executeTakeFirstOrThrow();
-        if (old.id !== req.body.expectedId)
-          fail(409, "存储设置已变更，请刷新后重试");
-        await tx
-          .updateTable("storage_profiles")
-          .set({ active: 0 })
-          .where("id", "=", old.id)
-          .execute();
-        const id = randomUUID();
-        await tx
-          .insertInto("storage_profiles")
-          .values({
-            id,
-            provider: c.provider,
-            config: JSON.stringify(c),
-            active: 1,
-            created_at: new Date().toISOString(),
-          })
-          .execute();
-        await tx
-          .insertInto("audit_events")
-          .values({
-            id: randomUUID(),
-            actor_id: a.id,
-            resource_id: null,
-            action: "storage.configured",
-            created_at: new Date().toISOString(),
-          })
-          .execute();
-        return { id };
-      });
-    },
-  );
-  api.addContentTypeParser(
-    "application/octet-stream",
-    (req, payload, done) => {
-      if (req.routeOptions.url === "/api/v1/files/items") return done(null, payload);
-      void readUploadBuffer(payload, uploadLimits.asset).then(body => done(null, body), done);
-    },
-  );
+  api.put("/api/v1/admin/storage", async (req) => {
+    admin(req);
+    fail(
+      405,
+      "File storage is managed through deployment environment variables",
+    );
+  });
+  api.addContentTypeParser("application/octet-stream", (req, payload, done) => {
+    if (req.routeOptions.url === "/api/v1/files/items")
+      return done(null, payload);
+    void readUploadBuffer(payload, uploadLimits.asset).then(
+      (body) => done(null, body),
+      done,
+    );
+  });
   let concurrent = 0;
   const uploads = new WeakSet<FastifyRequest>();
   api.addHook("onResponse", async (req) => {
@@ -185,7 +119,8 @@ export function registerAssets(
   });
   api.post<{
     Querystring: {
-      purpose: "avatar" | "cover" | "attachment" | "comment_image" | "ai_attachment";
+      purpose:
+        "avatar" | "cover" | "attachment" | "comment_image" | "ai_attachment";
       resourceId?: string;
       filename: string;
     };
@@ -225,9 +160,16 @@ export function registerAssets(
         q = req.query;
       if (!Buffer.isBuffer(req.body) || !req.body.length)
         fail(400, "请上传非空文件");
-      if (q.purpose !== "avatar" && q.purpose !== "ai_attachment" && !q.resourceId)
+      if (
+        q.purpose !== "avatar" &&
+        q.purpose !== "ai_attachment" &&
+        !q.resourceId
+      )
         fail(400, "请指定所属文档或知识库");
-      if (q.purpose === "ai_attachment") { await requireCapability(db,a.id,"ai.create"); if(q.resourceId) fail(400,"对话附件不能关联文档"); }
+      if (q.purpose === "ai_attachment") {
+        await requireCapability(db, a.id, "ai.create");
+        if (q.resourceId) fail(400, "对话附件不能关联文档");
+      }
       if (q.purpose === "avatar" && q.resourceId) fail(400, "头像不属于文档");
       const recent = await db
         .selectFrom("assets")
@@ -254,16 +196,19 @@ export function registerAssets(
         .selectAll()
         .where("active", "=", 1)
         .executeTakeFirstOrThrow();
-      const c = decode(p), id = randomUUID();
+      const c = decode(p),
+        id = randomUUID();
       let key = "";
-      let stored = false, committed = false;
+      let stored = false,
+        committed = false;
       try {
         let body = req.body,
           mime = "application/octet-stream",
           filename = Array.from(q.filename.replace(/[\x00-\x1f\x7f/\\]/g, "_"))
             .slice(0, 240)
             .join("");
-        const imageRequired = q.purpose !== "attachment" && q.purpose !== "ai_attachment";
+        const imageRequired =
+          q.purpose !== "attachment" && q.purpose !== "ai_attachment";
         const raster =
           body
             .subarray(0, 8)
@@ -301,10 +246,17 @@ export function registerAssets(
           mime = "image/webp";
           filename = filename.replace(/\.[^.]*$/, "") + ".webp";
         } else if (raster) {
-          try { await sharp(body, { limitInputPixels: 25000000, animated: false }).metadata(); }
-          catch { fail(400, "图片无法解析，或分辨率过大"); }
+          try {
+            await sharp(body, {
+              limitInputPixels: 25000000,
+              animated: false,
+            }).metadata();
+          } catch {
+            fail(400, "图片无法解析，或分辨率过大");
+          }
         }
-        if(q.purpose === "ai_attachment" && !raster) mime=attachmentMime(filename,body);
+        if (q.purpose === "ai_attachment" && !raster)
+          mime = attachmentMime(filename, body);
         mime = await detectBufferMime(body, filename);
         key = objectKey(id, mime);
         await storage.put(c, key, body, mime, filename);
@@ -339,7 +291,7 @@ export function registerAssets(
               .select("profile_metadata")
               .where("id", "=", a.id)
               .executeTakeFirstOrThrow();
-            if (!await profileEditable(tx, a.id, "avatar"))
+            if (!(await profileEditable(tx, a.id, "avatar")))
               fail(403, "头像由认证源管理");
           }
           if (q.resourceId) {
@@ -353,8 +305,17 @@ export function registerAssets(
           await checkStorage(tx, row.owner_id, body.length);
           await tx.insertInto("assets").values(row).execute();
           {
-            const recognitionRow = await tx.selectFrom("file_recognition_settings").selectAll().where("id", "=", "default").executeTakeFirst();
-            const recognition = recognitionRow ? JSON.parse(recognitionRow.config) as { enabled?: boolean; modelId?: string | null } : {};
+            const recognitionRow = await tx
+              .selectFrom("file_recognition_settings")
+              .selectAll()
+              .where("id", "=", "default")
+              .executeTakeFirst();
+            const recognition = recognitionRow
+              ? (JSON.parse(recognitionRow.config) as {
+                  enabled?: boolean;
+                  modelId?: string | null;
+                })
+              : {};
             const fileObject: Schema["file_storage_objects"] = {
               id: row.id,
               profile_id: row.profile_id,
@@ -363,33 +324,47 @@ export function registerAssets(
               size: body.length,
               mime: row.mime,
               ai_description: null,
-              ai_status: recognition.enabled && recognition.modelId ? "pending" : "skipped",
-              ai_model: recognition.enabled && recognition.modelId ? recognition.modelId : null,
+              ai_status:
+                recognition.enabled && recognition.modelId
+                  ? "pending"
+                  : "skipped",
+              ai_model:
+                recognition.enabled && recognition.modelId
+                  ? recognition.modelId
+                  : null,
               ai_generated_at: null,
               created_at: row.created_at,
             };
             await registerStoredObject(tx, fileObject);
             if (q.purpose === "attachment" || q.purpose === "ai_attachment") {
-            const fileId = randomUUID();
-            await tx.insertInto("file_items").values({
-              id: fileId,
-              owner_id: row.owner_id,
-              parent_type: q.purpose === "ai_attachment" ? "system" : "document",
-              parent_id: q.purpose === "ai_attachment" ? "ai" : q.resourceId!,
-              storage_object_id: fileObject.id,
-              name: row.filename,
-              mime: row.mime,
-              size: row.size,
-              metadata: JSON.stringify({ assetId: row.id, resourceId: q.resourceId ?? null }),
-              ai_description_override: null,
-              locked: q.purpose === "attachment" ? 1 : 0,
-              version: 1,
-              created_at: row.created_at,
-              updated_at: row.created_at,
-              deleted_at: null,
-              delete_batch: null,
-            }).execute();
-            await enqueueProjection(tx, "search-file", fileId, { fileId });
+              const fileId = randomUUID();
+              await tx
+                .insertInto("file_items")
+                .values({
+                  id: fileId,
+                  owner_id: row.owner_id,
+                  parent_type:
+                    q.purpose === "ai_attachment" ? "system" : "document",
+                  parent_id:
+                    q.purpose === "ai_attachment" ? "ai" : q.resourceId!,
+                  storage_object_id: fileObject.id,
+                  name: row.filename,
+                  mime: row.mime,
+                  size: row.size,
+                  metadata: JSON.stringify({
+                    assetId: row.id,
+                    resourceId: q.resourceId ?? null,
+                  }),
+                  ai_description_override: null,
+                  locked: q.purpose === "attachment" ? 1 : 0,
+                  version: 1,
+                  created_at: row.created_at,
+                  updated_at: row.created_at,
+                  deleted_at: null,
+                  delete_batch: null,
+                })
+                .execute();
+              await enqueueProjection(tx, "search-file", fileId, { fileId });
             }
             if (!row.mime.startsWith("image/"))
               await tx
@@ -472,9 +447,7 @@ export function registerAssets(
         error: extract?.error,
         imageCount:
           extract?.parts.filter((part) => part.type === "image").length ?? 0,
-        preview: markdown
-          ? markdown.slice(0, 280)
-          : extract?.error,
+        preview: markdown ? markdown.slice(0, 280) : extract?.error,
         description: object?.ai_description?.trim() || undefined,
         aiStatus: object?.ai_status ?? undefined,
       };
@@ -482,7 +455,12 @@ export function registerAssets(
   );
   api.get<{
     Params: { id: string };
-    Querystring: { download?: string; trashPreview?: string; audit?: string; variant?: "thumbnail" };
+    Querystring: {
+      download?: string;
+      trashPreview?: string;
+      audit?: string;
+      variant?: "thumbnail";
+    };
   }>(
     "/api/v1/assets/:id/content",
     {
@@ -504,9 +482,21 @@ export function registerAssets(
           .selectFrom("assets")
           .selectAll()
           .where("id", "=", req.params.id)
-          .$if(req.query.audit !== "1", q => q.where("deleted_at", "is", null))
+          .$if(req.query.audit !== "1", (q) =>
+            q.where("deleted_at", "is", null),
+          )
           .executeTakeFirst();
-      if (!asset || !["avatar", "cover", "attachment", "comment_image", "ai_attachment"].includes(asset.purpose)) fail(404, "文件不存在");
+      if (
+        !asset ||
+        ![
+          "avatar",
+          "cover",
+          "attachment",
+          "comment_image",
+          "ai_attachment",
+        ].includes(asset.purpose)
+      )
+        fail(404, "文件不存在");
       const audit = req.query.audit === "1";
       if (audit) fail(404, "文件不存在");
       if (req.query.trashPreview || audit)
@@ -529,7 +519,8 @@ export function registerAssets(
         }
       } else if (!audit && asset.owner_id !== a?.id) {
         if (
-          !a || asset.purpose !== "avatar" ||
+          !a ||
+          asset.purpose !== "avatar" ||
           !(await db
             .selectFrom("user_preferences")
             .select("user_id")
@@ -538,7 +529,10 @@ export function registerAssets(
         )
           fail(404, "文件不存在");
       }
-      const selected = req.query.variant === "thumbnail" ? await thumbnailFor(db, asset.object_key) : asset;
+      const selected =
+        req.query.variant === "thumbnail"
+          ? await thumbnailFor(db, asset.object_key)
+          : asset;
       const p = await db
           .selectFrom("storage_profiles")
           .selectAll()
@@ -546,15 +540,31 @@ export function registerAssets(
           .executeTakeFirstOrThrow(),
         c = decode(p);
       const cdn = storage.cdnUrl(c, selected.object_key);
-      if(asset.purpose === "ai_attachment") reply.header("Cache-Control","private, no-store");
-      if (cdn && !asset.resource_id && !audit && asset.purpose !== "ai_attachment" && req.query.download !== "1") return reply.redirect(cdn);
+      if (asset.purpose === "ai_attachment")
+        reply.header("Cache-Control", "private, no-store");
+      if (
+        cdn &&
+        !asset.resource_id &&
+        !audit &&
+        asset.purpose !== "ai_attachment" &&
+        req.query.download !== "1"
+      )
+        return reply.redirect(cdn);
       reply
         .header(
           "Content-Disposition",
           `${asset.mime === "image/webp" && req.query.download !== "1" ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(asset.filename)}`,
         )
         .header("Content-Security-Policy", "default-src 'none'; sandbox");
-      return sendFileContent(req, reply, storage, c, selected, !/^image\/(png|jpeg|gif|webp|avif|svg\+xml)$/.test(selected.mime) || req.query.download === "1");
+      return sendFileContent(
+        req,
+        reply,
+        storage,
+        c,
+        selected,
+        !/^image\/(png|jpeg|gif|webp|avif|svg\+xml)$/.test(selected.mime) ||
+          req.query.download === "1",
+      );
     },
   );
   api.get<{ Params: { id: string } }>(

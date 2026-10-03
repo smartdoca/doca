@@ -40,6 +40,7 @@ import {
 import { SheetNativeMentions } from "@web/features/documents/sheet-native-mentions.js";
 import { useSheetDocumentLinks } from "@web/features/documents/sheet-document-links.js";
 import { useSheetDocumentPicker } from "@web/features/documents/sheet-document-picker.js";
+import { useSheetPluginElements } from "./sheet-plugin-elements.js";
 import "@smartdoca/sheet/style.css";
 import "@web/features/documents/surface.css";
 import { AtSign, Eye, EyeOff, MessageSquare } from "lucide-react";
@@ -125,6 +126,7 @@ export default function SheetDocument({
   const ai = useAI();
   const aiRef = useRef(ai); aiRef.current = ai;
   const session = sync.binding?.value;
+  const elements = useSheetPluginElements(id, handle, editable);
   const menus = useMemo<SpreadsheetMenuExtension[]>(
     () => [
       { id: "doca-ai", title: "引用给 AI", ariaLabel: "引用给 AI", path: "ribbon.others.others", order: 998, icon: <AtSign size={18} />, requiresEditPermission: false, enabled: context => !!context.selection && !!aiRef.current?.userId, action: () => aiRef.current?.add() },
@@ -297,6 +299,7 @@ export default function SheetDocument({
           locale={locale}
           toolbarLayout="two-row"
           menus={menus}
+          cellRenderers={elements.renderers}
           renderCellObject={(object) => renderSheetObject(object, setFilePreview)}
           onPasteContent={pasteDocumentLink}
           ref={ref}
@@ -342,6 +345,7 @@ export default function SheetDocument({
         targetComment={targetComment}
         loadMoreComments={loadMoreComments}
       />
+      {elements.ui}
     </section>
   );
 }

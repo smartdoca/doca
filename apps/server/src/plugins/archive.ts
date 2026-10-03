@@ -117,3 +117,63 @@ export async function materialize(
   }
   return root;
 }
+
+/** Trusted database metadata lets a complete local cache start without downloading its ZIP again. */
+export function archiveFileIndex(bytes: Uint8Array) {
+  return JSON.stringify({
+    version: 1,
+    files: Object.fromEntries(
+      Object.entries(unpack(bytes)).map(([name, content]) => [
+        name,
+        digest(content),
+      ]),
+    ),
+  });
+}
+export async function cachedRelease(
+  directory: string,
+  hash: string,
+  rawIndex: string,
+) {
+  if (!/^[a-f0-9]{64}$/.test(hash))
+    throw new Error("Invalid plugin release identity");
+  const index = JSON.parse(rawIndex) as { version: unknown; files: unknown };
+  if (
+    !index ||
+    Object.keys(index).sort().join(",") !== "files,version" ||
+    index.version !== 1 ||
+    !index.files ||
+    typeof index.files !== "object" ||
+    Array.isArray(index.files)
+  )
+    throw new Error("Invalid plugin cache index");
+  const entries = Object.entries(index.files);
+  if (
+    !entries.length ||
+    entries.length > 10000 ||
+    !Object.hasOwn(index.files, "package.json") ||
+    entries.some(
+      ([name, value]) =>
+        !name ||
+        name.startsWith("/") ||
+        /[\\:\x00-\x1f]/.test(name) ||
+        name.split("/").some((p) => p === ".." || p === "." || !p) ||
+        typeof value !== "string" ||
+        !/^[a-f0-9]{64}$/.test(value),
+    )
+  )
+    throw new Error("Invalid plugin cache index");
+  const root = path.join(directory, ".releases", hash);
+  try {
+    const current = await readPackageFiles(root);
+    return Object.keys(current).length === entries.length &&
+      entries.every(
+        ([name, hash]) =>
+          Object.hasOwn(current, name) && digest(current[name]!) === hash,
+      )
+      ? root
+      : null;
+  } catch {
+    return null;
+  }
+}

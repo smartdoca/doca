@@ -1,3 +1,4 @@
+import { storageRuntime } from "@server/adapters/storage.js";
 import { cleanupFileReceipts } from "@server/plugins/file-receipt-cleanup.js";
 import { expect, it } from "vitest";
 import { mkdtemp, rm, writeFile, access } from "node:fs/promises";
@@ -17,7 +18,7 @@ it("durably replays concurrent creates, rejects conflicts, recovers pending uplo
   const config = { driver: "sqlite" as const, path: join(root, "test.sqlite") };
   let db = await openTestDatabase(config);
   const storage = {
-    root: join(root, "objects"),
+    configuration: storageRuntime().configuration, root: join(root, "objects"),
     credentials: {},
     endpointHosts: [],
     cdnKeyPairId: undefined,

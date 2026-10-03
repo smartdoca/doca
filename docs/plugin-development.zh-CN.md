@@ -1,10 +1,18 @@
 # Doca 插件开发规范
 
-更新：2026-10-02；源码宿主 0.1.8，公共 SDK 0.1.5（生产部署未验收）。本文是插件开发的主入口，包含当前内容、App 和安装约定；链接文档补充完整类型、协议和历史验收记录。任何新增或修改兼容策略、旧格式转换或数据库迁移，必须先与项目负责人对齐方案。
+更新：2026-10-02；源码宿主 0.1.8，SDK 源码 0.1.7（npm 发布及生产部署未验收）。本文是插件开发的主入口，包含当前内容、App 和安装约定；链接文档补充完整类型、协议和历史验收记录。任何新增或修改兼容策略、旧格式转换或数据库迁移，必须先与项目负责人对齐方案。
 
 [English](plugin-development.md)
 
 完整目标及尚未实现部分见 [SDK 契约](plugin-sdk-contract.zh-CN.md)。项目尚未上线，删除不合理的旧接口，不维护旧会员、审核或源码加载兼容层。
+
+水平扩展与存储职责按已确认的[托管存储规范](plugin-horizontal-scaling.zh-CN.md)执行。所有持久化由宿主管理，安装包必须声明 `doca.storage: "host"`；缺失或其他值在安装、目录发现和启动时于导入代码前拒绝。托管 SQL 与内部对象已导出；凭证和临时工作区仍有实现缺口。
+
+## 已实现存储修订（2026-10-03，SDK 源码 0.1.7）
+
+`@smartdoca/plugin-sdk/storage` 已导出安装身份绑定的 `pluginDatabaseToken`（`storage.sql.v1`）和 `pluginObjectStorageToken`（`storage.objects.v1`）。关系库支持显式 version 1 结构声明、text/int32/双精度列、主键/唯一约束、结构化查询/写入/删除，以及回调只执行一次的事务。联表、外键、通用 SQL、upsert、托管凭据和临时工作区尚未导出。当前 SDK 通过宿主编译的查询和宿主连接中的命名空间表隔离；独立 PostgreSQL 角色与进程隔离是更强的待实现边界。
+
+逻辑库为 `plugin:<pluginId>`，用户文件归属及私有对象使用 `plugins/<pluginId>`，发行包使用 `host/plugin-releases/<sha256>.zip`。ZIP 字节进入环境变量配置的文件存储，共享数据库只保存 version 2 清单、归档引用和可信文件哈希索引。有效缓存无需重新下载 ZIP。全部实例由运维逐个重启。新宿主基线拒绝旧数据库/格式/SDK 包，原数据保留，不提供迁移或 fallback。详见[准确实现与限制](unified-storage-implementation.md)。
 
 ## 许可证边界
 
@@ -17,7 +25,7 @@ Doca 及公开插件 SDK 采用 [MIT](../LICENSE)。插件可以开源，也可�
 
 ## 安装与启动
 
-通过「管理 → 插件商店」上传完整的预构建 ZIP，或停机后放入 `DOCA_PLUGINS_DIR/<plugin-id>/`。每个实例重启生效，共享数据库保存全站清单和完整归档，各实例启动自动校验并补齐本地缓存。不保留 npm 安装目录兼容路径。详见 [商店协议](plugin-store-protocol.md) 与 [部署说明](plugin-deployment.zh-CN.md)。
+通过「管理 → 插件商店」上传完整的预构建 ZIP，或停机后放入 `DOCA_PLUGINS_DIR/<plugin-id>/`。每个实例重启生效，共享数据库保存全站清单、归档引用和哈希索引，完整 ZIP 字节保存在统一文件存储，各实例启动自动校验并补齐本地缓存。不保留 npm 安装目录兼容路径。详见 [商店协议](plugin-store-protocol.md) 与 [部署说明](plugin-deployment.zh-CN.md)。
 
 插件包的 package.json：
 
@@ -28,6 +36,7 @@ Doca 及公开插件 SDK 采用 [MIT](../LICENSE)。插件可以开源，也可�
   "type": "module",
   "doca": {
     "dataVersion": "1",
+    "storage": "host",
     "manifest": "./manifest.json",
     "server": "./dist/server.js",
     "web": { "directory": "./web", "entry": "./index.js" }
@@ -57,12 +66,16 @@ manifest.json 必须为静态 JSON，版本与 package.json 一致：
 ```ts
 import { definePlugin } from "@smartdoca/plugin-sdk";
 import { filesServiceToken } from "@smartdoca/plugin-sdk/files";
-import { httpServiceToken, usersServiceToken } from "@smartdoca/plugin-sdk/platform";
+import {
+  httpServiceToken,
+  usersServiceToken,
+} from "@smartdoca/plugin-sdk/platform";
 import manifest from "../manifest.json" with { type: "json" };
 
 export default () =>
   definePlugin({
     manifest,
+    async uninstall() {},
     injections: {
       required: [filesServiceToken, httpServiceToken, usersServiceToken],
     },
@@ -91,19 +104,19 @@ export default () =>
 
 ## 当前公共服务
 
-| 导入入口            | 服务                      | 用途                                         |
-| ------------------- | ------------------------- | -------------------------------------------- |
-| plugin-sdk/files    | filesServiceToken         | 文件夹、文件、上传、内容、绑定及访问授权     |
-| plugin-sdk/platform | usersServiceToken         | 当前授权用户资料、统一用户搜索               |
-| plugin-sdk/platform | permissionsServiceToken   | 注册业务资源鉴权及用户关系来源               |
-| plugin-sdk/platform | httpServiceToken          | 已认证、独立命名空间的后端路由               |
-| plugin-sdk/platform | policiesServiceToken      | 创建、存储、分享、转移及 AI 调用前的业务准入 |
-| plugin-sdk/platform | eventsServiceToken        | 读取持久事件流，包括 ai.usage.recorded       |
-| plugin-sdk/platform | notificationsServiceToken | 幂等发布、撤回通知及受权站内跳转             |
-| plugin-sdk/ai       | aiServiceToken            | 注册带 JSON Schema 的 AI 工具和 skill 手册   |
-| plugin-sdk/content | contentServiceToken | 统一内容清单、读取、定位、可选搜索及知识订阅来源 |
-| plugin-sdk/platform | activityServiceToken | 插件自管最近访问，宿主汇总与鉴权 |
-| plugin-sdk/search | searchServiceToken | 投影、重建与授权索引查询 |
+| 导入入口            | 服务                      | 用途                                             |
+| ------------------- | ------------------------- | ------------------------------------------------ |
+| plugin-sdk/files    | filesServiceToken         | 文件夹、文件、上传、内容、绑定及访问授权         |
+| plugin-sdk/platform | usersServiceToken         | 当前授权用户资料、统一用户搜索                   |
+| plugin-sdk/platform | permissionsServiceToken   | 注册业务资源鉴权及用户关系来源                   |
+| plugin-sdk/platform | httpServiceToken          | 已认证、独立命名空间的后端路由                   |
+| plugin-sdk/platform | policiesServiceToken      | 创建、存储、分享、转移及 AI 调用前的业务准入     |
+| plugin-sdk/platform | eventsServiceToken        | 读取持久事件流，包括 ai.usage.recorded           |
+| plugin-sdk/platform | notificationsServiceToken | 幂等发布、撤回通知及受权站内跳转                 |
+| plugin-sdk/ai       | aiServiceToken            | 注册带 JSON Schema 的 AI 工具和 skill 手册       |
+| plugin-sdk/content  | contentServiceToken       | 统一内容清单、读取、定位、可选搜索及知识订阅来源 |
+| plugin-sdk/platform | activityServiceToken      | 插件自管最近访问，宿主汇总与鉴权                 |
+| plugin-sdk/search   | searchServiceToken        | 投影、重建与授权索引查询                         |
 
 注册 ID 必须以插件 ID 加点开头。路由 namespace 必须等于插件 ID。这些公共注册自动归属插件生命周期，关闭或启动失败时回收；自建定时器、连接仍用 context.effect/effectAsync 回收。关闭不删除持久数据。
 
@@ -113,53 +126,31 @@ AI 工具通过 `aiServiceToken.registerTool` 注册，包含 id、description�
 
 Doca 不内置会员、货币价格、积分或业务额度。模型管理中的输入/输出速率和每张图片 Token 只负责把厂商原始用量统一折算为 Token，不是最终售价。用量记录区分未确认调用与实际指标；`ai.usage.recorded` 在结算事务内写入持久事件，顶层 `metrics` 是已折算用量，`provider.metrics` 保留厂商原始事实。插件通过 events.read(cursor, limit) 拉取，持久保存消费位置并按事件 ID 幂等处理。策略 check 可以拒绝调用；跨插件预留、失败补偿和资金一致性尚未提供完整事务协议，不能将一次 check 当作完整计费实现。
 
-插件自管独立数据库、凭证、业务任务和 outbox。宿主不提供 data.v1/data.v2，也不打开插件数据库。数据库必须符合声明的 dataVersion，可复用结构相同的已有数据；结构不匹配时拒绝启动。数据放在下文的业务数据目录。卸载见下文。
+插件负责业务模型、授权、任务逻辑和 outbox 语义；持久状态全部通过宿主公共服务保存。插件不选择本地/远端后端，不连接私有数据库、不读取存储凭证、不向系统目录持久化。目前提供 storage.sql.v1 与 storage.objects.v1；data.v1/data.v2 不可用。托管凭证与临时工作区仍待实现，不能自带存储作为替代。
 
-## 业务数据目录
+## 宿主托管持久化
 
-业务库、凭证、任务和 outbox 放在插件自己的数据目录，不放进安装包目录。
+所有安装包（包括无独立状态的插件）必须声明 `doca.storage: "host"`。这是遵守托管存储契约的声明，不是库名或后端选择。静态检查在解析/导入服务端入口前执行，覆盖 ZIP、npm/商店安装、离线目录导入、共享归档恢复和打包工具；没有缺字段默认值或旧存储适配。声明是受信任插件作者的承诺，不构成 Node.js 沙箱或完整代码审核。
 
-插件只读取 `DOCA_PLUGINS_DATA_DIR`，并只使用 `<DOCA_PLUGINS_DATA_DIR>/<自己的插件 id>/`。相对路径相对进程工作目录。插件不自己补默认路径，也不再定义某个插件专用的数据目录环境变量。没有这个变量时，插件不能猜一个目录。
+不再提供插件业务数据目录环境变量或插件可选的数据路径。`DOCA_PLUGINS_DIR` 仍是宿主管理的可重建安装缓存，不能存业务数据。本地/远端后端完全由宿主配置，多实例由宿主保证使用共享数据库和对象存储；插件使用相同的 SDK 方法，不判断宿主后端。
 
-默认值由安装配置提供。Docker Compose 在未设置时传入 `/data/plugin-data`。
-
-宿主不创建、不打开这个目录里的数据库。插件在首次使用时创建自己的子目录。`uninstall` 删除本插件的这个子目录，不要删除其他插件的目录。多个实例共用同一份业务库时，使用同一个根目录；插件安装缓存目录仍然各实例分开。
+用户上传、附件和导出成品使用 `files.v1` 文件夹/文件系统，保存稳定 ID、绑定并遵循权限。表记录、配置、任务、游标和 outbox 使用宿主托管关系能力，逻辑库名为 `plugin:<pluginId>`，由可信注入绑定。内部持久二进制使用宿主内部对象能力，凭证使用宿主凭证能力；其中托管凭证目前尚未导出。临时处理使用流或将来的宿主管理任务工作目录，具有限制和清理，不持久依赖前一实例的路径。所需接口与状态见存储规范。
 
 ## 数据结构
 
-`doca.dataVersion` 是插件私有数据库的结构号。它不是可以比较大小的版本号。
-
-计划让新版本继续使用已经安装的数据时，结构号不能改。依赖库需要升级时，由插件自己准备升级方法，在插件代码里把现有库升级到新依赖库可以读取的状态。宿主不调用这个方法，也不因为依赖库版本变化而修改结构号。
-
-结构号一旦改变，就表示不再兼容旧版本的数据。必须先卸载旧版本，等 `uninstall` 删掉旧库并清除旧结构号，才能安装声明新结构号的版本。宿主不会把旧库迁移到新结构。
+`doca.dataVersion` 是业务结构的精确标识，不比较大小，也不证明旧文件可通过新存储读取。已安装升级要求标识相同，实际结构仍须验证；不匹配明确拒绝。不自动迁移、降级、补旧字段、导入旧目录或双读双写。旧自管数据保持原样，不能以托管空库代替已有业务数据。将来的结构/后端转换须另行确认方案、验证和回退。
 
 ## 卸载
 
-已安装插件必须实现 `uninstall(context)`。插件工厂没有这个方法时，宿主拒绝安装，也不会加载该插件。
+已安装插件必须实现 `uninstall(context)`，工厂缺失时拒绝安装。该钩子处理业务解绑/外部撤销，只使用宿主公共服务，重复调用必须幂等，不能打开或递归删除宿主存储路径。没有独立状态的插件可使用空实现。
 
-管理员卸载时，宿主先调用 `uninstall`。插件在这里删除自己的数据库、凭证、任务和 outbox。调用成功后，宿主才清除结构号并移除安装目标。宿主不打开、不删除插件数据库。
+私有库与对象由宿主管理：业务卸载钩子成功后，清单事务使当前 generation 失效、删除已声明的私有表并持久化对象清理意图，失败的字节清理会重试。凭证托管、集群业务任务排空仍未实现；所有实例需人工重启。钩子失败保留安装状态，外部副作用不能自动回滚。用户文件和其他业务引用保留，不以卸载替代数据迁移。
 
-- 结构号不同就是不兼容旧结构。`uninstall` 只删除当前库，不把旧库迁移成新结构。
-- 数据已经不存在时，再次调用必须成功。
-- 方法缺失或抛错时，卸载不完成：插件保持已安装，结构号保留。
-- `initialize`、`mount`、`ready`、`dispose` 只管理本次进程里的连接、定时器和注册。不要在 `dispose` 里删除数据库。
-- 宿主文件服务中的附件不会随卸载自动删除。插件要解除自己的绑定时，必须确认这些文件没有被其他业务继续使用。
-
-继续使用已有数据的升级必须保持 `doca.dataVersion` 不变，依赖库升级写在插件自己的升级方法里。改变结构号的版本必须先卸载旧版本，见上文「数据结构」。
-
-```ts
-export default () =>
-  definePlugin({
-    manifest,
-    async uninstall() {
-      await removeOwnDatabase();
-    },
-  });
-```
-
-`removeOwnDatabase` 由插件自己实现，删除它存放业务数据的库。宿主不提供这个函数。
+禁用、停机和 `dispose` 只回收注册、计时器和连接，不删除持久数据。插件移除不自动删除用户文件、文档载荷、其他业务仍使用的绑定或文件持久回执。文件清理必须走文件服务，校验归属、授权与其他引用。
 
 ## Web
+
+`host.ai.open(input)` 可携带提示词、普通文本上下文、授权文档引用和现有文件附件启动个人助手。`sessionId` 打开当前用户的已有会话，省略时新建。默认预填可编辑输入框，仅显式 `autoSend: true` 才通过正常宿主任务队列提交消息。Web 和 App 原生插件容器共用类型化 SDK 方法。详见[参数、限制和示例](plugin-assistant.md)；源码支持不代表 npm 已发布或真机已验收。
 
 可选 Web 产物默认导出 `async host => bundle`，host 提供 React、apiBase、useEnvironment、navigate、toast、confirm、request 和 FilePicker。React 从 host 注入，避免重复 renderer；其他依赖须打入浏览器产物，不要求宿主解析 npm 裸路径。bundle 遵循 `@smartdoca/plugin-sdk/web` 导出的 WebPluginBundle，manifest.pluginId/version 与服务端一致，支持页面、导航、管理和设置贡献。
 
@@ -179,7 +170,7 @@ HTTP 回调、附件绑定授权、用户校准、搜索与知识接口，以及
 
 交付验收需用实际宿主交付物、SDK 和业务插件 tgz，在仓库外的隔离环境安装启动。预备完整依赖闭包，禁止依赖源码链接、未声明缓存或安装/启动时访问包仓库；实际验证 Web 资源加载、业务流程、撤权、失败重试和重启恢复。SDK 构建及导入成功仅是基础验证，不可替代端到端验收。
 
-插件数据库只接受声明的结构版本（包括已有兼容数据），结构不匹配时拒绝启动，不运行升级或降级脚本。卸载要求见上文「卸载」。用户删除协议尚未提供。动态 WebView 的受限会话与实际可用接口见邮箱插件对接手册 v1。默认数据目录和任务状态管理不会赋予宿主访问插件数据库的权限。
+插件数据库只接受声明的结构版本（包括已有兼容数据），结构不匹配时拒绝启动，不运行升级或降级脚本。卸载要求见上文「卸载」。用户删除协议尚未提供。动态 WebView 的受限会话与实际可用接口见邮箱插件对接手册 v1。不提供插件可选的数据目录；持久化通过宿主作用域能力，未实现部分单独列明。
 
 ## 后台身份复核与通知
 
@@ -201,13 +192,13 @@ HTTP 注册默认限制请求体 1 MiB；需要附件等大请求的单条路由
 
 使用 `@smartdoca/plugin-sdk@^0.1.3`。从 `@smartdoca/plugin-sdk/content` 导入 `contentServiceToken` 与 `ContentSource` 类型，在 `injections.required` 声明服务，并在 mount 中注册来源。来源归属注册它的插件；内置文档和文件也使用这套契约。
 
-| 成员 | 契约 |
-| --- | --- |
-| 来源声明 | `id`、`pluginId`、`version: 1`、中英文 `title`、`contentTypes`、`purposes`、`capabilities: {search}`、`configSchema` |
-| `list(ctx, {config, cursor, limit})` | 必需。返回 `{items, nextCursor, snapshot}`。每项含 `ref: {sourceId, resourceId, blockId}`、`fingerprint`、`title`，可选 `order`、`anchor`、`excerpt`；此处不返回完整正文。 |
-| `read(ctx, {config, ref, fingerprint})` | 必需。重新鉴权后返回清单项及 `text`，不可用返回 null；指纹变化报冲突，不能在旧指纹下返回新正文。 |
-| `resolve(ctx, ref)` | 必需。重新鉴权并返回 `{path, fingerprint}` 或 null；path 是当前可打开的站内位置。 |
-| `search(ctx, {config, cursor, limit, query})` | 可选，声明与实现必须一致。返回轻量分页结果；不支持时宿主不会自动全量扫描代替。 |
+| 成员                                          | 契约                                                                                                                                                                       |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 来源声明                                      | `id`、`pluginId`、`version: 1`、中英文 `title`、`contentTypes`、`purposes`、`capabilities: {search}`、`configSchema`                                                       |
+| `list(ctx, {config, cursor, limit})`          | 必需。返回 `{items, nextCursor, snapshot}`。每项含 `ref: {sourceId, resourceId, blockId}`、`fingerprint`、`title`，可选 `order`、`anchor`、`excerpt`；此处不返回完整正文。 |
+| `read(ctx, {config, ref, fingerprint})`       | 必需。重新鉴权后返回清单项及 `text`，不可用返回 null；指纹变化报冲突，不能在旧指纹下返回新正文。                                                                           |
+| `resolve(ctx, ref)`                           | 必需。重新鉴权并返回 `{path, fingerprint}` 或 null；path 是当前可打开的站内位置。                                                                                          |
+| `search(ctx, {config, cursor, limit, query})` | 可选，声明与实现必须一致。返回轻量分页结果；不支持时宿主不会自动全量扫描代替。                                                                                             |
 
 `ctx` 包含宿主认证的 `principalId`、`purpose`（knowledge、analysis、search）和取消信号 `signal`。来源每次调用都检查当前业务权限。声明 analysis 的来源可供未来待办插件分析，不需要邮箱专用查询接口。消费方先调用 `sources(ctx, purpose)`，再调用服务的 list/read/search 并传入 sourceId、purpose；服务 resolve 接受 `{ref, purpose}`。只能使用来源已声明的用途。
 
@@ -228,7 +219,7 @@ Web 与受限移动 WebView 复用插件 Web 产物。`@smartdoca/plugin-sdk/web
 - Android 保存可返回 completed/canceled；iOS 保存和系统分享的 presented 仅表示展示系统面板，不代表操作完成。切换账号或页面销毁会取消进行中的请求。
 - 邮箱绑定作为 Web 能力，当前不实现原生 OAuth。
 
-当前公共 SDK 包版本是 0.1.5。宿主测试和构建不能替代独立邮箱包联调、iOS/Android 真机验收，这两项仍待完成；详细契约见[原生能力](plugin-native.md)。
+当前 SDK 源码包版本是 0.1.7，不表示已完成 npm 发布。宿主测试和构建不能替代独立邮箱包联调、iOS/Android 真机验收，这两项仍待完成；详细契约见[原生能力](plugin-native.md)。
 
 ## 分发与导航
 
@@ -243,3 +234,9 @@ Web 与受限移动 WebView 复用插件 Web 产物。`@smartdoca/plugin-sdk/web
 ## 模板与素材插件
 
 SDK 0.1.5 新增可选的创作资源提供者／消费者、公共客户端和宿主注入选择器；见[准确契约](creation-resources.md)。宿主没有默认来源，插件按自身命名空间与生命周期注册，业务消费者自行校验操作权限。
+
+多来源选择和 AI 检索使用 0.1.6 源码修订：查询传 providerIds，声明本地化来源说明；检索 modes 声明与 retrieve 方法成对提供。宿主提供来源发现、有限结果聚合和 AI 工具，搜索引擎由提供者选择。按已确认协议变更拒绝旧查询单值字段。结果和选择回调均可获取来源元数据，见[入参与边界](creation-resources.md)。
+
+## 文档插件元素（2026-10-02，SDK 0.1.6 源码）
+
+已实现 Web bundle 可选的 `elements` 注册以及 `@smartdoca/plugin-sdk/editor-elements` 导出，支持富文本原子行内元素、表格整单元格画布展示及配置表单。宿主通过原生命令与撤销提交配置，不向插件开放任意编辑器句柄。未知类型或版本显示异常占位，保留原始 JSON；不转换、不迁移、不清理数据。默认不安装提供方。详见[精确元素契约](plugin-editor-elements.md)和[独立倒计时/新闻链接示例](../examples/plugin-elements/README.md)。源码验收不表示 npm 发布、生产安装或移动真机验收。

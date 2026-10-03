@@ -3,7 +3,7 @@ import sharp from "sharp";
 import type { DB, Schema } from "@db/index.js";
 import {
   createStorage,
-  storageDefaults,
+  storageConfigForProfile,
   storageRuntime,
   type StorageRuntime,
   type StorageConfig,
@@ -29,12 +29,11 @@ export type FileExtract = {
 const PARSER_VERSION = 2;
 const activeByDatabase = new WeakMap<DB, Set<Promise<void>>>();
 
-function profileConfig(profile: Schema["storage_profiles"]): StorageConfig {
-  return {
-    ...storageDefaults,
-    ...JSON.parse(profile.config),
-    provider: profile.provider,
-  } as StorageConfig;
+function profileConfig(
+  runtime: StorageRuntime,
+  profile: Schema["storage_profiles"],
+): StorageConfig {
+  return storageConfigForProfile(runtime, profile);
 }
 
 function parseResult(raw: string): StoredExtractPart[] {
@@ -174,7 +173,7 @@ export async function processFileExtract(
       .selectAll()
       .where("id", "=", object.profile_id)
       .executeTakeFirstOrThrow();
-    const config = profileConfig(profile);
+    const config = profileConfig(runtime, profile);
     const storage = createStorage(runtime);
     const body = await storage.read(config, object.object_key);
     const filename = item?.name || object.object_key;
@@ -331,7 +330,7 @@ export async function readExtractImages(
     .where("id", "=", object.profile_id)
     .executeTakeFirstOrThrow();
   const storage = createStorage(runtime);
-  const config = profileConfig(profile);
+  const config = profileConfig(runtime, profile);
   const images: {
     part: StoredExtractPart & { type: "image" };
     data: Buffer;

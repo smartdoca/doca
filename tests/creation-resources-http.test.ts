@@ -108,6 +108,60 @@ it("serves authenticated empty registries, retires old endpoints and creates onl
       payload: { principalId: user.id },
     });
     expect(bad.statusCode).toBe(400);
+    Object.assign(template.provider, {
+      description: { zh: "网络模板", en: "Web templates" },
+      retrieval: { modes: ["keyword"] },
+    });
+    template.provider.retrieve = async (_context, input) => {
+      const { ref, title, summary, tags, contract, contentType } =
+        template.card;
+      return {
+        items: [
+          {
+            ref,
+            title,
+            summary,
+            tags,
+            contract,
+            contentType,
+            matchText: input.query,
+          },
+        ],
+        mode: "keyword",
+        hasMore: false,
+      };
+    };
+    for (const url of [
+      "/api/v1/creation-resources/templates/retrieve",
+      "/api/v1/plugin-platform/doca.ai/templates.retrieve",
+    ]) {
+      const response = await app.inject({
+        method: "POST",
+        url,
+        headers: { host: "localhost", cookie, origin: "http://localhost" },
+        payload: { query: "季度汇报", providerIds: [template.provider.id] },
+      });
+      expect(response.statusCode, response.body).toBe(200);
+      expect(response.json().items[0].source.description.zh).toBe("网络模板");
+      expect(response.json().items[0]).not.toHaveProperty("preview");
+    }
+    for (const operation of ["search", "tags", "providers", "retrieve"]) {
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/v1/creation-resources/templates/${operation}`,
+        headers: { host: "localhost", cookie, origin: "http://localhost" },
+        payload: { query: "季度汇报", providerId: template.provider.id },
+      });
+      expect(response.statusCode, response.body).toBe(400);
+    }
+    const materialEmpty = await app.inject({
+      method: "POST",
+      url: "/api/v1/creation-resources/materials/retrieve",
+      headers: { host: "localhost", cookie, origin: "http://localhost" },
+      payload: { query: "背景图" },
+    });
+    expect(materialEmpty.statusCode).toBe(200);
+    expect(materialEmpty.json().items).toEqual([]);
   } finally {
     await app.close();
     await db.destroy();

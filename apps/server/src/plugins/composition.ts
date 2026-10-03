@@ -1,3 +1,12 @@
+import { createHostFileStore } from "../services/host-file-store.js";
+import {
+  bindPluginStorage,
+  cleanupPluginObjects,
+} from "../services/plugin-storage.js";
+import {
+  pluginDatabaseToken,
+  pluginObjectStorageToken,
+} from "@smartdoca/plugin-sdk/storage";
 import { registerPluginMobileSessions } from "./mobile-session.js";
 import { registerNavigation } from "../routes/navigation.js";
 import { PluginManager } from "./manager.js";
@@ -83,6 +92,8 @@ function runtimePlugin(runtime: ServerRuntimeService) {
     manifest: runtimeManifest,
     async discover(context) {
       context.provide(serverRuntimeToken, runtime);
+      context.provide(pluginDatabaseToken, Object.freeze({}) as never);
+      context.provide(pluginObjectStorageToken, Object.freeze({}) as never);
       await providePlatform(context, runtime);
     },
   });
@@ -368,12 +379,44 @@ export async function composeServerPlugins(
     runtime.options.pluginDirectory ?? pluginDirectory(),
     plugins.map((p) => p.manifest),
     runtime.db,
+    undefined,
+    createHostFileStore(runtime.runtime.storage),
   );
+  let cleanupInFlight: Promise<void> | undefined;
+  const cleanup = () => {
+    if (cleanupInFlight) return cleanupInFlight;
+    cleanupInFlight = cleanupPluginObjects(runtime.db, manager.archiveStore)
+      .then((result) => {
+        if (result.failed)
+          runtime.api.log.warn(result, "Plugin object cleanup pending");
+      })
+      .catch((error) =>
+        runtime.api.log.error(error, "Plugin object cleanup failed"),
+      )
+      .finally(() => {
+        cleanupInFlight = undefined;
+      });
+    return cleanupInFlight;
+  };
+  const cleanupTimer = setInterval(() => void cleanup(), 60_000);
+  cleanupTimer.unref();
+  runtime.api.addHook("onClose", async () => {
+    clearInterval(cleanupTimer);
+    await cleanupInFlight;
+  });
+  await cleanup();
   const installed = await manager.prepare(runtime.options.plugins);
   plugins.push(
     ...(await importInstalledPlugins(
       installed,
       plugins.map((p) => p.manifest),
+      (p) =>
+        bindPluginStorage(
+          runtime.db,
+          manager.archiveStore,
+          p.manifest.id,
+          p.dataVersion,
+        ),
     )),
   );
   for (const plugin of plugins) host.register(plugin);

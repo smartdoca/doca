@@ -17,7 +17,7 @@ import { lockAIUser } from "@core/modules/ai/config.js";
 import { enqueueProjection } from "@core/modules/automation/jobs.js";
 import {
   createStorage,
-  storageDefaults,
+  storageConfigForProfile,
   storageRuntime,
   type StorageRuntime,
   type StorageConfig,
@@ -64,40 +64,43 @@ function cellIndex(value: unknown) {
   return value;
 }
 
-export const imageInsertSchema = z.preprocess((value) => {
-  const nested =
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    "spreadsheet" in value &&
-    value.spreadsheet &&
-    typeof value.spreadsheet === "object"
-      ? (value.spreadsheet as Record<string, unknown>)
-      : undefined;
-  const v =
-    value && typeof value === "object" && !Array.isArray(value)
-      ? { ...(value as Record<string, unknown>) }
-      : {};
-  const { spreadsheet: _ignored, ...rest } = v;
-  return {
-    ...rest,
-    sheetId: v.sheetId === undefined ? (nested?.sheetId ?? null) : v.sheetId,
-    row: cellIndex(v.row === undefined ? nested?.row : v.row),
-    column: cellIndex(v.column === undefined ? nested?.column : v.column),
-  };
-}, z.object({
-  assetId: z.string().uuid().describe("已生成图片的 assetId"),
-  resourceId: z.string().uuid().describe("目标文档 ID"),
-  sheetId: z
-    .union([z.string().min(1), z.null()])
-    .describe("表格传 document_read 的 sheetOrder[0]；非表格传 null"),
-  row: z
-    .union([z.number().int().min(0), z.null()])
-    .describe("表格零基行号；非表格传 null"),
-  column: z
-    .union([z.number().int().min(0), z.null()])
-    .describe("表格零基列号；非表格传 null"),
-}));
+export const imageInsertSchema = z.preprocess(
+  (value) => {
+    const nested =
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      "spreadsheet" in value &&
+      value.spreadsheet &&
+      typeof value.spreadsheet === "object"
+        ? (value.spreadsheet as Record<string, unknown>)
+        : undefined;
+    const v =
+      value && typeof value === "object" && !Array.isArray(value)
+        ? { ...(value as Record<string, unknown>) }
+        : {};
+    const { spreadsheet: _ignored, ...rest } = v;
+    return {
+      ...rest,
+      sheetId: v.sheetId === undefined ? (nested?.sheetId ?? null) : v.sheetId,
+      row: cellIndex(v.row === undefined ? nested?.row : v.row),
+      column: cellIndex(v.column === undefined ? nested?.column : v.column),
+    };
+  },
+  z.object({
+    assetId: z.string().uuid().describe("已生成图片的 assetId"),
+    resourceId: z.string().uuid().describe("目标文档 ID"),
+    sheetId: z
+      .union([z.string().min(1), z.null()])
+      .describe("表格传 document_read 的 sheetOrder[0]；非表格传 null"),
+    row: z
+      .union([z.number().int().min(0), z.null()])
+      .describe("表格零基行号；非表格传 null"),
+    column: z
+      .union([z.number().int().min(0), z.null()])
+      .describe("表格零基列号；非表格传 null"),
+  }),
+);
 
 export function spreadsheetImagePlacement(
   input: z.infer<typeof imageInsertSchema>,
@@ -172,19 +175,21 @@ export async function insertGeneratedImage(
   const normalized = imageInsertSchema.parse(input);
   await requireCapability(db, ctx.actor.id, "ai.create");
   await requireCapability(db, ctx.actor.id, "assets.upload");
-  const { resource } = await checkScope(
-    db,
-    ctx,
-    normalized.resourceId,
-    true,
-  );
+  const { resource } = await checkScope(db, ctx, normalized.resourceId, true);
   if (
-    !["markdown", "rich_text", "canvas", "presentation", "spreadsheet"].includes(
-      resource.format,
-    )
+    ![
+      "markdown",
+      "rich_text",
+      "canvas",
+      "presentation",
+      "spreadsheet",
+    ].includes(resource.format)
   )
     fail(400, "当前支持插入文档、Markdown、画板、演示文稿和表格");
-  if (spreadsheetImagePlacement(normalized) && resource.format !== "spreadsheet")
+  if (
+    spreadsheetImagePlacement(normalized) &&
+    resource.format !== "spreadsheet"
+  )
     fail(400, "工作表位置仅适用于表格文档");
   const source = await sourceImage(db, ctx, normalized.assetId);
   const identity = digest(normalized);
@@ -203,11 +208,7 @@ export async function insertGeneratedImage(
     .selectAll()
     .where("id", "=", source.profile_id)
     .executeTakeFirstOrThrow();
-  const config = {
-    ...storageDefaults,
-    ...JSON.parse(profile.config),
-    provider: profile.provider,
-  } as StorageConfig;
+  const config = storageConfigForProfile(runtime, profile);
   const storage = createStorage(runtime);
   const bytes = await storage.read(config, source.object_key);
   const metadata = await sharp(bytes, {
@@ -329,46 +330,82 @@ export async function insertGeneratedImage(
       ];
     } else if (target.format === "spreadsheet") {
       const place = spreadsheetImagePlacement(normalized);
-      const sheetId = place?.sheetId ?? value.sheetOrder.find(
-        (id: string) => value.sheets[id] && !value.sheets[id].hidden,
-      );
+      const sheetId =
+        place?.sheetId ??
+        value.sheetOrder.find(
+          (id: string) => value.sheets[id] && !value.sheets[id].hidden,
+        );
       const sheet = value.sheets[sheetId];
       if (!sheet || sheet.hidden) fail(400, "请选择有效且可见的工作表");
-      const { width, height } = floatingImageSize(metadata.width, metadata.height);
+      const { width, height } = floatingImageSize(
+        metadata.width,
+        metadata.height,
+      );
       const rowHeight = sheet.defaultRowHeight ?? 24;
-      const rowTop = (row: number) => row * rowHeight + Object.entries(sheet.rowData ?? {})
-        .reduce((sum, [index, data]: [string, any]) =>
-          Number(index) < row ? sum + (data.h ?? rowHeight) - rowHeight : sum, 0);
+      const rowTop = (row: number) =>
+        row * rowHeight +
+        Object.entries(sheet.rowData ?? {}).reduce(
+          (sum, [index, data]: [string, any]) =>
+            Number(index) < row ? sum + (data.h ?? rowHeight) - rowHeight : sum,
+          0,
+        );
       let row = place?.row ?? 0;
       const column = place?.column ?? 0;
       if (!place) {
         const usedRows = Object.entries(sheet.cellData ?? {})
           .filter(([, cells]: [string, any]) => Object.keys(cells).length)
           .map(([index]) => Number(index));
-        let bottom = usedRows.length ? rowTop(Math.max(...usedRows) + 1) + 16 : 0;
+        let bottom = usedRows.length
+          ? rowTop(Math.max(...usedRows) + 1) + 16
+          : 0;
         const floating = readFloatingObjects(value);
         for (const view of floating) {
           if (view.anchor?.sheetId !== sheetId) continue;
           const geometry = view.object.geometry;
-          bottom = Math.max(bottom, rowTop(view.anchor.startRow) + geometry.offsetY + geometry.height + 16);
+          bottom = Math.max(
+            bottom,
+            rowTop(view.anchor.startRow) +
+              geometry.offsetY +
+              geometry.height +
+              16,
+          );
         }
         while (row < sheet.rowCount && rowTop(row) < bottom) row++;
-        if (rowTop(row) < bottom) row += Math.ceil((bottom - rowTop(row)) / rowHeight);
+        if (rowTop(row) < bottom)
+          row += Math.ceil((bottom - rowTop(row)) / rowHeight);
       }
       if (place && (row >= sheet.rowCount || column >= sheet.columnCount))
         fail(400, "图片插入位置超出工作表范围");
       operations = [];
       if (row >= sheet.rowCount)
-        operations.push({ type: "structure", edit: {
-          sheetId, axis: "row", action: "insert", index: sheet.rowCount,
-          count: row - sheet.rowCount + Math.ceil(height / rowHeight) + 1,
-        } });
+        operations.push({
+          type: "structure",
+          edit: {
+            sheetId,
+            axis: "row",
+            action: "insert",
+            index: sheet.rowCount,
+            count: row - sheet.rowCount + Math.ceil(height / rowHeight) + 1,
+          },
+        });
       operations.push({
         type: "putFloatingObject",
         input: {
-          id: elementId, kind: "image", assetId, name: source.filename,
-          anchor: { sheetId, startRow: row, endRow: row, startColumn: column, endColumn: column },
-          offsetX: 8, offsetY: 8, width, height,
+          id: elementId,
+          kind: "image",
+          assetId,
+          name: source.filename,
+          anchor: {
+            sheetId,
+            startRow: row,
+            endRow: row,
+            startColumn: column,
+            endColumn: column,
+          },
+          offsetX: 8,
+          offsetY: 8,
+          width,
+          height,
         },
       });
     } else {

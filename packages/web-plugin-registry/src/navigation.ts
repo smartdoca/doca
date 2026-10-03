@@ -138,7 +138,6 @@ for (const [key, zh, en] of [
   ["users", "用户管理", "Users"],
   ["registration", "注册审核", "Registration"],
   ["access", "权限与可见性", "Permissions"],
-  ["templates", "文档模板", "Templates"],
   ["ai", "AI 能力", "AI"],
   ["file-recognition", "文件识别", "File recognition"],
   ["platform", "站点与服务", "Site settings"],

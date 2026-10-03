@@ -13,6 +13,8 @@ export async function handlePluginNativeRequest(
   signal: AbortSignal,
 ) {
   const request = validateNativeRequest(value, pluginId);
+  if (request.operation === "assistant.open")
+    throw new Error("Assistant launch must use the assistant handler");
   async function authorized() {
     signal.throwIfAborted();
     const current = await loadSession();

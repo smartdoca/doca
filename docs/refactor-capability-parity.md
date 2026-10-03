@@ -225,8 +225,9 @@ A capability can move behind a plugin contribution only when:
    providers, or UI registrations behind;
 4. plugin dependency and required-service failures occur before serving
    traffic;
-5. plugin-owned data starts from the current empty database baseline and a
-   mismatched schema prevents startup;
+5. plugin business state uses host-managed storage, packages declare
+   `doca.storage: "host"`, and mismatched declarations/structures are rejected
+   without implicit migration or an empty-store fallback for existing data;
 6. application bootstrap still owns security and authorization policy;
 7. the extracted contribution completely replaces the first-party registration.
 

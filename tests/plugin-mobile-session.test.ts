@@ -15,7 +15,7 @@ it("binds mobile tickets to one plugin, denies replay and host APIs, and revokes
     id: "example.mail",
     version: "1.0.0",
     displayName: "Mail",
-    sdkRange: "^0.1.0",
+    sdkRange: "^0.1.7",
   };
   await writeFile(
     join(pkg, "package.json"),
@@ -25,6 +25,7 @@ it("binds mobile tickets to one plugin, denies replay and host APIs, and revokes
       type: "module",
       doca: {
         dataVersion: "1",
+        storage: "host",
         manifest: "./manifest.json",
         server: "./server.js",
         web: { directory: "./web", entry: "./index.js" },

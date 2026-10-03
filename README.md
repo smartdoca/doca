@@ -27,6 +27,7 @@ Node.js 22 or newer and pnpm 11.25.0.
 
 ```sh
 pnpm install --frozen-lockfile
+cp .env.example .env
 pnpm dev
 ```
 
@@ -52,20 +53,22 @@ docker compose pull
 docker compose up -d
 ```
 
-Set `DOCA_ORIGIN` in `.env` to the public HTTPS origin, with no path and no trailing slash. Compose publishes the container on `127.0.0.1:39120`. Terminate TLS in a reverse proxy on the same machine and forward HTTP and the WebSocket path `/api/v1/ws`.
+Set `DOCA_ORIGIN` in `.env` to the public HTTPS origin, with no path and no trailing slash. Configure `DOCA_FILE_STORE_ID` and `DOCA_FILE_STORES_JSON` as shown in the environment example. Compose publishes the container on `127.0.0.1:39120`. Terminate TLS in a reverse proxy on the same machine and forward HTTP and the WebSocket path `/api/v1/ws`.
 
 ```sh
 curl -fsS http://127.0.0.1:39120/health
 bash scripts/bootstrap-admin.sh
 ```
 
-A healthy process returns `{"status":"ok","version":"0.1.8"}`. SQLite, uploads, and the AI database stay in the `doca_data` volume. The first database must be empty. Doca refuses a non-empty database whose schema is not the current baseline.
+A healthy process returns `{"status":"ok","version":"0.1.9"}`. SQLite, uploads, and the AI database stay in the `doca_data` volume. The first database must be empty. Doca refuses a non-empty database whose schema is not the current baseline.
+
+Version 0.1.9 intentionally rejects the old database baseline, plugin installation list, SDK ranges and storage configuration. Preserve old data and deploy to a new database and separate storage; no automatic migration is provided. See [release requirements](docs/releases/0.1.9.md).
 
 `DOCA_ASSET_BASE` is optional. Leave it empty to serve JavaScript and CSS from the container. When it is set, Doca still returns the HTML and only rewrites `/assets/` URLs in that HTML. The prefix must be HTTPS in production and must allow cross-origin reads of ES modules.
 
 ## Plugin development
 
-Business behavior that is not part of the core is a plugin. Doca loads plugins only from `DOCA_PLUGINS_DIR`. When that variable is unset, the directory is `${DOCA_DATA_DIR:-./data}/plugins`. Install built packages there as direct dependencies of that directory's own `package.json`, then restart Doca. The host does not install packages at startup, does not scan transitive dependencies, and does not load plugins from this source tree.
+Business behavior that is not part of the core is a plugin. Upload a complete prebuilt ZIP under Admin → Plugins, then manually restart every instance. The host stores the immutable archive in shared file storage and verifies/restores each instance's cache under `DOCA_PLUGINS_DIR` on startup. When unset, this directory is `${DOCA_DATA_DIR:-./data}/plugins`. Offline installation places a complete `<plugin-id>/` release directory there while stopped. There is no root npm installation manifest or host-source loading path.
 
 A plugin package points at a static manifest, compiled server JavaScript, and an optional browser bundle:
 
@@ -75,6 +78,8 @@ A plugin package points at a static manifest, compiled server JavaScript, and an
   "version": "1.0.0",
   "type": "module",
   "doca": {
+    "dataVersion": "1",
+    "storage": "host",
     "manifest": "./manifest.json",
     "server": "./dist/server.js",
     "web": { "directory": "./web", "entry": "./index.js" }
@@ -88,7 +93,7 @@ A plugin package points at a static manifest, compiled server JavaScript, and an
   "id": "example.attachments",
   "version": "1.0.0",
   "displayName": "Attachments",
-  "sdkRange": "^0.1.0"
+  "sdkRange": "^0.1.7"
 }
 ```
 
@@ -103,6 +108,7 @@ export default () =>
   definePlugin({
     manifest,
     injections: { required: [httpServiceToken] },
+    async uninstall() {},
     async mount(context) {
       await context.inject(httpServiceToken).register(manifest.id, [
         {

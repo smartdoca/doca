@@ -1,3 +1,4 @@
+import { storageRuntime } from "@server/adapters/storage.js";
 import { openTestDatabase as openDatabase } from "./database.js";
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -107,7 +108,7 @@ beforeEach(async () => {
   app = await createApp(db, {
     origin,
     storage: {
-      root: join(directory, "uploads"),
+      configuration: storageRuntime().configuration, root: join(directory, "uploads"),
       credentials: {},
       endpointHosts: [],
       cdnKeyPairId: undefined,
@@ -1061,46 +1062,17 @@ describe("uploads and storage", () => {
       (await request("GET", "/assets/" + id + "/content")).statusCode,
     ).toBe(404);
   });
-  it("keeps old uploads readable after switching profiles and restricts storage administration", async () => {
+  it("exposes environment-managed storage read-only and preserves uploaded bytes", async () => {
     const asset = (await upload(alice, "avatar", await png())).json();
-    expect((await request("GET", "/admin/storage", alice)).statusCode).toBe(
-      403,
-    );
-    const settings = (
-      await request("GET", "/admin/storage", adminCookie)
-    ).json();
+    expect((await request("GET", "/admin/storage", alice)).statusCode).toBe(403);
+    const settings = (await request("GET", "/admin/storage", adminCookie)).json();
     expect(settings.config.provider).toBe("local");
-    expect(
-      (
-        await request("PUT", "/admin/storage", adminCookie, {
-          expectedId: settings.id,
-          config: { ...storageDefaults, provider: "s3", bucket: "doca-test" },
-        })
-      ).statusCode,
-    ).toBe(400);
-    expect(
-      (
-        await request("PUT", "/admin/storage", adminCookie, {
-          expectedId: settings.id,
-          config: storageDefaults,
-        })
-      ).statusCode,
-    ).toBe(200);
-    expect(
-      (
-        await request("PUT", "/admin/storage", adminCookie, {
-          expectedId: settings.id,
-          config: storageDefaults,
-        })
-      ).statusCode,
-    ).toBe(409);
-    expect(
-      (await request("GET", "/assets/" + asset.id + "/content", alice))
-        .statusCode,
-    ).toBe(200);
-    expect(
-      await db.selectFrom("storage_profiles").selectAll().execute(),
-    ).toHaveLength(2);
+    expect(settings.managedBy).toBe("environment");
+    expect(settings.config.root).toBeUndefined();
+    const before = await db.selectFrom("storage_profiles").selectAll().execute();
+    expect((await request("PUT", "/admin/storage", adminCookie, { expectedId:settings.id, config:storageDefaults })).statusCode).toBe(405);
+    expect(await db.selectFrom("storage_profiles").selectAll().execute()).toEqual(before);
+    expect((await request("GET", "/assets/" + asset.id + "/content", alice)).statusCode).toBe(200);
   });
   it("copies assets with independent authorization and preserves the bytes", async () => {
     const doc = await create();

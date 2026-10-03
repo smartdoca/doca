@@ -1,6 +1,4 @@
-import { resolve } from "node:path";
 import { Type, type Static } from "@sinclair/typebox";
-import { createPrivateKey } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { DB } from "@db/index.js";
 import { transact } from "@db/transactions.js";
@@ -33,18 +31,6 @@ const refs = (schema: any) =>
   });
 const schema = object({
   identity: object({ credentials: refs(secret), allowedOrigins: list }),
-  storage: object({
-    credentials: refs(
-      object({
-        accessKeyId: text,
-        secretAccessKey: secret,
-        sessionToken: secret,
-      }),
-    ),
-    endpointHosts: list,
-    cdnKeyPairId: text,
-    cdnPrivateKey: secret,
-  }),
   messaging: object({
     endpoint: Type.String({ maxLength: 2000 }),
     secret,
@@ -75,14 +61,20 @@ export async function registerRuntimeSettings(
   const saved = existing ? JSON.parse(existing.config) : null;
   const identity: IdentityRuntime =
     overrides.identity ?? (saved ? saved.identity : identityRuntime());
-  const storage: StorageRuntime =
-    overrides.storage ??
-    (saved
-      ? {
-          root: resolve(process.env.DOCA_UPLOAD_DIR || "data/v1/uploads"),
-          ...saved.storage,
-        }
-      : storageRuntime());
+  const storage = overrides.storage ?? storageRuntime();
+  if (saved && Object.hasOwn(saved, "storage"))
+    throw new Error(
+      "Database storage configuration is unsupported; use a new database",
+    );
+  const profile = await db
+    .selectFrom("storage_profiles")
+    .select("id")
+    .where("active", "=", 1)
+    .executeTakeFirstOrThrow();
+  if (profile.id !== storage.configuration.currentId)
+    throw new Error(
+      "Database file store ID differs from deployment configuration",
+    );
   const messaging: MessagingRuntime =
     overrides.messaging ??
     (saved ? configuredMessaging(saved.messaging) : messagingRuntime());
@@ -95,17 +87,6 @@ export async function registerRuntimeSettings(
     identity: {
       credentials: identity.credentials,
       allowedOrigins: identity.allowedOrigins,
-    },
-    storage: {
-      credentials: Object.fromEntries(
-        Object.entries(storage.credentials).map(([ref, c]) => [
-          ref,
-          { ...c, sessionToken: c.sessionToken ?? "" },
-        ]),
-      ),
-      endpointHosts: storage.endpointHosts,
-      cdnKeyPairId: storage.cdnKeyPairId ?? "",
-      cdnPrivateKey: storage.cdnPrivateKey ?? "",
     },
     messaging: {
       endpoint: "",
@@ -147,7 +128,6 @@ export async function registerRuntimeSettings(
     const row = await read();
     const c = JSON.parse(row.config);
     Object.assign(identity, c.identity);
-    Object.assign(storage, c.storage);
     Object.assign(search, c.search);
     // Test/deployment adapters may supply an in-process sender rather than an HTTP gateway.
     if (
@@ -172,10 +152,6 @@ export async function registerRuntimeSettings(
       value.identity.credentials[ref] = value.identity.credentials[ref]
         ? null
         : "";
-    for (const credential of Object.values(value.storage.credentials) as any[])
-      for (const key of ["secretAccessKey", "sessionToken"])
-        credential[key] = credential[key] ? null : "";
-    value.storage.cdnPrivateKey = value.storage.cdnPrivateKey ? null : "";
     value.messaging.secret = value.messaging.secret ? null : "";
     value.search.apiKey = value.search.apiKey ? null : "";
     return value;
@@ -209,10 +185,7 @@ export async function registerRuntimeSettings(
           c = structuredClone(req.body.config) as any;
         const keep = (value: any, previous: any) =>
           value === null ? (previous ?? "") : value;
-        for (const ref of [
-          ...Object.keys(c.identity.credentials),
-          ...Object.keys(c.storage.credentials),
-        ])
+        for (const ref of [...Object.keys(c.identity.credentials)])
           if (["__proto__", "prototype", "constructor"].includes(ref))
             fail(400, "凭据名称不可用");
         for (const ref of Object.keys(c.identity.credentials)) {
@@ -226,25 +199,6 @@ export async function registerRuntimeSettings(
           )
             fail(400, "请填写 SSO 密钥，或移除该凭据");
         }
-        for (const [ref, credential] of Object.entries(
-          c.storage.credentials,
-        ) as [string, any][]) {
-          for (const key of ["secretAccessKey", "sessionToken"])
-            credential[key] = keep(
-              credential[key],
-              old.storage.credentials[ref]?.[key],
-            );
-          if (
-            (!credential.accessKeyId.trim() ||
-              !credential.secretAccessKey.trim()) &&
-            !Object.hasOwn(old.storage.credentials, ref)
-          )
-            fail(400, "请填写对象存储的 Access Key 和 Secret Key");
-        }
-        c.storage.cdnPrivateKey = keep(
-          c.storage.cdnPrivateKey,
-          old.storage.cdnPrivateKey,
-        );
         c.messaging.secret = keep(c.messaging.secret, old.messaging.secret);
         c.search.apiKey = keep(c.search.apiKey, old.search.apiKey);
         const origin = (value: string, https: boolean) => {
@@ -272,9 +226,6 @@ export async function registerRuntimeSettings(
         c.search.allowedOrigins = c.search.allowedOrigins.map((v: string) =>
           origin(v, false),
         );
-        for (const host of c.storage.endpointHosts)
-          if (new URL(origin("https://" + host, true)).host !== host)
-            fail(400, "存储端点请填写域名及可选端口");
         if (c.messaging.endpoint) {
           try {
             const u = new URL(c.messaging.endpoint);
@@ -285,15 +236,6 @@ export async function registerRuntimeSettings(
           }
           if (!c.messaging.secret || !c.messaging.channels.length)
             fail(400, "请设置网关密钥并选择发送渠道");
-        }
-        if (c.storage.cdnPrivateKey) {
-          try {
-            createPrivateKey(c.storage.cdnPrivateKey);
-          } catch {
-            fail(400, "CDN 签名私钥格式无效，请填写 PEM 私钥");
-          }
-          if (!c.storage.cdnKeyPairId.trim())
-            fail(400, "请填写 CDN 签名密钥 ID");
         }
         const updated = await tx
           .updateTable("account_settings")

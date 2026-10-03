@@ -5,13 +5,26 @@ import * as React from "react";
 import { FolderFilePicker } from "@web/features/files/files.js";
 import { notifyFeedback } from "@web/shared/components/feedback.js";
 import { useI18n } from "@web/shared/i18n.js";
-import { createPluginPlatformClient } from "@smartdoca/plugin-sdk/web";
+import { createPluginPlatformClient, createPluginAssistantClient } from "@smartdoca/plugin-sdk/web";
+import { publishAssistantDraft } from "@web/features/ai/ai-launch.js";
 import type { PluginWebHost } from "@smartdoca/plugin-sdk/web";
 
 export function createWebHost(
   pluginId: string,
 ): PluginWebHost<typeof React, typeof FolderFilePicker> {
   const apiBase = `/api/v1/plugins/${pluginId}`;
+  const assistant = createPluginAssistantClient(pluginId, async <T,>(path: string, input?: unknown): Promise<T> => {
+    const response = await fetch(`/api/v1${path}`, {
+      method: input === undefined ? "GET" : "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: input === undefined ? undefined : JSON.stringify(input),
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) throw Object.assign(new Error(body?.message ?? response.statusText), { status: response.status, requestId: body?.requestId });
+    return body as T;
+  }, (draft, result) => {
+    publishAssistantDraft(draft);
+    location.hash = `/ai?session=${encodeURIComponent(result.sessionId)}`;
+  }, () => crypto.randomUUID());
   const resourceRequest:ResourceRequest = async(operation,input,signal) => {
     const response = await fetch(`/api/v1/plugin-platform/${pluginId}/${operation}`, {method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify(input),signal});
     const body = await response.json().catch(()=>null); if(!response.ok)throw Object.assign(new Error(body?.message??response.statusText),{status:response.status}); return body;
@@ -19,6 +32,14 @@ export function createWebHost(
   return Object.freeze({
     React,
     apiBase,
+    ai: { open: (input?: import("@smartdoca/plugin-sdk/web").PluginAssistantOpenInput) => {
+      if (location.hash.startsWith("#/m/plugins/")) {
+        const native = nativeCapabilities(pluginId);
+        if (!native) return Promise.reject(new Error("Native assistant is unavailable"));
+        return native.ai.open(input);
+      }
+      return assistant.open(input);
+    } },
     ui: { openView: (input: Parameters<PluginWebHost["ui"]["openView"]>[0]) => openExtensionView(pluginId, input) },
     platform: createPluginPlatformClient(async <T,>(operation: string, input: unknown, signal?: AbortSignal): Promise<T> => {
       const response = await fetch(`/api/v1/plugin-platform/${pluginId}/${operation}`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(input), signal });

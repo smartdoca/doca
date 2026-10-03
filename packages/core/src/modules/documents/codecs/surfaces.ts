@@ -41,6 +41,13 @@ import {
 import { recordVersion } from "../../history/repository.js";
 import type { Actor } from "../../identity/passwords.js";
 import { notify, validateNewMentions } from "../../interactions/community.js";
+import { validatePluginElementPayload } from "@smartdoca/plugin-contracts";
+export function validateSheetPluginElements(workbook: { sheets: Record<string, any> }) {
+  for (const sheet of Object.values(workbook.sheets))
+    for (const row of Object.values(sheet.cellData ?? {}) as any[])
+      for (const cell of Object.values(row) as any[])
+        if (cell?.custom && Object.hasOwn(cell.custom, "docaElement")) validatePluginElementPayload(cell.custom.docaElement);
+}
 export const surfaceCodec = (format: string) =>
   format === "canvas"
     ? CANVAS_CODEC
@@ -364,6 +371,7 @@ export async function exchangeSurface(
         update: encoded,
         checkpointSeq: loaded.state.checkpoint_seq,
       });
+      validateSheetPluginElements(workbook);
       embeddedMedia = textMediaIds(JSON.stringify(workbook));
       contentBytes = Buffer.byteLength(JSON.stringify(workbook));
     } finally {

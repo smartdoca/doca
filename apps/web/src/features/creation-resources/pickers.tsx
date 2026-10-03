@@ -4,7 +4,8 @@ import { api, type Resource } from "@web/shared/api.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import type {
-  CreationResourceCard,
+  CreationResourceResult,
+  ResourceRetrievalPage,
   ResourceProviderDescriptor,
   ResourcePage,
   ResourceTag,
@@ -13,6 +14,7 @@ import type {
   TemplatePayload,
   JsonObject,
   ResourceSort,
+  ResourceSourceInfo,
 } from "@smartdoca/plugin-contracts";
 import type {
   PluginTemplatePickerProps,
@@ -59,6 +61,8 @@ export function MaterialPicker(
       close={props.close}
       request={send}
       contentType={props.contentType}
+      providerIds={props.providerIds}
+      onSourcesChange={props.onSourcesChange}
       choose={async (selection) => {
         const key = JSON.stringify(selection.ref);
         if (!operations.current.has(key))
@@ -68,6 +72,7 @@ export function MaterialPicker(
           name: string;
           mime: string;
           size: number;
+          source: ResourceSourceInfo;
         }>("materials.import", {
           ref: selection.ref,
           operationKey: operations.current.get(key),
@@ -77,6 +82,7 @@ export function MaterialPicker(
           name: file.name,
           mime: file.mime,
           size: file.size,
+          source: file.source,
         };
         if (props.accept && !props.accept(reference))
           throw new Error("Unsupported material type");
@@ -93,48 +99,69 @@ function ResourceBrowser({
   choose,
   blank,
   request: send = request,
+  providerIds: initialProviderIds,
+  onSourcesChange,
 }: {
   kind: "templates" | "materials";
   contract?: ResourceType;
   contentType?: ResourceType;
   close: () => void;
-  choose: (selection: TemplateSelection) => void | Promise<void>;
+  choose: (
+    selection: TemplateSelection,
+    resource: CreationResourceResult,
+  ) => void | Promise<void>;
   blank?: () => void | Promise<void>;
   request?: ResourceRequest;
+  providerIds?: readonly string[];
+  onSourcesChange?: (providerIds: readonly string[] | undefined) => void;
 }) {
   const { t, locale } = useI18n();
   const [providers, setProviders] = useState<
       readonly ResourceProviderDescriptor[]
     >([]),
     [tags, setTags] = useState<readonly ResourceTag[]>([]);
-  const [providerId, setProviderId] = useState(""),
+  const [providerIds, setProviderIds] = useState<readonly string[] | undefined>(
+      initialProviderIds,
+    ),
     [query, setQuery] = useState(""),
     [tag, setTag] = useState(""),
     [sort, setSort] = useState<ResourceSort>("updated");
-  const [items, setItems] = useState<readonly CreationResourceCard[]>([]),
+  const [items, setItems] = useState<readonly CreationResourceResult[]>([]),
     [cursor, setCursor] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
-    [partial, setPartial] = useState(false);
-  const [selected, setSelected] = useState<CreationResourceCard | null>(null),
+    [partial, setPartial] = useState(false),
+    [tagsPartial, setTagsPartial] = useState(false);
+  const [selected, setSelected] = useState<CreationResourceResult | null>(null),
     [parameters, setParameters] = useState<Record<string, unknown>>({}),
     [preview, setPreview] = useState<TemplatePayload | null>(null);
+  const [searchMode, setSearchMode] = useState<"keyword" | "smart">("keyword");
+  const [truncated, setTruncated] = useState(false);
+  const [retrievalFailures, setRetrievalFailures] = useState<
+    ResourceRetrievalPage["failures"]
+  >([]);
+  const [matchText, setMatchText] = useState<Record<string, string>>({});
+  const initialSourceKey = JSON.stringify(initialProviderIds);
+  useEffect(() => {
+    setProviderIds(initialProviderIds);
+    setTag("");
+    setSort("updated");
+  }, [initialSourceKey]);
   const [rawParameters, setRawParameters] = useState("{}");
   const generation = useRef(0),
     controller = useRef<AbortController | null>(null);
   const filter = {
     ...(contract ? { contract } : {}),
     ...(contentType ? { contentType } : {}),
-    ...(providerId ? { providerId } : {}),
+    ...(providerIds ? { providerIds } : {}),
     query,
     tags: tag ? [tag] : [],
     sort,
   };
-  const filterKey = JSON.stringify(filter);
+  const filterKey = JSON.stringify([filter, searchMode]);
   useEffect(() => {
     const abort = new AbortController();
-    setProviderId("");
     send<readonly ResourceProviderDescriptor[]>(
       `${kind}.providers`,
       {
@@ -143,7 +170,9 @@ function ResourceBrowser({
       },
       abort.signal,
     )
-      .then(setProviders)
+      .then((value) => {
+        if (!abort.signal.aborted) setProviders(value);
+      })
       .catch((e) => {
         if (!abort.signal.aborted) setError(e.message);
       });
@@ -167,24 +196,64 @@ function ResourceBrowser({
     setError("");
     setSelected(null);
     setPartial(false);
+    setTruncated(false);
+    setRetrievalFailures([]);
+    setMatchText({});
     const timer = window.setTimeout(() => {
-      send<ResourcePage>(
-        `${kind}.search`,
-        { ...filter, limit: 24 },
-        abort.signal,
-      )
-        .then((page) => {
-          if (generation.current !== version || abort.signal.aborted) return;
-          setItems(page.items);
-          setCursor(page.nextCursor);
-          setPartial(!page.complete);
-        })
-        .catch((e) => {
-          if (!abort.signal.aborted) setError(e.message);
-        })
-        .finally(() => {
+      void (async () => {
+        try {
+          if (query.trim() && searchMode === "smart") {
+            const { sort: _sort, ...retrieval } = filter;
+            const result = await send<ResourceRetrievalPage>(
+              `${kind}.retrieve`,
+              { ...retrieval, query: query.trim(), mode: "auto", topK: 20 },
+              abort.signal,
+            );
+            const described = await Promise.allSettled(
+              result.items.map((hit) =>
+                send<CreationResourceResult>(
+                  `${kind}.describe`,
+                  hit.ref,
+                  abort.signal,
+                ),
+              ),
+            );
+            if (generation.current !== version || abort.signal.aborted) return;
+            setItems(
+              described.flatMap((value) =>
+                value.status === "fulfilled" ? [value.value] : [],
+              ),
+            );
+            setPartial(
+              !result.complete ||
+                described.some((value) => value.status === "rejected"),
+            );
+            setTruncated(result.truncated);
+            setRetrievalFailures(result.failures);
+            setMatchText(
+              Object.fromEntries(
+                result.items
+                  .filter((hit) => hit.matchText)
+                  .map((hit) => [JSON.stringify(hit.ref), hit.matchText!]),
+              ),
+            );
+          } else {
+            const page = await send<ResourcePage>(
+              `${kind}.search`,
+              { ...filter, limit: 24 },
+              abort.signal,
+            );
+            if (generation.current !== version || abort.signal.aborted) return;
+            setItems(page.items);
+            setCursor(page.nextCursor);
+            setPartial(!page.complete);
+          }
+        } catch (e) {
+          if (!abort.signal.aborted) setError((e as Error).message);
+        } finally {
           if (!abort.signal.aborted) setLoading(false);
-        });
+        }
+      })();
     }, 150);
     return () => {
       window.clearTimeout(timer);
@@ -193,19 +262,20 @@ function ResourceBrowser({
   }, [kind, filterKey, send]);
   useEffect(() => {
     const abort = new AbortController();
+    setTagsPartial(false);
     send<{ items: readonly ResourceTag[]; complete: boolean }>(
       `${kind}.tags`,
       {
         ...(contract ? { contract } : {}),
         ...(contentType ? { contentType } : {}),
-        ...(providerId ? { providerId } : {}),
+        ...(providerIds ? { providerIds } : {}),
       },
       abort.signal,
     )
       .then((result) => {
         if (abort.signal.aborted) return;
         setTags(result.items);
-        if (!result.complete) setPartial(true);
+        setTagsPartial(!result.complete);
       })
       .catch((e) => {
         if (!abort.signal.aborted) setError(e.message);
@@ -213,7 +283,7 @@ function ResourceBrowser({
     return () => abort.abort();
   }, [
     kind,
-    providerId,
+    JSON.stringify(providerIds),
     contract?.id,
     contract?.version,
     contentType?.id,
@@ -240,7 +310,7 @@ function ResourceBrowser({
       if (version === generation.current) setLoading(false);
     }
   }
-  function select(card: CreationResourceCard) {
+  function select(card: CreationResourceResult) {
     setSelected(card);
     setPreview(null);
     const values: Record<string, unknown> = {};
@@ -263,7 +333,7 @@ function ResourceBrowser({
     setBusy(true);
     setError("");
     try {
-      await choose({ ref: selected.ref, parameters: values() });
+      await choose({ ref: selected.ref, parameters: values() }, selected);
       close();
     } catch (e) {
       setError((e as Error).message);
@@ -288,11 +358,20 @@ function ResourceBrowser({
       setBusy(false);
     }
   }
-  const supported = providerId
-    ? (providers.find((p) => p.id === providerId)?.sorts ?? [])
-    : ["updated", "name"].filter((s) =>
-        providers.every((p) => p.sorts.includes(s as ResourceSort)),
-      );
+  const selectedProviders = providers.filter(
+    (p) => !providerIds || providerIds.includes(p.id),
+  );
+  const supported = (
+    selectedProviders.length === 1
+      ? selectedProviders[0]!.sorts
+      : (["updated", "name"] as const)
+  ).filter((value) => selectedProviders.every((p) => p.sorts.includes(value)));
+  function changeSources(ids: readonly string[] | undefined) {
+    setProviderIds(ids);
+    setTag("");
+    setSort("updated");
+    onSourcesChange?.(ids);
+  }
   const nativeFormat = preview?.contentType.id.startsWith("doca.native.")
     ? (preview.contentType.id.slice(12) as Resource["format"])
     : null;
@@ -315,27 +394,63 @@ function ResourceBrowser({
               onChange={(e) => setQuery(e.target.value)}
               disabled={busy}
             />
+            <details className="resource-source-picker">
+              <summary>
+                {t("resources.source")} ·{" "}
+                {providerIds === undefined
+                  ? t("resources.allSources")
+                  : t("resources.selectedSources", {
+                      count: providerIds.length,
+                    })}
+              </summary>
+              <fieldset disabled={busy}>
+                <legend>{t("resources.source")}</legend>
+                <button type="button" onClick={() => changeSources(undefined)}>
+                  {t("resources.allSources")}
+                </button>
+                <button type="button" onClick={() => changeSources([])}>
+                  {t("resources.clearSources")}
+                </button>
+                {providers.map((p) => (
+                  <label key={p.id}>
+                    <input
+                      type="checkbox"
+                      aria-label={p.title[locale]}
+                      checked={
+                        providerIds === undefined || providerIds.includes(p.id)
+                      }
+                      onChange={(event) => {
+                        const ids = new Set(
+                          providerIds ?? providers.map((source) => source.id),
+                        );
+                        if (event.target.checked) ids.add(p.id);
+                        else ids.delete(p.id);
+                        changeSources([...ids].sort());
+                      }}
+                    />
+                    <span>
+                      <strong>{p.title[locale]}</strong>
+                      {p.description && <small>{p.description[locale]}</small>}
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            </details>
             <select
-              aria-label={t("resources.source")}
-              value={providerId}
+              aria-label={t("resources.searchMode")}
+              value={searchMode}
               disabled={busy}
-              onChange={(e) => {
-                setProviderId(e.target.value);
-                setTag("");
-                setSort("updated");
-              }}
+              onChange={(e) =>
+                setSearchMode(e.target.value as "keyword" | "smart")
+              }
             >
-              <option value="">{t("resources.allSources")}</option>
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title[locale]}
-                </option>
-              ))}
+              <option value="keyword">{t("resources.keywordSearch")}</option>
+              <option value="smart">{t("resources.smartSearch")}</option>
             </select>
             <select
               aria-label={t("resources.sort")}
               value={sort}
-              disabled={busy}
+              disabled={busy || (searchMode === "smart" && !!query.trim())}
               onChange={(e) => setSort(e.target.value as ResourceSort)}
             >
               {supported.map((s) => (
@@ -365,8 +480,28 @@ function ResourceBrowser({
             ))}
           </div>
           {error && <Feedback tone="error" message={error} />}{" "}
-          {partial && (
+          {(partial || tagsPartial) && (
             <Feedback tone="warning" message={t("resources.partial")} />
+          )}
+          {retrievalFailures.length > 0 && (
+            <ul className="resource-failures">
+              {retrievalFailures.map((failure) => (
+                <li key={failure.providerId}>
+                  {providers.find((p) => p.id === failure.providerId)?.title[
+                    locale
+                  ] ?? failure.providerId}
+                  ：
+                  {t(
+                    `resources.retrieval.${failure.code}` as "resources.retrieval.unsupported",
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {truncated && (
+            <p className="resource-retrieval-limit">
+              {t("resources.retrievalLimit")}
+            </p>
           )}
           <div className="template-grid">
             {blank && (
@@ -406,6 +541,12 @@ function ResourceBrowser({
                 )}
                 <strong>{item.title}</strong>
                 <span>{item.summary}</span>
+                <span
+                  className="resource-card-source"
+                  title={item.source.description?.[locale]}
+                >
+                  {item.source.title[locale]}
+                </span>
               </button>
             ))}
           </div>
@@ -421,7 +562,18 @@ function ResourceBrowser({
       {selected && (
         <section className="resource-selection">
           {error && <Feedback tone="error" message={error} />}
+          <div className="resource-source-info">
+            <strong>
+              {t("resources.source")} · {selected.source.title[locale]}
+            </strong>
+            {selected.source.description && (
+              <p>{selected.source.description[locale]}</p>
+            )}
+          </div>
           <p>{selected.summary}</p>
+          {matchText[JSON.stringify(selected.ref)] && (
+            <p>{matchText[JSON.stringify(selected.ref)]}</p>
+          )}
           <small>{selected.license}</small>
           {kind === "templates" &&
             (Object.values(selected.parameters.properties ?? {}).some(

@@ -86,11 +86,6 @@ it("restricts credentials to admins and protects writes against cross-origin req
 it("persists secrets without returning them, preserves masked values, checks revisions and survives restart", async () => {
   const c = await read();
   c.config.identity.credentials.company = "sso-private-value";
-  c.config.storage.credentials.store = {
-    accessKeyId: "access-id",
-    secretAccessKey: "storage-private-value",
-    sessionToken: "session-private-value",
-  };
   c.config.search.apiKey = "search-private-value";
   c.config.messaging = {
     endpoint: "https://gateway.example.test/send",
@@ -124,9 +119,8 @@ it("persists secrets without returning them, preserves masked values, checks rev
         .executeTakeFirstOrThrow()
     ).config,
   );
-  expect(stored.storage.credentials.store.secretAccessKey).toBe(
-    "storage-private-value",
-  );
+  expect(stored.storage).toBeUndefined();
+  expect(stored.identity.credentials.company).toBe("sso-private-value");
   await app.close();
   app = await createApp(db, { origin });
   expect((await read()).config.identity.credentials.company).toBeNull();
@@ -172,7 +166,7 @@ it("rejects unsafe endpoint, malformed keys and unexpected configuration fields"
       v.identity.allowedOrigins = ["http://sso.example.test"];
     },
     (v: any) => {
-      v.storage.cdnPrivateKey = "not-a-private-key";
+      v.storage = { credentials: {} };
     },
     (v: any) => {
       v.messaging.endpoint = "http://localhost:1234";

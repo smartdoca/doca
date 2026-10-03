@@ -1,3 +1,4 @@
+import type { PluginStorageServices } from "../services/plugin-storage.js";
 import { fileOperationScope } from "./file-operation-scope.js";
 import type {
   DocaPlugin,
@@ -6,7 +7,10 @@ import type {
 } from "@smartdoca/plugin-sdk";
 
 /** Bind public registration capabilities to the plugin that received them. */
-export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {
+export function scopeInstalledPlugin(
+  plugin: DocaPlugin,
+  storage?: PluginStorageServices,
+): DocaPlugin {
   const contexts = new WeakMap<
     PluginLifecycleContext,
     PluginLifecycleContext
@@ -35,6 +39,13 @@ export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {
         throw new Error(
           `Private host service is unavailable to plugins: ${token.id}`,
         );
+      if (["storage.sql.v1", "storage.objects.v1"].includes(token.id)) {
+        if (!storage)
+          throw new Error("Plugin storage is unavailable in this host context");
+        return (
+          token.id === "storage.sql.v1" ? storage.database : storage.objects
+        ) as T;
+      }
       const value = optional
         ? context.injectOptional(token)
         : context.inject(token);
@@ -159,6 +170,10 @@ export function scopeInstalledPlugin(plugin: DocaPlugin): DocaPlugin {
     };
     const scoped = new Proxy(context, {
       get(target, property) {
+        if (property === "context") return scope(Reflect.get(target, property));
+        if (property === "child")
+          return (id?: string) =>
+            scope(target.child(id) as unknown as PluginLifecycleContext);
         if (property === "provide")
           return (token: ServiceToken<unknown>, value: unknown) => {
             owned(token.id);

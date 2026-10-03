@@ -1,4 +1,5 @@
 import { KnowledgeConnections } from "@web/features/knowledge/knowledge-connections.js";
+import { assistantDraft, consumeAssistantDraft, subscribeAssistantDraft } from "./ai-launch.js";
 import { htmlLang } from "@doca/i18n";
 import { AIChoiceCard } from "@web/features/ai/ai-choice-card.js";
 import {
@@ -38,6 +39,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -588,6 +590,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
   }
 
   const ai = useAI()!;
+  const launchDraft = useSyncExternalStore(subscribeAssistantDraft, () => assistantDraft(ai.userId, ai.sessionId));
+  const launchModel = useRef<{ sessionId: string; modelId: string } | null>(null);
   const currentAI = useRef(ai);
   currentAI.current = ai;
   const [modal, modalContext] = Modal.useModal();
@@ -1171,7 +1175,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
     let active = true;
     void readPageState<string>("ai.model")
       .then((item) => {
-        if (active && item?.value) setModel(item.value);
+        if (active && item?.value && launchModel.current?.sessionId !== ai.sessionId) setModel(item.value);
       })
       .catch(() => undefined);
     return () => {
@@ -1209,6 +1213,21 @@ export function AIChat({ full = false }: { full?: boolean }) {
     senderRef.current?.focus();
     ai.setComposerDraft(null);
   }, [ai.composerDraft, full]);
+  useEffect(() => {
+    if (!full || !launchDraft) return;
+    replaceComposerText(launchDraft.text);
+    replaceFiles(launchDraft.attachments.map(file => composerFile(asChatFile(file))));
+    setFolderTargets([]);
+    ai.setReferences(launchDraft.references);
+    ai.setFileContext(null);
+    setHasDraft(!!launchDraft.text.trim());
+    if (launchDraft.modelId) setModel(launchDraft.modelId);
+    launchModel.current = { sessionId: launchDraft.sessionId, modelId: launchDraft.modelId };
+    setSkillIds([]);
+    setSkipApprovals({ create: false, delete: false, modify: false });
+    senderRef.current?.focus();
+    consumeAssistantDraft(launchDraft);
+  }, [full, launchDraft]);
   useEffect(() => {
     setOptimistic(null);
     setOlder([]);
@@ -1256,7 +1275,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
           };
           setConversation(next);
           if (userId) void writeConversationCache(userId, sessionId, next);
-          if (!modelLoaded && data.session.model_id)
+          if (!modelLoaded && data.session.model_id && launchModel.current?.sessionId !== sessionId)
             setModel(data.session.model_id);
           modelLoaded = true;
           ai.resourcesChanged(data.operations.map((op) => op.id));

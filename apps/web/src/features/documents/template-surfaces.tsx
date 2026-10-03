@@ -43,7 +43,8 @@ import "katex/dist/katex.min.css";
 import "@web/features/documents/markdown.css";
 import "@web/features/documents/surface.css";
 
-const plugins = [mentionPlugin, documentLinkPlugin];
+import { pluginElementPlugin } from "./rich-plugin-elements.js";
+const plugins = [mentionPlugin, documentLinkPlugin, pluginElementPlugin];
 const spreadsheetRuntimeOwners = new WeakMap<HTMLElement, object>();
 // Univer disposes its nested React root from the editor effect cleanup. That
 // cleanup runs while the template dialog is still committing, which makes React

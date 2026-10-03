@@ -1,4 +1,5 @@
 export type JsonPrimitive = string | number | boolean | null;
+export * from "./editor-elements.js";
 export type JsonValue = JsonPrimitive | JsonObject | readonly JsonValue[];
 export interface JsonObject {
   readonly [key: string]: JsonValue;
@@ -954,11 +955,12 @@ export interface DocaPlugin<Config extends JsonObject = JsonObject> {
   initialize?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
   mount?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
   ready?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
-  /** Process shutdown only. Installed plugins must not delete their database here. */
+  /** Process shutdown only. Do not delete durable host-managed state here. */
   dispose?(context: PluginLifecycleContext<Config>): MaybePromise<void>;
   /**
    * Required for an installed plugin. The host calls it when an administrator
-   * uninstalls the plugin. Delete the plugin's own database and private state.
+   * uninstalls the plugin. Perform business cleanup through public host services;
+   * never open or delete storage paths. Managed private-store cleanup is host-owned.
    * The method must succeed on a repeated call after the data is already gone.
    */
   uninstall?(context: PluginLifecycleContext<Config>): MaybePromise<void>;

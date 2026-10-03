@@ -71,6 +71,7 @@ export interface ManagedPlugin {
   enabled: boolean;
   runningVersion: string | null;
   pending: boolean;
+  canCancel: boolean;
   removing: boolean;
 }
 export interface PluginInventory {

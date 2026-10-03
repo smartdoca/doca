@@ -345,7 +345,7 @@ Web 服务和浏览器客户端保持同一权限语义。App 端沿用受控 We
 
 目前 `scopeInstalledPlugin` 只对列出的公共注册服务自动执行归属检查并用 context.effect 持有 disposer。新增资源注册 token **不会自动获得这套处理**：实施时必须在 `apps/server/src/plugins/scope.ts` 为它增加明确的归属检查和生命周期包装，再由宿主提供方注册服务。异步注册沿用 effectAsync 并实际返回可释放句柄。释放贡献不删除私有业务数据；是否启用／停用仍按当前实例启动配置，不承诺热卸载。
 
-SDK 版本、服务协议版本、内容 schema、资源 revision 和插件 dataVersion 各有不同职责，不能互相替代。模板／素材资源更新本身不要求修改插件私有数据库 dataVersion。
+SDK 版本、服务协议版本、内容 schema、资源 revision 和插件 dataVersion 各有不同职责，不能互相替代。模板／素材资源更新本身不要求修改插件业务结构 dataVersion；持久化依赖宿主托管能力，见[存储规范](plugin-horizontal-scaling.zh-CN.md)。
 
 ### 9.4 身份、权限与调用
 

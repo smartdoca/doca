@@ -103,3 +103,70 @@
 .modal-gallery .template-card > span {
   padding: 0 12px;
 }
+
+.resource-source-picker {
+  position: relative;
+  min-width: 180px;
+}
+.resource-source-picker summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 6px;
+}
+.resource-source-picker fieldset {
+  position: absolute;
+  z-index: 5;
+  top: 100%;
+  right: 0;
+  width: min(340px, 75vw);
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #ddd);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0002;
+}
+.resource-source-picker legend {
+  font-weight: 600;
+}
+.resource-source-picker fieldset > button {
+  margin: 0 6px 8px 0;
+}
+.resource-source-picker label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+}
+.resource-source-picker label input {
+  flex: none;
+  min-width: 0;
+  width: 16px;
+  margin-top: 3px;
+}
+.resource-source-picker label span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.resource-source-picker small,
+.resource-source-info p,
+.resource-retrieval-limit {
+  color: var(--muted, #666);
+  font-size: 12px;
+}
+.modal-gallery .template-card > .resource-card-source {
+  margin-top: auto;
+  color: var(--accent, #2563eb);
+}
+.resource-source-info {
+  padding: 12px;
+  background: var(--surface-secondary, #f5f7fb);
+  border-radius: 6px;
+}
+.resource-failures {
+  font-size: 13px;
+  color: var(--muted, #666);
+}

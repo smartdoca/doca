@@ -367,7 +367,7 @@ it("loads an installed provider through the public service and serves authentica
       id: "example.activity",
       version: "1.0.0",
       displayName: "Activity",
-      sdkRange: "^0.1.0",
+      sdkRange: "^0.1.7",
     };
     await writeFile(
       join(pkg, "package.json"),
@@ -377,6 +377,7 @@ it("loads an installed provider through the public service and serves authentica
         type: "module",
         doca: {
           dataVersion: "1",
+          storage: "host",
           manifest: "./manifest.json",
           server: "./server.js",
         },

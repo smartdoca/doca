@@ -7,6 +7,12 @@ export function registerDriver(db: DB, driver: "sqlite" | "postgres") {
   drivers.set(db, driver);
 }
 
+export function databaseDriver(db: object) {
+  const driver = drivers.get(db);
+  if (!driver) throw new Error("Database driver is not registered");
+  return driver;
+}
+
 /** Retry only database transactions. External side effects belong after commit. */
 export async function transact<T>(
   db: DB,
@@ -20,7 +26,8 @@ export async function transact<T>(
         drivers.get(db) === "postgres"
           ? builder.setIsolationLevel("serializable")
           : builder
-      ).execute(tx => {
+      ).execute((tx) => {
+        registerDriver(tx, databaseDriver(db));
         inheritDatabaseRuntimeScope(db, tx);
         return fn(tx);
       });
@@ -44,6 +51,7 @@ export async function readSnapshot<T>(
   fn: (tx: Transaction<Schema>) => Promise<T>,
 ): Promise<T> {
   const run = (tx: Transaction<Schema>) => {
+    registerDriver(tx, databaseDriver(db));
     inheritDatabaseRuntimeScope(db, tx);
     return fn(tx);
   };

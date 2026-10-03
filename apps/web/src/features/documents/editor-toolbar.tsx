@@ -1,6 +1,6 @@
 import { Feedback } from "@web/shared/components/feedback.js";
 import { useI18n } from "@web/shared/i18n.js";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { RichTextEditorHandle, BlockType } from "@smartdoca/slate";
 import { FONT_FAMILIES } from "@smartdoca/slate";
 import { Editor, Range, Transforms, type Range as SlateRange } from "slate";
@@ -41,10 +41,12 @@ import { fileUrl, type FileItem } from "@web/shared/api.js";
 export function EditorToolbar({
   handle,
   disabled,
+  elementInsert,
 }: {
   handle: RichTextEditorHandle | null;
   disabled: boolean;
   selectionRevision?: number;
+  elementInsert?: ReactNode;
 }) {
   const { t: tr } = useI18n();
   const host = useRef<HTMLDivElement>(null);
@@ -577,6 +579,7 @@ export function EditorToolbar({
       ),
     },
   ];
+  if (elementInsert) items.push({ key: tr("editor.element.insert"), width: 34, node: <>{elementInsert}</> });
   const mobileEditor =
     typeof document !== "undefined" &&
     document.documentElement.dataset.editorShell === "mobile";
@@ -593,6 +596,7 @@ export function EditorToolbar({
     tr("toolbar.quote"),
     tr("toolbar.media"),
     tr("toolbar.divider"),
+    tr("editor.element.insert"),
   ]);
   const toolbarItems = mobileEditor
     ? items.filter((item) => mobileTools.has(item.key))

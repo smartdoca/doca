@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { handlePluginNativeRequest } from "../../src/plugins/native";
+import { preparePluginAssistant } from "../../src/plugins/assistant";
+import { publishAssistantDraft } from "../../src/ai-launch";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { View } from "react-native";
 import { Button, Text } from "react-native-paper";
 import { WebView } from "react-native-webview";
@@ -15,11 +17,13 @@ export default function PluginPage() {
     { locale, t } = useI18n(),
     nav = useMobileNavigation();
   const webview = useRef<WebView>(null);
+  const router = useRouter();
+  const openingAssistant = useRef(false);
   const lifecycle = useRef(new AbortController());
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     lifecycle.current = new AbortController();
     return () => lifecycle.current.abort();
-  }, [session?.origin, session?.token, id]);
+  }, [session?.origin, session?.token, id]));
   const identity = useQuery({
     queryKey: ["plugin-native-identity", session?.origin, session?.token],
     enabled: !!session,
@@ -81,8 +85,16 @@ export default function PluginPage() {
           }
           const signal = lifecycle.current.signal;
           let result: unknown, error: string | undefined;
+          let assistant: Awaited<ReturnType<typeof preparePluginAssistant>> | undefined;
           try {
-            result = await handlePluginNativeRequest(
+            if (request?.operation === "assistant.open") {
+              if (openingAssistant.current) throw new Error("Assistant launch already in progress");
+              openingAssistant.current = true;
+              try {
+                assistant = await preparePluginAssistant(request, session, entry.pluginId, signal);
+                result = assistant.result;
+              } finally { openingAssistant.current = false; }
+            } else result = await handlePluginNativeRequest(
               request,
               session,
               identity.data.user.id,
@@ -106,6 +118,10 @@ export default function PluginPage() {
             webview.current?.injectJavaScript(
               `window.dispatchEvent(new CustomEvent("doca-native-response", {detail:${payload}}));true;`,
             );
+            if (assistant) {
+              publishAssistantDraft(session, request.id, assistant.draft);
+              router.push({ pathname: "/ai/[id]", params: { id: assistant.result.sessionId, launch: request.id } });
+            }
           }
         }}
         key={`${session.origin}:${id}:${ticket.data.ticket}`}

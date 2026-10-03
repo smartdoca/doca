@@ -1,6 +1,6 @@
 {
   "name": "@smartdoca/plugin-sdk",
-  "version": "0.1.5",
+  "version": "0.1.7",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -16,7 +16,9 @@
     "./content": "./src/content.ts",
     "./documents": "./src/documents.ts",
     "./native": "./src/native.ts",
-    "./creation-resources": "./src/creation-resources.ts"
+    "./creation-resources": "./src/creation-resources.ts",
+    "./editor-elements": "./src/editor-elements.ts",
+    "./storage": "./src/storage.ts"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.4",
@@ -83,6 +85,14 @@
       "./creation-resources": {
         "types": "./dist/creation-resources.d.ts",
         "import": "./dist/creation-resources.js"
+      },
+      "./editor-elements": {
+        "types": "./dist/editor-elements.d.ts",
+        "import": "./dist/editor-elements.js"
+      },
+      "./storage": {
+        "types": "./dist/storage.d.ts",
+        "import": "./dist/storage.js"
       }
     }
   }

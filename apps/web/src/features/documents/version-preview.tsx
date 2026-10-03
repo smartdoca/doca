@@ -5,7 +5,8 @@ import { assetUrl } from "@web/shared/api.js";
 import "@smartdoca/slate/style.css";
 import { mentionPlugin } from "@web/features/documents/document-mentions.js";
 import { documentLinkPlugin } from "@web/features/documents/document-link.js";
-const plugins = [mentionPlugin, documentLinkPlugin];
+import { pluginElementPlugin } from "./rich-plugin-elements.js";
+const plugins = [mentionPlugin, documentLinkPlugin, pluginElementPlugin];
 export default function VersionPreview({
   value,
   trash = false,

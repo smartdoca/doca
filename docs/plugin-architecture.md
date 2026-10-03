@@ -11,3 +11,5 @@ A business plugin talks to the host through the public files, users, permissions
 The host keeps authentication, authorization, files, document collaboration, security audit, original AI usage, and token usage rated by the model. Membership, points, prices, content moderation, and mail are not core tables, tools, or pages. A future mail plugin owns its backend, data, and acceptance tests.
 
 A generic tree slot, more business services, and a fund reservation protocol are still listed by implementation status in the contract. A proposed API is not an export you can call.
+
+All durable plugin state is host-managed. Packages must declare `doca.storage: "host"`; plugins own models/authorization, not drivers, storage paths or local/remote configuration. Managed SQL and private objects are exported in SDK 0.1.7; managed credentials remain a proposed capability. See the [storage contract](plugin-horizontal-scaling.md).

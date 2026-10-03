@@ -8,13 +8,32 @@ import type {
   ResourcePage,
   CreationResourceRef,
   CreationResourceCard,
+  CreationResourceResult,
+  ResourceRetrieval,
+  ResourceRetrievalHit,
+  ResourceRetrievalMode,
+  ResourceRetrievalPage,
   ResourceTag,
   TemplatePayload,
+  TemplateReadResult,
+  ResourceSourceInfo,
   TemplateSelection,
   ResourceConsumerDescriptor,
 } from "@smartdoca/plugin-contracts";
 export type * from "@smartdoca/plugin-contracts";
 export interface ResourceProvider extends ResourceProviderDescriptor {
+  /** Optional indexed/remote retrieval; host never emulates it by paging search. */
+  retrieve?(
+    context: PluginRequestContext,
+    input: ResourceRetrieval & {
+      topK: number;
+      mode: "auto" | ResourceRetrievalMode;
+    },
+  ): Promise<{
+    items: readonly ResourceRetrievalHit[];
+    mode: ResourceRetrievalMode;
+    hasMore: boolean;
+  }>;
   tags(
     context: PluginRequestContext,
     filter: ResourceFilter,
@@ -57,6 +76,10 @@ export interface TemplateConsumer extends ResourceConsumerDescriptor {
 }
 export interface ResourceDirectoryV1<P extends ResourceProvider> {
   register(provider: P): () => void;
+  retrieve(
+    context: PluginRequestContext,
+    input: ResourceRetrieval,
+  ): Promise<ResourceRetrievalPage>;
   providers(
     context: PluginRequestContext,
     filter: ResourceFilter,
@@ -76,13 +99,13 @@ export interface ResourceDirectoryV1<P extends ResourceProvider> {
   describe(
     context: PluginRequestContext,
     ref: CreationResourceRef,
-  ): Promise<CreationResourceCard>;
+  ): Promise<CreationResourceResult>;
 }
 export interface TemplatesServiceV1 extends ResourceDirectoryV1<TemplateProvider> {
   read(
     context: PluginRequestContext,
     input: TemplateSelection,
-  ): Promise<TemplatePayload>;
+  ): Promise<TemplateReadResult>;
   registerConsumer(consumer: TemplateConsumer): () => void;
   consumers(
     context: PluginRequestContext,
@@ -100,7 +123,13 @@ export interface MaterialsServiceV1 extends ResourceDirectoryV1<MaterialProvider
   import(
     context: PluginRequestContext,
     input: { ref: CreationResourceRef; operationKey: string },
-  ): Promise<{ fileId: string; name: string; mime: string; size: number }>;
+  ): Promise<{
+    fileId: string;
+    name: string;
+    mime: string;
+    size: number;
+    source: ResourceSourceInfo;
+  }>;
 }
 export const templatesServiceToken =
   defineService<TemplatesServiceV1>("templates.v1");

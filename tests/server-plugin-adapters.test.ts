@@ -1,3 +1,4 @@
+import { storageRuntime } from "@server/adapters/storage.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
@@ -135,7 +136,7 @@ it("publishes only core plugin versions without a default business installation"
     const app = await createApp(db, {
       origin,
       storage: {
-        root: join(directory, "uploads"),
+        configuration: storageRuntime().configuration, root: join(directory, "uploads"),
         credentials: {},
         endpointHosts: [],
         cdnKeyPairId: undefined,

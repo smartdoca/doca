@@ -3,6 +3,7 @@ import {
   type YjsInlineCodec,
 } from "@smartdoca/slate/yjs";
 import type { Doc } from "yjs";
+import { validatePluginElementPayload } from "@smartdoca/plugin-contracts";
 const codec = (type: `custom:${string}`, key: string): YjsInlineCodec => ({
   type,
   schemaVersion: 1,
@@ -39,7 +40,22 @@ const codec = (type: `custom:${string}`, key: string): YjsInlineCodec => ({
 });
 export const referenceCodec = codec("custom:document-reference", "documentId");
 export const mentionCodec = codec("custom:user-mention", "userId");
-export const inlineCodecs = [referenceCodec, mentionCodec];
+/** One permanent host codec: missing business renderers do not affect recovery. */
+export const pluginElementCodec: YjsInlineCodec = {
+  type: "custom:plugin-element",
+  schemaVersion: 1,
+  encode(element) {
+    const payload = (element as unknown as Record<string, unknown>).payload;
+    validatePluginElementPayload(payload);
+    return { payload: structuredClone(payload) };
+  },
+  decode(data, { id }) {
+    if (Object.keys(data).some(key => key !== "payload")) throw Error("Invalid plugin element codec data");
+    validatePluginElementPayload(data.payload);
+    return { type: "custom:plugin-element", id, payload: structuredClone(data.payload), label: typeof data.payload.text === "string" ? data.payload.text : "", children: [{ text: "" }] };
+  },
+};
+export const inlineCodecs = [referenceCodec, mentionCodec, pluginElementCodec];
 export class DocaYjsDocument extends BaseRuntime {
   constructor(doc: Doc) {
     super(doc, { inlineCodecs });

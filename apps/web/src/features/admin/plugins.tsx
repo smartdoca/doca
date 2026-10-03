@@ -187,11 +187,11 @@ export function Plugins() {
       (activeOperation?.operation === operation &&
         (pluginId == null || activeOperation.pluginId === pluginId) &&
         (version == null || activeOperation.version === version)) ||
-        (busy &&
-          activeAction ===
-            (operation === "install" && version != null
-              ? `release:${version}`
-              : operation)),
+      (busy &&
+        activeAction ===
+          (operation === "install" && version != null
+            ? `release:${version}`
+            : operation)),
     );
   useEffect(() => {
     if (!busy && !activeOperation) return;
@@ -502,7 +502,11 @@ export function Plugins() {
           <aside
             className="plugin-progress-toast"
             data-status={
-              operationLocked ? "running" : operationError ? "failed" : "completed"
+              operationLocked
+                ? "running"
+                : operationError
+                  ? "failed"
+                  : "completed"
             }
             role={operationError ? "alert" : "status"}
             aria-live={operationError ? "assertive" : "polite"}
@@ -1018,7 +1022,7 @@ export function Plugins() {
                       </Button>
                     </>
                   )}
-                  {local.pending && (
+                  {local.canCancel && (
                     <Button
                       loading={operationPending("cancel", local.id)}
                       disabled={operationLocked}

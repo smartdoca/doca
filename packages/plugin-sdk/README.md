@@ -1,6 +1,16 @@
 # @smartdoca/plugin-sdk
 
-Doca's public plugin SDK. Plugins declare service requirements and own their business implementation and storage. They must not import host source paths or use private runtime bridges.
+Doca's public plugin SDK. Plugins declare service requirements and own business models and authorization. All persistence uses public host-managed services; installed packages must declare `doca.storage: "host"` and never select local/remote backends or storage paths. Managed SQL/private-object/credential/workspace services are not exported yet; see the [storage contract](../../docs/plugin-horizontal-scaling.md). They must not import host source paths or use private runtime bridges.
+
+## Public capabilities added in 0.1.6 (source)
+
+`PluginWebHost.ai.open({prompt, context, documentIds, attachmentFileIds, sessionId, modelId, autoSend})` opens the personal assistant on Web and in the native App container. It pre-fills an editable draft unless `autoSend: true` explicitly submits a host job. All resource/session/model authorization and execution policies use the existing host flows. See the [launch contract and examples](../../docs/plugin-assistant.md). This source addition does not imply npm publication or an updated native App.
+
+Template and material queries accept multi-source `providerIds`. Providers name and describe their own sources and optionally declare retrieval modes with an indexed/remote `retrieve` method. Public clients expose `templates.retrieve` and `materials.retrieve`; results and picker selections carry host-owned source metadata. The host never substitutes a full browse scan for unsupported retrieval. The agreed protocol change rejects singular query `providerId`, while resource references and stored content remain unchanged. See the [resource protocol and AI tools](../../docs/creation-resources.md).
+
+`@smartdoca/plugin-sdk/editor-elements` exports typed document-element contributions, payload validation and exact-version state checks. Optional `WebPluginBundle.elements` registers rich atomic inline views and spreadsheet whole-cell canvas renderers/configuration forms. Unknown types or versions retain their original JSON and display an error placeholder; no conversion or migration is supplied. Native editing, undo and the host collaboration queue persist changes. No providers are installed by default. See the [element contract](../../docs/plugin-editor-elements.md) and [independent countdown/news example](../../examples/plugin-elements/README.md).
+
+This source version also contains the sidebar `web.leftMore` / `global.leftMore` slots. Build and independent-consumer verification do not imply npm publication, production installation or native-device acceptance.
 
 ## Public capabilities added in 0.1.4
 
@@ -12,7 +22,7 @@ Doca's public plugin SDK. Plugins declare service requirements and own their bus
 
 ## Public capabilities added in 0.1.3
 
-- Installed plugins must implement `uninstall(context)`. The host calls it when an administrator uninstalls the plugin. The plugin deletes its own database and private state. The call must succeed again when that data is already gone. `dispose` only releases process resources and does not delete the database.
+- Installed plugins must implement `uninstall(context)`. The host calls it when an administrator uninstalls the plugin. The hook performs business cleanup through public host services, never by opening/deleting storage paths. Managed private-store cleanup belongs to the host and its cluster coordinator is not implemented yet. The call is idempotent. `dispose` only releases process resources and preserves durable state.
 - `PLUGIN_SDK_VERSION` is this package's version. Import it from `@smartdoca/plugin-sdk` or `@smartdoca/plugin-sdk/version`.
 
 ## Public capabilities added in 0.1.2
@@ -27,3 +37,5 @@ The source types and generated declarations define exact request/response fields
 ## Template and material providers (SDK 0.1.5)
 
 `@smartdoca/plugin-sdk/creation-resources` exports `templatesServiceToken` (`templates.v1`) and `materialsServiceToken` (`materials.v1`). Register providers/consumers through injected services; plugin lifecycle owns disposers. `host.platform.templates/materials` and injected `host.TemplatePicker/MaterialPicker` share the same authenticated services. No providers are installed by default. See [resource contract](../../docs/creation-resources.md).
+
+- `@smartdoca/plugin-sdk/storage` (source 0.1.7): `pluginDatabaseToken` provides an installation-bound structured relational database and once-only transactions; `pluginObjectStorageToken` provides opaque immutable private objects (32 MiB maximum). Ordinary files use `files.v1`; shared content/templates/materials use their existing services. No raw DB handle, filesystem path, other-plugin selector or credentials are exposed. See [implementation](../../docs/unified-storage-implementation.md).
