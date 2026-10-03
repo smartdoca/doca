@@ -1,6 +1,6 @@
 import type {
   TemplatesServiceV1,
-  MaterialsServiceV1,
+  MaterialsServiceV2,
 } from "./creation-resources.js";
 import type {
   DirectorySearchInput,
@@ -34,8 +34,15 @@ export interface PluginPlatformClient {
   };
   readonly materials: WithoutContext<
     Pick<
-      MaterialsServiceV1,
-      "providers" | "tags" | "search" | "retrieve" | "describe" | "import"
+      MaterialsServiceV2,
+      | "providers"
+      | "tags"
+      | "search"
+      | "retrieve"
+      | "describe"
+      | "import"
+      | "collectionDescribe"
+      | "collectionItems"
     >
   >;
   readonly users: {
@@ -94,6 +101,8 @@ export function createPluginPlatformClient(
       retrieve: call("materials.retrieve"),
       describe: call("materials.describe"),
       import: call("materials.import"),
+      collectionDescribe: call("materials.collectionDescribe"),
+      collectionItems: call("materials.collectionItems"),
     }),
     users: Object.freeze({
       me: (options?: { signal?: AbortSignal }) =>

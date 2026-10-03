@@ -1,16 +1,16 @@
 # Plugin development
 
-Updated 2026-10-02 for source host 0.1.8 and SDK source 0.1.7 (npm publication and production deployment not verified). This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
+Updated 2026-10-03 for source host 0.1.10 and SDK source 0.1.9 (npm publication and production deployment not verified). This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
 
 [中文](plugin-development.zh-CN.md)
 
 The full target, including parts that are not implemented, is the [SDK contract](plugin-sdk-contract.md). Do not keep obsolete membership, moderation, or source-loading compatibility layers.
 
-The [horizontal scaling and managed storage contract](plugin-horizontal-scaling.md) is approved. All persistence is host-managed; packages must declare `doca.storage: "host"`. Missing or different declarations are rejected before code import on install, directory discovery and startup. Managed SQL/private objects are exported in SDK 0.1.7; credentials and workspaces remain implementation gaps.
+The [horizontal scaling and managed storage contract](plugin-horizontal-scaling.md) is approved. All persistence is host-managed; packages must declare `doca.storage: "host"`. Missing or different declarations are rejected before code import on install, directory discovery and startup. Managed SQL/private objects are exported in SDK 0.1.7; credentials are exported in SDK source 0.1.9; workspaces remain a gap.
 
 ## Implemented storage revision (2026-10-03, SDK source 0.1.7)
 
-`@smartdoca/plugin-sdk/storage` now exports installation-bound `pluginDatabaseToken` (`storage.sql.v1`) and `pluginObjectStorageToken` (`storage.objects.v1`). The database subset is explicit schema version 1, text/int32/double columns, primary/unique constraints, structured select/insert/update/remove and transactions with callbacks executed once. Joins, foreign keys, generic SQL, upsert, credentials and workspaces are not exported. Current SDK isolation is enforced by host-compiled queries over namespaced tables on the host connection; separate PostgreSQL roles/process isolation remain a stronger future boundary.
+`@smartdoca/plugin-sdk/storage` now exports installation-bound `pluginDatabaseToken` (`storage.sql.v1`) and `pluginObjectStorageToken` (`storage.objects.v1`). The database subset is explicit schema version 1, text/int32/double columns, primary/unique constraints, structured select/insert/update/remove and transactions with callbacks executed once. `pluginCredentialToken` (`storage.credentials.v1`, SDK source 0.1.8) provides server-only encrypted credentials with revision-checked refresh and deletion. Joins, foreign keys, generic SQL, upsert and workspaces are not exported. See [credential API and deployment](plugin-credentials.md). Current SDK isolation is enforced by host-compiled queries over namespaced tables on the host connection; separate PostgreSQL roles/process isolation remain a stronger future boundary.
 
 Logical databases use `plugin:<pluginId>`, user-file attribution and private objects use `plugins/<pluginId>`, and release ZIPs use `host/plugin-releases/<sha256>.zip`. Complete immutable ZIP bytes live in environment-configured file storage; the shared database holds registry version 2, archive references and trusted file-hash indexes. Verified cache hits do not download ZIPs again. All instances are restarted manually. The new host baseline rejects older databases/formats/SDK packages and preserves their data, with no migration or fallback. See [exact implementation and limitations](unified-storage-implementation.md).
 
@@ -121,7 +121,7 @@ Register an AI tool with `aiServiceToken.registerTool`: id, description, inputSc
 
 Doca does not include membership, prices, points, or business quotas. Model input and output rates, and tokens per image, convert a vendor's raw usage into tokens. They are not a price. Usage distinguishes an unconfirmed call from actual metrics. `ai.usage.recorded` is written inside the settlement transaction. Top-level `metrics` are the rated usage. `provider.metrics` keeps the vendor's raw facts. A plugin pulls events with `events.read(cursor, limit)`, stores its cursor, and handles each event id once. A policy check can refuse a call. Cross-plugin reservation, failure compensation, and money consistency do not yet have a full transaction protocol. One check is not a billing implementation.
 
-Plugins own business models, authorization, job logic and outbox semantics; all durable state uses public host-managed services. Plugins never choose a local/remote backend, connect to a private database, read storage credentials or persist to system directories. There is currently no managed SQL or private-object SDK export, nor `data.v1`/`data.v2`; integrations needing those capabilities must wait for implementation rather than supply their own store.
+Plugins own business models, authorization, job logic and outbox semantics; all durable state uses public host-managed services. Plugins never choose a local/remote backend, connect to a private database, read storage credentials or persist to system directories. Managed SQL and private objects are exported in SDK 0.1.7, credentials in SDK source 0.1.9; `data.v1`/`data.v2` and temporary workspaces are not exported. Missing capabilities cannot be replaced with a self-managed store.
 
 ## Host-managed persistence
 
@@ -129,7 +129,7 @@ Plugins own business models, authorization, job logic and outbox semantics; all 
 
 There is no plugin business-data-directory environment variable or plugin-selectable data path. `DOCA_PLUGINS_DIR` remains the host's rebuildable installation cache, not a business store. The host alone configures local/remote persistence and ensures shared database/object storage for horizontal deployments. Plugins use the same SDK methods in both cases and must not branch on the host backend.
 
-User uploads, attachments and export deliverables use `files.v1` folders/files with stable IDs, bindings and permissions. Structured records, config, jobs, cursors and outbox belong in the host-managed relational capability. Its logical database name is `plugin:<pluginId>` and is bound by trusted injection. Private durable binaries use a host-managed private-object capability; credentials use a host-managed credential capability. Private objects are exported in SDK 0.1.7; managed credentials remain pending. Temporary work may use a future host-managed task workspace or streams, with limits/cleanup and no durable dependence on a previous instance's path. See the storage contract for required interfaces and status.
+User uploads, attachments and export deliverables use `files.v1` folders/files with stable IDs, bindings and permissions. Structured records, config, jobs, cursors and outbox belong in the host-managed relational capability. Its logical database name is `plugin:<pluginId>` and is bound by trusted injection. Private durable binaries use a host-managed private-object capability; credentials use a host-managed credential capability. Private objects are exported in SDK 0.1.7; managed credentials in SDK source 0.1.8. Temporary work may use a future host-managed task workspace or streams, with limits/cleanup and no durable dependence on a previous instance's path. See the storage contract for required interfaces and status.
 
 ## Data structure
 
@@ -214,7 +214,7 @@ Use the same Web bundle on Web and in the scoped mobile WebView. `PluginWebHost`
 - Android save returns completed/canceled. iOS save and system sharing may report presented, which does not prove a user completed the action. Account switching or page disposal cancels outstanding requests.
 - Mail account binding belongs on Web. Native OAuth is outside this delivery.
 
-The current SDK source package version is 0.1.7; this does not confirm npm publication. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
+The current SDK source package version is 0.1.8; this does not confirm npm publication. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
 
 ## Distribution and navigation
 
@@ -235,3 +235,6 @@ For named multi-source selection and AI retrieval, use the 0.1.6 source revision
 ## Plugin document elements (2026-10-02, SDK 0.1.6 source)
 
 The optional Web bundle `elements` registry and `@smartdoca/plugin-sdk/editor-elements` are implemented for rich atomic inline elements and spreadsheet whole-cell canvas views. Configuration forms submit through host-owned native operations and undo; there is no public arbitrary editor handle. Exact unknown types/versions show an error placeholder and preserve opaque JSON, with no conversion, migration or cleanup. Zero providers are installed by default. See [the exact element contract](plugin-editor-elements.md) and [the independent countdown/news example](../examples/plugin-elements/README.md). npm publication, production installation and native-device acceptance are not implied.
+
+
+Material collections are implemented in SDK source 0.1.9: materials.v2 / version 2 providers, separate material/collection result groups, paging, tags and indexed retrieval. Collection metadata never embeds members. The agreed revision has no materials.v1 adapter and no existing-file/document migration. Collection management belongs to providers using public host-managed persistence. See the [resource protocol](creation-resources.md).

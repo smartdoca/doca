@@ -1,6 +1,6 @@
 # @smartdoca/plugin-sdk
 
-Doca's public plugin SDK. Plugins declare service requirements and own business models and authorization. All persistence uses public host-managed services; installed packages must declare `doca.storage: "host"` and never select local/remote backends or storage paths. Managed SQL/private-object/credential/workspace services are not exported yet; see the [storage contract](../../docs/plugin-horizontal-scaling.md). They must not import host source paths or use private runtime bridges.
+Doca's public plugin SDK. Plugins declare service requirements and own business models and authorization. All persistence uses public host-managed services; installed packages must declare `doca.storage: "host"` and never select local/remote backends or storage paths. Managed SQL/private objects are exported in 0.1.7, managed credentials in source 0.1.8; temporary workspaces are not exported; see the [storage contract](../../docs/plugin-horizontal-scaling.md). They must not import host source paths or use private runtime bridges.
 
 ## Public capabilities added in 0.1.6 (source)
 
@@ -36,6 +36,12 @@ The source types and generated declarations define exact request/response fields
 
 ## Template and material providers (SDK 0.1.5)
 
-`@smartdoca/plugin-sdk/creation-resources` exports `templatesServiceToken` (`templates.v1`) and `materialsServiceToken` (`materials.v1`). Register providers/consumers through injected services; plugin lifecycle owns disposers. `host.platform.templates/materials` and injected `host.TemplatePicker/MaterialPicker` share the same authenticated services. No providers are installed by default. See [resource contract](../../docs/creation-resources.md).
+`@smartdoca/plugin-sdk/creation-resources` exports `templatesServiceToken` (`templates.v1`) and `materialsServiceToken` (`materials.v2`). Register providers/consumers through injected services; plugin lifecycle owns disposers. `host.platform.templates/materials` and injected `host.TemplatePicker/MaterialPicker` share the same authenticated services. No providers are installed by default. See [resource contract](../../docs/creation-resources.md).
 
-- `@smartdoca/plugin-sdk/storage` (source 0.1.7): `pluginDatabaseToken` provides an installation-bound structured relational database and once-only transactions; `pluginObjectStorageToken` provides opaque immutable private objects (32 MiB maximum). Ordinary files use `files.v1`; shared content/templates/materials use their existing services. No raw DB handle, filesystem path, other-plugin selector or credentials are exposed. See [implementation](../../docs/unified-storage-implementation.md).
+## Managed storage
+
+- `@smartdoca/plugin-sdk/storage` (source 0.1.7): `pluginDatabaseToken` provides an installation-bound structured relational database and once-only transactions; `pluginObjectStorageToken` provides opaque immutable private objects (32 MiB maximum). Ordinary files use `files.v1`; shared content/templates/materials use their existing services. No raw DB handle, filesystem path, other-plugin selector or backend connection credentials are exposed. See [implementation](../../docs/unified-storage-implementation.md).
+
+- `@smartdoca/plugin-sdk/storage` (source 0.1.8): `pluginCredentialToken` (`storage.credentials.v1`) provides `create`, `inspect`, `get`, revision-checked `update` and `remove`. Plaintext is server-only; IDs are host-generated and bound to the receiving plugin installation. The host requires `DOCA_CREDENTIAL_MASTER_KEY`; plugins authorize their accounts before access. See [usage and deployment](../../docs/plugin-credentials.md).
+
+Material collections (SDK source 0.1.9, contracts source 0.1.7): `MaterialsServiceV2` and version 2 providers require an explicit `collections` capability (methods or null). Material cards contain collection references; unified search/retrieve return separate `materials` and `collections` groups. Fetch collection metadata and paginated members with `collectionDescribe` / `collectionItems`. Source constraints and independent tags apply to UI and AI. No materials.v1 adapter or stored-data migration. See the [resource protocol](../../docs/creation-resources.md).

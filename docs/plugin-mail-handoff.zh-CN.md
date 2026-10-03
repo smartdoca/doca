@@ -1,6 +1,6 @@
 # 邮箱插件接入交接（2026-09-26）
 
-> 2026-10-02 存储更新：下文自管数据库/目录及卸载约定仅为历史记录，已由[确认后的托管存储规范](plugin-horizontal-scaling.zh-CN.md)替换。新包必须声明 `doca.storage: "host"`，缺失/其他值于导入代码前拒绝；SQL/内部对象/凭证服务尚未导出。旧验收不代表新基线验收。
+> 2026-10-02 存储更新：下文自管数据库/目录及卸载约定仅为历史记录，已由[确认后的托管存储规范](plugin-horizontal-scaling.zh-CN.md)替换。新包必须声明 `doca.storage: "host"`，缺失/其他值于导入代码前拒绝；SQL/内部对象已在 SDK 0.1.7 导出，凭证已在 SDK 源码 0.1.8 / 宿主源码 0.1.10 实现（本次版本尚未发布）。邮箱包应声明 ^0.1.8、注入 pluginCredentialToken，由部署方设置 DOCA_CREDENTIAL_MASTER_KEY；见[凭证接口](plugin-credentials.md)。旧验收不代表新基线验收。
 
 > 历史对接记录：当前开发以[插件开发指引](plugin-development.zh-CN.md)为入口（宿主 0.1.1 / SDK 0.1.2）。本文旧的 preview/pull/持久订阅游标及“尚未发布”状态不再作为新接入标准；内容使用 content.v1，原生能力使用 PluginWebHost.native。历史测试结论仅适用于当时的版本。
 

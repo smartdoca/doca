@@ -2,7 +2,7 @@
 
 [中文](plugin-deployment.zh-CN.md)
 
-The approved [managed storage contract](plugin-horizontal-scaling.md) requires `doca.storage: "host"` and host-owned persistence. Static rejection, managed SQL and private objects are implemented. Credentials, temporary workspaces and cluster task draining remain gaps. Plugins do not choose local/remote backends or receive business-data directories.
+The approved [managed storage contract](plugin-horizontal-scaling.md) requires `doca.storage: "host"` and host-owned persistence. Static rejection, managed SQL and private objects are implemented. Credentials are exported in SDK source 0.1.8; temporary workspaces and cluster task draining remain gaps. Plugins do not choose local/remote backends or receive business-data directories.
 
 Administrators use **Admin → Plugins** to browse the official store, upload a local ZIP, install, upgrade, enable, disable or uninstall plugins. Changes are saved as the desired installation and take effect on each instance's next restart. The page shows the answering instance's running version separately from the global target. Current uninstall calls the required business cleanup hook, then clears the structure marker. Hook failure leaves installation intact. Host-managed private-store cleanup uses generation fencing and durable object garbage records; business task draining remains unimplemented; plugin filesystem deletion is prohibited. Upgrades of an installed plugin still require the same `doca.dataVersion`. Plugins check their actual database structure during initialization.
 
@@ -21,9 +21,9 @@ docker compose restart doca
 
 Restart every instance in a multi-instance deployment; use the appropriate supervisor for other deployment types. The UI does not restart processes. During a rolling restart, drain traffic or use affinity if plugin APIs have changed. V1 does not promise zero-downtime mixed-version APIs.
 
-## Implemented storage revision (2026-10-03, SDK source 0.1.7)
+## Implemented storage revision (2026-10-03, SDK source 0.1.8)
 
-`@smartdoca/plugin-sdk/storage` now exports installation-bound `pluginDatabaseToken` (`storage.sql.v1`) and `pluginObjectStorageToken` (`storage.objects.v1`). The database subset is explicit schema version 1, text/int32/double columns, primary/unique constraints, structured select/insert/update/remove and transactions with callbacks executed once. Joins, foreign keys, generic SQL, upsert, credentials and workspaces are not exported. Current SDK isolation is enforced by host-compiled queries over namespaced tables on the host connection; separate PostgreSQL roles/process isolation remain a stronger future boundary.
+`@smartdoca/plugin-sdk/storage` now exports installation-bound `pluginDatabaseToken` (`storage.sql.v1`) and `pluginObjectStorageToken` (`storage.objects.v1`). The database subset is explicit schema version 1, text/int32/double columns, primary/unique constraints, structured select/insert/update/remove and transactions with callbacks executed once. SDK source 0.1.8 additionally exports `pluginCredentialToken` (`storage.credentials.v1`): server-only encrypted CRUD, metadata and revision checks. See [credential API](plugin-credentials.md). Joins, foreign keys, generic SQL, upsert and workspaces are not exported. Current SDK isolation is enforced by host-compiled queries over namespaced tables on the host connection; separate PostgreSQL roles/process isolation remain a stronger future boundary.
 
 Logical databases use `plugin:<pluginId>`, user-file attribution and private objects use `plugins/<pluginId>`, and release ZIPs use `host/plugin-releases/<sha256>.zip`. Complete immutable ZIP bytes live in environment-configured file storage; the shared database holds registry version 2, archive references and trusted file-hash indexes. Verified cache hits do not download ZIPs again. All instances are restarted manually. The new host baseline rejects older databases/formats/SDK packages and preserves their data, with no migration or fallback. See [exact implementation and limitations](unified-storage-implementation.md).
 

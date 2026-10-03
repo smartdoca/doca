@@ -71,16 +71,46 @@ export interface PluginObjectStorageServiceV1 {
     readonly data: Uint8Array;
     readonly mime: string;
   }): Promise<PluginStoredObject>;
-  get(
-    id: string,
-  ): Promise<{
+  get(id: string): Promise<{
     readonly object: PluginStoredObject;
     readonly data: Uint8Array;
   } | null>;
   remove(id: string): Promise<void>;
 }
-/** Bound to the installed plugin identity by the host. No database selector, raw SQL, paths or credentials. */
+export interface PluginCredentialMetadata {
+  readonly id: string;
+  readonly revision: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+/** Server-only secrets. Authorize the business account before using this service; never return values to browsers or AI prompts. */
+export interface PluginCredentialServiceV1 {
+  /** A non-empty UTF-8 string, at most 64 KiB. Serialize OAuth bundles explicitly. */
+  create(input: { readonly value: string }): Promise<PluginCredentialMetadata>;
+  inspect(id: string): Promise<PluginCredentialMetadata | null>;
+  get(
+    id: string,
+  ): Promise<{
+    readonly credential: PluginCredentialMetadata;
+    readonly value: string;
+  } | null>;
+  /** Compare-and-swap. Concurrent refreshes cannot silently overwrite one another. */
+  update(input: {
+    readonly id: string;
+    readonly value: string;
+    readonly expectedRevision: number;
+  }): Promise<PluginCredentialMetadata>;
+  /** Repeating a successful deletion is harmless; a changed revision is rejected. */
+  remove(input: {
+    readonly id: string;
+    readonly expectedRevision: number;
+  }): Promise<void>;
+}
+/** Bound to the installed plugin identity by the host. No database selector, raw SQL, paths or backend connection credentials. */
 export const pluginDatabaseToken =
   defineService<PluginDatabaseServiceV1>("storage.sql.v1");
 export const pluginObjectStorageToken =
   defineService<PluginObjectStorageServiceV1>("storage.objects.v1");
+export const pluginCredentialToken = defineService<PluginCredentialServiceV1>(
+  "storage.credentials.v1",
+);

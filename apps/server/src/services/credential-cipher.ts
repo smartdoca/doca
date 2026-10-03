@@ -53,6 +53,7 @@ export interface SealedCredential {
 }
 
 export interface CredentialCipher {
+  readonly fingerprint: string;
   seal(binding: CredentialBinding, value: string): SealedCredential;
   open(binding: CredentialBinding, record: unknown): string;
   dispose(): void;
@@ -123,6 +124,7 @@ export function createCredentialCipher(
     );
   }
   return Object.freeze({
+    fingerprint: keyFingerprint,
     seal(binding: CredentialBinding, value: string): SealedCredential {
       const authenticatedIdentity = aad(binding);
       if (

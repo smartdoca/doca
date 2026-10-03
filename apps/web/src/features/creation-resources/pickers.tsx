@@ -1,3 +1,5 @@
+import { Popover, Select } from "antd";
+import { Search, X, LoaderCircle, SlidersHorizontal } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useI18n } from "@web/shared/i18n.js";
 import { api, type Resource } from "@web/shared/api.js";
@@ -5,6 +7,10 @@ import { Dialog } from "@web/features/documents/dialogs.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import type {
   CreationResourceResult,
+  MaterialSearchPage,
+  MaterialRetrievalPage,
+  MaterialCollectionResult,
+  MaterialTagPage,
   ResourceRetrievalPage,
   ResourceProviderDescriptor,
   ResourcePage,
@@ -124,9 +130,13 @@ function ResourceBrowser({
       initialProviderIds,
     ),
     [query, setQuery] = useState(""),
+    [draftQuery, setDraftQuery] = useState(""),
+    [searchAttempt, setSearchAttempt] = useState(0),
     [tag, setTag] = useState(""),
     [sort, setSort] = useState<ResourceSort>("updated");
-  const [items, setItems] = useState<readonly CreationResourceResult[]>([]),
+  const [items, setItems] = useState<
+      readonly (CreationResourceResult | MaterialCollectionResult)[]
+    >([]),
     [cursor, setCursor] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true),
@@ -136,15 +146,55 @@ function ResourceBrowser({
   const [selected, setSelected] = useState<CreationResourceResult | null>(null),
     [parameters, setParameters] = useState<Record<string, unknown>>({}),
     [preview, setPreview] = useState<TemplatePayload | null>(null);
+  const filterToggle = useRef<HTMLButtonElement>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchMode, setSearchMode] = useState<"keyword" | "smart">("keyword");
   const [truncated, setTruncated] = useState(false);
   const [retrievalFailures, setRetrievalFailures] = useState<
     ResourceRetrievalPage["failures"]
   >([]);
   const [matchText, setMatchText] = useState<Record<string, string>>({});
+  const [materialTab, setMaterialTab] = useState<"materials" | "collections">(
+    "materials",
+  );
+  const [collectionScope, setCollectionScope] =
+    useState<MaterialCollectionResult | null>(null);
+  const collectionView =
+    kind === "materials" && materialTab === "collections" && !collectionScope;
+  const browseQuery = useRef("");
+  function leaveCollection() {
+    setCollectionScope(null);
+    setMaterialTab("collections");
+    setQuery(browseQuery.current);
+    setDraftQuery(browseQuery.current);
+    setTag("");
+  }
+  async function openCollection(item: MaterialCollectionResult) {
+    setBusy(true);
+    setError("");
+    try {
+      const current = await send<MaterialCollectionResult>(
+        "materials.collectionDescribe",
+        item.ref,
+        controller.current?.signal,
+      );
+      browseQuery.current = query;
+      setCollectionScope(current);
+      setMaterialTab("materials");
+      setQuery("");
+      setDraftQuery("");
+      setTag("");
+    } catch (error) {
+      if (!controller.current?.signal.aborted)
+        setError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   const initialSourceKey = JSON.stringify(initialProviderIds);
   useEffect(() => {
     setProviderIds(initialProviderIds);
+    setCollectionScope(null);
     setTag("");
     setSort("updated");
   }, [initialSourceKey]);
@@ -156,10 +206,18 @@ function ResourceBrowser({
     ...(contentType ? { contentType } : {}),
     ...(providerIds ? { providerIds } : {}),
     query,
-    tags: tag ? [tag] : [],
+    ...(collectionView
+      ? { collectionTags: tag ? [tag] : [] }
+      : { tags: tag ? [tag] : [] }),
+    ...(collectionScope ? { collectionRefs: [collectionScope.ref] } : {}),
     sort,
   };
-  const filterKey = JSON.stringify([filter, searchMode]);
+  const filterKey = JSON.stringify([
+    filter,
+    searchMode,
+    materialTab,
+    searchAttempt,
+  ]);
   useEffect(() => {
     const abort = new AbortController();
     send<readonly ResourceProviderDescriptor[]>(
@@ -204,15 +262,27 @@ function ResourceBrowser({
         try {
           if (query.trim() && searchMode === "smart") {
             const { sort: _sort, ...retrieval } = filter;
-            const result = await send<ResourceRetrievalPage>(
+            const response = await send<
+              ResourceRetrievalPage | MaterialRetrievalPage
+            >(
               `${kind}.retrieve`,
-              { ...retrieval, query: query.trim(), mode: "auto", topK: 20 },
+              {
+                ...retrieval,
+                query: query.trim(),
+                mode: "auto",
+                topK: 20,
+                ...(kind === "materials" ? { target: materialTab } : {}),
+              },
               abort.signal,
             );
+            const result =
+              "materials" in response ? response[materialTab] : response;
             const described = await Promise.allSettled(
               result.items.map((hit) =>
-                send<CreationResourceResult>(
-                  `${kind}.describe`,
+                send<CreationResourceResult | MaterialCollectionResult>(
+                  collectionView
+                    ? "materials.collectionDescribe"
+                    : `${kind}.describe`,
                   hit.ref,
                   abort.signal,
                 ),
@@ -238,12 +308,21 @@ function ResourceBrowser({
               ),
             );
           } else {
-            const page = await send<ResourcePage>(
-              `${kind}.search`,
-              { ...filter, limit: 24 },
+            const { collectionRefs: _refs, ...memberFilter } = filter;
+            const response = await send<ResourcePage | MaterialSearchPage>(
+              collectionScope ? "materials.collectionItems" : `${kind}.search`,
+              collectionScope
+                ? { ...memberFilter, ref: collectionScope.ref, limit: 24 }
+                : {
+                    ...filter,
+                    limit: 24,
+                    ...(kind === "materials" ? { target: materialTab } : {}),
+                  },
               abort.signal,
             );
             if (generation.current !== version || abort.signal.aborted) return;
+            const page =
+              "materials" in response ? response[materialTab] : response;
             setItems(page.items);
             setCursor(page.nextCursor);
             setPartial(!page.complete);
@@ -263,17 +342,23 @@ function ResourceBrowser({
   useEffect(() => {
     const abort = new AbortController();
     setTagsPartial(false);
-    send<{ items: readonly ResourceTag[]; complete: boolean }>(
+    setTags([]);
+    send<
+      { items: readonly ResourceTag[]; complete: boolean } | MaterialTagPage
+    >(
       `${kind}.tags`,
       {
         ...(contract ? { contract } : {}),
         ...(contentType ? { contentType } : {}),
         ...(providerIds ? { providerIds } : {}),
+        ...(collectionScope ? { collectionRefs: [collectionScope.ref] } : {}),
       },
       abort.signal,
     )
-      .then((result) => {
+      .then((response) => {
         if (abort.signal.aborted) return;
+        const result =
+          "materials" in response ? response[materialTab] : response;
         setTags(result.items);
         setTagsPartial(!result.complete);
       })
@@ -284,6 +369,8 @@ function ResourceBrowser({
   }, [
     kind,
     JSON.stringify(providerIds),
+    materialTab,
+    JSON.stringify(collectionScope?.ref),
     contract?.id,
     contract?.version,
     contentType?.id,
@@ -295,12 +382,23 @@ function ResourceBrowser({
     const version = generation.current;
     setLoading(true);
     try {
-      const page = await send<ResourcePage>(
-        `${kind}.search`,
-        { ...filter, cursor, limit: 24 },
+      const { collectionRefs: _refs, ...memberFilter } = filter;
+      const response = await send<ResourcePage | MaterialSearchPage>(
+        collectionScope ? "materials.collectionItems" : `${kind}.search`,
+        collectionScope
+          ? { ...memberFilter, ref: collectionScope.ref, cursor, limit: 24 }
+          : kind === "materials"
+            ? {
+                ...filter,
+                target: materialTab,
+                cursors: { [materialTab]: cursor },
+                limit: 24,
+              }
+            : { ...filter, cursor, limit: 24 },
         controller.current?.signal,
       );
       if (version !== generation.current) return;
+      const page = "materials" in response ? response[materialTab] : response;
       setItems((old) => [...old, ...page.items]);
       setCursor(page.nextCursor);
       setPartial(!page.complete);
@@ -368,9 +466,31 @@ function ResourceBrowser({
   ).filter((value) => selectedProviders.every((p) => p.sorts.includes(value)));
   function changeSources(ids: readonly string[] | undefined) {
     setProviderIds(ids);
+    setCollectionScope(null);
     setTag("");
     setSort("updated");
     onSourcesChange?.(ids);
+  }
+  const popupContainer = (trigger: HTMLElement) =>
+    trigger.closest<HTMLElement>('[role="dialog"]') ?? document.body;
+  const smartResults = searchMode === "smart" && !!query.trim();
+  const advancedFiltersActive =
+    !!query.trim() || sort !== "updated" || searchMode !== "keyword";
+  const resultTitle = t(
+    kind === "templates"
+      ? "resources.templates"
+      : collectionView
+        ? "resources.collections"
+        : "resources.materialItems",
+  );
+  function clearQuery() {
+    setDraftQuery("");
+    setQuery("");
+  }
+  function resetAdvancedFilters() {
+    clearQuery();
+    setSearchMode("keyword");
+    setSort("updated");
   }
   const nativeFormat = preview?.contentType.id.startsWith("doca.native.")
     ? (preview.contentType.id.slice(12) as Resource["format"])
@@ -379,185 +499,387 @@ function ResourceBrowser({
     <Dialog
       title={
         selected?.title ??
+        collectionScope?.title ??
         t(kind === "templates" ? "resources.templates" : "resources.materials")
       }
       close={busy ? () => {} : close}
-      className="modal-gallery"
+      className="modal-gallery resource-browser"
     >
       {!selected && (
-        <>
-          <div className="resource-filters">
-            <input
-              aria-label={t("resources.search")}
-              placeholder={t("resources.search")}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              disabled={busy}
-            />
-            <details className="resource-source-picker">
-              <summary>
-                {t("resources.source")} ·{" "}
-                {providerIds === undefined
-                  ? t("resources.allSources")
-                  : t("resources.selectedSources", {
-                      count: providerIds.length,
-                    })}
-              </summary>
-              <fieldset disabled={busy}>
-                <legend>{t("resources.source")}</legend>
-                <button type="button" onClick={() => changeSources(undefined)}>
-                  {t("resources.allSources")}
+        <div className="resource-browser-view">
+          {kind === "materials" &&
+            (collectionScope ? (
+              <div className="resource-collection-heading">
+                <button disabled={busy} onClick={leaveCollection}>
+                  {t("resources.backToCollections")}
                 </button>
-                <button type="button" onClick={() => changeSources([])}>
-                  {t("resources.clearSources")}
-                </button>
-                {providers.map((p) => (
-                  <label key={p.id}>
-                    <input
-                      type="checkbox"
-                      aria-label={p.title[locale]}
-                      checked={
-                        providerIds === undefined || providerIds.includes(p.id)
-                      }
-                      onChange={(event) => {
-                        const ids = new Set(
-                          providerIds ?? providers.map((source) => source.id),
-                        );
-                        if (event.target.checked) ids.add(p.id);
-                        else ids.delete(p.id);
-                        changeSources([...ids].sort());
-                      }}
-                    />
-                    <span>
-                      <strong>{p.title[locale]}</strong>
-                      {p.description && <small>{p.description[locale]}</small>}
-                    </span>
-                  </label>
+                <strong>{collectionScope.title}</strong>
+                <span>{collectionScope.source.title[locale]}</span>
+              </div>
+            ) : (
+              <div
+                className="resource-tabs"
+                role="tablist"
+                aria-label={t("resources.materials")}
+              >
+                {(["materials", "collections"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    role="tab"
+                    aria-selected={materialTab === tab}
+                    disabled={busy}
+                    onClick={() => {
+                      setMaterialTab(tab);
+                      setTag("");
+                    }}
+                  >
+                    {t(
+                      tab === "materials"
+                        ? "resources.materialItems"
+                        : "resources.collections",
+                    )}
+                  </button>
                 ))}
-              </fieldset>
-            </details>
-            <select
-              aria-label={t("resources.searchMode")}
-              value={searchMode}
-              disabled={busy}
-              onChange={(e) =>
-                setSearchMode(e.target.value as "keyword" | "smart")
-              }
-            >
-              <option value="keyword">{t("resources.keywordSearch")}</option>
-              <option value="smart">{t("resources.smartSearch")}</option>
-            </select>
-            <select
-              aria-label={t("resources.sort")}
-              value={sort}
-              disabled={busy || (searchMode === "smart" && !!query.trim())}
-              onChange={(e) => setSort(e.target.value as ResourceSort)}
-            >
-              {supported.map((s) => (
-                <option key={s} value={s}>
-                  {t(`resources.sort.${s}` as "resources.sort.updated")}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="resource-tags">
-            <button
-              className={!tag ? "active" : ""}
-              disabled={busy}
-              onClick={() => setTag("")}
-            >
-              {t("resources.allTags")}
-            </button>
-            {tags.map((x) => (
-              <button
-                className={tag === x.id ? "active" : ""}
-                key={x.id}
-                disabled={busy}
-                onClick={() => setTag(x.id)}
-              >
-                {x.title[locale]}
-              </button>
+              </div>
             ))}
-          </div>
-          {error && <Feedback tone="error" message={error} />}{" "}
-          {(partial || tagsPartial) && (
-            <Feedback tone="warning" message={t("resources.partial")} />
-          )}
-          {retrievalFailures.length > 0 && (
-            <ul className="resource-failures">
-              {retrievalFailures.map((failure) => (
-                <li key={failure.providerId}>
-                  {providers.find((p) => p.id === failure.providerId)?.title[
-                    locale
-                  ] ?? failure.providerId}
-                  ：
-                  {t(
-                    `resources.retrieval.${failure.code}` as "resources.retrieval.unsupported",
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          {truncated && (
-            <p className="resource-retrieval-limit">
-              {t("resources.retrievalLimit")}
-            </p>
-          )}
-          <div className="template-grid">
-            {blank && (
-              <button
-                className="template-blank"
-                disabled={busy}
-                onClick={() => {
-                  setBusy(true);
-                  void Promise.resolve()
-                    .then(blank)
-                    .catch((e) => {
-                      setError(e.message);
-                      setBusy(false);
-                    });
-                }}
+          <div className="resource-browse-filters">
+            <div
+              className="resource-browse-row"
+              role="group"
+              aria-label={t("resources.source")}
+            >
+              <span className="resource-browse-label">
+                {t("resources.source")}
+              </span>
+              <div className="resource-browse-options">
+                <button
+                  type="button"
+                  aria-pressed={providerIds === undefined}
+                  disabled={busy}
+                  onClick={() => {
+                    if (providerIds !== undefined) changeSources(undefined);
+                  }}
+                >
+                  {t("resources.all")}
+                </button>
+                {providers.map((provider) => (
+                  <button
+                    type="button"
+                    key={provider.id}
+                    aria-pressed={providerIds?.includes(provider.id) ?? false}
+                    title={provider.description?.[locale]}
+                    disabled={busy}
+                    onClick={() => {
+                      const current = providerIds ?? [];
+                      changeSources(
+                        current.includes(provider.id)
+                          ? current.filter((id) => id !== provider.id)
+                          : [...current, provider.id].sort(),
+                      );
+                    }}
+                  >
+                    {provider.title[locale]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div
+              className="resource-browse-row"
+              role="group"
+              aria-label={t("resources.tags")}
+            >
+              <span className="resource-browse-label">
+                {t("resources.tags")}
+              </span>
+              <div className="resource-browse-options">
+                <button
+                  type="button"
+                  aria-pressed={!tag}
+                  disabled={busy}
+                  onClick={() => setTag("")}
+                >
+                  {t("resources.all")}
+                </button>
+                {tags.map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    aria-pressed={tag === item.id}
+                    disabled={busy}
+                    onClick={() => setTag(item.id)}
+                  >
+                    {item.title[locale]}
+                  </button>
+                ))}
+              </div>
+              <Popover
+                placement="bottom"
+                trigger="click"
+                open={filtersOpen}
+                onOpenChange={setFiltersOpen}
+                getPopupContainer={popupContainer}
+                content={
+                  <div
+                    className="resource-advanced-filters"
+                    role="region"
+                    aria-label={t("resources.filters")}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.stopPropagation();
+                        setFiltersOpen(false);
+                        filterToggle.current?.focus();
+                      }
+                    }}
+                  >
+                    <div className="resource-advanced-heading">
+                      <strong>{t("resources.filters")}</strong>
+                      <button
+                        type="button"
+                        className="resource-filter-reset"
+                        disabled={
+                          busy || (!advancedFiltersActive && !draftQuery)
+                        }
+                        onClick={resetAdvancedFilters}
+                      >
+                        {t("search.reset")}
+                      </button>
+                    </div>
+                    <form
+                      className="resource-search-input"
+                      role="search"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        if (busy || !draftQuery.trim()) return;
+                        setQuery(draftQuery.trim());
+                        setSearchAttempt((n) => n + 1);
+                        setFiltersOpen(false);
+                        filterToggle.current?.focus();
+                      }}
+                    >
+                      <input
+                        aria-label={t("resources.search")}
+                        placeholder={t(
+                          collectionScope
+                            ? "resources.searchCollectionPlaceholder"
+                            : kind === "templates"
+                              ? searchMode === "smart"
+                                ? "resources.templateSmartPlaceholder"
+                                : "resources.templateSearchPlaceholder"
+                              : searchMode === "smart"
+                                ? "resources.materialSmartPlaceholder"
+                                : "resources.materialSearchPlaceholder",
+                        )}
+                        value={draftQuery}
+                        maxLength={1000}
+                        onChange={(event) => setDraftQuery(event.target.value)}
+                        disabled={busy}
+                      />
+                      {draftQuery && (
+                        <button
+                          type="button"
+                          className="resource-search-clear"
+                          aria-label={t("resources.clearQuery")}
+                          disabled={busy}
+                          onClick={clearQuery}
+                        >
+                          <X size={16} aria-hidden="true" />
+                        </button>
+                      )}
+                      <Select
+                        className="resource-search-mode"
+                        variant="borderless"
+                        aria-label={t("resources.searchMode")}
+                        value={searchMode}
+                        disabled={busy}
+                        getPopupContainer={popupContainer}
+                        onChange={setSearchMode}
+                        options={[
+                          {
+                            value: "keyword",
+                            label: t("resources.keywordSearch"),
+                          },
+                          { value: "smart", label: t("resources.smartSearch") },
+                        ]}
+                      />
+                      <button
+                        type="submit"
+                        className="resource-search-submit"
+                        aria-label={t("common.search")}
+                        title={t("common.search")}
+                        disabled={
+                          busy ||
+                          !draftQuery.trim() ||
+                          (loading && draftQuery.trim() === query.trim())
+                        }
+                      >
+                        {loading ? (
+                          <LoaderCircle
+                            size={16}
+                            className="resource-search-spinner"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <Search size={16} aria-hidden="true" />
+                        )}
+                      </button>
+                    </form>
+                    <div className="resource-filter-field">
+                      <span>{t("resources.sort")}</span>
+                      <Select
+                        aria-label={t("resources.sort")}
+                        value={smartResults ? "relevance" : sort}
+                        disabled={busy || smartResults}
+                        getPopupContainer={popupContainer}
+                        onChange={(value) => setSort(value as ResourceSort)}
+                        options={
+                          smartResults
+                            ? [
+                                {
+                                  value: "relevance",
+                                  label: t("resources.sort.relevance"),
+                                },
+                              ]
+                            : supported.map((value) => ({
+                                value,
+                                label: t(
+                                  `resources.sort.${value}` as "resources.sort.updated",
+                                ),
+                              }))
+                        }
+                      />
+                    </div>
+                  </div>
+                }
               >
-                <strong>{t("resources.blank")}</strong>
-                <span>{t("resources.blankHelp")}</span>
+                <button
+                  type="button"
+                  className="resource-filter-toggle"
+                  ref={filterToggle}
+                  aria-label={t("resources.filters")}
+                  aria-expanded={filtersOpen}
+                  data-active={advancedFiltersActive || undefined}
+                  title={t("resources.filters")}
+                  disabled={busy}
+                >
+                  <SlidersHorizontal size={16} aria-hidden="true" />
+                </button>
+              </Popover>
+            </div>
+          </div>
+          <div className="resource-results-heading">
+            <div className="resource-results-title">
+              <strong>{collectionScope?.title ?? resultTitle}</strong>
+              {query && (
+                <button
+                  type="button"
+                  className="resource-query-summary"
+                  title={query}
+                  aria-label={t("resources.clearQuery")}
+                  disabled={busy}
+                  onClick={clearQuery}
+                >
+                  <Search size={12} aria-hidden="true" />
+                  <span>{query}</span>
+                  <X size={12} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+            <span role="status" aria-live="polite">
+              {loading
+                ? t("resources.loading")
+                : t("resources.loadedCount", { count: items.length })}
+            </span>
+          </div>
+          <div className="resource-results">
+            {error && <Feedback tone="error" message={error} />}{" "}
+            {(partial || tagsPartial) && (
+              <Feedback tone="warning" message={t("resources.partial")} />
+            )}
+            {retrievalFailures.length > 0 && (
+              <ul className="resource-failures">
+                {retrievalFailures.map((failure) => (
+                  <li key={failure.providerId}>
+                    {providers.find((p) => p.id === failure.providerId)?.title[
+                      locale
+                    ] ?? failure.providerId}
+                    ：
+                    {t(
+                      `resources.retrieval.${failure.code}` as "resources.retrieval.unsupported",
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {truncated && (
+              <p className="resource-retrieval-limit">
+                {t("resources.retrievalLimit")}
+              </p>
+            )}
+            <div className="template-grid">
+              {blank && (
+                <button
+                  className="template-blank"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    void Promise.resolve()
+                      .then(blank)
+                      .catch((e) => {
+                        setError(e.message);
+                        setBusy(false);
+                      });
+                  }}
+                >
+                  <strong>{t("resources.blank")}</strong>
+                  <span>{t("resources.blankHelp")}</span>
+                </button>
+              )}
+              {items.map((item) => (
+                <button
+                  className="template-card"
+                  key={JSON.stringify(item.ref)}
+                  disabled={busy}
+                  onClick={() =>
+                    "parameters" in item
+                      ? select(item)
+                      : void openCollection(item)
+                  }
+                >
+                  {item.preview && (
+                    <div className="resource-card-cover">
+                      <img
+                        src={item.preview}
+                        alt={item.title}
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </div>
+                  )}
+                  <strong>{item.title}</strong>
+                  {"count" in item && item.count !== undefined && (
+                    <small>
+                      {t("resources.collectionCount", { count: item.count })}
+                    </small>
+                  )}
+                  <span>{item.summary}</span>
+                  <span
+                    className="resource-card-source"
+                    title={item.source.description?.[locale]}
+                  >
+                    {item.source.title[locale]}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {!loading && !items.length && <p>{t("resources.empty")}</p>}
+            {loading && <p>{t("resources.loading")}</p>}
+            {cursor && (
+              <button disabled={loading || busy} onClick={() => void more()}>
+                {t("resources.more")}
               </button>
             )}
-            {items.map((item) => (
-              <button
-                className="template-card"
-                key={JSON.stringify(item.ref)}
-                disabled={busy}
-                onClick={() => select(item)}
-              >
-                {item.preview && (
-                  <div className="resource-card-cover">
-                    <img
-                      src={item.preview}
-                      alt={item.title}
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                )}
-                <strong>{item.title}</strong>
-                <span>{item.summary}</span>
-                <span
-                  className="resource-card-source"
-                  title={item.source.description?.[locale]}
-                >
-                  {item.source.title[locale]}
-                </span>
-              </button>
-            ))}
           </div>
-          {!loading && !items.length && <p>{t("resources.empty")}</p>}
-          {loading && <p>{t("resources.loading")}</p>}
-          {cursor && (
-            <button disabled={loading || busy} onClick={() => void more()}>
-              {t("resources.more")}
-            </button>
-          )}
-        </>
+        </div>
       )}
       {selected && (
         <section className="resource-selection">
@@ -575,6 +897,15 @@ function ResourceBrowser({
             <p>{matchText[JSON.stringify(selected.ref)]}</p>
           )}
           <small>{selected.license}</small>
+          {kind === "materials" && "collections" in selected && (
+            <p>
+              {t("resources.collectionMembership", {
+                count: (
+                  selected as import("@smartdoca/plugin-contracts").MaterialResult
+                ).collections.length,
+              })}
+            </p>
+          )}
           {kind === "templates" &&
             (Object.values(selected.parameters.properties ?? {}).some(
               (p) =>
@@ -598,35 +929,60 @@ function ResourceBrowser({
                     {schema.description ?? key}
                     {selected.parameters.required?.includes(key) ? " *" : ""}
                     {schema.type === "boolean" ? (
-                      <input
-                        type="checkbox"
-                        checked={parameters[key] === true}
+                      <Select
+                        aria-label={schema.description ?? key}
+                        value={
+                          typeof parameters[key] === "boolean"
+                            ? String(parameters[key])
+                            : undefined
+                        }
+                        placeholder={t("resources.choose")}
+                        allowClear
                         disabled={busy}
-                        onChange={(e) => {
-                          setParameters((old) => ({
-                            ...old,
-                            [key]: e.target.checked,
-                          }));
+                        getPopupContainer={popupContainer}
+                        options={[
+                          { value: "true", label: t("resources.booleanTrue") },
+                          {
+                            value: "false",
+                            label: t("resources.booleanFalse"),
+                          },
+                        ]}
+                        onChange={(value) => {
+                          setParameters((old) => {
+                            const next = { ...old };
+                            if (value === undefined) delete next[key];
+                            else next[key] = value === "true";
+                            return next;
+                          });
                           setPreview(null);
                         }}
                       />
                     ) : schema.type === "string" && schema.enum ? (
-                      <select
-                        value={String(parameters[key] ?? "")}
+                      <Select
+                        aria-label={schema.description ?? key}
+                        value={
+                          parameters[key] === undefined
+                            ? undefined
+                            : String(parameters[key])
+                        }
+                        placeholder={t("resources.choose")}
+                        allowClear
                         disabled={busy}
-                        onChange={(e) => {
-                          setParameters((old) => ({
-                            ...old,
-                            [key]: e.target.value,
-                          }));
+                        getPopupContainer={popupContainer}
+                        options={schema.enum.map((value) => ({
+                          value,
+                          label: value,
+                        }))}
+                        onChange={(value) => {
+                          setParameters((old) => {
+                            const next = { ...old };
+                            if (value === undefined) delete next[key];
+                            else next[key] = value;
+                            return next;
+                          });
                           setPreview(null);
                         }}
-                      >
-                        <option value="">{t("resources.choose")}</option>
-                        {schema.enum.map((x) => (
-                          <option key={x}>{x}</option>
-                        ))}
-                      </select>
+                      />
                     ) : (
                       <input
                         type={schema.type === "string" ? "text" : "number"}

@@ -1,5 +1,5 @@
 import { createUserDirectory } from "@core/modules/discovery/users.js";
-import { HOST_VERSION } from "../version.js";
+import { HOST_VERSION } from "./version.js";
 import { pluginMobileActor } from "../plugins/mobile-session.js";
 import { emitIntegrationEvent } from "@core/modules/automation/events.js";
 import {
@@ -492,6 +492,13 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     realtime,
     consumeRateLimit: (key, max, windowMs) =>
       realtimeCluster.consumeRateLimit(key, max, windowMs),
+  }).catch(async (error) => {
+    // Failed composition must release already-created connections and workers.
+    try {
+      await api.close();
+    } finally {
+      throw error;
+    }
   });
   // Fastify routes are immutable after mounting, so the host is intentionally
   // disposed only from application close (or startup rollback below).

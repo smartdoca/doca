@@ -13,7 +13,13 @@ import type {
   PluginDataQuery,
   PluginStoredObject,
   PluginObjectStorageServiceV1,
+  PluginCredentialServiceV1,
 } from "@smartdoca/plugin-sdk/storage";
+import type { CredentialCipher } from "./credential-cipher.js";
+import {
+  bindPluginCredentials,
+  verifyCredentialKey,
+} from "./plugin-credentials.js";
 import { createPluginStorageNamespace } from "./plugin-storage-namespaces.js";
 import type { HostFileStore } from "./host-file-store.js";
 
@@ -208,6 +214,12 @@ export async function removePluginStorage(db: DB, id: string) {
     .where("plugin_id", "=", id)
     .where("generation", "=", row.generation)
     .execute();
+  await db
+    .deleteFrom("plugin_credentials")
+    .where("plugin_id", "=", id)
+    .where("namespace", "=", namespace.database)
+    .where("generation", "=", row.generation)
+    .execute();
 }
 /** Durable garbage intents survive process crashes and storage outages. Archives never enter this collector. */
 export async function cleanupPluginObjects(db: DB, files: HostFileStore) {
@@ -247,6 +259,7 @@ export async function cleanupPluginObjects(db: DB, files: HostFileStore) {
 export interface PluginStorageServices {
   readonly database: PluginDatabaseServiceV1;
   readonly objects: PluginObjectStorageServiceV1;
+  readonly credentials?: PluginCredentialServiceV1;
 }
 
 /** Internal factory: the SDK receives only these already-bound services. */
@@ -255,6 +268,7 @@ export async function bindPluginStorage(
   files: HostFileStore,
   id: string,
   dataVersion: string,
+  credentialCipher?: CredentialCipher,
 ): Promise<PluginStorageServices> {
   const namespace = createPluginStorageNamespace(id);
   const installed = await db
@@ -679,5 +693,21 @@ export async function bindPluginStorage(
           if (row) await cleanupPluginObjects(db, files);
         }),
     });
-  return Object.freeze({ database, objects });
+  if (credentialCipher) await verifyCredentialKey(db, credentialCipher);
+  return Object.freeze({
+    database,
+    objects,
+    ...(credentialCipher
+      ? {
+          credentials: bindPluginCredentials(
+            db,
+            credentialCipher,
+            id,
+            namespace.database,
+            generation,
+            current,
+          ),
+        }
+      : {}),
+  });
 }

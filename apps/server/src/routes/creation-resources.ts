@@ -3,11 +3,15 @@ import { z } from "zod";
 import type { Actor } from "@core/modules/identity/passwords.js";
 import type {
   TemplatesServiceV1,
-  MaterialsServiceV1,
+  MaterialsServiceV2,
 } from "@smartdoca/plugin-sdk/creation-resources";
 import type { PluginRequestContext } from "@smartdoca/plugin-sdk/platform";
 import type { TemplateSelection } from "@smartdoca/plugin-contracts";
 import {
+  materialQueryFilterSchema,
+  materialSearchSchema,
+  materialRetrievalSchema,
+  materialCollectionItemsSchema,
   resourceFilterSchema,
   resourceSearchSchema,
   resourceRetrievalSchema,
@@ -17,7 +21,7 @@ import {
 import { fail } from "@core/shared/errors.js";
 export interface CreationResourceServices {
   templates: TemplatesServiceV1;
-  materials: MaterialsServiceV1;
+  materials: MaterialsServiceV2;
 }
 export async function callCreationResource(
   services: CreationResourceServices,
@@ -37,13 +41,42 @@ export async function callCreationResource(
     case "providers":
       return service.providers(context, resourceFilterSchema.parse(body));
     case "tags":
-      return service.tags(context, resourceFilterSchema.parse(body));
+      return kind === "materials"
+        ? services.materials.tags(
+            context,
+            materialQueryFilterSchema.parse(body),
+          )
+        : services.templates.tags(context, resourceFilterSchema.parse(body));
     case "search":
-      return service.search(context, resourceSearchSchema.parse(body));
+      return kind === "materials"
+        ? services.materials.search(context, materialSearchSchema.parse(body))
+        : services.templates.search(context, resourceSearchSchema.parse(body));
     case "retrieve":
-      return service.retrieve(context, resourceRetrievalSchema.parse(body));
+      return kind === "materials"
+        ? services.materials.retrieve(
+            context,
+            materialRetrievalSchema.parse(body),
+          )
+        : services.templates.retrieve(
+            context,
+            resourceRetrievalSchema.parse(body),
+          );
     case "describe":
       return service.describe(context, resourceRefSchema.parse(body));
+    case "collectionDescribe":
+      if (kind === "materials")
+        return services.materials.collectionDescribe(
+          context,
+          resourceRefSchema.parse(body),
+        );
+      break;
+    case "collectionItems":
+      if (kind === "materials")
+        return services.materials.collectionItems(
+          context,
+          materialCollectionItemsSchema.parse(body),
+        );
+      break;
     case "read":
       if (kind === "templates")
         return services.templates.read(

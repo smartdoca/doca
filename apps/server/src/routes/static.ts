@@ -1,5 +1,5 @@
 import { fail } from "@core/shared/errors.js";
-import { HOST_VERSION } from "../version.js";
+import { HOST_VERSION } from "../app/version.js";
 import type { DB } from "@db/index.js";
 import type { FastifyInstance } from "fastify";
 import { readFile, realpath } from "node:fs/promises";

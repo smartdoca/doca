@@ -2,7 +2,7 @@
 
 [中文](deployment.zh-CN.md)
 
-One server can run the published image `docker.io/smartdoca/doca:0.1.9`. A single container uses SQLite and does not need PostgreSQL or Redis. Use those only when you run more than one application replica. See [single instance and horizontal scaling](horizontal-scaling.md).
+One server can run the published image `docker.io/smartdoca/doca:0.1.10`. A single container uses SQLite and does not need PostgreSQL or Redis. Use those only when you run more than one application replica. See [single instance and horizontal scaling](horizontal-scaling.md).
 
 ## Requirements
 
@@ -26,7 +26,7 @@ Edit `.env` before the first start.
 
 File storage also requires `DOCA_FILE_STORE_ID` and `DOCA_FILE_STORES_JSON`, as provided by `docker.env.example`. Backend paths and credentials are read from the environment; the administration page is read-only. See [file storage](storage.md).
 
-Version 0.1.9 rejects old database baselines, plugin installation lists, SDK ranges and storage configuration. Preserve the old deployment/data and use a new empty database and separate storage for this release. No conversion or migration is provided. See [release requirements](releases/0.1.9.md).
+Version 0.1.10 rejects old database baselines, plugin installation lists, SDK ranges and storage configuration. Preserve the old deployment/data and use a new empty database and separate storage for this release. No conversion or migration is provided. See [release requirements](releases/0.1.10.md).
 
 `DOCA_ORIGIN` is the origin users type in the browser. Production rejects any value that is not HTTPS. Do not add a path, query, or trailing slash.
 
@@ -43,7 +43,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker compose up -d` pulls `docker.io/smartdoca/doca:0.1.9`. Add `--build` only when you want an image built from this checkout.
+`docker compose up -d` pulls `docker.io/smartdoca/doca:0.1.10`. Add `--build` only when you want an image built from this checkout.
 
 Check the container:
 
@@ -52,7 +52,7 @@ docker compose ps
 curl -fsS http://127.0.0.1:39120/health
 ```
 
-A healthy process returns `{"status":"ok","version":"0.1.9"}`.
+A healthy process returns `{"status":"ok","version":"0.1.10"}`.
 
 SQLite, uploaded files, and the AI database are stored in the `doca_data` volume. The database must be empty on first start. A non-empty database whose schema is not the current baseline is refused. Do not delete a database that already contains users.
 
@@ -117,3 +117,5 @@ An official tag such as `v1.2.3` builds the web app and attaches `doca-web-asset
 The container keeps its own `/assets` files. Fonts and images referenced from stylesheets with a root path still load from Doca.
 
 `index.html` is sent with `Cache-Control: no-cache`, so a new visit after a release fetches the new page. Hashed files under `/assets/` are sent with `Cache-Control: public, max-age=31536000, immutable`. Their names change when the content changes, so a year-long cache does not keep an old script after the new HTML is loaded. A CDN in front of `DOCA_ASSET_BASE` needs the same long cache on those hashed files.
+
+Host 0.1.10 / SDK 0.1.9 provides managed plugin credentials, requiring `DOCA_CREDENTIAL_MASTER_KEY`. The credentials-v2 baseline rejects databases from 0.1.9 and earlier without migration; preserve the old deployment and data and use a new empty database. Compose forwards database and cloud-storage environment settings; see [environment example](../docker.env.example), [credential deployment](plugin-credentials.md) and [release notes](releases/0.1.10.md).

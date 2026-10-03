@@ -1,6 +1,6 @@
 {
   "name": "@example/doca-storage",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "license": "MIT",
   "files": [
@@ -9,7 +9,7 @@
     "web"
   ],
   "doca": {
-    "dataVersion": "1",
+    "dataVersion": "2",
     "storage": "host",
     "manifest": "./manifest.json",
     "server": "./server.js",

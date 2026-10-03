@@ -1,3 +1,4 @@
+import type { CredentialCipher } from "../services/credential-cipher.js";
 import {
   createHostFileStore,
   type HostFileStore,
@@ -83,6 +84,7 @@ export class PluginManager {
     readonly archiveStore: HostFileStore = createHostFileStore(
       storageRuntime(),
     ),
+    readonly credentialCipher?: CredentialCipher,
   ) {
     this.directory = path.resolve(directory);
   }
@@ -466,6 +468,7 @@ export class PluginManager {
           this.archiveStore,
           id,
           entry.dataVersion,
+          this.credentialCipher,
         ),
       );
       await runPluginUninstall(installed);

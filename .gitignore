@@ -50,6 +50,7 @@ pnpm-debug.log*
 
 # Local pack output is disposable; vendor contains required file: dependencies.
 *.tgz
+*.zip
 !/vendor/*.tgz
 
 # Local agent rule. The same rule lives in the user Cursor rules directory.

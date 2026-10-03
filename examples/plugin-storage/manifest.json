@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "id": "example.storage",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "displayName": "Storage SDK acceptance",
   "description": "Isolated example of host-managed database, user files and private objects",
-  "sdkRange": "^0.1.7"
+  "sdkRange": "^0.1.8"
 }

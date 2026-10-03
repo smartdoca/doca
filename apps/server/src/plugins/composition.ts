@@ -1,4 +1,6 @@
 import { createHostFileStore } from "../services/host-file-store.js";
+import { createCredentialCipher } from "../services/credential-cipher.js";
+import { verifyCredentialKey } from "../services/plugin-credentials.js";
 import {
   bindPluginStorage,
   cleanupPluginObjects,
@@ -6,6 +8,7 @@ import {
 import {
   pluginDatabaseToken,
   pluginObjectStorageToken,
+  pluginCredentialToken,
 } from "@smartdoca/plugin-sdk/storage";
 import { registerPluginMobileSessions } from "./mobile-session.js";
 import { registerNavigation } from "../routes/navigation.js";
@@ -87,13 +90,18 @@ const aiManifest = {
   ],
 } as const;
 
-function runtimePlugin(runtime: ServerRuntimeService) {
+function runtimePlugin(
+  runtime: ServerRuntimeService,
+  credentialsAvailable: boolean,
+) {
   return definePlugin({
     manifest: runtimeManifest,
     async discover(context) {
       context.provide(serverRuntimeToken, runtime);
       context.provide(pluginDatabaseToken, Object.freeze({}) as never);
       context.provide(pluginObjectStorageToken, Object.freeze({}) as never);
+      if (credentialsAvailable)
+        context.provide(pluginCredentialToken, Object.freeze({}) as never);
       await providePlatform(context, runtime);
     },
   });
@@ -364,101 +372,119 @@ export async function composeServerPlugins(
   runtime: ServerRuntimeService,
 ): Promise<ServerPluginComposition> {
   const host = new PluginHost();
-  const files = createServerFilesCapability(
-    runtime.db,
-    runtime.runtime.storage,
-  );
-  const plugins: DocaPlugin[] = [
-    runtimePlugin(runtime),
-    searchPlugin(),
-    documentsPlugin(runtime, files),
-    aiPlugin(files),
-    filesPlugin(runtime, files),
-  ];
-  const manager = new PluginManager(
-    runtime.options.pluginDirectory ?? pluginDirectory(),
-    plugins.map((p) => p.manifest),
-    runtime.db,
-    undefined,
-    createHostFileStore(runtime.runtime.storage),
-  );
-  let cleanupInFlight: Promise<void> | undefined;
-  const cleanup = () => {
-    if (cleanupInFlight) return cleanupInFlight;
-    cleanupInFlight = cleanupPluginObjects(runtime.db, manager.archiveStore)
-      .then((result) => {
-        if (result.failed)
-          runtime.api.log.warn(result, "Plugin object cleanup pending");
-      })
-      .catch((error) =>
-        runtime.api.log.error(error, "Plugin object cleanup failed"),
-      )
-      .finally(() => {
-        cleanupInFlight = undefined;
-      });
-    return cleanupInFlight;
-  };
-  const cleanupTimer = setInterval(() => void cleanup(), 60_000);
-  cleanupTimer.unref();
-  runtime.api.addHook("onClose", async () => {
-    clearInterval(cleanupTimer);
-    await cleanupInFlight;
-  });
-  await cleanup();
-  const installed = await manager.prepare(runtime.options.plugins);
-  plugins.push(
-    ...(await importInstalledPlugins(
-      installed,
-      plugins.map((p) => p.manifest),
-      (p) =>
-        bindPluginStorage(
-          runtime.db,
-          manager.archiveStore,
-          p.manifest.id,
-          p.dataVersion,
-        ),
-    )),
-  );
-  for (const plugin of plugins) host.register(plugin);
-  const descriptors = host.order.map((id) => {
-    const manifest = plugins.find(
-      (plugin) => plugin.manifest.id === id,
-    )!.manifest;
-    const installedPlugin = installed.find((p) => p.manifest.id === id);
-    return {
-      id: manifest.id,
-      version: manifest.version,
-      ...(installedPlugin?.web ? { web: pluginWebUrl(installedPlugin) } : {}),
-    };
-  });
-  await host.start();
+  const masterKey = process.env.DOCA_CREDENTIAL_MASTER_KEY;
+  const credentialCipher = masterKey
+    ? createCredentialCipher(masterKey)
+    : undefined;
+  runtime.api.addHook("onClose", async () => credentialCipher?.dispose());
   try {
-    await manager.confirm();
+    if (credentialCipher)
+      await verifyCredentialKey(runtime.db, credentialCipher);
+    const files = createServerFilesCapability(
+      runtime.db,
+      runtime.runtime.storage,
+    );
+    const plugins: DocaPlugin[] = [
+      runtimePlugin(runtime, !!credentialCipher),
+      searchPlugin(),
+      documentsPlugin(runtime, files),
+      aiPlugin(files),
+      filesPlugin(runtime, files),
+    ];
+    const manager = new PluginManager(
+      runtime.options.pluginDirectory ?? pluginDirectory(),
+      plugins.map((p) => p.manifest),
+      runtime.db,
+      undefined,
+      createHostFileStore(runtime.runtime.storage),
+      credentialCipher,
+    );
+    let cleanupInFlight: Promise<void> | undefined;
+    const cleanup = () => {
+      if (cleanupInFlight) return cleanupInFlight;
+      cleanupInFlight = cleanupPluginObjects(runtime.db, manager.archiveStore)
+        .then((result) => {
+          if (result.failed)
+            runtime.api.log.warn(result, "Plugin object cleanup pending");
+        })
+        .catch((error) =>
+          runtime.api.log.error(error, "Plugin object cleanup failed"),
+        )
+        .finally(() => {
+          cleanupInFlight = undefined;
+        });
+      return cleanupInFlight;
+    };
+    const cleanupTimer = setInterval(() => void cleanup(), 60_000);
+    cleanupTimer.unref();
+    runtime.api.addHook("onClose", async () => {
+      clearInterval(cleanupTimer);
+      await cleanupInFlight;
+    });
+    await cleanup();
+    const installed = await manager.prepare(runtime.options.plugins);
+    plugins.push(
+      ...(await importInstalledPlugins(
+        installed,
+        plugins.map((p) => p.manifest),
+        (p) =>
+          bindPluginStorage(
+            runtime.db,
+            manager.archiveStore,
+            p.manifest.id,
+            p.dataVersion,
+            credentialCipher,
+          ),
+      )),
+    );
+    for (const plugin of plugins) host.register(plugin);
+    const descriptors = host.order.map((id) => {
+      const manifest = plugins.find(
+        (plugin) => plugin.manifest.id === id,
+      )!.manifest;
+      const installedPlugin = installed.find((p) => p.manifest.id === id);
+      return {
+        id: manifest.id,
+        version: manifest.version,
+        ...(installedPlugin?.web ? { web: pluginWebUrl(installedPlugin) } : {}),
+      };
+    });
+    await host.start();
+    try {
+      await manager.confirm();
+    } catch (error) {
+      await host.dispose();
+      throw error;
+    }
+    registerPluginManagement(runtime.api, runtime.db, runtime.admin, manager);
+    registerPluginMobileSessions(
+      runtime.api,
+      runtime.db,
+      runtime.auth,
+      installed.flatMap((p) => p.navigation),
+      runtime.origin.protocol === "https:",
+    );
+    registerNavigation(
+      runtime.api,
+      runtime.db,
+      runtime.auth,
+      runtime.admin,
+      installed.flatMap((p) => p.navigation),
+    );
+    registerPluginAssets(runtime.api, installed, (id, version) =>
+      manager.assetPlugin(id, version),
+    );
+    const search = host
+      .context(searchManifest.id)!
+      .inject(searchRegistrationToken)
+      .require();
+    return { host, search, plugins: descriptors };
   } catch (error) {
-    await host.dispose();
+    try {
+      await host.dispose();
+    } finally {
+      credentialCipher?.dispose();
+    }
     throw error;
   }
-  registerPluginManagement(runtime.api, runtime.db, runtime.admin, manager);
-  registerPluginMobileSessions(
-    runtime.api,
-    runtime.db,
-    runtime.auth,
-    installed.flatMap((p) => p.navigation),
-    runtime.origin.protocol === "https:",
-  );
-  registerNavigation(
-    runtime.api,
-    runtime.db,
-    runtime.auth,
-    runtime.admin,
-    installed.flatMap((p) => p.navigation),
-  );
-  registerPluginAssets(runtime.api, installed, (id, version) =>
-    manager.assetPlugin(id, version),
-  );
-  const search = host
-    .context(searchManifest.id)!
-    .inject(searchRegistrationToken)
-    .require();
-  return { host, search, plugins: descriptors };
 }
