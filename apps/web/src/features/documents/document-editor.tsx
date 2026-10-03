@@ -93,7 +93,8 @@ import { openReplica } from "@web/features/documents/offline-replica.js";
 import { documentLinkPlugin, internalDocumentId } from "@web/features/documents/document-link.js";
 import { mentionPlugin, DocumentMentions } from "@web/features/documents/document-mentions.js";
 import { DocaYjsDocument as YjsDocument } from "@core/modules/documents/codecs/rich-runtime.js";
-const documentPlugins = [mentionPlugin, documentLinkPlugin];
+import { pluginElementPlugin, RichPluginElements } from "./rich-plugin-elements.js";
+const documentPlugins = [mentionPlugin, documentLinkPlugin, pluginElementPlugin];
 type Anchor = RichAnchor;
 export function DocumentEditor({
   detail,
@@ -711,7 +712,7 @@ function RichDocument({
     />
   );
   return (
-    <section
+    <RichPluginElements documentId={id} handle={toolbarHandle} editable={editable}>{elementInsert => <section
       ref={shell}
       data-page-width={pageWidth}
       style={{ "--document-panel-right": `${panelBounds.right}px`, "--document-panel-top": `${panelBounds.top}px`, "--document-panel-bottom": `${panelBounds.bottom}px` } as React.CSSProperties}
@@ -847,6 +848,7 @@ function RichDocument({
             handle={toolbarHandle}
             disabled={!editable}
             selectionRevision={selectionRevision}
+            elementInsert={elementInsert}
           />,
           toolbarSlot,
         )}
@@ -1256,6 +1258,6 @@ function RichDocument({
           </aside>
         )}
       </div>
-    </section>
+    </section>}</RichPluginElements>
   );
 }

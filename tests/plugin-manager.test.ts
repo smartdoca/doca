@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile, readFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +6,7 @@ import { zipSync, strToU8 } from "fflate";
 import { openTestDatabase } from "./database.js";
 import { PluginManager } from "@server/plugins/manager.js";
 import { PluginStore } from "@server/plugins/store.js";
-import { digest, unpack } from "@server/plugins/archive.js";
+import { digest, unpack, archiveFileIndex } from "@server/plugins/archive.js";
 import { createApp } from "@server/app/create-app.js";
 import { createUser } from "@core/modules/identity/passwords.js";
 import type { DB } from "@db/index.js";
@@ -41,7 +41,7 @@ function bundle(
     id,
     version,
     displayName: "Demo",
-    sdkRange: "^0.1.0",
+    sdkRange: "^0.1.7",
     dependencies,
   };
   return zipSync(
@@ -53,6 +53,7 @@ function bundle(
           type: "module",
           doca: {
             dataVersion,
+            storage: "host",
             manifest: "./manifest.json",
             server: "./server.js",
             web: { directory: "./web", entry: "./index.js" },
@@ -71,6 +72,100 @@ function bundle(
     { mtime: new Date("2020-01-01T00:00:00Z") },
   );
 }
+it.each(["local", "npm", "store"] as const)(
+  "rejects undeclared storage through %s installation without saving the plugin or running its factory",
+  async (source) => {
+    const db = await database();
+    const manager = new PluginManager(await directory(), [], db);
+    await manager.prepare();
+    await manager.confirm();
+    const before = await db.selectFrom("plugin_registry").selectAll().execute();
+    const files = unpack(bundle());
+    const pkg = JSON.parse(new TextDecoder().decode(files["package.json"]!));
+    delete pkg.doca.storage;
+    files["package.json"] = strToU8(JSON.stringify(pkg));
+    files["server.js"] = strToU8("throw new Error('plugin code must not run')");
+    await expect(manager.install(zipSync(files), source)).rejects.toThrow(
+      'doca.storage must be "host"',
+    );
+    expect(
+      await db.selectFrom("plugin_registry").selectAll().execute(),
+    ).toEqual(before);
+    expect(
+      await db.selectFrom("plugin_archives").selectAll().execute(),
+    ).toEqual([]);
+  },
+);
+it("rejects an old shared archive on startup without importing code or modifying persisted registry/data", async () => {
+  const db = await database();
+  const first = new PluginManager(await directory(), [], db);
+  await first.prepare();
+  await first.confirm();
+  await first.install(bundle(), "local");
+  const row = await db
+    .selectFrom("plugin_registry")
+    .selectAll()
+    .executeTakeFirstOrThrow();
+  const state = JSON.parse(row.state);
+  const archive = await db
+    .selectFrom("plugin_archives")
+    .selectAll()
+    .executeTakeFirstOrThrow();
+  const files = unpack(
+    await first.archiveStore.read(
+      archive.store_id,
+      archive.object_key,
+      archive.size,
+      archive.sha256,
+    ),
+  );
+  const pkg = JSON.parse(new TextDecoder().decode(files["package.json"]!));
+  delete pkg.doca.storage;
+  files["package.json"] = strToU8(JSON.stringify(pkg));
+  files["server.js"] = strToU8("throw new Error('old plugin must not run')");
+  const oldBytes = zipSync(files);
+  const oldHash = digest(oldBytes);
+  state.desired["example.demo"].sha256 = oldHash;
+  const stored = await first.archiveStore.putImmutable(
+    `host/plugin-releases/${oldHash}.zip`,
+    oldBytes,
+    "application/zip",
+  );
+  await db.transaction().execute(async (tx) => {
+    await tx
+      .updateTable("plugin_archives")
+      .set({
+        sha256: oldHash,
+        store_id: stored.storeId,
+        object_key: stored.key,
+        size: stored.size,
+        file_index: archiveFileIndex(oldBytes),
+      })
+      .where("sha256", "=", archive.sha256)
+      .execute();
+    await tx
+      .updateTable("plugin_registry")
+      .set({ state: JSON.stringify(state) })
+      .where("id", "=", row.id)
+      .execute();
+  });
+  const before = await db.selectFrom("plugin_registry").selectAll().execute();
+  const archives = await db.selectFrom("plugin_archives").selectAll().execute();
+  const directoryPath = await directory();
+  const dataPath = join(directoryPath, ".old-business-data");
+  await writeFile(dataPath, "preserved");
+  const restarted = new PluginManager(directoryPath, [], db);
+  await expect(restarted.prepare()).rejects.toThrow(
+    'doca.storage must be "host"',
+  );
+  expect(await db.selectFrom("plugin_registry").selectAll().execute()).toEqual(
+    before,
+  );
+  expect(await db.selectFrom("plugin_archives").selectAll().execute()).toEqual(
+    archives,
+  );
+  expect(await readFile(dataPath, "utf8")).toBe("preserved");
+});
 it("synchronizes uploads to a second empty instance and repairs partial/corrupt caches before loading", async () => {
   const db = await database(),
     a = await directory(),
@@ -98,13 +193,29 @@ it("synchronizes uploads to a second empty instance and repairs partial/corrupt 
   expect(await readFile(join(root, "server.js"), "utf8")).toContain(
     "export default",
   );
-  await db
-    .updateTable("plugin_archives")
-    .set({ content: Buffer.from("broken").toString("base64") })
-    .execute();
+  await db.updateTable("plugin_archives").set({ size: 1 }).execute();
   await expect(
     new PluginManager(await directory(), [], db).prepare(),
-  ).rejects.toThrow("checksum");
+  ).rejects.toThrow();
+});
+it("uses a complete verified cache without fetching its shared archive again", async () => {
+  const db = await database(),
+    dir = await directory();
+  const first = new PluginManager(dir, [], db);
+  await first.install(bundle(), "local");
+  await first.prepare();
+  const restarted = new PluginManager(dir, [], db);
+  vi.spyOn(restarted.archiveStore, "read").mockRejectedValue(
+    new Error("archive backend is unavailable"),
+  );
+  expect(await restarted.prepare()).toHaveLength(1);
+  await writeFile(
+    join(dir, ".releases", digest(bundle()), "web/chunk.js"),
+    "corrupt",
+  );
+  await expect(
+    new PluginManager(dir, [], db, undefined, restarted.archiveStore).prepare(),
+  ).rejects.toThrow("backend is unavailable");
 });
 it("upgrades without touching running code and clears the structure number on uninstall", async () => {
   const db = await database(),
@@ -119,6 +230,7 @@ it("upgrades without touching running code and clears the structure number on un
     version: "1.1.0",
     runningVersion: "1.0.0",
     pending: true,
+    canCancel: true,
   });
   expect(await readFile(old!.server, "utf8")).toContain('"version":"1.0.0"');
   await expect(running.install(bundle("1.2.0", "2"), "local")).rejects.toThrow(
@@ -138,16 +250,75 @@ it("upgrades without touching running code and clears the structure number on un
   expect((await emptyInstance.inventory()).plugins).toEqual([]);
   expect(
     JSON.parse(
-      (await db.selectFrom("plugin_registry").select("state").executeTakeFirstOrThrow()).state,
+      (
+        await db
+          .selectFrom("plugin_registry")
+          .select("state")
+          .executeTakeFirstOrThrow()
+      ).state,
     ).dataVersions,
   ).toEqual({});
-  expect((await emptyInstance.install(bundle("2.0.0", "2"), "local")).plugins[0]).toMatchObject({
+  expect(
+    (await emptyInstance.install(bundle("2.0.0", "2"), "local")).plugins[0],
+  ).toMatchObject({
     version: "2.0.0",
     dataVersion: "2",
   });
   expect(
     await db.selectFrom("plugin_archives").selectAll().execute(),
   ).toHaveLength(3);
+});
+it("requires old instances to restart after reinstalling the same release and cannot cancel cleared storage", async () => {
+  const db = await database();
+  const installer = new PluginManager(await directory(), [], db);
+  await installer.install(bundle(), "local");
+  await expect(installer.change("example.demo", "cancel")).rejects.toThrow(
+    "cannot be cancelled",
+  );
+  const old = new PluginManager(await directory(), [], db);
+  await old.prepare();
+  await old.confirm();
+  await old.change("example.demo", "disable");
+  await old.change("example.demo", "cancel");
+  expect((await old.inventory()).restartRequired).toBe(false);
+  await installer.change("example.demo", "remove");
+  await expect(old.change("example.demo", "cancel")).rejects.toThrow(
+    "cannot be cancelled",
+  );
+  await installer.install(bundle(), "local");
+  const before = await db.selectFrom("plugin_registry").selectAll().execute();
+  expect((await old.inventory()).plugins[0]).toMatchObject({
+    version: "1.0.0",
+    runningVersion: "1.0.0",
+    pending: true,
+    canCancel: false,
+  });
+  expect((await old.inventory()).restartRequired).toBe(true);
+  await expect(old.change("example.demo", "cancel")).rejects.toThrow(
+    "installation changed",
+  );
+  expect(await db.selectFrom("plugin_registry").selectAll().execute()).toEqual(
+    before,
+  );
+  const restarted = new PluginManager(await directory(), [], db);
+  await restarted.prepare();
+  await restarted.confirm();
+  expect((await restarted.inventory()).restartRequired).toBe(false);
+  await restarted.change("example.demo", "disable");
+  await restarted.change("example.demo", "cancel");
+  expect((await restarted.inventory()).restartRequired).toBe(false);
+  await restarted.change("example.demo", "disable");
+  const disabled = new PluginManager(await directory(), [], db);
+  await disabled.prepare();
+  await disabled.confirm();
+  await disabled.change("example.demo", "enable");
+  expect((await disabled.inventory()).plugins[0]).toMatchObject({
+    runningVersion: null,
+    pending: true,
+    canCancel: true,
+  });
+  await disabled.change("example.demo", "cancel");
+  expect((await disabled.inventory()).restartRequired).toBe(false);
 });
 it("keeps the install when the plugin uninstall method fails", async () => {
   const db = await database();
@@ -178,15 +349,23 @@ it("keeps the install when the plugin uninstall method fails", async () => {
   expect(state.desired["example.demo"].dataVersion).toBe("1");
   expect(state.dataVersions["example.demo"]).toBe("1");
 });
-it("rejects an install that does not implement uninstall", async () => {
-  const db = await database();
-  await expect(
-    new PluginManager(await directory(), [], db).install(
-      bundle("1.0.0", "1", "example.demo", [], ""),
-      "local",
-    ),
-  ).rejects.toThrow("Plugin example.demo must implement uninstall");
+it("defers runtime imports until startup and rejects a missing uninstall then", async () => {
+  const db = await database(),
+    directoryPath = await directory();
+  const manager = new PluginManager(directoryPath, [], db);
+  await manager.install(bundle("1.0.0", "1", "example.demo", [], ""), "local");
+  const installed = await new PluginManager(
+    await directory(),
+    [],
+    db,
+  ).prepare();
+  const { importInstalledPlugins } =
+    await import("@server/plugins/installation.js");
+  await expect(importInstalledPlugins(installed)).rejects.toThrow(
+    "must implement uninstall",
+  );
 });
+
 it("validates enabled dependency graphs and refuses concurrent lost updates", async () => {
   const db = await database();
   const a = new PluginManager(await directory(), [], db),
@@ -200,6 +379,21 @@ it("validates enabled dependency graphs and refuses concurrent lost updates", as
   );
   await expect(a.change("example.demo", "disable")).rejects.toThrow();
   await expect(a.change("example.demo", "remove")).rejects.toThrow();
+  let arrivals = 0;
+  let release!: () => void;
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  for (const manager of [a, b]) {
+    const save = (manager as any).save.bind(manager);
+    vi.spyOn(manager as any, "save").mockImplementation(
+      async (...args: unknown[]) => {
+        if (++arrivals === 2) release();
+        await barrier;
+        return save(...args);
+      },
+    );
+  }
   const results = await Promise.allSettled([
     a.change("example.consumer", "disable"),
     b.change("example.consumer", "remove"),

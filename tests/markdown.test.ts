@@ -10,6 +10,7 @@ import {
   createMarkdownTextAnchor,
   resolveMarkdownTextAnchor,
 } from "@smartdoca/markdown";
+import { createMarkdownReplica } from "@web/features/documents/markdown-replica.js";
 import { type DB } from "@db/index.js";
 import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
@@ -470,4 +471,48 @@ it("rejects an oversized collaboration update atomically, preserves receipt iden
   loaded.destroy();
   x.a.destroy();
   x.b.destroy();
+});
+
+it("bootstraps the host replica without unsubmitted metadata before its first text edit", async () => {
+  const x = await setup();
+  const replica = createMarkdownReplica();
+  const updates: Uint8Array[] = [];
+  const stop = observeLocalMarkdownUpdates(replica, (e) =>
+    updates.push(e.update),
+  );
+  try {
+    expect(Y.decodeStateVector(Y.encodeStateVector(replica.doc)).size).toBe(0);
+    applyRemoteMarkdownUpdate(replica.doc, unb64(x.baseline.update));
+    const session = replica.session({
+      ready: true,
+      state: "ready",
+      saveState: "clean",
+      epochId: x.baseline.epochId,
+    });
+    replica.text.insert(0, "first host edit");
+    expect(updates).toHaveLength(1);
+    await x.submit(updates[0]!);
+    const restored = await restoreMarkdown(db, x.resource.id);
+    try {
+      expect(restored.doc.getText("markdown").toString()).toBe(
+        "first host edit",
+      );
+    } finally {
+      restored.destroy();
+    }
+    const status = replica.session({
+      ready: true,
+      state: "ready",
+      saveState: "saving",
+    });
+    expect(status.doc).toBe(session.doc);
+    expect(status.awareness).toBe(session.awareness);
+    expect(status.undoManager).toBe(session.undoManager);
+    expect(updates).toHaveLength(1);
+  } finally {
+    stop();
+    replica.dispose();
+    x.a.destroy();
+    x.b.destroy();
+  }
 });

@@ -1,5 +1,7 @@
 import { extensionSlots, extensionMatches, type ExtensionCommand, type ExtensionView, type ExtensionPlacement, type ExtensionContext, type ExtensionSlot } from "./extensions.js";
 export * from "./extensions.js";
+import { validateElementContribution, type PluginElementContribution } from "./editor-elements.js";
+export * from "./editor-elements.js";
 export type ClientPluginTarget = "web" | "mobile";
 export type PluginLocale = "zh" | "en";
 export type RegistryDisposer = () => void;
@@ -110,6 +112,20 @@ function compareContributions(
  * atomically or leaves no record behind; the returned disposer is idempotent.
  */
 export class EffectRegistry<T extends OwnedContribution> {
+  #revision = 0;
+  readonly #listeners = new Set<() => void>();
+  readonly snapshot = () => this.#revision;
+  readonly subscribe = (listener: () => void) => {
+    this.#listeners.add(listener);
+    return () => { this.#listeners.delete(listener); };
+  };
+  #emit() {
+    this.#revision++;
+    for (const listener of this.#listeners) {
+      // Observers cannot prevent atomic registration/disposal or other observers.
+      try { listener(); } catch { /* consumer error stays outside registry state */ }
+    }
+  }
   readonly #byId = new Map<string, T>();
   readonly #byConflictKey = new Map<string, T>();
 
@@ -139,6 +155,7 @@ export class EffectRegistry<T extends OwnedContribution> {
       );
     this.#byId.set(contribution.id, contribution);
     if (conflictKey) this.#byConflictKey.set(conflictKey, contribution);
+    this.#emit();
     let active = true;
     return () => {
       if (!active) return;
@@ -150,6 +167,7 @@ export class EffectRegistry<T extends OwnedContribution> {
         this.#byConflictKey.get(conflictKey) === contribution
       )
         this.#byConflictKey.delete(conflictKey);
+      this.#emit();
     };
   }
 
@@ -332,6 +350,7 @@ export type DefaultWebPluginTypes = {
 
 export interface WebPluginBundle<T extends WebPluginTypes = DefaultWebPluginTypes> {
   readonly manifest: ClientPluginManifest;
+  readonly elements?: readonly PluginElementContribution<T["View"]>[];
   readonly commands?: readonly ExtensionCommand[];
   readonly views?: readonly ExtensionView<T["View"]>[];
   readonly placements?: readonly ExtensionPlacement[];
@@ -410,6 +429,7 @@ function validateExtension(item: ExtensionCommand | ExtensionView, method: unkno
 export class WebPluginRegistry<
   T extends WebPluginTypes = DefaultWebPluginTypes,
 > {
+  readonly elements = new EffectRegistry<PluginElementContribution<T["View"]>>("web editor element");
   readonly commands = new EffectRegistry<ExtensionCommand>("web command");
   readonly views = new EffectRegistry<ExtensionView<T["View"]>>("web view");
   readonly placements = new EffectRegistry<ExtensionPlacement>("web placement");
@@ -462,6 +482,12 @@ export class WebPluginRegistry<
     const effects: RegistryDisposer[] = [];
     try {
       const pluginId = bundle.manifest.pluginId;
+      for (const item of bundle.elements ?? []) {
+        try { validateElementContribution(item); } catch {
+          throw new RegistryConflictError("INVALID_CONTRIBUTION", "invalid editor element definition", item.id);
+        }
+      }
+      registerOwned(this.elements, bundle.elements, pluginId, effects);
       for (const item of bundle.commands ?? []) validateExtension(item, item.execute);
       for (const item of bundle.views ?? []) validateExtension(item, item.render);
       registerOwned(this.commands, bundle.commands, pluginId, effects);

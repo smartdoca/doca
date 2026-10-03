@@ -2,7 +2,7 @@
 
 [English](deployment.md)
 
-一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.1.8`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
+一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.1.9`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
 
 ## 条件
 
@@ -24,6 +24,10 @@ cp docker.env.example .env
 
 ## 必填配置
 
+文件存储还需要 `DOCA_FILE_STORE_ID` 和 `DOCA_FILE_STORES_JSON`，示例见 `docker.env.example`。后端路径和密钥通过环境变量提供，管理页只读展示。见[文件存储](storage.zh-CN.md)。
+
+0.1.9 拒绝旧数据库基线、插件安装清单、SDK 范围和存储配置。保留旧部署及原数据，为新版使用新空数据库和独立存储，不提供自动转换或迁移。见[发行要求](releases/0.1.9.md)。
+
 `DOCA_ORIGIN` 是用户在浏览器里打开的地址。生产环境拒绝不是 HTTPS 的值。不要加路径、查询参数或末尾斜杠。
 
 ```text
@@ -39,7 +43,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker compose up -d` 会拉取 `docker.io/smartdoca/doca:0.1.8`。只有要从当前检出构建镜像时才加 `--build`。
+`docker compose up -d` 会拉取 `docker.io/smartdoca/doca:0.1.9`。只有要从当前检出构建镜像时才加 `--build`。
 
 检查容器：
 
@@ -48,7 +52,7 @@ docker compose ps
 curl -fsS http://127.0.0.1:39120/health
 ```
 
-健康的进程返回 `{"status":"ok","version":"0.1.8"}`。
+健康的进程返回 `{"status":"ok","version":"0.1.9"}`。
 
 SQLite、上传文件和 AI 数据库保存在 `doca_data` 卷。首次启动时数据库必须是空的。非空且结构不是当前基线的数据库会被拒绝。不要删除已经有用户的数据库。
 

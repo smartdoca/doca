@@ -1,5 +1,7 @@
 /** Explicitly available only inside the authenticated native plugin container. */
+import { validateAssistantOpenInput, type PluginAssistantClient, type PluginAssistantOpenInput } from "./assistant.js";
 export interface PluginNativeCapabilities {
+  readonly ai: PluginAssistantClient;
   storage: {
     get(key: string): Promise<string | null>;
     set(key: string, value: string): Promise<void>;
@@ -25,7 +27,8 @@ export type NativeOperation =
   | "storage.remove"
   | "storage.clear"
   | "attachment.save"
-  | "attachment.share";
+  | "attachment.share"
+  | "assistant.open";
 export interface PluginNativeRequest {
   version: 1;
   id: string;
@@ -37,6 +40,7 @@ export interface PluginNativeRequest {
     path?: string;
     name?: string;
     mime?: string;
+    assistant?: PluginAssistantOpenInput;
   };
 }
 export function validateNativeRequest(
@@ -62,9 +66,15 @@ export function validateNativeRequest(
       "storage.clear",
       "attachment.save",
       "attachment.share",
+      "assistant.open",
     ].includes(request.operation)
   )
     throw new Error("Unsupported native operation");
+  if (request.operation === "assistant.open") {
+    if (Object.keys(request.input).some(key => key !== "assistant"))
+      throw new Error("Invalid native assistant input");
+    validateAssistantOpenInput(request.input.assistant);
+  }
   if (
     ["storage.get", "storage.set", "storage.remove"].includes(
       request.operation,

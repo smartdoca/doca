@@ -255,8 +255,6 @@ it("imports materials with current file permissions and binds template assets du
     .insertInto("storage_profiles")
     .values({
       id: profileId,
-      provider: "local",
-      config: "{}",
       active: 1,
       created_at: now,
     })
@@ -352,6 +350,14 @@ it("imports materials with current file permissions and binds template assets du
     assets: [{ key: "hero", ref: materialRef }],
   });
   const { createContent } = await import("@core/workflows/resources.js");
+  expect(
+    (
+      await createMaterialsService(db).import(resourceRequest(user), {
+        ref: materialRef,
+        operationKey: "source-metadata-check",
+      })
+    ).source,
+  ).toMatchObject({ id: materialRef.providerId, title: { zh: "图" } });
   const doc = await createContent(db).create(user, {
     kind: "document",
     format: "rich_text",

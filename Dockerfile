@@ -50,7 +50,8 @@ ENV NODE_ENV=production \
     DOCA_DATABASE=sqlite \
     DOCA_DATA_DIR=/data \
     DOCA_SQLITE_PATH=/data/doca.db \
-    DOCA_UPLOAD_DIR=/data/uploads
+    DOCA_FILE_STORE_ID=local \
+    DOCA_FILE_STORES_JSON="{\"version\":1,\"stores\":{\"local\":{\"provider\":\"local\",\"root\":\"/data/storage\"}}}"
 
 # AI's SQLite file defaults to ai.db alongside DOCA_SQLITE_PATH.
 # Supply DOCA_ORIGIN=https://your-domain at runtime, behind an HTTPS proxy.
@@ -60,10 +61,10 @@ COPY --from=build /app/packages ./packages
 COPY --from=build /app/apps/server ./apps/server
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 
-RUN mkdir -p /data/uploads && chown -R node:node /data
+RUN mkdir -p /data/storage && chown -R node:node /data
 USER node
 
-# Mount a persistent volume here for SQLite, AI memory and local uploads.
+# Mount a persistent volume here for SQLite, AI memory and local file storage.
 VOLUME ["/data"]
 EXPOSE 39120
 

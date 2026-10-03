@@ -1,10 +1,18 @@
 # Plugin development
 
-Updated 2026-10-02 for source host 0.1.8 and public SDK 0.1.5 (production deployment not verified). This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
+Updated 2026-10-02 for source host 0.1.8 and SDK source 0.1.7 (npm publication and production deployment not verified). This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
 
 [中文](plugin-development.zh-CN.md)
 
 The full target, including parts that are not implemented, is the [SDK contract](plugin-sdk-contract.md). Do not keep obsolete membership, moderation, or source-loading compatibility layers.
+
+The [horizontal scaling and managed storage contract](plugin-horizontal-scaling.md) is approved. All persistence is host-managed; packages must declare `doca.storage: "host"`. Missing or different declarations are rejected before code import on install, directory discovery and startup. Managed SQL/private objects are exported in SDK 0.1.7; credentials and workspaces remain implementation gaps.
+
+## Implemented storage revision (2026-10-03, SDK source 0.1.7)
+
+`@smartdoca/plugin-sdk/storage` now exports installation-bound `pluginDatabaseToken` (`storage.sql.v1`) and `pluginObjectStorageToken` (`storage.objects.v1`). The database subset is explicit schema version 1, text/int32/double columns, primary/unique constraints, structured select/insert/update/remove and transactions with callbacks executed once. Joins, foreign keys, generic SQL, upsert, credentials and workspaces are not exported. Current SDK isolation is enforced by host-compiled queries over namespaced tables on the host connection; separate PostgreSQL roles/process isolation remain a stronger future boundary.
+
+Logical databases use `plugin:<pluginId>`, user-file attribution and private objects use `plugins/<pluginId>`, and release ZIPs use `host/plugin-releases/<sha256>.zip`. Complete immutable ZIP bytes live in environment-configured file storage; the shared database holds registry version 2, archive references and trusted file-hash indexes. Verified cache hits do not download ZIPs again. All instances are restarted manually. The new host baseline rejects older databases/formats/SDK packages and preserves their data, with no migration or fallback. See [exact implementation and limitations](unified-storage-implementation.md).
 
 ## License
 
@@ -14,7 +22,7 @@ Do not ship a dependency whose license is unknown, forbids redistribution, or co
 
 ## Install and start
 
-Install a complete prebuilt ZIP through Admin → Plugins, or drop a `<plugin-id>/` release directory into `DOCA_PLUGINS_DIR` while stopped. Restart each instance. The shared database holds desired selection and full archives; instance-local caches synchronize automatically at startup. There is no npm installation-directory compatibility path. See the [store protocol](plugin-store-protocol.md) and [deployment guide](plugin-deployment.md).
+Install a complete prebuilt ZIP through Admin → Plugins, or drop a `<plugin-id>/` release directory into `DOCA_PLUGINS_DIR` while stopped. Restart each instance. The shared database holds desired selection, archive references and file-hash indexes; complete ZIP bytes live in the configured file store; instance-local caches synchronize automatically at startup. There is no npm installation-directory compatibility path. See the [store protocol](plugin-store-protocol.md) and [deployment guide](plugin-deployment.md).
 
 ```json
 {
@@ -23,6 +31,7 @@ Install a complete prebuilt ZIP through Admin → Plugins, or drop a `<plugin-id
   "type": "module",
   "doca": {
     "dataVersion": "1",
+    "storage": "host",
     "manifest": "./manifest.json",
     "server": "./dist/server.js",
     "web": { "directory": "./web", "entry": "./index.js" }
@@ -52,12 +61,16 @@ Depend on the public contract. Do not import `@server/*`, `@core/*`, `@web/*`, `
 ```ts
 import { definePlugin } from "@smartdoca/plugin-sdk";
 import { filesServiceToken } from "@smartdoca/plugin-sdk/files";
-import { httpServiceToken, usersServiceToken } from "@smartdoca/plugin-sdk/platform";
+import {
+  httpServiceToken,
+  usersServiceToken,
+} from "@smartdoca/plugin-sdk/platform";
 import manifest from "../manifest.json" with { type: "json" };
 
 export default () =>
   definePlugin({
     manifest,
+    async uninstall() {},
     injections: {
       required: [filesServiceToken, httpServiceToken, usersServiceToken],
     },
@@ -86,19 +99,19 @@ That route is `/api/v1/plugins/example.attachments/folders`. Identity comes from
 
 ## Public services
 
-| Import | Service | Use |
-| --- | --- | --- |
-| plugin-sdk/files | filesServiceToken | Folders, files, upload, content, bindings, and access |
-| plugin-sdk/platform | usersServiceToken | The authorized user's profile and unified user search |
-| plugin-sdk/platform | permissionsServiceToken | Register business-resource authorization and relationship sources |
-| plugin-sdk/platform | httpServiceToken | Authenticated routes in the plugin's own namespace |
-| plugin-sdk/platform | policiesServiceToken | Admission before create, store, share, transfer, and AI calls |
-| plugin-sdk/platform | eventsServiceToken | Read the durable event stream, including `ai.usage.recorded` |
-| plugin-sdk/platform | notificationsServiceToken | Publish and withdraw notifications idempotently |
-| plugin-sdk/ai | aiServiceToken | Register AI tools with a JSON Schema and skill manuals |
-| plugin-sdk/content | contentServiceToken | Unified inventory, read, resolve, optional search and knowledge sources |
-| plugin-sdk/platform | activityServiceToken | Plugin-owned recent visits, host aggregation and authorization |
-| plugin-sdk/search | searchServiceToken | Projection, rebuild and authorized index queries |
+| Import              | Service                   | Use                                                                     |
+| ------------------- | ------------------------- | ----------------------------------------------------------------------- |
+| plugin-sdk/files    | filesServiceToken         | Folders, files, upload, content, bindings, and access                   |
+| plugin-sdk/platform | usersServiceToken         | The authorized user's profile and unified user search                   |
+| plugin-sdk/platform | permissionsServiceToken   | Register business-resource authorization and relationship sources       |
+| plugin-sdk/platform | httpServiceToken          | Authenticated routes in the plugin's own namespace                      |
+| plugin-sdk/platform | policiesServiceToken      | Admission before create, store, share, transfer, and AI calls           |
+| plugin-sdk/platform | eventsServiceToken        | Read the durable event stream, including `ai.usage.recorded`            |
+| plugin-sdk/platform | notificationsServiceToken | Publish and withdraw notifications idempotently                         |
+| plugin-sdk/ai       | aiServiceToken            | Register AI tools with a JSON Schema and skill manuals                  |
+| plugin-sdk/content  | contentServiceToken       | Unified inventory, read, resolve, optional search and knowledge sources |
+| plugin-sdk/platform | activityServiceToken      | Plugin-owned recent visits, host aggregation and authorization          |
+| plugin-sdk/search   | searchServiceToken        | Projection, rebuild and authorized index queries                        |
 
 A registration id starts with the plugin id and a dot. The route namespace equals the plugin id. These registrations follow the plugin lifecycle and are released if the plugin stops or fails to start. Timers and connections you create yourself still use `context.effect` or `effectAsync`. Stopping does not delete persisted data.
 
@@ -108,53 +121,31 @@ Register an AI tool with `aiServiceToken.registerTool`: id, description, inputSc
 
 Doca does not include membership, prices, points, or business quotas. Model input and output rates, and tokens per image, convert a vendor's raw usage into tokens. They are not a price. Usage distinguishes an unconfirmed call from actual metrics. `ai.usage.recorded` is written inside the settlement transaction. Top-level `metrics` are the rated usage. `provider.metrics` keeps the vendor's raw facts. A plugin pulls events with `events.read(cursor, limit)`, stores its cursor, and handles each event id once. A policy check can refuse a call. Cross-plugin reservation, failure compensation, and money consistency do not yet have a full transaction protocol. One check is not a billing implementation.
 
-The plugin owns its database, credentials, business jobs, and outbox. The host does not offer data.v1 or data.v2 and does not open the plugin database. The database must match the declared data version; compatible existing data is accepted. A mismatched schema refuses to start. Store that data in the business data directory below. Uninstall is specified below.
+Plugins own business models, authorization, job logic and outbox semantics; all durable state uses public host-managed services. Plugins never choose a local/remote backend, connect to a private database, read storage credentials or persist to system directories. There is currently no managed SQL or private-object SDK export, nor `data.v1`/`data.v2`; integrations needing those capabilities must wait for implementation rather than supply their own store.
 
-## Business data directory
+## Host-managed persistence
 
-The business database, credentials, jobs, and outbox belong in the plugin's own data directory. They do not belong in the installation directory.
+`doca.storage` must be exactly `"host"`, including stateless plugins. It declares compliance with the managed-storage contract; it is not a database name or backend selector. Static inspection checks it before resolving/importing server code. ZIP, npm/store installation, offline directory import, shared-archive restoration and package tooling use this check. No missing-field default or legacy adapter is provided. A declaration is a trusted plugin author's commitment, not a Node.js sandbox or a code audit.
 
-A plugin reads only `DOCA_PLUGINS_DATA_DIR` and uses only `<DOCA_PLUGINS_DATA_DIR>/<its own plugin id>/`. A relative path is relative to the process working directory. The plugin does not invent a default path, and it does not define a data-directory environment variable of its own. Without this variable, the plugin has no directory to guess.
+There is no plugin business-data-directory environment variable or plugin-selectable data path. `DOCA_PLUGINS_DIR` remains the host's rebuildable installation cache, not a business store. The host alone configures local/remote persistence and ensures shared database/object storage for horizontal deployments. Plugins use the same SDK methods in both cases and must not branch on the host backend.
 
-The installation configuration supplies the value. Docker Compose passes `/data/plugin-data` when it is unset.
-
-The host does not create or open the database in this directory. The plugin creates its own subdirectory the first time it needs it. `uninstall` deletes that plugin's subdirectory and does not delete another plugin's directory. Instances that share one business database use the same root. Each instance still keeps its own plugin installation cache.
+User uploads, attachments and export deliverables use `files.v1` folders/files with stable IDs, bindings and permissions. Structured records, config, jobs, cursors and outbox belong in the host-managed relational capability. Its logical database name is `plugin:<pluginId>` and is bound by trusted injection. Private durable binaries use a host-managed private-object capability; credentials use a host-managed credential capability. Private objects are exported in SDK 0.1.7; managed credentials remain pending. Temporary work may use a future host-managed task workspace or streams, with limits/cleanup and no durable dependence on a previous instance's path. See the storage contract for required interfaces and status.
 
 ## Data structure
 
-`doca.dataVersion` is the structure number of the plugin's private database. It is not a version number that can be compared by magnitude.
-
-When a new release is planned to keep using data that is already installed, the structure number must stay the same. If a dependency library needs to be upgraded, the plugin prepares that upgrade itself and brings the existing database to a state the new library can read. The host does not call this upgrade, and a dependency-library change does not change the structure number.
-
-Changing the structure number means the release is no longer compatible with the previous version's data. The old version must be uninstalled first. After `uninstall` deletes the old database and the host clears the old structure number, a release that declares the new structure number can be installed. The host does not migrate the old database to the new structure.
+`doca.dataVersion` is an exact plugin business-structure identifier, not an ordered version or evidence that old files can be read through a new store. Installed upgrades require the same identifier; actual structure still needs validation. Mismatches fail explicitly. Do not automatically migrate, downgrade, fill old fields, import old directories or dual read/write. Existing self-managed data remains untouched and is not used as an empty managed-database fallback. Any future structure/backend conversion needs a separately accepted plan, validation and rollback.
 
 ## Uninstall
 
-An installed plugin must implement `uninstall(context)`. The host rejects installation and does not load a package whose factory omits it.
+An installed plugin must implement `uninstall(context)`; startup rejects a factory without it. The hook handles business unbinding/external revocation and only uses public host services. It must be idempotent and never open or recursively delete host storage paths. A stateless plugin may implement an empty hook.
 
-When an administrator uninstalls a plugin, the host calls `uninstall` first. The plugin deletes its own database, credentials, jobs, and outbox. After that call succeeds, the host clears the structure marker and removes the installation. The host does not open or delete the plugin database.
+Managed private database/object cleanup belongs to the host. On successful business uninstall, the registry transaction fences the current generation, drops declared private tables and queues object deletion with durable retries. Credentials and cluster task draining remain unimplemented. User files and other business references are preserved. Hook failure leaves the installation intact; external hook effects cannot be rolled back. All instances still require manual restart.
 
-- A different structure number means the old structure is incompatible. `uninstall` deletes the current database. It does not migrate the old database into the new structure.
-- A repeated call must succeed when the data is already gone.
-- If the method is missing or throws, uninstall does not finish: the plugin stays installed and the structure marker stays.
-- `initialize`, `mount`, `ready`, and `dispose` manage connections, timers, and registrations for the current process. Do not delete the database in `dispose`.
-- Attachments stored through the host file service are not deleted automatically. Before a plugin removes its own bindings, it must check that no other business still uses those files.
-
-An upgrade that keeps the installed data must leave `doca.dataVersion` unchanged and perform any dependency-library upgrade inside the plugin. A release that changes the structure number must uninstall the old version first. See [Data structure](#data-structure) above.
-
-```ts
-export default () =>
-  definePlugin({
-    manifest,
-    async uninstall() {
-      await removeOwnDatabase();
-    },
-  });
-```
-
-`removeOwnDatabase` is the plugin's own function. It deletes the database where that plugin stores its business data. The host does not provide this function.
+Disable, process shutdown and `dispose` release registrations, timers and connections without deleting durable data. User files, document payloads, bindings used by other businesses and durable file receipts are not automatically deleted by plugin removal. Any file cleanup uses the file service and checks ownership, authorization and remaining references.
 
 ## Web
+
+`host.ai.open(input)` opens the personal assistant with an editable prompt/context, authorized document references and existing-file attachments. `sessionId` resumes an owned conversation; omission creates one. Only explicit `autoSend: true` submits a message through the normal host job queue. Web and the native plugin container share the typed SDK interface. See [parameters, limits and examples](plugin-assistant.md); source support does not imply npm publication or native-device acceptance.
 
 The optional web build default-exports `async host => bundle`. `host` provides React, apiBase, useEnvironment, navigate, toast, confirm, request, FilePicker, platform, and ui. React comes from the host so there is one renderer. Other dependencies are bundled. The host does not resolve bare npm imports. The bundle follows `WebPluginBundle` exported by `@smartdoca/plugin-sdk/web`. `manifest.pluginId` and version match the server. Pages, navigation, admin, and settings contributions are supported.
 
@@ -174,7 +165,7 @@ HTTP callbacks, attachment binding, user calibration, search and knowledge, and 
 
 Acceptance installs a real host build, the SDK, and the business plugin tarball outside this repository. Prepare the full dependency closure. Do not depend on a source link, an undeclared cache, or a registry fetch during install or startup. Verify web assets, the business flow, revocation, retry, and restart. Building the SDK is not end-to-end acceptance.
 
-A plugin database must match its declared data version. A mismatch refuses startup. There is no upgrade or downgrade script. Uninstall requirements are in [Uninstall](#uninstall) above. A user-deletion protocol is not available. The dynamic mobile WebView contract is documented in the mail integration v1 guide. The default data directory and job status do not let the host read the plugin database.
+A plugin database must match its declared data version. A mismatch refuses startup. There is no upgrade or downgrade script. Uninstall requirements are in [Uninstall](#uninstall) above. A user-deletion protocol is not available. The dynamic mobile WebView contract is documented in the mail integration v1 guide. There is no plugin-selected data directory; persistence uses scoped host capabilities, with implementation gaps documented separately.
 
 ## Background identity checks and notifications
 
@@ -196,13 +187,13 @@ HTTP registration limits the body to 1 MiB by default. A route that needs a larg
 
 Use `@smartdoca/plugin-sdk@^0.1.3`. Import `contentServiceToken` and the `ContentSource` type from `@smartdoca/plugin-sdk/content`; declare the token in `injections.required` and register the source during mount. Sources belong to the registering plugin. Built-in documents and files use the same contract.
 
-| Member | Contract |
-| --- | --- |
-| Declaration | `id`, `pluginId`, `version: 1`, localized `title`, `contentTypes`, `purposes`, `capabilities: {search}`, `configSchema` |
-| `list(ctx, {config, cursor, limit})` | Required. Return `{items, nextCursor, snapshot}`. Each item contains `ref: {sourceId, resourceId, blockId}`, `fingerprint`, `title`, optional `order`, `anchor`, `excerpt`; do not return full bodies here. |
-| `read(ctx, {config, ref, fingerprint})` | Required. Recheck permission and return the item plus `text`, or null when unavailable. A changed fingerprint is a conflict, never new text under an old fingerprint. |
-| `resolve(ctx, ref)` | Required. Recheck access and return `{path, fingerprint}` or null. `path` is a current in-app location. |
-| `search(ctx, {config, cursor, limit, query})` | Optional; declare and implement together. Return a lightweight page. Unsupported search does not fall back to a full scan. |
+| Member                                        | Contract                                                                                                                                                                                                    |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Declaration                                   | `id`, `pluginId`, `version: 1`, localized `title`, `contentTypes`, `purposes`, `capabilities: {search}`, `configSchema`                                                                                     |
+| `list(ctx, {config, cursor, limit})`          | Required. Return `{items, nextCursor, snapshot}`. Each item contains `ref: {sourceId, resourceId, blockId}`, `fingerprint`, `title`, optional `order`, `anchor`, `excerpt`; do not return full bodies here. |
+| `read(ctx, {config, ref, fingerprint})`       | Required. Recheck permission and return the item plus `text`, or null when unavailable. A changed fingerprint is a conflict, never new text under an old fingerprint.                                       |
+| `resolve(ctx, ref)`                           | Required. Recheck access and return `{path, fingerprint}` or null. `path` is a current in-app location.                                                                                                     |
+| `search(ctx, {config, cursor, limit, query})` | Optional; declare and implement together. Return a lightweight page. Unsupported search does not fall back to a full scan.                                                                                  |
 
 `ctx` contains the authenticated `principalId`, `purpose` (`knowledge`, `analysis`, or `search`) and cancellation `signal`. The provider enforces current business permission on every call. A source supporting analysis can serve a future to-do plugin without a mail-specific API. Consumers use `sources(ctx, purpose)`, then service `list/read/search` with `sourceId` and `purpose`; service `resolve` takes `{ref, purpose}`. Only request a purpose declared by that source.
 
@@ -223,7 +214,7 @@ Use the same Web bundle on Web and in the scoped mobile WebView. `PluginWebHost`
 - Android save returns completed/canceled. iOS save and system sharing may report presented, which does not prove a user completed the action. Account switching or page disposal cancels outstanding requests.
 - Mail account binding belongs on Web. Native OAuth is outside this delivery.
 
-The current public SDK package version is 0.1.5. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
+The current SDK source package version is 0.1.7; this does not confirm npm publication. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
 
 ## Distribution and navigation
 
@@ -238,3 +229,9 @@ Global navigation has Web user, App user and Web administrator scopes. Declare p
 ## Template and material plugins
 
 SDK 0.1.5 adds optional creation-resource providers and consumers, `host.platform.templates/materials`, and injected `TemplatePicker/MaterialPicker`. See [exact resource protocol](creation-resources.md). Providers have no default installation. Register under your namespace and current lifecycle; business consumers authorize their own actions.
+
+For named multi-source selection and AI retrieval, use the 0.1.6 source revision: query with `providerIds`, declare localized source descriptions and optional retrieval modes, and implement `retrieve` together with its declaration. The host provides source discovery, bounded result aggregation and AI tools; providers choose their search engine. Old singular query fields are rejected under the agreed protocol change. Source metadata is available in results and picker callbacks. See [request shapes and limits](creation-resources.md).
+
+## Plugin document elements (2026-10-02, SDK 0.1.6 source)
+
+The optional Web bundle `elements` registry and `@smartdoca/plugin-sdk/editor-elements` are implemented for rich atomic inline elements and spreadsheet whole-cell canvas views. Configuration forms submit through host-owned native operations and undo; there is no public arbitrary editor handle. Exact unknown types/versions show an error placeholder and preserve opaque JSON, with no conversion, migration or cleanup. Zero providers are installed by default. See [the exact element contract](plugin-editor-elements.md) and [the independent countdown/news example](../examples/plugin-elements/README.md). npm publication, production installation and native-device acceptance are not implied.

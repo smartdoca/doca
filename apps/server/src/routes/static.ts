@@ -1,4 +1,5 @@
 import { fail } from "@core/shared/errors.js";
+import { HOST_VERSION } from "../version.js";
 import type { DB } from "@db/index.js";
 import type { FastifyInstance } from "fastify";
 import { readFile, realpath } from "node:fs/promises";
@@ -29,12 +30,12 @@ export async function registerStaticRoutes(
   );
   api.get("/live", { schema: { hide: true } }, async () => ({
     status: "ok",
-    version: "0.1.8",
+    version: HOST_VERSION,
   }));
   const ready = async () => {
     await db.selectFrom("settings").select("id").executeTakeFirstOrThrow();
     if (!realtimeReady()) fail(503, "实时集群尚未就绪");
-    return { status: "ok", version: "0.1.8" };
+    return { status: "ok", version: HOST_VERSION };
   };
   api.get("/ready", { schema: { hide: true } }, ready);
   api.get("/health", { schema: { hide: true } }, ready);

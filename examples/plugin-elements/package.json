@@ -1,0 +1,21 @@
+{
+  "name": "@example/doca-elements",
+  "version": "1.0.0",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "manifest.json",
+    "server.js",
+    "web"
+  ],
+  "doca": {
+    "dataVersion": "1",
+    "storage": "host",
+    "manifest": "./manifest.json",
+    "server": "./server.js",
+    "web": {
+      "directory": "./web",
+      "entry": "./index.js"
+    }
+  }
+}

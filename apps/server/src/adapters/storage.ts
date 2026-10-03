@@ -15,6 +15,11 @@ import { dirname, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { uploadLimits, validateObjectKey } from "../services/storage-policy.js";
+import {
+  parseFileStoreEnvironment,
+  configuredFileStore,
+  type HostFileStoreConfiguration,
+} from "../services/file-store-config.js";
 import { fail } from "@core/shared/errors.js";
 
 export interface StorageConfig {
@@ -25,6 +30,9 @@ export interface StorageConfig {
   forcePathStyle: boolean;
   credentialRef: string;
   cdnDomain: string;
+  root?: string;
+  cdnKeyPairId?: string;
+  cdnPrivateKey?: string;
 }
 export const storageDefaults: StorageConfig = {
   provider: "local",
@@ -40,14 +48,54 @@ type Credential = {
   secretAccessKey: string;
   sessionToken?: string;
 };
-export function storageRuntime() {
+export function storageRuntime(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+) {
+  const configuration = parseFileStoreEnvironment(environment);
+  const current = configuredFileStore(configuration, configuration.currentId);
+  const credentials: Record<string, Credential> = {};
+  const endpointHosts: string[] = [];
+  for (const [id, store] of configuration.stores)
+    if (store.provider === "s3") {
+      credentials[id] = { ...store.credentials };
+      if (store.endpoint) endpointHosts.push(new URL(store.endpoint).host);
+    }
   return {
-    root: resolve(process.env.DOCA_UPLOAD_DIR || "data/v1/uploads"),
-    credentials: {} as Record<string, Credential>,
-    endpointHosts: [] as string[],
-    cdnKeyPairId: undefined as string | undefined,
-    cdnPrivateKey: undefined as string | undefined,
+    configuration,
+    root: current.provider === "local" ? current.root : "",
+    credentials,
+    endpointHosts,
+    cdnKeyPairId:
+      current.provider === "s3" ? current.cdn?.keyPairId : undefined,
+    cdnPrivateKey:
+      current.provider === "s3" ? current.cdn?.privateKey : undefined,
   };
+}
+/** Profiles contain only a stable store ID. Infrastructure is resolved from deployment configuration. */
+export function storageConfigForProfile(
+  runtime: StorageRuntime,
+  profile: { id: string },
+): StorageConfig {
+  const c = configuredFileStore(runtime.configuration, profile.id);
+  return c.provider === "local"
+    ? {
+        ...storageDefaults,
+        root:
+          profile.id === runtime.configuration.currentId
+            ? runtime.root
+            : c.root,
+      }
+    : {
+        provider: "s3",
+        bucket: c.bucket,
+        region: c.region,
+        endpoint: c.endpoint ?? "",
+        forcePathStyle: c.forcePathStyle,
+        credentialRef: profile.id,
+        cdnDomain: c.cdn?.domain ?? "",
+        cdnKeyPairId: c.cdn?.keyPairId,
+        cdnPrivateKey: c.cdn?.privateKey,
+      };
 }
 export type StorageRuntime = ReturnType<typeof storageRuntime>;
 export function validateStorage(c: StorageConfig, runtime: StorageRuntime) {
@@ -58,7 +106,7 @@ export function validateStorage(c: StorageConfig, runtime: StorageRuntime) {
     !runtime.credentials[c.credentialRef]?.secretAccessKey ||
     !runtime.credentials[c.credentialRef]?.accessKeyId
   )
-    fail(400, "请先在“服务凭据”中配置此存储凭据");
+    fail(400, "请通过文件存储环境变量配置此存储凭据");
   if (c.endpoint) {
     let u: URL;
     try {
@@ -75,7 +123,7 @@ export function validateStorage(c: StorageConfig, runtime: StorageRuntime) {
       u.pathname !== "/" ||
       !runtime.endpointHosts.includes(u.host)
     )
-      fail(400, "云存储端点必须为 HTTPS，且位于“服务凭据”的允许端点域名中");
+      fail(400, "云存储端点必须为 HTTPS，且位于文件存储环境变量配置中");
   }
   if (c.cdnDomain) {
     let u: URL;
@@ -93,14 +141,17 @@ export function validateStorage(c: StorageConfig, runtime: StorageRuntime) {
       u.pathname !== "/"
     )
       fail(400, "CDN 请填写 HTTPS 域名，不带路径或参数");
-    if (!runtime.cdnKeyPairId || !runtime.cdnPrivateKey)
+    if (
+      !(c.cdnKeyPairId ?? runtime.cdnKeyPairId) ||
+      !(c.cdnPrivateKey ?? runtime.cdnPrivateKey)
+    )
       fail(400, "CDN 需要配置 CloudFront 签名密钥，以保护私有文件");
   }
 }
 export function createStorage(runtime: StorageRuntime) {
-  function path(key: string) {
+  function path(c: StorageConfig, key: string) {
     validateObjectKey(key);
-    return resolve(runtime.root, key);
+    return resolve(c.root ?? runtime.root, key);
   }
   function client(c: StorageConfig) {
     const credentials = runtime.credentials[c.credentialRef];
@@ -147,7 +198,7 @@ export function createStorage(runtime: StorageRuntime) {
       if (received !== size) throw new Error("Upload size mismatch");
     }
     if (c.provider === "local") {
-      const target = path(key);
+      const target = path(c, key);
       await mkdir(dirname(target), { recursive: true, mode: 0o700 });
       const handle = await open(target, "wx", 0o600);
       try {
@@ -252,7 +303,7 @@ export function createStorage(runtime: StorageRuntime) {
   ) {
     validateObjectKey(key);
     if (c.provider === "local") {
-      const handle = await open(path(key), "r");
+      const handle = await open(path(c, key), "r");
       return handle.createReadStream(range);
     }
     const s3 = client(c);
@@ -290,7 +341,7 @@ export function createStorage(runtime: StorageRuntime) {
       if (c.provider === "local" && reservedReplay) {
         // Only the durable operation owner may replace this key, after checking
         // the immutable content fingerprint. Readers never see partial bytes.
-        const target = path(key);
+        const target = path(c, key);
         await mkdir(dirname(target), { recursive: true, mode: 0o700 });
         const temporary = `${target}.pending-${randomUUID()}`;
         try {
@@ -345,7 +396,7 @@ export function createStorage(runtime: StorageRuntime) {
     /** Called with the durable operation lock held; never scan unrelated directories. */
     async removeReservedTemporaries(c: StorageConfig, key: string) {
       if (c.provider !== "local") return;
-      const target = path(key);
+      const target = path(c, key);
       const prefix = target.slice(target.lastIndexOf("/") + 1) + ".pending-";
       const names = await readdir(dirname(target)).catch(
         (error: NodeJS.ErrnoException) => {
@@ -362,19 +413,22 @@ export function createStorage(runtime: StorageRuntime) {
     },
     async remove(c: StorageConfig, key: string) {
       validateObjectKey(key);
-      if (c.provider === "local") await unlink(path(key));
+      if (c.provider === "local") await unlink(path(c, key));
       else
         await send(c, new DeleteObjectCommand({ Bucket: c.bucket, Key: key }));
     },
     cdnUrl(c: StorageConfig, key: string) {
       if (c.provider !== "s3" || !c.cdnDomain) return null;
       validateObjectKey(key);
-      if (!runtime.cdnKeyPairId || !runtime.cdnPrivateKey)
+      if (
+        !(c.cdnKeyPairId ?? runtime.cdnKeyPairId) ||
+        !(c.cdnPrivateKey ?? runtime.cdnPrivateKey)
+      )
         fail(503, "CDN 签名配置不可用");
       return getSignedUrl({
         url: new URL(key, c.cdnDomain.replace(/\/$/, "") + "/").href,
-        keyPairId: runtime.cdnKeyPairId,
-        privateKey: runtime.cdnPrivateKey,
+        keyPairId: (c.cdnKeyPairId ?? runtime.cdnKeyPairId)!,
+        privateKey: (c.cdnPrivateKey ?? runtime.cdnPrivateKey)!,
         dateLessThan: new Date(
           (Math.floor(Date.now() / 1000) + 60) * 1000,
         ).toISOString(),

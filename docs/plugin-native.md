@@ -1,5 +1,7 @@
 # App 插件缓存与附件能力
 
+`host.ai.open` 在原生插件容器通过新增的 `assistant.open` 操作打开原生个人助手。参数和错误语义见[启动契约](plugin-assistant.md)。提示词/上下文不进入导航 URL，账号凭据不进入 WebView；预填请求在内存中按账号和一次性启动标识消费。
+
 公开类型来自 `@smartdoca/plugin-sdk/native`，通过 `PluginWebHost.native` 使用。在 Web 为 null；App 插件容器中提供：
 
 - `storage.get(key)` / `set(key, value)` / `remove(key)` / `clear()`：字符串缓存，单值最多 200 万字符，每个插件最多 2000 万字符。

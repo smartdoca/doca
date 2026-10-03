@@ -8,6 +8,7 @@ import {
   encodeStateVector,
 } from "@smartdoca/slate/yjs";
 import { type DB } from "@db/index.js";
+import { databaseDriver, registerDriver } from "@db/transactions.js";
 import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import {
@@ -632,7 +633,14 @@ redisIt(
       redisPrefix: prefix,
       instanceId: "left",
     });
-    const right = await createApp(db, {
+    // One runtime handle per host keeps service registrations independent.
+    // Share the test-owned executor so both hosts see the same isolated data.
+    const rightDb = db.withPlugin({
+      transformQuery: ({ node }) => node,
+      transformResult: ({ result }) => Promise.resolve(result),
+    });
+    registerDriver(rightDb, databaseDriver(db));
+    const right = await createApp(rightDb, {
       origin,
       redisUrl: process.env.DOCA_TEST_REDIS_URL,
       redisPrefix: prefix,

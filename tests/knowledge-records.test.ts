@@ -1,3 +1,4 @@
+import { storageRuntime } from "@server/adapters/storage.js";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -72,7 +73,7 @@ beforeEach(async () => {
   app = await createApp(db, {
     origin,
     storage: {
-      root: join(directory, "uploads"),
+      configuration: storageRuntime().configuration, root: join(directory, "uploads"),
       credentials: {},
       endpointHosts: [],
       cdnKeyPairId: undefined,

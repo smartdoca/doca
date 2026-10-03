@@ -10,7 +10,7 @@ import { fail } from "@core/shared/errors.js";
 import { lockAIUser } from "@core/modules/ai/config.js";
 import {
   createStorage,
-  storageDefaults,
+  storageConfigForProfile,
   type StorageRuntime,
   type StorageConfig,
 } from "../../adapters/storage.js";
@@ -33,6 +33,7 @@ export async function storeUserFile(
     mime: string;
     body: Buffer;
     storage?: StorageRuntime;
+    storageNamespace?: string;
     /** Reserved by the durable plugin operation before writing bytes. */
     preparedObject?: { id: string; profileId: string };
     beforeCreate?: (tx: DB) => Promise<Schema["file_items"] | undefined>;
@@ -50,18 +51,19 @@ export async function storeUserFile(
   const profile = await db
     .selectFrom("storage_profiles")
     .selectAll()
-    .where(input.preparedObject ? "id" : "active", "=", input.preparedObject?.profileId ?? 1)
+    .where(
+      input.preparedObject ? "id" : "active",
+      "=",
+      input.preparedObject?.profileId ?? 1,
+    )
     .executeTakeFirstOrThrow();
-  const config = {
-    ...storageDefaults,
-    ...JSON.parse(profile.config),
-    provider: profile.provider,
-  } as StorageConfig;
+  const config = storageConfigForProfile(input.storage, profile);
   const findExisting = (tx: DB) =>
     tx
       .selectFrom("file_storage_objects")
       .selectAll()
       .where("profile_id", "=", profile.id)
+      .where("object_key", "like", `${input.storageNamespace ?? "host"}/%`)
       .where("sha256", "=", sha256)
       .where("size", "=", size)
       .where("mime", "=", mime)
@@ -72,8 +74,15 @@ export async function storeUserFile(
     let candidate = await findExisting(db);
     if (!candidate) {
       const id = input.preparedObject?.id ?? randomUUID();
-      const key = objectKey(id, mime);
-      await storage.put(config, key, input.body, mime, filename, !!input.preparedObject);
+      const key = objectKey(id, mime, input.storageNamespace ?? "host");
+      await storage.put(
+        config,
+        key,
+        input.body,
+        mime,
+        filename,
+        !!input.preparedObject,
+      );
       stored = { config, key };
       candidate = {
         id,
@@ -94,7 +103,11 @@ export async function storeUserFile(
       await lockAIUser(tx, input.actorId);
       const replay = await input.beforeCreate?.(tx);
       if (replay) {
-        const object = await tx.selectFrom("file_storage_objects").selectAll().where("id", "=", replay.storage_object_id).executeTakeFirstOrThrow();
+        const object = await tx
+          .selectFrom("file_storage_objects")
+          .selectAll()
+          .where("id", "=", replay.storage_object_id)
+          .executeTakeFirstOrThrow();
         return { row: replay, object };
       }
       await requireCapability(tx, input.actorId, "assets.upload");
@@ -106,6 +119,7 @@ export async function storeUserFile(
       }
       const now = new Date().toISOString();
       const row: Schema["file_items"] = {
+        storage_namespace: input.storageNamespace ?? "host",
         id: randomUUID(),
         owner_id: input.ownerId,
         parent_type: input.parentType,

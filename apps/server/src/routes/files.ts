@@ -2,7 +2,10 @@ import { sql } from "kysely";
 import { recordActivity } from "@core/modules/workspace/activity.js";
 import { folderInSearch } from "@core/modules/discovery/catalog.js";
 import { queryResourcePage } from "@core/modules/resources/queries.js";
-import { authorizeFileFolder as folderAccess, authorizeFileItem } from "@core/modules/access/file-access.js";
+import {
+  authorizeFileFolder as folderAccess,
+  authorizeFileItem,
+} from "@core/modules/access/file-access.js";
 import { Readable } from "node:stream";
 import {
   requireCapability,
@@ -53,7 +56,7 @@ import type { DB, Schema } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import {
   createStorage,
-  storageDefaults,
+  storageConfigForProfile,
   storageRuntime,
   type StorageConfig,
   type StorageRuntime,
@@ -80,12 +83,11 @@ function cleanName(value: string, fallback = "未命名") {
   return (name || fallback).slice(0, 255);
 }
 
-function configOf(profile: Schema["storage_profiles"]): StorageConfig {
-  return {
-    ...storageDefaults,
-    ...JSON.parse(profile.config),
-    provider: profile.provider as StorageConfig["provider"],
-  };
+function configOf(
+  runtime: StorageRuntime,
+  profile: Schema["storage_profiles"],
+): StorageConfig {
+  return storageConfigForProfile(runtime, profile);
 }
 
 type Parent = { type: ParentType; id: string };
@@ -184,9 +186,14 @@ export function registerFiles(
       );
       if (!modelConfig) throw new Error("识别模型不可用");
       const recognition = await recognizeStoredFile(db, {
-        objectId, filename: row.file_name || row.object_key, userId,
-        model: modelConfig, storage: runtime, purpose: "index",
-        visualPolicy: row.mime.startsWith("image/") || config.ocrEnabled ? "auto" : "off",
+        objectId,
+        filename: row.file_name || row.object_key,
+        userId,
+        model: modelConfig,
+        storage: runtime,
+        purpose: "index",
+        visualPolicy:
+          row.mime.startsWith("image/") || config.ocrEnabled ? "auto" : "off",
       });
       if (recognition.status !== "ready")
         throw new Error(recognition.warning || "文件尚未完整识别");
@@ -256,8 +263,7 @@ export function registerFiles(
         2,
         5 * 60_000,
       );
-    })()
-      .catch(() => {});
+    })().catch(() => {});
   }, 1500);
   recognitionTimer.unref();
   api.addHook("preClose", async () => {
@@ -502,7 +508,8 @@ export function registerFiles(
           if (candidate.owner_id === actor.id) physicalFolders.push(candidate);
           else {
             try {
-              if (await folderInSearch(db, actor, candidate.id)) physicalFolders.push(candidate);
+              if (await folderInSearch(db, actor, candidate.id))
+                physicalFolders.push(candidate);
             } catch {}
           }
         }
@@ -698,7 +705,8 @@ export function registerFiles(
           "file_extracts.status as extract_status",
         ])
         .where("file_items.deleted_at", "is", null)
-        .orderBy("file_items.name"); {
+        .orderBy("file_items.name");
+      {
         files = files
           .where("file_items.parent_type", "=", type)
           .where("file_items.parent_id", "=", id);
@@ -741,9 +749,7 @@ export function registerFiles(
           mime: file.mime,
           size: file.size,
           locked:
-            !!file.locked ||
-            type === "document" ||
-            isCopyOnlyParent(type, id),
+            !!file.locked || type === "document" || isCopyOnlyParent(type, id),
           version: file.version,
           created_at: file.created_at,
           updated_at: file.updated_at,
@@ -860,15 +866,37 @@ export function registerFiles(
         .execute();
       type SearchFileRow = (typeof rows)[number];
       const visible: SearchFileRow[] = [];
-      const documentMedia = new Map<string, Promise<{ ids: Set<string> | null; updatedAt: string }>>();
+      const documentMedia = new Map<
+        string,
+        Promise<{ ids: Set<string> | null; updatedAt: string }>
+      >();
       for (const row of rows) {
         if (!policy.searchGroups.includes(filePolicyGroup(row.mime))) continue;
-        if (!(await releaseDocumentFileIfUnused(db, row.id, documentMedia))) continue;
+        if (!(await releaseDocumentFileIfUnused(db, row.id, documentMedia)))
+          continue;
         try {
           await readableItem(db, actor, row.id);
-          if (req.query.scope === "public" && row.parent_type !== "folder" && row.parent_type !== "document") continue;
-          if (row.parent_type === "folder" && !await folderInSearch(db, actor, row.parent_id, req.query.scope)) continue;
-          if (row.parent_type === "document" && !(await queryResourcePage(db, actor, {matchedIds:[row.parent_id], scope:req.query.scope})).items.length) continue;
+          if (
+            req.query.scope === "public" &&
+            row.parent_type !== "folder" &&
+            row.parent_type !== "document"
+          )
+            continue;
+          if (
+            row.parent_type === "folder" &&
+            !(await folderInSearch(db, actor, row.parent_id, req.query.scope))
+          )
+            continue;
+          if (
+            row.parent_type === "document" &&
+            !(
+              await queryResourcePage(db, actor, {
+                matchedIds: [row.parent_id],
+                scope: req.query.scope,
+              })
+            ).items.length
+          )
+            continue;
         } catch {
           continue;
         }
@@ -1061,7 +1089,6 @@ export function registerFiles(
     },
   );
 
-
   api.post<{ Body: { name: string; parentId?: string | null } }>(
     "/api/v1/files/folders",
     {
@@ -1203,7 +1230,7 @@ export function registerFiles(
         if (!candidate) {
           const id = randomUUID(),
             key = objectKey(id, mime),
-            config = configOf(profile);
+            config = configOf(runtime, profile);
           await storage.putStream(
             config,
             key,
@@ -1231,11 +1258,7 @@ export function registerFiles(
         const result = await transact(db, async (tx) => {
           if ((await parentOwner(tx, actor, parent)) !== ownerId)
             fail(409, "目标文件夹已变化，请重新上传");
-          await requireCapability(
-            tx,
-            actor.id,
-            "assets.upload",
-          );
+          await requireCapability(tx, actor.id, "assets.upload");
           await checkStorage(tx, ownerId, size);
           let object = await findExisting(tx);
           if (!object) {
@@ -1336,10 +1359,7 @@ export function registerFiles(
       const actor = auth(req);
       await transact(db, async (tx) => {
         const item = await readableItem(tx, actor, req.params.id);
-        if (
-          item.locked ||
-          isCopyOnlyParent(item.parent_type, item.parent_id)
-        )
+        if (item.locked || isCopyOnlyParent(item.parent_type, item.parent_id))
           fail(403, "这个文件由系统或文档管理，不能直接修改");
         if (item.parent_type === "folder")
           await folderAccess(tx, actor, item.parent_id, 3);
@@ -1426,7 +1446,12 @@ export function registerFiles(
     const candidates = await db
       .selectFrom("file_folders")
       .selectAll()
-      .where(eb=>eb.or([eb("parent_id","=","shared"),sql<boolean>`exists(select 1 from resource_collections c where c.resource_kind='folder' and c.resource_id=file_folders.id and c.user_id=${actor.id})`]))
+      .where((eb) =>
+        eb.or([
+          eb("parent_id", "=", "shared"),
+          sql<boolean>`exists(select 1 from resource_collections c where c.resource_kind='folder' and c.resource_id=file_folders.id and c.user_id=${actor.id})`,
+        ]),
+      )
       .where("deleted_at", "is", null)
       .orderBy("updated_at", "desc")
       .execute();
@@ -1435,7 +1460,7 @@ export function registerFiles(
       let access: Awaited<ReturnType<typeof folderAccess>>;
       try {
         access = await folderAccess(db, actor, folder.id, 1);
-        if (!await folderInSearch(db, actor, folder.id, "personal")) continue;
+        if (!(await folderInSearch(db, actor, folder.id, "personal"))) continue;
       } catch {
         continue;
       }
@@ -1451,11 +1476,25 @@ export function registerFiles(
         .where("s.folder_id", "=", folder.id)
         .orderBy("u.display_name")
         .execute();
-      const collected = !!await db.selectFrom("resource_collections").select("resource_id").where("user_id","=",actor.id).where("resource_kind","=","folder").where("resource_id","=",folder.id).executeTakeFirst();
-      const isPublic = !!await db.selectFrom("folder_publications").select("folder_id").where("folder_id","=",folder.id).where("enabled","=",1).executeTakeFirst();
+      const collected = !!(await db
+        .selectFrom("resource_collections")
+        .select("resource_id")
+        .where("user_id", "=", actor.id)
+        .where("resource_kind", "=", "folder")
+        .where("resource_id", "=", folder.id)
+        .executeTakeFirst());
+      const isPublic = !!(await db
+        .selectFrom("folder_publications")
+        .select("folder_id")
+        .where("folder_id", "=", folder.id)
+        .where("enabled", "=", 1)
+        .executeTakeFirst());
       items.push({
         ...folder,
-        collected, public: isPublic, owned: folder.owner_id === actor.id, collaborating: members.some(m=>m.user_id===actor.id),
+        collected,
+        public: isPublic,
+        owned: folder.owner_id === actor.id,
+        collaborating: members.some((m) => m.user_id === actor.id),
         type: "folder",
         virtual: false,
         locked: access.role === "reader",
@@ -1876,7 +1915,10 @@ export function registerFiles(
         mime: source.mime,
         size: source.size,
         extractStatus: extract?.status ?? "pending",
-        preview: extract && "markdown" in extract ? extract.markdown.slice(0, 280) : undefined,
+        preview:
+          extract && "markdown" in extract
+            ? extract.markdown.slice(0, 280)
+            : undefined,
         description:
           source.ai_description_override ?? source.ai_description ?? undefined,
       };
@@ -2015,7 +2057,10 @@ export function registerFiles(
     },
   );
 
-  api.post<{ Params: { id: string }; Body: { parentId?: string | null; name?: string } }>(
+  api.post<{
+    Params: { id: string };
+    Body: { parentId?: string | null; name?: string };
+  }>(
     "/api/v1/files/folders/:id/copy",
     {
       schema: {
@@ -2096,7 +2141,12 @@ export function registerFiles(
         return id;
       };
       const id = await transact(db, (tx) =>
-        copyBranch(tx, source, targetParentId, req.body.name ? cleanName(req.body.name) : source.name),
+        copyBranch(
+          tx,
+          source,
+          targetParentId,
+          req.body.name ? cleanName(req.body.name) : source.name,
+        ),
       );
       return { id };
     },
@@ -2482,8 +2532,7 @@ export function registerFiles(
             .where("owner_id", "=", actor.id)
             .where("deleted_at", "is not", null)
             .executeTakeFirst();
-          if (Number(deleted.numDeletedRows) < 1)
-            fail(404, "回收站文件不存在");
+          if (Number(deleted.numDeletedRows) < 1) fail(404, "回收站文件不存在");
           await enqueueFileSearch(tx, req.body.id);
           return;
         }
@@ -2579,7 +2628,7 @@ export function registerFiles(
         req,
         reply,
         storage,
-        configOf(profile),
+        configOf(runtime, profile),
         selected,
         req.query.download === "1",
       );

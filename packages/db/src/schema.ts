@@ -501,8 +501,6 @@ export interface Schema {
   };
   storage_profiles: {
     id: string;
-    provider: string;
-    config: string;
     active: number;
     created_at: string;
   };
@@ -546,6 +544,7 @@ export interface Schema {
     updated_at: string;
   };
   file_folders: {
+    storage_namespace?: string;
     id: string;
     owner_id: string;
     parent_id: string | null;
@@ -575,6 +574,7 @@ export interface Schema {
     updated_at: string;
   };
   file_items: {
+    storage_namespace?: string;
     id: string;
     owner_id: string;
     parent_type: "system" | "folder" | "document";
@@ -645,8 +645,19 @@ export interface Schema {
     user_id: string;
     expires_at: string;
   };
-  plugin_webview_auth: {id:string;kind:string;plugin_id:string;parent_session:string;expires_at:string};
-  navigation_settings: { id: string; revision: number; draft: string; published: string };
+  plugin_webview_auth: {
+    id: string;
+    kind: string;
+    plugin_id: string;
+    parent_session: string;
+    expires_at: string;
+  };
+  navigation_settings: {
+    id: string;
+    revision: number;
+    draft: string;
+    published: string;
+  };
   settings: {
     directory_mode?: string;
     id: string;
@@ -726,8 +737,43 @@ export interface Schema {
     read_at: string | null;
     created_at: string;
   };
+  plugin_storage_namespaces: {
+    plugin_id: string;
+    namespace: string;
+    data_version: string;
+    generation: number;
+    state: "active" | "removed";
+    definition: string | null;
+    created_at: string;
+  };
+  plugin_object_garbage: {
+    id: string;
+    store_id: string;
+    object_key: string;
+    created_at: string;
+  };
+  plugin_private_objects: {
+    plugin_id: string;
+    generation: number;
+    id: string;
+    store_id: string;
+    object_key: string;
+    mime: string;
+    size: number;
+    sha256: string;
+    created_at: string;
+  };
   plugin_registry: { id: string; revision: number; state: string };
-  plugin_archives: { sha256: string; plugin_id: string; version: string; content: string; created_at: string };
+  plugin_archives: {
+    sha256: string;
+    plugin_id: string;
+    version: string;
+    store_id: string;
+    object_key: string;
+    size: number;
+    file_index: string;
+    created_at: string;
+  };
   audit_events: {
     id: string;
     actor_id: string;

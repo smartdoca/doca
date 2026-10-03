@@ -18,6 +18,11 @@ import {
   type ResourceFilter,
   type ResourceSearch,
   type CreationResourceCard,
+  type CreationResourceResult,
+  type ResourceRetrieval,
+  type ResourceRetrievalPage,
+  type ResourceRetrievalResult,
+  type ResourceSourceInfo,
   type CreationResourceRef,
   type ResourceProviderDescriptor,
   type TemplatePayload,
@@ -35,9 +40,9 @@ export const resourceFilterSchema = z
   .object({
     contract: resourceTypeSchema.optional(),
     contentType: resourceTypeSchema.optional(),
-    query: z.string().max(160).optional(),
+    query: z.string().max(1000).optional(),
     tags: z.array(id).max(30).optional(),
-    providerId: id.optional(),
+    providerIds: z.array(id).max(100).optional(),
     sort: z.enum(["updated", "name", "usage", "popular"]).optional(),
   })
   .strict();
@@ -45,6 +50,25 @@ export const resourceSearchSchema = resourceFilterSchema.extend({
   cursor: id.nullable().optional(),
   limit: z.number().int().min(1).max(48).optional(),
 });
+export const resourceRetrievalSchema = resourceFilterSchema
+  .omit({ query: true, sort: true })
+  .extend({
+    query: z.string().trim().min(1).max(1000),
+    mode: z.enum(["auto", "keyword", "semantic", "hybrid"]).optional(),
+    topK: z.number().int().min(1).max(20).optional(),
+  });
+const retrievalModeSchema = z.enum(["keyword", "semantic", "hybrid"]);
+const retrievalHitSchema = z
+  .object({
+    ref: resourceRefSchema,
+    title: z.string().min(1).max(160),
+    summary: z.string().max(2000),
+    tags: z.array(id).max(30),
+    contract: resourceTypeSchema,
+    contentType: resourceTypeSchema,
+    matchText: z.string().max(500).optional(),
+  })
+  .strict();
 export const templateSelectionSchema = z
   .object({
     ref: resourceRefSchema,
@@ -63,6 +87,17 @@ const descriptorSchema = z.object({
   contracts: z.array(resourceTypeSchema).min(1).max(50),
   contentTypes: z.array(resourceTypeSchema).min(1).max(50),
   sorts: z.array(sorts).min(1).max(4),
+  description: z
+    .object({
+      zh: z.string().min(1).max(1000),
+      en: z.string().min(1).max(1000),
+    })
+    .strict()
+    .optional(),
+  retrieval: z
+    .object({ modes: z.array(retrievalModeSchema).min(1).max(3) })
+    .strict()
+    .optional(),
 });
 const cardSchema = z
   .object({
@@ -89,7 +124,7 @@ const sameType = (
   b: { id: string; version: number },
 ) => a.id === b.id && a.version === b.version;
 const matches = (p: ResourceProviderDescriptor, f: ResourceFilter) =>
-  (!f.providerId || p.id === f.providerId) &&
+  (!f.providerIds || f.providerIds.includes(p.id)) &&
   (!f.contract || p.contracts.some((x) => sameType(x, f.contract!))) &&
   (!f.contentType || p.contentTypes.some((x) => sameType(x, f.contentType!)));
 const principalActor = (c: PluginRequestContext) => ({
@@ -110,7 +145,7 @@ interface Stream {
   id: string;
   cursor: string | null;
   done: boolean;
-  buffer: CreationResourceCard[];
+  buffer: CreationResourceResult[];
   seenCursors: string[];
   seenIds: string[];
   last?: CreationResourceCard;
@@ -122,6 +157,14 @@ interface Session {
   expires: number;
   streams: Stream[];
   failures: string[];
+}
+function sourceInfo(p: ResourceProviderDescriptor): ResourceSourceInfo {
+  return {
+    id: p.id,
+    pluginId: p.pluginId,
+    title: p.title,
+    ...(p.description ? { description: p.description } : {}),
+  };
 }
 function directory<P extends ResourceProvider>(db: DB, kind: string) {
   const scope = databaseRuntimeScope(db);
@@ -137,6 +180,11 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
     scope.set(`creation-resources:${kind}`, state);
   }
   const store = state;
+  function selectedProviders(f: ResourceFilter) {
+    if (f.providerIds?.some((providerId) => !store.providers.has(providerId)))
+      fail(404, "Resource source unavailable");
+    return [...store.providers.values()].filter((p) => matches(p, f));
+  }
   async function identity(c: PluginRequestContext) {
     c.signal.throwIfAborted();
     const user = await db
@@ -180,7 +228,7 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
     p: P,
     value: unknown,
     f?: ResourceFilter,
-  ): CreationResourceCard {
+  ): CreationResourceResult {
     const result = parsed(cardSchema, value, 502) as CreationResourceCard;
     if (kind === "templates" && !result.preview)
       fail(502, "Template card must include a style preview image");
@@ -213,7 +261,7 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
       f?.tags?.some((tag) => !result.tags.includes(tag))
     )
       fail(502, "Provider returned an incompatible resource");
-    return result;
+    return { ...result, source: sourceInfo(p) };
   }
   const compare = (
     a: CreationResourceCard,
@@ -244,6 +292,9 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
         store.providers.size >= 100 ||
         !p.sorts.includes("updated") ||
         !p.sorts.includes("name") ||
+        !!p.retrieval !== (typeof p.retrieve === "function") ||
+        (p.retrieval &&
+          new Set(p.retrieval.modes).size !== p.retrieval.modes.length) ||
         [
           "search",
           "tags",
@@ -266,9 +317,7 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
     async providers(c: PluginRequestContext, filter: ResourceFilter) {
       await identity(c);
       const f = parsed(resourceFilterSchema, filter);
-      return [...store.providers.values()]
-        .filter((p) => matches(p, f))
-        .map((p) => descriptorSchema.parse(p));
+      return selectedProviders(f).map((p) => descriptorSchema.parse(p));
     },
     async tags(c: PluginRequestContext, filter: ResourceFilter) {
       await identity(c);
@@ -279,17 +328,13 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
         >(),
         failures: string[] = [];
       const results = await Promise.allSettled(
-        [...store.providers.values()]
-          .filter((p) => matches(p, f))
-          .map(async (p) => ({
-            id: p.id,
-            items: await invoke(c, p.id, (p, c) => p.tags(c, f)),
-          })),
+        selectedProviders(f).map(async (p) => ({
+          id: p.id,
+          items: await invoke(c, p.id, (p, c) => p.tags(c, f)),
+        })),
       );
       let i = 0;
-      const providers = [...store.providers.values()].filter((p) =>
-        matches(p, f),
-      );
+      const providers = selectedProviders(f);
       for (const result of results) {
         const provider = providers[i++]!;
         if (result.status === "rejected") {
@@ -332,6 +377,182 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
         return item;
       });
     },
+    async retrieve(
+      context: PluginRequestContext,
+      input: ResourceRetrieval,
+    ): Promise<ResourceRetrievalPage> {
+      await identity(context);
+      const normalized = parsed(resourceRetrievalSchema, input),
+        topK = normalized.topK ?? 8,
+        mode = normalized.mode ?? "auto";
+      const filter = {
+        ...normalized,
+        tags: [...new Set(normalized.tags ?? [])].sort(),
+        ...(normalized.providerIds
+          ? { providerIds: [...new Set(normalized.providerIds)].sort() }
+          : {}),
+      };
+      const generation = store.generation;
+      const providers = selectedProviders(filter).sort((a, b) =>
+        a.id.localeCompare(b.id),
+      );
+      const deadline = AbortSignal.timeout(15000),
+        workContext = {
+          ...context,
+          signal: AbortSignal.any([context.signal, deadline]),
+        };
+      const results: {
+        items: ResourceRetrievalResult[];
+        source?: ResourceRetrievalPage["sources"][number];
+        failure?: ResourceRetrievalPage["failures"][number];
+      }[] = new Array(providers.length);
+      let next = 0;
+      const worker = async () => {
+        while (next < providers.length) {
+          const index = next++,
+            provider = providers[index]!;
+          if (
+            !provider.retrieval ||
+            !provider.retrieve ||
+            (mode !== "auto" && !provider.retrieval.modes.includes(mode))
+          ) {
+            results[index] = {
+              items: [],
+              failure: { providerId: provider.id, code: "unsupported" },
+            };
+            continue;
+          }
+          try {
+            const perProvider =
+              providers.length === 1 ? topK : Math.min(topK, 5);
+            const result = await invoke(
+              workContext,
+              provider.id,
+              async (p, c) => {
+                const value = await p.retrieve!(c, {
+                  ...filter,
+                  providerIds: [p.id],
+                  mode,
+                  topK: perProvider,
+                });
+                bounded(value, 100000);
+                const page = parsed(
+                  z
+                    .object({
+                      items: z.array(retrievalHitSchema).max(perProvider),
+                      mode: retrievalModeSchema,
+                      hasMore: z.boolean(),
+                    })
+                    .strict(),
+                  value,
+                  502,
+                );
+                if (
+                  !p.retrieval!.modes.includes(page.mode) ||
+                  (mode !== "auto" && mode !== page.mode)
+                )
+                  fail(502, "Invalid resource retrieval mode");
+                const seen = new Set<string>();
+                for (const hit of page.items) {
+                  if (
+                    hit.ref.providerId !== p.id ||
+                    seen.has(hit.ref.id) ||
+                    !matches(p, {
+                      contract: hit.contract,
+                      contentType: hit.contentType,
+                    }) ||
+                    (filter.contract &&
+                      !sameType(filter.contract, hit.contract)) ||
+                    (filter.contentType &&
+                      !sameType(filter.contentType, hit.contentType)) ||
+                    filter.tags.some((tag) => !hit.tags.includes(tag)) ||
+                    hit.tags.some(
+                      (tag) =>
+                        !tag.startsWith("doca.tag.") &&
+                        !tag.startsWith(p.pluginId + "."),
+                    )
+                  )
+                    fail(502, "Invalid resource retrieval hit");
+                  seen.add(hit.ref.id);
+                }
+                return page;
+              },
+            );
+            const items: ResourceRetrievalResult[] = [];
+            for (let rank = 0; rank < result.items.length; rank++) {
+              const hit = result.items[rank]!;
+              try {
+                const current = await service.describe(workContext, hit.ref);
+                if (
+                  !sameType(current.contract, hit.contract) ||
+                  !sameType(current.contentType, hit.contentType) ||
+                  filter.tags.some((tag) => !current.tags.includes(tag))
+                )
+                  fail(409, "Resource metadata changed");
+                // Use current metadata and source identity; never forward thumbnails to AI.
+                items.push({
+                  ...hit,
+                  title: current.title,
+                  summary: current.summary,
+                  tags: current.tags,
+                  source: current.source,
+                  rank: rank + 1,
+                });
+              } catch (error) {
+                context.signal.throwIfAborted();
+                if ((error as any).status === 404) continue;
+                throw error;
+              }
+            }
+            results[index] = {
+              items,
+              source: {
+                source: sourceInfo(provider),
+                mode: result.mode,
+                count: items.length,
+                truncated: result.hasMore,
+              },
+            };
+          } catch {
+            context.signal.throwIfAborted();
+            results[index] = {
+              items: [],
+              failure: {
+                providerId: provider.id,
+                code: deadline.aborted ? "timeout" : "failed",
+              },
+            };
+          }
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(4, providers.length) }, worker),
+      );
+      await identity(context);
+      if (generation !== store.generation)
+        fail(409, "Resource providers changed");
+      const candidates = results
+        .flatMap((result) => result.items)
+        .sort(
+          (a, b) =>
+            a.rank - b.rank || a.ref.providerId.localeCompare(b.ref.providerId),
+        );
+      const sources = results.flatMap((result) =>
+          result.source ? [result.source] : [],
+        ),
+        failures = results.flatMap((result) =>
+          result.failure ? [result.failure] : [],
+        );
+      return {
+        items: candidates.slice(0, topK),
+        sources,
+        failures,
+        complete: !failures.length,
+        truncated:
+          candidates.length > topK ||
+          sources.some((source) => source.truncated),
+      };
+    },
     async search(c: PluginRequestContext, input: ResourceSearch) {
       c = {
         ...c,
@@ -344,13 +565,17 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
         ...rest,
         query: rest.query?.trim() ?? "",
         tags: [...new Set(rest.tags ?? [])].sort(),
+        ...(rest.providerIds
+          ? { providerIds: [...new Set(rest.providerIds)].sort() }
+          : {}),
         sort: rest.sort ?? "updated",
       };
-      if ((f.sort === "usage" || f.sort === "popular") && !f.providerId)
+      if (
+        (f.sort === "usage" || f.sort === "popular") &&
+        f.providerIds?.length !== 1
+      )
         fail(400, "Usage/popularity require one provider");
-      const providers = [...store.providers.values()].filter((p) =>
-        matches(p, f),
-      );
+      const providers = selectedProviders(f);
       if (providers.some((p) => !p.sorts.includes(f.sort!)))
         fail(400, "Resource sort unsupported by provider");
       const key = JSON.stringify(f);
@@ -384,7 +609,7 @@ function directory<P extends ResourceProvider>(db: DB, kind: string) {
           })),
           failures: [],
         };
-      const items: CreationResourceCard[] = [];
+      const items: CreationResourceResult[] = [];
       let calls = 0;
       while (items.length < limit) {
         for (const stream of session.streams) {
@@ -492,7 +717,7 @@ export function createMaterialsService(db: DB): MaterialsServiceV1 {
         /[\x00-\x1f]/.test(input.operationKey)
       )
         fail(400, "Invalid material operation key");
-      await service.describe(c, input.ref);
+      const descriptor = await service.describe(c, input.ref);
       const result = await invoke(c, input.ref.providerId, (p, c) =>
         p.import(c, input),
       );
@@ -503,6 +728,7 @@ export function createMaterialsService(db: DB): MaterialsServiceV1 {
           .fileId,
       );
       return {
+        source: descriptor.source,
         fileId: file.id,
         name: file.name,
         mime: file.mime,
@@ -571,8 +797,8 @@ export function createTemplatesService(db: DB): TemplatesServiceV1 {
           fail(502, "Invalid template asset key");
         keys.add(a.key);
       }
-      await service.describe(c, input.ref);
-      return structuredClone(payload);
+      const descriptor = await service.describe(c, input.ref);
+      return { ...structuredClone(payload), source: descriptor.source };
     },
     registerConsumer(consumer) {
       if (

@@ -16,6 +16,7 @@ import { api, uuid } from "../../src/api";
 import { AnswerBody, ApprovalCards, type ApprovalItem } from "../../src/ai-answer";
 import { AiTrace, type TraceEvent, type TraceOperation } from "../../src/ai-trace";
 import { useAuth } from "../../src/auth";
+import { consumeAssistantDraft } from "../../src/ai-launch";
 import { colors } from "../../src/chrome";
 import { fileSize } from "../../src/format";
 
@@ -140,15 +141,37 @@ const prompts = ["帮我列一个提纲", "把这段话写得更清楚", "总结
 const screenWidth = Dimensions.get("window").width;
 
 export function Conversation({ sessionId, heading }: { sessionId?: string; heading?: string }) {
-  const params = useLocalSearchParams<{ id: string; title?: string }>();
+  const params = useLocalSearchParams<{ id: string; title?: string; launch?: string }>();
   const id = sessionId || (typeof params.id === "string" ? params.id : "");
   const title = heading ?? (typeof params.title === "string" ? params.title : undefined);
   const navigation = useNavigation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
+  const [launch, setLaunch] = useState<ReturnType<typeof consumeAssistantDraft>>(null);
+  const [composerText, setComposerText] = useState("");
+  const [references, setReferences] = useState<NonNullable<typeof launch>["references"]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState<PendingFile[]>([]);
+  const draftScope = `${session?.origin}:${session?.token}:${id}`;
+  const previousDraftScope = useRef(draftScope);
+  useEffect(() => {
+    if (previousDraftScope.current !== draftScope) {
+      previousDraftScope.current = draftScope;
+      setLaunch(null);
+      setComposerText("");
+      setReferences([]);
+      setPending([]);
+    }
+    const draft = consumeAssistantDraft(session, params.launch, id);
+    if (!draft) return;
+    setLaunch(draft);
+    setComposerText(draft.text);
+    setReferences(draft.references);
+    setPending(draft.attachments.map(file => ({
+      localId: file.id, id: file.id, name: file.filename, mime: file.mime, size: file.size, uri: "", status: "done",
+    })));
+  }, [params.launch, id, session?.origin, session?.token]);
   const [traces, setTraces] = useState<Record<string, TraceEvent[]>>({});
   const [reasoning, setReasoning] = useState<Record<string, string>>({});
   const [typing, setTyping] = useState(false);
@@ -184,7 +207,7 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
     setTraces(next);
   }, []);
   const modelId =
-    detail.data?.session.model_id ||
+    launch?.modelId || detail.data?.session.model_id ||
     options.data?.preferences?.default_model ||
     options.data?.defaultModel ||
     options.data?.models[0]?.id ||
@@ -549,7 +572,6 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
     const messageId = uuid();
     watch.current.add(messageId);
     setError("");
-    setPending([]);
     setMessages((current) =>
       GiftedChat.append(current, [
         { _id: messageId, text, createdAt: new Date(), user: { _id: "me", name: "我" }, attachments },
@@ -564,17 +586,21 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
           text,
           modelId,
           scope: "all",
-          references: [],
+          references,
           attachments: attachments.map((file) => file.id),
           files: [],
           skillIds: [],
           webSearch: !!options.data?.webSearchAvailable,
         },
       });
+      setPending([]);
+      setReferences([]);
+      setComposerText("");
       startStream();
     } catch (reason) {
       running.current = false;
       setTyping(false);
+      setComposerText(typed);
       setError(reason instanceof Error ? reason.message : "发送失败");
     }
   }
@@ -620,6 +646,7 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
   return (
     <View style={styles.page}>
       <GiftedChat
+        text={composerText}
         messages={messages}
         onSend={(items) => void onSend(items)}
         user={{ _id: "me", name: "我" }}
@@ -699,7 +726,7 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
               >
                 {pending.map((file) => (
                   <View key={file.localId} style={styles.pendingChip}>
-                    {file.mime.startsWith("image/") ? (
+                    {file.mime.startsWith("image/") && file.uri ? (
                       <Image source={{ uri: file.uri }} style={styles.pendingThumb} />
                     ) : null}
                     <View style={styles.pendingCopy}>
@@ -709,6 +736,18 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
                       </Text>
                     </View>
                     <Pressable hitSlop={8} onPress={() => setPending((current) => current.filter((item) => item.localId !== file.localId))}>
+                      <Text style={styles.pendingRemove}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
+            {references.length ? (
+              <ScrollView horizontal style={styles.pendingBar} contentContainerStyle={styles.pendingRow}>
+                {references.map(reference => (
+                  <View key={reference.resourceId} style={styles.pendingChip}>
+                    <Text numberOfLines={1} style={styles.pendingName}>@{reference.label}</Text>
+                    <Pressable hitSlop={8} onPress={() => setReferences(current => current.filter(item => item.resourceId !== reference.resourceId))}>
                       <Text style={styles.pendingRemove}>×</Text>
                     </Pressable>
                   </View>
@@ -745,6 +784,7 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
         renderComposer={(props) => (
           <Composer
             {...props}
+            onTextChanged={setComposerText}
             textInputStyle={styles.composer}
             placeholderTextColor={colors.muted}
           />
@@ -775,7 +815,7 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
                   return;
                 }
                 if (!typed && !pending.some((item) => item.status === "done")) return;
-                props.onSend?.({ text: typed || "请分析这些附件" }, true);
+                props.onSend?.({ text: typed || "请分析这些附件" }, false);
               }}
             >
               <View style={[styles.send, !enabled && styles.sendIdle]}>

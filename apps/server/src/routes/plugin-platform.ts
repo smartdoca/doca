@@ -190,7 +190,7 @@ export function registerPluginPlatformRoutes(
           }
           default:
             if (
-              /^(templates|materials)\.(providers|tags|search|describe|read|import|consumers|consume)$/.test(
+              /^(templates|materials)\.(providers|tags|search|retrieve|describe|read|import|consumers|consume)$/.test(
                 req.params.operation,
               )
             )

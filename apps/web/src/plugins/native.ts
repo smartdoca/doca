@@ -53,6 +53,7 @@ export function nativeCapabilities(
     });
   }
   return {
+    ai: { open: (assistant = {}) => call("assistant.open", { assistant }) },
     storage: {
       get: (key) => call("storage.get", { key }),
       set: (key, value) => call("storage.set", { key, value }),

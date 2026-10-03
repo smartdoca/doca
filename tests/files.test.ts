@@ -1,4 +1,5 @@
-import { beforeEach, afterEach, expect, it } from "vitest";
+import { storageRuntime } from "@server/adapters/storage.js";
+import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { mkdtemp, rm, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { openTestDatabase } from "./database.js";
@@ -58,6 +59,7 @@ beforeEach(async () => {
   app = await createApp(db, {
     origin,
     storage: {
+      configuration: storageRuntime().configuration,
       root: join(directory, "uploads"),
       credentials: {},
       endpointHosts: [],
@@ -108,7 +110,7 @@ it("detects real file types, preserves originals, generates reusable thumbnails,
     .executeTakeFirstOrThrow();
   expect(object.category).toBe("image");
   expect(object.object_key).toMatch(
-    /^objects\/image\/[a-f0-9]{2}\/[a-f0-9]{2}\/[^/]+\/original$/,
+    /^host\/objects\/image\/[a-f0-9]{2}\/[a-f0-9]{2}\/[^/]+\/original$/,
   );
   expect(
     (await request("GET", `/files/items/${item.id}/content`)).rawPayload,
@@ -121,6 +123,7 @@ it("detects real file types, preserves originals, generates reusable thumbnails,
   );
   expect(duplicate.json().storage_object_id).toBe(item.storage_object_id);
   const worker = createFileProcessingWorker(db, {
+    configuration: storageRuntime().configuration,
     root: join(directory, "uploads"),
     credentials: {},
     endpointHosts: [],
@@ -128,11 +131,19 @@ it("detects real file types, preserves originals, generates reusable thumbnails,
     cdnPrivateKey: undefined,
   });
   await worker.pump();
-  const preview = await request(
-    "GET",
-    `/files/items/${item.id}/content?variant=thumbnail`,
+  // The app worker can hold the lease before this explicit pump claims it.
+  // Wait for the observable result from whichever worker wins the lease.
+  const preview = await vi.waitFor(
+    async () => {
+      const result = await request(
+        "GET",
+        `/files/items/${item.id}/content?variant=thumbnail`,
+      );
+      expect(result.statusCode, result.body).toBe(200);
+      return result;
+    },
+    { timeout: 5000, interval: 50 },
   );
-  expect(preview.statusCode, preview.body).toBe(200);
   expect(await sharp(preview.rawPayload).metadata()).toMatchObject({
     format: "webp",
     width: 480,
@@ -213,6 +224,7 @@ it("retries a persisted thumbnail job after storage becomes available again", as
   const source = join(directory, "uploads", object.object_key);
   await rename(source, source + ".offline");
   const runtime = {
+    configuration: storageRuntime().configuration,
     root: join(directory, "uploads"),
     credentials: {},
     endpointHosts: [],
@@ -253,7 +265,16 @@ it("retries a persisted thumbnail job after storage becomes available again", as
 });
 
 it("rolls back object registration when a plugin rejects storage allocation", async () => {
-  pluginServices(db).policies.set("test.storage", { id: "test.storage", async check(input) { if (input.action === "storage.allocate" && Number(input.facts.additional) === 2) fail(413, "Storage denied by plugin"); } });
+  pluginServices(db).policies.set("test.storage", {
+    id: "test.storage",
+    async check(input) {
+      if (
+        input.action === "storage.allocate" &&
+        Number(input.facts.additional) === 2
+      )
+        fail(413, "Storage denied by plugin");
+    },
+  });
   expect(
     (
       await request(
@@ -305,9 +326,9 @@ it("supports the personal file lifecycle and keeps copies on the same object", a
     "GET",
     "/files?parentType=system&parentId=root",
   );
-  expect(
-    rootPage.json().folders.map((x: { name: string }) => x.name),
-  ).toEqual(expect.arrayContaining(["项目资料", "猫猫相册"]));
+  expect(rootPage.json().folders.map((x: { name: string }) => x.name)).toEqual(
+    expect.arrayContaining(["项目资料", "猫猫相册"]),
+  );
 
   const upload = await request(
     "POST",
@@ -318,9 +339,7 @@ it("supports the personal file lifecycle and keeps copies on the same object", a
   expect(upload.statusCode, upload.body).toBe(200);
   const item = upload.json();
   expect(
-    (
-      await request("GET", "/files?parentType=system&parentId=root")
-    )
+    (await request("GET", "/files?parentType=system&parentId=root"))
       .json()
       .files.map((x: { name: string }) => x.name),
   ).not.toContain("说明.txt");
@@ -460,13 +479,19 @@ it("copies a folder under a new name when the destination already has the origin
     parentId: null,
   });
   expect(source.statusCode, source.body).toBe(200);
-  const copied = await request("POST", `/files/folders/${source.json().id}/copy`, {
-    parentId: null,
-    name: "新建文件夹 2",
-  });
+  const copied = await request(
+    "POST",
+    `/files/folders/${source.json().id}/copy`,
+    {
+      parentId: null,
+      name: "新建文件夹 2",
+    },
+  );
   expect(copied.statusCode, copied.body).toBe(200);
   const root = await request("GET", "/files?parentType=system&parentId=root");
-  const names = root.json().folders.map((folder: { name: string }) => folder.name);
+  const names = root
+    .json()
+    .folders.map((folder: { name: string }) => folder.name);
   expect(names).toEqual(expect.arrayContaining(["新建文件夹", "新建文件夹 2"]));
 });
 
@@ -597,9 +622,13 @@ it("keeps AI assistant files copy-only so originals stay in place", async () => 
     "application/octet-stream",
   );
   expect(uploaded.statusCode, uploaded.body).toBe(200);
-  const attached = await request("POST", `/files/items/${uploaded.json().id}/attach`, {
-    purpose: "ai_attachment",
-  });
+  const attached = await request(
+    "POST",
+    `/files/items/${uploaded.json().id}/attach`,
+    {
+      purpose: "ai_attachment",
+    },
+  );
   expect(attached.statusCode, attached.body).toBe(200);
   const page = await request("GET", "/files?parentType=system&parentId=ai");
   expect(page.statusCode, page.body).toBe(200);
@@ -633,9 +662,13 @@ it("keeps AI assistant files copy-only so originals stay in place", async () => 
     still.json().files.some((file: { id: string }) => file.id === aiFile.id),
   ).toBe(true);
 
-  const intoAi = await request("POST", `/files/items/${uploaded.json().id}/copy`, {
-    parentType: "system",
-    parentId: "ai",
-  });
+  const intoAi = await request(
+    "POST",
+    `/files/items/${uploaded.json().id}/copy`,
+    {
+      parentType: "system",
+      parentId: "ai",
+    },
+  );
   expect(intoAi.statusCode, intoAi.body).toBe(403);
 });

@@ -3,7 +3,7 @@ import type { AIModel } from "@core/modules/ai/config.js";
 import { fail } from "@core/shared/errors.js";
 import {
   createStorage,
-  storageDefaults,
+  storageConfigForProfile,
   storageRuntime,
   type StorageRuntime,
   type StorageConfig,
@@ -92,11 +92,7 @@ export async function attachmentContent(
       .selectAll()
       .where("id", "=", row.profile_id)
       .executeTakeFirstOrThrow();
-    const config = {
-      ...storageDefaults,
-      ...JSON.parse(profile.config),
-      provider: profile.provider,
-    } as StorageConfig;
+    const config = storageConfigForProfile(runtime, profile);
     const data = await storage.read(config, row.object_key);
     if (data.length !== row.size) fail(409, "附件内容已改变，请重新上传");
     const objectId = await storageObjectIdForAsset(db, row);

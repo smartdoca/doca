@@ -1,8 +1,11 @@
 {
   "name": "@smartdoca/web-plugin-registry",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "MIT",
   "type": "module",
+  "dependencies": {
+    "@smartdoca/plugin-contracts": "workspace:*"
+  },
   "exports": {
     ".": "./src/index.ts"
   },

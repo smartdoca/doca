@@ -133,7 +133,7 @@ export function LibrarySystemPage({
         if ((cause as { name?: string }).name !== "AbortError") setError(cause instanceof Error ? cause.message : t("library.curated.failed"));
       });
     return () => controller.abort();
-  }, [resource.id, curated, tab]);
+  }, [resource.id, curated, tab, refreshVersion]);
 
   async function run(work: () => Promise<void>) {
     if (busy) return;

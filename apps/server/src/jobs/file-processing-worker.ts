@@ -4,11 +4,15 @@ import type { DB } from "@db/index.js";
 import { processProjections } from "@core/modules/automation/jobs.js";
 import {
   createStorage,
-  storageDefaults,
+  storageConfigForProfile,
   type StorageConfig,
   type StorageRuntime,
 } from "../adapters/storage.js";
-import { derivativeKey, filePolicy } from "../services/storage-policy.js";
+import {
+  derivativeKey,
+  filePolicy,
+  storageNamespaceForKey,
+} from "../services/storage-policy.js";
 import { cleanupTemporaryUploads } from "../services/upload-stream.js";
 import { processFileExtract } from "../services/ai/file-extract.js";
 
@@ -52,11 +56,7 @@ export function createFileProcessingWorker(db: DB, runtime: StorageRuntime) {
             .selectAll()
             .where("id", "=", object.profile_id)
             .executeTakeFirstOrThrow();
-          const config = {
-            ...storageDefaults,
-            ...JSON.parse(profile.config),
-            provider: profile.provider,
-          } as StorageConfig;
+          const config = storageConfigForProfile(runtime, profile);
           const original = await storage.read(config, object.object_key);
           const thumbnail = await sharp(original, {
             limitInputPixels: 25000000,
@@ -74,6 +74,7 @@ export function createFileProcessingWorker(db: DB, runtime: StorageRuntime) {
             object.mime,
             recipe,
             `${id}.webp`,
+            storageNamespaceForKey(object.object_key),
           );
           await storage.put(
             config,
@@ -111,8 +112,7 @@ export function createFileProcessingWorker(db: DB, runtime: StorageRuntime) {
       const extracts = await processProjections(
         db,
         "file-extract",
-        (payload) =>
-          processFileExtract(db, String(payload.objectId), runtime),
+        (payload) => processFileExtract(db, String(payload.objectId), runtime),
         2,
         5 * 60_000,
       );

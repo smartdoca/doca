@@ -3,7 +3,7 @@ import { createContent } from "@core/workflows/resources.js";
 import { createDocuments } from "@core/modules/collaboration/documents.js";
 import { MARKDOWN_CODEC } from "@core/modules/documents/codecs/markdown.js";
 import { createUser } from "@core/modules/identity/passwords.js";
-import { mkdtemp, mkdir, writeFile, rm, symlink } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, expect, it } from "vitest";
@@ -13,17 +13,24 @@ import { openTestDatabase } from "./database.js";
 
 const folders: string[] = [];
 afterEach(async () => { for (const folder of folders.splice(0)) await rm(folder, { recursive: true, force: true }); });
-async function fixture(options: { range?: string; server?: string } = {}) {
+async function fixture(options: { range?: string; server?: string; storage?: unknown } = {}) {
   const root = await mkdtemp(join(tmpdir(), "doca-install-")); folders.push(root);
   const pkg = join(root, "example.demo");
   await mkdir(join(pkg, "web"), { recursive: true });
-  const manifest = { schemaVersion: 1, id: "example.demo", version: "1.0.0", displayName: "Demo", sdkRange: options.range ?? "^0.1.0" };
-  await writeFile(join(pkg, "package.json"), JSON.stringify({ name: "@example/demo", version: "1.0.0", type: "module", doca: { dataVersion: "1", manifest: "./manifest.json", server: options.server ?? "./server.js", web: { directory: "./web", entry: "./index.js" } } }));
+  const manifest = { schemaVersion: 1, id: "example.demo", version: "1.0.0", displayName: "Demo", sdkRange: options.range ?? "^0.1.7" };
+  await writeFile(join(pkg, "package.json"), JSON.stringify({ name: "@example/demo", version: "1.0.0", type: "module", doca: { dataVersion: "1", storage: Object.hasOwn(options, "storage") ? options.storage : "host", manifest: "./manifest.json", server: options.server ?? "./server.js", web: { directory: "./web", entry: "./index.js" } } }));
   await writeFile(join(pkg, "manifest.json"), JSON.stringify(manifest));
   await writeFile(join(pkg, "web/index.js"), "export default ({React}) => ({manifest: {pluginId: 'example.demo', version: '1.0.0', targets: ['web']}});");
   await writeFile(join(pkg, "server.js"), `export default () => ({ manifest: ${JSON.stringify(manifest)}, async uninstall() {}, async mount(ctx) { const http = ctx.inject({id: 'http.v1'}); await ctx.effectAsync(() => http.register('example.demo', [{method:'GET',path:'/snapshot',async handle(req){return ctx.inject({id:'documents.read.v1'}).readSnapshot(req,{documentId:req.query.id})}},{method:'POST',path:'/large',bodyLimit:2097152,handle(req){return {length:req.rawBody.length}}},{method:'GET',path:'/me',async handle(req) {const profile = await ctx.inject({id:'users.v1'}).get(req,req.principal.id); const folders = await ctx.inject({id:'files.v1'}).folders.list({principalId:req.principal.id,signal:req.signal},{parentId:null}); return {profile,folders}}},{method:'GET',path:'/callback',auth:'external',verify(req) { return req.query.state === 'valid' }, handle(req,res) {res.header('Set-Cookie','demo=ok; HttpOnly; SameSite=Lax'); res.redirect(http.callbackUrl('example.demo','/me'));}},{method:'POST',path:'/hook',auth:'external',verify(req) {return req.headers['x-signature'] === 'test-signature' && new TextDecoder().decode(req.rawBody) === '{\"event\":1}'}, handle(req,res) {res.status(202); return {received:true, anonymous:req.principal===null}}}])); } });`);
   return { root, pkg };
 }
+it.each([undefined, null, "plugin", "local", "remote", true, { provider: "host" }])("rejects non-host storage %j before resolving or importing plugin code", async (storage) => {
+  const { root } = await fixture({ storage, server: "./missing-server.js" });
+  const oldData = join(root, ".old-business-data");
+  await writeFile(oldData, "preserved");
+  await expect(discoverInstalledPlugins(root)).rejects.toThrow('doca.storage must be "host"');
+  expect(await readFile(oldData, "utf8")).toBe("preserved");
+});
 it("discovers only direct packages and validates their static manifests before importing", async () => {
   const { root } = await fixture({ range: "^9.0.0" });
   const found = await discoverInstalledPlugins(root);

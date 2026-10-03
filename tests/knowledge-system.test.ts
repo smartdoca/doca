@@ -902,9 +902,7 @@ it.each(["DNS", "采购订单"])(
         .insertInto("storage_profiles")
         .values({
           id: profileId,
-          provider: "local",
-          config: "{}",
-          active: 0,
+                  active: 0,
           created_at: now(),
         })
         .execute();
@@ -1143,8 +1141,6 @@ it("uses the same shared-folder permissions for original file citations and file
     .insertInto("storage_profiles")
     .values({
       id: profileId,
-      provider: "local",
-      config: "{}",
       active: 0,
       created_at: now(),
     })

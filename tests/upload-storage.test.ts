@@ -1,3 +1,4 @@
+import { storageRuntime } from "@server/adapters/storage.js";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { mkdtemp, readdir, readFile, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -26,6 +27,7 @@ let runtime: StorageRuntime;
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "doca-upload-storage-"));
   runtime = {
+    configuration: storageRuntime().configuration,
     root,
     credentials: {
       test: { accessKeyId: "fixture", secretAccessKey: "fixture" },
@@ -55,7 +57,7 @@ it("detects content instead of trusting an extension and keeps size policy separ
   ).toBe("application/octet-stream");
   const id = randomUUID();
   expect(objectKey(id, "image/png")).toBe(
-    `objects/image/${id.slice(0, 2)}/${id.slice(2, 4)}/${id}/original`,
+    `host/objects/image/${id.slice(0, 2)}/${id.slice(2, 4)}/${id}/original`,
   );
   expect(filePolicy("video/mp4", 10)).toMatchObject({
     category: "video",

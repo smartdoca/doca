@@ -33,30 +33,43 @@ export function fileCategory(mime: string): FileCategory {
 }
 const uuidPattern =
   "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}";
-export function objectKey(id: string, mime: string) {
+export function objectKey(id: string, mime: string, namespace = "host") {
   if (!new RegExp(`^${uuidPattern}$`).test(id))
     throw new Error("Invalid object ID");
-  return `objects/${fileCategory(mime)}/${id.slice(0, 2)}/${id.slice(2, 4)}/${id}/original`;
+  assertStorageNamespace(namespace);
+  return `${namespace}/objects/${fileCategory(mime)}/${id.slice(0, 2)}/${id.slice(2, 4)}/${id}/original`;
 }
 export function derivativeKey(
   id: string,
   mime: string,
   recipe: string,
   filename: string,
+  namespace = "host",
 ) {
   if (
     !/^[a-z0-9-]{1,40}$/.test(recipe) ||
     !/^[a-z0-9-]+\.[a-z0-9]{1,8}$/.test(filename)
   )
     throw new Error("Invalid derivative path");
-  return objectKey(id, mime)
-    .replace(/^objects\//, "derived/")
+  return objectKey(id, mime, namespace)
+    .replace("/objects/", "/derived/")
     .replace(/original$/, `${recipe}/${filename}`);
 }
 export function validateObjectKey(key: string) {
+  if (/^host\/plugin-releases\/[a-f0-9]{64}\.zip$/.test(key)) return;
+  if (
+    new RegExp(
+      `^plugins/[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*/objects/[1-9][0-9]*/${uuidPattern}/${uuidPattern}$`,
+    ).test(key)
+  ) {
+    assertStorageNamespace(key.split("/").slice(0, 2).join("/"));
+    return;
+  }
+  const namespace = storageNamespaceForKey(key);
+  const relative = key.slice(namespace.length + 1);
   const match = new RegExp(
     `^(objects|derived)/(${fileCategories.join("|")})/([a-f0-9]{2})/([a-f0-9]{2})/(${uuidPattern})/(original|[a-z0-9-]{1,40}/[a-z0-9-]+\\.[a-z0-9]{1,8})$`,
-  ).exec(key);
+  ).exec(relative);
   if (
     !match ||
     match[3] !== match[5]!.slice(0, 2) ||
@@ -64,6 +77,23 @@ export function validateObjectKey(key: string) {
     (match[1] === "objects") !== (match[6] === "original")
   )
     throw new Error("Invalid object key");
+}
+function assertStorageNamespace(namespace: string) {
+  if (namespace === "host") return;
+  const id = namespace.slice("plugins/".length);
+  if (
+    !namespace.startsWith("plugins/") ||
+    id.length > 100 ||
+    !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(id)
+  )
+    throw new Error("Invalid object key namespace");
+}
+export function storageNamespaceForKey(key: string) {
+  const namespace = key.startsWith("host/")
+    ? "host"
+    : key.split("/").slice(0, 2).join("/");
+  assertStorageNamespace(namespace);
+  return namespace;
 }
 export function filePolicy(mime: string, size: number) {
   const category = fileCategory(mime);

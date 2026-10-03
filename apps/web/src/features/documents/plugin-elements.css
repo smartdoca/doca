@@ -1,0 +1,42 @@
+.plugin-element-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: baseline;
+  border: 1px solid var(--border, #d8dee7);
+  border-radius: 5px;
+  padding: 1px 5px;
+  max-width: 100%;
+}
+.plugin-element-error {
+  color: var(--danger, #b42318);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+.plugin-element-configure {
+  display: inline-flex;
+  padding: 2px !important;
+  border: 0;
+  background: transparent;
+  opacity: 0.65;
+}
+.plugin-element-choices {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.plugin-element-remove {
+  display: block;
+  margin-top: 16px;
+}
+.plugin-element-form {
+  display: grid;
+  gap: 12px;
+}
+.plugin-element-form label {
+  display: grid;
+  gap: 4px;
+}
+.plugin-element-form input {
+  width: 100%;
+}

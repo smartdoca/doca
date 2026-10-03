@@ -1,3 +1,4 @@
+import { storageRuntime } from "@server/adapters/storage.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { generateKeyPairSync } from "node:crypto";
 import { Readable } from "node:stream";
@@ -10,7 +11,7 @@ import {
   type StorageRuntime,
 } from "../apps/server/src/adapters/storage.js";
 const runtime: StorageRuntime = {
-  root: "/unused",
+  configuration: storageRuntime().configuration, root: "/unused",
   credentials: {
     test: { accessKeyId: "test-key", secretAccessKey: "test-secret" },
   },

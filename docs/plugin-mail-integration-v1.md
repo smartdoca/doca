@@ -10,7 +10,7 @@
 
 构建后先执行 `npm pack --dry-run` 检查文件清单，再 `npm pack`。审核绑定该版本完整 tgz 的 SHA-512，不允许同版本换包。不要打包 `.env`、业务数据库、用户邮件、OAuth 凭据或开发证书。
 
-manifest 必须含 schemaVersion=1、id、version、displayName、sdkRange；version 等于 package.json.version。dataVersion 是插件私有数据库结构标识；首版只允许代码版本升高且 dataVersion 不变。插件初始化仍须验证实际数据库结构，不能仅相信包中的标记。
+manifest 必须含 schemaVersion=1、id、version、displayName、sdkRange；version 等于 package.json.version。package.json 必须声明 `doca.storage: "host"`；缺失或其他值拒绝安装/加载。dataVersion 是业务结构标识，已安装升级必须保持不变并验证实际结构；不能据此自动导入旧数据库。
 
 安装方式：
 
@@ -19,7 +19,7 @@ manifest 必须含 schemaVersion=1、id、version、displayName、sdkRange；ver
 - 管理后台上传本地 ZIP；ZIP 根目录直接为 package.json，不能直接上传 npm tgz。
 - 停止实例后放入 `<DOCA_PLUGINS_DIR>/<plugin-id>/`，启动时导入共享归档。
 
-所有包变更需重启各实例，目录缺失自动从共享宿主数据库补齐。邮箱数据库、账号凭据、任务队列与 outbox 由邮箱插件负责持久化；包目录不是数据目录，多实例邮件同步须由插件自己协调锁和幂等。
+所有包变更需重启各实例，目录缺失自动从共享宿主数据库补齐。邮箱定义业务模型、队列与 outbox 语义，持久化与账号凭证完全依赖宿主；不选择本地/远端、不自建持久库或目录。多实例同步通过托管事务协调租约与幂等，所需 SQL/凭证能力尚未导出，不能以插件私有存储替代。
 
 ## 2. 服务端接口
 
@@ -27,7 +27,7 @@ manifest 必须含 schemaVersion=1、id、version、displayName、sdkRange；ver
 
 注册的 `/messages` 实际为 `/api/v1/plugins/example.mail/messages`。用户身份来自 request.principal。每次读取正文、下载附件、发送或后台同步都重新检查邮箱业务权限及用户状态，隐藏入口不代表撤销权限。
 
-插件专有数据库中保存账号、凭据、邮件索引、发件幂等记录和同步游标。附件通过 files.v1 及 owner binding 管理，使用稳定 id，不存临时 URL。跨数据库写入使用 outbox、幂等键和补偿；不存在宿主提供的统一业务 SQL 或跨库事务。
+账号、邮件索引、发件幂等记录和同步游标归插件业务模型，通过宿主托管关系服务持久化，逻辑库绑定插件 ID；凭据归宿主托管凭证能力。附件通过 files.v1 与 owner binding 管理，保存稳定 ID，不存临时 URL。跨服务用 outbox、幂等和补偿，不提供跨库事务。关系库/凭证等新增能力当前未导出，交付须按[存储规范](plugin-horizontal-scaling.zh-CN.md)完成宿主能力和独立验收。
 
 参考已有 [邮箱能力交接](plugin-mail-handoff.md)，其中 AI、目录交集、通知和文件接口仍有效。全局搜索接入、自动知识库订阅、用户删除协同仍须单独验收，不应因服务 token 存在就宣称完整业务已实现。
 
@@ -115,8 +115,8 @@ App 必须先升级到包含插件宿主的版本；之后兼容插件不需要�
 3. App 各导航位置能打开相同页面，布局发布后前台刷新生效，Web-only 插件不出现在 App。
 4. 票据重放失败；受限会话访问 `/admin`、其他插件及全局文件 API 被拒绝；注销后不可继续请求。
 5. 升级后目标/运行版本与待重启提示正确；dataVersion 不匹配拒绝。
-6. 第二实例空插件目录、npm/商城离线时自动补齐；业务数据库和同步锁由插件自行验证。
-7. 禁用/卸载后重启不再出现入口，邮件和账号数据保留。
+6. 第二实例空插件目录、npm/商城离线时自动补齐；托管业务状态在另一实例可见，租约、重复执行和实例故障接管通过验收。
+7. 禁用/卸载后重启不再出现入口；禁用不删数据，卸载清理范围与宿主集群协调按存储规范验收，不自行删目录。
 8. 回报不足时附宿主/SDK/App/插件版本、安装来源、最小重现、脱敏请求 ID；不要提交真实邮件或凭据。
 
 当前尚未完成真机/模拟器与独立邮箱 npm 包的端到端验收；源码检查和宿主测试不能替代这一步。

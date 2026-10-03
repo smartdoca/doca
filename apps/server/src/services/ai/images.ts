@@ -27,7 +27,7 @@ import {
 import { enqueueProjection } from "@core/modules/automation/jobs.js";
 import {
   createStorage,
-  storageDefaults,
+  storageConfigForProfile,
   storageRuntime,
   type StorageRuntime,
   type StorageConfig,
@@ -468,11 +468,7 @@ export async function generateImageAsset(
       .selectAll()
       .where("active", "=", 1)
       .executeTakeFirstOrThrow();
-    const storageConfig = {
-      ...storageDefaults,
-      ...JSON.parse(profile.config),
-      provider: profile.provider,
-    } as StorageConfig;
+    const storageConfig = storageConfigForProfile(runtime, profile);
     const assetId = randomUUID(),
       key = objectKey(assetId, "image/webp"),
       filename = `AI-${assetId.slice(0, 8)}.webp`;
@@ -578,8 +574,8 @@ export async function generateImageAsset(
         ready: true,
         url: `/api/v1/assets/${assetId}/content`,
         instruction: input.resourceId
-            ? "图片已存入 AI 助手文件夹并展示在对话中。仅在用户要求插入时调用 image_insert；加入文档只会创建位置引用，不会复制图片内容。"
-            : "图片已存入 AI 助手文件夹并展示在对话中。用户可预览、下载或点击加入文档；加入文档只会创建位置引用。",
+          ? "图片已存入 AI 助手文件夹并展示在对话中。仅在用户要求插入时调用 image_insert；加入文档只会创建位置引用，不会复制图片内容。"
+          : "图片已存入 AI 助手文件夹并展示在对话中。用户可预览、下载或点击加入文档；加入文档只会创建位置引用。",
       };
       await tx
         .updateTable("ai_operations")

@@ -244,8 +244,6 @@ it("scans nested folders without a depth cap and detects later additions", async
     .insertInto("storage_profiles")
     .values({
       id: profile,
-      provider: "local",
-      config: "{}",
       active: 0,
       created_at: now,
     })

@@ -35,7 +35,6 @@ export function registerPluginManagement(
   manager: PluginManager,
 ) {
   const base = "/api/v1/admin/plugins";
-  const activeOperations = new Set<string>();
   api.get(`${base}/operations`, async (req) => {
     admin(req);
     const items = await db
@@ -46,6 +45,13 @@ export function registerPluginManagement(
       .orderBy("id", "desc")
       .limit(100)
       .execute();
+    // A pending outcome is a shared durable fact, not proof that this responding process owns the request.
+    const finished = new Set(
+      items
+        .map((item) => JSON.parse(item.details))
+        .filter((item) => item.stage !== "requested")
+        .map((item) => item.operationId),
+    );
     return {
       items: items.map(({ details, ...item }) => {
         const parsed = JSON.parse(details);
@@ -55,8 +61,7 @@ export function registerPluginManagement(
           version: typeof parsed.version === "string" ? parsed.version : null,
           error: typeof parsed.error === "string" ? parsed.error : null,
           active:
-            parsed.stage === "requested" &&
-            activeOperations.has(parsed.operationId),
+            parsed.stage === "requested" && !finished.has(parsed.operationId),
         };
       }),
     };
@@ -94,10 +99,13 @@ export function registerPluginManagement(
     actor: Actor,
     action: string,
     run: () => Promise<T>,
-    metadata: { pluginId?: string; packageName?: string; version?: string } = {},
+    metadata: {
+      pluginId?: string;
+      packageName?: string;
+      version?: string;
+    } = {},
   ) {
     const operationId = randomUUID();
-    activeOperations.add(operationId);
     try {
       await audit(actor, operationId, action, "requested", metadata);
       const result = await run();
@@ -116,8 +124,6 @@ export function registerPluginManagement(
         message.slice(0, 500),
       );
       fail(400, message);
-    } finally {
-      activeOperations.delete(operationId);
     }
   }
   api.get(base, async (req) => {

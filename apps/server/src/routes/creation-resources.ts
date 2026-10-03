@@ -10,6 +10,7 @@ import type { TemplateSelection } from "@smartdoca/plugin-contracts";
 import {
   resourceFilterSchema,
   resourceSearchSchema,
+  resourceRetrievalSchema,
   resourceRefSchema,
   templateSelectionSchema,
 } from "@core/modules/creation-resources/service.js";
@@ -39,6 +40,8 @@ export async function callCreationResource(
       return service.tags(context, resourceFilterSchema.parse(body));
     case "search":
       return service.search(context, resourceSearchSchema.parse(body));
+    case "retrieve":
+      return service.retrieve(context, resourceRetrievalSchema.parse(body));
     case "describe":
       return service.describe(context, resourceRefSchema.parse(body));
     case "read":

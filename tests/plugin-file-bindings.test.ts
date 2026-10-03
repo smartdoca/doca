@@ -1,3 +1,4 @@
+import { storageRuntime } from "@server/adapters/storage.js";
 import { createApp } from "@server/app/create-app.js";
 import { expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -15,7 +16,7 @@ it("rechecks binding authorization and never changes the original file ACL", asy
   try {
     const owner = await createUser(db, { login: "owner", displayName: "Owner", password: "test-password-2026" }, { bootstrap: true });
     const reader = await createUser(db, { login: "reader", displayName: "Reader", password: "test-password-2026" }, { actor: { ...owner, admin: 1 } });
-    const files = createServerFilesCapability(db, { root, credentials: {}, endpointHosts: [], cdnKeyPairId: undefined, cdnPrivateKey: undefined });
+    const files = createServerFilesCapability(db, { ...storageRuntime(), root, credentials: {}, endpointHosts: [], cdnKeyPairId: undefined, cdnPrivateKey: undefined });
     const context = { principalId: owner.id };
     const upload = await files.uploads.begin(context, { filename: "attachment.txt", mime: "text/plain", size: 5 });
     await files.uploads.write(context, { uploadId: upload.id, offset: 0, bytes: new TextEncoder().encode("hello") });
@@ -27,7 +28,7 @@ it("rechecks binding authorization and never changes the original file ACL", asy
     const request = { principalId: reader.id };
     await expect(files.content.read!(request, { fileId: file.id })).rejects.toMatchObject({ status: 404 });
     await expect(files.content.read!(request, { fileId: file.id, bindingId: binding.id })).rejects.toMatchObject({ status: 404 });
-    app = await createApp(db, { origin: "http://localhost:39130", storage: { root, credentials: {}, endpointHosts: [], cdnKeyPairId: undefined, cdnPrivateKey: undefined }, pluginDirectory: join(root, "plugins") });
+    app = await createApp(db, { origin: "http://localhost:39130", storage: { ...storageRuntime(), root, credentials: {}, endpointHosts: [], cdnKeyPairId: undefined, cdnPrivateKey: undefined }, pluginDirectory: join(root, "plugins") });
     const login = await app.inject({ method: "POST", url: "/api/v1/auth/login", headers: { host: "localhost:39130", origin: "http://localhost:39130" }, payload: { login: "reader", password: "test-password-2026" } });
     const headers = { host: "localhost:39130", cookie: String(login.headers["set-cookie"]).split(";")[0]! };
     const url = `/api/v1/plugin-file-bindings/${binding.id}/content`;

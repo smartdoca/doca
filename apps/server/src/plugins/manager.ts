@@ -1,3 +1,15 @@
+import {
+  createHostFileStore,
+  type HostFileStore,
+} from "../services/host-file-store.js";
+import { storageRuntime } from "../adapters/storage.js";
+import { hostPluginReleaseKey } from "../services/plugin-storage-namespaces.js";
+import {
+  installPluginStorage,
+  bindPluginStorage,
+  removePluginStorage,
+  cleanupPluginObjects,
+} from "../services/plugin-storage.js";
 import { isDeepStrictEqual } from "node:util";
 import { mkdir, rename, readdir } from "node:fs/promises";
 import path from "node:path";
@@ -16,7 +28,14 @@ import type {
 } from "@core/shared/plugin-store.js";
 import { inspectPlugin, instantiateInstalledPlugin } from "./installation.js";
 import { PluginStore } from "./store.js";
-import { digest, materialize, pack, unpack } from "./archive.js";
+import {
+  digest,
+  materialize,
+  pack,
+  unpack,
+  archiveFileIndex,
+  cachedRelease,
+} from "./archive.js";
 
 const entrySchema = z
   .object({
@@ -39,13 +58,13 @@ const entrySchema = z
 type Entry = z.infer<typeof entrySchema>;
 const stateSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     desired: z.record(z.string(), entrySchema),
     dataVersions: z.record(z.string(), z.string()),
   })
   .strict();
 type State = z.infer<typeof stateSchema>;
-const empty = (): State => ({ version: 1, desired: {}, dataVersions: {} });
+const empty = (): State => ({ version: 2, desired: {}, dataVersions: {} });
 const equal = isDeepStrictEqual;
 export class PluginManager {
   private materializations = new Map<
@@ -54,11 +73,16 @@ export class PluginManager {
   >();
   private running: Record<string, Entry> = {};
   private selected: Record<string, Entry> = {};
+  private selectedGenerations: Record<string, number> = {};
+  private runningGenerations: Record<string, number> = {};
   constructor(
     readonly directory: string,
     readonly core: readonly PluginManifest[],
     private readonly db: DB,
     readonly store = new PluginStore(),
+    readonly archiveStore: HostFileStore = createHostFileStore(
+      storageRuntime(),
+    ),
   ) {
     this.directory = path.resolve(directory);
   }
@@ -73,25 +97,62 @@ export class PluginManager {
       state: row ? stateSchema.parse(JSON.parse(row.state)) : empty(),
     };
   }
+  private async generations(entries: Record<string, Entry>) {
+    const namespaces = await this.db
+      .selectFrom("plugin_storage_namespaces")
+      .selectAll()
+      .execute();
+    const result: Record<string, number> = {};
+    for (const [id, entry] of Object.entries(entries)) {
+      const namespace = namespaces.find((row) => row.plugin_id === id);
+      if (
+        !namespace ||
+        namespace.state !== "active" ||
+        namespace.namespace !== `plugin:${id}` ||
+        namespace.data_version !== entry.dataVersion
+      )
+        throw new Error(
+          "Plugin storage differs from installation; refresh and retry",
+        );
+      result[id] = namespace.generation;
+    }
+    return result;
+  }
   private async save(
     state: State,
     revision: number,
-    archive?: { hash: string; bytes: Uint8Array; id: string; version: string },
+    archive?: {
+      hash: string;
+      storeId: string;
+      key: string;
+      size: number;
+      id: string;
+      version: string;
+      dataVersion: string;
+      fileIndex: string;
+    },
+    removeId?: string,
   ) {
     // CAS and archive commit together; concurrent administrators cannot lose updates.
     await this.db.transaction().execute(async (tx) => {
-      if (archive)
+      if (archive) {
+        await installPluginStorage(tx, archive.id, archive.dataVersion);
         await tx
           .insertInto("plugin_archives")
           .values({
             sha256: archive.hash,
             plugin_id: archive.id,
             version: archive.version,
-            content: Buffer.from(archive.bytes).toString("base64"),
+            store_id: archive.storeId,
+            object_key: archive.key,
+            size: archive.size,
+            file_index: archive.fileIndex,
             created_at: new Date().toISOString(),
           })
           .onConflict((c) => c.column("sha256").doNothing())
           .execute();
+      }
+      if (removeId) await removePluginStorage(tx, removeId);
       if (!revision) {
         const result = await tx
           .insertInto("plugin_registry")
@@ -145,13 +206,27 @@ export class PluginManager {
   private async ensure(entry: Entry) {
     const archive = await this.db
       .selectFrom("plugin_archives")
-      .select("content")
+      .selectAll()
       .where("sha256", "=", entry.sha256)
       .executeTakeFirstOrThrow();
-    const descriptor = await this.materialize(
+    if (archive.object_key !== hostPluginReleaseKey(archive.sha256))
+      throw new Error("Invalid plugin archive reference");
+    const cached = await cachedRelease(
+      this.directory,
       entry.sha256,
-      Buffer.from(archive.content, "base64"),
+      archive.file_index,
     );
+    const descriptor = cached
+      ? await inspectPlugin(cached)
+      : await this.materialize(
+          entry.sha256,
+          await this.archiveStore.read(
+            archive.store_id,
+            archive.object_key,
+            archive.size,
+            archive.sha256,
+          ),
+        );
     if (
       !equal(descriptor.manifest, entry.manifest) ||
       descriptor.dataVersion !== entry.dataVersion
@@ -205,6 +280,7 @@ export class PluginManager {
     const { state } = await this.read();
     this.validate(state);
     this.selected = structuredClone(state.desired);
+    this.selectedGenerations = await this.generations(this.selected);
     const descriptors = [];
     for (const [id, entry] of Object.entries(state.desired)) {
       if (disabled[id] === false) {
@@ -219,9 +295,11 @@ export class PluginManager {
   }
   async confirm() {
     this.running = structuredClone(this.selected);
+    this.runningGenerations = { ...this.selectedGenerations };
   }
   async inventory(): Promise<PluginInventory> {
     const { state } = await this.read();
+    const generations = await this.generations(state.desired);
     const plugins = [];
     for (const id of new Set([
       ...Object.keys(this.running),
@@ -241,13 +319,20 @@ export class PluginManager {
         runningVersion: this.running[id]?.enabled
           ? this.running[id]!.manifest.version
           : null,
-        pending: !equal(target, this.running[id]),
+        pending:
+          !equal(target, this.running[id]) ||
+          generations[id] !== this.runningGenerations[id],
+        canCancel:
+          !!target &&
+          !!this.running[id] &&
+          generations[id] === this.runningGenerations[id] &&
+          !equal(target, this.running[id]),
         removing: !target,
       });
     }
     return {
       plugins,
-      restartRequired: !equal(this.running, state.desired),
+      restartRequired: plugins.some((plugin) => plugin.pending),
       storeUrl: this.store.origin,
     };
   }
@@ -264,7 +349,6 @@ export class PluginManager {
     if (Object.values(this.running).some((p) => p.sha256 === hash))
       throw new Error("Plugin release already running");
     const plugin = await this.materialize(hash, bytes);
-    await instantiateInstalledPlugin(plugin);
     const id = plugin.manifest.id;
     if (
       expected &&
@@ -308,9 +392,18 @@ export class PluginManager {
     };
     this.validate(state);
     state.dataVersions[id] = plugin.dataVersion;
+    const archived = await this.archiveStore.putImmutable(
+      hostPluginReleaseKey(hash),
+      bytes,
+      "application/zip",
+    );
     await this.save(state, revision, {
       hash,
-      bytes,
+      storeId: archived.storeId,
+      key: archived.key,
+      size: archived.size,
+      dataVersion: plugin.dataVersion,
+      fileIndex: archiveFileIndex(bytes),
       id,
       version: plugin.manifest.version,
     });
@@ -327,24 +420,54 @@ export class PluginManager {
       .where("version", "=", version)
       .executeTakeFirst();
     if (!archive) return undefined;
-    return this.materialize(
+    if (archive.object_key !== hostPluginReleaseKey(archive.sha256))
+      throw new Error("Invalid plugin archive reference");
+    const cached = await cachedRelease(
+      this.directory,
       archive.sha256,
-      Buffer.from(archive.content, "base64"),
+      archive.file_index,
     );
+    return cached
+      ? inspectPlugin(cached)
+      : this.materialize(
+          archive.sha256,
+          await this.archiveStore.read(
+            archive.store_id,
+            archive.object_key,
+            archive.size,
+            archive.sha256,
+          ),
+        );
   }
   async change(id: string, action: "enable" | "disable" | "remove" | "cancel") {
     const { state, revision } = await this.read();
     if (!Object.hasOwn(state.desired, id) && !Object.hasOwn(this.running, id))
       throw new Error("Plugin not found");
     if (action === "cancel") {
-      if (this.running[id]) {
-        state.desired[id] = structuredClone(this.running[id]!);
-        state.dataVersions[id] = this.running[id]!.dataVersion;
-      } else delete state.desired[id];
+      const running = this.running[id];
+      if (!running || !state.desired[id])
+        throw new Error(
+          "Installation or uninstall cannot be cancelled; uninstall or restart instead",
+        );
+      const generations = await this.generations(state.desired);
+      if (generations[id] !== this.runningGenerations[id])
+        throw new Error(
+          "Plugin installation changed; restart instead of cancelling",
+        );
+      state.desired[id] = structuredClone(running);
+      state.dataVersions[id] = running.dataVersion;
     } else if (action === "remove") {
       const entry = state.desired[id] ?? this.running[id];
       if (!entry) throw new Error("Plugin not found");
-      const installed = await instantiateInstalledPlugin(await this.ensure(entry));
+      const installed = await instantiateInstalledPlugin(
+        await this.ensure(entry),
+        await bindPluginStorage(
+          this.db,
+          this.archiveStore,
+          id,
+          entry.dataVersion,
+        ),
+      );
       await runPluginUninstall(installed);
       delete state.desired[id];
       delete state.dataVersions[id];
@@ -353,7 +476,14 @@ export class PluginManager {
       state.desired[id]!.enabled = action === "enable";
     }
     this.validate(state);
-    await this.save(state, revision);
+    await this.save(
+      state,
+      revision,
+      undefined,
+      action === "remove" ? id : undefined,
+    );
+    if (action === "remove")
+      await cleanupPluginObjects(this.db, this.archiveStore);
     return this.inventory();
   }
 }

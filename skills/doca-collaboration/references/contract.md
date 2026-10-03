@@ -136,3 +136,15 @@ Yjs checkpoint 保存原 CRDT 的完整编码，不能用 JSON 投影重建并�
 后续仍需组件和平台共同落地：正式组件选区 API、持久离线队列、Excel 稳定区域评论锚点和统一回滚能力。组件未导出的能力仍属于目标契约，Excel 基线验证继续保留。
 
 现有服务协议仍见 [collaboration.md](collaboration.md)。该文档是下一阶段统一契约，不代表上面字段和能力都已发布。
+
+## Plugin elements increment — 2026-10-02
+
+The host now implements the optional SDK 0.1.6 Web element registry. Rich text stores an opaque JSON envelope through one permanent `custom:plugin-element` inline codec using the existing rich schema 3. Spreadsheet stores opaque JSON in native `ICellData.custom.docaElement` using existing schema 6 and the public range command path. Neither changes transport, protocol version, epoch, checkpoint identity, ACK receipts or reliable outbox. There is no second JSON autosave or business-owned content database.
+
+Unknown types and exact envelope/data versions display an unsupported placeholder and retain their original bounded JSON. No adapter, migration, conversion or deletion is provided. Existing internal reference readers remain unchanged. Native insertion/configuration/removal participates in clipboard, undo and collaboration. Configuration forms recheck a live rich range or stable spreadsheet single-cell anchor and fail on a removed/concurrently changed target. Canvas timers are view-only, at most once per second and scheduled only after a visible timed cell is drawn; hidden pages pause. Render/selection/idle changes must not increase content seq or history.
+
+Isolated automated acceptance covers native persistence and reload, opaque unknown payloads, rich atom delete/undo/clipboard, sheet row insertion/anchor/copy/delete/undo, duplicate ACK replay, two-replica convergence with no remote echo, readonly denial and oversized payload rollback. Tests do not edit user documents. This increment does not claim universal block support, all spreadsheet operations, cross-format lossless export, permanent offline queues or native-device acceptance. Precise element fields and limits are in the repository source `docs/plugin-editor-elements.md`.
+
+## Markdown bootstrap correction — 2026-10-03
+
+The host restores the authoritative checkpoint into an empty replica before calling the shipped Markdown session factory. It no longer stamps local metadata into a loading replica: those unsubmitted CRDT clocks caused the first text update to depend on items absent from the server. Session status snapshots retain the same doc/text/awareness/undo objects. No schema, epoch or persisted-format adapter changes; existing pending edits are preserved and are not silently converted or cleared. Regression acceptance includes first-edit durable restore, no remote/bootstrap echo and stable status handles; browser verification covers typing, cross-instance updates, reload and idle checks on isolated documents.

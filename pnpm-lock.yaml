@@ -598,7 +598,11 @@ importers:
 
   packages/search-host: {}
 
-  packages/web-plugin-registry: {}
+  packages/web-plugin-registry:
+    dependencies:
+      '@smartdoca/plugin-contracts':
+        specifier: workspace:*
+        version: link:../plugin-contracts
 
 packages:
 

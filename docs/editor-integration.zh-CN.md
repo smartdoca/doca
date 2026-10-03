@@ -61,3 +61,15 @@
 自动测试覆盖：邀请接受/拒绝/撤回、管理员配置权限及 revision、公开/直接/整库权限与主动展示分离、匿名引用过滤、引用增删与旧索引补齐不增加 seq、原子引用 Backspace 与 CRDT 往返、跨格式文字及代码批量替换与撤销、资产下载 ACL。
 
 隔离浏览器验收覆盖：同账号双页编辑和提及、内部引用相对链接与跳转、固定工具栏插入链接、真实 SDK 富文本格式复制粘贴及刷新保留、双向关系、替换后双页一致、知识库首篇/设置与收藏、头像列表、静置 60 秒无新增写入、刷新恢复和主页固定标签。额外修复了异步链接表单被全局菜单按钮处理提前关闭、选区引用被释放的问题。真实中文输入法、所有 Excel 操作、完整断网故障矩阵不属于这轮新增验证结论。
+
+## Plugin elements increment — 2026-10-02
+
+Source host 0.1.8 and SDK 0.1.6 now implement `WebPluginBundle.elements` and `plugin-sdk/editor-elements`. These are current source exports, not proof of npm publication or native-device acceptance. `@smartdoca/slate` 0.4.12 has a host-owned permanent `custom:plugin-element` atomic inline codec/renderer; business registrations change only its registry lookup and never remount the editor. `@smartdoca/sheet` 0.2.0-rc.17 exposes native `cellRenderers` and range `setValue(ICellData)`; the host stores a whole-cell element in `custom.docaElement` with a static text `v`. The fixed built-in `SpreadsheetCellObject` union is not extended or coerced.
+
+Configuration sessions capture a live rich range or stable single-cell anchor, recheck readonly/provider/current target, and commit native operations with native undo. Missing type, provider, format or exact version shows an error placeholder while retaining opaque bounded JSON. Existing internal reference readers are unchanged. No compatibility adapter, automatic conversion or migration is introduced. General blocks, floating spreadsheet objects and public arbitrary editor mutation handles remain unimplemented. See the repository source `docs/plugin-editor-elements.md` and independent example `examples/plugin-elements/README.md` for precise fields, limits and installation.
+
+Performance: ordinary cells take a property-check fast path. Validation is memoized per immutable payload/provider; registry changes invalidate the canvas cache. Only painting a visible timed cell schedules another view refresh, at most once per second; hidden pages pause and sheets with no visible timed cells have no recurring canvas timer. No ticking data is persisted. Third-party renderers still own their CPU/network work and require their own performance acceptance.
+
+## Markdown 初始化修复（2026-10-03）
+
+宿主先将服务端权威 checkpoint 恢复到空副本，再调用当前 Markdown 包的会话工厂。加载期间不再写入客户端元数据，以免首次正文更新依赖从未提交到服务端的 CRDT 项。状态快照保留同一 doc/text/awareness/undo 对象。不改变 schema、epoch 或存储格式，不转换或清空已有待提交编辑。隔离验收覆盖首次编辑持久恢复、远端/初始化无回声、稳定状态句柄，以及浏览器连续输入、跨实例更新、重载和空闲检查。

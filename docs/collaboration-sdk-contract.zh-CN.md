@@ -138,3 +138,15 @@ Yjs checkpoint 保存原 CRDT 的完整编码，不能用 JSON 投影重建并�
 后续仍需组件和平台共同落地：正式组件选区 API、持久离线队列、Excel 稳定区域评论锚点和统一回滚能力。组件未导出的能力仍属于目标契约，Excel 基线验证继续保留。
 
 现有服务协议仍见 [collaboration.md](collaboration.zh-CN.md)。该文档是下一阶段统一契约，不代表上面字段和能力都已发布。
+
+## Plugin elements increment — 2026-10-02
+
+The host now implements the optional SDK 0.1.6 Web element registry. Rich text stores an opaque JSON envelope through one permanent `custom:plugin-element` inline codec using the existing rich schema 3. Spreadsheet stores opaque JSON in native `ICellData.custom.docaElement` using existing schema 6 and the public range command path. Neither changes transport, protocol version, epoch, checkpoint identity, ACK receipts or reliable outbox. There is no second JSON autosave or business-owned content database.
+
+Unknown types and exact envelope/data versions display an unsupported placeholder and retain their original bounded JSON. No adapter, migration, conversion or deletion is provided. Existing internal reference readers remain unchanged. Native insertion/configuration/removal participates in clipboard, undo and collaboration. Configuration forms recheck a live rich range or stable spreadsheet single-cell anchor and fail on a removed/concurrently changed target. Canvas timers are view-only, at most once per second and scheduled only after a visible timed cell is drawn; hidden pages pause. Render/selection/idle changes must not increase content seq or history.
+
+Isolated automated acceptance covers native persistence and reload, opaque unknown payloads, rich atom delete/undo/clipboard, sheet row insertion/anchor/copy/delete/undo, duplicate ACK replay, two-replica convergence with no remote echo, readonly denial and oversized payload rollback. Tests do not edit user documents. This increment does not claim universal block support, all spreadsheet operations, cross-format lossless export, permanent offline queues or native-device acceptance. Precise element fields and limits are in the repository source `docs/plugin-editor-elements.md`.
+
+## Markdown 初始化修复（2026-10-03）
+
+宿主先将服务端权威 checkpoint 恢复到空副本，再调用当前 Markdown 包的会话工厂。加载期间不再写入客户端元数据，以免首次正文更新依赖从未提交到服务端的 CRDT 项。状态快照保留同一 doc/text/awareness/undo 对象。不改变 schema、epoch 或存储格式，不转换或清空已有待提交编辑。隔离验收覆盖首次编辑持久恢复、远端/初始化无回声、稳定状态句柄，以及浏览器连续输入、跨实例更新、重载和空闲检查。
