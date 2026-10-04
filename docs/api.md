@@ -138,16 +138,16 @@ Agent and MCP `knowledge_search` uses the same search, with query, mode auto, ke
 | GET /assets/:id/content | Asset permission | Streams the file, or 302 to a 60-second signed URL when a CDN is configured |
 | GET /resources/:id/assets | reader, anonymous if public | Latest 200 document attachments |
 | PUT /resources/:id/cover | library manager | `{version, assetId}` uuid or null. 409 if stale |
-| GET /admin/storage | system administrator | Configuration without secrets |
-| PUT /admin/storage | system administrator | `{expectedId, config}` returns `{id}`. 409 on conflict |
+| GET /admin/storage | system administrator | `{id,config,managedBy,credentialRefs,cdnSigningReady,maxUploadBytes}` without secrets; managedBy is environment |
+| PUT /admin/storage | system administrator | 405: storage is configured through deployment environment variables |
 
-`config` is `{provider, bucket, region, endpoint, forcePathStyle, credentialRef, cdnDomain}`. Every field is required. Unused strings may be empty. region and credentialRef are non-empty. The endpoint is HTTPS and on the server allowlist. S3 needs a credential alias. CDN needs a CloudFront signing key. See [file storage](storage.md).
+Set `DOCA_FILE_STORE_ID` and versioned `DOCA_FILE_STORES_JSON` in the deployment environment. The read-only response excludes local root and private signing material. The database stores stable IDs and object references. See [file storage](storage.md) for local/S3 configuration and optional CloudFront signing.
 
-Avatar and cover uploads accept PNG, JPEG, WebP, and GIF, at most 5 MB. Attachments are at most 20 MB. Images are re-encoded to WebP and metadata is removed. A successful upload does not bind an avatar or cover. That needs the matching PUT. An attachment belongs to the resource immediately. 413 is the body limit. 429 is the upload limit. An asset id is not a public file URL. Copying a resource creates new asset ids and permission links and reuses the immutable stored object.
+Avatar and cover uploads accept PNG, JPEG, WebP, and GIF, at most 5 MB. Attachments are at most 20 MiB. Avatar/cover images are normalized to WebP with metadata removed; ordinary attachments preserve their original bytes. A successful upload does not bind an avatar or cover. That needs the matching PUT. An attachment belongs to the resource immediately. 413 is the body limit. 429 is the upload limit. An asset id is not a public file URL. Copying a resource creates new asset ids and permission links and reuses the immutable stored object.
 
 ## Operations
 
-`GET /health` is not under `/api/v1`. It checks the database and returns `{status:"ok", version:"0.1.0"}`, and it also checks Host.
+`GET /health` is not under `/api/v1`. It checks the database and returns `{status:"ok", version:"0.1.10"}`, and it also checks Host.
 
 The edit flow is GET the latest object, submit with version, and refresh on success. 409 asks the user to refresh. It does not overwrite. `version` is metadata only. It is not the Yjs state or a backup version. Rich text collaboration and external OIDC sign-in exist. Administrators register webhook URLs and request headers from Hook. The POST body is documented in [Webhook delivery](webhooks.md). Backup and acting as an OIDC provider do not. `bootstrap.capabilities` reports actual capabilities.
 

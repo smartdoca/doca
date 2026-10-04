@@ -47,7 +47,7 @@ Install a complete prebuilt ZIP through Admin → Plugins, or drop a `<plugin-id
   "id": "example.attachments",
   "version": "1.0.0",
   "displayName": "Attachments",
-  "sdkRange": "^0.1.3",
+  "sdkRange": "^0.1.9",
   "dependencies": [{ "id": "doca.files", "range": "^0.1.0" }]
 }
 ```

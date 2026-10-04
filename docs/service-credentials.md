@@ -1,20 +1,25 @@
-# 后台服务凭据
+# Platform service credentials
 
-入口：管理员后台 → 平台设置 → 服务凭据。
+[中文](service-credentials.zh-CN.md)
 
-- SSO 认证：具名 Client Secret、自定义 HTTPS 来源；认证源配置引用凭据名称。
-- 验证码网关：HTTPS 地址、Bearer 密钥、手机和邮箱渠道。
-- 对象存储：具名 Access Key ID、Secret Access Key、可选 Session Token 和允许端点域名。
-- CDN 签名：CloudFront 密钥 ID 和 PEM 私钥。
-- 文档搜索：Meilisearch API 密钥及允许来源。
-- 会员回调密钥继续在「等级与会员 → 会员回调」设置或生成；Webhook 密钥仍使用已有数据库配置。
+Open Admin → Platform settings → Service credentials. The current host-managed platform record covers:
 
-服务凭据存于 account_settings 的 service-credentials 记录。旧环境变量只在该记录不存在时导入；已有数据库设置优先，修改环境变量不覆盖后台配置。数据库连接、站点地址、监听端口、上传目录属于启动配置，仍在环境变量中；数据库连接必须先于数据库读取，首次管理员初始化也仍通过引导流程完成。
+- Identity: named SSO client secrets and permitted HTTPS origins. Identity providers refer to the credential name.
+- Verification gateway: HTTPS endpoint, bearer secret, and phone/email channels.
+- Document search: Meilisearch API key and permitted origins.
 
-管理接口 GET/PUT /api/v1/admin/service-credentials 仅系统管理员可访问，写操作验证 Origin。GET 将已配置的秘密值替换为 null；PUT 的 null 表示保留原值，空字符串表示明确清空，不填写伪遮罩字符串。修订号防止并发修改覆盖。审计仅记录操作，不保存密钥内容。私钥按 PEM 校验；端点继续限制协议、来源和重定向。
+File backend credentials and CloudFront signing keys are configured only in `DOCA_FILE_STORES_JSON`; the storage administration page is read-only. They are not editable in this platform record. [Plugin credentials](plugin-credentials.md) use the separate server-only encrypted service and its deployment master key.
 
-服务端为访问第三方服务而保存可用密钥，数据库及其备份需按敏感配置保管。接口不向普通用户、公共配置、错误日志或管理员读取接口返回已保存密钥。会员回调仅需验证，仍只存摘要。
+## Persistence and configuration precedence
 
-每个服务实例在处理 API 请求时检查配置修订号，变更时刷新适配器；无需重启。验证码密钥轮换使未完成的验证码挑战失效。轮换对象存储密钥时沿用原凭据名称，旧资产仍依赖原存储位置和凭据。
+Platform settings are persisted under `account_settings`, ID `service-credentials`. Existing code seeds identity/messaging configuration from the runtime environment only when this record is absent; a saved record takes precedence thereafter. Changing environment variables does not overwrite the saved settings. This is an existing initialization path, retained and documented here without a new adapter or migration. A saved record containing the retired storage shape is explicitly rejected by the current host.
 
-等级名称新增 color 可选字段，格式为 #RRGGBB；留空跟随主题。颜色随有效等级返回，遵守会员展示开关，与图标独立设置。
+Database connections, site origin, listening ports, and file storage remain startup configuration. The database must be connected before persisted settings can be read. The first administrator still uses the explicit bootstrap command.
+
+## API and secret handling
+
+`GET` / `PUT /api/v1/admin/service-credentials` require a system administrator; mutations validate Origin. GET replaces configured secrets with null. On PUT, null retains the existing secret and an empty string clears it. Do not send a fake masking string. Revision checks prevent concurrent overwrites. Audit stores the action rather than secret values; endpoint protocol, origin, and redirect restrictions remain.
+
+The server retains usable third-party credentials. Treat the database and backups as sensitive configuration. Saved secrets are not returned to ordinary users, public bootstrap, error logs, or administrator GET responses. Plugin credential encryption does not automatically re-encrypt these platform settings.
+
+Every service process checks the settings revision before API requests and refreshes adapters after a change without restarting. Rotating the verification secret invalidates pending verification challenges. Storage credential changes follow the deployment-owned [storage rules](storage.md), including preservation of stable store IDs and referenced bytes.

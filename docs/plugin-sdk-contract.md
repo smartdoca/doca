@@ -109,7 +109,7 @@ The host reserves the object id and storage configuration, then writes bytes. Lo
 
 ### 7.2 Search and external knowledge
 
-Use `@smartdoca/plugin-sdk@^0.1.3`. Import `contentServiceToken` and the `ContentSource` type from `@smartdoca/plugin-sdk/content`; declare the token in `injections.required` and register the source during mount. Sources belong to the registering plugin. Built-in documents and files use the same contract.
+Use `@smartdoca/plugin-sdk@^0.1.9`. Import `contentServiceToken` and the `ContentSource` type from `@smartdoca/plugin-sdk/content`; declare the token in `injections.required` and register the source during mount. Sources belong to the registering plugin. Built-in documents and files use the same contract.
 
 | Member                                        | Contract                                                                                                                                                                                                    |
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

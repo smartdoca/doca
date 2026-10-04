@@ -1,38 +1,40 @@
-# 文件交换接入约定
+# File exchange integration contract
 
-适用 Doca 各编辑器的文件导入、导出和包升级。基础内容与可接受的样式优先，不要求完整 Office 还原；部分能力有损可以接受，但不能静默丢弃重要内容。这里规定职责与验收，不意味着每个包已实现全部接口。
+[中文](editor-file-exchange-contract.zh-CN.md)
 
-## 职责
+This contract applies to file import/export and conversion-package upgrades across Doca editors. Basic content and acceptable styling take priority over complete Office fidelity. Documented loss is acceptable; important content must not disappear silently. Responsibilities and acceptance requirements do not imply every package already implements every interface.
 
-- 子包负责格式识别、解析/序列化、模型转换、素材枚举、结构化警告/错误、文件大小和解压/图片尺寸限制。以独立入口暴露纯转换器，声明 Node 或浏览器环境要求。
-- 平台负责选择文件、创建新文档、授权上传和下载、用户反馈、文件名及触发浏览器下载。包不得自行连接平台 API、创建业务文档或开启第二条保存链路。
-- 导入结果应为本机模型、待上传素材及警告。导出结果应为 Blob、文件名、MIME 及警告。具体字段以实际版本类型为准，不强制假定统一方法名。
-- 支持类型由真实交付能力决定，文件后缀 accept 只用于提示，解析仍需验证文件内容。用户界面不提供 JSON 上传下载；内部模型及故障恢复副本不等于便携格式。
+## Responsibilities
 
-## 协同、素材与安全
+- Packages identify formats, parse/serialize, convert models, enumerate assets, report structured warnings/errors, and enforce file/decompression/image-dimension limits. Expose pure converters through independent entry points and declare Node/browser requirements.
+- The host selects files, creates resources, authorizes upload/download, provides feedback, chooses filenames, and triggers browser downloads. Packages must not call platform APIs, create business documents, or establish another save channel.
+- Import results contain native models, pending assets, and warnings. Export results contain Blob, filename, MIME, and warnings. Follow the installed version's actual types rather than assume unified method names.
+- Supported types follow delivered capability. Filename accept filters are hints; parsers verify contents. Product UI does not offer JSON upload/download: internal models/recovery copies are separate from portable formats.
 
-- 默认导入创建新资源、新 epoch 和稳定身份；不将导入结果覆盖正在编辑的 Y.Doc，不复用旧评论、权限、历史和 outbox。全文替换必须另走明确的替换协议。
-- 需要所属资源才能上传时，可先创建新记录、上传素材，再执行一次性初始化；服务端必须拒绝已初始化/已打开/已修改资源，不能让这个接口成为绕过协同的全量保存通道。
-- 素材重新上传获得新文档自己的稳定 ID。不能持久化 blob/data/临时签名地址，也不能从导入文件信任已有用户、资源或权限 ID。外部资源默认不自动抓取；若支持抓取，宿主另行实现 SSRF/大小/来源限制。
-- SVG 等主动内容必须安全处理。Doca 当前将已由画板包清洗的 SVG 栅格化后走原有图片上传服务；不直接放开同源任意 SVG 执行。
-- 业务历史采用协同契约中的滚动保留规则；淘汰历史行不代表素材已无引用，不据此直接删除附件。文件导出读取当前文档或仍保留的指定历史；已淘汰的版本明确返回不存在，不回退到当前内容冒充历史。
-- 导出读取受当前资源权限约束；文件转换不改变正文、选区、撤销、presence 或保存状态，不等待/伪造 ACK。若包要求先结束原生编辑，宿主明确完成编辑后调用，不把 flush 隐藏在纯导出中。
-- 取消、失败及迟到回调不得插入到其他文档/选区。服务端二次校验权限；中断上传不代表服务端资产已回滚，应说明临时资源清理策略。
+## Collaboration, assets, and security
 
-## Doca 当前产品矩阵（2026-09-12）
+- Import normally creates a new resource, epoch, and stable identity, without replacing an actively edited Y.Doc or reusing comments, permissions, history, or outbox. Full-body replacement requires a separate explicit protocol.
+- If upload requires a resource, create its record, upload assets, then perform one-time initialization. The server rejects initialized/opened/modified resources; this endpoint cannot become a full-save bypass around collaboration.
+- Reuploaded assets receive the new document's stable IDs. Never persist blob/data/temporary signed URLs or trust user/resource/permission IDs from imported files. External assets are not fetched automatically; host-supported fetching requires SSRF, size, and origin controls.
+- Sanitize active content such as SVG. Doca rasterizes SVG already sanitized by the canvas package and uses the existing image-upload service, without enabling arbitrary same-origin SVG execution.
+- Business history follows the retention rules of the collaboration contract. Removing a history row does not establish that assets are unreferenced and cannot justify deleting attachments. Export reads current content or a retained requested version; an evicted version returns not-found rather than current content masquerading as history.
+- Export enforces current resource access. Conversion changes no body, selection, undo, presence, or save state and neither waits for nor fabricates ACKs. If the package requires native editing to finish first, the host explicitly finishes it before calling export rather than hiding flush in a pure converter.
+- Cancellation, failures, and late callbacks cannot insert into a different document/selection. The server rechecks access. Aborted upload does not prove server assets rolled back; document temporary-resource cleanup.
 
-| 类型 | 导入 | 导出 | 可接受限制 |
+## Product matrix recorded on 2026-09-12
+
+| Format | Import | Export | Accepted limitations |
 | --- | --- | --- | --- |
-| 富文本 | DOCX、MD/Markdown | DOCX、MD | 复杂布局简化；自定义对象可读文本降级；不支持旧 DOC |
-| 表格 | XLSX | XLSX | 基础值、公式文本、多表和样式；图片/附件/业务身份等可警告后降级 |
-| Markdown | UTF-8 MD/Markdown | 原文 MD | 资源引用保留，不打包离线素材 |
-| 画板 | PNG/JPEG/WebP/SVG 素材 | PNG/SVG | 导入为图片素材；不恢复原生图层，不承诺编辑数据往返 |
-| 演示文稿 | 待交付确认 | 待交付确认 | 不根据“即将 ready”开放入口 |
+| Rich text | DOCX, MD/Markdown | DOCX, MD | Simplified complex layout; custom objects may degrade to readable text; no legacy DOC |
+| Spreadsheet | XLSX | XLSX | Basic values, formula text, multiple sheets, styles; images/attachments/business identities may degrade with warnings |
+| Markdown | UTF-8 MD/Markdown | Original MD | Retains resource references without offline asset packaging |
+| Canvas | PNG/JPEG/WebP/SVG assets | PNG/SVG | Imports image assets rather than reconstructing native layers; no editable-model roundtrip promise |
+| Presentation | Delivery unconfirmed | Delivery unconfirmed | Do not enable entries based on an upcoming readiness claim |
 
-已检查接口：slatetsx 0.4.0 `/conversion` 的 importDocument/exportDocument；exlsx rc.5 `/xlsx` 的 xlsxToSnapshot/snapshotToXlsx 返回结果对象；exmd 0.4.1 importMarkdownFile/exportMarkdownFile；aidcanvas 0.4.0 `/io` 与 handle.exportFile。复用版本号时必须以 hash 命名包并更新 lockfile；仍需验收安装产物，不以源码 README 代替。
+Inspected interfaces: slatetsx 0.4.0 `/conversion` importDocument/exportDocument; exlsx rc.5 `/xlsx` xlsxToSnapshot/snapshotToXlsx returning result objects; exmd 0.4.1 importMarkdownFile/exportMarkdownFile; aidcanvas 0.4.0 `/io` and handle.exportFile. When reusing a version number, use a hash-named package and update the lockfile. Accept installed artifacts rather than source README claims alone.
 
-## 验收证据
+## Acceptance evidence
 
-剪贴板也遵守同一资源边界：包只报告文件/文本和捕获的目标位置；宿主上传图片或附件、判断本站链接并做权限查询，包再用正常编辑事务插入。异步完成时不得采用新的当前选区，也不能写入已关闭或失去编辑权限的文档。普通表格多行/制表符粘贴保留原生行为。超链接只允许安全协议；站内文档保存稳定 ID 并生成相对地址，不存域名。Excel 当前业务对象为整单元格对象，不应宣传为支持混合行内富文本；XLSX 往返可能降级为可读标签并给出警告。
+Clipboard operations follow the same asset boundary. Packages report files/text and captured insertion targets; the host uploads images/attachments and checks internal links/access, then the package inserts through normal edit transactions. Async completion cannot use a newer current selection or write into closed/readonly documents. Native spreadsheet multiline/tab paste remains. Hyperlinks accept safe protocols only; internal documents store stable IDs and generate relative URLs without deployment domains. Current spreadsheet business objects occupy whole cells, without mixed inline rich-text support claims; XLSX roundtrips may degrade to readable labels with warnings.
 
-使用隔离数据和实际文件，至少覆盖：基础中文/格式/表格或图形；导入后编辑并重载；导出文件重新打开或导入；不同编辑实例同步；导出前后零正文增量；只读导出与编辑禁用；损坏文件/超限/取消；素材重新绑定和无权限读取；警告可见。逐项记录通过、降级及未验收范围，构建成功不等于导入导出正确。
+Use isolated data and real files to cover basic Chinese text/styles/tables/graphics, editing and reload after import, exported-file reopening/reimport, synchronization between editor instances, zero body increments on export, readonly export/edit guards, corrupt/oversized/cancelled files, asset rebinding/unauthorized reads, and visible warnings. Record passed, lossy, and unverified cases individually. A successful build does not prove correct file exchange.

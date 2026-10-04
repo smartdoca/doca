@@ -34,8 +34,6 @@ cp docker.env.example .env
 DOCA_ORIGIN=https://docs.example.com
 ```
 
-已发布的 `0.1.0` 镜像请把 `DOCA_ASSET_BASE` 留空。该镜像构建时还没有资源地址改写，JavaScript 和 CSS 始终由容器提供。之后的镜像才会在你填写 `DOCA_ASSET_BASE` 时使用它。见 [静态资源](#静态资源)。
-
 ## 启动
 
 ```sh
@@ -101,13 +99,13 @@ HTML 页面和接口留在 `DOCA_ORIGIN`。`DOCA_ASSET_BASE` 只改写这份 HTM
 留空时，JavaScript、CSS 和其他构建文件由容器从 `/assets` 提供。填写时使用没有账号信息、查询参数、哈希或末尾斜杠的 HTTPS 前缀：
 
 ```text
-DOCA_ASSET_BASE=https://cdn.example.com/doca/0.1.0
+DOCA_ASSET_BASE=https://cdn.example.com/doca/0.1.10
 ```
 
 页面里原来的 `/assets/index-abc.js` 会变成：
 
 ```text
-https://cdn.example.com/doca/0.1.0/assets/index-abc.js
+https://cdn.example.com/doca/0.1.10/assets/index-abc.js
 ```
 
 把整个 `apps/web/dist/assets` 目录发布到这个前缀下，并保留 `assets` 这一层。文件名包含内容哈希，必须和同一个镜像里的 HTML 一致。接口请求仍发往 `DOCA_ORIGIN`。

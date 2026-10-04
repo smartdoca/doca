@@ -12,4 +12,4 @@ plugin-contracts 定义 manifest 与生命周期；plugin-sdk 提供注入、事
 
 通用目录树插槽、更多业务能力服务化和资金预留补偿协议仍以契约的实现状态表为准，不能把提案 API 当作可用导出。
 
-插件持久化全部由宿主管理，安装包必须声明 `doca.storage: "host"`。插件负责模型与授权，不负责驱动、存储路径或本地/远端配置。SDK 0.1.7 已导出托管 SQL 与内部对象；托管凭证仍为拟议能力，详见[存储规范](plugin-horizontal-scaling.zh-CN.md)。
+插件持久化全部由宿主管理，安装包必须声明 `doca.storage: "host"`。插件负责模型与授权，不负责驱动、存储路径或本地/远端配置。SDK 0.1.7 已导出托管 SQL 与内部对象；SDK 0.1.9 已导出服务端加密凭证，详见[存储规范](plugin-horizontal-scaling.zh-CN.md)。

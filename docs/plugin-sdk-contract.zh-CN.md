@@ -143,7 +143,7 @@ owner binding 是资源归属事实，不等于访问授权。通过邮箱读取
 
 ### 7.2 搜索与外部知识
 
-使用 `@smartdoca/plugin-sdk@^0.1.3`。从 `@smartdoca/plugin-sdk/content` 导入 `contentServiceToken` 与 `ContentSource` 类型，在 `injections.required` 声明服务，并在 mount 中注册来源。来源归属注册它的插件；内置文档和文件也使用这套契约。
+使用 `@smartdoca/plugin-sdk@^0.1.9`。从 `@smartdoca/plugin-sdk/content` 导入 `contentServiceToken` 与 `ContentSource` 类型，在 `injections.required` 声明服务，并在 mount 中注册来源。来源归属注册它的插件；内置文档和文件也使用这套契约。
 
 | 成员                                          | 契约                                                                                                                                                                       |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -1,29 +1,51 @@
 # Doca
 
-**[Official documentation](https://d.smartdoca.cc/#/r/d23f269a-2726-4565-9b7d-51655625ee7e)**
+[Documentation](https://smartdoca.github.io/doca/#/en/) · [简体中文](README.zh-CN.md)
 
-[简体中文](README.zh-CN.md)
-
-Doca is a document and knowledge workspace for a person or a small team. One deployment has one account system. It does not include spaces, organizations, or a parent/child app split.
-
-The published container image is [docker.io/smartdoca/doca](https://hub.docker.com/r/smartdoca/doca).
+Doca is an open-source document and knowledge workspace for individuals and small teams. One deployment has one account system.
 
 ## Features
 
-- Documents and knowledge libraries, with a library table of contents, private / signed-in / public reading, inherited or custom permissions, invitations, and ownership transfer.
-- Editors for rich text ([@smartdoca/slate](https://www.npmjs.com/package/@smartdoca/slate)), Markdown ([@smartdoca/markdown](https://www.npmjs.com/package/@smartdoca/markdown)), spreadsheets ([@smartdoca/sheet](https://www.npmjs.com/package/@smartdoca/sheet)), slides ([@smartdoca/slides](https://www.npmjs.com/package/@smartdoca/slides)), and canvas ([@smartdoca/canvas](https://www.npmjs.com/package/@smartdoca/canvas)). Collaboration uses Yjs, with persistence acknowledgements, snapshots, and reconnect.
-- Knowledge curation and knowledge Q&A assistants bound to libraries.
-- An AI assistant that can read documents and files the current user is allowed to see, plus quick notes.
-- Personal files and shared folders, with local disk or S3-compatible storage and an optional CloudFront URL.
-- Comments, likes, favorites, notifications, move, copy, and a trash that restores by batch.
-- Search. An administrator can configure Meilisearch; otherwise Doca matches titles and body text in the database.
-- Sign-in with a password, OIDC, Google, GitHub, WeChat QR, or QQ. Registration can be closed, automatic, or held for an administrator. There is no default account.
-- Chinese and English interface text.
-- SQLite for one container. PostgreSQL and Redis are used only when more than one application replica is running. See [horizontal scaling](docs/horizontal-scaling.md).
+- Rich text, Markdown, spreadsheets, slides, and canvas documents, with realtime collaboration and history.
+- Knowledge libraries, source curation, Q&A assistants, and a personal AI assistant.
+- Personal files and shared folders, with local or S3-compatible storage.
+- Invitations, permissions, sharing, comments, notifications, search, and trash.
+- Password, OIDC, Google, GitHub, WeChat QR, and QQ sign-in; Chinese and English interface text.
+- SQLite for one server; shared PostgreSQL, Redis, and file storage for multiple replicas.
+- Business plugins built against the public `@smartdoca/plugin-sdk`.
 
-## Run locally
+## Quick start with Docker
 
-Node.js 22 or newer and pnpm 11.25.0.
+Requires Git, Docker Engine, Docker Compose, and an HTTPS domain served by a reverse proxy. This installs the published 0.1.10 image into a fresh database. Existing installations must read the [release requirements](https://smartdoca.github.io/doca/#/en/releases/0.1.10) and preserve their data before changing versions.
+
+```sh
+# 1. Clone the matching release
+git clone --branch v0.1.10 --depth 1 https://github.com/smartdoca/doca.git
+cd doca
+
+# 2. Configure the environment
+cp docker.env.example .env
+# Edit .env: set DOCA_ORIGIN to your HTTPS origin.
+# Keep the example local file-store configuration for a single server.
+
+# 3. Pull the image
+docker compose pull
+
+# 4. Start and check health
+docker compose up -d
+curl -fsS http://127.0.0.1:39120/health
+
+# 5. Initialize the administrator login and password
+bash scripts/bootstrap-admin.sh
+```
+
+The password must be at least 12 characters. There is no default account. Compose binds to `127.0.0.1:39120`; configure the HTTPS reverse proxy before browser access. SQLite, files, plugins, and the AI database persist in `doca_data`.
+
+The [complete quick start](https://smartdoca.github.io/doca/#/en/getting-started/quickstart) includes `.env`, the reverse proxy, health checks, administrator recovery, and data preservation.
+
+## Development
+
+Node.js 22.12 or newer and pnpm 11.25.0:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -31,114 +53,19 @@ cp .env.example .env
 pnpm dev
 ```
 
-Open http://127.0.0.1:39130. The API listens on port 39120 and the dev server proxies it. Use `127.0.0.1`, not `localhost`. The first start creates `data/v1/doca.db`.
+Open `http://127.0.0.1:39130`. Initialize the administrator with `bash scripts/bootstrap-admin-local.sh`. `pnpm check` runs TypeScript, tests, and the Web build. See [development](https://smartdoca.github.io/doca/#/en/development/development).
 
-There is no default administrator. In the project directory:
+## Documentation
 
-```sh
-bash scripts/bootstrap-admin-local.sh
-```
+- [User guide](https://smartdoca.github.io/doca/#/en/getting-started/user-guide)
+- [Deployment and configuration](https://smartdoca.github.io/doca/#/en/operations/deployment)
+- [Plugin development](https://smartdoca.github.io/doca/#/en/plugins/plugin-development)
+- [HTTP API](https://smartdoca.github.io/doca/#/en/reference/api); the running application also provides `/api/openapi.json`.
+- [Release notes](https://smartdoca.github.io/doca/#/en/releases/0.1.10)
+- [Documentation source](docs/README.md)
 
-The password must be at least 12 characters. The database stores only a hash.
-
-`pnpm check` runs the typecheck, tests, and web build. `pnpm start` serves the built web app and the API without Vite. Copy `.env.example` to `.env` when the defaults need to change. Do not commit secrets.
-
-## Run with Docker
-
-[Deployment guide](docs/deployment.md) · [中文](docs/deployment.zh-CN.md)
-
-```sh
-cp docker.env.example .env
-docker compose pull
-docker compose up -d
-```
-
-Set `DOCA_ORIGIN` in `.env` to the public HTTPS origin, with no path and no trailing slash. Configure `DOCA_FILE_STORE_ID` and `DOCA_FILE_STORES_JSON` as shown in the environment example. Compose publishes the container on `127.0.0.1:39120`. Terminate TLS in a reverse proxy on the same machine and forward HTTP and the WebSocket path `/api/v1/ws`.
-
-```sh
-curl -fsS http://127.0.0.1:39120/health
-bash scripts/bootstrap-admin.sh
-```
-
-A healthy process returns `{"status":"ok","version":"0.1.10"}`. SQLite, uploads, and the AI database stay in the `doca_data` volume. The first database must be empty. Doca refuses a non-empty database whose schema is not the current baseline.
-
-Version 0.1.10 intentionally rejects the old database baseline, plugin installation list, SDK ranges and storage configuration. Preserve old data and deploy to a new database and separate storage; no automatic migration is provided. See [release requirements](docs/releases/0.1.10.md).
-
-`DOCA_ASSET_BASE` is optional. Leave it empty to serve JavaScript and CSS from the container. When it is set, Doca still returns the HTML and only rewrites `/assets/` URLs in that HTML. The prefix must be HTTPS in production and must allow cross-origin reads of ES modules.
-
-## Plugin development
-
-Business behavior that is not part of the core is a plugin. Upload a complete prebuilt ZIP under Admin → Plugins, then manually restart every instance. The host stores the immutable archive in shared file storage and verifies/restores each instance's cache under `DOCA_PLUGINS_DIR` on startup. When unset, this directory is `${DOCA_DATA_DIR:-./data}/plugins`. Offline installation places a complete `<plugin-id>/` release directory there while stopped. There is no root npm installation manifest or host-source loading path.
-
-A plugin package points at a static manifest, compiled server JavaScript, and an optional browser bundle:
-
-```json
-{
-  "name": "@example/attachments",
-  "version": "1.0.0",
-  "type": "module",
-  "doca": {
-    "dataVersion": "1",
-    "storage": "host",
-    "manifest": "./manifest.json",
-    "server": "./dist/server.js",
-    "web": { "directory": "./web", "entry": "./index.js" }
-  }
-}
-```
-
-```json
-{
-  "schemaVersion": 1,
-  "id": "example.attachments",
-  "version": "1.0.0",
-  "displayName": "Attachments",
-  "sdkRange": "^0.1.7"
-}
-```
-
-Depend on `@smartdoca/plugin-sdk` and the public service tokens. Do not import `@server/*`, `@core/*`, `@web/*`, `@db/*`, or other host source. The host injects the implementation at runtime.
-
-```ts
-import { definePlugin } from "@smartdoca/plugin-sdk";
-import { httpServiceToken } from "@smartdoca/plugin-sdk/platform";
-import manifest from "../manifest.json" with { type: "json" };
-
-export default () =>
-  definePlugin({
-    manifest,
-    injections: { required: [httpServiceToken] },
-    async uninstall() {},
-    async mount(context) {
-      await context.inject(httpServiceToken).register(manifest.id, [
-        {
-          method: "GET",
-          path: "/items",
-          async handle() {
-            return { items: [] };
-          },
-        },
-      ]);
-    },
-  });
-```
-
-That route is served at `/api/v1/plugins/example.attachments/items` and uses the host session. Register ids under the plugin id. Keep plugin data in the plugin's own database. Disabling a plugin releases runtime resources and does not delete stored user data.
-
-The specification, public services, and verification requirements are in [plugin development](docs/plugin-development.md) and the [plugin SDK contract](docs/plugin-sdk-contract.md). Installation layout is in [plugin deployment](docs/plugin-deployment.md).
-
-## More documentation
-
-- [Architecture](docs/architecture.md)
-- [Authentication](docs/authentication.md)
-- [Collaboration and search](docs/collaboration.md)
-- [Editor integration](docs/editor-integration.md)
-- [Storage](docs/storage.md)
-- [API](docs/api.md). The running service also publishes `/api/openapi.json`.
-- [Development setup](docs/development.md)
+For a documentation preview, run `pnpm docs:dev` and open `http://127.0.0.1:39140/#/en/`. `pnpm docs:check` verifies bilingual coverage and local links. GitHub Pages setup is in [documentation maintenance](docs/documentation.md).
 
 ## License
 
-Doca is [MIT](LICENSE). You may use, modify, and distribute it, including in commercial products and network services. Copies and substantial portions must keep the copyright notice and the MIT permission notice.
-
-The rich text, spreadsheet, Markdown, canvas, and slides editors use the same license and are published separately on npm.
+[MIT](LICENSE). The separately published rich text, spreadsheet, Markdown, canvas, and slides editors use the same license.

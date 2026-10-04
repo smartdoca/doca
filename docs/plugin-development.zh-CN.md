@@ -4,7 +4,7 @@
 
 [English](plugin-development.md)
 
-完整目标及尚未实现部分见 [SDK 契约](plugin-sdk-contract.zh-CN.md)。项目尚未上线，删除不合理的旧接口，不维护旧会员、审核或源码加载兼容层。
+完整目标及尚未实现部分见 [SDK 契约](plugin-sdk-contract.zh-CN.md)。新增设计不得保留已退出的会员、审核或源码加载路径；现有兼容行为的处理遵循仓库事先确认规则。
 
 水平扩展与存储职责按已确认的[托管存储规范](plugin-horizontal-scaling.zh-CN.md)执行。所有持久化由宿主管理，安装包必须声明 `doca.storage: "host"`；缺失或其他值在安装、目录发现和启动时于导入代码前拒绝。托管 SQL 与内部对象已导出；凭证已在 SDK 源码 0.1.8 实现，临时工作区仍有缺口。
 
@@ -52,7 +52,7 @@ manifest.json 必须为静态 JSON，版本与 package.json 一致：
   "id": "example.attachments",
   "version": "1.0.0",
   "displayName": "Attachments",
-  "sdkRange": "^0.1.3",
+  "sdkRange": "^0.1.9",
   "dependencies": [{ "id": "doca.files", "range": "^0.1.0" }]
 }
 ```

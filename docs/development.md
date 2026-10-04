@@ -8,12 +8,13 @@ Node.js 22.12 or newer, or Node.js 24 LTS, and pnpm 11. Versions are locked in `
 
 ```sh
 pnpm install --frozen-lockfile
+cp .env.example .env
 pnpm dev
 ```
 
 Open http://127.0.0.1:39130. The API listens on 39120 and the dev server proxies it on the same origin. Opening 39120 directly, or using `localhost` instead of `127.0.0.1`, does not match the configuration.
 
-The defaults run as they are. Copy `.env.example` to `.env` when you need to change them. Do not commit secrets.
+Copy `.env.example` before starting: file-store variables are required. Its local origin, SQLite path, and storage directory work together. Adjust `.env` when needed and never commit secrets.
 
 ## Create the administrator
 
@@ -59,7 +60,7 @@ The command checks that the account is an enabled administrator, updates the pas
 
 Production HTML always comes from Doca, and the API uses that same origin. `DOCA_ASSET_BASE` only rewrites `/assets/...` URLs inside the HTML.
 
-When it is unset, the container serves JS, CSS, and other build files from `/assets`. When it is set, those HTML URLs use the prefix, for example `https://cdn.example.com/doca/0.1.0/assets/index-abc.js`. The prefix is an HTTP(S) URL with no userinfo, query, or hash. Production requires HTTPS. `/assets` remains in the container. Fonts and images referenced from CSS with a root path still come back to Doca.
+When it is unset, the container serves JS, CSS, and other build files from `/assets`. When it is set, those HTML URLs use the prefix, for example `https://cdn.example.com/doca/0.1.10/assets/index-abc.js`. The prefix is an HTTP(S) URL with no userinfo, query, or hash. Production requires HTTPS. `/assets` remains in the container. Fonts and images referenced from CSS with a root path still come back to Doca.
 
 An official tag such as `v1.2.3` makes GitHub Actions build the web app and create a Release. The attachment is `doca-web-assets-v1.2.3.tar.gz`. Keep the `assets` directory after unpacking, and set `DOCA_ASSET_BASE` to an HTTPS prefix that contains it. A prerelease tag such as `v1.2.3-rc.1` does not create a Release. A push to `main` does not either. Do not use `github.com/.../releases/download` as `DOCA_ASSET_BASE`. That URL redirects and does not send cross-origin headers for ES modules. Put the unpacked `assets` directory on a CDN or object store that allows cross-origin script reads.
 

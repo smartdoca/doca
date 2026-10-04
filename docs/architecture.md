@@ -4,11 +4,11 @@
 
 This is the entry point for the current module layout, queries, and consistency rules. The database and each module follow the source and the current schema.
 
-Version 0.1.0. This page describes the code as it is. Desktop and DSH remain product designs. There is no runtime adapter for them.
+Baseline: host 0.1.10. This page describes current source; deployment-specific services and device behavior require their own acceptance.
 
 ## 1. Decisions
 
-The sidebar order is search, home, AI assistant, quick notes, libraries, and trash. Inside a library the sidebar becomes that library's table of contents. A personal document opens as its own page without that sidebar. A library document keeps the library contents. Home has four tabs: recent, owned by me, shared with me, and favorites, with type and time sorting. A creation calendar is not part of the core. A plugin may add that page later.
+The workspace separates public discovery at `/home` from personal document management at `/documents`. Navigation also provides search, AI assistant, quick notes, libraries, and trash, with administrator-configured plugin entries. A library page shows its contents; discovery, collection, and body access follow separate rules. See [discovery and collections](public-resource-discovery.md). A creation calendar is a plugin capability rather than a core page.
 
 A profile has a display name, a preset or uploaded avatar, and a password change. A library can have a cover. The document body and the admin pages share attachment upload and download. Admin navigation is separate: overview, users, sign-in and registration, file storage, document search, and Hook. Hook registers callback URLs for background delivery. Admin statistics are aggregate counts. An administrator does not gain the right to read private documents.
 
@@ -114,7 +114,7 @@ Production acceptance of the editor packages, account recovery, live SSO, harden
 
 ## Uploads, sign-in, and collaboration
 
-`apps/server/src/routes/assets.ts` validates uploads, checks the resource ACL, and records assets. `storage.ts` reads and writes local files or S3 and signs CDN URLs. The current configuration chooses where new uploads go. Each asset keeps an immutable `storage_profile`. Switching configuration does not move old objects. Avatars, covers, and document images use the same entry. Private objects are read through the backend. A CDN is an optional short-lived signed cache, not a public directory. See [file storage](storage.md).
+`apps/server/src/routes/assets.ts` validates uploads, checks the resource ACL, and records assets. `storage.ts` reads and writes local files or S3 and signs CDN URLs. The current configuration chooses where new uploads go. Each asset keeps a stable store ID/object reference. Stores are configured by environment, with a read-only administration view; changing a path or bucket does not move existing bytes. Avatars, covers, and document images use the same entry. Private objects are read through the backend. A CDN is an optional short-lived signed cache, not a public directory. See [file storage](storage.md).
 
 SSO has two directions. The current external identity key is `provider_id` plus `subject`. A provider is an immutable type, issuer, and client id. Accounts are not merged by email. OIDC is validated with `openid-client`. The site keeps its Strict session and same-origin completion. Doca is not an OIDC provider. Identity sources, approval policy, and deployment are in [authentication](authentication.md).
 

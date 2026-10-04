@@ -174,18 +174,18 @@ GET /resources新增scope=recent/owned：recent为本人的实际访问记录；
 | GET /assets/:id/content | 资产权限 | 本地/无CDN返回文件流，有CDN鉴权后302到60秒签名URL |
 | GET /resources/:id/assets | reader（可匿名公开阅读） | {items:[{id,filename,mime,size,created_at}]}，最新200个文档附件 |
 | PUT /resources/:id/cover | 知识库manager | {version,assetId:uuid或null} → {ok:true}，递增资源version；409过期 |
-| GET /admin/storage | 系统管理员 | {id,config,credentialRefs,cdnSigningReady,maxUploadBytes}，不包含密钥 |
-| PUT /admin/storage | 系统管理员 | {expectedId,config} → {id}，新配置ID；409并发冲突 |
+| GET /admin/storage | 系统管理员 | {id,config,managedBy,credentialRefs,cdnSigningReady,maxUploadBytes}，managedBy=environment，不包含密钥 |
+| PUT /admin/storage | 系统管理员 | 405：存储通过部署环境变量配置 |
 
-config={provider:local或s3,bucket,region,endpoint,forcePathStyle,credentialRef,cdnDomain}，所有字段必填，未用字符串可为空；region、credentialRef非空。端点必须HTTPS且位于服务器白名单。S3需要服务器凭据别名，CDN需要CloudFront签名密钥。详情见 [文件存储部署](storage.zh-CN.md)。
+部署环境必须提供 `DOCA_FILE_STORE_ID` 和带 version 的 `DOCA_FILE_STORES_JSON`。只读响应排除本地 root 和签名私钥；数据库保存稳定 ID 和对象引用。local/S3 及可选 CloudFront 签名配置见[文件存储](storage.zh-CN.md)。
 
-上传头像/封面仅接受PNG/JPEG/WebP/GIF，最大5MB；附件最大20MB。图片重新编码成WebP并移除元数据。上传成功不自动绑定头像或封面，需要相应PUT；附件直接归属资源。错误413代表请求体超限，429表示上传限流；任何asset ID都不是无权限的公开文件链接。
+上传头像/封面仅接受PNG/JPEG/WebP/GIF，最大5MB；附件最大20 MiB；头像/封面转为 WebP 并移除元数据，普通附件保留原字节。上传成功不自动绑定头像或封面，需要相应PUT；附件直接归属资源。错误413代表请求体超限，429表示上传限流；任何asset ID都不是无权限的公开文件链接。
 
 复制资源会给附件/封面生成独立资产ID和权限关联，复用不可变存储对象。文件上传不实现跨端双向同步。
 
 ## 运维与冲突
 
-GET /health（非/api/v1）查询数据库后返回{status:"ok",version:"0.1.0"}，也校验Host。
+GET /health（非/api/v1）查询数据库后返回{status:"ok",version:"0.1.10"}，也校验Host。
 
 修改流程：GET最新对象 → 带version提交 → 成功刷新；409提示用户刷新，不自动强制覆盖。
 
@@ -194,18 +194,18 @@ version仅用于元数据；不是正文Yjs状态或备份版本。富文本协�
 ## SSO、多身份绑定与注册审批
 
 完整接口及策略见 [身份认证说明](authentication.zh-CN.md#http-接口)。新增 `/admin/auth`、`/auth/providers`、`/me/identities` 系列接口；公开注册响应带 status，pending 用户需管理员批准后重新登录。管理员用户列表可按 status 过滤。
-# 评论与用户范围增量
+## 评论与用户范围
 
 富评论、用户标识、用户搜索策略以及通知接口见 [评论与社区能力](./comments-and-community.zh-CN.md)。旧的纯文本评论请求保持兼容。
-# 本轮增量
+## 文档体验与编辑器
 
 文档体验、历史回滚与表格协议见 [文档交互设计](document-experience.zh-CN.md) 和 [编辑器接入说明](editor-integration.zh-CN.md)。
-# 用户卡片（2026-09-11）
+## 用户卡片
 
 `GET /api/v1/user-card-settings` 读取全站卡片展示配置。`PUT /api/v1/admin/user-card-settings` 仅管理员可调用，接受 `{ enabled, text, style, url, revision }`，style 为 `primary | secondary | link`，返回新 revision；并发冲突返回 409。URL 中 `{userId}` 表示用户公开唯一标识，`{uid}` 表示内部 UUID，替换值做 URL 编码。仅允许 HTTP(S) 或站内相对路径，禁止脚本与协议相对地址。
 
 `scope=libraries` 仅返回自己拥有、或被直接授予整个知识库编辑/管理权限的知识库。仅单篇文档授权不返回父知识库；单篇文档仍可在 `scope=shared&kind=document` 中查询。对知识库新增评论返回 400。
-# 文档接入与主动展示
+## 文档接入与主动展示
 
 新增授权/邀请、引用关系、强制下载接口及权限语义见 [文档接入说明](editor-integration.zh-CN.md#接口)。
 

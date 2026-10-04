@@ -8,12 +8,13 @@ Node.js 22.12+或24 LTS、pnpm 11。版本锁定pnpm-lock.yaml；better-sqlite3�
 
 ```sh
 pnpm install --frozen-lockfile
+cp .env.example .env
 pnpm dev
 ```
 
 入口 http://127.0.0.1:39130，API监听39120，通过前端同源代理访问。直接访问39120或用localhost替换127.0.0.1会与配置不符。
 
-默认配置即可运行，需调整时参照.env.example创建本地.env，不提交凭证。
+启动前复制 `.env.example`，文件存储变量为必填；示例中的本地 origin、SQLite 路径和存储目录配套使用。按需调整 `.env`，不提交凭证。
 
 ## 初始化管理员
 
@@ -59,7 +60,7 @@ unset DOCA_RESET_ADMIN_LOGIN DOCA_RESET_ADMIN_PASSWORD
 
 生产页面的 HTML 始终由 Doca 返回，接口也使用页面所在的源。`DOCA_ASSET_BASE` 只改写 HTML 里的 `/assets/...` 地址。
 
-不设置时，JS、CSS 和其他构建文件由容器从 `/assets` 读取。设置时，HTML 中的这些地址改为该前缀，例如 `https://cdn.example.com/doca/0.1.0/assets/index-abc.js`。前缀必须是没有账号、查询参数或哈希的 HTTP(S) URL；生产环境必须是 HTTPS。容器里的 `/assets` 仍然保留，样式表内部以根路径引用的字体和图片会继续回到 Doca。
+不设置时，JS、CSS 和其他构建文件由容器从 `/assets` 读取。设置时，HTML 中的这些地址改为该前缀，例如 `https://cdn.example.com/doca/0.1.10/assets/index-abc.js`。前缀必须是没有账号、查询参数或哈希的 HTTP(S) URL；生产环境必须是 HTTPS。容器里的 `/assets` 仍然保留，样式表内部以根路径引用的字体和图片会继续回到 Doca。
 
 推送正式版本标签 `v1.2.3` 时，GitHub Actions 会构建网页并创建 Release，附件是 `doca-web-assets-v1.2.3.tar.gz`。解压后保留其中的 `assets` 目录，再把包含该目录的 HTTPS 前缀写入 `DOCA_ASSET_BASE`。`v1.2.3-rc.1` 这类预发布标签不会创建 Release。推送到 `main` 也不会。浏览器不要直接使用 `github.com/.../releases/download` 作为 `DOCA_ASSET_BASE`：下载地址会跳转，也不为 ES module 提供跨源响应头。把解压出的 `assets` 目录放到允许跨源读取脚本的 CDN 或对象存储上。
 

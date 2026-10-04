@@ -139,13 +139,13 @@ Yjs checkpoint 保存原 CRDT 的完整编码，不能用 JSON 投影重建并�
 
 现有服务协议仍见 [collaboration.md](collaboration.zh-CN.md)。该文档是下一阶段统一契约，不代表上面字段和能力都已发布。
 
-## Plugin elements increment — 2026-10-02
+## 插件元素增量（2026-10-02）
 
-The host now implements the optional SDK 0.1.6 Web element registry. Rich text stores an opaque JSON envelope through one permanent `custom:plugin-element` inline codec using the existing rich schema 3. Spreadsheet stores opaque JSON in native `ICellData.custom.docaElement` using existing schema 6 and the public range command path. Neither changes transport, protocol version, epoch, checkpoint identity, ACK receipts or reliable outbox. There is no second JSON autosave or business-owned content database.
+宿主已实现 SDK 0.1.6 可选 Web 元素注册表。富文本通过永久 `custom:plugin-element` 原子行内 codec 保存不透明 JSON envelope。表格在原生 `ICellData` 的 `custom.docaElement` 保存配置，以 `v` 保存静态文本投影；整单元格画布渲染器只读取配置，不改持久值。两种格式继续使用原生模型、检查点、撤销和同一个可靠 outbox。
 
-Unknown types and exact envelope/data versions display an unsupported placeholder and retain their original bounded JSON. No adapter, migration, conversion or deletion is provided. Existing internal reference readers remain unchanged. Native insertion/configuration/removal participates in clipboard, undo and collaboration. Configuration forms recheck a live rich range or stable spreadsheet single-cell anchor and fail on a removed/concurrently changed target. Canvas timers are view-only, at most once per second and scheduled only after a visible timed cell is drawn; hidden pages pause. Render/selection/idle changes must not increase content seq or history.
+未知类型和不匹配的精确 envelope/data 版本显示不支持占位，保留原始有界 JSON。不提供适配、迁移、转换或自动重置。现有内部引用读取规则保持。原生插入、配置、删除参与剪贴板、撤销和协同。配置表单重新检查实时富文本范围或稳定单单元格锚点，目标已删除或并发变化时拒绝。画布计时器只刷新视图，最多每秒一次，只有绘制了可见计时单元格后才安排下一次刷新；隐藏页面暂停。渲染、选区和空闲变化不得增加正文 seq 或历史。
 
-Isolated automated acceptance covers native persistence and reload, opaque unknown payloads, rich atom delete/undo/clipboard, sheet row insertion/anchor/copy/delete/undo, duplicate ACK replay, two-replica convergence with no remote echo, readonly denial and oversized payload rollback. Tests do not edit user documents. This increment does not claim universal block support, all spreadsheet operations, cross-format lossless export, permanent offline queues or native-device acceptance. Precise element fields and limits are in the repository source `docs/plugin-editor-elements.md`.
+隔离自动验收覆盖原生持久化与重载、未知 payload 原样保存、富文本原子删除/撤销/剪贴板、表格行插入/锚点/复制/删除/撤销、重复 ACK 重放、两副本收敛且不回声、只读拒绝和超限 payload 回滚。不编辑用户文档。本增量不保证通用块支持、全部表格操作、跨格式无损导出、永久离线队列或原生设备验收。精确字段与限制见仓库 `docs/plugin-editor-elements.md`。
 
 ## Markdown 初始化修复（2026-10-03）
 

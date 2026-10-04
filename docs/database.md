@@ -1,137 +1,183 @@
-# 数据库结构
+# Database reference
 
-当前数据库结构由 `packages/db/src/create-schema.ts` 的全新建表定义，`schema.ts` 维护表类型，`connection.ts` 管理连接，`transactions.ts` 管理事务和冲突重试。新环境直接创建当前最终结构，不保留旧版本回填、旧表转换或历史迁移兼容。
+[中文](database.zh-CN.md)
 
-运行时授权结构以统一的 `grants` 和 `share_link_revocations` 表为准，设计与权限计算见 [统一授权来源与权限计算方案](superpowers/specs/2026-09-19-unified-authorization-design.md)。
+The current baseline is `doca-2026-10-03-credentials-v2`. [create-schema.ts](../packages/db/src/create-schema.ts) defines tables, indexes, foreign keys, and checks; [schema.ts](../packages/db/src/schema.ts) defines Kysely types; [connection.ts](../packages/db/src/connection.ts) opens connections; [transactions.ts](../packages/db/src/transactions.ts) manages transactions and conflict retries.
 
-## 工作台表
+Empty databases are initialized with the current schema. Startup validates the baseline and required storage/credential shapes. Old baselines are rejected; this release does not migrate or convert them. Preserve existing data/deployments and follow [release requirements](releases/0.1.10.md). The existing document_templates table is retained without CRUD or automatic registration as a resource provider; see [templates and materials](creation-resources.md). These are current implementation facts, not a new migration plan.
 
-resources 保留 nullable 的 last_editor_id（关联 users.id）和 last_edited_at。创建、独立复制、标题修改和有效正文更新记录实际操作者；读取、无变化的同步和权限调整不改写。记录独立于增量历史，快照清理后仍保留。
+## Connections, initialization, and backup
 
-| 表               | 主键                  | 字段/用途                                                                                                  |
-| ---------------- | --------------------- | ---------------------------------------------------------------------------------------------------------- |
-| resource_visits  | user_id + resource_id | 两个外键、visited_at；记录本人实际打开时间，有user_id+visited_at索引                                       |
-| user_preferences | user_id（FK）         | avatar（预设标识）、theme（light/soft）、density（comfortable/compact）、default_sort、sort_order、version |
-| user_presence    | user_id（FK）         | last_seen_at；在线心跳，统计时结合active状态和有效会话                                                     |
+SQLite enables foreign_keys, WAL, busy_timeout=5000, and synchronous=FULL. Source development uses `data/v1/doca.db`; Compose persists `/data/doca.db` in doca_data. A reliable backup must include WAL consistently or use a SQLite backup/checkpoint procedure; copying only an actively written .db is insufficient.
 
-个人偏好无记录时返回默认值version=0，首次保存插入version=1。后续保存带版本条件，避免资料与偏好互相覆盖。访问历史仅返回仍有阅读权限且未删除的资源，不以历史记录绕过权限。
+PostgreSQL uses pg with a default maximum pool of 10. Operators configure its URL and schema through environment settings. Shared PostgreSQL, Redis, and accessible file stores are required for multiple replicas; see [horizontal scaling](horizontal-scaling.md). Driver support and recorded isolated checks do not replace acceptance against the actual database and object service.
 
-## 类型约定
+The host and AI modules can use separately configured database connections. Back up every configured database, referenced file store, and protected deployment configuration, including the credential master key. Restore them consistently into an isolated environment before production recovery.
 
-- ID 为随机 UUID，存 varchar(36)，不编码用户或空间含义。
-- 时间为 UTC ISO 8601 字符串 varchar(32)，排序必须维持统一格式。
-- 跨库布尔使用 integer 0/1；API 通常转为布尔，表投影中部分状态仍为 0/1。
-- version/revision 为正整数；删除为可空时间，而非物理删除。
-- JSON 请求使用 camelCase，当前数据库资源响应字段使用 snake_case；详见 API。
+## Identifiers and concurrency
 
-## 表
+- Most resource/account IDs are random UUID strings; protocol digests, singleton IDs, and operation keys use their declared formats.
+- Times are UTC ISO 8601 strings. Keep one normalized format for ordering.
+- Cross-database booleans use integer 0/1, commonly converted to API booleans. JSON is stored as text where declared.
+- Metadata version, configuration revision, authorization revision, collaboration seq/epoch, and operation receipts have distinct meanings; never substitute one for another.
+- Soft deletion uses deleted_at where provided; not every table has a deletion column. Composite keys, unique indexes, foreign keys, and serialized transactions enforce the relevant constraints.
+- Request JSON generally uses camelCase, while resource/database projections may use snake_case; consult [HTTP API](api.md).
 
-| 表            | 主键                                            | 主要字段与用途                                                                                          |
-| ------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| users         | id                                              | login 唯一、display_name、password_hash、admin、status(active/disabled)、created_at                     |
-| sessions      | id                                              | id 是随机会话的 SHA-256，不是明文；user_id FK、expires_at                                               |
-| settings      | id                                              | 唯一业务行 system；site_name、registration、revision                                                    |
-| resources     | id                                              | 文档与知识库共用的权限/生命周期实体，详细见下                                                           |
-| grants        | resource_id + user_id + source_type + source_id | 主动授权、链接授权和父权限覆盖/阻断的统一授权记录                                                       |
-| comments      | id                                              | resource_id FK、author_id FK、body、parent_id FK、resolved、deleted_at、version、created_at、updated_at |
-| reactions     | resource_id + user_id + kind                    | FK；kind=like/favorite，复合主键避免重复                                                                |
-| notifications | id                                              | user_id FK、resource_id FK 可空、type、read_at、created_at                                              |
-| audit_events  | id                                              | actor_id FK、resource_id FK 可空、action、created_at                                                    |
+## Resources, discovery, and authorization
 
-### resources
+resources holds both document and library identities. Formats include rich_text, markdown, spreadsheet, canvas, and presentation. owner_id identifies the single owner separately from grants. access_mode is inherit/custom; visibility is invited/requestable/authenticated/public. Authorization and discovery are separate: discoverable titles or collection entries do not grant body access.
 
-| 字段                    | 类型/空值                     | 约束与含义                                                                                   |
-| ----------------------- | ----------------------------- | -------------------------------------------------------------------------------------------- |
-| id                      | varchar(36) PK                | 稳定资源身份                                                                                 |
-| kind                    | varchar(16) NOT NULL          | document / library；DB CHECK                                                                 |
-| format                  | varchar(24) NOT NULL          | rich_text / spreadsheet / presentation；请求 schema 校验，知识库忽略正文类型                 |
-| title                   | varchar(160) NOT NULL         | 富文本编辑时从第一行派生；管理重命名同步更新已初始化的第一行                                 |
-| owner_id                | varchar(36) NOT NULL FK users | 一个所有者，不通过 grant 表表达                                                              |
-| library_id              | varchar(36) NULL FK resources | 文档所属知识库；知识库自身为空                                                               |
-| parent_id               | varchar(36) NULL FK resources | 父文档，根文档为空                                                                           |
-| access_mode             | varchar(16) NOT NULL          | inherit / custom；DB CHECK                                                                   |
-| visibility              | varchar(16) NOT NULL          | invited / requestable / authenticated / public；DB CHECK；inherit 时不使用本字段作为开放范围 |
-| version                 | integer NOT NULL              | 正整数 CHECK；元数据修改递增                                                                 |
-| deleted_at              | varchar(32) NULL              | 软删除时间                                                                                   |
-| delete_batch            | varchar(36) NULL              | 同一次级联删除的标记                                                                         |
-| created_at / updated_at | varchar(32) NOT NULL          | 创建与元数据最后修改时间                                                                     |
+Personal documents have kind=document, owner_id=current user, and no library_id or parent_id. Libraries cannot nest. A document has one location; parents must belong to the same library and parent chains cannot cycle. Foreign keys prevent dangling references, while core transactions validate cross-row tree rules. Manual SQL can still violate invariants and is not a supported product-write API.
 
-个人文档是 owner_id=当前用户、kind=document、library_id为空的查询，不建个人空间表，不自动创建根文档。个人文档的 parent_id 必须为空；文档父子关系只存在于知识库内。
+The grant key is `(resource_id,user_id,source_type,source_id)`. direct/link/parent_override grants and active/disabled state feed current permission evaluation. share_links and share_link_revocations record link generations, access, and revocation facts. Invitations, requests, collections, entries, and tickets model their distinct workflows. Read [permissions](permission-inheritance.md) and [discovery](public-resource-discovery.md) for exact rules.
 
-知识库不可嵌套；文档有且仅有一个位置；父文档所属库必须与自己一致；父链不能成环。FK 防悬空，跨行规则在 core 的序列化事务内验证，数据库本身不能阻止所有手工写入导致的树异常。
+last_editor_id/last_edited_at records real creation, independent copy, renaming, and effective body updates. Reads, unchanged synchronization, and permission changes do not rewrite it. Visits are personal and filtered by current access and deletion. user_preferences uses optimistic version conditions, with default version=0 before its first saved record; it does not share the profile revision.
 
-### 评论
+## Content, references, and collaboration
 
-支持全文与选区评论。一层 thread 与一层 reply：parent_id 为空为主题，否则必须指向同资源下的主题；不能回复回复、已删除或已处理主题。body 为纯文本，React 文本渲染，不解释 HTML。软删除会清空 body，保留关系占位；选区锚点由当前编辑器协议直接保存。
+Persisted content uses document_states/checkpoints and document_updates; editor/Markdown epochs and receipts identify ordered operations and deduplicate retries. document_versions stores business history with recovery data. Codec, schema, baseline, seq, and epoch are editor-specific; all five formats use their implemented persistence paths. See the [collaboration contract](collaboration-sdk-contract.md), [collaboration guide](collaboration.md), and [editor integration](editor-integration.md).
 
-### 通知与审计
+Document references, integration events, pending events, projection jobs/cursors, and search reconciliation separate authoritative content/authorization from derived indexes. References do not grant access. Search settings/tasks/model fingerprints and reconciliation entries track configuration and repair state without duplicating plaintext model secrets. Projection failure must not fabricate a successful content save.
 
-通知投递给指定用户，默认不通知操作者自己。权限变更通知当前提交的被邀请人；所有权转移通知新所有者；评论通知资源所有者和被回复者；点赞变更通知资源所有者。收藏不会向其他人发通知。审计只记录动作元数据，不复制正文。
+Comments keep root/reply relationships, body/body_json, optional current-protocol anchors, resolution, and deletion state. Comment text/rich content is rendered safely. Notifications have recipients, actors, deduplication/ticket fields, and optional plugin metadata. Audit/security records contain action metadata rather than copied document bodies. See [comments and notifications](comments-and-community.md) and [authentication](authentication.md).
 
-本轮不是完整的安全审计平台：未提供审计查询界面、登录失败审计、不可篡改归档和保留期清理。
+## Files and plugin state
 
-## 索引
+storage_profiles contains only stable id, active, and created_at. Backend configuration and credentials come from the environment; there are no provider/config columns or writable administrator storage configuration in this baseline. assets and file_storage_objects retain stable store/object identities; file_items/folders/bindings, derivatives, extracts, and operation receipts manage user files and content processing. File bytes are separate from database rows. Never remove a shared physical object because one referencing document or history row was removed. See [file storage](storage.md).
 
-- users.login 唯一。
-- resources(owner_id,deleted_at)、resources(parent_id)、resources(library_id)。
-- 当前：grants(resource_id,user_id,source_type,source_id) 主键；source_type 为 direct、link 或 parent_override，status 为 active 或 disabled。
-- share_links 保存 token、角色、有效期和人数上限；share_link_revocations 按(resource_id,share_id)保存一次撤销事件及 revoked_user_ids JSON。
-- grants 按(user_id,resource_id,status)和(resource_id,source_type,source_id,status)建立查询索引。
-- comments(resource_id,created_at)。
-- reactions(resource_id,user_id,kind) 主键。
-- notifications(user_id,created_at)。
+Plugin namespaces bind plugin_id, namespace, data_version, generation, state, and declared definitions. Managed SQL business tables are defined through the plugin storage service and are not a fixed list in Schema. Private objects, garbage records, immutable archives, registry state, WebView sessions, and navigation settings remain host-managed. plugin_credentials stores encrypted sealed values with namespace/generation/revision; plugin_credential_keys stores key fingerprints, not the master key. See [plugin storage](plugin-horizontal-scaling.md) and [credentials](plugin-credentials.md).
 
-后续按实际查询负载补充 sessions(user_id/expiry)、grants(user_id)、收藏反向查询、审计时间等索引，避免在未验证查询策略前堆砌索引。
+## AI and knowledge workflows
 
-## 存储与初始化
+AI sessions separate user-mentioned resources, explicitly approved resources, and display/history associations; resource_ids alone does not authorize model access. Jobs store approval summaries and parameter digests, relinquish leases while awaiting approval, and resume only after authenticated ownership checks. AI calls preserve original usage facts; accounting/policy business modules do not replace them. Secrets, skills, MCP keys, notes, operation receipts, and session events have separate tables and access boundaries.
 
-SQLite：开启 foreign_keys、WAL、busy_timeout=5000、synchronous=FULL；默认新数据库 data/v1/doca.db。不能在运行中只复制主 db 文件忽略 WAL 作为可靠备份。
+Knowledge subscriptions, instructions, sources, entries/versions, chunks/links, human tasks, assistants/runs, bots/sharing/keys, conversations/messages/cases, and publication records support [knowledge curation](knowledge-studio.md) and [Q&A sharing](knowledge-sharing.md). Provider-owned content remains provider-owned; indexed knowledge does not bypass source authorization.
 
-PostgreSQL：pg 连接池 max=10，使用同一建表定义。当前环境没有实库可连接，兼容性尚需 PostgreSQL 集成验证；不能把驱动存在等同部署验收。
+## Current table and field inventory
 
-新环境直接按当前基线创建数据库；不支持旧数据库自动迁移或新旧模型混用。
+The inventory below reflects the current Schema interface. Field names are listed exhaustively; exact SQL types, nullability, defaults, primary/unique keys, and foreign keys remain defined by create-schema.ts. Optional TypeScript properties do not imply nullable SQL columns. This is a reference, not an instruction to create or modify tables manually.
 
-正文、身份、协同、搜索和权限表均在当前基线中直接创建，详见 [认证数据结构](authentication.md#数据库)。外部注册用户的 password_hash 为空字符串（不能密码登录），可经最近验证首次设置密码。版本化备份表暂不创建；资源元数据版本、协同 seq、本地修改代数、云端备份版本、Yjs 状态分别独立，不能混用。
-
-## 协同与搜索
-
-- `document_states`：resource_id 主键及外键、codec、checkpoint(base64完整Yjs状态)、checkpoint_seq、seq、text(正文检索投影)、updated_at(上次checkpoint时间)。正文更新时在同一事务递增资源version并从第一行派生title。
-- `document_updates`：联合主键(resource_id,seq)、data(base64增量)、author_id、created_at；恢复时按seq排序。50次有效更新/5分钟后的下一次更新触发checkpoint，已覆盖的增量删除。CRDT内部命令历史保留。
-- `comments.anchor`：可空JSON文本，仅选区根评论使用，包含blockId、quote、start/end(base64 Yjs相对位置)。回复通过parent_id归属线程。正文锚点不存绝对字符偏移。
-- `search_settings`：id=system、enabled、endpoint、index_name、updated_at；同时包含 image_recognition_enabled（默认0）、image_policy_version、reconcile_interval_hours（默认6）和 generation。API密钥不存入此表。
-- `search_embedding_task`：id=system；记录最近一次向量配置的 operation_id、endpoint、index_name、embedder_name、task_uid、status、updated_at。配置和模型密钥由 Meilisearch 持久化，本表不存密钥；状态查询通过原 taskUid 恢复。提交响应丢失或提交中崩溃会显示 unknown，不自动重放。该表只跟踪模型配置任务，文档同步任务的 taskUid 持久化另行实现。
-- `search_embedding_models`：按搜索服务、索引、embedder 名称关联 AI model_id，保存本次应用的 fingerprint、operation_id、applied。指纹用于发现模型或厂商凭据变化，不向前端返回，不保存第二份明文密钥；任务成功后才标记已应用。
-- `search_reconciliation`：单例扫描状态，包含目标代次、轮次、阶段、游标、索引偏移、扫描/差异计数、开始/扫描完成/修复完成/下次运行时间、租约和错误。按页原子提交进度。
-- `search_reconcile_entries`：本轮索引 ID/内容哈希清单及待修复记录。无资源外键，资源永久删除后仍能清理索引残留。正文不复制进清单；待修复项通过 projection_jobs 执行，成功后按代次/轮次确认。
-
-富文本 codec=slatetsx-yjs-v1；spreadsheet/presentation暂不创建正文状态。完整协议见 [协同说明](collaboration.md)。
-
-## 上传存储
-
-- `storage_profiles`：id、provider(local/s3)、config(JSON，包含桶、区域、端点、凭据别名、CDN域名)、active、created_at。切换时创建新记录，旧记录保留；API以 expectedId 防止并发覆盖。密钥不入数据库。
-- `assets`：id、owner_id、resource_id(nullable)、purpose(avatar/cover/attachment)、profile_id、object_key、filename、mime、size、created_at、deleted_at。resource_id/deleted_at 联合索引。数据库引用有外键约束，资产ID和物理对象key分离。
-- `resources.cover_asset_id`：知识库封面，绑定时检查库ID、用途和元数据version；变更递增version。
-- `user_preferences.avatar_asset_id`：自定义头像，绑定时必须为本人上传的avatar；使用个人设置version防并发覆盖。
-- 上传对象不可变。复制文档/知识库时为附件/封面生成新的资产ID和资源关联，可以复用物理对象，不复用权限。未来垃圾清理必须在所有引用都消失后才能删除物理对象。
-
-# 评论与社区
-
-社区字段直接包含在当前基线：用户 public_id / directory_mode、站点 directory_mode、评论 body_json、通知操作者和去重字段。字段语义见 [评论与社区能力](./comments-and-community.md)。
-
-# 活动与表格
-
-活动与表格结构直接包含在当前基线，具体以当前接口实现为准。
-
-# 用户卡片配置
-
-`user_card_settings(id, config, revision)` 为单行 `id=system`。config 保存 enabled/text/style/url，revision 用于管理员配置乐观锁。
-
-# 授权与引用关系增量表
-
-站点展示策略、授权回应状态、文档引用边及派生索引进度直接包含在当前基线，字段和事务约束见 [文档接入说明](editor-integration.md#数据库与引用一致性)。
-
-## AI 会话范围与审批（033 / 034）
-
-- `ai_sessions.mentioned_resource_ids` 保存用户主动 @ 的文档，不从模型检索/读取记录推导授权。
-- `ai_sessions.approved_resource_ids` 保存用户在会话审批卡片明确授权的文档。`resource_ids` 仍用于关联展示和历史会话访问校验，不能单独作为模型授权范围。
-- `ai_jobs.result.progress.approvals` 保存具体操作摘要、服务端参数摘要 ID、状态和可选目标文档。`awaiting_approval` 释放执行租约；决定接口锁用户并校验任务归属后恢复。管理员权限申请复用 `access_requests`，不会直接修改文档授权。
+| Table | Fields |
+| --- | --- |
+| `schema_baseline` | `id`, `created_at` |
+| `file_operation_receipts` | `plugin_id`, `user_id`, `operation`, `operation_key`, `request_hash`, `status`, `result`, `object_id`, `profile_id`, `object_key`, `cleanup_at`, `created_at` |
+| `ai_session_resources` | `session_id`, `kind`, `resource_id`, `title`, `href`, `touched_at` |
+| `ai_sessions` | `approved_resource_ids`, `mentioned_resource_ids`, `id`, `user_id`, `title`, `model_id`, `resource_ids`, `archived`, `revision`, `created_at`, `updated_at` |
+| `ai_users` | `user_id`, `default_model`, `memory_enabled`, `memory_revision`, `lock_version` |
+| `ai_notes` | `user_id`, `content`, `updated_at` |
+| `ai_secrets` | `user_id`, `key`, `value`, `updated_at` |
+| `ai_jobs` | `id`, `session_id`, `user_id`, `model_id`, `status`, `input`, `digest`, `result`, `error`, `lease`, `lease_until`, `attempts`, `cancelled`, `created_at`, `updated_at` |
+| `ai_operations` | `id`, `user_id`, `job_id`, `digest`, `result`, `created_at` |
+| `ai_calls` | `id`, `user_id`, `job_id`, `model_id`, `model_snapshot`, `periods`, `state`, `input_tokens`, `output_tokens`, `cached_tokens`, `usage`, `created_at`, `updated_at` |
+| `ai_skills` | `id`, `user_id`, `name`, `description`, `content`, `formats`, `enabled`, `revision`, `updated_at` |
+| `ai_mcp_keys` | `id`, `user_id`, `name`, `token_hash`, `resource_ids`, `writable`, `expires_at`, `created_at` |
+| `ai_session_events` | `session_id`, `seq`, `event_id`, `digest`, `type`, `payload`, `created_at` |
+| `tickets` | `operation_json`, `id`, `kind`, `resource_kind`, `source_key`, `hidden_for_user_id`, `resource_id`, `user_id`, `initiator_id`, `status`, `role`, `message`, `created_at`, `updated_at`, `expires_at`, `reminded_at` |
+| `ticket_events` | `operation_json`, `id`, `ticket_id`, `actor_id`, `status`, `message`, `created_at` |
+| `registration_reviews` | `user_id`, `status`, `reviewer_id`, `message`, `created_at`, `updated_at` |
+| `access_invitations` | `include_descendants`, `resource_id`, `user_id`, `role`, `state`, `version`, `invited_by`, `created_at`, `updated_at`, `expires_at`, `decided_by` |
+| `invitation_history` | `include_descendants`, `resource_id`, `user_id`, `role`, `state`, `version`, `invited_by`, `created_at`, `updated_at`, `expires_at`, `decided_by`, `id` |
+| `resource_collections` | `user_id`, `resource_kind`, `resource_id`, `created_at` |
+| `resource_entries` | `user_id`, `resource_id`, `state`, `source`, `version`, `updated_at` |
+| `pending_integration_events` | `id`, `type`, `payload`, `created_at` |
+| `projection_cursors` | `id`, `revision` |
+| `projection_jobs` | `lease_token`, `lease_until`, `status`, `plugin_id`, `max_attempts`, `id`, `kind`, `payload`, `revision`, `attempts`, `available_at`, `last_error` |
+| `markdown_epochs` | `resource_id`, `epoch_id` |
+| `editor_epochs` | `resource_id`, `epoch_id`, `baseline` |
+| `editor_receipts` | `resource_id`, `epoch_id`, `message_id`, `digest`, `seq` |
+| `markdown_receipts` | `resource_id`, `epoch_id`, `message_id`, `digest`, `seq` |
+| `access_requests` | `operation_json`, `message`, `decision_message`, `id`, `resource_id`, `user_id`, `role`, `status`, `created_at`, `updated_at`, `decided_by` |
+| `integration_events` | `id`, `seq`, `type`, `payload`, `created_at` |
+| `distribution_settings` | `id`, `config`, `revision` |
+| `document_references` | `source_id`, `target_id` |
+| `user_card_settings` | `id`, `config`, `revision` |
+| `share_links` | `include_descendants`, `max_members`, `revoked`, `revoked_at`, `resource_id`, `token`, `token_hash`, `generation`, `revision`, `role`, `enabled`, `expires_at`, `created_by`, `created_at` |
+| `share_link_revocations` | `resource_id`, `share_id`, `revoked_by`, `revoked_at`, `revoked_user_ids` |
+| `document_versions` | `recovery_json`, `id`, `resource_id`, `seq`, `checkpoint`, `title`, `author_id`, `created_at` |
+| `visit_events` | `id`, `resource_id`, `user_id`, `created_at` |
+| `account_settings` | `id`, `config`, `revision` |
+| `login_identifiers` | `value`, `user_id`, `kind`, `active` |
+| `user_contacts` | `user_id`, `kind`, `value`, `verified_at`, `verification_source` |
+| `account_flows` | `id`, `kind`, `user_id`, `data`, `expires_at` |
+| `verification_challenges` | `id`, `binding`, `destination`, `kind`, `purpose`, `digest`, `attempts`, `consumed`, `created_at`, `expires_at` |
+| `security_audit` | `id`, `actor_id`, `user_id`, `action`, `details`, `created_at` |
+| `auth_providers` | `profile_config`, `protocol_config`, `id`, `type`, `name`, `issuer`, `client_id`, `credential_ref`, `enabled`, `version` |
+| `auth_identities` | `id`, `user_id`, `provider_id`, `subject`, `display_name`, `created_at` |
+| `auth_flows` | `intent`, `id`, `browser_hash`, `provider_id`, `provider_version`, `verifier`, `nonce`, `user_id`, `session_id`, `expires_at`, `stage`, `identity` |
+| `document_states` | `resource_id`, `codec`, `checkpoint`, `checkpoint_seq`, `seq`, `text`, `updated_at` |
+| `document_updates` | `resource_id`, `seq`, `data`, `author_id`, `created_at` |
+| `search_settings` | `id`, `enabled`, `endpoint`, `index_name`, `updated_at`, `image_recognition_enabled`, `image_policy_version`, `reconcile_interval_hours`, `generation`, `ai_min_score` |
+| `search_embedding_task` | `id`, `operation_id`, `endpoint`, `index_name`, `embedder_name`, `task_uid`, `status`, `updated_at` |
+| `search_embedding_models` | `id`, `endpoint`, `index_name`, `embedder_name`, `model_id`, `fingerprint`, `operation_id`, `applied`, `document_template`, `document_template_max_bytes`, `applied_at` |
+| `search_reconciliation` | `id`, `generation`, `round_id`, `phase`, `cursor`, `remote_offset`, `scanned`, `differences`, `started_at`, `checked_at`, `completed_at`, `next_at`, `lease_token`, `lease_until`, `last_error` |
+| `search_reconcile_entries` | `id`, `round_id`, `content_hash`, `pending` |
+| `storage_profiles` | `id`, `active`, `created_at` |
+| `file_storage_objects` | `id`, `profile_id`, `object_key`, `sha256`, `size`, `mime`, `category`, `ai_description`, `ai_status`, `ai_model`, `ai_generated_at`, `created_at` |
+| `file_derivatives` | `id`, `source_id`, `profile_id`, `object_key`, `kind`, `recipe`, `mime`, `size`, `created_at` |
+| `file_extracts` | `storage_object_id`, `status`, `result`, `error`, `updated_at` |
+| `folder_publications` | `folder_id`, `enabled`, `revision` |
+| `folder_entries` | `folder_id`, `user_id`, `state`, `updated_at` |
+| `file_folders` | `storage_namespace`, `id`, `owner_id`, `parent_id`, `name`, `version`, `created_at`, `updated_at`, `deleted_at`, `delete_batch` |
+| `file_folder_shares` | `folder_id`, `user_id`, `role`, `version`, `created_at`, `updated_at` |
+| `file_folder_share_links` | `folder_id`, `token`, `token_hash`, `role`, `enabled`, `created_by`, `created_at`, `updated_at` |
+| `file_items` | `storage_namespace`, `id`, `owner_id`, `parent_type`, `parent_id`, `storage_object_id`, `name`, `mime`, `size`, `metadata`, `ai_description_override`, `locked`, `version`, `created_at`, `updated_at`, `deleted_at`, `delete_batch` |
+| `file_bindings` | `id`, `file_id`, `owner_plugin`, `owner_type`, `owner_id`, `role`, `created_at` |
+| `file_recognition_settings` | `id`, `config`, `revision` |
+| `assets` | `uploaded_by`, `id`, `owner_id`, `resource_id`, `purpose`, `profile_id`, `object_key`, `filename`, `mime`, `size`, `created_at`, `deleted_at` |
+| `workspace_activity` | `user_id`, `resource_kind`, `resource_id`, `visited_at`, `favorite` |
+| `resource_visits` | `user_id`, `resource_id`, `visited_at` |
+| `user_preferences` | `avatar_asset_id`, `user_id`, `avatar`, `theme`, `density`, `default_sort`, `sort_order`, `version` |
+| `user_presence` | `user_id`, `last_seen_at` |
+| `users` | `profile_metadata`, `profile_revision`, `public_id`, `directory_mode`, `id`, `login`, `display_name`, `password_hash`, `admin`, `status`, `created_at`, `last_login_at` |
+| `sessions` | `id`, `user_id`, `expires_at` |
+| `plugin_webview_auth` | `id`, `kind`, `plugin_id`, `parent_session`, `expires_at` |
+| `navigation_settings` | `id`, `revision`, `draft`, `published` |
+| `settings` | `directory_mode`, `id`, `registration`, `revision`, `site_name`, `default_locale`, `default_timezone`, `registration_review`, `sso_registration`, `social_registration` |
+| `resources` | `permission_overrides`, `content_bytes`, `authz_revision`, `history_readers`, `discoverable`, `last_editor_id`, `last_edited_at`, `cover_asset_id`, `page_width`, `ai_curated`, `knowledge_schedule`, `knowledge_preset`, `id`, `kind`, `format`, `title`, `owner_id`, `library_id`, `parent_id`, `tree_order`, `access_mode`, `visibility`, `requests_enabled`, `share_links_enabled`, `public_role`, `version`, `deleted_at`, `delete_batch`, `created_at`, `updated_at` |
+| `document_templates` | `id`, `format`, `title`, `content`, `preview`, `created_by`, `created_at`, `updated_at` |
+| `grants` | `include_descendants`, `source_type`, `source_id`, `source_resource_id`, `status`, `created_by`, `created_at`, `updated_at`, `resource_id`, `user_id`, `role` |
+| `comments` | `body_json`, `anchor`, `id`, `resource_id`, `author_id`, `body`, `parent_id`, `resolved`, `deleted_at`, `version`, `created_at`, `updated_at` |
+| `reactions` | `resource_id`, `user_id`, `kind`, `created_at` |
+| `plugin_notifications` | `notification_id`, `plugin_id`, `resource_type`, `resource_id`, `title`, `body`, `path`, `request_hash`, `withdrawn_at` |
+| `notifications` | `ticket_id`, `actor_id`, `comment_id`, `dedupe_key`, `id`, `user_id`, `resource_id`, `type`, `read_at`, `created_at` |
+| `plugin_storage_namespaces` | `plugin_id`, `namespace`, `data_version`, `generation`, `state`, `definition`, `created_at` |
+| `plugin_object_garbage` | `id`, `store_id`, `object_key`, `created_at` |
+| `plugin_credential_keys` | `id`, `fingerprint`, `created_at` |
+| `plugin_credentials` | `plugin_id`, `namespace`, `generation`, `id`, `revision`, `sealed`, `created_at`, `updated_at` |
+| `plugin_private_objects` | `plugin_id`, `generation`, `id`, `store_id`, `object_key`, `mime`, `size`, `sha256`, `created_at` |
+| `plugin_registry` | `id`, `revision`, `state` |
+| `plugin_archives` | `sha256`, `plugin_id`, `version`, `store_id`, `object_key`, `size`, `file_index`, `created_at` |
+| `audit_events` | `id`, `actor_id`, `resource_id`, `action`, `created_at` |
+| `user_page_state` | `user_id`, `key`, `value`, `version`, `updated_at` |
+| `knowledge_chunks` | `id`, `source_kind`, `source_id`, `ordinal`, `title`, `text`, `anchor`, `content_hash`, `reader_ids`, `updated_at` |
+| `knowledge_links` | `id`, `from_kind`, `from_id`, `to_kind`, `to_id`, `relation`, `score`, `reason`, `created_at` |
+| `knowledge_link_hides` | `user_id`, `link_id`, `created_at` |
+| `knowledge_feedback` | `id`, `user_id`, `chunk_id`, `judgment`, `query`, `created_at` |
+| `knowledge_conversations` | `access_key_id`, `id`, `scope_id`, `kind`, `owner_id`, `title`, `summary`, `state`, `archived`, `created_at`, `updated_at` |
+| `knowledge_messages` | `id`, `conversation_id`, `role`, `author_id`, `trigger`, `content`, `detail`, `created_at` |
+| `knowledge_tasks` | `id`, `conversation_id`, `actor_id`, `status`, `error`, `created_at`, `updated_at` |
+| `knowledge_checkpoints` | `task_id`, `detail`, `attempts`, `available_at` |
+| `knowledge_source_observations` | `library_id`, `source_id`, `fingerprint`, `updated_at` |
+| `knowledge_cases` | `id`, `bot_id`, `message_id`, `user_id`, `judgment`, `reason`, `snapshot`, `status`, `created_at` |
+| `knowledge_source_actions` | `id`, `library_id`, `source_key`, `actor_id`, `action`, `detail`, `created_at` |
+| `knowledge_human_tasks` | `id`, `library_id`, `conversation_id`, `task_key`, `kind`, `title`, `detail`, `status`, `revision`, `resolution`, `created_at`, `updated_at` |
+| `knowledge_publications` | `library_id`, `revision`, `fingerprint`, `documents`, `status`, `error`, `updated_at` |
+| `knowledge_source_groups` | `config`, `id`, `library_id`, `title`, `source_kind`, `created_at` |
+| `knowledge_subscriptions` | `name`, `group_id`, `id`, `creator_id`, `library_id`, `source_kind`, `source_id`, `url`, `node_id`, `source_version`, `status`, `created_at`, `preset` |
+| `knowledge_instructions` | `library_id`, `path`, `revision`, `markdown`, `author_id`, `created_at` |
+| `knowledge_settings` | `library_id`, `revision`, `config`, `updated_at` |
+| `knowledge_entries` | `id`, `library_id`, `title`, `markdown`, `origin`, `status`, `revision`, `source_refs`, `instruction_hash`, `review_state`, `author_id`, `created_at`, `updated_at` |
+| `knowledge_entry_versions` | `entry_id`, `revision`, `snapshot`, `author_id`, `created_at` |
+| `knowledge_assistant_users` | `assistant_id`, `user_id`, `accepted`, `visited_at`, `integration`, `revision` |
+| `knowledge_bot_sharing` | `bot_id`, `enabled` |
+| `knowledge_bot_share_links` | `id`, `bot_id`, `token`, `enabled`, `revoked_at`, `expires_at`, `max_members`, `version`, `created_at` |
+| `knowledge_bot_link_members` | `link_id`, `user_id`, `created_at` |
+| `knowledge_bot_keys` | `id`, `bot_id`, `creator_id`, `name`, `channel`, `token_hash`, `expires_at`, `created_at` |
+| `knowledge_assistants` | `manager_ids`, `config`, `visibility`, `id`, `owner_id`, `title`, `revision`, `library_ids`, `member_ids`, `enabled`, `updated_at` |
+| `knowledge_directories` | `library_id`, `path`, `resource_id` |
+| `knowledge_runs` | `id`, `library_id`, `trigger`, `status`, `detail`, `created_at` |
+| `knowledge_bots` | `library_id`, `title`, `published`, `updated_at` |
+| `knowledge_gaps` | `id`, `user_id`, `query`, `status`, `detail`, `created_at` |
+| `webview_tickets` | `id`, `user_id`, `expires_at` |
+| `qr_logins` | `id`, `secret_hash`, `user_id`, `expires_at` |
+| `push_devices` | `id`, `user_id`, `token`, `platform`, `created_at`, `updated_at` |

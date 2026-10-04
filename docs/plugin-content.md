@@ -1,17 +1,19 @@
-# 通用内容来源 content.v1
+# Content providers: content.v1
 
-公开入口：`@smartdoca/plugin-sdk/content`。宿主定义契约和调用入口，插件负责业务实现；内置文档和文件也注册相同来源。此接口不会自动把全部来源交给 AI。
+[中文](plugin-content.zh-CN.md)
 
-## 契约
+The public entry is `@smartdoca/plugin-sdk/content`. The host defines the contract and invocation boundary; plugins implement business behavior. Built-in documents/files register through the same interface. Registering a source does not automatically expose every source to AI.
 
-- `sources(context, purpose)`：发现来源声明。
-- 来源必需实现 `list`、`read`、`resolve`；可选 `search`，声明与实现严格一致。
-- `list(context, {config, cursor, limit})`：返回轻量块清单 `{items,nextCursor,snapshot}`，每项包含 `ref:{sourceId,resourceId,blockId}`、`fingerprint`、`title`，可带 `order`、`anchor`、短 `excerpt`，禁止包含 `text` 正文。
-- `read(context, {config,ref,fingerprint})`：只读取指定块正文，返回清单字段及 `text`，当前不可读返回 null；指纹变化返回冲突，消费端重新枚举。
-- `resolve(context,ref)`：重新授权并返回 `{path,fingerprint}` 或 null，path 只能是站内路径。
-- `search(context, {config,cursor,limit,query})`：返回相同轻量清单，由来源实现搜索，不自动用全文扫描替代。
+## Contract
 
-服务调用 list/read/search 时另传 `sourceId` 与 `purpose`；来源回调得到真实 `principalId`、`purpose` 和 `signal`。来源必须在每次调用校验当前账号、配置范围和权限；不得信任请求体中的用户 ID。宿主调用前后检查用户状态与来源生命周期，并设置 20 秒调用超时。
+- `sources(context, purpose)` discovers source declarations.
+- Sources require `list`, `read`, and `resolve`. Optional `search` must agree exactly with the capability declaration.
+- `list(context, {config, cursor, limit})` returns lightweight `{items,nextCursor,snapshot}`. Each item includes `ref:{sourceId,resourceId,blockId}`, `fingerprint`, and `title`, optionally `order`, `anchor`, and a short `excerpt`. Body `text` is forbidden.
+- `read(context, {config,ref,fingerprint})` returns the list fields plus the selected block's `text`, or null when currently unreadable. A changed fingerprint produces a conflict and requires re-enumeration.
+- `resolve(context,ref)` reauthorizes and returns `{path,fingerprint}` or null. Paths must be inside the application.
+- `search(context, {config,cursor,limit,query})` returns the same lightweight list. Sources implement search; the host does not substitute a full-body scan.
+
+Service list/read/search calls also carry `sourceId` and `purpose`. Callbacks receive the actual `principalId`, `purpose`, and `signal`. Every invocation checks account, configured scope, and current permissions; body-supplied user IDs are untrusted. The host checks user/source lifecycle before and after calls and applies a 20-second timeout.
 
 ```ts
 const content = context.inject(contentServiceToken);
@@ -26,30 +28,30 @@ content.register({
 });
 ```
 
-三个回调由插件实现。不得读取宿主私有表、源代码路径或其他插件数据库。
+The plugin implements all three callbacks. It must not read private host tables/source or another plugin's database.
 
-## 对账规则
+## Reconciliation
 
-消费端保存当前身份、订阅配置对应的引用与指纹，完整枚举后比较：不变块无需读取或 AI 分析，变化块定点读取。只有完整遍历成功才可以认定旧引用消失。超时、分页失败、快照变化和权限不确定均不能当作空集合；不更新已消费指纹，后续重试。
+Consumers store references/fingerprints under the current identity and subscription configuration. After complete enumeration, unchanged blocks need no read/AI analysis, while changed blocks are read directly. Only a successful complete traversal establishes disappearance. Timeouts, failed pages, changed snapshots, and uncertain permission cannot be treated as an empty set or advance consumed fingerprints.
 
-`cursor=null` 开始，`nextCursor=null` 结束；一次遍历的 snapshot 必须一致。分页游标只用于遍历，不是持久增量日志游标。来源应在内容、范围或权限变化使遍历失去完整性时拒绝旧游标。无需实现独立 listChanges/readChanges。
+`cursor=null` begins; `nextCursor=null` ends. A traversal's snapshot must remain consistent. Cursors enumerate pages; they are not durable incremental-log positions. Reject old cursors when content, scope, or permissions invalidate completeness. Separate `listChanges`/`readChanges` are not required.
 
-宿主限制每页 100 项、单块正文 200 万字符，并验证引用、重复项、游标与取消。完整清单上限 10 万块；分析辅助器限制本次变化正文总量，超限明确失败，不截断后宣称完整。
+Limits: 100 items per page, 2 million body characters per block, 100,000 blocks in a complete inventory. The host validates references, duplicates, cursors, and cancellation. Analysis helpers bound the total changed text and fail explicitly on overflow rather than truncating and claiming completeness.
 
-内置来源通过段落内容寻址。未改段落不会因前方插入段落而改变身份；修改正文表现为旧块消失、新块出现。它不是原生编辑器稳定节点 ID。重复块、标题上下文和长段落切片的边界见 [内容指纹与搜索对账](content-fingerprint-reconciliation.md)。
+Built-in sources use paragraph content addressing. Inserting a paragraph before an unchanged paragraph does not change its identity. Editing a body removes the old block and creates a new one. These are not native editor stable node IDs. Duplicate-block, heading-context, and long-paragraph slicing rules are in the [fingerprint record](content-fingerprint-reconciliation.md).
 
-## 宿主入口与消费端
+## Host APIs and consumers
 
-HTTP：GET `/api/v1/content/sources?purpose=analysis`；POST `/api/v1/content/list`、`read`、`resolve`、`search`。身份来自宿主会话，响应 no-store。
+HTTP: `GET /api/v1/content/sources?purpose=analysis`; POST `/api/v1/content/list`, `/read`, `/resolve`, `/search`. Identity comes from the host session and responses use no-store.
 
-全局搜索只调用声明 search 的来源。知识库/文档筛选不能套到插件业务范围时，不混入插件结果。点击再次 resolve。
+Global search calls only sources declaring search. Document/library filters that cannot apply to plugin business scopes exclude those plugin results. Clicking resolves access again.
 
-知识库 content 订阅复用 `knowledge_subscriptions`、`knowledge_source_groups.config`、现有整理任务；配置中只存来源配置、身份和已消费块指纹，不保存额外完整邮件正文。新订阅入口为 POST `/api/v1/knowledge/libraries/:id/content-subscriptions`，参数 `{sourceId,config,title}`。来源必须支持 knowledge。整理逐块读取和分析变化正文，成功事务才确认指纹；草稿引用携带 contentRef。
+Knowledge content subscriptions reuse `knowledge_subscriptions`, `knowledge_source_groups.config`, and existing curation jobs. Configuration stores source settings, identity, and consumed fingerprints without mirroring complete email bodies. `POST /api/v1/knowledge/libraries/:id/content-subscriptions` takes `{sourceId,config,title}` and requires the source's knowledge purpose. Curation analyzes changed blocks and confirms fingerprints only in successful transactions; draft citations carry `contentRef`.
 
-来源删除、解绑或撤权的用户确认策略：暂停衍生结果访问和检索，保留内容供管理员处理。新文档读取、资源列表（含搜索候选）和问答快照均按当前来源清单与指纹过滤。来源失败同样阻止本次返回，不删除内容。管理端保留条目。既有已打开协作连接的即时踢出和已下发内容撤回不在本次实现保证内。
+The existing agreed policy for deleted/unbound/revoked sources suspends derived access/retrieval and preserves content for managers. New document reads, lists/search candidates, and Q&A snapshots filter by the current inventory/fingerprints. Source failures block the operation rather than delete content; management retains entries. This increment does not guarantee immediate eviction of already-open collaborative sessions or recall of already-delivered content.
 
-外部来源复验在事务前完成；事务内只提交配置 CAS、订阅状态和消费指纹。资源预检只在本次操作内复用，绑定读取者和条目引用签名；缺少预检的事务读取保守阻止派生内容。单文档或指定库查询限制预检范围，跨库列表检查候选派生条目。
+External source revalidation happens before transactions. Transactions commit only configuration CAS, subscription state, and consumed fingerprints. Operation-scoped prechecks bind reader identity and entry-reference signatures. Transaction reads without prechecks conservatively block derived content. A specified document/library bounds prechecks; cross-library lists check candidate derived entries.
 
-来源选择器提供基础 schema 表单；复杂嵌套配置需要插件自己的配置页。编辑接口为 PUT `/api/v1/knowledge/libraries/:id/content-source-groups/:groupId`，参数同新增接口；仅订阅发起者可修改来源范围。配置变化后重新对账，保留既有内容供复核。
+The source picker provides basic schema forms; complex nested configuration needs the plugin's own page. `PUT /api/v1/knowledge/libraries/:id/content-source-groups/:groupId` takes the creation parameters. Only the subscribing principal can change scope. Changes trigger reconciliation and preserve existing content for review.
 
-现有 knowledge.sources.v1 没有自动适配为 content.v1；业务插件需实现公开标准。未新增数据库结构、历史数据转换或旧协议兼容代码。
+`knowledge.sources.v1` is not automatically adapted to `content.v1`; business plugins implement the public standard. This increment introduced no new database structure, historical conversion, or old-protocol compatibility code.

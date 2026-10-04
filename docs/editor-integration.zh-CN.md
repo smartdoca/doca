@@ -62,13 +62,13 @@
 
 隔离浏览器验收覆盖：同账号双页编辑和提及、内部引用相对链接与跳转、固定工具栏插入链接、真实 SDK 富文本格式复制粘贴及刷新保留、双向关系、替换后双页一致、知识库首篇/设置与收藏、头像列表、静置 60 秒无新增写入、刷新恢复和主页固定标签。额外修复了异步链接表单被全局菜单按钮处理提前关闭、选区引用被释放的问题。真实中文输入法、所有 Excel 操作、完整断网故障矩阵不属于这轮新增验证结论。
 
-## Plugin elements increment — 2026-10-02
+## 插件元素增量（2026-10-02）
 
-Source host 0.1.8 and SDK 0.1.6 now implement `WebPluginBundle.elements` and `plugin-sdk/editor-elements`. These are current source exports, not proof of npm publication or native-device acceptance. `@smartdoca/slate` 0.4.12 has a host-owned permanent `custom:plugin-element` atomic inline codec/renderer; business registrations change only its registry lookup and never remount the editor. `@smartdoca/sheet` 0.2.0-rc.17 exposes native `cellRenderers` and range `setValue(ICellData)`; the host stores a whole-cell element in `custom.docaElement` with a static text `v`. The fixed built-in `SpreadsheetCellObject` union is not extended or coerced.
+宿主源码 0.1.8 和 SDK 0.1.6 实现了 `WebPluginBundle.elements` 与 `plugin-sdk/editor-elements`。这是已实现源码导出，不代表 npm 发布或原生设备验收。`@smartdoca/slate` 0.4.12 提供宿主永久持有的 `custom:plugin-element` 原子行内 codec/renderer；业务注册仅改变注册表查找，不重建编辑器。`@smartdoca/sheet` 0.2.0-rc.17 提供原生 `cellRenderers` 和范围 `setValue(ICellData)`；宿主在 `custom.docaElement` 保存整单元格元素，`v` 保存静态文本。不扩展或强制转换内置 `SpreadsheetCellObject` 联合类型。
 
-Configuration sessions capture a live rich range or stable single-cell anchor, recheck readonly/provider/current target, and commit native operations with native undo. Missing type, provider, format or exact version shows an error placeholder while retaining opaque bounded JSON. Existing internal reference readers are unchanged. No compatibility adapter, automatic conversion or migration is introduced. General blocks, floating spreadsheet objects and public arbitrary editor mutation handles remain unimplemented. See the repository source `docs/plugin-editor-elements.md` and independent example `examples/plugin-elements/README.md` for precise fields, limits and installation.
+配置会话捕获富文本实时范围或稳定的单单元格锚点，重新检查只读状态、提供者及当前目标，通过原生命令和撤销提交。缺失类型、提供者、格式或精确版本时显示错误占位，保留有界的不透明 JSON。现有内部引用读取规则保持原状。不提供兼容适配、自动转换或迁移。通用块、表格浮动对象与任意公开编辑器修改句柄仍未实现。精确字段、限制和安装见仓库 `docs/plugin-editor-elements.md` 与独立示例 `examples/plugin-elements/README.md`。
 
-Performance: ordinary cells take a property-check fast path. Validation is memoized per immutable payload/provider; registry changes invalidate the canvas cache. Only painting a visible timed cell schedules another view refresh, at most once per second; hidden pages pause and sheets with no visible timed cells have no recurring canvas timer. No ticking data is persisted. Third-party renderers still own their CPU/network work and require their own performance acceptance.
+性能：普通单元格通过属性检查快速返回。验证按不可变 payload/提供者缓存，注册表变化清理画布缓存。仅绘制可见且需计时刷新的单元格时安排视图刷新，频率最多每秒一次；隐藏页面暂停，没有可见计时单元格的表格不运行重复计时器。不持久化跳动数值。第三方渲染器需单独验证 CPU 与网络开销。
 
 ## Markdown 初始化修复（2026-10-03）
 

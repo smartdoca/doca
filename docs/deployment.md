@@ -34,8 +34,6 @@ Version 0.1.10 rejects old database baselines, plugin installation lists, SDK ra
 DOCA_ORIGIN=https://docs.example.com
 ```
 
-Leave `DOCA_ASSET_BASE` empty for the published `0.1.0` image. That image was built before asset rewriting existed, so it always serves JavaScript and CSS from the container. A later image reads `DOCA_ASSET_BASE` when you set it. See [Static assets](#static-assets).
-
 ## Start
 
 ```sh
@@ -101,13 +99,13 @@ The HTML page and the API stay on `DOCA_ORIGIN`. `DOCA_ASSET_BASE` changes only 
 Leave it unset to serve JavaScript, CSS, and the other built files from the container at `/assets`. When you set it, use an HTTPS prefix with no userinfo, query, hash, or trailing slash:
 
 ```text
-DOCA_ASSET_BASE=https://cdn.example.com/doca/0.1.0
+DOCA_ASSET_BASE=https://cdn.example.com/doca/0.1.10
 ```
 
 A page that referenced `/assets/index-abc.js` then loads:
 
 ```text
-https://cdn.example.com/doca/0.1.0/assets/index-abc.js
+https://cdn.example.com/doca/0.1.10/assets/index-abc.js
 ```
 
 Publish the whole `apps/web/dist/assets` directory at that prefix and keep the `assets` path segment. The file names include a content hash and must match the HTML inside the same image. API requests remain on `DOCA_ORIGIN`.
