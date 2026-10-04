@@ -34,7 +34,7 @@ DOCA_DATABASE_URL=postgresql://user:password@postgres:5432/doca
 DOCA_DATABASE_POOL_MAX=10
 DOCA_REDIS_URL=redis://redis:6379
 DOCA_REDIS_PREFIX=doca-production
-DOCA_TRUST_PROXY=10.0.0.0/8
+DOCA_TRUST_PROXY=10.0.0.10/32
 ```
 
 `DOCA_INSTANCE_ID` 可由编排平台设置为 Pod/容器名；未设置时每个进程生成随机 ID。`DOCA_REDIS_PREFIX` 必须在共享 Redis 中区分环境。`DOCA_TRUST_PROXY` 只列出实际反向代理的 IP 或 CIDR，否则客户端可伪造 IP，破坏审计和限流。
@@ -59,7 +59,7 @@ Redis 一旦配置就是必需依赖：启动连接失败、运行期不可用�
 - 数据库连接总量约为“副本数 × `DOCA_DATABASE_POOL_MAX`”，必须小于 PostgreSQL 或连接代理的可用额度，并预留运维和后台任务连接。
 - 本地磁盘不能用于多主机上传。CDN 只缓存读取结果；源对象仍必须位于 S3 或共享文件系统。历史 `storage_profile` 指向的存储配置必须继续可用。
 - Meilisearch、S3、消息网关等外部服务必须让所有副本看到同一配置和同一数据。凭据存于共享数据库，但网络连通、白名单和密钥仍由部署环境保证。
-- 插件目录必须随镜像只读发布，所有副本安装完全相同的插件版本。不要在滚动发布中修改共享插件目录。
+- 共享数据库记录目标插件版本，安装 ZIP 位于共享存储；每实例需要独立可写的 `DOCA_PLUGINS_DIR` 安装与缓存目录，启动时从归档校验恢复。操作需人工重启全部实例生效，见[插件部署](plugin-deployment.zh-CN.md)。
 - Redis 建议启用认证、TLS/私网、内存上限与可观测告警；数据库和对象存储仍需独立备份。Redis 数据丢失不应造成正文丢失，但会中断实时传播、在线状态和全局限流。
 - `/ready` 只证明当前副本能访问数据库和实时集群，不代替端到端协作、对象存储、搜索与消息通道监控。
 

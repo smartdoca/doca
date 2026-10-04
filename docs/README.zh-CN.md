@@ -7,13 +7,14 @@ Doca 是面向个人和小团队的文档与知识工作台。本套文档覆盖
 ## 开始使用
 
 - [快速开始](quickstart.zh-CN.md)：拉取代码 → 配置 `.env` → 拉取镜像 → 启动 → 初始化管理员密码。
+- [功能与边界](features.zh-CN.md)：核心、独立插件及尚未提供的能力。
 - [配置说明](configuration.zh-CN.md)：必填配置和可选服务。
 - [使用指南](user-guide.zh-CN.md)：文档、知识库、文件、搜索与 AI。
 - [常见问题与排障](faq.zh-CN.md)。
 
 ## 使用指南
 
-[文档与分享](document-experience.zh-CN.md) · [权限](permission-inheritance.zh-CN.md) · [发现与收录](public-resource-discovery.zh-CN.md) · [评论与通知](comments-and-community.zh-CN.md) · [随手记](quick-notes.zh-CN.md) · [知识整理](knowledge-studio.zh-CN.md) · [问答分享](knowledge-sharing.zh-CN.md)
+[文档与分享](document-experience.zh-CN.md) · [权限](permission-inheritance.zh-CN.md) · [发现与收录](public-resource-discovery.zh-CN.md) · [评论与通知](comments-and-community.zh-CN.md) · [知识整理](knowledge-studio.zh-CN.md) · [问答分享](knowledge-sharing.zh-CN.md)
 
 ## 部署运维
 

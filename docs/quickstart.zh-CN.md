@@ -29,7 +29,7 @@ DOCA_FILE_STORE_ID=local
 DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root":"/data/storage"}}}'
 ```
 
-站点地址不要带路径、查询参数、哈希或末尾斜杠。保留容器持久卷中的 `/data/storage` 路径。`docker.env.example` 用于 Docker 部署；`.env.example` 用于[源码开发](development.zh-CN.md)。
+站点地址不要带子路径、查询参数或片段；根路径末尾斜杠会被规范化。保留容器持久卷中的 `/data/storage` 路径。`docker.env.example` 用于 Docker 部署；`.env.example` 用于[源码开发](development.zh-CN.md)。
 
 在同一台服务器配置反向代理。以 Caddy 为例：
 
@@ -54,7 +54,6 @@ Compose 使用 `docker.io/smartdoca/doca:0.1.10`。这一步下载已构建镜�
 ```sh
 docker compose up -d
 docker compose ps
-curl -fsS http://127.0.0.1:39120/health
 ```
 
 等待容器健康，健康检查应返回：

@@ -14,6 +14,8 @@ Doca is an open-source document and knowledge workspace for individuals and smal
 - SQLite for one server; shared PostgreSQL, Redis, and file storage for multiple replicas.
 - Business plugins built against the public `@smartdoca/plugin-sdk`.
 
+The default image installs no quick-notes, mail, calendar, membership, or moderation plugins. Templates and materials need a separately installed provider. See [capabilities and limits](https://smartdoca.github.io/doca/#/en/getting-started/features).
+
 ## Quick start with Docker
 
 Requires Git, Docker Engine, Docker Compose, and an HTTPS domain served by a reverse proxy. This installs the published 0.1.10 image into a fresh database. Existing installations must read the [release requirements](https://smartdoca.github.io/doca/#/en/releases/0.1.10) and preserve their data before changing versions.
@@ -33,7 +35,7 @@ docker compose pull
 
 # 4. Start and check health
 docker compose up -d
-curl -fsS http://127.0.0.1:39120/health
+docker compose ps
 
 # 5. Initialize the administrator login and password
 bash scripts/bootstrap-admin.sh

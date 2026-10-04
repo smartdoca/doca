@@ -28,7 +28,7 @@ Compose 把端口绑定到服务器回环地址。生产环境通过反向代理
 docker compose config --quiet
 docker compose ps
 docker compose logs --tail=100 doca
-curl -fsS http://127.0.0.1:39120/health
+curl -fsS -H 'Host: doca.example.com' http://127.0.0.1:39120/health
 ```
 
 在服务器上、包含 `compose.yaml` 的检出目录执行。不要公开含密钥的日志。源码开发使用 `http://127.0.0.1:39130` 和开发配置。
@@ -44,3 +44,5 @@ GitHub Pages 托管这套静态文档网站。Doca 应用需要容器或服务�
 ## 插件或外部服务为什么不可用？
 
 插件包需满足当前 SDK 和存储契约。安装状态变化后，逐个手动重启全部实例。使用加密凭证的插件要求所有副本持有同一个持久主密钥。AI、SSO、搜索及云存储是否可用还取决于真实凭据和网络，源码测试不能代替真实服务验收。详见[插件部署](plugin-deployment.zh-CN.md)。
+
+上面的健康检查需替换为实际配置的主机名；421 表示 Host 不匹配，回环探测也需正确 Host。默认不信任任何代理；代理 IP 共享限流时应准确配置 `DOCA_TRUST_PROXY`。

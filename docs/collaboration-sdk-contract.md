@@ -85,7 +85,7 @@ The core keeps snapshots of successful writes. Membership level does not limit o
 
 Comment author, body, replies, and resolution live in the platform database. The component provides captureAnchor, resolveAnchor, renderAnchors, and onAnchorClick. Rich text uses a relative text position. A spreadsheet should use a stable row and column range that transforms with insert and delete. A fully deleted or resolved anchor is not highlighted.
 
-This round does not show a full-document comment rail for spreadsheets. A stable anchor protocol for region comments is not provided. The temporary cursor API is not a permanent region comment.
+The current spreadsheet package and host implement region comments with stable row/column identities, capture/resolve/reveal APIs, marker rendering, epoch validation and deleted-target handling. Supported row/column insertion, sorting and sheet changes are covered by isolated tests in `tests/editor-sessions.test.ts`, `tests/sheet-axis-sizes.test.ts` and `tests/sheet-collection.test.ts`. This permanent protocol is separate from temporary cell presence.
 
 ## 8. Shared acceptance
 
@@ -102,11 +102,11 @@ This round does not show a full-document comment rail for spreadsheets. A stable
 
 ## 9. What is implemented
 
-Done in this round: a shared reliable commit queue, no idle sync echo, temporary spreadsheet selections and names, fixed layout, rich text fixed-toolbar selection state, and the insert-table menu width.
+Host 0.1.10 integrates rich text, Markdown, spreadsheets, canvas, and slides with a shared reliable commit queue and durable ACKs. Idle synchronization does not echo content; selections and names use format adapters. All five formats expose history reads; manager restore is supported only for rich text and Markdown. Spreadsheet, canvas, and presentation previews report `canRestore:false`. This does not establish a unified component rollback API for every format.
 
 The platform implements epoch, protocol checks, commit receipts, and history recovery metadata. Without Redis, broadcast and presence are one process. With Redis, document updates, server refresh, permission invalidation, notifications, and presence cross instances. The database commit is still the ACK boundary and the source of document truth. After Redis reconnects, the server sends the authoritative state again to active rooms on this instance. Pub/Sub is not a durable log, and a Redis failure does not silently fall back to the local bus.
 
-Still shared work for the component and the platform: a formal selection API, a persistent offline queue, stable spreadsheet region-comment anchors, and a unified rollback. A capability the component does not export is still a target contract.
+Still shared work for the component and the platform: a formal selection API, a persistent offline queue and a unified rollback across formats. A capability the component does not export is still a target contract.
 
 ## Plugin elements increment — 2026-10-02
 

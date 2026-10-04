@@ -1,6 +1,7 @@
 [
   {"id":"getting-started","en":"Getting started","zh":"入门", "pages":[
     ["quickstart","Quick start","快速开始"],
+    ["features","Capabilities and limits","功能与边界"],
     ["configuration","Configuration","配置说明"],
     ["user-guide","User guide","使用指南"],
     ["faq","FAQ and troubleshooting","常见问题与排障"]
@@ -10,7 +11,6 @@
     ["permission-inheritance","Permissions","权限"],
     ["public-resource-discovery","Discovery and collections","发现与收录"],
     ["comments-and-community","Comments and notifications","评论与通知"],
-    ["quick-notes","Quick notes","随手记"],
     ["knowledge-studio","Knowledge curation","知识整理"],
     ["knowledge-sharing","Q&A sharing","问答分享"]
   ]},

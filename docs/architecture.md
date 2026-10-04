@@ -2,126 +2,63 @@
 
 [中文](architecture.zh-CN.md)
 
-This is the entry point for the current module layout, queries, and consistency rules. The database and each module follow the source and the current schema.
+Baseline: host 0.1.10 / SDK 0.1.9, checked against current source on 2026-10-04. This describes implemented assembly and boundaries; deployment-specific services and device behavior need separate acceptance. Start with [capabilities and limits](features.md).
 
-Baseline: host 0.1.10. This page describes current source; deployment-specific services and device behavior require their own acceptance.
+## Application and modules
 
-## 1. Decisions
-
-The workspace separates public discovery at `/home` from personal document management at `/documents`. Navigation also provides search, AI assistant, quick notes, libraries, and trash, with administrator-configured plugin entries. A library page shows its contents; discovery, collection, and body access follow separate rules. See [discovery and collections](public-resource-discovery.md). A creation calendar is a plugin capability rather than a core page.
-
-A profile has a display name, a preset or uploaded avatar, and a password change. A library can have a cover. The document body and the admin pages share attachment upload and download. Admin navigation is separate: overview, users, sign-in and registration, file storage, document search, and Hook. Hook registers callback URLs for background delivery. Admin statistics are aggregate counts. An administrator does not gain the right to read private documents.
-
-Doca is a TypeScript modular monolith, not a set of microservices. The web app and the server live in one repository with separate directories and builds. Development uses two ports. The browser always uses one origin. In production the server can serve the built web app. Cordis owns the in-process context, services, effects, and lifecycle. The Doca SDK owns the stable contract.
+Doca is a TypeScript modular monolith. Development runs React/Vite and Fastify on separate ports behind one browser origin. Production serves the built Web app and API through Fastify. Cordis owns in-process services and lifecycle; the public SDK defines plugin boundaries.
 
 ```text
-Browser (React / Vite)
-    │ same-origin HTTP JSON / WebSocket + HttpOnly session cookie
-    ▼
-apps/server — Host/Origin checks, sign-in, validation, HTTP routes, static files
-    ▼
-PluginHost — discover, initialize, mount, ready, dispose in reverse order
-    ├── AIHost / SearchHost
-    ├── plugin-files (files.v1)
-    ├── plugin-documents (documents.v1 / knowledge source aggregation)
-    ▼
-packages/core — accounts, permissions, domain rules, transaction boundaries
-    ▼
-packages/db — Kysely types, the current schema, SQLite / PostgreSQL drivers
+Browser: React + five document editors
+  │ same-origin HTTP / WebSocket; host-authenticated sessions
+Fastify: Host/Origin validation, routes, security, static files
+  │
+Host composition: accounts, documents, files, search, AI, knowledge
+  │ trusted business plugins discovered in the installation directory
+Core domain rules / Kysely database access
+  │
+SQLite single instance, or shared PostgreSQL + Redis + file backend
 ```
 
-The server is the HTTP handler and middleware layer. Core is the domain layer. The db package is the model and access layer. TypeScript checks compile time. TypeBox schemas check requests at runtime. Do not trust the browser alone.
+The default host contains rich text, Markdown, spreadsheets, slides, canvas, document permissions, discovery, files, knowledge curation, Q&A assistants, authentication, registration review, security audit, and raw AI usage facts. Quick notes, mail, calendar, membership, billing, business quotas, and moderation are independent business concerns; no such provider is installed by default. Templates/materials/elements expose interfaces with zero default providers.
 
-## 2. Directories
+## Directories
 
 | Path | Responsibility |
 | --- | --- |
-| apps/server/src/main.ts | Assemble services, the dev proxy, and shutdown |
-| apps/server/src/bootstrap/config.ts | Validate configuration and connect the database |
-| apps/server/src/app/create-app.ts | API, session, and security boundary; tests can inject it without listening |
-| apps/server/src/bootstrap/admin.ts | Create the first administrator explicitly |
-| apps/web/src/app/main.tsx | Mount the root component |
-| apps/web/src/app/app.tsx | Routes, global state, and cross-feature assembly |
-| apps/web/src/features/documents/tree.tsx | The permission-filtered tree |
-| apps/web/src/features/documents/dialogs.tsx | Grants, transfer, and move confirmation |
-| apps/web/src/features/admin/admin.tsx | Users, site settings, and the registration switch |
-| packages/core/src/modules/identity/passwords.ts | Password derivation and account creation |
-| packages/core/src/workflows/resources.ts | Resource rules, ACL, transactions, and audit |
-| packages/db/src/create-schema.ts | The current baseline schema for a new database |
-| tests/cloud.test.ts | API integration tests on a temporary database |
+| `apps/server/src/main.ts` | Startup, listening, shutdown |
+| `apps/server/src/bootstrap/config.ts` | Origin, database, proxy, Redis configuration |
+| `apps/server/src/app/create-app.ts` | HTTP routes, session and security boundaries |
+| `apps/server/src/plugins/composition.ts` | Built-in services and installed plugin assembly |
+| `apps/server/src/routes` | Host HTTP endpoints |
+| `apps/server/src/services` | Realtime, search, AI and other application services |
+| `apps/web/src/app/app.tsx` | Workspace routing and feature assembly |
+| `apps/web/src/features/documents/document-editor.tsx` | Dispatch to the five installed editor packages |
+| `packages/core/src` | Domain rules, authorization and transactions |
+| `packages/db/src/create-schema.ts` | Current empty-database baseline |
+| `packages/plugin-sdk` | Public server/Web/plugin interfaces |
+| `tests` | Isolated unit and integration checks |
 
-The web app does not import the server database or password modules. It uses HTTP DTOs. Web, core, and db imports use the `@web/*`, `@core/*`, and `@db/*` aliases. `apps/*` and `packages/*` are workspace packages, built and tested by the root scripts.
+Web code calls HTTP DTOs rather than importing database or password internals. Business plugins consume published SDK services and never import host source or create global runtime bridges. See [plugin architecture](plugin-architecture.md) and [implementation inventory](plugin-sdk-contract.md).
 
-```text
-apps/web/src/
-  app/       entry and global assembly
-  features/  product pages and local styles
-  shared/    API, components, hooks, utils
-  styles/    global theme
+## Identity and security
 
-apps/server/src/
-  app/       Fastify, request context, security
-  routes/    HTTP routes
-  services/  AI, search, notes, collaboration
-  adapters/  storage, identity, messaging
-  jobs/      background work
-  bootstrap/ startup configuration and the administrator
-```
+One deployment has one account system, without organization/space/tenant tables. Registration and external providers start disabled; no default administrator exists. Passwords use scrypt and random salts; the database stores session digests. Site sessions last eight hours. Password changes and account disabling revoke sessions.
 
-## 3. Identity, security, and permissions
+Every request checks configured Host. Mutations also check same-origin Origin. Site cookies are HttpOnly, SameSite=Strict, and Secure over HTTPS. Authentication adapters support external OIDC and social providers; contact verification and recovery are implemented, with verification gateways required. Registration approval has a dedicated review workflow. Doca as an OIDC provider, SAML, and IdP-wide logout are unavailable. See [authentication](authentication.md).
 
-- One deployment has one account system. There are no app, space, tenant, or organization tables.
-- The first start does not create a default account. An administrator is created by a server command. Registration is closed by default.
-- Passwords use a random salt and scrypt. The session cookie is a random credential. The database stores a SHA-256 digest. A session lasts 8 hours.
-- Changing the password revokes every session. Disabling a user revokes sessions and blocks later access.
-- Every request checks the configured Host. Mutations also require the same Origin. Cookies are HttpOnly and SameSite=Strict, and Secure on HTTPS.
-- The body cannot set `owner_id`, a role, or arbitrary fields. Identity comes from the session. The server decides who created a resource.
-- An administrator does not automatically receive content access. No read right is a uniform 404. A read right without the requested action is 403.
-- Sharing one document does not reveal its ancestors. `parent_id` and `library_id` are null when the caller cannot read the ancestor. Search filters by permission before paging.
-- A notification stores the event type and the resource reference, not a title or comment body that might leak. Opening the resource checks access again.
+Administration does not grant access to private content. Missing read access generally returns 404; an authorized reader lacking an action gets 403. ACLs, inherited grants, publication, collections, and sharing have separate rules. Hidden ancestors are not disclosed. See [permissions](permission-inheritance.md) and [discovery](public-resource-discovery.md).
 
-Roles are reader < commenter < editor < manager < owner. Visibility grants at most reader. A library document with inherit takes the parent document or library permission. An owner above the document is at most manager on the child. A direct invitation can be added. A personal document is always custom and does not inherit ordinary members. The document owner always has full rights. The library owner always keeps management inside that library. Named grants, parent and child calculation, and share revocation are in [permission inheritance](permission-inheritance.md).
+## Persistence and collaboration
 
-Transferring a document does not transfer ownership of other documents in the tree. Transferring a library changes library governance and does not rewrite each document's `owner_id`.
+Document metadata uses HTTP and version checks. All five editor formats use one host WebSocket lifecycle with format-specific Yjs codecs. The server validates content, rechecks authorization and commits before acknowledging; metadata version, content sequence, epoch, schema and history IDs are distinct. History is available for all formats, but restore currently supports rich text and Markdown only. See [collaboration](collaboration.md) and [document history](document-experience.md).
 
-## 4. Consistency
+SQLite, AI and Webhook stores plus local files fit a single instance. PostgreSQL uses a separate Webhook database and an AI schema. Multiple replicas require a shared database, file backend and Redis for events, presence and limits. Without Redis, those implementations are process-local. Configured Redis failures do not silently fall back. Database jobs use leases/outboxes, not only process memory. See [configuration](configuration.md) and [horizontal scaling](horizontal-scaling.md).
 
-- Metadata changes carry `version`. The server compares it and then updates. A stale write returns 409 and does not overwrite silently.
-- The resource tree, ACL, and batch delete or restore finish in one transaction. Audit and notifications commit or roll back with the change.
-- Business transactions do not use the settings row as a mutex. PostgreSQL uses serializable transactions and retries conflicts. SQLite uses a connection transaction. A document acknowledgement is sent after a durable commit.
-- A single-document operation loads the target and the ancestors it needs. A tree change loads the affected subtree. Lists filter permissions in SQL and then page. Discovery and recent visits are separate from access rights.
-- Likes and favorites use a composite primary key and a target-state API, so a repeated request does not double-count.
-- A move requires management of every affected child, and cycles are rejected. The current behavior resets sharing on the moved subtree to private, clears direct invitations, and keeps each owner and the destination library's governance. The user must confirm.
-- Delete moves the document to the trash. `delete_batch` records that batch. Restore does not revive a child that was deleted earlier on its own.
-- An ordinary copy creates new resource ids, remaps structure and asset ids, belongs to the copier, and is private. The body gets a new Yjs identity. Grants, comments, reactions, and revocation history are not copied.
+Objects retain stable store IDs and object references. Environment configuration selects physical stores; the storage administration page is read-only. Private downloads recheck access. A CDN supplies expiring authorized URLs and never replaces storage. Backups include every database, referenced backend, plugin archive and protected configuration. See [file storage](storage.md).
 
-## 5. What exists, and what does not
+Installed plugins use shared registry records and immutable archives, plus a writable per-instance cache restored on startup. Manual restart activates desired releases. Managed private SQL, objects and credentials are implemented; task draining, temporary workspaces and stronger process isolation remain gaps. Exact-version validation rejects unsupported baselines or structures; no migration or compatibility adapter is added here. Existing data must be preserved. See [release requirements](releases/0.1.10.md).
 
-Real data is wired for local accounts, sign-in and sign-out, password change, the registration switch, and enabling or disabling users; personal document lists, the library tree, title search, and type filters; permissions, transfer, move, independent copy, and trash; comments, a single reply level, resolution, likes, and favorites; the notification list and read state; and system configuration.
+## Current limits and acceptance
 
-Still needs deployment or an external integration:
-
-- A full desktop offline runtime. Rich text, Markdown, spreadsheets, canvas, and their collaboration protocols are connected.
-- Acting as an OIDC provider, SAML, and account recovery. External OIDC and social sign-in adapters exist. Live vendor credentials and deployment checks are still required.
-- Production AI providers, external MCP clients, and a Meilisearch cluster. AI, MCP, session events, import and export, attachments, and database search fallback exist in code.
-- Desktop, DSH, and device binding.
-
-Comment detail currently returns at most the earliest 200 comments. The notification API is paged. The UI shows the latest 50. The tree pages through resources the caller can access. These are current capacity limits, not the final product limits.
-
-## 6. Later work
-
-Production acceptance of the editor packages, account recovery, live SSO, hardening, and comment paging come first. Desktop, DSH, and backups wait until the cloud deployment has been tested.
-
-## Uploads, sign-in, and collaboration
-
-`apps/server/src/routes/assets.ts` validates uploads, checks the resource ACL, and records assets. `storage.ts` reads and writes local files or S3 and signs CDN URLs. The current configuration chooses where new uploads go. Each asset keeps a stable store ID/object reference. Stores are configured by environment, with a read-only administration view; changing a path or bucket does not move existing bytes. Avatars, covers, and document images use the same entry. Private objects are read through the backend. A CDN is an optional short-lived signed cache, not a public directory. See [file storage](storage.md).
-
-SSO has two directions. The current external identity key is `provider_id` plus `subject`. A provider is an immutable type, issuer, and client id. Accounts are not merged by email. OIDC is validated with `openid-client`. The site keeps its Strict session and same-origin completion. Doca is not an OIDC provider. Identity sources, approval policy, and deployment are in [authentication](authentication.md).
-
-`#/admin`, `#/account`, and `#/preferences` use their own settings shell and do not render the document tree. Identity adapters are in `apps/server/src/adapters/identity-providers.ts`. Policy is in `packages/core/src/modules/identity`. Pages are in `apps/web/src/features/auth/authentication.tsx`.
-
-Document collaboration uses WebSocket. Metadata stays on HTTP. The server validates updates, checks access, broadcasts, persists, and builds recovery state. Each editor package parses its own anchors. Metadata `version` is not a Yjs state vector. See [collaboration and search](collaboration.md).
-
-The default deployment is one process without Redis. Broadcast, presence, and limits stay in that process. With Redis, the same interfaces use a cross-instance bus, presence, and global limits. Document updates are still committed in the database. Several replicas also require PostgreSQL and shared object storage. Schema creation and replica startup are separate. See [horizontal scaling](horizontal-scaling.md).
-
-Webhooks use a separate database for subscriptions and deliveries. The business transaction only appends the existing outbox. After commit, a background worker posts matching events with the headers configured for that callback, then retries and records the result. Callback URLs may be public or on the same machine and private network. The business transaction does not call the network.
+Comment threads and notifications have dedicated paginated endpoints; document detail is not a complete comment export. Persistent offline outboxes, native device integration, live identity/AI providers, production S3/CDN, and target-infrastructure failover require separate work or acceptance. Automated isolated tests demonstrate their stated scope; a build does not prove all external services are operational.

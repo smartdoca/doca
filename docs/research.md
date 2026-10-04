@@ -33,3 +33,10 @@ These records retain their original language, date, and content. They are outsid
 - [文档交互与回收站验收（2026-09-11）](https://github.com/smartdoca/doca/blob/main/docs/trash-and-document-ui.md)
 - [视觉与选择控件](https://github.com/smartdoca/doca/blob/main/docs/ui-style.md)
 - [统一存储实现](https://github.com/smartdoca/doca/blob/main/docs/unified-storage-implementation.md)
+- [Former quick notes implementation (removed from the host)](https://github.com/smartdoca/doca/blob/main/docs/quick-notes.md)
+- [Early document experience record](https://github.com/smartdoca/doca/blob/main/docs/document-experience-history.md)
+- [Early collaboration record](https://github.com/smartdoca/doca/blob/main/docs/collaboration-history.md)
+- [Early editor integration record](https://github.com/smartdoca/doca/blob/main/docs/editor-integration-history.md)
+- [Early HTTP API record](https://github.com/smartdoca/doca/blob/main/docs/api-history.md)
+
+- [Documentation capability and deployment audit (2026-10-04, Chinese)](https://github.com/smartdoca/doca/blob/main/docs/documentation-audit-2026-10-04.md)

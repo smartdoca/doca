@@ -114,7 +114,7 @@ Yjs checkpoint 保存原 CRDT 的完整编码，不能用 JSON 投影重建并�
 
 评论作者/正文/回复/解决状态属于平台数据库。组件需提供 captureAnchor、resolveAnchor、renderAnchors、onAnchorClick。富文本是相对文本位置，Excel 应为稳定行列范围，随插删变换；完全删除或解决后不高亮。
 
-本轮不展示 Excel 全文评论区。区域评论的稳定锚点协议尚未提供，不以临时光标接口冒充已经支持永久区域评论。
+当前表格包和宿主已实现区域评论，使用稳定行列身份、capture/resolve/reveal API、标记渲染、epoch 校验与删除目标处理。已支持的行列插入、排序和工作表变化由 `tests/editor-sessions.test.ts`、`tests/sheet-axis-sizes.test.ts`、`tests/sheet-collection.test.ts` 隔离测试覆盖。永久协议与临时单元格 presence 分开。
 
 ## 8. 两个组件必须共用的验收清单
 
@@ -131,11 +131,11 @@ Yjs checkpoint 保存原 CRDT 的完整编码，不能用 JSON 投影重建并�
 
 ## 9. 当前实现与提案的边界
 
-本轮已做：共用可靠提交队列、移除空闲同步回传、Excel 临时选区/用户名、固定布局、富文本固定工具栏选中态、插入表格菜单宽度修复。
+当前宿主 0.1.10 已接入富文本、Markdown、表格、画板和演示文稿，共用可靠提交队列及持久 ACK；空闲同步不回传正文，选区与用户名由各格式适配器处理。五种格式支持历史读取；仅富文本和 Markdown 支持管理者恢复，表格、画板、演示文稿返回 `canRestore:false`。这不是所有格式已具备统一组件回滚 API 的承诺。
 
 平台当前已实现 epoch、协议校验、提交回执与历史恢复元数据，具体支持范围见上文及各组件集成文档。无 Redis 时使用单进程广播和 presence；配置 Redis 后，文档更新、服务端刷新、权限失效、通知和 presence 跨实例传播。数据库提交仍是 ACK 边界和正文事实来源，Redis 重连后由服务端向本实例活动房间重新下发权威状态，不把 Pub/Sub 当持久日志，也不在 Redis 故障时静默退回本机总线。
 
-后续仍需组件和平台共同落地：正式组件选区 API、持久离线队列、Excel 稳定区域评论锚点和统一回滚能力。组件未导出的能力仍属于目标契约，Excel 基线验证继续保留。
+后续仍需组件和平台共同落地：正式组件选区 API、持久离线队列和跨格式统一回滚能力。组件未导出的能力仍属于目标契约，Excel 基线验证继续保留。
 
 现有服务协议仍见 [collaboration.md](collaboration.zh-CN.md)。该文档是下一阶段统一契约，不代表上面字段和能力都已发布。
 

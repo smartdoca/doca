@@ -2,7 +2,7 @@
 
 [中文](user-guide.zh-CN.md)
 
-Complete the [quick start](quickstart.md), sign in, and create your first document or library. An administrator manages the site; ownership and collaboration grants determine access to individual resources.
+Read [capabilities and limits](features.md) for the default host and independent plugin boundary. Complete the [quick start](quickstart.md), sign in, and create your first document or library. An administrator manages the site; ownership and collaboration grants determine access to individual resources.
 
 ## Documents and libraries
 
@@ -24,9 +24,9 @@ Use personal files or shared folders for ordinary files. Downloads pass authoriz
 
 Comments support replies, mentions, resolving, and notifications according to resource access. Temporary collaboration cursors are separate from permanent comment anchors. [Comments and notifications](comments-and-community.md) describe visibility and supported behavior.
 
-## Notes and knowledge
+## Knowledge and AI
 
-[Quick notes](quick-notes.md) capture private text and attachments and can be organized into documents. [Knowledge curation](knowledge-studio.md) organizes authorized sources into a maintained library. Q&A assistants retrieve permitted sources; [Q&A sharing](knowledge-sharing.md) controls who can use an assistant.
+[Knowledge curation](knowledge-studio.md) organizes authorized sources into a maintained library. Q&A assistants retrieve permitted sources; [Q&A sharing](knowledge-sharing.md) controls who can use an assistant.
 
 The personal AI assistant can use authorized documents and files. Attached references and session approvals narrow the scope; they do not expand your own permissions. Model and service availability depend on administrator configuration.
 

@@ -28,7 +28,7 @@ Stop and read the matching [release requirements](releases/0.1.10.md). Doca 0.1.
 docker compose config --quiet
 docker compose ps
 docker compose logs --tail=100 doca
-curl -fsS http://127.0.0.1:39120/health
+curl -fsS -H 'Host: doca.example.com' http://127.0.0.1:39120/health
 ```
 
 Run these on the server in the checkout containing `compose.yaml`. Do not publish logs containing secrets. For source development use `http://127.0.0.1:39130` and the development configuration.
@@ -44,3 +44,5 @@ An ordinary `docker compose restart` preserves the persistent volume. Configurat
 ## Why is a plugin or an external service unavailable?
 
 Plugin packages must satisfy the current SDK and storage contract. Restart every instance manually after installation changes. Plugins using encrypted credentials need the same persistent master key on every replica. AI, SSO, search, and cloud-storage availability also depends on real credentials and network connectivity; source tests do not establish live-service acceptance. See [plugin deployment](plugin-deployment.md).
+
+Use the actual configured host in the health command above. A 421 indicates a Host mismatch, including when probing loopback. No proxy is trusted by default; shared proxy IP limits require a narrowly configured `DOCA_TRUST_PROXY`.

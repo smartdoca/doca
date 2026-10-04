@@ -7,13 +7,14 @@ Doca is a document and knowledge workspace for individuals and small teams. This
 ## Get started
 
 - [Quick start](quickstart.md): clone → configure `.env` → pull the image → start → initialize the administrator password.
+- [Capabilities and limits](features.md): core features, independent plugins, and unavailable capabilities.
 - [Configuration](configuration.md): required settings and optional services.
 - [User guide](user-guide.md): documents, libraries, files, search, and AI.
 - [FAQ and troubleshooting](faq.md).
 
 ## User guides
 
-[Documents and sharing](document-experience.md) · [Permissions](permission-inheritance.md) · [Discovery and collections](public-resource-discovery.md) · [Comments and notifications](comments-and-community.md) · [Quick notes](quick-notes.md) · [Knowledge curation](knowledge-studio.md) · [Q&A sharing](knowledge-sharing.md)
+[Documents and sharing](document-experience.md) · [Permissions](permission-inheritance.md) · [Discovery and collections](public-resource-discovery.md) · [Comments and notifications](comments-and-community.md) · [Knowledge curation](knowledge-studio.md) · [Q&A sharing](knowledge-sharing.md)
 
 ## Deployment and operations
 

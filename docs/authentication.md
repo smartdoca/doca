@@ -22,9 +22,9 @@ Under Admin, Sign-in and registration, each entry is configured separately:
 | Enterprise OIDC | Only an already linked identity can sign in | The first sign-in creates a user | The first sign-in creates a pending user |
 | Google, GitHub, WeChat, QQ | Only an already linked identity can sign in | The first sign-in creates a user | The first sign-in creates a pending user |
 
-An active user who is already linked is not blocked by "closed registration" and can still link another identity. A user an administrator creates is active immediately. A pending user has no site session and cannot open documents or the WebSocket. An administrator filters Pending on the user page and approves, or rejects and disables. After approval the person signs in again. An old authorization flow is not activated.
+An active user who is already linked is not blocked by "closed registration" and can still link another identity. A user an administrator creates is active immediately. A pending user has no site session and cannot open documents or the WebSocket. An administrator uses the dedicated registration-review page to approve or reject. Ordinary user enable/disable cannot approve a pending account. After approval the person signs in again. An old authorization flow is not activated.
 
-External registration and every identity provider start disabled. The password entry stays available so an identity-provider outage cannot lock the administrator out. Contact verification, phone-code sign-in, and password recovery exist. Code sending and attempt limits use the shared database. Older password-login limits are still per process. SMS has its own admission rule. A third-party source can override the category policy.
+External registration and every identity provider start disabled. The password entry stays available so an identity-provider outage cannot lock the administrator out. Contact verification, phone-code sign-in, and password recovery exist. Code sending and attempt limits use the shared database. Password-login and public-bot IP limits use process-local counters without Redis and shared counters when Redis is configured. SMS has its own admission rule. A third-party source can override the category policy.
 
 When sign-in methods change, the server checks every active user and administrator against enabled methods, verified contacts, password identifiers, and provider credentials. If anyone would have no usable method after the change, the save is rejected. An administrator can first choose a new method under "require users to add a sign-in method". The next time those users open the site they must verify or link it. The old method is closed only after everyone has finished. Adding a method does not force its use by default.
 
@@ -94,7 +94,9 @@ The prefix is `/api/v1`. Writes must match Origin.
 | POST /auth/password/setup | Recent verification | `{password}` of 12–128 characters, first setup only, revokes other sessions |
 | DELETE /me/identities/:id | Recent verification | Unlink. The last usable method is protected |
 | GET /admin/users?status=pending | Administrator | Filter and page active, pending, or disabled |
-| PATCH /admin/users/:id | Administrator | status active approves. disabled rejects or disables and revokes sessions |
+| GET /admin/registration-reviews | Administrator | Paginated pending/approved/rejected reviews |
+| POST /admin/registration-reviews/:id | Administrator | `{decision:"approved"\|"rejected",message?}` |
+| PATCH /admin/users/:id | Administrator | Ordinary active/disabled users only; pending returns 409 |
 
 `POST /auth/register` adds `status`. Pending tells the person to wait and does not sign them in.
 

@@ -190,7 +190,7 @@ HTTP 注册默认限制请求体 1 MiB；需要附件等大请求的单条路由
 
 ## 统一内容：读取、搜索与知识库订阅
 
-使用 `@smartdoca/plugin-sdk@^0.1.3`。从 `@smartdoca/plugin-sdk/content` 导入 `contentServiceToken` 与 `ContentSource` 类型，在 `injections.required` 声明服务，并在 mount 中注册来源。来源归属注册它的插件；内置文档和文件也使用这套契约。
+使用 `@smartdoca/plugin-sdk@^0.1.9`。从 `@smartdoca/plugin-sdk/content` 导入 `contentServiceToken` 与 `ContentSource` 类型，在 `injections.required` 声明服务，并在 mount 中注册来源。来源归属注册它的插件；内置文档和文件也使用这套契约。
 
 | 成员                                          | 契约                                                                                                                                                                       |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -229,7 +229,7 @@ Web 与受限移动 WebView 复用插件 Web 产物。`@smartdoca/plugin-sdk/web
 
 ## 公共读取与多位置展示（SDK 0.1.4）
 
-新增用户目录、原生文档快照、知识库目录、`host.platform`、`host.ui` 及可选 commands/views/placements 的实际导出和接入示例见[插件公共读取与多位置展示](plugin-extensions.md)。使用新方法的插件声明最低 `sdkRange: "^0.1.4"`；当前只注册常规页面的插件无需新增注册。
+新增用户目录、原生文档快照、知识库目录、`host.platform`、`host.ui` 及可选 commands/views/placements 的实际导出和接入示例见[插件公共读取与多位置展示](plugin-extensions.md)。使用新方法的插件声明最低 `sdkRange: "^0.1.9"`；当前只注册常规页面的插件无需新增注册。
 
 ## 模板与素材插件
 

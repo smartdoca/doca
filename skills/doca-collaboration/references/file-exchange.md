@@ -19,17 +19,17 @@ This contract applies to file import/export and conversion-package upgrades acro
 - Export enforces current resource access. Conversion changes no body, selection, undo, presence, or save state and neither waits for nor fabricates ACKs. If the package requires native editing to finish first, the host explicitly finishes it before calling export rather than hiding flush in a pure converter.
 - Cancellation, failures, and late callbacks cannot insert into a different document/selection. The server rechecks access. Aborted upload does not prove server assets rolled back; document temporary-resource cleanup.
 
-## Product matrix recorded on 2026-09-12
+## Product matrix recorded on 2026-10-04
 
 | Format | Import | Export | Accepted limitations |
 | --- | --- | --- | --- |
-| Rich text | DOCX, MD/Markdown | DOCX, MD | Simplified complex layout; custom objects may degrade to readable text; no legacy DOC |
+| Rich text | DOCX, MD/Markdown, PDF | DOCX, MD, PDF | Simplified complex layout; custom objects may degrade to readable text; no legacy DOC |
 | Spreadsheet | XLSX | XLSX | Basic values, formula text, multiple sheets, styles; images/attachments/business identities may degrade with warnings |
-| Markdown | UTF-8 MD/Markdown | Original MD | Retains resource references without offline asset packaging |
+| Markdown | UTF-8 MD/Markdown, PDF converted to Markdown | MD, PDF | Retains resource references without offline asset packaging |
 | Canvas | PNG/JPEG/WebP/SVG assets | PNG/SVG | Imports image assets rather than reconstructing native layers; no editable-model roundtrip promise |
-| Presentation | Delivery unconfirmed | Delivery unconfirmed | Do not enable entries based on an upcoming readiness claim |
+| Presentation | PPTX, at most 30 MB | PPTX | Basic text, shapes, tables, images; complex masters/animations may simplify; no legacy PPT |
 
-Inspected interfaces: slatetsx 0.4.0 `/conversion` importDocument/exportDocument; exlsx rc.5 `/xlsx` xlsxToSnapshot/snapshotToXlsx returning result objects; exmd 0.4.1 importMarkdownFile/exportMarkdownFile; aidcanvas 0.4.0 `/io` and handle.exportFile. When reusing a version number, use a hash-named package and update the lockfile. Accept installed artifacts rather than source README claims alone.
+Installed packages: `@smartdoca/slate` 0.4.12, `@smartdoca/sheet` 0.2.0-rc.17, `@smartdoca/markdown` 0.4.3, `@smartdoca/canvas` 0.4.2, `@smartdoca/slides` 0.3.0-alpha.2. Import dispatch is in `apps/web/src/features/documents/file-transfer.tsx`; exports use the respective host editor adapters. PDF import recognizes/converts content and reuploads assets; it does not preserve original page layout. Reused versions need hash-named artifacts and lockfile updates. Independent applications and complex files still need individual acceptance.
 
 ## Acceptance evidence
 

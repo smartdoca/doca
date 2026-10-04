@@ -28,11 +28,13 @@ cp docker.env.example .env
 
 0.1.10 拒绝旧数据库基线、插件安装清单、SDK 范围和存储配置。保留旧部署及原数据，为新版使用新空数据库和独立存储，不提供自动转换或迁移。见[发行要求](releases/0.1.10.md)。
 
-`DOCA_ORIGIN` 是用户在浏览器里打开的地址。生产环境拒绝不是 HTTPS 的值。不要加路径、查询参数或末尾斜杠。
+`DOCA_ORIGIN` 是用户在浏览器里打开的地址。生产环境拒绝不是 HTTPS 的值。不要加子路径、查询参数或片段；根路径末尾斜杠会被规范化。
 
 ```text
 DOCA_ORIGIN=https://docs.example.com
 ```
+
+Docker 示例已经提供必填存储值；首次单机部署修改来源即可，PostgreSQL、Redis 和插件凭证密钥是条件配置。默认值、S3 必填字段及独立 Webhook/AI 存储见[配置说明](configuration.zh-CN.md)。
 
 ## 启动
 
@@ -47,8 +49,10 @@ docker compose up -d
 
 ```sh
 docker compose ps
-curl -fsS http://127.0.0.1:39120/health
+curl -fsS -H 'Host: docs.example.com' http://127.0.0.1:39120/health
 ```
+
+将 `docs.example.com` 替换为配置来源的主机名，非标准端口也需带上。镜像内置探针已经携带正确 Host，等待 `docker compose ps` 显示 `healthy`。直接以回环地址 curl 会返回 421。
 
 健康的进程返回 `{"status":"ok","version":"0.1.10"}`。
 
@@ -66,7 +70,7 @@ docs.example.com {
 
 Caddy 默认代理 WebSocket 升级。Nginx 需要在 `/api/v1/ws` 上设置 `Upgrade` 和 `Connection` 头。
 
-代理从本机回环地址连入时，不要设置 `DOCA_TRUST_PROXY`。Doca 已经信任来自回环地址的转发头。
+`DOCA_TRUST_PROXY` 默认空值，不信任任何转发头，回环连接也不例外。需要审计和限流识别真实客户端 IP 时，只配置应用实际看到的代理 IP/CIDR。Docker 桥接可能让宿主机代理表现为桥接网关，而非 `127.0.0.1`，应先核对网络。未配置时代理后的用户可能共享代理 IP 的限流额度。
 
 如果另一台机器上的负载均衡器连到这台主机，把容器端口发布到内网接口，而不是只绑定回环地址，并把 `DOCA_TRUST_PROXY` 设为该负载均衡器的 IP 段。不要信任整个公网。
 
@@ -116,4 +120,4 @@ https://cdn.example.com/doca/0.1.10/assets/index-abc.js
 
 `index.html` 使用 `Cache-Control: no-cache`，发版后重新打开会拿到新页面。`/assets/` 下带哈希的文件使用 `Cache-Control: public, max-age=31536000, immutable`，缓存一年。内容变化时文件名会变，所以拿到新 HTML 之后不会继续用旧脚本。`DOCA_ASSET_BASE` 前面的 CDN 也要对这些带哈希的文件使用同样的长期缓存。
 
-本版宿主 0.1.10 / SDK 0.1.9 提供托管插件凭证，需设置 `DOCA_CREDENTIAL_MASTER_KEY`；credentials-v2 数据库基线拒绝 0.1.9 和更早的库，不自动迁移，保留原部署和数据并使用新空数据库。Compose 转发数据库与云存储环境变量，见 [配置示例](../docker.env.example)、[凭证部署说明](plugin-credentials.md)和[发行说明](releases/0.1.10.md)。
+本版宿主 0.1.10 / SDK 0.1.9 提供托管插件凭证，仅安装要求凭证服务的插件时才需设置 `DOCA_CREDENTIAL_MASTER_KEY`，核心启动不需要该项；credentials-v2 数据库基线拒绝 0.1.9 和更早的库，不自动迁移，保留原部署和数据并使用新空数据库。Compose 转发数据库与云存储环境变量，见 [配置示例](../docker.env.example)、[凭证部署说明](plugin-credentials.md)和[发行说明](releases/0.1.10.md)。

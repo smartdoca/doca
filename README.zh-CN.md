@@ -14,6 +14,8 @@ Doca 是面向个人和小团队的开源文档与知识工作台。一次部署
 - 单服务器使用 SQLite；多副本使用共享 PostgreSQL、Redis 和文件存储。
 - 通过公开 `@smartdoca/plugin-sdk` 开发业务插件。
 
+默认镜像不安装随手记、邮箱、日历、会员或内容审核插件。模板和素材需要单独安装提供者，详见[功能与边界](https://smartdoca.github.io/doca/#/zh-cn/getting-started/features)。
+
 ## Docker 快速开始
 
 需要 Git、Docker Engine、Docker Compose，以及通过反向代理提供 HTTPS 的域名。本流程在新空数据库中安装已发布的 0.1.10 镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.10)并保留原数据。
@@ -33,7 +35,7 @@ docker compose pull
 
 # 4. 启动并检查健康状态
 docker compose up -d
-curl -fsS http://127.0.0.1:39120/health
+docker compose ps
 
 # 5. 初始化管理员账号和密码
 bash scripts/bootstrap-admin.sh

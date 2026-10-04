@@ -29,7 +29,7 @@ DOCA_FILE_STORE_ID=local
 DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root":"/data/storage"}}}'
 ```
 
-The origin must have no path, query, fragment, or trailing slash. Keep `/data/storage` inside the container's persistent volume. `docker.env.example` is for Docker; `.env.example` is for [source development](development.md).
+Use only the origin, without a subpath, query, or fragment. A root trailing slash is normalized. Keep `/data/storage` inside the container's persistent volume. `docker.env.example` is for Docker; `.env.example` is for [source development](development.md).
 
 Configure a reverse proxy on the same server. For example, with Caddy:
 
@@ -54,7 +54,6 @@ Compose uses `docker.io/smartdoca/doca:0.1.10`. This step downloads the prebuilt
 ```sh
 docker compose up -d
 docker compose ps
-curl -fsS http://127.0.0.1:39120/health
 ```
 
 Wait for the container to become healthy. The health response is:

@@ -1,62 +1,60 @@
-# Quick notes
+# 随手记
 
-[中文](quick-notes.zh-CN.md)
+入口为 `#/notes`，位于 AI 助手下方，使用 Feather 羽毛笔图标。桌面左侧是每条随手记的标题（没有正文时用创建时间），右侧是正文；窄屏先显示列表，点进一条后再看正文。标题放在和工作区顶栏同一行，和文件夹、邮箱一样，悬浮图标跟在标题后面；左列从搜索和新建开始。打开悬浮窗口后，随手记页面留空，内容都在窗口里：搜索和新建在最上，其下是全部与已删除，点进一条后用返回图标回到列表。再点侧栏「随手记」会让悬浮窗口闪一下。窗口可拖拽、改大小、折叠或关闭。位置、大小和开启状态记在 `ui.notesFloat` 页面状态里，和邮箱草稿同一套偏好，网页与助手写入都会生效。默认工具仅图片、待办、附件和格式展开按钮。文字格式包含粗体、斜体、删除线、两种列表和链接。正文保留图片及附件，支持搜索、多选整理、删除和恢复。
 
-The `#/notes` entry sits below the personal AI assistant. Desktop uses a title list on the left and an editor on the right; narrow screens show the list before opening an item. A note without text uses its creation time as its title. The title shares the workspace header layout used by folders and mail, with the floating-window action beside it. The list begins with search and creation.
+## 保存和权限
 
-Opening the floating window moves note content into it and leaves the page empty. Search/create appear above All and Deleted; a back action returns from a note to the list. Selecting Notes in the sidebar flashes the existing window. The window can be moved, resized, collapsed, and closed. Position, size, and open state are stored in `ui.notesFloat` page state and respond to Web and assistant changes. Default tools are image, task, attachment, and expanded formatting. Formatting includes bold, italic, strikethrough, two list types, and links. Content preserves images/attachments and supports search, multi-selection compilation, deletion, and restore.
+- 独立 `quick_notes` 表，普通 JSON 保存，不加入文档目录、公共搜索、Yjs 房间、评论或协作在线状态。
+- 所有读写以当前登录用户为所有者校验；管理员不能通过普通接口读取别人的卡片，私人附件也不能通过审计下载入口绕过所有者检查。
+- 新建使用客户端 UUID 和幂等 PUT；编辑使用版本号 PATCH，900ms 防抖，仅实际内容变化保存，关闭编辑区会提交待保存内容。重复回执不重复加版本，冲突保留本地草稿供用户与云端内容合并。
+- 浏览器草稿按账号和卡片隔离，刷新后恢复。草稿缓存不是离线同步队列，也不承诺清理浏览器数据后仍可恢复。附件需要在线上传。
+- 单卡最多 3 万字/128KB，最多 12 个图片附件；单文件沿用平台上传与用户等级限制，上限 20MB。使用 slatetsx 原生编辑与只读渲染，保留段落样式、富文本、链接、待办、代码块、图片、附件。表格、分列和图表等复杂粘贴结构降为文字。
+- `assets.purpose = note_attachment`，上传时所有者私有，卡片保存时绑定 `note_id`；下载始终鉴权并使用 private/no-store，不跳转 CDN。删除为软删除，所有者仍可在已删除列表查看和恢复。
 
-## Saving and permissions
+## 整理成文档
 
-- `quick_notes` stores ordinary JSON separately from document trees, public search, Yjs rooms, comments, and collaborative presence.
-- Every read/write checks the signed-in owner. Administrators cannot read others' notes through ordinary APIs; audit download routes cannot bypass private attachment ownership.
-- Creation uses a client UUID and idempotent PUT. Editing uses version-checked PATCH, a 900 ms debounce, and actual content changes only. Closing the editor submits pending content. Duplicate receipts do not increment versions twice. Conflicts retain the local draft for merging with cloud content.
-- Browser drafts are isolated by account and note and restored after refresh. They are not an offline synchronization queue and are not guaranteed after browser-data cleanup. Attachments require online uploads.
-- Each note is at most 30,000 characters / 128 KB with at most 12 image/attachment references. Each file follows platform upload and account limits, up to 20 MB. Native slatetsx editing/readonly rendering retains paragraphs, rich text, links, tasks, code, images, and attachments. Complex pasted tables, columns, and charts degrade to text.
-- `assets.purpose = note_attachment`; an upload is owner-private and saving binds `note_id`. Download always authenticates, uses private/no-store, and never redirects to a CDN. Deletion is soft; the owner can read and restore deleted notes.
+1. 选择 1–20 条记录，指定整理要求和已有 AI 模型。
+2. 服务端验证记录版本和所有权，固定本次选中内容快照，按既有模型额度和计费执行一次受限生成。不向模型提供其他记录、联网工具或附件二进制。
+3. 预览结果，可编辑正文后保存。原始记录保留；最近 30 次整理可在“整理记录”重新打开。
+4. 通过既有文档创建和原生导入流程生成私人富文本文档，关闭访问申请、分享链接，且不继承部署的公开默认值。第一版不提供知识库目标选择。
+5. 图片附件随文保留，不声称解析其内容。文档使用独立资产记录和权限，原始私人附件的授权不变。不可变存储对象可以复用，未来物理清理必须检查同一 `profile_id/object_key` 的全部引用，不能按单一资产行直接删对象。
 
-## Compile into a document
+`quick_note_compilations` 持久化输入快照、状态和成果。相同请求 ID 不重复调用模型；相同保存请求不重复创建文档。生成最长 90 秒，重启/超时后从历史读取会显示中断，用户可重新选择记录发起整理；首版没有后台任务自动恢复。修改预览是当前页面草稿，保存文档后成为持久成果。失败不修改原始随手记。
 
-1. Select 1–20 notes, an instruction, and an available AI model.
-2. The server checks ownership and versions, freezes the selected snapshots, and runs one bounded generation under existing model quotas/rating. It supplies no other notes, network tools, or attachment bytes.
-3. Preview and edit the result before saving. Original notes remain. The latest 30 compilations can be reopened.
-4. Existing document creation/native import creates a private rich-text document, disables access requests/share links, and does not inherit the deployment's public defaults. The initial version does not choose a library target.
-5. Image attachments remain with the document without claiming to analyze their contents. The document receives independent asset records/permissions; original private attachments keep their grants. Immutable objects may be reused. Future physical cleanup must check every reference to the same `profile_id/object_key`, rather than deleting by one asset row.
-
-`quick_note_compilations` persists input snapshots, state, and results. Repeated request IDs do not call the model twice; repeated save requests do not create duplicate documents. Generation is limited to 90 seconds. History reports interruption after restart/timeout; users select notes again to start another compilation. There is no automatic background recovery. Preview edits remain a page draft until document saving persists the result. Failure does not alter original notes.
-
-Generated Markdown is converted only into supported native paragraphs, headings, lists, and safe links. HTML, generated image URLs, and internal resource links are not imported as trusted nodes. Private source provenance remains in compilation records and is not embedded in a document that might later be shared.
+AI 生成的 Markdown 仅转换为受支持的原生段落、标题、列表和安全链接，HTML、模型生成的图片 URL、内部资源链接不作为可信节点导入。私人来源追溯保存在整理记录中，不嵌入可能后续被分享的文档正文。
 
 ## API
 
-`quick_notes`, `quick_note_compilations`, and `assets.note_id` belong to the current database baseline.
+`quick_notes`、`quick_note_compilations` 和 `assets.note_id` 直接包含在当前数据库基线中。
 
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /api/v1/quick-notes?q=&trash=0&offset=0` | Owner list, 30 items per page, newest creation first |
-| `GET /api/v1/quick-notes/:id` | Read a note, including the owner's deleted notes |
-| `PUT /api/v1/quick-notes/:id` | Idempotent creation with `content`, `assetIds` |
-| `PATCH /api/v1/quick-notes/:id` | Save those fields plus optimistic-lock `version` |
-| `POST /api/v1/quick-notes/:id/trash` | Delete/restore with `version`, `deleted` |
-| `POST /api/v1/assets?purpose=note_attachment&filename=…` | Private attachment upload |
-| `POST /api/v1/quick-notes/compilations` | `id`, `notes: [{id, version}]`, `instruction`, `modelId` |
-| `GET /api/v1/quick-notes/compilations` | Current user's latest compilations |
-| `GET /api/v1/quick-notes/compilations/:id` | State, preview, frozen inputs |
-| `POST /api/v1/quick-notes/compilations/:id/document` | Save preview `markdown` |
+| 接口                                                     | 用途                                                     |
+| -------------------------------------------------------- | -------------------------------------------------------- |
+| `GET /api/v1/quick-notes?q=&trash=0&offset=0`            | 所有者列表，30 条分页，按创建时间倒序                    |
+| `GET /api/v1/quick-notes/:id`                            | 读取单卡，含本人已删除卡片                               |
+| `PUT /api/v1/quick-notes/:id`                            | 幂等新建，`content`、`assetIds`                          |
+| `PATCH /api/v1/quick-notes/:id`                          | 同上另加 `version`，乐观锁保存                           |
+| `POST /api/v1/quick-notes/:id/trash`                     | `version`、`deleted`，删除或恢复                         |
+| `POST /api/v1/assets?purpose=note_attachment&filename=…` | 私人附件上传                                             |
+| `POST /api/v1/quick-notes/compilations`                  | `id`、`notes: [{id, version}]`、`instruction`、`modelId` |
+| `GET /api/v1/quick-notes/compilations`                   | 本人最近的整理记录                                       |
+| `GET /api/v1/quick-notes/compilations/:id`               | 状态、预览和固定输入快照                                 |
+| `POST /api/v1/quick-notes/compilations/:id/document`     | 保存预览，`markdown`                                     |
 
-## Verification
+## 验证
 
-- `tests/quick-notes.test.ts` uses isolated databases to cover ownership/admin isolation, authorized attachments, restoration, validation, idempotency, conflicts, selected snapshots, usage rating, failure recovery, private native documents, and attachment copies.
-- `scripts/qa-quick-notes-server.mts` uses an in-memory database, temporary attachments, a simulated model, port 39252, and requires `DOCA_QA_ISOLATED=1`.
-- `scripts/qa-quick-notes-ui.cjs` checks layout, collapsed formatting, rich content/attachments, autosave, conflict merging, AI preview/creation, deletion/restore, narrow-screen overflow, and absence of collaborative writes. `PLAYWRIGHT_MODULE` selects the browser library.
-- Write acceptance uses neither user documents nor real model keys. Real output quality depends on the configured provider/model.
+- `tests/quick-notes.test.ts`：隔离数据库中的所有者权限、管理员隔离、鉴权附件、恢复、输入验证、幂等、并发冲突、选定输入快照、计费、失败恢复、私人原生文档及附件副本。
+- `scripts/qa-quick-notes-server.mts`：专用内存数据库、临时附件、模拟模型，端口 39252，必须设置 `DOCA_QA_ISOLATED=1`。
+- `scripts/qa-quick-notes-ui.cjs`：使用上述服务验证左右布局、默认收起格式、富文本/附件、自动保存、冲突合并、AI 预览和生成、删除恢复、移动端无横向溢出及无协作写入。通过 `PLAYWRIGHT_MODULE` 指定可用浏览器运行库。
+- 不使用用户文档或真实模型密钥做写入验收。真实供应商输出质量仍取决于用户配置的模型。
 
-## Lightweight editor integration (2026-09-16)
+## slatetsx 轻量接入（2026-09-16）
 
-`RichTextEditor` uses standalone `initialValue`, without `value` or `collaboration`. Save receipts are not fed back into the editor, preserving selection and undo. Stable independent `resources` and `plugins` use SDK upload commands/callbacks. The host owns asset metadata; body content stores resource UUIDs. The server checks that every reference belongs to the owner and is in the note's asset set.
+- `RichTextEditor` 使用非协同 `initialValue`，不传 `value` 或 `collaboration`；保存回执不回灌编辑器，保持选区与撤销栈。
+- 使用独立稳定的 `resources` / `plugins`，上传走 SDK commands 与资源回调。资源元数据由宿主维护，正文仅存资源 UUID，服务端检查正文引用均包含在卡片资产集合中且归本人所有。
+- 当前编辑器通过 `insertMenu?: readonly BlockType[]` 配置斜杠菜单及块菜单的插入项目，通过 `ariaLabel` 提供区域标签。文字属性、浮动格式工具、拖拽和撤销均使用当前 SDK。
+- Doca 仅开放正文/标题/列表/引用/待办/代码/分割线/图片/附件；复杂粘贴结构由宿主插件转为文字，保存仍经严格校验。未通过校验、上传未完成或失败时阻止提交，避免仅保存上一次有效内容。
+- 右侧正文区占满剩余高度并在内部滚动。SDK 文档页的最小高度与留白仅在随手记作用域覆盖；只读展示时裁掉首尾空段落，不改持久化内容。
 
-`insertMenu?: readonly BlockType[]` controls slash/block insertion and `ariaLabel` labels the region. Formatting, floating tools, dragging, and undo use the current SDK. Doca allows body text, headings, lists, quotes, tasks, code, dividers, images, and attachments. A host plugin converts complex paste to text. Strict save validation blocks invalid content and incomplete/failed uploads instead of saving only the last valid projection.
+点左侧标题即在右侧编辑，修改自动保存。新建在有内容后也会自动保存；保存失败或版本冲突时保留编辑状态及本地草稿。编辑区隐藏逐行悬浮操作，并收回左侧工具栏占位；选中文字的格式浮层继续保留。
 
-The right editor fills remaining height and scrolls internally. Minimum-height/spacing overrides are scoped to notes. Readonly display trims leading/trailing empty paragraphs without rewriting persistence. Clicking a title edits it on the right; changes autosave. New notes save once they have content. Save failures/conflicts preserve edit state and local drafts. Per-line floating controls and reserved left-toolbar space are hidden, while selection formatting remains.
-
-Bulk selection supports at most 20 notes, select-all/clear, compilation, and deletion. Single/bulk deletion confirms restorability and checks each version. Partial failure removes only successful items, keeps failed ones, reports the count, and permits retry after refresh.
+列表工具栏的批量选择进入勾选模式（最多 20 条），提供全选/清空、整理及删除所选。单条与批量删除均需确认并说明可恢复；每条删除仍检查版本。批量部分失败时，仅移除已成功记录，保留失败记录并报告数量，刷新后可重试。

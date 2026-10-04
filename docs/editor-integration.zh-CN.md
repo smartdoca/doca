@@ -1,75 +1,47 @@
-# 文档接入与内容发现（2026-09-11）
+# 编辑器集成与文件交换
 
 [English](editor-integration.md)
 
-## 本轮落地
+当前宿主 0.1.10 已接入五种编辑器。按安装包真实导出使用接口，目标能力与未实现项不能作为已有 API；详细职责见[接入参考](../skills/doca-editor-integration/references/integration.md)及[协同契约](collaboration-sdk-contract.zh-CN.md)。
 
-- 知识库设置只保留顶部标题和所有者信息，左侧知识库名称后提供收藏。主页分为收藏文档、收藏知识库。
-- 切换知识库时先加载正确上下文，只挂载知识库文档树；个人文档打开为独立页面，不展示左侧目录。列表绑定查询标识，不复用上一类资源的结果。
-- 内部文档引用、用户提及使用平台行内原子组件，保留 SDK 的 link 编码；引用存 `#/r/{资源 UUID}`，不是当前域名。可整体删除/复制，点击直接导航。
-- 点赞上方展示本文引用和引用本文。只统计当前请求用户能读取的文档，包括匿名公开访问；撤权和删除后不泄露标题、ID 或隐藏数量。
-- 文档标题单行省略，后面展示重叠在线头像及完整成员列表。使用已有 presence 消息，不创建另一条协同连接；用户数量去重，会话光标仍分别处理。
-- 固定工具栏新增超链接设置/移除；查找面板可展开单个替换、全部替换。只读/离线/演示模式不提供替换。替换走编辑器模型和本地协同事务，可撤销，不修改 DOM。
-- 上传进度采用 SDK 的 0～1；视频、图片、附件共用鉴权上传。下载使用鉴权后的 `?download=1`，明确 attachment，不把图片下载误当预览，也不绕过 ACL。
+## 已安装包与宿主适配
 
-## 访问与主动展示分离
+| 格式 | 当前安装包 | 宿主入口 |
+| --- | --- | --- |
+| 富文本 | @smartdoca/slate 0.4.12 | document-editor.tsx |
+| Markdown | @smartdoca/markdown 0.4.3 | markdown-editor.tsx |
+| 表格 | @smartdoca/sheet 0.2.0-rc.17 | spreadsheet-editor.tsx |
+| 画布 | @smartdoca/canvas 0.4.2 | canvas-editor.tsx |
+| 幻灯片 | @smartdoca/slides 0.3.0-alpha.2 | presentation-editor.tsx |
 
-管理员入口：用户可见范围 → 授权与内容展示。
+入口位于 [文档 feature](../apps/web/src/features/documents)。包负责模型、编辑命令、撤销、格式渲染、选择与转换；宿主负责身份、ACL、上传下载、引用、用户卡片、导航、评论和协同连接。语言只影响界面，不翻译用户正文，不重建编辑器。
 
-| 设置           | 默认           | 行为                                            |
-| -------------- | -------------- | ----------------------------------------------- |
-| 新协作者       | 直接授权       | 可切换接受邀请后生效；不倒退撤销已有权限        |
-| 分享给我的文档 | 交互后展示     | 直接文档授权 + 已打开或接受；可改授权生效即展示 |
-| 协作知识库     | 授权生效即展示 | 可改打开/接受后展示；所有者始终展示             |
-| 公开知识库     | 不主动展示     | 可开启本站公开知识库目录                        |
+## 引用、资源与查找
 
-公开文档不会仅因公开进入分享列表。有阅读权限的文档仍可搜索。整库协作获得的子文档不计作直接分享；单独对某篇文档显式授权则计入。收藏与最近访问继续按自己的操作及当前权限展示。
+内部文档引用保存稳定 UUID 和 `#/r/{id}` 相对位置；提及保留用户 UUID，候选使用当前用户目录策略。引用及反向引用按当前阅读权过滤，引用本身不授予访问权。
 
-待处理分享位于主页“与我共享”和知识库列表的独立入口，不混入文件列表。直接授权在打开之前可接受加入列表；邀请授权接受前不产生额外权限（原有公开阅读权限不受影响）。拒绝删除该显式授权，不影响其他来源权限；撤回后不能再接受。邀请通知只透露定向邀请资源的必要标题，不使其他无权限通知可见。
+图片、附件和素材使用宿主资源回调。上传进度、取消、错误和迟到回调需绑定原目标；下载通过 `assets/:id/content?download=1` 鉴权，不把物理存储地址当永久引用。
 
-权限记录直接使用当前 `grants` 状态；管理者看到 pending 状态。修改角色不会自动接受。所有接受/拒绝与资源版本变化在事务内完成，避免与权限编辑并发覆盖。
+查找替换通过各编辑器的模型或原生能力完成。富文本使用宿主 Slate 模型适配；其他格式使用实际安装包提供的 find/replace 或原生面板。只读、断线及演示状态不提供正文替换。没有通用公开编辑器任意修改句柄，不承诺所有格式具有相同文本范围或正则能力。
 
-## 接口
+## 文件导入导出
 
-- `GET /api/v1/admin/distribution`：管理员读取配置及 revision。
-- `PUT /api/v1/admin/distribution`：管理员提交 `{revision, grantMode: direct|invite, sharedDocuments: granted|interacted, libraryMembers: granted|interacted, publicLibraries: boolean}`；旧 revision 返回 409。
-- `GET /api/v1/me/invitations`：当前用户待接受邀请和未访问的直接授权；不返回其他用户邀请。
-- `POST /api/v1/me/invitations/:id`：`{accept: boolean}`；接受或拒绝当前用户的有效显式授权，已撤回/删除返回 404。
-- `GET /api/v1/resources/:id/references`：需能阅读当前资源；返回 `{outgoing, incoming}`，元素 `{id,title,format}`，双向按当前权限过滤。公开资源允许匿名。
-- `GET /api/v1/assets/:id/content?download=1`：按同一资产 ACL 下载，响应 attachment；下载不走预览 CDN 重定向。
+| 格式 | 导入 | 导出与限制 |
+| --- | --- | --- |
+| 富文本 | DOCX、Markdown、PDF | DOCX、Markdown、PDF；复杂布局可能简化，不支持旧 DOC |
+| Markdown | Markdown、PDF（转换） | Markdown、PDF；不打包完整离线素材 |
+| 表格 | XLSX | XLSX；不支持对象可降级并告警，不承诺完整 Office 保真 |
+| 画布 | PNG/JPEG/WebP/SVG 图片素材 | PNG/SVG；导入不恢复原生图层 |
+| 幻灯片 | PPTX（最大 30 MB） | PPTX；基础文字、图形、表格和图片，复杂母版/动画可简化，不支持旧 PPT |
 
-## 数据库与引用一致性
+导入创建新文档和新谱系，资产重新授权绑定；不覆盖正在编辑的文档。转换警告向用户展示。PDF 导出走浏览器/组件生成链路，不代表完整 Office 排版还原。实现见 [file-transfer.tsx](../apps/web/src/features/documents/file-transfer.tsx)，职责和验收见[文件交换契约](editor-file-exchange-contract.zh-CN.md)。
 
-当前基线中的分发与引用结构：
+## 评论与业务扩展
 
-- `distribution_settings(id, config, revision)`：站点策略。
-- `grant_responses(resource_id, user_id, state)`：联合主键，pending/granted/accepted。缺失旧记录仍保持原 grant 生效；pending 不参与 effectiveGrants。
-- `document_references(source_id, target_id)`：唯一有向边，源资源外键，目标为稳定 UUID（可保留删除/暂不可访问目标的关系）；target 索引支持反向查询。
+永久锚点与在线光标不同。五种格式按各自协议提供内容评论；表格使用稳定行列 ID 与原生 capture/resolve/reveal 方法，校验结构变化与已删除目标。未知插件元素保留原有不透明数据并展示错误占位，不自动转换或删除。
 
-写入正文的同一事务更新引用边，删除引用会删除边。导入和副本创建也在写入事务中生成引用边；读取路径只查询当前索引，不执行数据修复。
+模板、素材和文档元素由已安装提供者贡献，默认没有提供者。富文本原子行内和表格整单元格插件元素已实现，不提供通用块或表格浮动对象。见[元素契约](plugin-editor-elements.zh-CN.md)和[模板素材](creation-resources.zh-CN.md)。
 
-## 组件边界与后续复用
+## 验证范围
 
-全局与仓库已提供 `$doca-editor-integration`，与 `$doca-collaboration` 配套。完整约定见 [接入参考](../skills/doca-editor-integration/references/integration.md)。它区分已经存在的 slatetsx props/commands 与其他模块待实现的能力，不把理想接口当成已发布 API。
-
-查找定位、替换、撤销最终应封装在各自编辑器包里，平台统一面板/快捷键/权限。目前 slatetsx 未导出完整 find/replace 能力，Doca 使用 Slate 模型适配器；Excel 后续包装原生能力，不复用 Slate 范围。当前支持字面量、不区分大小写搜索；不提供正则。原子引用不参与文本替换。文档展示高亮仍基于已渲染视图，大规模虚拟化应采用包的模型查找与 reveal 接口。
-
-本轮未改 slatetsx 上游源码或新建传输协议。仍使用宿主共享 WebSocket/outbox；不宣称持久离线保障、Excel 永久区域锚点或所有类型均已改造。
-
-## 验收
-
-自动测试覆盖：邀请接受/拒绝/撤回、管理员配置权限及 revision、公开/直接/整库权限与主动展示分离、匿名引用过滤、引用增删与旧索引补齐不增加 seq、原子引用 Backspace 与 CRDT 往返、跨格式文字及代码批量替换与撤销、资产下载 ACL。
-
-隔离浏览器验收覆盖：同账号双页编辑和提及、内部引用相对链接与跳转、固定工具栏插入链接、真实 SDK 富文本格式复制粘贴及刷新保留、双向关系、替换后双页一致、知识库首篇/设置与收藏、头像列表、静置 60 秒无新增写入、刷新恢复和主页固定标签。额外修复了异步链接表单被全局菜单按钮处理提前关闭、选区引用被释放的问题。真实中文输入法、所有 Excel 操作、完整断网故障矩阵不属于这轮新增验证结论。
-
-## 插件元素增量（2026-10-02）
-
-宿主源码 0.1.8 和 SDK 0.1.6 实现了 `WebPluginBundle.elements` 与 `plugin-sdk/editor-elements`。这是已实现源码导出，不代表 npm 发布或原生设备验收。`@smartdoca/slate` 0.4.12 提供宿主永久持有的 `custom:plugin-element` 原子行内 codec/renderer；业务注册仅改变注册表查找，不重建编辑器。`@smartdoca/sheet` 0.2.0-rc.17 提供原生 `cellRenderers` 和范围 `setValue(ICellData)`；宿主在 `custom.docaElement` 保存整单元格元素，`v` 保存静态文本。不扩展或强制转换内置 `SpreadsheetCellObject` 联合类型。
-
-配置会话捕获富文本实时范围或稳定的单单元格锚点，重新检查只读状态、提供者及当前目标，通过原生命令和撤销提交。缺失类型、提供者、格式或精确版本时显示错误占位，保留有界的不透明 JSON。现有内部引用读取规则保持原状。不提供兼容适配、自动转换或迁移。通用块、表格浮动对象与任意公开编辑器修改句柄仍未实现。精确字段、限制和安装见仓库 `docs/plugin-editor-elements.md` 与独立示例 `examples/plugin-elements/README.md`。
-
-性能：普通单元格通过属性检查快速返回。验证按不可变 payload/提供者缓存，注册表变化清理画布缓存。仅绘制可见且需计时刷新的单元格时安排视图刷新，频率最多每秒一次；隐藏页面暂停，没有可见计时单元格的表格不运行重复计时器。不持久化跳动数值。第三方渲染器需单独验证 CPU 与网络开销。
-
-## Markdown 初始化修复（2026-10-03）
-
-宿主先将服务端权威 checkpoint 恢复到空副本，再调用当前 Markdown 包的会话工厂。加载期间不再写入客户端元数据，以免首次正文更新依赖从未提交到服务端的 CRDT 项。状态快照保留同一 doc/text/awareness/undo 对象。不改变 schema、epoch 或存储格式，不转换或清空已有待提交编辑。隔离验收覆盖首次编辑持久恢复、远端/初始化无回声、稳定状态句柄，以及浏览器连续输入、跨实例更新、重载和空闲检查。
+升级前核对安装产物的 README、导出类型和 schema；使用隔离文档验证真实文件往返、只读、素材授权、双页同步、回执和重载。不能从单个单元格测试推断全部表格操作收敛，也不能从构建通过推断设备验收完成。早期接入与验收记录保留在[研发资料](research.zh-CN.md)。

@@ -76,3 +76,9 @@ Performance: ordinary cells take a property-check fast path. Validation is memoi
 ## Markdown bootstrap correction — 2026-10-03
 
 The host restores the authoritative checkpoint into an empty replica before calling the shipped Markdown session factory. It no longer stamps local metadata into a loading replica: those unsubmitted CRDT clocks caused the first text update to depend on items absent from the server. Session status snapshots retain the same doc/text/awareness/undo objects. No schema, epoch or persisted-format adapter changes; existing pending edits are preserved and are not silently converted or cleared. Regression acceptance includes first-edit durable restore, no remote/bootstrap echo and stable status handles; browser verification covers typing, cross-instance updates, reload and idle checks on isolated documents.
+
+## Current host inventory — 2026-10-04
+
+Host 0.1.10 integrates `@smartdoca/slate` 0.4.12, `@smartdoca/sheet` 0.2.0-rc.17, `@smartdoca/markdown` 0.4.3, `@smartdoca/canvas` 0.4.2 and `@smartdoca/slides` 0.3.0-alpha.2. Earlier dated artifact inventories above describe their original versions, not the complete current package surface. Current source guides are `docs/editor-integration.md` and `docs/editor-file-exchange-contract.md`.
+
+All five host formats use the shared transport/ACK lifecycle and implement content-comment anchors. Spreadsheet region comments use stable row/column identities with native capture/resolve/reveal and server validation. All formats expose history reads, but only rich text and Markdown support manager restore; other previews report `canRestore:false`. PDF import/export and PPTX import/export are connected in the host. Persistent offline outboxes, a unified cross-format component API and device/service acceptance remain separate gaps. No compatibility behavior, persisted schema or user data is changed by this inventory update.

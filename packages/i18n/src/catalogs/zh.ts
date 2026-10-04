@@ -1109,8 +1109,6 @@ export const zh = {
   "authAdmin.unlinkWarning":
     "解除「{name}」后，该身份将不能再登录当前账号。文档不会被删除。",
   "users.select": "选择 {name}",
-  "users.membershipExpires": "{name}至 · {date}",
-  "users.membershipExpired": "{name}已过期 · {date}",
   "users.resetWarning":
     "为「{name}」设置新密码。对方当前的登录会全部退出。请把新密码告知对方，这里不会再次显示。",
   "users.confirmDisable": "确认停用",
@@ -1593,8 +1591,6 @@ export const zh = {
   "users.loading": "正在加载…",
   "users.noMatches": "没有匹配的用户",
   "users.noMethods": "尚未绑定",
-  "users.membership": "会员",
-  "users.noTimedMembership": "无定时会员",
   "users.admin": "管理员",
   "users.regular": "普通用户",
   "users.resetPassword": "重置密码",
@@ -2494,9 +2490,7 @@ export const zh = {
   "admin.login": "登录与注册",
   "admin.users": "用户管理",
   "admin.registration": "注册审核",
-  "admin.levels": "等级与会员",
   "admin.access": "权限与可见性",
-  "admin.moderation": "内容审核",
   "admin.templates": "文档模板",
   "admin.ai": "AI 能力",
   "admin.recognition": "文件识别",

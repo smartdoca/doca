@@ -34,7 +34,7 @@ Routes are under `/api/v1`:
 - `PUT /admin/users/:id/directory` takes `{mode: "all" | "related" | "none" | null}`. null follows the site again.
 - `GET /me`, `GET /users/:id/profile`, and the administrator user list include `public_id`.
 
-## Comment interaction
+## Rich-text comment interaction
 
 Edit mode appends a comment icon at the end of the editor's floating selection toolbar. Readonly mode shows the comment icon alone, without formatting tools. Submitting requires commenter or higher.
 
@@ -51,6 +51,9 @@ Full-document comments and selection comments share the rich composer: @ search,
 - `POST /assets?purpose=comment_image&resourceId=...&filename=...` uploads bytes, at most 5 MB. The server validates the image and access.
 
 An @ in the document body uses the editor mentions extension. Candidates come from the same scoped lookup. A mention node stores the user UUID, not only the display name.
+
+
+All five formats have permanent comment anchors; the Slate selection details above describe rich text only. Spreadsheet captures stable row/column IDs through its native comment API, resolves current ranges after structural changes, and validates target existence on the server. See [collaboration](collaboration.md).
 
 ## Notifications
 

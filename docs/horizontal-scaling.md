@@ -34,7 +34,7 @@ DOCA_DATABASE_URL=postgresql://user:password@postgres:5432/doca
 DOCA_DATABASE_POOL_MAX=10
 DOCA_REDIS_URL=redis://redis:6379
 DOCA_REDIS_PREFIX=doca-production
-DOCA_TRUST_PROXY=10.0.0.0/8
+DOCA_TRUST_PROXY=10.0.0.10/32
 ```
 
 The orchestrator may set `DOCA_INSTANCE_ID` to the pod or container name. Otherwise each process generates a random id. `DOCA_REDIS_PREFIX` must separate environments that share one Redis. `DOCA_TRUST_PROXY` lists only the reverse proxy addresses or CIDRs. A wider range lets clients forge IPs and break audit and rate limits.
@@ -59,7 +59,7 @@ File recognition, text extraction, knowledge curation, and mobile push use datab
 - Total database connections are about replicas × `DOCA_DATABASE_POOL_MAX`. Stay under the PostgreSQL or pooler limit, and leave room for operations and background jobs.
 - Local disk cannot hold uploads for several hosts. A CDN only caches reads. Objects stay in S3 or on a shared filesystem. Storage named by an existing `storage_profile` must remain available.
 - Meilisearch, S3, and message gateways must show every replica the same configuration and the same data. Credentials live in the shared database. Network access, allowlists, and keys are still the deployment's job.
-- The plugin directory is published read-only with the image. Every replica runs the same plugin versions. Do not change a shared plugin directory during a rolling update.
+- The shared database records desired plugin releases and references immutable ZIPs in shared storage. Each replica needs its own writable installation/cache directory (`DOCA_PLUGINS_DIR`); startup validates and restores it from the archive. Operations take effect after manual restart of every replica. Keep running versions consistent; see [plugin deployment](plugin-deployment.md).
 - Redis should use authentication, TLS or a private network, a memory limit, and alerts. The database and object storage still need their own backups. Losing Redis must not lose document text, but it stops realtime delivery, presence, and global limits.
 - `/ready` only proves that this replica can reach the database and the realtime cluster. It does not replace end-to-end checks of collaboration, object storage, search, and messaging.
 

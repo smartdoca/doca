@@ -139,7 +139,7 @@ User uploads, attachments and export deliverables use `files.v1` folders/files w
 
 An installed plugin must implement `uninstall(context)`; startup rejects a factory without it. The hook handles business unbinding/external revocation and only uses public host services. It must be idempotent and never open or recursively delete host storage paths. A stateless plugin may implement an empty hook.
 
-Managed private database/object cleanup belongs to the host. On successful business uninstall, the registry transaction fences the current generation, drops declared private tables and queues object deletion with durable retries. Credentials and cluster task draining remain unimplemented. User files and other business references are preserved. Hook failure leaves the installation intact; external hook effects cannot be rolled back. All instances still require manual restart.
+Managed private database/object cleanup belongs to the host. On successful business uninstall, the registry transaction fences the current generation, drops declared private tables and queues object deletion with durable retries. Credential cleanup and generation fencing are implemented; cluster business-task draining remains unavailable. User files and other business references are preserved. Hook failure leaves the installation intact; external hook effects cannot be rolled back. All instances still require manual restart.
 
 Disable, process shutdown and `dispose` release registrations, timers and connections without deleting durable data. User files, document payloads, bindings used by other businesses and durable file receipts are not automatically deleted by plugin removal. Any file cleanup uses the file service and checks ownership, authorization and remaining references.
 
@@ -185,7 +185,7 @@ HTTP registration limits the body to 1 MiB by default. A route that needs a larg
 
 ## Unified content: reading, search and knowledge subscriptions
 
-Use `@smartdoca/plugin-sdk@^0.1.3`. Import `contentServiceToken` and the `ContentSource` type from `@smartdoca/plugin-sdk/content`; declare the token in `injections.required` and register the source during mount. Sources belong to the registering plugin. Built-in documents and files use the same contract.
+Use `@smartdoca/plugin-sdk@^0.1.9`. Import `contentServiceToken` and the `ContentSource` type from `@smartdoca/plugin-sdk/content`; declare the token in `injections.required` and register the source during mount. Sources belong to the registering plugin. Built-in documents and files use the same contract.
 
 | Member                                        | Contract                                                                                                                                                                                                    |
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -214,7 +214,7 @@ Use the same Web bundle on Web and in the scoped mobile WebView. `PluginWebHost`
 - Android save returns completed/canceled. iOS save and system sharing may report presented, which does not prove a user completed the action. Account switching or page disposal cancels outstanding requests.
 - Mail account binding belongs on Web. Native OAuth is outside this delivery.
 
-The current SDK source package version is 0.1.8; this does not confirm npm publication. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
+The current SDK source package version is 0.1.9; this does not confirm npm publication. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
 
 ## Distribution and navigation
 
@@ -224,7 +224,7 @@ Global navigation has Web user, App user and Web administrator scopes. Declare p
 
 ## Public reading and UI extensions (SDK 0.1.4)
 
-[Implemented interfaces](plugin-extensions.md) describe user directory policy, native document snapshots, library traversal, `host.platform`, `host.ui` and optional commands/views/placements. Plugins using new methods declare `sdkRange: "^0.1.4"`; existing page-only plugins need no new registration.
+[Implemented interfaces](plugin-extensions.md) describe user directory policy, native document snapshots, library traversal, `host.platform`, `host.ui` and optional commands/views/placements. Plugins using new methods declare `sdkRange: "^0.1.9"`; existing page-only plugins need no new registration.
 
 ## Template and material plugins
 

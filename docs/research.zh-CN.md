@@ -33,3 +33,10 @@
 - [文档交互与回收站验收（2026-09-11）](https://github.com/smartdoca/doca/blob/main/docs/trash-and-document-ui.md)
 - [视觉与选择控件](https://github.com/smartdoca/doca/blob/main/docs/ui-style.md)
 - [统一存储实现](https://github.com/smartdoca/doca/blob/main/docs/unified-storage-implementation.md)
+- [随手记原实现（已移出宿主）](https://github.com/smartdoca/doca/blob/main/docs/quick-notes.md)
+- [文档交互早期记录](https://github.com/smartdoca/doca/blob/main/docs/document-experience-history.md)
+- [协同早期阶段记录](https://github.com/smartdoca/doca/blob/main/docs/collaboration-history.md)
+- [文档接入早期记录](https://github.com/smartdoca/doca/blob/main/docs/editor-integration-history.md)
+- [HTTP API 早期记录](https://github.com/smartdoca/doca/blob/main/docs/api-history.md)
+
+- [文档能力与部署核对（2026-10-04）](https://github.com/smartdoca/doca/blob/main/docs/documentation-audit-2026-10-04.md)

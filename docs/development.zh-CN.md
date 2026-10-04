@@ -4,7 +4,7 @@
 
 ## 开发启动
 
-Node.js 22.12+或24 LTS、pnpm 11。版本锁定pnpm-lock.yaml；better-sqlite3原生构建已在pnpm-workspace.yaml允许。
+Node.js 22.12+或24 LTS、pnpm 11.25.0。版本锁定pnpm-lock.yaml；better-sqlite3原生构建已在pnpm-workspace.yaml允许。
 
 ```sh
 pnpm install --frozen-lockfile
@@ -73,7 +73,7 @@ NODE_ENV=production DOCA_ORIGIN=https://docs.example.com pnpm start
 
 check执行类型检查、测试和前端构建；start服务构建产物与API，不启动Vite。示例域名需替换并配置TLS反代，保留原Host/Origin，转发DOCA_PORT。
 
-后端不信任任意X-Forwarded-*，默认loopback。当前认证按连接IP限流，反代用户可能共享配额；正式上线须结合受信代理配置完善限流，不能随意开启trustProxy。
+后端默认不信任任何 X-Forwarded-*，回环地址也不例外；`DOCA_TRUST_PROXY` 仅填写实际代理 IP/CIDR。当前认证按连接IP限流，反代用户可能共享配额；正式上线须结合受信代理配置完善限流，不能随意开启trustProxy。
 
 ## AI 任务日志
 
@@ -105,7 +105,7 @@ kubectl logs -f deploy/doca --tail=200
 
 浏览器中的 AI 会话接口会返回 `jobs[].id`、`jobs[].status` 和 `jobs[].error`。用这个 job ID 在日志中定位对应的 `AI job failed` 记录即可；日志只记录脱敏后的错误分类，不会输出模型密钥或完整提示词。
 
-这是可运行开发基线，尚非生产验收发布：缺账号找回、OIDC 提供方、完整安全审计/监控、大规模查询优化等。外部 OIDC 和社交登录适配已实现，凭据部署和真实平台联调见 [身份认证说明](authentication.zh-CN.md)，能力边界见 [架构](architecture.zh-CN.md)。
+这是可运行开发基线，尚非生产验收发布：账号找回已实现，联系方式找回需配置验证网关；OIDC 提供方、完整监控、大规模查询优化等仍待完善。外部 OIDC 和社交登录适配已实现，凭据部署和真实平台联调见 [身份认证说明](authentication.zh-CN.md)，能力边界见 [架构](architecture.zh-CN.md)。
 
 ## 数据保护
 

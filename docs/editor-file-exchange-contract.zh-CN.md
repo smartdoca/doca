@@ -21,17 +21,17 @@
 - 导出读取受当前资源权限约束；文件转换不改变正文、选区、撤销、presence 或保存状态，不等待/伪造 ACK。若包要求先结束原生编辑，宿主明确完成编辑后调用，不把 flush 隐藏在纯导出中。
 - 取消、失败及迟到回调不得插入到其他文档/选区。服务端二次校验权限；中断上传不代表服务端资产已回滚，应说明临时资源清理策略。
 
-## Doca 当前产品矩阵（2026-09-12）
+## Doca 当前产品矩阵（2026-10-04）
 
 | 类型 | 导入 | 导出 | 可接受限制 |
 | --- | --- | --- | --- |
-| 富文本 | DOCX、MD/Markdown | DOCX、MD | 复杂布局简化；自定义对象可读文本降级；不支持旧 DOC |
+| 富文本 | DOCX、MD/Markdown、PDF | DOCX、MD、PDF | 复杂布局简化；自定义对象可读文本降级；不支持旧 DOC |
 | 表格 | XLSX | XLSX | 基础值、公式文本、多表和样式；图片/附件/业务身份等可警告后降级 |
-| Markdown | UTF-8 MD/Markdown | 原文 MD | 资源引用保留，不打包离线素材 |
+| Markdown | UTF-8 MD/Markdown、PDF 转 Markdown | MD、PDF | 资源引用保留，不打包离线素材 |
 | 画板 | PNG/JPEG/WebP/SVG 素材 | PNG/SVG | 导入为图片素材；不恢复原生图层，不承诺编辑数据往返 |
-| 演示文稿 | 待交付确认 | 待交付确认 | 不根据“即将 ready”开放入口 |
+| 演示文稿 | PPTX，最大 30 MB | PPTX | 基础文字、图形、表格和图片；复杂母版/动画可能简化，不支持旧 PPT |
 
-已检查接口：slatetsx 0.4.0 `/conversion` 的 importDocument/exportDocument；exlsx rc.5 `/xlsx` 的 xlsxToSnapshot/snapshotToXlsx 返回结果对象；exmd 0.4.1 importMarkdownFile/exportMarkdownFile；aidcanvas 0.4.0 `/io` 与 handle.exportFile。复用版本号时必须以 hash 命名包并更新 lockfile；仍需验收安装产物，不以源码 README 代替。
+当前安装包：`@smartdoca/slate` 0.4.12、`@smartdoca/sheet` 0.2.0-rc.17、`@smartdoca/markdown` 0.4.3、`@smartdoca/canvas` 0.4.2、`@smartdoca/slides` 0.3.0-alpha.2。导入分派见 `apps/web/src/features/documents/file-transfer.tsx`，导出见各宿主编辑器适配器。PDF 导入经过识别/转换与素材重新上传，不承诺保留原始页布局。复用版本号时以 hash 命名包并更新 lockfile；独立外部应用和复杂文件仍需逐项验收。
 
 ## 验收证据
 

@@ -4,7 +4,7 @@
 
 ## Start locally
 
-Node.js 22.12 or newer, or Node.js 24 LTS, and pnpm 11. Versions are locked in `pnpm-lock.yaml`. The `better-sqlite3` native build is allowed in `pnpm-workspace.yaml`.
+Node.js 22.12 or newer, or Node.js 24 LTS, and pnpm 11.25.0. Versions are locked in `pnpm-lock.yaml`. The `better-sqlite3` native build is allowed in `pnpm-workspace.yaml`.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -73,7 +73,7 @@ NODE_ENV=production DOCA_ORIGIN=https://docs.example.com pnpm start
 
 `check` runs the typecheck, tests, and web build. `start` serves the built web app and the API without Vite. Replace the example name, terminate TLS in a reverse proxy, keep Host and Origin, and forward `DOCA_PORT`.
 
-The server does not trust arbitrary `X-Forwarded-*` headers. Loopback is trusted by default. Authentication rate limits use the connection IP, so users behind one proxy can share a quota. A production proxy must be configured as trusted. Do not turn on `trustProxy` for the public internet.
+The server does not trust arbitrary `X-Forwarded-*` headers. No proxy, including loopback, is trusted by default. Set `DOCA_TRUST_PROXY` only to the actual proxy IPs/CIDRs. Authentication rate limits use the connection IP, so users behind one proxy can share a quota. A production proxy must be configured as trusted. Do not turn on `trustProxy` for the public internet.
 
 ## AI job logs
 
@@ -92,7 +92,7 @@ docker compose logs --since=30m doca | grep -E "AI job failed|AI 工作流|模�
 
 With Docker alone, replace `doca` with the container name. On Kubernetes, read the pod stdout with `kubectl logs`. The browser session API returns `jobs[].id`, `jobs[].status`, and `jobs[].error`. Match that job id to `AI job failed`. Logs record a redacted error class. They do not print model keys or the full prompt.
 
-This is a runnable development baseline, not a finished production acceptance. Account recovery, acting as an OIDC provider, full security audit and monitoring, and large-query tuning are still open. External OIDC and social sign-in adapters exist. Live credentials are in [authentication](authentication.md). Boundaries are in [architecture](architecture.md).
+This is a runnable development baseline, not a finished production acceptance. Account recovery is implemented and requires configured verification gateways for contact-based recovery. Acting as an OIDC provider, complete monitoring and large-query tuning still need work. External OIDC and social sign-in adapters exist. Live credentials are in [authentication](authentication.md). Boundaries are in [architecture](architecture.md).
 
 ## Data protection
 
