@@ -53,6 +53,7 @@ Node.js 22.12 or newer and pnpm 11.25.0:
 ```sh
 pnpm install --frozen-lockfile
 cp .env.example .env
+# Set the storage root in .env to an absolute writable local directory.
 pnpm dev
 ```
 
