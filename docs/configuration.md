@@ -56,6 +56,21 @@ Webhook delivery always uses a separate database. SQLite creates `webhooks.db` b
 
 Multiple replicas require shared PostgreSQL, Redis, and file storage. Changing a variable does not transfer existing data. Read [horizontal scaling](horizontal-scaling.md) and [release requirements](releases/0.1.10.md).
 
+## Passing environment variables through Compose
+
+`.env` supplies Compose interpolation; it does not automatically forward every variable to the container. Only settings declared in `compose.yaml` reach the service. Container bind address, port, SQLite/AI paths, and data directory are fixed in the current file. Change its environment, port mappings, and persistent mounts together when customizing those values.
+
+For example, the host supports `DOCA_KNOWLEDGE_EMBED_ORIGINS` for cross-site Q&A embedding, but the 0.1.10 Compose file does not forward it. Create `compose.override.yaml` in the deployment directory:
+
+```yaml
+services:
+  doca:
+    environment:
+      DOCA_KNOWLEDGE_EMBED_ORIGINS: "${DOCA_KNOWLEDGE_EMBED_ORIGINS:-}"
+```
+
+Set comma-separated complete origins in `.env`, for example `DOCA_KNOWLEDGE_EMBED_ORIGINS=https://portal.example.com`, then run `docker compose up -d`. Same-origin embedding is allowed by default; ordinary pages still deny framing. Allow only trusted embedding origins; bot authorization and channel settings remain separate checks.
+
 ## Administrator settings and applying changes
 
 Registration, identity providers, verification gateways, search, AI models, and webhook subscriptions use their administration pages. File backend credentials stay in the environment; the storage page is read-only. Platform service credentials and plugin encrypted credentials are separate services; see [service credentials](service-credentials.md).

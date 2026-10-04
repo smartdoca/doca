@@ -73,3 +73,5 @@ The Curation assistant tab opens the shared conversation directly. Inputs accept
 The right panel combines unresolved human tasks from current and earlier conversations. Drafts, source suggestions, and decisions use stable deduplication keys and version checks. Adoption, replacement, source completion, or scope changes close stale tasks while preserving audit. `inspect`, `human_task`, and `resolve_human_task` expose/manage outstanding items; local blockers do not block other work. Human actions add operator-identified messages.
 
 Q&A feedback remains independent of curation conversations, displaying the bot and frozen feedback conversation with the evaluated answer marked. Managers can start manual analysis or select off/daily/weekly feedback processing. Each schedule creates a new timestamp-named conversation. Votes can change or be withdrawn; withdrawal retains audit and removes the case from pending processing.
+
+Docker deployments must explicitly forward `DOCA_KNOWLEDGE_EMBED_ORIGINS` to enable cross-site embedding; setting it only in `.env` is insufficient. See [configuration](configuration.md#passing-environment-variables-through-compose).

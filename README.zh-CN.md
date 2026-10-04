@@ -36,6 +36,7 @@ docker compose pull
 # 4. 启动并检查健康状态
 docker compose up -d
 docker compose ps
+# 等待状态显示 healthy，再初始化管理员
 
 # 5. 初始化管理员账号和密码
 bash scripts/bootstrap-admin.sh

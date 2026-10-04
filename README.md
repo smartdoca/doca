@@ -36,6 +36,7 @@ docker compose pull
 # 4. Start and check health
 docker compose up -d
 docker compose ps
+# Wait for healthy before initializing the administrator
 
 # 5. Initialize the administrator login and password
 bash scripts/bootstrap-admin.sh

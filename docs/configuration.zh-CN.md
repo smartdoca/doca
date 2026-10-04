@@ -56,6 +56,21 @@ Webhook 投递始终使用独立数据库。SQLite 在主库旁创建 `webhooks.
 
 多副本需要共享 PostgreSQL、Redis 和文件存储；修改变量不搬运已有数据，见[水平扩展](horizontal-scaling.zh-CN.md)与[发行要求](releases/0.1.10.zh-CN.md)。
 
+## Compose 环境变量传递
+
+`.env` 用于 Compose 插值，不会自动把每个变量传入容器。只有 `compose.yaml` 中声明的项生效；容器监听地址、端口和 SQLite/AI/数据目录在当前文件中固定。需要改这些项时同时调整 Compose 的 environment、端口映射与持久挂载。
+
+例如跨站嵌入问答页面的 `DOCA_KNOWLEDGE_EMBED_ORIGINS` 已由宿主支持，但 0.1.10 Compose 尚未传递。需在部署目录创建 `compose.override.yaml`：
+
+```yaml
+services:
+  doca:
+    environment:
+      DOCA_KNOWLEDGE_EMBED_ORIGINS: "${DOCA_KNOWLEDGE_EMBED_ORIGINS:-}"
+```
+
+再在 `.env` 设置逗号分隔的完整来源，例如 `DOCA_KNOWLEDGE_EMBED_ORIGINS=https://portal.example.com`，执行 `docker compose up -d`。默认仅允许同源嵌入；普通页面仍禁止 iframe。仅配置可信嵌入来源，授权与机器人渠道设置仍独立校验。
+
 ## 管理配置与生效
 
 注册、身份源、验证网关、搜索、AI 模型和 Webhook 订阅通过对应管理页配置。文件后端凭据位于环境，存储管理页只读；平台服务凭据与插件加密凭证是不同服务，见[服务凭据](service-credentials.zh-CN.md)。
