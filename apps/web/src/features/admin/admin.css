@@ -900,38 +900,6 @@ input.switch-input[type="checkbox"]:checked:after {
   height: 15px;
   flex-shrink: 0;
 }
-.membership-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  padding: 16px;
-  background: #f6f8fa;
-  border-radius: 8px;
-}
-.membership-summary span {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-.membership-summary strong {
-  display: block;
-  color: var(--text);
-  font-size: 14px;
-  margin-top: 8px;
-}
-.membership-settings > p {
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-.membership-settings .admin-settings-form label:has(> input[type="checkbox"]) {
-  flex-direction: row;
-  align-items: center;
-}
-.membership-settings .admin-settings-form .capability-row label {
-  margin: 0;
-}
-.membership-settings .admin-form-footer {
-  margin-top: 24px;
-}
 .source-fields {
   padding: 0;
   border: 0;
@@ -1054,8 +1022,7 @@ input.switch-input[type="checkbox"]:checked:after {
   }
 }
 @media (max-width: 600px) {
-  .admin-form-fields,
-  .membership-summary {
+  .admin-form-fields {
     grid-template-columns: 1fr;
   }
   .source-mapping-head,

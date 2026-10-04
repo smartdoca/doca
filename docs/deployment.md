@@ -22,19 +22,19 @@ cp docker.env.example .env
 
 Edit `.env` before the first start.
 
-## Required setting
+## Required settings
 
 File storage also requires `DOCA_FILE_STORE_ID` and `DOCA_FILE_STORES_JSON`, as provided by `docker.env.example`. Backend paths and credentials are read from the environment; the administration page is read-only. See [file storage](storage.md).
 
 Version 0.1.10 rejects old database baselines, plugin installation lists, SDK ranges and storage configuration. Preserve the old deployment/data and use a new empty database and separate storage for this release. No conversion or migration is provided. See [release requirements](releases/0.1.10.md).
 
-`DOCA_ORIGIN` is the origin users type in the browser. Production rejects any value that is not HTTPS. Do not add a path, query, or trailing slash.
+`DOCA_ORIGIN` is the origin users type in the browser. Production rejects any value that is not HTTPS. Use only the origin without a subpath, query, or fragment; a root trailing slash is normalized.
 
 ```text
 DOCA_ORIGIN=https://docs.example.com
 ```
 
-Leave `DOCA_ASSET_BASE` empty for the published `0.1.0` image. That image was built before asset rewriting existed, so it always serves JavaScript and CSS from the container. A later image reads `DOCA_ASSET_BASE` when you set it. See [Static assets](#static-assets).
+The Docker example already supplies the required file-store values. For a fresh single server, change the origin and retain those values; PostgreSQL, Redis, and the plugin credential key are conditional. See [configuration](configuration.md) for defaults, S3 fields, and separate Webhook/AI stores.
 
 ## Start
 
@@ -49,8 +49,10 @@ Check the container:
 
 ```sh
 docker compose ps
-curl -fsS http://127.0.0.1:39120/health
+curl -fsS -H 'Host: docs.example.com' http://127.0.0.1:39120/health
 ```
+
+Replace `docs.example.com` with the host in your configured origin, including its port if nonstandard. The built-in container probe already supplies this Host; wait for `docker compose ps` to show `healthy`. A bare loopback curl is rejected with 421.
 
 A healthy process returns `{"status":"ok","version":"0.1.10"}`.
 
@@ -68,7 +70,7 @@ docs.example.com {
 
 Caddy proxies WebSocket upgrades by default. An Nginx server needs `Upgrade` and `Connection` headers on `/api/v1/ws`.
 
-Do not set `DOCA_TRUST_PROXY` when the proxy connects from this same machine. Requests arrive from the loopback address, which Doca already trusts for forwarded headers.
+`DOCA_TRUST_PROXY` is empty by default: no forwarded headers are trusted, including connections from loopback. To preserve client IPs for audit and limits, configure only the proxy IP/CIDR that the application actually sees. A Docker bridge can make a host proxy appear as the bridge gateway rather than `127.0.0.1`; inspect the deployment network before choosing this value. Without it, proxied users may share the proxy IP quota.
 
 If a load balancer on another machine connects to this host, publish the container port on the private interface instead of only loopback, and set `DOCA_TRUST_PROXY` to that load balancer's IP range. Do not trust the public internet.
 
@@ -101,13 +103,13 @@ The HTML page and the API stay on `DOCA_ORIGIN`. `DOCA_ASSET_BASE` changes only 
 Leave it unset to serve JavaScript, CSS, and the other built files from the container at `/assets`. When you set it, use an HTTPS prefix with no userinfo, query, hash, or trailing slash:
 
 ```text
-DOCA_ASSET_BASE=https://cdn.example.com/doca/0.1.0
+DOCA_ASSET_BASE=https://cdn.example.com/doca/0.1.10
 ```
 
 A page that referenced `/assets/index-abc.js` then loads:
 
 ```text
-https://cdn.example.com/doca/0.1.0/assets/index-abc.js
+https://cdn.example.com/doca/0.1.10/assets/index-abc.js
 ```
 
 Publish the whole `apps/web/dist/assets` directory at that prefix and keep the `assets` path segment. The file names include a content hash and must match the HTML inside the same image. API requests remain on `DOCA_ORIGIN`.
@@ -118,4 +120,4 @@ The container keeps its own `/assets` files. Fonts and images referenced from st
 
 `index.html` is sent with `Cache-Control: no-cache`, so a new visit after a release fetches the new page. Hashed files under `/assets/` are sent with `Cache-Control: public, max-age=31536000, immutable`. Their names change when the content changes, so a year-long cache does not keep an old script after the new HTML is loaded. A CDN in front of `DOCA_ASSET_BASE` needs the same long cache on those hashed files.
 
-Host 0.1.10 / SDK 0.1.9 provides managed plugin credentials, requiring `DOCA_CREDENTIAL_MASTER_KEY`. The credentials-v2 baseline rejects databases from 0.1.9 and earlier without migration; preserve the old deployment and data and use a new empty database. Compose forwards database and cloud-storage environment settings; see [environment example](../docker.env.example), [credential deployment](plugin-credentials.md) and [release notes](releases/0.1.10.md).
+Host 0.1.10 / SDK 0.1.9 provides managed plugin credentials. `DOCA_CREDENTIAL_MASTER_KEY` is required only when an installed plugin requires the credential service; core startup does not require it. The credentials-v2 baseline rejects databases from 0.1.9 and earlier without migration; preserve the old deployment and data and use a new empty database. Compose forwards database and cloud-storage environment settings; see [environment example](../docker.env.example), [credential deployment](plugin-credentials.md) and [release notes](releases/0.1.10.md).

@@ -11,7 +11,7 @@ DOCA_PLUGIN_STORE_URL=https://store.smartdoca.cc
 DOCA_PLUGINS_DIR=/data/plugins
 ```
 
-商店地址必须是 HTTPS origin，不带路径、查询参数或凭据。目前默认商店尚未部署；连接失败不影响本地上传和已有插件。插件安装目录留空时使用 `${DOCA_DATA_DIR:-./data}/plugins`，相对路径基于工作目录。数据库和对象存储仅由宿主配置，不提供插件业务数据目录环境变量；插件 API 不暴露宿主存本地还是远端。
+商店地址必须是 HTTPS origin，不带路径、查询参数或凭据。远端服务可用性需单独确认；连接失败不影响本地上传和已有插件。插件安装目录留空时使用 `${DOCA_DATA_DIR:-./data}/plugins`，相对路径基于工作目录。数据库和对象存储仅由宿主配置，不提供插件业务数据目录环境变量；插件 API 不暴露宿主存本地还是远端。
 
 仓库的 Docker Compose 部署，在部署目录执行：
 

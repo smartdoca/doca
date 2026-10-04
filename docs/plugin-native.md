@@ -1,20 +1,22 @@
-# App 插件缓存与附件能力
+# Native plugin cache and attachments
 
-`host.ai.open` 在原生插件容器通过新增的 `assistant.open` 操作打开原生个人助手。参数和错误语义见[启动契约](plugin-assistant.md)。提示词/上下文不进入导航 URL，账号凭据不进入 WebView；预填请求在内存中按账号和一次性启动标识消费。
+[中文](plugin-native.zh-CN.md)
 
-公开类型来自 `@smartdoca/plugin-sdk/native`，通过 `PluginWebHost.native` 使用。在 Web 为 null；App 插件容器中提供：
+In the native plugin container, `host.ai.open` uses `assistant.open` to open the native personal assistant. Parameters and errors follow the [launch contract](plugin-assistant.md). Prompts and context stay out of navigation URLs; account credentials stay out of the WebView. Prefill requests are consumed in memory under the current account and a one-time launch identifier.
 
-- `storage.get(key)` / `set(key, value)` / `remove(key)` / `clear()`：字符串缓存，单值最多 200 万字符，每个插件最多 2000 万字符。
-- `attachments.save({path,name,mime})` / `share(...)`：path 是插件 API 下相对路径，例如 `/mailboxes/123/attachments/456?download=true`。
+Public types come from `@smartdoca/plugin-sdk/native`, exposed through `PluginWebHost.native`. This property is null on Web. The App plugin container provides:
 
-缓存命名空间由原生宿主绑定服务器、在线确认的用户 ID 和插件 ID，插件不能指定其他身份。数据保存在 App 持久目录，跨重启保留，退出或移除账号时清理对应服务器缓存。写入串行执行，新快照完成后再替换旧快照。WebView 保持临时隔离，登录 Cookie 不作为持久缓存方案。
+- `storage.get(key)` / `set(key, value)` / `remove(key)` / `clear()`: string cache, at most 2 million characters per value and 20 million per plugin.
+- `attachments.save({path,name,mime})` / `share(...)`: `path` is relative to the plugin API, for example `/mailboxes/123/attachments/456?download=true`.
 
-原生先在线核验登录身份再加载插件。已有插件 IndexedDB 代码不会自动迁移或接管；插件应显式采用 native.storage。不支持完全离线冷启动，卸载 App 或系统清理存储不保证缓存保留。
+The native host binds the cache namespace to the server, online-verified user ID, and plugin ID. Plugins cannot choose another identity. Data lives in the App's persistent directory, survives restarts, and is cleared for the corresponding server when signing out or removing the account. Writes are serialized; a new snapshot finishes before replacing the previous one. The WebView remains temporary and isolated; login cookies are not a persistent-cache mechanism.
 
-附件下载经宿主内部鉴权派发，禁止插件重定向到外域；原生会话 token 不交给 WebView。最大附件 32 MiB。保存/分享结束清理临时文件。
+The native host verifies the signed-in identity online before loading a plugin. Existing plugin IndexedDB code is not automatically migrated or adopted; plugins explicitly use `native.storage`. Fully offline cold starts are unsupported. App removal or system storage cleanup may remove the cache.
 
-Android save 使用系统目录选择，返回 completed 或 canceled。iOS save 和 share 打开系统分享面板，返回 presented；系统接口不提供可靠的最终保存/取消结果，因此 presented 不能当成保存成功。
+Attachment downloads use internal authenticated host dispatch. Redirects to external origins are forbidden and the native session token is never provided to the WebView. Attachments are at most 32 MiB. Temporary files are cleaned after save/share.
 
-页面卸载或账号切换取消正在执行的原生请求。邮箱绑定在 Web 完成，不提供原生 OAuth 流程。
+Android save uses the system directory picker and returns `completed` or `canceled`. iOS save and share present the system share sheet and return `presented`. The system API does not reliably report final save/cancel results, so `presented` does not establish a successful save.
 
-当前已通过类型检查和协议/宿主下载测试，缓存持久性、系统分享及保存仍需 iOS/Android 真机验收。
+Page disposal or account switching cancels active native requests. Mail account linking happens on Web; there is no native OAuth flow.
+
+Type checks and protocol/host-download tests passed in the recorded implementation. Cache persistence, system sharing, and saving still require iOS/Android device acceptance.

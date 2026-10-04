@@ -1,16 +1,18 @@
-# 插件接入首页最近访问
+# Plugin recent activity
 
-2026-09-30。本接口已在仓库实现，公开导出位于 `@smartdoca/plugin-sdk/platform`。使用包含本接口的 SDK 构建产物和对应宿主；这里不代表已经发布了新的 npm 版本。
+[中文](plugin-activity.zh-CN.md)
 
-## 存储与职责
+Implemented on 2026-09-30 and publicly exported from `@smartdoca/plugin-sdk/platform`. Use an SDK artifact and host containing this interface. Source availability alone does not establish a new npm publication.
 
-插件通过 `activityServiceToken`（服务 ID `activity.v1`）注册数据源。插件定义访问记录、历史查询、当前业务权限与删除清理逻辑；持久化依赖宿主托管能力，不能自建数据库或持久目录。activity.v1 只聚合来源，不另建业务记录镜像，也不提供专用的代写访问接口。所需托管关系服务尚未导出，见[存储规范](plugin-horizontal-scaling.zh-CN.md)。
+## Storage and ownership
 
-宿主已有记录继续保存在 `resource_visits`、`knowledge_assistant_users.visited_at`、`workspace_activity`，由内置来源加入汇总。没有表结构变更、历史搬迁或双写。公共资源发现页继续使用 `/workspace/recent?publicOnly=true`，其收录逻辑仅适用于内置资源；插件注册最近访问不意味着接入公共发现、收藏、搜索或 AI。
+Plugins register through `activityServiceToken` (`activity.v1`). They own visit records, history queries, current business authorization, and deletion cleanup, using host-managed persistence. The service only aggregates sources; it creates no business mirror or special visit-writing endpoint. Use the [current managed storage contract](plugin-horizontal-scaling.md).
 
-插件停用后注册随生命周期释放，列表及打开入口立即不再提供该来源；持久记录不被宿主删除。重新启用后重新查询插件当前数据。实际安装、停用仍遵循各宿主实例重启生效的插件生命周期。
+Built-in records remain in `resource_visits`, `knowledge_assistant_users.visited_at`, and `workspace_activity`. This increment changed no table, moved no history, and introduced no dual writing. The public discovery page's `/workspace/recent?publicOnly=true` collection logic applies to built-in resources. Registering activity does not register discovery, favorites, search, or AI.
 
-## 注册接口
+Disposal removes runtime registrations and opening/listing stops offering that source. Stored records remain. Re-enabling queries current plugin data. Actual installation/disable follows the host's restart-based lifecycle.
+
+## Registration
 
 ```ts
 import {
@@ -20,24 +22,24 @@ import {
 } from "@smartdoca/plugin-sdk/platform";
 ```
 
-在插件 `injections.required` 中声明 `activityServiceToken` 和 `permissionsServiceToken`。不具备 `activity.v1` 的宿主应明确拒绝加载此插件，不使用宿主私有表或旧接口降级。已有不使用此能力的插件无须修改。`register(source)` 返回注销函数；通过安装插件注入的服务注册时，宿主自动绑定 effect，停止或初始化失败时释放。
+Declare both tokens in `injections.required`. A host without `activity.v1` rejects a plugin requiring it; private tables or old endpoints are not substitutes. Existing plugins that do not use activity need no new registration. `register(source)` returns a disposer; scoped injection binds it to plugin effects and releases it on shutdown or initialization failure.
 
-每种内容类型注册一个来源，例如 `example.mail.messages` 和 `example.mail.threads`：
+Register one source per content type, for example `example.mail.messages` and `example.mail.threads`:
 
-| 字段 | 约定 |
+| Field | Requirement |
 | --- | --- |
-| `id` | 插件 ID 加点号开头的唯一来源 ID，最长 150 字符 |
-| `pluginId` | 必须等于被注入服务的插件身份 |
-| `schemaVersion` | 固定为 `1`，不支持的版本拒绝注册 |
-| `resourceType` | 已注册至 `permissions.v1` 的资源类型，条目 ID 即该类型的资源 ID |
-| `title` | 必须包含 `en`、`zh`，每种最长 100 字符；用于首页类型筛选及来源文字 |
-| `icon` | `file`、`mail`、`calendar`、`message`、`task`、`book`、`folder` 之一 |
-| `list(context, input)` | 返回当前用户可读的访问记录分页 |
-| `get(context, id)` | 打开前查询当前记录、标题、路径并复查权限；不存在或不可读时返回 `null` |
+| `id` | Unique plugin-prefixed source ID, at most 150 characters |
+| `pluginId` | Must equal the injected plugin identity |
+| `schemaVersion` | Exactly `1`; unsupported versions fail registration |
+| `resourceType` | Registered with `permissions.v1`; item IDs identify that type's resource |
+| `title` | `en` and `zh`, at most 100 characters each, for filters/source labels |
+| `icon` | `file`, `mail`, `calendar`, `message`, `task`, `book`, or `folder` |
+| `list(context, input)` | Current user's readable visit page |
+| `get(context, id)` | Current record/title/path with rechecked authorization, or null |
 
-ID 与资源类型采用小写字母开头、字母数字及点号/连字符分段的标识。宿主每实例最多注册 64 个插件来源，重复 ID 拒绝注册。每个来源可返回任意数量的业务资源，但必须分页。
+IDs and resource types begin with a lowercase letter and use alphanumeric segments separated by dots/hyphens. Each instance permits at most 64 plugin sources and rejects duplicate IDs. Business resources are unlimited but must be paged.
 
-`context` 是宿主构造的 `{ principalId, signal }`。用户 ID 来源于认证会话，不能从浏览器参数中选取其他用户。响应条目为：
+Host-created context is `{principalId, signal}`. The principal comes from the authenticated session rather than a browser-selected user. An item has this shape:
 
 ```ts
 {
@@ -48,28 +50,28 @@ ID 与资源类型采用小写字母开头、字母数字及点号/连字符分�
 }
 ```
 
-`path` 必须是站内路径，以 `/` 加字母或数字开头，不含 origin、hash、反斜杠或控制字符；禁止外部地址及协议相对地址。查询值自行 URL 编码。业务标题保持原文，类型名称通过 `title.en/zh` 本地化。
+`id` contains 1–500 visible ASCII characters; title is nonempty and at most 500 characters. `path` starts with slash plus a letter/digit and contains no origin, hash, backslash, or control characters. External/protocol-relative addresses are forbidden. Encode query values. Business titles keep their original content; type names use `title.en/zh`.
 
-## 分页协议
+## Pagination
 
-`list` 收到 `{ until, after, limit }`，返回 `{ items, hasMore }`：
+`list` takes `{until, after, limit}` and returns `{items, hasMore}`:
 
-1. 每个用户、来源、资源只返回一次最后访问记录。按 `visitedAt DESC, id ASC` 排序；ID 比较必须采用 ASCII 二进制顺序，不能按本地化排序。
-2. 时间统一为带毫秒的 UTC ISO 字符串，例如 `2026-09-30T09:20:00.000Z`。只返回 `visitedAt <= until`。
-3. `after` 为 `null` 时从头开始，否则应用严格边界：`visitedAt < after.visitedAt`，或时间相等且 `id > after.id`。记录被删除后仍可使用这个数值边界，不能要求边界记录仍然存在。
-4. `items.length <= limit`，宿主目前最多请求 51 条。允许短页；如果还有记录，`hasMore` 必须为 `true`。`hasMore=true` 时必须至少返回一条记录，不能用空页表示“稍后重试”。
-5. 插件查询先按当前用户访问记录及权限过滤。宿主仍调用 `permissions.v1` 对每项检查 `activity.read`，权限过滤后会按需续取；一次请求最多续取 20 批，包含权限检查在内的来源总耗时限制为 1.5 秒。实现应使用索引，响应取消信号，不在查询中做远端全量同步。
-6. 列表查询不得更新访问时间；只有业务内容成功打开才记录访问。同一请求可能被重复调用，未被宿主当前页消费的候选也可能再次查询。
+1. Return one latest visit per user/source/resource, ordered `visitedAt DESC, id ASC` with ASCII binary ID order.
+2. Use UTC ISO strings with milliseconds, and only `visitedAt <= until`.
+3. `after=null` starts. Otherwise require `visitedAt < after.visitedAt`, or equal time with `id > after.id`. The boundary remains usable after its record is deleted.
+4. `items.length <= limit`; the host currently requests at most 51. Short pages are allowed. Remaining records require `hasMore=true` and at least one returned item; empty pages cannot mean retry later.
+5. Filter user visits and current permission first. The host also checks `activity.read` on every item and fetches more as needed. At most 20 batches and 1.5 seconds per source, including permission checks. Use indexes, honor cancellation, and avoid remote full synchronization inside queries.
+6. Listing never updates visits. Record visits only after successfully opening business content. Calls and unconsumed candidates may repeat.
 
-宿主每页展示 50 条，以访问时间倒序、来源 ID 正序、资源 ID 正序合并；内置来源 ID 为 `doca`，其资源排序键为 `kind:id`。下一页游标保存首次查询的 `until`、已选择来源和各来源已消费的位置，绑定用户及筛选条件。前端将游标视作不透明值，不自行拼装。
+The host merges pages of 50 by descending visit time, ascending source ID, then resource ID. Built-in source is `doca`, with `kind:id` resource keys. Opaque next cursors bind user/filters and retain the first `until`, selected sources, and consumed positions.
 
-这是当前权限下的实时列表，不是冻结数据库快照。翻页期间的新访问在刷新后出现；删除、撤权或更新了访问时间的记录可能从当前翻页链消失。插件业务查询通过托管事务保证单次分页读取一致。
+The list reflects current permission rather than a frozen database snapshot. New visits appear on refresh; deletion, revocation, or updated visit times may remove records from a paging chain. Use managed transactions for consistent individual page reads.
 
-来源异常、超时、非法分页/跳转或权限服务缺失时，该来源本页结果全部丢弃，其他来源继续返回。失败来源在本轮后续分页中保持跳过，并通过 `unavailableSources` 提示刷新重试，避免恢复时向后续页插入更早应显示的内容。新注册来源也要刷新后进入本轮分页。
+Failure, timeout, invalid paging/path, or missing permissions service discards that source's entire page and preserves other sources. Failed sources remain skipped for later pages of that traversal and appear in `unavailableSources`; refresh retries. Newly registered sources also require refresh.
 
-## 接入示例
+## Example
 
-以下为插件 `mount(context)` 内的来源注册示例。`mailStore` 是插件需要实现的业务服务，不是 SDK 导出；其持久化必须使用宿主托管能力。新增关系服务尚未导出，因此该示例不代表一个可独立安装的完整邮件存储实现。
+This `mount(context)` example requires plugin-implemented `mailStore`, persisted with current host-managed services; `mailStore` is not an SDK export.
 
 ```ts
 const pluginId = "example.mail";
@@ -103,19 +105,17 @@ const source: ActivitySource = {
 context.inject(activityServiceToken).register(source);
 ```
 
-已有权限注册器若还支持邮件读取等业务 action，应在同一个注册器内加入 `activity.read` 分支，不要为相同插件/资源类型重复注册。
+Add `activity.read` to an existing permission registration rather than registering the same plugin/resource type twice. After a plugin's authenticated open-mail API successfully reads content, update its visit table with the session's user ID. On deletion, clean that table or filter deleted items through joins; the host cannot clean records it does not own.
 
-在插件自己的“打开邮件”认证接口成功读到内容之后，以宿主会话中的用户 ID 更新插件访问表。删除邮件时清理插件访问表，或者查询时通过关联过滤已删除邮件；不要请求宿主清理它没有持有的记录。
+## Host entry points and authorization
 
-## 宿主入口与权限
+- `GET /api/v1/workspace/activity`: authenticated mixed list; accepts built-in `kind`, plugin `source`, and `cursor`. `kind` and `source` are mutually exclusive. Returns `items`, `nextCursor`, `sources`, `unavailableSources`.
+- Plugin items have `kind=plugin`, `sourceId`, `sourceTitle`, and `icon`. UI keys include the source ID.
+- `href` points to `/api/v1/workspace/activity/open?source=...&id=...`. The host rechecks account/source/`activity.read`, invokes `get` for the current path, reauthorizes, then redirects. Failure is 404; it does not redirect using a historical snapshot.
+- Target pages and business APIs independently authorize. Activity grants no attachment or associated-document access.
 
-- `GET /api/v1/workspace/activity`：认证用户的混合列表。支持 `kind`（五种内置类型之一）、`source`（插件来源 ID）、`cursor`；`kind` 与 `source` 不能同时提供。返回 `items`、`nextCursor`、`sources`、`unavailableSources`。
-- 插件条目的 `kind` 为 `plugin`，带 `sourceId`、`sourceTitle`、`icon`。渲染 key 必须包含来源 ID，不能只用资源 ID。
-- 插件条目的 `href` 指向宿主 `/api/v1/workspace/activity/open?source=...&id=...`。宿主复查账号、来源及 `activity.read`，调用 `get` 获取最新路径，再复查授权并跳转；失败返回 404，不使用历史快照跳转。
-- 插件目标页面和业务 API 仍须独立鉴权。最近访问不是授权入口，也不会授予附件或关联文档权限。
+## Acceptance and rollback
 
-## 验收与回退
+`tests/plugin-activity.test.ts` and `tests/workspace-home.test.ts` use isolated databases/installation directories. They cover equal-time order, traversal, short-page continuation, deletion, cross-user access, revocation, unregistering, failures/timeouts, unsafe redirects, invalid cursors, real package injection, and HTTP opening.
 
-使用隔离数据库和临时安装目录，覆盖跨来源同时间排序、多页遍历、短页补取、资源删除、跨用户访问、撤权、注销、故障/超时、危险跳转、错误游标，以及真实安装包服务注入和 HTTP 打开流程。仓库测试为 `tests/plugin-activity.test.ts`，内置访问记录测试为 `tests/workspace-home.test.ts`。
-
-回退宿主时无需回退数据库：本能力未新增或改变任何持久表。插件自己的历史记录继续保留；依赖 `activity.v1` 的插件在不提供该服务的宿主上拒绝加载。不要删除业务数据来实现回退。
+This capability introduced no persistent table change. Plugin history remains when reverting a host; a plugin requiring `activity.v1` refuses a host that lacks it. Do not delete business data for rollback.

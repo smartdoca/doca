@@ -22,9 +22,9 @@
 | 企业 OIDC SSO | 只允许已绑定身份登录 | 首次登录创建用户 | 首次登录创建 pending 用户 |
 | Google/GitHub/微信/QQ | 只允许已绑定身份登录 | 首次登录创建用户 | 首次登录创建 pending 用户 |
 
-已有绑定的 active 用户不受“关闭注册”影响，已有用户仍可绑定身份。管理员手动创建的用户直接 active。待审核用户没有本站会话，不能访问文档或 WebSocket。管理员在用户页筛选“待审核”并批准，或拒绝并停用。审批通过后需重新登录，不激活旧授权流程。
+已有绑定的 active 用户不受“关闭注册”影响，已有用户仍可绑定身份。管理员手动创建的用户直接 active。待审核用户没有本站会话，不能访问文档或 WebSocket。管理员在独立注册审核页批准或拒绝；普通用户启用/停用操作不能审批 pending 账号。审批通过后需重新登录，不激活旧授权流程。
 
-默认不开启外部注册或任何身份源。保留账号密码入口，避免身份源故障导致管理员无法登录。本轮已增加联系方式验证、手机验证码登录与密码恢复；验证码发送和尝试限制使用共享数据库，密码登录等原有限流仍为单进程。短信单独配置准入规则，第三方来源可单独覆盖类别策略。
+默认不开启外部注册或任何身份源。保留账号密码入口，避免身份源故障导致管理员无法登录。本轮已增加联系方式验证、手机验证码登录与密码恢复；验证码发送和尝试限制使用共享数据库，密码登录和公开机器人 IP 限流在未配置 Redis 时使用进程内计数，配置 Redis 后共享计数。短信单独配置准入规则，第三方来源可单独覆盖类别策略。
 
 登录方式切换时，服务端会按启用状态、已验证联系方式、密码账号标识和身份源凭据逐个检查所有 active 用户及管理员。只要有人在修改后没有可用方式，就拒绝保存。管理员可以先在“强制用户补充登录方式”中选择新方式；用户下次打开时必须完成验证或绑定，全部完成后再关闭旧方式。仅新增方式时默认不强制。
 
@@ -95,7 +95,9 @@ Google/GitHub/微信/QQ 的固定 HTTPS 域名内置允许。OIDC Issuer 及 Dis
 | POST /auth/password/setup | 最近验证；`{password}` 12–128字符，仅首次设置，撤销其他会话 |
 | DELETE /me/identities/:id | 最近验证；解绑本人身份，保护最后可用方式 |
 | GET /admin/users?status=pending | 管理员；active/pending/disabled 过滤和分页 |
-| PATCH /admin/users/:id | 管理员；status active 批准、disabled 拒绝或停用并撤销会话 |
+| GET /admin/registration-reviews | 管理员 | pending/approved/rejected 分页审核记录 |
+| POST /admin/registration-reviews/:id | 管理员 | `{decision:"approved"\|"rejected",message?}` |
+| PATCH /admin/users/:id | 管理员 | 普通 active/disabled 用户启停；pending 返回 409 |
 
 `POST /auth/register` 响应增加 status，pending 时提示等待审核，不自动登录。
 

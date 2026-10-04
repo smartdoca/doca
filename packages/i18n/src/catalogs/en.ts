@@ -1168,8 +1168,6 @@ export const en = {
   "authAdmin.unlinkWarning":
     "After unlinking “{name}”, that identity can no longer sign in to this account. Documents will not be deleted.",
   "users.select": "Select {name}",
-  "users.membershipExpires": "{name} until {date}",
-  "users.membershipExpired": "{name} expired {date}",
   "users.resetWarning":
     "Set a new password for “{name}”. All of their current sessions will end. Share the password with them; it will not be shown again.",
   "users.confirmDisable": "Confirm disable",
@@ -1708,8 +1706,6 @@ export const en = {
   "users.loading": "Loading…",
   "users.noMatches": "No matching users",
   "users.noMethods": "Not linked",
-  "users.membership": "Membership",
-  "users.noTimedMembership": "No timed membership",
   "users.admin": "Administrator",
   "users.regular": "Regular user",
   "users.resetPassword": "Reset password",
@@ -2655,9 +2651,7 @@ export const en = {
   "admin.login": "Sign-in and registration",
   "admin.users": "Users",
   "admin.registration": "Registration review",
-  "admin.levels": "Levels and membership",
   "admin.access": "Access and visibility",
-  "admin.moderation": "Content review",
   "admin.templates": "Templates",
   "admin.ai": "AI",
   "admin.recognition": "File recognition",

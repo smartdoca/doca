@@ -1,65 +1,44 @@
-# Document interaction, sharing, and history
+# Documents, sharing, and history
 
 [中文](document-experience.zh-CN.md)
 
-## Editing and navigation
+Checked against current host 0.1.10 source. Early development and temporary package records are in [research](research.md).
 
-Choosing document, spreadsheet, or slides from "+" creates it immediately. A new document is named "Untitled" and the rich text title is empty. `firstLineTitle` is enabled. After a valid Yjs update the server takes the title from the first line, at most 160 characters, and falls back to "Untitled" when it is blank. The top bar updates immediately. The tree name refreshes 1.5 seconds after the title changes. Spreadsheet and slides entries can be created. Their editors are connected through the published packages. Treat an older note that says they are not connected as outdated where the current package is installed.
+## Create and edit
 
-The editing area is at least 540 px and grows with the available height. Empty space restores the caret at the end. There is no separate attachment upload strip. Images and attachments are inserted from the editor menu. Opening a document expands the next level and the ancestors. The fixed top bar limits the title width and shows an ellipsis. Last-edited information is underneath. Avatar, notification, and more menus close on outside click, blur, and Esc.
+The creation menu provides rich text, Markdown, spreadsheets, slides, and canvas. All five have editors and independent collaboration codecs. Templates require installed providers; blank-document creation is available by default. Personal documents are independent pages; library documents use their library tree.
 
-Like avatars show 8 people by default. The rest is an ellipsis that pages through everyone. Existing likes and comments are unchanged.
+Images and attachments use host uploads, asset IDs, and authorized downloads. Editing requires editor permission or above, and save confirmation follows database commit. Disconnecting retains pending edits in the current page; closing it creates no offline backup. Tools, find/replace, presence, and comments vary by format; see [editor integration](editor-integration.md).
 
-## Revocable link grants
+## Sharing and permissions
 
-The share switch, link role, inviting a collaborator, collaborator role, and removing a collaborator save immediately. There is no extra confirm at the bottom. Repeated submits are disabled while saving. The server version check prevents overwriting a concurrent edit. Failure restores the last confirmed server state and shows the error. Removing a link grant does not remove an explicit invitation.
+The sharing panel manages visibility, invitations, member authorization sources, and links. Changes check a version or revision; refresh after a 409 conflict. Management and ownership operations follow their own authorization rules; see [permissions](permission-inheritance.md).
 
-Direct invitations and people who redeemed a link are both rows in `grants`, distinguished by `source_type` and `source_id`. `share_links` stores only the public link configuration. A person who redeemed a link keeps the link source and share id. The public link configuration is not mixed with one user's grant adjustment. The design record for the unified grant table is kept with the Chinese permission notes.
+Links use `#/s/{token}` for signed-in preview and acceptance. Documents and Q&A share the entry point, but a Q&A link grants bot reading only. The global link switch, individual link disable/expiry, and member-source revocation are distinct actions; removing one source leaves other valid sources intact. See [Q&A sharing](knowledge-sharing.md). Public reading, discovery, collections, and favorites are separate; collecting grants no access, and system administrators do not automatically gain private-content access.
 
-- A link is `#/s/{token}`. The token is 32 random bytes in the URL fragment, not an HTTP query parameter. After sign-in it is redeemed with a same-origin POST.
-- The current link requires sign-in and supports reader, commenter, editor, and manager. Anonymous public reading still comes from visibility.
-- The link table stores the token and a SHA-256 index. Only a manager API returns the token. Do not put the token in a resource projection, audit log, or search index. Database backups are sensitive.
-- A permission change applies immediately to people who already redeemed. Turning the link off revokes permissions derived from it. Turning it on creates a new token and generation. Old links and old redemptions stop working. `revision` is independent of generation so concurrent configuration does not overwrite itself. A conflict is 409.
-- Turning a link off does not change ownership, direct invitations, or parent inheritance. Revoking a link deletes the grant source for that share id and records one revocation. The user can receive access again from a new share id. A manager can change collaborator permissions. Transferring ownership is still owner-only. Moving a document subtree closes related links, matching the older reset-to-private behavior.
-- Body, tree, search, and attachments query effective permissions together. WebSocket writes and pushes recheck access. A connection with no other access is closed when the link is turned off. Bytes already downloaded cannot be recalled.
+## History and restore
 
-## Information and history
+- The document menu provides history, snapshot previews, and manual snapshots. History normally requires editor permission; enabling reader history allows access according to resource reading permission.
+- Restorable rich-text and Markdown snapshots offer restore to managers or owners. `expectedSeq` checks current content. Refresh after a conflict so an old preview cannot overwrite newer edits.
+- Spreadsheets, slides, and canvas have snapshots and readonly previews. They currently return `canRestore: false` and show no restore action.
+- Business history and collaboration checkpoints are persisted separately. Restore uses the snapshot's format, lineage, and assets; missing history is never replaced with current content.
+- Visit and action records recheck current permissions. They are not backups and cannot reconstruct unsaved history.
 
-- Visit count, likes, favorites, and comment count are visible to anyone who can read.
-- Visit and operation records are visible to managers and the owner, 100 rows per page. Visit events start from this upgrade. Old recent-visit data is not presented as a complete history.
-- `document_versions` stores a full Yjs checkpoint that incremental compaction does not overwrite. One is created every 50 valid updates, or on the next valid update more than 5 minutes later. An editor can also save manually. The operation log is aggregated with automatic snapshots. It is not written on every keystroke.
-- Viewing history uses the current document permission and shows a readonly text preview of the body at that time. It does not replace the document that is being collaborated on. Restore is not offered yet. Snapshots that were not kept before the upgrade cannot be reconstructed.
+## Move, copy, and trash
 
-Presentation mode uses the browser fullscreen API, hides the admin bar, tree, and comments, and makes the editor readonly. Esc leaves it.
+Check destination and descendant permissions before moving, and confirm the authorization reset. Ownership transfer requires the owner. Copy creates an independent resource and content identity, rebinds assets, and excludes grants, comments, and undo history. Deletion enters trash; restoration respects deletion batches and parent state. Permanent deletion is an explicit authorized cleanup and does not mean deleting every shared storage object.
 
-## HTTP
+## Routes and source
 
-Writes use the same origin and a valid sign-in. The prefix is `/api/v1`.
+These paths have the `/api/v1` prefix:
 
 | Route | Purpose |
 | --- | --- |
-| GET /resources/:id/likes?cursor= | People who liked, first-page total, nextCursor |
-| GET /resources/:id/share-link | A manager reads the link configuration and current token |
-| PUT /resources/:id/share-link | `{enabled,role,version}` returns a new version and link configuration |
-| POST /share/redeem | `{token}` returns the resource id |
-| GET /resources/:id/info?tab=stats\|visits\|audit&cursor= | One tab: statistics or a paged record |
-| GET /resources/:id/versions?cursor= | Snapshot metadata and nextCursor |
-| POST /resources/:id/versions | An editor saves the current snapshot |
-| GET /resources/:id/versions/:versionId | Readonly historical body |
+| `GET /resources/:id/versions` | History list |
+| `POST /resources/:id/versions` | Manual snapshot |
+| `GET /resources/:id/versions/:versionId` | Preview and current content sequence |
+| `POST /resources/:id/versions/:versionId/restore` | `{expectedSeq}`, restore a supported format |
+| `POST /share/redeem` | `{token, accept?, consume?}`, preview/accept a link |
+| `GET /resources/:id/info` | Statistics, visits, or action records |
 
-Editors are the published `@smartdoca/*` packages locked in this repository. Do not follow an older checkout that pinned a private tarball.
-
-## Immediate actions and dialogs
-
-- A dialog closes on the backdrop or Escape. An action inside it does not close it by accident. Focus is restored and Tab stays inside.
-- Choosing an avatar upload saves automatically. A preset avatar saves on click. Failure shows an error. Upload and asset permission rules are unchanged.
-- Hovering a display name shows an edit icon. Enter or blur saves. Escape cancels. Enter during an input-method composition does not submit early.
-- Theme, density, and sort preferences save when chosen. A profile update refreshes the avatar and name cache on the current page.
-- Collaborator search runs 300 ms after typing. A stale request is cancelled so an old result cannot replace a new one.
-- Delete, transfer, move that resets permissions, password change, and unlinking a third-party account keep an explicit button or confirmation. They are not silent submits.
-
-## Verification in this round
-
-Two pages of the same account were checked for body and code-block cursors and name colors, changing only the selection. An in-memory page checked avatar and name autosave, the share switch succeeding and rolling back on failure, and independent comment cards that do not overlap. Automation covers readonly cursor rejection, server identity that cannot be forged, cleanup on session exit, cursors that do not write the document version, and rich text and mention UTF-16 offsets that follow relative positions.
-
-If local development still loads an old prebuilt dependency, restart once with `DOCA_REBUILD_DEPS=1 pnpm dev`. A real Chinese input method and cross-browser checks still need a person.
+See [experience.ts](../apps/server/src/routes/experience.ts), [history service](../packages/core/src/modules/history/service.ts), and [editor dispatch](../apps/web/src/features/documents/document-editor.tsx). The running `/api/openapi.json` and server validation define the complete deployed API.

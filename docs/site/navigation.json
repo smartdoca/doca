@@ -1,0 +1,64 @@
+[
+  {"id":"getting-started","en":"Getting started","zh":"入门", "pages":[
+    ["quickstart","Quick start","快速开始"],
+    ["features","Capabilities and limits","功能与边界"],
+    ["configuration","Configuration","配置说明"],
+    ["user-guide","User guide","使用指南"],
+    ["faq","FAQ and troubleshooting","常见问题与排障"]
+  ]},
+  {"id":"guides","en":"User guides","zh":"使用指南", "pages":[
+    ["document-experience","Documents and sharing","文档与分享"],
+    ["permission-inheritance","Permissions","权限"],
+    ["public-resource-discovery","Discovery and collections","发现与收录"],
+    ["comments-and-community","Comments and notifications","评论与通知"],
+    ["knowledge-studio","Knowledge curation","知识整理"],
+    ["knowledge-sharing","Q&A sharing","问答分享"]
+  ]},
+  {"id":"operations","en":"Deployment and operations","zh":"部署运维", "pages":[
+    ["deployment","Deployment","部署说明"],
+    ["storage","File storage","文件存储"],
+    ["horizontal-scaling","Horizontal scaling","水平扩展"],
+    ["authentication","Authentication","身份认证"],
+    ["service-credentials","Service credentials","服务凭据"],
+    ["webhooks","Webhooks","Webhook"]
+  ]},
+  {"id":"development","en":"Development","zh":"开发", "pages":[
+    ["development","Development setup","开发环境"],
+    ["architecture","Architecture","项目架构"],
+    ["editor-integration","Editor integration","编辑器集成"],
+    ["collaboration","Collaboration","实时协同"],
+    ["i18n","Internationalization","国际化"]
+  ]},
+  {"id":"plugins","en":"Plugins","zh":"插件", "pages":[
+    ["plugin-architecture","Plugin architecture","插件架构"],
+    ["plugin-development","Plugin development","插件开发"],
+    ["plugin-deployment","Plugin deployment","插件部署"],
+    ["plugin-credentials","Managed credentials","托管凭证"],
+    ["plugin-assistant","Launch the AI assistant","启动 AI 助手"],
+    ["plugin-native","Native cache and attachments","原生缓存与附件"],
+    ["plugin-activity","Recent activity","最近访问"],
+    ["plugin-content","Content providers","内容来源"],
+    ["plugin-extensions","Reading and UI extensions","读取与界面扩展"],
+    ["creation-resources","Templates and materials","模板与素材"],
+    ["plugin-editor-elements","Document elements","文档元素"],
+    ["plugin-store-protocol","Plugin store protocol","插件商店协议"]
+  ]},
+  {"id":"reference","en":"Reference","zh":"技术参考", "pages":[
+    ["api","HTTP API","HTTP API"],
+    ["database","Database","数据库"],
+    ["plugin-sdk-contract","Plugin SDK contract","插件 SDK 契约"],
+    ["plugin-horizontal-scaling","Plugin storage contract","插件存储契约"],
+    ["collaboration-sdk-contract","Collaboration contract","协同契约"],
+    ["editor-file-exchange-contract","File exchange contract","文件交换契约"]
+  ]},
+  {"id":"releases","en":"Releases","zh":"发行记录", "pages":[
+    ["releases/0.1.10","0.1.10","0.1.10"],
+    ["releases/0.1.9","0.1.9","0.1.9"],
+    ["releases/0.1.8","0.1.8","0.1.8"],
+    ["releases/0.1.7","0.1.7","0.1.7"]
+  ]},
+  {"id":"project","en":"Project","zh":"项目", "pages":[
+    ["documentation","Documentation maintenance","文档维护"],
+    ["research","Research and acceptance records","研发与验收资料"]
+  ]}
+]

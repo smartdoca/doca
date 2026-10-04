@@ -15,7 +15,7 @@ DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root"
 
 Use a dedicated persistent directory, writable only by the service user and outside the static web tree. Multiple instances must share the same physical backend. Backups cover the database, every referenced file store and protected deployment configuration. A referenced storage ID must remain configured; changing its physical path or bucket does not move its bytes.
 
-Version 0.1.9 rejects the old database baseline, database-managed storage configuration and old plugin installation list. Old data is preserved without migration or conversion. Deploy to a new empty database and separate storage; see [release requirements](releases/0.1.9.md).
+Version 0.1.10 rejects the old database baseline, database-managed storage configuration and old plugin installation list. Old data is preserved without migration or conversion. Deploy to a new empty database and separate storage; see [release requirements](releases/0.1.10.md).
 
 ## Namespaces and access
 
@@ -32,11 +32,11 @@ Without a CDN, the host proxies private cloud files. Storage secrets are never r
 ## Checks and permissions
 
 - Avatars and covers are at most 5 MB. PNG, JPEG, WebP, and GIF are recognized from the file header and decoded. The limit is 25 million pixels. Metadata is removed and the image is stored as WebP. Avatars are cropped square, at most 512 px. Covers are at most 1600 px wide. A GIF keeps the first frame.
-- Attachments are at most 20 MB. Recognized images are compressed to WebP, at most 2400 px. Other files are stored as the original bytes. SVG and HTML are not inlined as executable images. Ordinary files are served as attachments with `nosniff` and a sandbox. There is no virus scan.
+- Document/AI attachment uploads are at most 20 MiB and preserve original bytes; recognized raster images are validated with a 25-million-pixel limit. Avatar/cover/comment image paths normalize images to WebP with purpose-specific limits. Ordinary user files use a separate streaming upload API with a 2 GiB limit. SVG and HTML are not inlined as executable images. Ordinary files are served as attachments with `nosniff` and a sandbox. There is no virus scan.
 - At most 4 concurrent uploads, and 60 attempts per user per 10 minutes. The API also checks recent upload records. A reverse proxy should add its own body size, connection, and storage limits. There is no per-user disk quota yet.
 - An avatar draft is readable only by the uploader. After it is bound, signed-in users of the site can see it. Anonymous users cannot. A cover follows the library ACL. An unbound cover draft is readable only by the uploader. An attachment follows the document ACL. A system administrator has no extra read right. A cover requires manager. An attachment requires editor.
 - The object is written first. A transaction then rechecks the user and the resource permission and records the asset. If recording fails, the uncommitted object is deleted when possible. Cover edits use the resource version. Avatar edits use the profile version.
-- Finished but unbound avatar and cover drafts are kept for now. Scheduled orphan cleanup, quotas, virus scanning, and multipart upload are not done. A crash can leave an unregistered object. Cleanup must check every asset reference. Do not delete a shared object because one document was removed.
+- Finished but unbound avatar and cover drafts are kept for now. Scheduled asset-draft cleanup, per-user quotas, and virus scanning are not done. Ordinary user-file uploads have S3 multipart support from 32 MiB with 8 MiB parts; this is separate from the bounded asset endpoint. A crash can leave an unregistered object. Cleanup must check every asset reference. Do not delete a shared object because one document was removed.
 
 ## Verification
 

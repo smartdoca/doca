@@ -227,8 +227,7 @@
 }
 
 .account-verification,
-.source-fields,
-.membership-settings fieldset {
+.source-fields {
   min-width: 0;
   border: 1px solid var(--border, #e2e8f0);
   border-radius: 10px;
@@ -236,8 +235,7 @@
   margin: 12px 0;
 }
 .account-verification label,
-.source-fields label,
-.membership-settings label {
+.source-fields label {
   display: flex;
   gap: 8px;
   align-items: center;
@@ -419,9 +417,6 @@ form.auth-card.account-login-card.is-scanning .auth-card-body {
   gap: 12px;
   align-items: center;
   margin: 10px 0;
-}
-.membership-settings h3 {
-  margin-top: 28px;
 }
 @media (max-width: 720px) {
   .capability-row {

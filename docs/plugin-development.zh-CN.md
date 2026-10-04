@@ -4,7 +4,7 @@
 
 [English](plugin-development.md)
 
-完整目标及尚未实现部分见 [SDK 契约](plugin-sdk-contract.zh-CN.md)。项目尚未上线，删除不合理的旧接口，不维护旧会员、审核或源码加载兼容层。
+完整目标及尚未实现部分见 [SDK 契约](plugin-sdk-contract.zh-CN.md)。新增设计不得保留已退出的会员、审核或源码加载路径；现有兼容行为的处理遵循仓库事先确认规则。
 
 水平扩展与存储职责按已确认的[托管存储规范](plugin-horizontal-scaling.zh-CN.md)执行。所有持久化由宿主管理，安装包必须声明 `doca.storage: "host"`；缺失或其他值在安装、目录发现和启动时于导入代码前拒绝。托管 SQL 与内部对象已导出；凭证已在 SDK 源码 0.1.8 实现，临时工作区仍有缺口。
 
@@ -52,7 +52,7 @@ manifest.json 必须为静态 JSON，版本与 package.json 一致：
   "id": "example.attachments",
   "version": "1.0.0",
   "displayName": "Attachments",
-  "sdkRange": "^0.1.3",
+  "sdkRange": "^0.1.9",
   "dependencies": [{ "id": "doca.files", "range": "^0.1.0" }]
 }
 ```
@@ -190,7 +190,7 @@ HTTP 注册默认限制请求体 1 MiB；需要附件等大请求的单条路由
 
 ## 统一内容：读取、搜索与知识库订阅
 
-使用 `@smartdoca/plugin-sdk@^0.1.3`。从 `@smartdoca/plugin-sdk/content` 导入 `contentServiceToken` 与 `ContentSource` 类型，在 `injections.required` 声明服务，并在 mount 中注册来源。来源归属注册它的插件；内置文档和文件也使用这套契约。
+使用 `@smartdoca/plugin-sdk@^0.1.9`。从 `@smartdoca/plugin-sdk/content` 导入 `contentServiceToken` 与 `ContentSource` 类型，在 `injections.required` 声明服务，并在 mount 中注册来源。来源归属注册它的插件；内置文档和文件也使用这套契约。
 
 | 成员                                          | 契约                                                                                                                                                                       |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -229,7 +229,7 @@ Web 与受限移动 WebView 复用插件 Web 产物。`@smartdoca/plugin-sdk/web
 
 ## 公共读取与多位置展示（SDK 0.1.4）
 
-新增用户目录、原生文档快照、知识库目录、`host.platform`、`host.ui` 及可选 commands/views/placements 的实际导出和接入示例见[插件公共读取与多位置展示](plugin-extensions.md)。使用新方法的插件声明最低 `sdkRange: "^0.1.4"`；当前只注册常规页面的插件无需新增注册。
+新增用户目录、原生文档快照、知识库目录、`host.platform`、`host.ui` 及可选 commands/views/placements 的实际导出和接入示例见[插件公共读取与多位置展示](plugin-extensions.md)。使用新方法的插件声明最低 `sdkRange: "^0.1.9"`；当前只注册常规页面的插件无需新增注册。
 
 ## 模板与素材插件
 

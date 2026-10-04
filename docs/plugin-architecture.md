@@ -12,4 +12,4 @@ The host keeps authentication, authorization, files, document collaboration, sec
 
 A generic tree slot, more business services, and a fund reservation protocol are still listed by implementation status in the contract. A proposed API is not an export you can call.
 
-All durable plugin state is host-managed. Packages must declare `doca.storage: "host"`; plugins own models/authorization, not drivers, storage paths or local/remote configuration. Managed SQL and private objects are exported in SDK 0.1.7; managed credentials remain a proposed capability. See the [storage contract](plugin-horizontal-scaling.md).
+All durable plugin state is host-managed. Packages must declare `doca.storage: "host"`; plugins own models/authorization, not drivers, storage paths or local/remote configuration. Managed SQL and private objects are exported in SDK 0.1.7; server-only encrypted credentials are exported in SDK 0.1.9. See the [storage contract](plugin-horizontal-scaling.md).

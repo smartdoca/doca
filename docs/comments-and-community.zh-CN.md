@@ -73,6 +73,9 @@
 
 正文 @ 使用编辑器 mentions 扩展，候选同样来自范围受限的 lookup。用户提及节点保留用户 UUID，而非仅存显示名字。
 
+
+五种格式各有永久评论锚点；上面的 Slate 选区说明仅适用于富文本。表格通过原生评论 API 捕获稳定行列 ID，结构变化后解析当前范围，服务端检查目标是否仍存在，见[实时协同](collaboration.zh-CN.md)。
+
 ## 通知
 
 支持 comment.created、comment.mentioned、document.mentioned、resource.permissions_changed（新增邀请）、like.added、favorite.added 以及已有所有权转移事件。

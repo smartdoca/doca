@@ -4,16 +4,17 @@
 
 ## 开发启动
 
-Node.js 22.12+或24 LTS、pnpm 11。版本锁定pnpm-lock.yaml；better-sqlite3原生构建已在pnpm-workspace.yaml允许。
+Node.js 22.12+或24 LTS、pnpm 11.25.0。版本锁定pnpm-lock.yaml；better-sqlite3原生构建已在pnpm-workspace.yaml允许。
 
 ```sh
 pnpm install --frozen-lockfile
+cp .env.example .env
 pnpm dev
 ```
 
 入口 http://127.0.0.1:39130，API监听39120，通过前端同源代理访问。直接访问39120或用localhost替换127.0.0.1会与配置不符。
 
-默认配置即可运行，需调整时参照.env.example创建本地.env，不提交凭证。
+启动前复制 `.env.example`，文件存储变量为必填；示例中的本地 origin、SQLite 路径和存储目录配套使用。按需调整 `.env`，不提交凭证。
 
 ## 初始化管理员
 
@@ -59,7 +60,7 @@ unset DOCA_RESET_ADMIN_LOGIN DOCA_RESET_ADMIN_PASSWORD
 
 生产页面的 HTML 始终由 Doca 返回，接口也使用页面所在的源。`DOCA_ASSET_BASE` 只改写 HTML 里的 `/assets/...` 地址。
 
-不设置时，JS、CSS 和其他构建文件由容器从 `/assets` 读取。设置时，HTML 中的这些地址改为该前缀，例如 `https://cdn.example.com/doca/0.1.0/assets/index-abc.js`。前缀必须是没有账号、查询参数或哈希的 HTTP(S) URL；生产环境必须是 HTTPS。容器里的 `/assets` 仍然保留，样式表内部以根路径引用的字体和图片会继续回到 Doca。
+不设置时，JS、CSS 和其他构建文件由容器从 `/assets` 读取。设置时，HTML 中的这些地址改为该前缀，例如 `https://cdn.example.com/doca/0.1.10/assets/index-abc.js`。前缀必须是没有账号、查询参数或哈希的 HTTP(S) URL；生产环境必须是 HTTPS。容器里的 `/assets` 仍然保留，样式表内部以根路径引用的字体和图片会继续回到 Doca。
 
 推送正式版本标签 `v1.2.3` 时，GitHub Actions 会构建网页并创建 Release，附件是 `doca-web-assets-v1.2.3.tar.gz`。解压后保留其中的 `assets` 目录，再把包含该目录的 HTTPS 前缀写入 `DOCA_ASSET_BASE`。`v1.2.3-rc.1` 这类预发布标签不会创建 Release。推送到 `main` 也不会。浏览器不要直接使用 `github.com/.../releases/download` 作为 `DOCA_ASSET_BASE`：下载地址会跳转，也不为 ES module 提供跨源响应头。把解压出的 `assets` 目录放到允许跨源读取脚本的 CDN 或对象存储上。
 
@@ -72,7 +73,7 @@ NODE_ENV=production DOCA_ORIGIN=https://docs.example.com pnpm start
 
 check执行类型检查、测试和前端构建；start服务构建产物与API，不启动Vite。示例域名需替换并配置TLS反代，保留原Host/Origin，转发DOCA_PORT。
 
-后端不信任任意X-Forwarded-*，默认loopback。当前认证按连接IP限流，反代用户可能共享配额；正式上线须结合受信代理配置完善限流，不能随意开启trustProxy。
+后端默认不信任任何 X-Forwarded-*，回环地址也不例外；`DOCA_TRUST_PROXY` 仅填写实际代理 IP/CIDR。当前认证按连接IP限流，反代用户可能共享配额；正式上线须结合受信代理配置完善限流，不能随意开启trustProxy。
 
 ## AI 任务日志
 
@@ -104,7 +105,7 @@ kubectl logs -f deploy/doca --tail=200
 
 浏览器中的 AI 会话接口会返回 `jobs[].id`、`jobs[].status` 和 `jobs[].error`。用这个 job ID 在日志中定位对应的 `AI job failed` 记录即可；日志只记录脱敏后的错误分类，不会输出模型密钥或完整提示词。
 
-这是可运行开发基线，尚非生产验收发布：缺账号找回、OIDC 提供方、完整安全审计/监控、大规模查询优化等。外部 OIDC 和社交登录适配已实现，凭据部署和真实平台联调见 [身份认证说明](authentication.zh-CN.md)，能力边界见 [架构](architecture.zh-CN.md)。
+这是可运行开发基线，尚非生产验收发布：账号找回已实现，联系方式找回需配置验证网关；OIDC 提供方、完整监控、大规模查询优化等仍待完善。外部 OIDC 和社交登录适配已实现，凭据部署和真实平台联调见 [身份认证说明](authentication.zh-CN.md)，能力边界见 [架构](architecture.zh-CN.md)。
 
 ## 数据保护
 

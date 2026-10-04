@@ -114,7 +114,7 @@ Yjs checkpoint 保存原 CRDT 的完整编码，不能用 JSON 投影重建并�
 
 评论作者/正文/回复/解决状态属于平台数据库。组件需提供 captureAnchor、resolveAnchor、renderAnchors、onAnchorClick。富文本是相对文本位置，Excel 应为稳定行列范围，随插删变换；完全删除或解决后不高亮。
 
-本轮不展示 Excel 全文评论区。区域评论的稳定锚点协议尚未提供，不以临时光标接口冒充已经支持永久区域评论。
+当前表格包和宿主已实现区域评论，使用稳定行列身份、capture/resolve/reveal API、标记渲染、epoch 校验与删除目标处理。已支持的行列插入、排序和工作表变化由 `tests/editor-sessions.test.ts`、`tests/sheet-axis-sizes.test.ts`、`tests/sheet-collection.test.ts` 隔离测试覆盖。永久协议与临时单元格 presence 分开。
 
 ## 8. 两个组件必须共用的验收清单
 
@@ -131,21 +131,21 @@ Yjs checkpoint 保存原 CRDT 的完整编码，不能用 JSON 投影重建并�
 
 ## 9. 当前实现与提案的边界
 
-本轮已做：共用可靠提交队列、移除空闲同步回传、Excel 临时选区/用户名、固定布局、富文本固定工具栏选中态、插入表格菜单宽度修复。
+当前宿主 0.1.10 已接入富文本、Markdown、表格、画板和演示文稿，共用可靠提交队列及持久 ACK；空闲同步不回传正文，选区与用户名由各格式适配器处理。五种格式支持历史读取；仅富文本和 Markdown 支持管理者恢复，表格、画板、演示文稿返回 `canRestore:false`。这不是所有格式已具备统一组件回滚 API 的承诺。
 
 平台当前已实现 epoch、协议校验、提交回执与历史恢复元数据，具体支持范围见上文及各组件集成文档。无 Redis 时使用单进程广播和 presence；配置 Redis 后，文档更新、服务端刷新、权限失效、通知和 presence 跨实例传播。数据库提交仍是 ACK 边界和正文事实来源，Redis 重连后由服务端向本实例活动房间重新下发权威状态，不把 Pub/Sub 当持久日志，也不在 Redis 故障时静默退回本机总线。
 
-后续仍需组件和平台共同落地：正式组件选区 API、持久离线队列、Excel 稳定区域评论锚点和统一回滚能力。组件未导出的能力仍属于目标契约，Excel 基线验证继续保留。
+后续仍需组件和平台共同落地：正式组件选区 API、持久离线队列和跨格式统一回滚能力。组件未导出的能力仍属于目标契约，Excel 基线验证继续保留。
 
 现有服务协议仍见 [collaboration.md](collaboration.zh-CN.md)。该文档是下一阶段统一契约，不代表上面字段和能力都已发布。
 
-## Plugin elements increment — 2026-10-02
+## 插件元素增量（2026-10-02）
 
-The host now implements the optional SDK 0.1.6 Web element registry. Rich text stores an opaque JSON envelope through one permanent `custom:plugin-element` inline codec using the existing rich schema 3. Spreadsheet stores opaque JSON in native `ICellData.custom.docaElement` using existing schema 6 and the public range command path. Neither changes transport, protocol version, epoch, checkpoint identity, ACK receipts or reliable outbox. There is no second JSON autosave or business-owned content database.
+宿主已实现 SDK 0.1.6 可选 Web 元素注册表。富文本通过永久 `custom:plugin-element` 原子行内 codec 保存不透明 JSON envelope。表格在原生 `ICellData` 的 `custom.docaElement` 保存配置，以 `v` 保存静态文本投影；整单元格画布渲染器只读取配置，不改持久值。两种格式继续使用原生模型、检查点、撤销和同一个可靠 outbox。
 
-Unknown types and exact envelope/data versions display an unsupported placeholder and retain their original bounded JSON. No adapter, migration, conversion or deletion is provided. Existing internal reference readers remain unchanged. Native insertion/configuration/removal participates in clipboard, undo and collaboration. Configuration forms recheck a live rich range or stable spreadsheet single-cell anchor and fail on a removed/concurrently changed target. Canvas timers are view-only, at most once per second and scheduled only after a visible timed cell is drawn; hidden pages pause. Render/selection/idle changes must not increase content seq or history.
+未知类型和不匹配的精确 envelope/data 版本显示不支持占位，保留原始有界 JSON。不提供适配、迁移、转换或自动重置。现有内部引用读取规则保持。原生插入、配置、删除参与剪贴板、撤销和协同。配置表单重新检查实时富文本范围或稳定单单元格锚点，目标已删除或并发变化时拒绝。画布计时器只刷新视图，最多每秒一次，只有绘制了可见计时单元格后才安排下一次刷新；隐藏页面暂停。渲染、选区和空闲变化不得增加正文 seq 或历史。
 
-Isolated automated acceptance covers native persistence and reload, opaque unknown payloads, rich atom delete/undo/clipboard, sheet row insertion/anchor/copy/delete/undo, duplicate ACK replay, two-replica convergence with no remote echo, readonly denial and oversized payload rollback. Tests do not edit user documents. This increment does not claim universal block support, all spreadsheet operations, cross-format lossless export, permanent offline queues or native-device acceptance. Precise element fields and limits are in the repository source `docs/plugin-editor-elements.md`.
+隔离自动验收覆盖原生持久化与重载、未知 payload 原样保存、富文本原子删除/撤销/剪贴板、表格行插入/锚点/复制/删除/撤销、重复 ACK 重放、两副本收敛且不回声、只读拒绝和超限 payload 回滚。不编辑用户文档。本增量不保证通用块支持、全部表格操作、跨格式无损导出、永久离线队列或原生设备验收。精确字段与限制见仓库 `docs/plugin-editor-elements.md`。
 
 ## Markdown 初始化修复（2026-10-03）
 

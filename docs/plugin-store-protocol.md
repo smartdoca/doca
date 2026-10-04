@@ -1,16 +1,18 @@
-# Doca 插件商城交互协议 v1
+# Doca plugin store protocol v1
 
-更新：2026-09-30。**远端商城开发以本文为准。** 本文替换此前“全量目录 + 商城托管 ZIP”的草案，不需要兼容旧接口。
+[中文](plugin-store-protocol.zh-CN.md)
 
-状态：本协议是本轮确定的实现目标；Doca 分支 `codex/plugin-store` 正在接入。已有 ZIP 安装、共享归档、多实例启动补齐；npm 安装、远端分页、更新检查、新详情和导航/App 宿主已接入源码并有本地测试；远端服务与独立插件的端到端联调尚未完成。不要把本文视为全部能力已经上线的证明。远端可立即按本文实现，并用下方验收用例提供 fixtures。
+Updated 2026-09-30, with current mandatory fields and navigation notes below. **Remote store implementations use this protocol.** It supersedes the earlier full-catalog/store-hosted-ZIP draft; that draft is not an accepted endpoint contract.
 
-## 1. 职责和部署
+ZIP/npm installation, shared archives, multi-instance startup restoration, remote pagination, update checks, details, and Web/App navigation are implemented in source. External stores and independent plugins still require the acceptance checks below; source implementation does not prove every external service is live. Current SDK is `0.1.9`; verify examples against installed host versions and package exports.
 
-- npm registry 分发完整、预编译的插件包。商城不提供 ZIP 下载接口，但审核系统必须检查具体 npm 包字节。
-- 远端商城维护插件资料、分类、版本目录、审核/撤回状态、点赞与下载统计、富文本详情。
-- Doca 维护管理员权限、安装事务、完整性校验、共享归档、运行版本、Web/App 入口和布局配置。
-- 点赞、GitHub 登录均在远端网站完成。Doca 只展示点赞量，并在用户点击后提示打开新页面；不收取远端登录凭据，不实现点赞 API、OAuth 回调或账号绑定。
-- Doca 仍支持手动 npm 安装和本地 ZIP / 目录安装。目录外安装标为“未经官方审核”；下载自 npm 本身不等于官方审核通过。
+## 1. Responsibilities and deployment
+
+- The npm registry distributes complete precompiled packages. The store has no ZIP-download endpoint; review must inspect actual npm package bytes.
+- The remote store owns metadata, categories, releases, approval/withdrawal, likes/download statistics, and rich-text details.
+- Doca owns administrator authorization, installation transactions, integrity verification, shared archives, running versions, Web/App entries, and layouts.
+- Likes and GitHub login occur on the remote website. Doca displays counts and offers a new page on click. It collects no remote login credentials and implements no like API, OAuth callback, or account binding.
+- Manual npm and local ZIP/directory installations remain supported. Packages outside the reviewed catalog are labeled unreviewed; npm distribution alone is not official approval.
 
 ```dotenv
 DOCA_PLUGIN_STORE_URL=https://store.smartdoca.cc
@@ -18,25 +20,26 @@ DOCA_PLUGIN_NPM_REGISTRY=https://registry.npmjs.org
 DOCA_PLUGINS_DIR=/data/plugins
 ```
 
-两个地址都是 HTTPS origin，不允许凭据、路径前缀、query 或 fragment。空值使用默认值。首版不支持私有 registry 登录。Doca 服务端代理全部商城 API 请求，不向远端转发浏览器 Cookie、Authorization、用户 ID 或业务数据；远端无需开放浏览器 CORS。
+Store/registry addresses are HTTPS origins without credentials, path prefixes, query, or fragment. Empty values use defaults. Private registry login is unsupported in v1. The Doca server proxies store requests without browser Cookie, Authorization, user IDs, or business data; the remote service needs no browser CORS.
 
-API 前缀 `/api/v1`。JSON UTF-8，响应带 `protocolVersion: 1`。时间为 UTC ISO 8601，计数为非负安全整数，未知计数为 `null`，不能以 0 代替未知。所有接口公共只读，无需商城登录。
+API prefix is `/api/v1`. JSON is UTF-8 and responses include protocolVersion:1. Times are UTC ISO 8601. Counts are nonnegative safe integers or null when unknown; unknown must not become zero. All endpoints are public read-only and need no store login.
 
-## 2. 公共类型
+## 2. Public types
 
-### PluginSummary：卡片资料
+### PluginSummary
 
 ```json
 {
   "id": "example.mail",
-  "name": "邮箱",
-  "summary": "收发邮件与管理多个邮箱账号。",
+  "name": "Mail",
+  "summary": "Send and receive mail across multiple accounts.",
   "author": { "name": "Example", "url": "https://github.com/example" },
   "categoryId": "productivity",
   "icon": null,
   "detailPath": "/plugins/example.mail",
   "targets": ["web", "mobile"],
   "review": "approved",
+  "official": false,
   "latestVersion": "1.2.0",
   "downloads": { "count": 1234, "period": "last30Days", "source": "npm", "asOf": "2026-09-30T00:00:00Z" },
   "likes": { "count": 42, "asOf": "2026-09-30T00:00:00Z" },
@@ -44,31 +47,33 @@ API 前缀 `/api/v1`。JSON UTF-8，响应带 `protocolVersion: 1`。时间为 U
 }
 ```
 
-约束：
+Constraints:
 
-- `id`：与安装包 manifest.id 相同，匹配 `^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$`，最多 100 字符。
-- `name` / `author.name`：1–160 字符；`summary`：最多 300 字符，均为纯文本。
-- `author.url`：HTTPS URL 或 null，仅供用户点击，不由宿主自动抓取。
-- `categoryId`：1–60 字符，`[a-z0-9-]+`；分类列表单独获取，不从当前页推导。
-- `icon`：PNG data URL 或 null，编码后总长不超过 24 KiB；不接受 SVG、脚本或远端图片 URL。
-- `detailPath`：商城同源绝对路径 `/plugins/<id>`；由 Doca 拼接配置的商城 origin，禁止外部 origin、query、fragment、路径穿越。打开新页使用 `noopener,noreferrer`。
-- `targets`：非空且去重的 `web` / `mobile` 数组。mobile 指 App 内受控 WebView 页面，不是动态原生代码。
-- `review`：`approved | suspended`。列表默认仅返回 approved；详情允许 suspended。
-- `latestVersion`：最新审核通过的稳定版本或 null，**不代表对当前 Doca 可安装或可升级**。
-- npm 近 30 天下载数是包下载统计，不是 Doca 安装人数，也不是具体版本下载数。
-- 未提供统计时仍返回对象：count/asOf 为 null。列表不返回富文本正文、历史版本数组、npm tarball 或完整导航配置。
+- id matches manifest.id and `^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$`, maximum 100 characters.
+- name/author.name: 1–160 characters; summary: at most 300; all plain text.
+- author.url: HTTPS URL or null for user clicks only, without automatic host fetching.
+- categoryId: 1–60 characters matching `[a-z0-9-]+`. Fetch categories separately rather than infer them from a page.
+- icon: PNG data URL or null, at most 24 KiB encoded; no SVG, scripts, or remote image URLs.
+- detailPath: same-origin absolute `/plugins/<id>`, joined with the configured origin. Reject external origins, query/fragment, and traversal. New windows use noopener,noreferrer.
+- targets: nonempty deduplicated web/mobile array. mobile means a controlled App WebView rather than dynamic native code.
+- review: approved/suspended. Lists default to approved; details may return suspended.
+- official: required boolean, separate from release review. Display official identity only for true, without inferring it from installation source. Missing official is a protocol error.
+- latestVersion: latest approved stable release or null; it does not establish installability/upgradability on a particular host.
+- Last-30-day npm downloads count package downloads, rather than Doca users/installations or version-specific downloads.
+- Missing statistics still return objects with null count/asOf. Lists omit rich-text body, historical release arrays, tarballs, and full navigation.
 
-### Release：一个不可变版本
+### Release
 
 ```json
 {
   "pluginId": "example.mail",
   "version": "1.2.0",
-  "sdkRange": "^0.1.0",
+  "sdkRange": "^0.1.9",
   "dataVersion": "1",
   "targets": ["web", "mobile"],
   "mobileHostRange": "^1.0.0",
   "dependencies": [],
+  "changelog": "Improve mail synchronization.",
   "review": "approved",
   "reviewedAt": "2026-09-29T12:00:00Z",
   "publishedAt": "2026-09-29T10:00:00Z",
@@ -82,39 +87,39 @@ API 前缀 `/api/v1`。JSON UTF-8，响应带 `protocolVersion: 1`。时间为 U
 }
 ```
 
-示例摘要是占位值；实际必须为 SHA-512 的 64 字节摘要，标准 base64，单个 SRI 值。`npm.size` 为准确 tgz 字节数，1–33,554,432。`npm.version`、Release.version、package.json.version、manifest.version 必须一致。
+The digest above is a placeholder. Actual integrity must be one SRI value containing a standard-base64 SHA-512 digest of 64 bytes. npm.size is the exact tgz length, 1–33,554,432 bytes. npm.version, Release.version, package.json.version, and manifest.version must match.
 
-`version` 采用三段 semver，可含 prerelease，不含 build metadata；最多 100 字符。`sdkRange` 与插件 manifest 完全一致；当前 SDK 能力基线 0.1.0，支持 `*`、精确值、`^`、`~`。`mobileHostRange` 在 targets 含 mobile 时必填，表示移动插件宿主协议版本（首版 1.0.0），不是 App 商店构建号。Doca SDK 与移动宿主协议分别判断。
+version uses three-part semver, may include prerelease, excludes build metadata, and is at most 100 characters. sdkRange exactly matches manifest; current SDK is 0.1.9 and supported ranges are `*`, exact, `^`, and `~`. mobileHostRange is required for mobile targets and refers to mobile plugin-host protocol (v1:1.0.0), separate from App store build number and SDK compatibility.
 
-`dataVersion` 为 `[a-zA-Z0-9._-]{1,80}`，不比较大小；首版升级必须完全相同。dependencies 为最多 100 个 `{id,range,optional?}`，属于 Doca 插件依赖，不是 npm dependencies。首版不自动安装依赖插件。
+dataVersion matches `[a-zA-Z0-9._-]{1,80}` without ordering; v1 upgrades require exact equality. dependencies contains at most 100 `{id,range,optional?}` Doca plugin dependencies, separate from npm dependencies. Missing dependency plugins are not automatically installed.
 
-版本 review 为 `approved | withdrawn`；撤回后禁止新安装，不自动卸载已运行版本。即使 npm 发布了更高版本，未经审核的版本也不能出现在官方更新推荐中。
+Release review is approved/withdrawn. Withdrawal prevents new installation without automatically unloading running versions. Higher npm releases cannot appear in official recommendations without approval. Review binds `(pluginId,npm.registry,npm.name,version,integrity,size)`; the same version cannot replace its package. Authors, statistics, and review state may change; package bytes/capability declarations are immutable.
 
-商城审核绑定 `(pluginId, npm.registry, npm.name, version, integrity, size)`；不得同版本换包。作者、下载量、点赞量、审核撤回状态可以更新，包内容及其能力声明不可变。
+changelog is a required plain-text string on release-list and exact-release endpoints, maximum 100000 characters. Empty means absent notes; preserve line breaks without executing HTML.
 
-## 3. 分类
+## 3. Categories
 
 `GET /api/v1/categories?locale=zh`
 
 ```json
-{"protocolVersion":1,"items":[{"id":"productivity","name":"效率工具","count":12}]}
+{"protocolVersion":1,"items":[{"id":"productivity","name":"Productivity","count":12}]}
 ```
 
-最多 100 个分类。locale 仅 `zh | en`，缺省 zh；没有译文时返回默认文案。count 为当前已审核可见插件总量或 null，不受列表当前搜索条件影响。
+At most 100 categories. locale is zh/en, default zh; missing translations use default labels. count is the approved visible catalog total or null, independent of current list filters.
 
-## 4. 插件列表：服务端分页、搜索、排序
+## 4. Paginated search and ordering
 
 `GET /api/v1/plugins?q=mail&category=productivity&target=mobile&sort=downloads&limit=24&locale=zh`
 
-| 参数 | 规则 |
+| Parameter | Rule |
 | --- | --- |
-| q | 可选，修剪后最多 100 字符；搜索名称、简介、作者、plugin id、npm 包名；远端实现匹配 |
-| category | 可选分类 ID，省略为全部 |
-| target | 可选 `web` / `mobile`，省略不限 |
-| sort | `updated`（默认）、`downloads`、`likes`、`name` |
-| limit | 1–48，默认 24 |
-| cursor | 可选不透明游标，最多 2048 字符 |
-| locale | zh / en，默认 zh |
+| q | Optional; trimmed maximum 100 characters; remote matching searches name, summary, author, plugin ID, and npm name |
+| category | Optional category ID; omitted means all |
+| target | Optional web/mobile; omitted means unrestricted |
+| sort | updated (default), downloads, likes, name |
+| limit | 1–48, default 24 |
+| cursor | Optional opaque cursor, at most 2048 characters |
+| locale | zh/en, default zh |
 
 ```json
 {
@@ -124,85 +129,85 @@ API 前缀 `/api/v1`。JSON UTF-8，响应带 `protocolVersion: 1`。时间为 U
 }
 ```
 
-items 为 PluginSummary[]，不超过 limit。total 为匹配总数或 null；nextCursor 为 null 表示末页。客户端“加载更多”只追加当前查询的结果；更改搜索、筛选、排序后清空游标重新请求，取消旧请求或忽略旧响应，不能把不同查询结果混合。
+items is PluginSummary[] within limit. total is matching count or null; null nextCursor means the last page. Load More appends results from the same query only. Changing search/filter/order clears the cursor; cancel old requests or ignore late responses instead of mixing queries.
 
-排序：updated 按 updatedAt 降序；downloads 按近 30 天下载量降序；likes 降序；name 按本地化名称升序；均以 id 升序稳定打破平局。未知统计排在已知之后。
+updated sorts descending updatedAt; downloads descending last-30-day count; likes descending; name ascending localized name. All use ascending id as a stable tie breaker. Unknown statistics follow known values.
 
-游标必须绑定规范化查询、排序及结果快照；后续分页保持 snapshotAt。快照至少有效 15 分钟，防止统计变化导致翻页重复或漏项。过期返回 410 `cursor_expired`，客户端重新开始；参数不匹配返回 400 `cursor_mismatch`。不得让 Doca 下载整个目录后自行搜索、排序或分页。
+Cursors bind normalized query, order, and result snapshot; continuation preserves snapshotAt. Snapshots last at least 15 minutes to avoid duplicates/missing entries as statistics change. Expiry returns 410 cursor_expired and restarts; mismatched parameters return 400 cursor_mismatch. Doca must not download the entire catalog to perform local search/sort/pagination.
 
-单页响应上限 2 MiB，15 秒超时。可返回 ETag；Doca 只有缓存匹配响应时才发送 If-None-Match，304 使用缓存。
+A page is at most 2 MiB with a 15-second timeout. ETag is optional; Doca sends If-None-Match only with a matching cached response and uses that cache on 304.
 
-## 5. 插件详情：资料与只读富文本
+## 5. Details and read-only rich text
 
 `GET /api/v1/plugins/<id>?locale=zh`
 
 ```json
 {
   "protocolVersion": 1,
-  "plugin": { "id": "example.mail", "name": "见 PluginSummary，实际必须返回完整对象" },
+  "plugin": { "id": "example.mail", "name": "See PluginSummary; return the complete object" },
   "description": {
     "format": "doca-slate",
     "version": 1,
     "nodes": [
-      { "type": "heading", "level": 2, "children": [{"text":"邮箱插件"}] },
-      { "type": "paragraph", "children": [{"text":"支持多个邮箱账号。","bold":true}] }
+      { "type": "heading", "level": 2, "children": [{"text":"Mail plugin"}] },
+      { "type": "paragraph", "children": [{"text":"Supports multiple mail accounts.","bold":true}] }
     ]
   }
 }
 ```
 
-这里缩写的 plugin 必须实际返回完整 PluginSummary。详情不嵌入全部版本；版本另行分页。正文由远端使用 slatetsx 编辑、持久化并转换到下述传输结构；Doca 只读展示，无编辑、保存或加载远端编辑器插件的行为。`doca-slate` 是明确的传输子集，不承诺任意 slatetsx 内部节点都可直接传递。
+The abbreviated plugin object must actually be a full PluginSummary. Releases are paginated separately. The remote service edits/persists with slatetsx and converts into the transport subset below; Doca displays it read-only without saving, editing, or loading remote editor plugins. doca-slate does not accept arbitrary internal slatetsx nodes.
 
-### 富文本 v1 节点
+### Rich-text v1 nodes
 
-- 文本：`{text:string,bold?:boolean,italic?:boolean,underline?:boolean,strikethrough?:boolean,code?:boolean}`。
-- paragraph：`{type:"paragraph",children:Inline[]}`。
-- heading：同上，另含 level 整数 1–6。
-- link：行内 `{type:"link",url:string,children:Text[]}`，仅允许 https/http/mailto，拒绝控制字符、javascript/data URL；外链新窗口使用 noopener,noreferrer。
-- blockquote：`{type:"blockquote",children:Block[]}`。
-- bulleted-list / numbered-list：`{type:...,children:ListItem[]}`；list-item：`{type:"list-item",children:Block[]}`。
-- code-block：`{type:"code-block",language?:string,children:Text[]}`，纯文本呈现，不执行代码。
-- image：`{type:"image",src:string,alt:string,children:[{text:""}]}`。src 是 PNG/JPEG/WebP data URL，单张解码后最多 1 MiB（1,048,576 字节）；拒绝 SVG、远程 URL，避免私有地址请求与追踪。Doca 0.1.5 及更早版本仍受原 256 KiB 上限限制，较大图片需要更新客户端后显示；此调整不迁移或转换已有数据，回滚客户端会恢复原显示限制。详情响应总计仍不得超过 2 MiB。
-- divider：`{type:"divider",children:[{text:""}]}`。
+- Text: `{text:string,bold?:boolean,italic?:boolean,underline?:boolean,strikethrough?:boolean,code?:boolean}`.
+- paragraph: `{type:"paragraph",children:Inline[]}`.
+- heading: paragraph structure with integer level 1–6.
+- link: inline `{type:"link",url:string,children:Text[]}`; https/http/mailto only; reject control characters, javascript/data URLs; external windows use noopener,noreferrer.
+- blockquote: `{type:"blockquote",children:Block[]}`.
+- bulleted-list/numbered-list: `{type:...,children:ListItem[]}`; list-item: `{type:"list-item",children:Block[]}`.
+- code-block: `{type:"code-block",language?:string,children:Text[]}`; render plain text without execution.
+- image: `{type:"image",src:string,alt:string,children:[{text:""}]}`; PNG/JPEG/WebP data URLs, at most 1 MiB decoded per image (1,048,576 bytes). Reject SVG/remote URLs to avoid private-address requests and tracking. Doca 0.1.5 and earlier retains its original 256 KiB display limit; larger images need an updated client. This limit change neither migrates nor converts data; client rollback restores its former display limit. Total details remain within 2 MiB.
+- divider: `{type:"divider",children:[{text:""}]}`.
 
-不支持的节点保留安全的文本子节点并提示部分内容无法显示；未知 format/version 给出明确提示和远端详情页链接，不执行 HTML/JSX。不接受原始 HTML、自定义脚本、iframe、可执行组件、事件处理字段。正文最多 5000 节点、16 层、200000 文本字符，详情响应总计最多 2 MiB。远端负责转换表格等尚未支持的类型为段落或图片。新增节点需协调协议与渲染器。
+Unsupported nodes retain safe text children with partial-display feedback. Unknown format/version shows an explicit message and remote details link, without executing HTML/JSX. Raw HTML, scripts, iframes, executable components, and event-handler fields are rejected. Limits: 5000 nodes, depth 16, 200000 text characters, and 2 MiB total response. The remote service converts unsupported tables/types to paragraphs/images. New types require coordinated protocol/renderer changes.
 
-## 6. 版本列表和安装前核验
+## 6. Releases and installation checks
 
 `GET /api/v1/plugins/<id>/releases?limit=20&cursor=...`
 
-返回 `{protocolVersion:1,items:Release[],page:{nextCursor,total,snapshotAt}}`，规则同列表，limit 1–48。按 semver 降序，默认含审核通过的稳定版本；可选 `includePrerelease=true`。明确撤回版本仅通过下面的精确查询返回。
+Returns `{protocolVersion:1,items:Release[],page:{nextCursor,total,snapshotAt}}` with list rules and limit 1–48. Sort descending semver and default to approved stable releases; optional includePrerelease=true. Withdrawn versions are available only through exact lookup:
 
 `GET /api/v1/plugins/<id>/releases/<version>`
 
-返回 `{protocolVersion:1,release:Release}`。安装操作必须重新获取精确版本审核状态与摘要，不能直接使用过期列表。404 表示未知版本；withdrawn 在 200 响应中明确给出并拒绝安装。
+Returns `{protocolVersion:1,release:Release}`. Installation refetches exact review state/digest rather than trust stale lists. Unknown versions return 404; withdrawn is explicit in a 200 response and cannot install.
 
-### npm 下载流程
+### npm download
 
-1. 验证 Release.npm.registry 等于宿主配置的 registry（首版默认 npmjs），禁止商城任意指定下载源。
-2. 从 registry 获取精确包版本元数据：`GET /<encodeURIComponent(packageName)>/<encodeURIComponent(version)>`，不解析 latest/tag/range。
-3. 验证 registry 元数据 name/version、dist.integrity 与商城审核的 SRI 一致；下载 dist.tarball。
-4. tarball 必须 HTTPS 且同 registry origin，无凭据、fragment；不跟随重定向。元数据不超过 2 MiB，15 秒；下载不超过 32 MiB，120 秒，校验大小和 SHA-512。
-5. 安全解包 npm tgz，要求根目录 `package/`，剥离一次；只接受普通文件/目录，拒绝符号链接、硬链接、设备、绝对路径、穿越、重复路径。POSIX pax 扩展头（typeflag `x`/`g`，macOS libarchive 与 npm 用来写 mtime、xattr）跳过，不作为文件解出，也不采用其中的 path 覆盖，下一则 ustar 头的路径才参与校验。最大 10000 项、128 MiB 展开量；流式限制解压大小。
-6. 核对 package / manifest / 审核元数据，发布完整归档和目标状态。npm 生命周期脚本一律不运行，不执行 npm install，也不下载缺失运行依赖。
+1. Check Release.npm.registry equals the configured registry (default npmjs); the store cannot choose arbitrary origins.
+2. Fetch exact version metadata at `GET /<encodeURIComponent(packageName)>/<encodeURIComponent(version)>`, without latest/tag/range resolution.
+3. Verify name/version and dist.integrity against approved SRI, then download dist.tarball.
+4. The tarball is HTTPS at the registry origin without credentials/fragment; no redirects. Metadata: 2 MiB/15 seconds. Download: 32 MiB/120 seconds, exact size and SHA-512 validation.
+5. Safely extract npm tgz under exactly one package/ wrapper. Accept ordinary files/directories only; reject symbolic/hard links, devices, absolute/traversal/duplicate paths. Skip POSIX pax x/g extension headers (used for mtime/xattr by npm/macOS libarchive), neither extracting them nor adopting their path overrides. Validate the following ustar path. Enforce at most 10000 entries and 128 MiB expanded data with streaming limits.
+6. Verify package/manifest/review metadata and publish the complete archive/target state. Never run npm lifecycle scripts, npm install, or downloads for missing runtime dependencies.
 
-手动 npm 安装使用相同校验流程，摘要取配置 registry 的精确版本元数据，但没有官方审核背书。商城首页故障不影响手动安装；已安装包的启动不依赖 npm 或商城在线。
+Manual npm uses the same checks with configured-registry exact metadata, without official review. Store outages do not prevent manual installation; installed-plugin startup does not require npm/store availability.
 
-## 7. 批量检查已安装插件更新
+## 7. Batch update checks
 
 `POST /api/v1/updates/check`
 
 ```json
 {
   "protocolVersion": 1,
-  "host": { "sdkVersion": "0.1.0", "mobileHostVersion": "1.0.0" },
+  "host": { "sdkVersion": "0.1.9", "mobileHostVersion": "1.0.0" },
   "plugins": [
     { "id": "example.mail", "version": "1.0.0", "dataVersion": "1", "npm": {"registry":"https://registry.npmjs.org","name":"@example/doca-mail"} }
   ]
 }
 ```
 
-每批 1–100 个不同插件 ID，最多 128 KiB。仅提交安装元数据，不提交站点标识、用户、配置、数据内容或业务凭据。超过 100 个由 Doca 分批请求。无 npm 来源的本地包可省略 npm，仍可检查同 ID 官方版本，但不能默默把其安装来源切换到官方。
+Send 1–100 distinct plugin IDs per batch, at most 128 KiB. Only installation metadata is submitted, excluding site identifiers, users, configuration, content, and credentials. Doca batches larger sets. Local packages without npm origin can omit npm and check official same-ID releases, without silently switching installation source.
 
 ```json
 {
@@ -215,33 +220,33 @@ items 为 PluginSummary[]，不超过 limit。total 为匹配总数或 null；ne
       "status": "update_available",
       "currentReview": "approved",
       "latestVersion": "1.2.0",
-      "release": { "pluginId": "example.mail", "version": "实际为完整 Release 对象" },
+      "release": { "pluginId": "example.mail", "version": "Return the complete Release object" },
       "reason": null
     }
   ]
 }
 ```
 
-每个请求项必须恰好返回一个结果，installedVersion 回显输入，避免客户端把旧响应套用到安装后的新版本。status：
+Return exactly one item per request, echoing installedVersion so stale responses cannot attach to a newly installed version.
 
-| status | 意义 |
+| status | Meaning |
 | --- | --- |
-| update_available | 存在更高、已审核且 SDK/dataVersion/移动宿主协议兼容的稳定版本，release 必须为完整 Release |
-| up_to_date | 没有更高的已审核稳定版本，release=null |
-| incompatible | 有更高版本，但无兼容候选，release=null；reason 为 sdk / data_version / mobile_host |
-| unknown | 商城无此插件或来源包不匹配，release=null；reason 为 not_found / source_mismatch |
+| update_available | Higher approved stable release compatible with SDK/dataVersion/mobile host; release is complete |
+| up_to_date | No higher approved stable release; release=null |
+| incompatible | Higher versions exist without a compatible candidate; release=null; reason=sdk/data_version/mobile_host |
+| unknown | Unknown plugin or mismatched npm source; release=null; reason=not_found/source_mismatch |
 
-currentReview 为 approved / withdrawn / unknown。当前版本被撤回时单独提醒，不自动删除或停用。插件其他依赖是否已安装由 Doca 在安装时再次检查，远端更新建议不保证本地依赖图可满足。
+currentReview is approved/withdrawn/unknown. Notify separately for withdrawn installed versions without automatic deletion/disablement. Doca rechecks local dependency plugins during installation; remote recommendations cannot guarantee the local dependency graph.
 
-选择最高兼容版本，而不是只检查最新版本。latestVersion 是最高审核稳定版本，可高于 release.version。Doca 必须自行再次验证版本、SDK、数据结构及依赖，不能把远端结论当授权。
+Choose the highest compatible release, rather than test only the latest. latestVersion is highest approved stable and may exceed release.version. Doca independently verifies version, SDK, data structure, and dependencies; remote recommendations are not authorization.
 
-Doca 打开“已安装 / 可升级”时检查，提供手动刷新，可缓存 15 分钟；安装操作后使该插件检查结果失效。失败显示“更新检查失败/未知”，不能显示“全部最新”。正在卸载的插件不提示升级。比较的是全局目标安装版本，运行版本与待重启状态另行显示。目录外 npm 包可从 registry 检查版本，但必须维持“未经审核”标识且不得自动安装。
+Check on Installed/Upgradable view opening, allow manual refresh, and cache at most 15 minutes. Installation invalidates that plugin's result. Failure shows failed/unknown instead of claiming everything is current. Do not suggest upgrades while uninstalling. Compare global target versions; running versions/restart state display separately. Out-of-catalog npm packages can check registry versions but remain unreviewed without automatic installation.
 
-批量响应上限 2 MiB、15 秒。局部未知以 items 状态表达；整体网络/限流/格式错误使用 HTTP 错误，不虚构正常结果。
+Batch responses: 2 MiB/15 seconds. Partial unknowns use item states; network/rate-limit/format errors use HTTP errors without fabricated normal results.
 
-## 8. 安装包及导航声明
+## 8. Packages and navigation
 
-npm tgz 内 `package/package.json`；本地 ZIP 内直接为 `package.json`，没有 wrapper。
+npm tgz contains package/package.json; local ZIP has package.json directly without a wrapper.
 
 ```json
 {
@@ -271,65 +276,63 @@ npm tgz 内 `package/package.json`；本地 ZIP 内直接为 `package.json`，�
 }
 ```
 
-插件必须预编译并打包完整运行依赖，不允许宿主源码别名、全局桥接或 pnpm 符号链接树。package.json 必须声明 `doca.storage: "host"`，缺失/其他值在 ZIP/npm/商店、目录导入和启动恢复时于导入代码前拒绝，不补默认值或适配。服务端默认导出工厂；Web 默认导出 `host => bundle`，React 由宿主注入。持久化全部依赖宿主，插件不选择本地/远端、不自建库或持久目录。已安装插件必须实现业务清理 uninstall，不能自行删除宿主磁盘路径；失败保持安装。托管存储能力及尚未实现的清理协调见[存储规范](plugin-horizontal-scaling.zh-CN.md)。
+Precompile and bundle all runtime dependencies; no host source aliases, global bridges, or pnpm symlink trees. `doca.storage: "host"` is mandatory. Missing/other values are rejected before importing code during ZIP/npm/store installation, directory import, or startup restoration, without defaults/adapters. Server default exports a factory; Web defaults to host=>bundle using injected React. All persistence uses host services; plugins cannot choose local/remote persistence, create databases, or maintain persistent directories. Installed plugins implement business cleanup uninstall without deleting host paths; failure retains installation. See the [storage contract](plugin-horizontal-scaling.md) for managed capabilities and cleanup coordination.
 
-导航由静态 package.json 声明，id 必须在插件命名空间内，webPath 必须位于 `/plugins/<plugin-id>/`；对应页面仍须在 Web bundle 注册。navigation 最多 30 项，allowedSlots/defaults 去重，defaults 是 allowedSlots 子集。无 mobile 声明不得出现 mobile 槽；声明 mobile 必须提供 Web 页面及 mobileHostRange。
+Static package.json navigation IDs use the namespace and webPath stays under `/plugins/<plugin-id>/`; register the corresponding page in the Web bundle too. At most 30 entries. allowedSlots/defaults are deduplicated and defaults is a subset. No mobile slots without mobile declaration; mobile requires a Web page and mobileHostRange.
 
-完整位置集合为上述 13 个以及 `web.admin`。web.right 表示右侧**入口工具栏**；它不会自动把任意页面嵌成侧边面板。第一版入口打开页面，任意面板/抽屉组件协议另行定义，不得声称已经支持。
+Current slots also include web.admin and web.leftMore. Left More requires explicit declaration; web.more remains upper-right. See [UI extensions](plugin-extensions.md). web.right is an entry toolbar rather than automatic embedding of arbitrary pages as side panels. Entries open pages; commands/views/panel presentation have a separate public contract.
 
-管理员在 Doca 内按 Web/App 调整显示、位置、排序和分组，布局不是远端商城配置。插件只能提供默认值和支持范围。底部等区域有容量限制，溢出入口进入“更多”；插件停用后不出现在运行目录。导航隐藏不撤销路由/API 权限，后者仍由宿主与插件逐请求校验。
+Administrators configure Web/App visibility, position, order, and grouping in Doca. Layout is not remote-store configuration; plugins declare defaults and support only. Capacity overflow uses More. Disabled plugins disappear from running navigation. Hidden navigation does not revoke route/API access; host/plugins authorize every request.
 
-商城审核需核对 targets 与实际 web/mobile 声明、sdkRange、dataVersion、dependencies、npm 包身份和版本一致；商城不替代宿主再次校验。Release 不复制完整导航配置，安装包是能力声明的来源。
+Review checks targets against actual web/mobile declarations, sdkRange, dataVersion, dependencies, and package identity/version. Doca repeats verification. Release excludes complete navigation; the package is the capability source.
 
-App 需要先发布包含移动插件宿主的版本。此后符合协议的页面通过受控 WebView 加载，不下载执行 React Native 模块。登录使用宿主一次性票据，不把长期 App bearer token 传给插件脚本。App 插件页面跳转与宿主调用范围由开发手册定义。
+The App must first ship a build containing the mobile plugin host. Subsequent compliant pages load through controlled WebViews without downloading/executing React Native modules. Login uses host one-time tickets, never long-lived App bearer tokens in plugin scripts. Navigation/host-call scope follows the development guide.
 
-## 9. 错误、缓存、审核撤回
+## 9. Errors, cache, and withdrawal
 
 ```json
 {"protocolVersion":1,"error":{"code":"not_found","message":"Plugin not found"}}
 ```
 
-HTTP：400 invalid_request/cursor_mismatch，404 not_found，410 cursor_expired，429 rate_limited（Retry-After 秒数），503 unavailable。message 为纯文本，客户端不依赖它做逻辑判断。远端不返回登录 HTML、重定向或堆栈信息。查询失败保留本地管理，显示可重试错误；无法校验时不得继续安装。
+HTTP errors: 400 invalid_request/cursor_mismatch; 404 not_found; 410 cursor_expired; 429 rate_limited with Retry-After seconds; 503 unavailable. message is plain text, not a logic key. Do not return login HTML, redirects, or stack traces. Failure preserves local management and offers retry; installation cannot proceed without validation.
 
-详情及单版本审核状态建议缓存最长 60 秒；安装前精确版本请求要求重新验证，不使用离线缓存。审核不是绝对安全保证，Doca 服务端插件仍在受信进程执行，不能以“已审核”宣传沙箱隔离。
+Details/exact review cache should last at most 60 seconds. Installation must revalidate exact versions without offline cache. Approval is not an absolute safety guarantee: server plugins execute in a trusted process, not a sandbox.
 
-商城内部审核、作者发布、GitHub 登录和点赞写接口由商城自定，不属于 Doca 对接范围。发布顺序：先发布 npm 包 → 获取真实不可变字节 → 审核扫描与能力核对 → 发布 approved Release → 更新摘要和检索索引。
+Internal review, author publication, GitHub login, and like writes are store-owned. Publication order: publish npm package → obtain immutable actual bytes → review/scan capabilities → publish approved Release → update summary/search index.
 
-## 10. 多实例与生效时机
+## 10. Multiple instances and activation
 
-安装事务将完整包归档及全局目标状态写入共享宿主数据库，各实例使用私有可写插件目录。启动时逐文件核验和补齐，禁止运行半包；启动不访问 npm/商城。缺失或损坏的共享归档应明确报错。
+Installation stores complete archives and global target state in the shared host database; instances use private writable plugin directories. Startup verifies/restores files and rejects partial packages without accessing npm/store. Missing/corrupt shared archives fail explicitly.
 
-安装、升级、启用、禁用、卸载需逐个重启实例。管理页展示响应实例的运行版本，不宣称集群全部生效。建议 Docker Compose：`docker compose restart doca`；Kubernetes 等由运维逐实例滚动重启，API 不兼容时需排空旧实例流量。
+Installation/upgrade/enable/disable/uninstall needs each instance restarted. Management reports the responding instance's running version without claiming cluster-wide activation. Compose uses `docker compose restart doca`; Kubernetes/operators restart instances progressively and drain old traffic for incompatible APIs.
 
-历史版本 Web 静态资源可从共享归档补齐，不等于不同版本业务 API 兼容。导航布局发布后客户端刷新生效，无需重启；插件能力声明变更属于包升级，仍需重启。当前卸载调用业务清理 uninstall，成功后清数据版本标记，保留不可变归档；宿主托管库/内部对象清理与集群 fencing 仍待实现，不由插件删除目录。
+Historical Web assets can be restored from shared archives without implying cross-version business API compatibility. Published navigation layouts take effect after client refresh without restart; package capability changes require upgrade/restart. Current uninstall runs business cleanup, clears data-version markers on success, and retains immutable archives. Managed-database/private-object cleanup and generation fencing are implemented. Cluster-wide business-task draining remains pending; plugins cannot delete directories themselves.
 
-## 11. 联调交付清单
+## 11. Integration fixtures
 
-远端至少提供以下 fixture / 用例：
+Provide at least:
 
-1. 空列表，超过两页的列表，搜索/分类/平台筛选，四种排序；游标过期和参数不匹配。
-2. 完整摘要，未知统计，已暂停插件详情，合法富文本与未知节点降级。
-3. 版本分页；最新版不兼容但存在较低兼容更新；所有新版不兼容；当前版本撤回；未知插件/包名不匹配。
-4. 已审核 npm 包及真实 SRI/长度，包被替换、摘要错误、声明不一致、下载重定向、解压穿越等拒绝场景。
-5. 429/503/超时；远端故障不影响已安装插件列表与 App 当前业务使用。
-6. Doca 安装到一个实例，第二实例空目录且 npm/商城离线时重启自动补齐；损坏本地缓存后修复。
-7. Web/App 声明与导航位置核对；无移动声明的插件不出现在 App；数据结构不兼容升级拒绝。
-8. 点赞按钮仅打开配置商城同源详情页，不调用点赞接口，不启动 Doca OAuth 流程。
+1. Empty and more-than-two-page lists, search/category/platform filters, four sorts, expired/mismatched cursors.
+2. Complete summaries, unknown statistics, suspended details, valid rich text, and unknown-node text degradation.
+3. Release pagination; latest incompatible but lower compatible upgrade; all upgrades incompatible; withdrawn installed release; unknown/mismatched package.
+4. Reviewed npm bytes and real SRI/size; reject replaced packages, digest/declaration mismatches, redirects, and extraction traversal.
+5. 429/503/timeouts; store failure must not break local installed lists or current App business use.
+6. Install on one instance; restart another with an empty directory and npm/store offline; restore from shared archive and repair corrupted local cache.
+7. Web/App declarations/navigation; no App entry without mobile declaration; reject incompatible data upgrades.
+8. Like clicks open the configured same-origin details page without calling a like API or starting Doca OAuth.
 
-邮箱可直接按 [邮箱插件对接手册 v1](plugin-mail-integration-v1.md) 开始。
+Mail integration can start from the original [mail-plugin integration guide v1](plugin-mail-integration-v1.md), retained as research material.
 
-开发手册入口：[插件开发](plugin-development.md)、[中文插件开发](plugin-development.zh-CN.md)、[SDK 能力边界](plugin-sdk-contract.md)。这些文档正在随实现更新；遇到冲突以已导出的 SDK 类型与本页远端协议分别为准，不猜测尚未实现的宿主 API。
+See [plugin development](plugin-development.md) and [SDK boundaries](plugin-sdk-contract.md). For host APIs use actual exported types; for the remote store use this wire protocol. Do not infer proposed host methods.
 
-## 跨仓库验收
+## Cross-repository acceptance
 
-运行 `pnpm exec tsx scripts/verify-plugin-store-contract.ts ../doca-plugin-store`，使用商城实际路由和内存数据库验证 Doca 客户端对分类（含零数量）、搜索、平台过滤、游标分页、详情、版本、更新及游标过期的兼容性；不会读写商城业务数据库或发布 npm 包。
+Run `pnpm exec tsx scripts/verify-plugin-store-contract.ts ../doca-plugin-store`. It exercises the store's actual routes with an in-memory database for categories (including zero counts), search, targets, pagination, details, releases, updates, and cursor expiry, without touching business databases or publishing npm.
 
-当前辅助列表为 `/categories`，不是自由多标签系统；插件使用单一 `categoryId`。分类数量为全商城已上架插件数量，不随当前搜索条件变化；列表 `page.total` 为当前查询快照数量。未知下载/点赞数量显示破折号，零显示 0。
+/categories is a category list, not arbitrary multi-tagging; each plugin has one categoryId. Category counts cover all published plugins independent of search; page.total covers the query snapshot. Unknown downloads/likes display a dash, zero displays 0.
 
-商城审核需检查与宿主一致的静态导航字段：双语 title（各 1–80 字符）、icon、order、非空 allowedSlots 及合法 defaults，拒绝未知字段；server 必须为已构建 JS/mjs/cjs 文件，Web 入口为 JS，manifest 为静态 JSON。审核与安装均不得执行包内安装脚本。
+Review validates the same static navigation as the host: bilingual title (1–80 characters each), icon, order, nonempty allowedSlots, valid defaults, and no unknown fields. server is built JS/mjs/cjs, Web entry is JS, manifest is static JSON. Neither review nor installation executes package install scripts.
 
-### 官方身份和版本说明显示
+### Official identity and release notes
 
-`PluginSummary.official`（列表和详情的 `plugin`）为必填布尔值，表示商城标注的官方插件身份，与版本审核状态分开。客户端仅在值为 `true` 时展示“官方插件”，不能根据安装来源推断；缺失字段的响应视为协议错误。
-
-`Release.changelog` 为必填字符串，表示该版本的纯文本更新说明，版本列表及单版本接口均须返回。空字符串表示未提供，客户端按纯文本保留换行展示，不执行 HTML。Doca 接收长度上限为 100000 字符。
+PluginSummary.official and Release.changelog are mandatory, as specified above. Official identity is independent of release review. Release notes display as plain text with line breaks; absent fields are protocol errors rather than implicit defaults.

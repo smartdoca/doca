@@ -1,73 +1,77 @@
-# 知识整理与独立问答（2026-09-27）
+# Knowledge curation and independent Q&A
 
-本文描述当前实现。设计文档中的拟议 SDK 不因出现于文档而自动成为已导出能力。
+[中文](knowledge-studio.zh-CN.md)
 
-## 管理和来源
+This page records the implementation as of 2026-09-27 and its later workspace additions. Proposed SDKs in design records do not become exports merely by being documented.
 
-整理助手按知识库隔离，共享会话和持久指引向该库管理员开放。来源注册者保留在每个成员记录中，用于当前有效授权；共享管理不分享个人账号凭据。每条消息记录实际管理员、手动/定时/系统触发方式，模型接收统一的用户角色。
+## Administration and sources
 
-数据源是一个命名的同类型订阅组：链接、文件、文件夹、知识库或文档节点。一次最多选择500个成员，不能混合类型。组有共享指引、暂停与优先级；组内保留成员的标识、状态、授权、内容指纹和引用。修改范围时移出的成员停止整理，保留已有成果的来源溯源。相关 RFC 可按主题和整理要求放在一组，不应仅按文件扩展名判断。
+A library's curation assistant isolates shared conversations and persistent instructions by library and exposes them to that library's managers. Each source member retains its registering principal for current authorization; shared administration never shares personal account credentials. Messages record the actual manager and manual/scheduled/system trigger, while the model receives the common user role.
 
-文件夹、知识库和文档节点在扫描时递归发现后代；新增后代自动纳入。逐层检查权限和排除节点，范围选中不扩大授权。通过 read_source 的成员目录与 memberId 分页读取，避免把整个文件夹一次塞进模型。单项文件无法解析会保留缺口，不能伪装成内容已处理。
+A named source group contains one subscription type: links, files, folders, libraries, or document nodes. Selection is at most 500 members and cannot mix types. Groups share instructions, pause, and priority; members retain identity, state, authorization, fingerprints, and references. Removing members from scope stops further curation and preserves provenance for existing results. Group related material by topic/instructions rather than file extension alone.
 
-sourceScope 为 internal 时，网页读取、网络搜索、网络推荐和链接注册全部受工具层限制。实际管理员明确改变要求后才放开；定时任务或来源正文不能更改这一策略。会话对显式来源意图做结构化识别，必须有管理员原句作为依据；设置面板也可直接修改。
+Folder/library/document scans recursively discover descendants, including new ones. Every level checks permission and excluded nodes; selection never expands authorization. `read_source` enumerates members and pages by `memberId` rather than putting an entire folder into a model call. Unparseable files remain explicit gaps.
 
-## 文档与父级导读
+With `sourceScope=internal`, tool-level restrictions block webpage reads, web search/recommendations, and link registration. Only an actual manager's explicit new requirement can relax this rule; schedules and source bodies cannot. Structured intent recognition requires the manager's original statement. The settings panel can also change scope directly.
 
-知识成果是普通原生文档。人工直接编辑，发布投影读取当前文档状态。AI 修订记录提案时的原文版本，采用时检查是否有新人工改动，并沿用原有 Yjs 文档生命周期。
+## Documents and parent guides
 
-分类父节点也是可编辑的导读文档：解释范围、主题关系、阅读路径、排障入口，并链接子页。生成只需要直属子页的摘要与版本，不需要拼接全部子树；父页或子页更新后旧提案不直接覆盖。分类名称与导读正文保持区分。
+Knowledge results are ordinary native documents, editable by people. Publication reads current document state. AI proposals record the original document version and check for intervening human changes on adoption, retaining the normal Yjs lifecycle.
 
-## 执行与成本
+Category parents are editable guides explaining scope, relationships, reading paths, troubleshooting, and child links. Generation needs direct-child summaries/versions instead of concatenating the subtree. Changes to parent/child pages prevent blindly adopting an old proposal. Category names and guide bodies remain distinct.
 
-整理以多轮会话为主，工具记录与工作清单展现过程。复杂任务按章节拆分，持久化提示上下文、已处理消息、工具结果和未完成计划。每批12轮后自动排队续跑，单任务总预算180轮；重复未完成说明也计入预算。输出截断时要求更小步骤，不提交截断的草稿。
+## Execution and cost
 
-来源用内容指纹增量扫描，处理完成才写成功指纹；失败不标记已完成。父导读用子页摘要；来源分页读取；长会话压缩保留约束、证据、已完成操作及未完成清单。临时超时/限流/连接失败最多自动重试3次并退避，权限错误不盲目重试。工具写入与完成日志在同一事务，恢复时复用日志避免重复写入。
+Multi-round conversations, tool logs, and worklists expose progress. Complex work is divided into chapters. Prompt context, processed messages, tool results, and pending plans are persisted. After each 12-round batch execution queues a continuation; total budget is 180 rounds per task, including repeated incomplete statements. Truncated output requests smaller steps and is not committed as a finished draft.
 
-自动任务有 safe 与 draft 两种策略。safe 可采用有来源依据、没有人工修改冲突的新知识及 AI 修订；有人工修改或事实冲突时保留草稿并继续其他工作。此机制减少人工介入，但不保证任意模型都能可靠完成任意规模任务；验收要记录实际交付与失败，不以模型声称完成代替结果。
+Sources use incremental fingerprints; success fingerprints are written only after processing succeeds. Parent guides use summaries; source reads are paged. Conversation compaction preserves constraints, evidence, completed operations, and unfinished work. Transient timeout/rate-limit/connection failures retry at most three times with backoff. Permission failures are not blindly retried. Tool writes and completion logs commit together; recovery reuses logs to prevent duplicate writes.
 
-## 问答生效与索引
+Automation supports `safe` and `draft`. Safe can adopt source-grounded new knowledge and AI revisions without human-edit conflict. Human changes or factual conflicts leave a draft and allow other work to continue. Acceptance must record real delivery/failure rather than trusting a model's completion claim; arbitrary tasks/models are not guaranteed.
 
-问答自动生效或手动发布由管理员选择，与机器人公开范围无关。自动生效指文档保存后后台索引同步成功时切换；索引失败保留先前版本，页面显示失败原因。手动发布保持稳定快照直到再次成功发布。
+## Q&A publication and indexes
 
-全局文档搜索与知识问答使用独立逻辑投影，问答索引使用 Meilisearch 原生向量/混合检索。切换前等待索引任务成功，问答候选限制为所绑定知识库当前发布的分块。副索引配置从 Doca 已绑定模型重新构造凭据，不把 Meilisearch GET 返回的脱敏密钥当作真实密钥复制。
+Managers choose automatic activation or manual publication independently of an assistant's public scope. Automatic activation switches only after the saved document's background index synchronization succeeds. Failure retains the previous version and displays the reason. Manual publication holds a stable snapshot until the next successful publication.
 
-向量设置在索引准备时同步，查询已就绪索引时不再提交设置更新，避免服务重启后的首次问答阻塞在索引队列。附件与追问会先提炼核心检索术语，计算题先检索规则再代入数值。回答缺少有效证据编号时最多自动核对并修正一次，仍无引用则撤回该回答，不无限重试。
+Global document search and knowledge Q&A have separate logical projections. Q&A uses native Meilisearch vector/hybrid retrieval. Switching waits for successful index tasks. Candidates are limited to currently published chunks of bound libraries. Credentials for the secondary index are reconstructed from Doca's configured models; masked secrets returned by Meilisearch GET are not usable credentials.
 
-删除和收紧脱敏策略即时约束旧发布及历史回答，避免继续展示失效证据。普通文档与问答各有索引，不保存两份可独立修改的知识正文。
+Vector settings synchronize during index preparation. Queries against ready indexes do not submit settings updates, avoiding a post-restart first-query index-queue delay. Attachments/follow-up questions derive core retrieval terms; calculation questions retrieve rules before substituting numbers. An answer without valid evidence IDs receives at most one check/correction, then is withdrawn if citations remain absent.
 
-## 独立问答与反馈
+Deletion and tighter redaction immediately constrain prior publications and historical answers. Documents and Q&A indexes do not become two independently editable knowledge bodies.
 
-问答会话按用户隔离，不使用个人助手的会话或长期记忆。历史压缩只服务本次对话。依据当前生效知识回答并引用，资料不足时明确说明。整理图标使用书本勾选，问答使用机器人，与个人助手区分。
+## Independent Q&A and feedback
 
-支持完整问答页面、`/knowledge/embed/<botId>`、流式 HTTP 与 MCP；个人助手可将已绑定机器人作为只读检索工具。iframe 通过 DOCA_KNOWLEDGE_EMBED_ORIGINS 配置允许嵌入的站点。公开机器人支持匿名访客，服务端签发仅限该机器人、24小时有效的访客凭据，按凭据隔离会话；收回公开权限或关闭对应渠道后立即失效。访客入口采用按 IP 的进程内限流，多实例部署应配合网关限流。不应向网页暴露管理员或 MCP 密钥。
+Q&A conversations are isolated by user and do not reuse the personal assistant's conversations or long-term memory. Compaction serves only the current conversation. Answers cite currently active knowledge and explicitly state insufficient evidence. Curation and Q&A use distinct book/check and robot icons.
 
-机器人在左侧“知识库问答”列表管理，点击进入聊天，工具栏打开管理面板，右上角“分享与权限”管理公开范围、链接和成员。知识库的“问答机器人”页签列出所有绑定机器人及创建者；关联元信息不授予机器人使用或管理权限。创建者和机器人管理员管理配置，读者只问答。绑定知识库采用多选；每次检索按创建者当前管理权限过滤失效库，保留其他有效库。撤权后历史引用重新检查，生成中的回答也会中止并撤回失效内容。
+Channels include the full Q&A page, `/knowledge/embed/<botId>`, streaming HTTP, and MCP. The personal assistant can consume bound bots as read-only retrieval tools. `DOCA_KNOWLEDGE_EMBED_ORIGINS` controls iframe origins. Public bots allow anonymous visitors with server-issued, bot-only, 24-hour credentials and isolated conversations. Removing public access or closing a channel invalidates them immediately. Visitor IP limits use local counters without Redis and shared counters with Redis; gateway limits can add protection. Never expose administrator/MCP keys to the webpage.
 
-附件复用 AI 助手的上传与解析能力，需登录且由机器人管理员开启，每条消息最多8个附件、总计25MB。附件仅作为会话上下文，不写入知识库，不成为权威来源。
+The Knowledge Q&A list opens chat, toolbar configuration, and Sharing/permissions. A library's Q&A assistants tab lists bound bots and creators, without granting bot usage/management. Creators and bot managers configure; readers ask questions. Library binding supports multiple libraries and checks the creator's current management rights on each retrieval, retaining valid bindings. Revocation rechecks historical citations and interrupts/withdraws invalid in-progress answers.
 
-每个机器人独立开启网页、嵌入、API、MCP。管理面板生成 API/MCP 专用密钥（只在创建时显示原文，数据库只存哈希，默认90天有效，可撤销）。API：`POST /api/v1/knowledge/assistants/:id/api/ask`，请求包含 query 和可选 conversationId，使用 `Authorization: Bearer <key>`；返回会话 ID 和 SSE 地址，后续 GET 使用同一密钥。不同密钥不能读取彼此会话。MCP：`POST /api/v1/knowledge/assistants/:id/mcp`，使用 MCP 专用密钥调用 knowledge_search、knowledge_ask、knowledge_answer。密钥创建者丢失机器人管理权或账号停用后，密钥立即不可用。
+Attachments reuse AI upload/parsing, require sign-in and the bot manager's enabled setting, and are limited to eight files / 25 MB per message. They are conversation context, not library content or authoritative sources.
 
-已登录内部调用入口仍可用：HTTP：`POST /api/v1/knowledge/assistants/:id/ask` 返回 conversationId 与 streamUrl，可携带 conversationId 继续追问。SSE：`GET /api/v1/knowledge/conversations/:id/stream`。MCP：`POST /api/v1/knowledge/mcp`，凭据必须授权机器人当前有效的全部知识库，仅开放 search/ask/answer。
+Each bot independently enables Web, embed, API, and MCP. Configuration generates channel-specific API/MCP keys, shown in plaintext once, stored as hashes, revocable, and normally valid for 90 days. `POST /api/v1/knowledge/assistants/:id/api/ask` accepts `query` and optional `conversationId`, uses `Authorization: Bearer <key>`, and returns the conversation ID/SSE address. Subsequent GET uses the same key; different keys cannot read each other's conversations. `POST /api/v1/knowledge/assistants/:id/mcp` uses an MCP key for `knowledge_search`, `knowledge_ask`, and `knowledge_answer`. A disabled key creator or loss of bot management invalidates the key immediately.
 
-“有用/没用”反馈不阻塞对话。案例保存问答与证据，管理员可批量分类、生成修订并复测；复测须针对当前发布版本和明确预期。AI 自评是辅助证据，不能替代关键事实的规范核对。
+Internal authenticated HTTP remains `POST /api/v1/knowledge/assistants/:id/ask`, returning `conversationId` and `streamUrl`; pass `conversationId` for follow-up. SSE is `GET /api/v1/knowledge/conversations/:id/stream`. Internal MCP is `POST /api/v1/knowledge/mcp`; credentials must authorize all currently active bot libraries and only search/ask/answer are exposed.
 
-## 验收材料
+Helpful/unhelpful feedback does not block chat. Cases preserve answers and evidence; managers classify in batches, generate revisions, and retest against the current published version and explicit expectations. AI self-evaluation supplements evidence rather than replacing authoritative fact checks.
 
-- `artifacts/network-guide/`：32个网络协议章节、41个分类导读及生成/复核记录。
-- `scripts/knowledge-studio-live-acceptance.ts`：真实模型、内部来源边界、定时任务和多轮问答验收，结果记录于 live-acceptance.json。
-- `tests/knowledge-source-groups.test.ts`：分组、类型隔离、递归、范围变更与继承。
-- `tests/knowledge-studio*.test.ts`：共享管理、会话隔离、来源意图、检查点恢复、发布稳定性和人工编辑冲突。
-- `tests/knowledge-bot-management.test.ts`：多库撤权、机器人管理员、分享直达、附件开关、密钥隔离与 MCP。
-- `tests/knowledge-query-readonly.test.ts`：问答查询不触发向量设置更新。
-- `scripts/knowledge-bot-live-acceptance.ts`：多库绑定、真实附件计算及连续追问；输出 `artifacts/network-guide/bot-live-acceptance.json`。
+## Acceptance material
 
-运行真实 demo 会创建或修改上述专用演示知识库，并调用现有模型/搜索服务；自动测试使用隔离数据库，不在用户文档上做协同编辑测试。
+- `artifacts/network-guide/`: 32 protocol chapters, 41 category guides, and generation/review records.
+- `scripts/knowledge-studio-live-acceptance.ts`: real models, internal-source restrictions, schedules, and multi-round Q&A; records `live-acceptance.json`.
+- `tests/knowledge-source-groups.test.ts`: groups, type isolation, recursion, scope changes, inheritance.
+- `tests/knowledge-studio*.test.ts`: shared management, isolation, intent, checkpoint recovery, publication, human-edit conflicts.
+- `tests/knowledge-bot-management.test.ts`: multi-library revocation, managers, direct sharing, attachments, keys, MCP.
+- `tests/knowledge-query-readonly.test.ts`: retrieval does not update vector settings.
+- `scripts/knowledge-bot-live-acceptance.ts`: multiple bindings, real attachment calculations, follow-ups; outputs `artifacts/network-guide/bot-live-acceptance.json`.
 
-### 整理工作区与人工协助
+Real demos create/modify these dedicated demonstration libraries and call configured models/search. Automated tests use isolated databases and never collaboratively edit user documents.
 
-“整理助手”标签直接进入共享会话，不重复展示内部助手标题。输入区支持上传文件及引用来源；上传先通过当前操作者的文件夹编辑权限校验，随后将文件夹登记到当前知识库。来源读取授权只在整理范围内生效，不向其他管理员授予原始资源访问或写入权限。来源有可编辑名称，主要状态为开启/关闭；关闭保留配置但排除后续读取和扫描。
+### Curation workspace and human assistance
 
-右侧统一展示仍有效的人工待办，包括此前会话中未解决的事项。草稿、来源建议及人工决策使用稳定键去重、版本校验；采用、替换、来源补齐或范围变化后关闭过期待办，保留审计记录。助手在 inspect 中看到尚未关闭的待办，可通过 human_task / resolve_human_task 管理，局部待办不阻塞其他工作。人工处理会追加带操作者身份的会话消息。
+The Curation assistant tab opens the shared conversation directly. Inputs accept files/source references. Upload checks the operator's folder-edit permission before registering the folder in the library. Source-reading authorization applies only inside curation scope and does not grant other managers raw-source read/write access. Sources have editable names and enabled/disabled state; disabling preserves configuration and excludes future reads/scans.
 
-问答反馈独立于整理会话，显示机器人名称和反馈时的对话快照，并标记被评价的回答。管理员可以手动启动分析会话，或独立设置关闭/每天/每周的反馈处理周期；每次定时触发新建以触发时间命名的会话。点赞/不赞可以切换和撤销，撤销记录保留审计但不再进入待处理案例。
+The right panel combines unresolved human tasks from current and earlier conversations. Drafts, source suggestions, and decisions use stable deduplication keys and version checks. Adoption, replacement, source completion, or scope changes close stale tasks while preserving audit. `inspect`, `human_task`, and `resolve_human_task` expose/manage outstanding items; local blockers do not block other work. Human actions add operator-identified messages.
+
+Q&A feedback remains independent of curation conversations, displaying the bot and frozen feedback conversation with the evaluated answer marked. Managers can start manual analysis or select off/daily/weekly feedback processing. Each schedule creates a new timestamp-named conversation. Votes can change or be withdrawn; withdrawal retains audit and removes the case from pending processing.
+
+Docker deployments must explicitly forward `DOCA_KNOWLEDGE_EMBED_ORIGINS` to enable cross-site embedding; setting it only in `.env` is insufficient. See [configuration](configuration.md#passing-environment-variables-through-compose).
