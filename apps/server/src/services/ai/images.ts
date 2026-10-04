@@ -13,6 +13,7 @@ import {
   type AIModel,
 } from "@core/modules/ai/config.js";
 import { providerPreset } from "@core/modules/ai/providers.js";
+import { checkAttachments } from "./attachments.js";
 import { beginCall, settleCall } from "@core/modules/ai/usage.js";
 import {
   checkScope,
@@ -36,6 +37,14 @@ import {
 export const imageInputSchema = z.object({
   resourceId: z.string().uuid().optional(),
   prompt: z.string().trim().min(2).max(8000),
+  referenceImageIds: z
+    .array(z.string().uuid())
+    .min(1)
+    .max(8)
+    .optional()
+    .describe(
+      "参考图的附件/图片 assetId，按提示词中的图1、图2顺序排列。用户提供参考图或要求修改已有图片时必须传入；从当前会话参考图片或图片回执选择，不要使用文件 fileId。不需要参考图时省略。",
+    ),
   aspectRatio: z
     .enum(["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"])
     .optional()
@@ -49,6 +58,107 @@ export const imageInputSchema = z.object({
     ),
 });
 export type ImageInput = z.infer<typeof imageInputSchema>;
+
+/** Reference membership comes from owned session records, never model-supplied IDs alone. */
+export async function availableImageReferences(db: DB, ctx: ToolContext) {
+  if (!ctx.jobId) return [];
+  const job = await db
+    .selectFrom("ai_jobs as j")
+    .innerJoin("ai_sessions as s", "s.id", "j.session_id")
+    .select(["j.session_id", "j.created_at"])
+    .where("j.id", "=", ctx.jobId)
+    .where("j.user_id", "=", ctx.actor.id)
+    .where("s.user_id", "=", ctx.actor.id)
+    .executeTakeFirst();
+  if (!job) fail(404, "参考图片的会话不存在或无权访问");
+  const [jobs, operations] = await Promise.all([
+    db
+      .selectFrom("ai_jobs")
+      .select("input")
+      .where("session_id", "=", job.session_id)
+      .where("user_id", "=", ctx.actor.id)
+      .where("created_at", "<=", job.created_at)
+      .orderBy("created_at", "desc")
+      .execute(),
+    db
+      .selectFrom("ai_operations as o")
+      .innerJoin("ai_jobs as j", "j.id", "o.job_id")
+      .select("o.result")
+      .where("j.session_id", "=", job.session_id)
+      .where("j.user_id", "=", ctx.actor.id)
+      .where("o.user_id", "=", ctx.actor.id)
+      .where("j.created_at", "<=", job.created_at)
+      .where("o.result", "like", '%"image_generation"%')
+      .orderBy("o.created_at", "desc")
+      .execute(),
+  ]);
+  const ids = new Set<string>();
+  for (const row of jobs)
+    for (const id of JSON.parse(row.input).attachments ?? []) ids.add(id);
+  for (const row of operations) {
+    const result = JSON.parse(row.result);
+    if (
+      result.kind === "image_generation" &&
+      result.state === "saved" &&
+      result.assetId
+    )
+      ids.add(result.assetId);
+  }
+  if (!ids.size) return [];
+  const rows = await db
+    .selectFrom("assets")
+    .selectAll()
+    .where("id", "in", [...ids])
+    .where("owner_id", "=", ctx.actor.id)
+    .where("purpose", "=", "ai_attachment")
+    .where("deleted_at", "is", null)
+    .where("mime", "like", "image/%")
+    .execute();
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return [...ids].flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
+}
+
+async function readReferenceImages(
+  db: DB,
+  ctx: ToolContext,
+  ids: string[],
+  runtime: StorageRuntime,
+) {
+  const available = new Set(
+    (await availableImageReferences(db, ctx)).map((row) => row.id),
+  );
+  if (ids.some((id) => !available.has(id)))
+    fail(404, "参考图片不存在、已删除或不属于当前会话");
+  const rows = await checkAttachments(db, ctx.actor.id, ids);
+  const storage = createStorage(runtime);
+  const images: { data: Buffer; mime: string; filename: string }[] = [];
+  for (const row of rows) {
+    if (!["image/png", "image/jpeg", "image/webp"].includes(row.mime))
+      fail(400, "参考图片仅支持 PNG、JPEG 和 WebP");
+    const profile = await db
+      .selectFrom("storage_profiles")
+      .selectAll()
+      .where("id", "=", row.profile_id)
+      .executeTakeFirstOrThrow();
+    const data = await storage.read(
+      storageConfigForProfile(runtime, profile),
+      row.object_key,
+    );
+    if (data.length !== row.size) fail(409, "参考图片内容已改变，请重新上传");
+    try {
+      const image = sharp(data, { limitInputPixels: 25000000 });
+      const metadata = await image.metadata();
+      if (`image/${metadata.format}` !== row.mime || (metadata.pages ?? 1) > 1)
+        fail(400, "参考图片格式与内容不一致或包含多帧");
+      // Decode as well as inspecting metadata so corrupt pixels are rejected before billing.
+      await image.stats();
+    } catch {
+      fail(400, "参考图片无法解析、格式不支持或分辨率过大");
+    }
+    images.push({ data, mime: row.mime, filename: row.filename });
+  }
+  return images;
+}
 
 export async function testAIImageModel(
   model: AIModel,
@@ -182,6 +292,17 @@ export async function generateImageAsset(
     fail(400, "当前生图适配支持 OpenAI Images API 及其兼容服务");
   await requireCapability(db, ctx.actor.id, "assets.upload");
   if (ctx.writable === false) fail(403, "本次授权仅允许读取");
+  const runtime = options.storage ?? storageRuntime();
+  const referenceIds = input.referenceImageIds ?? [];
+  if (input.referenceImageIds !== undefined) {
+    const parsed =
+      imageInputSchema.shape.referenceImageIds.safeParse(referenceIds);
+    if (!parsed.success) fail(400, "参考图片参数无效，最多选择 8 张图片");
+    await checkJob(db, ctx);
+  }
+  const referenceImages = referenceIds.length
+    ? await readReferenceImages(db, ctx, referenceIds, runtime)
+    : [];
   const seedream = /seedream/i.test(model.model);
   const ratioSize: Record<
     NonNullable<ImageInput["aspectRatio"]>,
@@ -228,6 +349,8 @@ export async function generateImageAsset(
   const existing = await transact(db, async (tx) => {
     await lockAIUser(tx, ctx.actor.id);
     await checkJob(tx, ctx);
+    if (referenceIds.length)
+      await checkAttachments(tx, ctx.actor.id, referenceIds);
     const resource = input.resourceId
       ? (await checkScope(tx, ctx, input.resourceId, true)).resource
       : undefined;
@@ -349,7 +472,6 @@ export async function generateImageAsset(
       .execute();
     throw error;
   }
-  const runtime = options.storage ?? storageRuntime();
   const storage = createStorage(runtime);
   let stored: { config: StorageConfig; key: string } | undefined;
   let committed = false,
@@ -357,8 +479,44 @@ export async function generateImageAsset(
     definitiveRejection = false;
   try {
     options.signal?.throwIfAborted();
+    const fields = {
+      model: model.model,
+      prompt: input.prompt,
+      n: 1,
+      size,
+      ...(!model.model.startsWith("gpt-image")
+        ? { response_format: "b64_json" }
+        : {}),
+    };
+    const editing = referenceImages.length > 0 && !seedream;
+    let requestBody: string | FormData;
+    if (editing) {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(fields))
+        form.set(key, String(value));
+      for (const image of referenceImages)
+        form.append(
+          referenceImages.length === 1 ? "image" : "image[]",
+          new Blob([new Uint8Array(image.data)], { type: image.mime }),
+          image.filename,
+        );
+      requestBody = form;
+    } else {
+      requestBody = JSON.stringify({
+        ...fields,
+        ...(referenceImages.length
+          ? {
+              image: referenceImages.map(
+                (image) =>
+                  `data:${image.mime};base64,${image.data.toString("base64")}`,
+              ),
+            }
+          : {}),
+      });
+    }
     const response = await (options.fetch ?? fetch)(
-      model.baseUrl.replace(/\/$/, "") + "/images/generations",
+      model.baseUrl.replace(/\/$/, "") +
+        (editing ? "/images/edits" : "/images/generations"),
       {
         method: "POST",
         redirect: "error",
@@ -367,18 +525,10 @@ export async function generateImageAsset(
           ...(options.signal ? [options.signal] : []),
         ]),
         headers: {
-          "Content-Type": "application/json",
+          ...(editing ? {} : { "Content-Type": "application/json" }),
           Authorization: `Bearer ${model.apiKey}`,
         },
-        body: JSON.stringify({
-          model: model.model,
-          prompt: input.prompt,
-          n: 1,
-          size,
-          ...(!model.model.startsWith("gpt-image")
-            ? { response_format: "b64_json" }
-            : {}),
-        }),
+        body: requestBody,
       },
     );
     if (!response.ok) {
@@ -397,7 +547,9 @@ export async function generateImageAsset(
         502,
         [401, 403].includes(response.status)
           ? "图片模型认证失败，请检查厂商密钥"
-          : "图片模型调用失败，请检查模型标识、接口及尺寸支持",
+          : referenceImages.length
+            ? `图生图调用失败（HTTP ${response.status}），请检查模型是否支持参考图片、接口及尺寸；不会自动改为文生图`
+            : "图片模型调用失败，请检查模型标识、接口及尺寸支持",
       );
     }
     const reader = response.body?.getReader();
@@ -485,6 +637,8 @@ export async function generateImageAsset(
       await lockAIUser(tx, ctx.actor.id);
       await checkJob(tx, ctx);
       await requireCapability(tx, ctx.actor.id, "ai.create");
+      if (referenceIds.length)
+        await checkAttachments(tx, ctx.actor.id, referenceIds);
       if (input.resourceId) await checkScope(tx, ctx, input.resourceId, true);
       await requireCapability(tx, ctx.actor.id, "assets.upload");
       await checkStorage(tx, ctx.actor.id, rendered.data.length);

@@ -1,3 +1,5 @@
+import { runAssetUpload } from "./upload-queue.js";
+
 export interface User {
   public_id?: string;
   id: string;
@@ -226,6 +228,18 @@ export async function uploadFile(
     ...(resourceId ? { resourceId } : {}),
   });
   const url = "/api/v1/assets?" + query;
+  return runAssetUpload(
+    () => sendAssetUpload(file, url, signal, onProgress),
+    signal,
+  );
+}
+
+async function sendAssetUpload(
+  file: File,
+  url: string,
+  signal?: AbortSignal,
+  onProgress?: (progress: UploadProgress) => void,
+) {
   const finish = (
     data: any,
     status: number,
@@ -235,7 +249,10 @@ export async function uploadFile(
       window.dispatchEvent(new Event("profile-required"));
     if (status === 401) window.dispatchEvent(new Event("session-expired"));
     if (status < 200 || status >= 300)
-      throw new Error(data?.message || "上传失败");
+      throw Object.assign(new Error(data?.message || "上传失败"), {
+        status,
+        payload: data,
+      });
     return data as {
       id: string;
       url: string;
@@ -310,7 +327,8 @@ export async function uploadFile(
     };
     if (signal) {
       if (signal.aborted) {
-        abort();
+        settled = true;
+        reject(signal.reason ?? new DOMException("上传已取消", "AbortError"));
         return;
       }
       signal.addEventListener("abort", abort, { once: true });

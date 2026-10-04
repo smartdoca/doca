@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
 import { Feedback } from "@web/shared/components/feedback.js";
+import { Select } from "@web/shared/components/select.js";
 import { AINoteSettings } from "@web/features/ai/ai-note.js";
 export function AIUserSettings({
   options,
@@ -144,7 +145,7 @@ export function AIUserSettings({
             <p>记录常用语言、写作风格和个人偏好。知识库内容仍以原文为准。</p>
             <label>
               默认模型
-              <select
+              <Select
                 value={preferences.default_model ?? ""}
                 onChange={(e) =>
                   void act(() =>
@@ -166,7 +167,7 @@ export function AIUserSettings({
                     {m.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label>
               <input

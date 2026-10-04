@@ -17,6 +17,18 @@ DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root"
 
 0.1.10 拒绝旧数据库基线、数据库管理的存储配置和旧插件安装清单，保留旧数据，不转换、不迁移。新版使用新空数据库和独立存储，见[发行要求](releases/0.1.10.zh-CN.md)。
 
+## Docker 上传报 EACCES
+
+如果 `/api/v1/assets` 返回 HTTP 500，容器日志显示 `EACCES: permission denied, mkdir '/app/data'`，检查 `DOCA_FILE_STORES_JSON` 中当前本地存储的 `root`。镜像以 `node` 用户运行，工作目录为 `/app`；Compose 把持久数据卷挂载在 `/data`。开发配置的 `./data/v1/storage` 会解析成 `/app/data/v1/storage`，位于可写数据卷之外。
+
+如果这个存储从未保存过成功上传的文件，把它的 root 设置为 `/data/storage`，保留原存储 ID 和其他存储条目。只重建应用容器，使环境变量修改生效：
+
+```sh
+docker compose up -d --no-deps --force-recreate --pull never --no-build doca
+```
+
+如果存储已有文件，修改 root 前先检查并备份实际目录和数据库，约定保留对象字节及其原有 key 的路径方案，再验证旧文件下载和新文件上传。修改配置不会移动文件。不要通过删除数据卷或重置数据库修复路径、权限问题。
+
 ## 命名空间与访问
 
 宿主生成对象路径使用 `host/` 前缀，插件创建的常规文件使用 `plugins/<pluginId>/`。插件私有对象使用独立代次和对象路径，不可变安装 ZIP 使用 `host/plugin-releases/<sha256>.zip`。用户文件名不参与物理路径生成。文件和文件夹保持稳定 ID，并遵循宿主授权；GET `/api/v1/assets/:id/content` 检查权限，静态服务不能绕过。见[准确存储实现](unified-storage-implementation.md)。

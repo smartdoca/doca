@@ -131,7 +131,11 @@ import { completeExchanges, type AICheckpoint } from "./checkpoint.js";
 import { searchWeb } from "./web-search.js";
 import { fetchWebPage, fetchWebFile, publicWebUrl } from "./web-fetch.js";
 import { requestPublicHttp } from "./web-request.js";
-import { generateImageAsset, imageInputSchema } from "./images.js";
+import {
+  availableImageReferences,
+  generateImageAsset,
+  imageInputSchema,
+} from "./images.js";
 import { storeUserFile } from "./file-write.js";
 import {
   createExportFile,
@@ -1752,7 +1756,7 @@ export function createAIRunner(
               id: "image_generate",
               ...withCallExamples(
                 "image_generate",
-                "用专门的模型生成图片并展示在对话中，支持下载。除非用户明确要求尺寸，省略size使用管理员默认值；不要默认填写1024x1024。不要求插入时省略 resourceId，不要创建文档。用户明确要求插入时可指定目标 resourceId，生成后使用 image_insert 或原生编辑工具。原生流程图、表格、可编辑文字使用原生工具。",
+                "用专门的模型生成图片并展示在对话中，支持下载。用户提供参考图、要求修改已有图片或沿用其主体/风格时，必须从当前会话参考图片或图片回执选择 referenceImageIds，按提示词图1、图2顺序传入；仅提供文字描述不能代替图生图。无参考图或用户明确要求不参考时省略。自行判断，不要求用户切换文生图/图生图模式。图生图失败时不得移除参考图改为文生图，应如实说明错误。除非用户明确要求尺寸，省略size使用管理员默认值；不要默认填写1024x1024。不要求插入时省略 resourceId，不要创建文档。用户明确要求插入时可指定目标 resourceId，生成后使用 image_insert 或原生编辑工具。原生流程图、表格、可编辑文字使用原生工具。",
               ),
               inputSchema: imageInputSchema,
               execute: async (args) => {
@@ -3340,6 +3344,13 @@ export function createAIRunner(
           r.kind === "image_generation" && r.state === "saved" && r.assetId,
       )
       .map((r) => ({ assetId: r.assetId, filename: r.filename }));
+    const referenceImages = (await availableImageReferences(db, ctx)).map(
+      (image) => ({
+        assetId: image.id,
+        filename: image.filename,
+        currentTurn: (input.attachments ?? []).includes(image.id),
+      }),
+    );
     const droppedItems: Parameters<typeof describeDroppedExplorerItems>[0] = [];
     for (const item of input.files ?? []) {
       try {
@@ -3401,6 +3412,11 @@ export function createAIRunner(
           ]),
       ...(savedImages.length
         ? [`当前会话图片回执：${JSON.stringify(savedImages)}。`]
+        : []),
+      ...(referenceImages.length
+        ? [
+            `当前会话可用参考图片：${JSON.stringify(referenceImages)}。结合用户要求选择 referenceImageIds，有参考图的生图请求使用图生图；不要让用户选择技术模式。`,
+          ]
         : []),
 
       input.webSearch

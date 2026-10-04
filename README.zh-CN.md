@@ -18,11 +18,11 @@ Doca 是面向个人和小团队的开源文档与知识工作台。一次部署
 
 ## Docker 快速开始
 
-需要 Git、Docker Engine、Docker Compose，以及通过反向代理提供 HTTPS 的域名。本流程在新空数据库中安装已发布的 0.1.10 镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.10)并保留原数据。
+需要 Git、Docker Engine、Docker Compose，以及通过反向代理提供 HTTPS 的域名。本流程在新空数据库中安装已发布的 0.1.11 镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.11)并保留原数据。
 
 ```sh
 # 1. 拉取对应发行版代码
-git clone --branch v0.1.10 --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch v0.1.11 --depth 1 https://github.com/smartdoca/doca.git
 cd doca
 
 # 2. 配置环境变量
@@ -64,7 +64,7 @@ pnpm dev
 - [部署与配置](https://smartdoca.github.io/doca/#/zh-cn/operations/deployment)
 - [插件开发](https://smartdoca.github.io/doca/#/zh-cn/plugins/plugin-development)
 - [HTTP API](https://smartdoca.github.io/doca/#/zh-cn/reference/api)，运行中的应用还提供 `/api/openapi.json`。
-- [发行记录](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.10)
+- [发行记录](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.11)
 - [文档源码](docs/README.zh-CN.md)
 
 预览文档时，执行 `pnpm docs:dev` 并打开 `http://127.0.0.1:39140/#/zh-cn/`。`pnpm docs:check` 校验双语覆盖和本地链接。GitHub Pages 设置见[文档维护](docs/documentation.zh-CN.md)。

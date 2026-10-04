@@ -57,6 +57,7 @@ export function Select({
   value,
   defaultValue,
   onChange,
+  onInvalid,
   disabled,
   className = "",
   ...props
@@ -168,6 +169,7 @@ export function Select({
         aria-activedescendant={open ? id + "-" + active : undefined}
         aria-label={props["aria-label"]}
         aria-labelledby={props["aria-labelledby"]}
+        aria-required={props.required || undefined}
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : show())}
         onKeyDown={(e) => {
@@ -237,6 +239,13 @@ export function Select({
         aria-hidden="true"
         tabIndex={-1}
         onChange={onChange}
+        onInvalid={(event) => {
+          onInvalid?.(event);
+          if (event.defaultPrevented) return;
+          event.preventDefault();
+          trigger.current?.focus();
+          show();
+        }}
       >
         {children}
       </select>

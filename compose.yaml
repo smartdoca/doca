@@ -1,14 +1,14 @@
 # Production-oriented single-host deployment.
 # Put DOCA_ORIGIN=https://docs.example.com in .env.
 # Terminate TLS in a reverse proxy and forward to 127.0.0.1:39120.
-# The published image is docker.io/smartdoca/doca:0.1.10.
+# The published image is docker.io/smartdoca/doca:0.1.11.
 # `docker compose up -d` pulls that tag. Add `--build` to build from this checkout.
 services:
   doca:
     build:
       context: .
       dockerfile: Dockerfile
-    image: docker.io/smartdoca/doca:0.1.10
+    image: docker.io/smartdoca/doca:0.1.11
     pull_policy: always
     restart: unless-stopped
     init: true
@@ -29,6 +29,8 @@ services:
       DOCA_SQLITE_PATH: /data/doca.db
       DOCA_AI_SQLITE_PATH: /data/ai.db
       DOCA_FILE_STORE_ID: "${DOCA_FILE_STORE_ID:?Set the shared file store ID}"
+      # Local roots must refer to writable persistent mounts, such as /data/storage.
+      # Development .env paths (./data/...) resolve under the image's /app directory.
       DOCA_FILE_STORES_JSON: "${DOCA_FILE_STORES_JSON:?Set file storage environment configuration}"
       DOCA_CREDENTIAL_MASTER_KEY: "${DOCA_CREDENTIAL_MASTER_KEY:-}"
       DOCA_DATA_DIR: /data

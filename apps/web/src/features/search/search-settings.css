@@ -67,6 +67,9 @@
   min-width: 0;
   box-sizing: border-box;
 }
+.search-settings-layout .select-trigger {
+  width: 100%;
+}
 .search-settings-layout .search-setting-toggle {
   display: flex;
   align-items: center;

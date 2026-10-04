@@ -17,6 +17,18 @@ Use a dedicated persistent directory, writable only by the service user and outs
 
 Version 0.1.10 rejects the old database baseline, database-managed storage configuration and old plugin installation list. Old data is preserved without migration or conversion. Deploy to a new empty database and separate storage; see [release requirements](releases/0.1.10.md).
 
+## Docker uploads fail with EACCES
+
+If `/api/v1/assets` returns HTTP 500 and the container logs report `EACCES: permission denied, mkdir '/app/data'`, check the active local store's `root` in `DOCA_FILE_STORES_JSON`. The image runs as `node` with `/app` as its working directory; Compose mounts its persistent volume at `/data`. A development root such as `./data/v1/storage` resolves to `/app/data/v1/storage`, outside that writable volume.
+
+For a store that has never contained successfully uploaded files, set its root to `/data/storage`, keeping the same store ID and all other store entries. Apply the environment change by recreating only the application container:
+
+```sh
+docker compose up -d --no-deps --force-recreate --pull never --no-build doca
+```
+
+If the store already contains files, inspect and back up its actual directory and database before changing its root. Agree on a plan that preserves the object bytes and their existing keys at the configured location, then verify an existing download and a new upload. Changing configuration does not move files. Do not remove the data volume or reset the database to repair a path or permission error.
+
 ## Namespaces and access
 
 The host generates object paths under `host/`; plugin-created ordinary files use `plugins/<pluginId>/`. Private plugin objects and immutable installation ZIPs use separate generation/object paths and `host/plugin-releases/<sha256>.zip`. User filenames do not determine physical paths. Stable file/folder IDs and host authorization remain in use. `GET /api/v1/assets/:id/content` checks access; static serving cannot bypass it. See [the exact storage implementation](unified-storage-implementation.md).

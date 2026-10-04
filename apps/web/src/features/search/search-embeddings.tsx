@@ -3,6 +3,7 @@ import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { Feedback } from "@web/shared/components/feedback.js";
+import { Select } from "@web/shared/components/select.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
 import "@web/features/search/search-embeddings.css";
 
@@ -224,7 +225,7 @@ export function SearchEmbeddingSettings() {
           >
             <label>
               {t("embeddings.configuration")}
-              <select
+              <Select
                 disabled={disabled}
                 value={selected}
                 onChange={(e) => {
@@ -252,7 +253,7 @@ export function SearchEmbeddingSettings() {
                     {item.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             {!form.supported ? (
               <p>{t("embeddings.unsupported")}</p>
@@ -273,7 +274,7 @@ export function SearchEmbeddingSettings() {
                 <small>{t("embeddings.nameHelp")}</small>
                 <label>
                   {t("embeddings.model")}
-                  <select
+                  <Select
                     required
                     disabled={disabled}
                     value={form.modelId}
@@ -294,7 +295,7 @@ export function SearchEmbeddingSettings() {
                         {m.issue ? `（${m.issue}）` : ""}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
                 {!config.models.length && <p>{t("embeddings.noModels")}</p>}
                 {model && (

@@ -5,6 +5,7 @@ import { api, type Bootstrap } from "@web/shared/api.js";
 import { ExternalLoginOptions } from "@web/features/auth/authentication.js";
 import { QrLogin } from "@web/features/auth/qr-login.js";
 import { Feedback } from "@web/shared/components/feedback.js";
+import { Select } from "@web/shared/components/select.js";
 import {
   VerificationField,
   RegistrationFields,
@@ -271,7 +272,7 @@ export function AccountLogin({
           <>
             <label>
               {t("login.recoverVia")}
-              <select
+              <Select
                 value={recoveryKind}
                 onChange={(e) => {
                   setRecoveryKind(e.target.value as "email" | "phone");
@@ -287,7 +288,7 @@ export function AccountLogin({
                   options.securityMethods?.includes("phone") && (
                     <option value="phone">{t("login.phone")}</option>
                   )}
-              </select>
+              </Select>
             </label>
             <VerificationField
               key={recoveryKind}
