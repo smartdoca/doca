@@ -600,6 +600,19 @@ export function AIChat({ full = false }: { full?: boolean }) {
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [fileSourceOpen, setFileSourceOpen] = useState(false);
   const filesRef = useRef<Attachment<ChatFile>[]>([]);
+  const localUploads = useRef(
+    new Map<string, { controller: AbortController; preview?: string }>(),
+  );
+  useEffect(() => {
+    const uploads = localUploads.current;
+    return () => {
+      for (const upload of uploads.values()) {
+        upload.controller.abort();
+        if (upload.preview) URL.revokeObjectURL(upload.preview);
+      }
+      uploads.clear();
+    };
+  }, []);
   const composerRef = useRef<HTMLDivElement>(null);
   const attachmentRef = useRef<AttachmentsRef>(null);
   const senderRef = useRef<SenderRef>(null);
@@ -657,6 +670,13 @@ export function AIChat({ full = false }: { full?: boolean }) {
     senderRef.current?.insert([{ type: "text", value }], "end");
   };
   const replaceFiles = (value: Attachment<ChatFile>[]) => {
+    const retained = new Set(value.map((file) => file.uid));
+    for (const [uid, upload] of localUploads.current) {
+      if (retained.has(uid)) continue;
+      upload.controller.abort();
+      if (upload.preview) URL.revokeObjectURL(upload.preview);
+      localUploads.current.delete(uid);
+    }
     filesRef.current = value;
     setFiles(value);
     requestId.current = null;
@@ -712,26 +732,59 @@ export function AIChat({ full = false }: { full?: boolean }) {
       return;
     }
     const uid = crypto.randomUUID();
+    const controller = new AbortController();
+    const image =
+      file.type.startsWith("image/") ||
+      /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+    const preview = image ? URL.createObjectURL(file) : undefined;
+    localUploads.current.set(uid, { controller, preview });
     replaceFiles([
       ...filesRef.current,
-      { uid, name: file.name, size: file.size, status: "uploading" },
+      {
+        uid,
+        name: file.name,
+        size: file.size,
+        status: "uploading",
+        percent: 0,
+        description: t("bot.uploading"),
+        thumbUrl: preview,
+        cardType: image ? "image" : "file",
+      },
     ]);
     try {
-      const uploaded = await uploadFile(file, "ai_attachment");
+      const uploaded = await uploadFile(
+        file,
+        "ai_attachment",
+        undefined,
+        controller.signal,
+        ({ percent }) => {
+          if (controller.signal.aborted) return;
+          replaceFiles(
+            filesRef.current.map((f) =>
+              f.uid === uid ? { ...f, percent } : f,
+            ),
+          );
+        },
+      );
+      if (controller.signal.aborted) return;
       replaceFiles(
         filesRef.current.map((f) =>
           f.uid === uid ? composerFile(asChatFile(uploaded), uid) : f,
         ),
       );
+      if (preview) URL.revokeObjectURL(preview);
+      localUploads.current.delete(uid);
     } catch (e) {
+      if (controller.signal.aborted) return;
+      const message = e instanceof Error ? e.message : t("chat.uploadFailed");
       replaceFiles(
         filesRef.current.map((f) =>
           f.uid === uid
-            ? { ...f, status: "error", description: t("chat.uploadFailed") }
+            ? { ...f, status: "error", description: message }
             : f,
         ),
       );
-      ai.setError((e as Error).message);
+      ai.setError(message);
     }
   };
   const chooseStoredFile = async (

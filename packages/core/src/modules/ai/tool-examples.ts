@@ -66,7 +66,13 @@ export const TOOL_EXAMPLES: Record<string, Record<string, unknown>[]> = {
       column: null,
     },
   ],
-  image_generate: [{ prompt: "蓝色几何图标，白底，无文字" }],
+  image_generate: [
+    { prompt: "蓝色几何图标，白底，无文字" },
+    {
+      prompt: "保留参考图中的主体，将背景改成竹林",
+      referenceImageIds: [SAMPLE.asset],
+    },
+  ],
   image_show: [{}, { assetId: SAMPLE.asset }],
   ask_user: [
     {

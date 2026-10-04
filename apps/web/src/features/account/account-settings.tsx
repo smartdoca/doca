@@ -384,7 +384,7 @@ const fieldLabels = useFieldLabels();
       ))}
       <p className="subtle">{t("accountPolicy.contactsHelp")}</p>
 
-      <select
+      <Select
         value={kind}
         onChange={(e) => {
           setKind(e.target.value as "phone" | "email");
@@ -398,7 +398,7 @@ const fieldLabels = useFieldLabels();
         {data?.policy.fields?.phone.enabled !== false && (
           <option value="phone">{t("login.phone")}</option>
         )}
-      </select>
+      </Select>
       <VerificationField
         key={kind}
         kind={kind}

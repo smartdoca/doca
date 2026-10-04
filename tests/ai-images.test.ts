@@ -16,6 +16,8 @@ import { createApp } from "../apps/server/src/app/create-app.js";
 import {
   generateImageAsset,
   testAIImageModel,
+  availableImageReferences,
+  imageInputSchema,
 } from "../apps/server/src/services/ai/images.js";
 import {
   insertGeneratedImage,
@@ -24,7 +26,13 @@ import {
   imageInsertSchema,
   spreadsheetImagePlacement,
 } from "../apps/server/src/services/ai/image-insert.js";
-import { storageRuntime } from "../apps/server/src/adapters/storage.js";
+import {
+  createStorage,
+  storageConfigForProfile,
+  storageRuntime,
+} from "../apps/server/src/adapters/storage.js";
+import { objectKey } from "../apps/server/src/services/storage-policy.js";
+import { completionResponse } from "./ai-mock.js";
 import {
   editAIDocument,
   readAIDocument,
@@ -124,6 +132,567 @@ const imageResponse = async () =>
     usage: { input_tokens: 12, output_tokens: 30 },
   });
 const args = () => ({ resourceId: doc, prompt, size: "1024x1024" as const });
+
+async function referenceImage(
+  ctx: { jobId: string },
+  options: { owner?: Actor; mime?: string; data?: Buffer } = {},
+) {
+  const data =
+    options.data ??
+    (await sharp({
+      create: { width: 32, height: 24, channels: 3, background: "#8764c0" },
+    })
+      .png()
+      .toBuffer());
+  const id = randomUUID();
+  const profile = await db
+    .selectFrom("storage_profiles")
+    .selectAll()
+    .where("active", "=", 1)
+    .executeTakeFirstOrThrow();
+  const key = objectKey(id, "image/png");
+  const runtime = { ...storageRuntime(), root };
+  await createStorage(runtime).put(
+    storageConfigForProfile(runtime, profile),
+    key,
+    data,
+    "image/png",
+    `${id}.png`,
+  );
+  await db
+    .insertInto("assets")
+    .values({
+      id,
+      owner_id: (options.owner ?? user).id,
+      uploaded_by: (options.owner ?? user).id,
+      resource_id: null,
+      purpose: "ai_attachment",
+      profile_id: profile.id,
+      object_key: key,
+      filename: `${id}.png`,
+      mime: options.mime ?? "image/png",
+      size: data.length,
+      created_at: new Date().toISOString(),
+      deleted_at: null,
+    })
+    .execute();
+  const job = await db
+    .selectFrom("ai_jobs")
+    .select("input")
+    .where("id", "=", ctx.jobId)
+    .executeTakeFirstOrThrow();
+  const input = JSON.parse(job.input);
+  await db
+    .updateTable("ai_jobs")
+    .set({
+      input: JSON.stringify({
+        ...input,
+        attachments: [...(input.attachments ?? []), id],
+      }),
+    })
+    .where("id", "=", ctx.jobId)
+    .execute();
+  return { id, data };
+}
+
+it.each(["gpt-image-test", "compatible-image-model"])(
+  "sends original reference bytes to the %s edits endpoint without another generation",
+  async (model) => {
+    const { revision, ...config } = await aiConfig(db);
+    await saveAIConfig(
+      db,
+      { ...config, models: config.models.map((m) => ({ ...m, model })) },
+      revision,
+    );
+    const { ctx } = await imageJob();
+    const reference = await referenceImage(ctx);
+    let calls = 0;
+    const input = { prompt, referenceImageIds: [reference.id] };
+    const operation = randomUUID();
+    const options = {
+      storage: { ...storageRuntime(), root },
+      fetch: (async (url, init) => {
+        calls++;
+        expect(String(url)).toBe("https://images.example.test/v1/images/edits");
+        expect(new Headers(init?.headers).has("Content-Type")).toBe(false);
+        const body = init?.body as FormData;
+        expect(body).toBeInstanceOf(FormData);
+        expect(body.get("prompt")).toBe(prompt);
+        expect(body.get("n")).toBe("1");
+        expect(body.get("size")).toBe("1024x1024");
+        expect(body.get("response_format")).toBe(
+          model.startsWith("gpt-image") ? null : "b64_json",
+        );
+        const file = body.get("image") as File;
+        expect(file.type).toBe("image/png");
+        expect(Buffer.from(await file.arrayBuffer())).toEqual(reference.data);
+        return imageResponse();
+      }) as typeof fetch,
+    };
+    const result = await generateImageAsset(db, ctx, input, operation, options);
+    expect(result.state).toBe("saved");
+    expect(
+      (await generateImageAsset(db, ctx, input, operation, options)).assetId,
+    ).toBe(result.assetId);
+    expect(calls).toBe(1);
+    expect((await usageSummary(db, user.id)).calls).toEqual([
+      expect.objectContaining({ images: 1, state: "confirmed" }),
+    ]);
+  },
+);
+
+it("preserves multi-image order and treats different references as different generation requests", async () => {
+  const { ctx } = await imageJob();
+  const first = await referenceImage(ctx),
+    second = await referenceImage(ctx);
+  let calls = 0;
+  const options = {
+    storage: { ...storageRuntime(), root },
+    fetch: (async (_url, init) => {
+      const form = init?.body as FormData;
+      if (++calls === 1) {
+        expect(form.get("image")).toBeNull();
+        const files = form.getAll("image[]") as File[];
+        expect(files.map((file) => file.name)).toEqual([
+          `${second.id}.png`,
+          `${first.id}.png`,
+        ]);
+      }
+      return imageResponse();
+    }) as typeof fetch,
+  };
+  await generateImageAsset(
+    db,
+    ctx,
+    { prompt, referenceImageIds: [second.id, first.id] },
+    randomUUID(),
+    options,
+  );
+  await generateImageAsset(
+    db,
+    ctx,
+    { prompt, referenceImageIds: [first.id] },
+    randomUUID(),
+    options,
+  );
+  expect(calls).toBe(2);
+});
+
+it.each(["doubao-seedream-4-5", "doubao-seedream-5-0-lite"])(
+  "passes reference data URLs to %s generations with the existing size and output format",
+  async (model) => {
+    const { revision, ...config } = await aiConfig(db);
+    await saveAIConfig(
+      db,
+      { ...config, models: config.models.map((m) => ({ ...m, model })) },
+      revision,
+    );
+    const { ctx } = await imageJob();
+    const first = await referenceImage(ctx),
+      second = await referenceImage(ctx);
+    await generateImageAsset(
+      db,
+      ctx,
+      { prompt, referenceImageIds: [second.id, first.id] },
+      randomUUID(),
+      {
+        storage: { ...storageRuntime(), root },
+        fetch: (async (url, init) => {
+          expect(String(url)).toBe(
+            "https://images.example.test/v1/images/generations",
+          );
+          expect(JSON.parse(String(init?.body))).toMatchObject({
+            model,
+            size: "2048x2048",
+            response_format: "b64_json",
+            n: 1,
+            image: [second, first].map(
+              (ref) => `data:image/png;base64,${ref.data.toString("base64")}`,
+            ),
+          });
+          return imageResponse();
+        }) as typeof fetch,
+      },
+    );
+  },
+);
+
+it("makes historical attachments and images generated in the same session available as references", async () => {
+  const historical = await imageJob();
+  const uploaded = await referenceImage(historical.ctx);
+  const options = {
+    storage: { ...storageRuntime(), root },
+    fetch: imageResponse as typeof fetch,
+  };
+  const generated = await generateImageAsset(
+    db,
+    historical.ctx,
+    { prompt },
+    randomUUID(),
+    options,
+  );
+  const current = await imageJob(historical.sessionId);
+  expect(
+    (await availableImageReferences(db, current.ctx)).map((image) => image.id),
+  ).toEqual(expect.arrayContaining([uploaded.id, generated.assetId]));
+  await generateImageAsset(
+    db,
+    current.ctx,
+    { prompt, referenceImageIds: [generated.assetId] },
+    randomUUID(),
+    {
+      ...options,
+      fetch: (async (url) => {
+        expect(String(url)).toContain("/images/edits");
+        return imageResponse();
+      }) as typeof fetch,
+    },
+  );
+});
+
+it.each(["another-user", "another-session", "future-turn", "deleted"])(
+  "rejects a %s reference before calling the provider or recording usage",
+  async (kind) => {
+    const { ctx, sessionId } = await imageJob();
+    const referenceJob =
+      kind === "another-session"
+        ? await imageJob()
+        : kind === "future-turn"
+          ? await imageJob(sessionId)
+          : { ctx };
+    if (kind === "future-turn")
+      await db
+        .updateTable("ai_jobs")
+        .set({ created_at: new Date(Date.now() + 1000).toISOString() })
+        .where("id", "=", referenceJob.ctx.jobId)
+        .execute();
+    const reference = await referenceImage(referenceJob.ctx, {
+      owner: kind === "another-user" ? other : user,
+    });
+    if (kind === "deleted")
+      await db
+        .updateTable("assets")
+        .set({ deleted_at: new Date().toISOString() })
+        .where("id", "=", reference.id)
+        .execute();
+    let calls = 0;
+    await expect(
+      generateImageAsset(
+        db,
+        ctx,
+        { prompt, referenceImageIds: [reference.id] },
+        randomUUID(),
+        {
+          storage: { ...storageRuntime(), root },
+          fetch: (async () => {
+            calls++;
+            return imageResponse();
+          }) as typeof fetch,
+        },
+      ),
+    ).rejects.toThrow("不属于当前会话");
+    expect(calls).toBe(0);
+    expect((await usageSummary(db, user.id)).calls).toHaveLength(0);
+  },
+);
+
+it.each(["corrupt", "unsupported", "oversized", "duplicate", "too-many"])(
+  "rejects %s references before provider dispatch",
+  async (kind) => {
+    const { ctx } = await imageJob();
+    const reference = await referenceImage(ctx, {
+      ...(kind === "corrupt" ? { data: Buffer.from("not an image") } : {}),
+      ...(kind === "unsupported" ? { mime: "image/gif" } : {}),
+    });
+    if (kind === "oversized")
+      await db
+        .updateTable("assets")
+        .set({ size: 26 * 1024 * 1024 })
+        .where("id", "=", reference.id)
+        .execute();
+    const refs =
+      kind === "duplicate"
+        ? [reference.id, reference.id]
+        : kind === "too-many"
+          ? Array.from({ length: 9 }, () => randomUUID())
+          : [reference.id];
+    await expect(
+      generateImageAsset(
+        db,
+        ctx,
+        { prompt, referenceImageIds: refs },
+        randomUUID(),
+        {
+          storage: { ...storageRuntime(), root },
+          fetch: (async () => {
+            throw new Error("Provider must not be called");
+          }) as typeof fetch,
+        },
+      ),
+    ).rejects.toThrow(/参考图片|附件/);
+    expect((await usageSummary(db, user.id)).calls).toHaveLength(0);
+  },
+);
+
+it("does not fall back to text generation when a provider rejects image edits", async () => {
+  const { ctx } = await imageJob();
+  const reference = await referenceImage(ctx);
+  let calls = 0;
+  await expect(
+    generateImageAsset(
+      db,
+      ctx,
+      { prompt, referenceImageIds: [reference.id] },
+      randomUUID(),
+      {
+        storage: { ...storageRuntime(), root },
+        fetch: (async (url) => {
+          calls++;
+          expect(String(url)).toContain("/images/edits");
+          return Response.json({ error: "unsupported" }, { status: 404 });
+        }) as typeof fetch,
+      },
+    ),
+  ).rejects.toThrow("图生图调用失败");
+  expect(calls).toBe(1);
+  expect((await usageSummary(db, user.id)).calls[0]).toMatchObject({
+    images: 0,
+    state: "failed",
+  });
+});
+
+it("rechecks withdrawn reference access after generation while preserving actual image usage", async () => {
+  const { ctx } = await imageJob();
+  const reference = await referenceImage(ctx);
+  await expect(
+    generateImageAsset(
+      db,
+      ctx,
+      { prompt, referenceImageIds: [reference.id] },
+      randomUUID(),
+      {
+        storage: { ...storageRuntime(), root },
+        fetch: (async () => {
+          await db
+            .updateTable("assets")
+            .set({ deleted_at: new Date().toISOString() })
+            .where("id", "=", reference.id)
+            .execute();
+          return imageResponse();
+        }) as typeof fetch,
+      },
+    ),
+  ).rejects.toThrow("附件不存在或无权访问");
+  expect(await db.selectFrom("assets").select("id").execute()).toEqual([
+    { id: reference.id },
+  ]);
+  expect((await usageSummary(db, user.id)).calls[0]).toMatchObject({
+    images: 1,
+    state: "confirmed",
+  });
+});
+
+it("advertises optional schema-valid image references without changing text-only inputs", () => {
+  expect(imageInputSchema.parse({ prompt })).toEqual({ prompt });
+  expect(
+    imageInputSchema.parse({ prompt, referenceImageIds: [randomUUID()] })
+      .referenceImageIds,
+  ).toHaveLength(1);
+  expect(
+    imageInputSchema.safeParse({ prompt, referenceImageIds: [] }).success,
+  ).toBe(false);
+});
+
+it("routes an uploaded reference and a later generated-image edit through the chat agent", async () => {
+  const { revision, ...config } = await aiConfig(db);
+  await saveAIConfig(
+    db,
+    {
+      ...config,
+      vendors: [
+        ...config.vendors,
+        {
+          id: "chat-vendor",
+          name: "对话测试",
+          provider: "compatible",
+          baseUrl: "https://chat.example.test/v1",
+          apiKey: "chat-test-secret",
+          enabled: true,
+        },
+      ],
+      models: [
+        ...config.models,
+        {
+          id: "chat",
+          vendorId: "chat-vendor",
+          model: "mock-chat",
+          alias: "对话",
+          enabled: true,
+          tools: true,
+          vision: true,
+          maxInput: 64000,
+          maxOutput: 2000,
+        },
+      ],
+    },
+    revision,
+  );
+  let selectedReference = "",
+    imageCalls = 0;
+  const referenceMimes: string[] = [];
+  const origin = "http://localhost:39249";
+  const app = await createApp(db, {
+    origin,
+    storage: { ...storageRuntime(), root },
+    ai: {
+      memory: { driver: "sqlite", url: ":memory:" },
+      imageFetch: (async (url, init) => {
+        imageCalls++;
+        expect(String(url)).toBe("https://images.example.test/v1/images/edits");
+        referenceMimes.push(
+          (init?.body as FormData).get("image") instanceof File
+            ? ((init?.body as FormData).get("image") as File).type
+            : "missing",
+        );
+        return imageResponse();
+      }) as typeof fetch,
+      fetch: (async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        const messages = body.messages ?? [];
+        const lastUser = messages.findLastIndex(
+          (message: any) => message.role === "user",
+        );
+        const finished = messages
+          .slice(lastUser + 1)
+          .some((message: any) => message.role === "tool");
+        const imageTool = body.tools?.find(
+          (tool: any) => tool.function?.name === "image_generate",
+        );
+        let message: object;
+        if (imageTool && !finished) {
+          expect(imageTool.function.parameters.properties).toHaveProperty(
+            "referenceImageIds",
+          );
+          expect(JSON.stringify(messages[lastUser])).toContain(
+            "当前会话可用参考图片",
+          );
+          expect(JSON.stringify(messages[lastUser])).toContain(
+            selectedReference,
+          );
+          message = {
+            role: "assistant",
+            content: null,
+            tool_calls: [
+              {
+                id: randomUUID(),
+                type: "function",
+                function: {
+                  name: "image_generate",
+                  arguments: JSON.stringify({
+                    prompt: "保留参考图中的主体，将背景改成竹林",
+                    referenceImageIds: [selectedReference],
+                  }),
+                },
+              },
+            ],
+          };
+        } else message = { role: "assistant", content: "图片已生成。" };
+        return completionResponse(
+          {
+            id: randomUUID(),
+            object: "chat.completion",
+            created: 1,
+            model: body.model,
+            choices: [
+              {
+                index: 0,
+                message,
+                finish_reason: imageTool && !finished ? "tool_calls" : "stop",
+              },
+            ],
+            usage: {
+              prompt_tokens: 100,
+              completion_tokens: 40,
+              total_tokens: 140,
+            },
+          },
+          !!body.stream,
+        );
+      }) as typeof fetch,
+    },
+  });
+  try {
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      headers: { origin, host: "localhost:39249" },
+      payload: { login: "image-owner", password: "image-test-2026" },
+    });
+    const headers = {
+      origin,
+      host: "localhost:39249",
+      cookie: String(login.headers["set-cookie"]).split(";")[0]!,
+    };
+    const session = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/ai/sessions",
+        headers,
+        payload: { modelId: "chat", resourceIds: [] },
+      })
+    ).json().id;
+    const png = await sharp({
+      create: { width: 32, height: 24, channels: 3, background: "#248a66" },
+    })
+      .png()
+      .toBuffer();
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/v1/assets?purpose=ai_attachment&filename=reference.png",
+      headers: { ...headers, "content-type": "application/octet-stream" },
+      payload: png,
+    });
+    expect(upload.statusCode, upload.body).toBe(201);
+    selectedReference = upload.json().id;
+    for (const turn of [0, 1]) {
+      const id = randomUUID();
+      const send = await app.inject({
+        method: "POST",
+        url: `/api/v1/ai/sessions/${session}/messages`,
+        headers,
+        payload: {
+          id,
+          modelId: "chat",
+          scope: "all",
+          text: turn ? "继续修改刚才生成的图片" : "参考附件生成一张图片",
+          attachments: turn ? [] : [selectedReference],
+        },
+      });
+      expect(send.statusCode, send.body).toBe(200);
+      let job: any;
+      for (let attempt = 0; attempt < 150; attempt++) {
+        const state = (
+          await app.inject({ url: `/api/v1/ai/sessions/${session}`, headers })
+        ).json();
+        job = state.jobs.find((item: any) => item.id === id);
+        if (job && !["queued", "running"].includes(job.status)) break;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      expect(job?.status, job?.error).toBe("completed");
+      const operation = await db
+        .selectFrom("ai_operations")
+        .select("result")
+        .where("job_id", "=", id)
+        .where("result", "like", '%"image_generation"%')
+        .executeTakeFirstOrThrow();
+      selectedReference = JSON.parse(operation.result).assetId;
+    }
+    expect(imageCalls).toBe(2);
+    expect(referenceMimes).toEqual(["image/png", "image/webp"]);
+  } finally {
+    await app.close();
+  }
+});
 it.each([
   ["1:1", "2048x2048"],
   ["16:9", "2560x1440"],
