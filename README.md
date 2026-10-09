@@ -4,6 +4,10 @@
 
 Doca is an open-source document and knowledge workspace for individuals and small teams. One deployment has one account system.
 
+[Live demo](https://d.smartdoca.cc) · [Plugin marketplace](https://store.smartdoca.cc)
+
+**Demo data is cleared from time to time. Please do not store important data in the demo.**
+
 ## Features
 
 - Rich text, Markdown, spreadsheets, slides, and canvas documents, with realtime collaboration and history.

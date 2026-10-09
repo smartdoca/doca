@@ -4,6 +4,10 @@
 
 Doca is a document and knowledge workspace for individuals and small teams. This documentation covers the 0.1.12 release and clearly identified package contracts and implementation limits.
 
+[Live demo](https://d.smartdoca.cc) · [Plugin marketplace](https://store.smartdoca.cc)
+
+**Demo data is cleared from time to time. Please do not store important data in the demo.**
+
 ## Get started
 
 - [Quick start](quickstart.md): clone → configure `.env` → pull the image → start → initialize the administrator password.

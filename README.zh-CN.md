@@ -4,6 +4,10 @@
 
 Doca 是面向个人和小团队的开源文档与知识工作台。一次部署只有一套账号系统。
 
+[Demo 体验](https://d.smartdoca.cc) · [插件商城](https://store.smartdoca.cc)
+
+**Demo 数据会不定期清理，请不要存放重要数据。**
+
 ## 功能
 
 - 富文本、Markdown、表格、幻灯片和画布文档，支持实时协同与历史记录。
