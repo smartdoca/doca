@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { writeClipboardText } from "@web/shared/clipboard.js";
 import { ArrowLeft, Check, ClipboardList, Copy } from "lucide-react";
 import { api } from "@web/shared/api.js";
 import { Select } from "@web/shared/components/select.js";
@@ -238,7 +239,7 @@ export function Tickets({
   async function copy() {
     const url = `${location.origin}${location.pathname}#/tickets/${ticket!.id}`;
     try {
-      await navigator.clipboard.writeText(url);
+      await writeClipboardText(url);
       setNotice(tr("ticket.copied"));
     } catch {
       setManual(url);

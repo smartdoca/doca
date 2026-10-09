@@ -7,7 +7,7 @@
 ## 条件
 
 - Docker Engine 和 Docker Compose 插件。
-- 公开站点的域名和 TLS 证书。
+- 可访问的域名或内网地址；可信内网 HTTP 部署不强制 TLS 证书。
 - 与容器在同一台机器上的反向代理。Compose 只把 Doca 发布在 `127.0.0.1:39120`。
 
 代理需要转发 HTTP，以及 WebSocket 路径 `/api/v1/ws`。保留原始 `Host` 头。
@@ -28,7 +28,7 @@ cp docker.env.example .env
 
 0.1.13 使用新数据库基线 `doca-2026-10-08-knowledge-books-v2`，拒绝 0.1.12 及更早版本的数据库，不提供自动迁移、转换或重置。保留原部署、数据库、文件和配置；新版本使用独立空数据库与独立存储。回滚使用旧代码及未改动的旧数据库，新版产生的数据同样保留。见[发行要求](releases/0.1.13.zh-CN.md)。
 
-`DOCA_ORIGIN` 是用户在浏览器里打开的地址。生产环境拒绝不是 HTTPS 的值。不要加子路径、查询参数或片段；根路径末尾斜杠会被规范化。
+`DOCA_ORIGIN` 是用户在浏览器里打开的地址。包括生产环境在内，均支持 HTTP 和 HTTPS。不要加子路径、查询参数或片段；根路径末尾斜杠会被规范化。
 
 ```text
 DOCA_ORIGIN=https://docs.example.com
@@ -76,6 +76,8 @@ Caddy 默认代理 WebSocket 升级。Nginx 需要在 `/api/v1/ws` 上设置 `Up
 
 如果另一台机器上的负载均衡器连到这台主机，把容器端口发布到内网接口，而不是只绑定回环地址，并把 `DOCA_TRUST_PROXY` 设为该负载均衡器的 IP 段。不要信任整个公网。
 
+可信内网 HTTP 站点可设置 `DOCA_ORIGIN=http://doca.internal`，并通过 HTTP 反向代理提供该地址；也可将容器端口发布到指定内网接口，并在来源中带上端口。仓库 Compose 默认只绑定回环接口。无需改成开发模式，仍使用生产模式；HTTP 支持不改变 Host 或 Origin 校验。
+
 ## 创建管理员
 
 没有默认账号或密码。容器健康之后，在存放 `compose.yaml` 的目录执行：
@@ -102,7 +104,7 @@ bash scripts/reset-admin-password.sh
 
 HTML 页面和接口留在 `DOCA_ORIGIN`。`DOCA_ASSET_BASE` 只改写这份 HTML 里的 `/assets/...` 地址。
 
-留空时，JavaScript、CSS 和其他构建文件由容器从 `/assets` 提供。填写时使用没有账号信息、查询参数、哈希或末尾斜杠的 HTTPS 前缀：
+留空时，JavaScript、CSS 和其他构建文件由容器从 `/assets` 提供。填写时使用没有账号信息、查询参数、哈希或末尾斜杠的 HTTP(S) 前缀：
 
 ```text
 DOCA_ASSET_BASE=https://cdn.example.com/doca/0.1.11
@@ -122,4 +124,4 @@ https://cdn.example.com/doca/0.1.11/assets/index-abc.js
 
 `index.html` 使用 `Cache-Control: no-cache`，发版后重新打开会拿到新页面。`/assets/` 下带哈希的文件使用 `Cache-Control: public, max-age=31536000, immutable`，缓存一年。内容变化时文件名会变，所以拿到新 HTML 之后不会继续用旧脚本。`DOCA_ASSET_BASE` 前面的 CDN 也要对这些带哈希的文件使用同样的长期缓存。
 
-本版宿主 0.1.11 / SDK 0.1.9 提供托管插件凭证，仅安装要求凭证服务的插件时才需设置 `DOCA_CREDENTIAL_MASTER_KEY`，核心启动不需要该项；credentials-v2 数据库基线拒绝 0.1.9 和更早的库，不自动迁移，保留原部署和数据并使用新空数据库。Compose 转发数据库与云存储环境变量，见 [配置示例](../docker.env.example)、[凭证部署说明](plugin-credentials.md)和[发行说明](releases/0.1.11.zh-CN.md)。
+0.1.13 使用新数据库基线 `doca-2026-10-08-knowledge-books-v2`，拒绝 0.1.12 及更早版本的数据库，不提供自动迁移、转换或重置。保留原部署、数据库、文件和配置；新版本使用独立空数据库与独立存储。回滚使用旧代码及未改动的旧数据库，新版产生的数据同样保留。见[发行要求](releases/0.1.13.zh-CN.md)。

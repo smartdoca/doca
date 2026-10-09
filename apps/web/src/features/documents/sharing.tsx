@@ -1,4 +1,5 @@
 import { htmlLang } from "@doca/i18n";
+import { writeClipboardText } from "@web/shared/clipboard.js";
 import {
   useEffect,
   useLayoutEffect,
@@ -195,7 +196,7 @@ export function ShareLinkSettings({
   }
   async function copy(l: ShareLink) {
     try {
-      await navigator.clipboard.writeText(linkUrl(l));
+      await writeClipboardText(linkUrl(l));
       setCopied(l.id);
       setFallback("");
     } catch {

@@ -42,13 +42,13 @@ Doca is an SSO client only. Acting as an OIDC provider, SAML, and global SSO log
 
 ## Deployment
 
-1. Register the application on each platform. Production uses a fixed HTTPS `DOCA_ORIGIN`. The proxy keeps the configured Host.
+1. Register the application on each platform. Use the configured HTTP(S) `DOCA_ORIGIN`. The proxy keeps the configured Host.
 2. Under Platform settings, Service credentials, SSO, add a credential name and client secret, and set allowed custom SSO origins. The secret is stored in the database, takes effect when saved, and is not echoed.
 3. Add an identity provider: display name, issuer for OIDC only, client or app id, and the credential id. Leave it disabled, save, and copy the callback URL.
 4. Put that URL on the platform allowlist exactly: `https://doca.example.com/api/v1/auth/providers/<UUID>/callback`. Each provider has its own URL. An arbitrary return URL is not accepted.
 5. Configure the registration policy and enable the provider. Link or sign out from the profile page and test sign-in. Keep the original administrator method until that works.
 
-Google, GitHub, WeChat, and QQ fixed HTTPS hosts are allowed by default. Every host in an OIDC issuer and in the authorization, token, and JWKS URLs returned by discovery must be listed under custom SSO allowed origins, one full origin per line. Redirects are forbidden. Even a self-hosted provider must use HTTPS. The operator maintains the allowlist together with egress policy. Do not trust mutable untrusted DNS or open arbitrary private addresses.
+Google, GitHub, WeChat, and QQ fixed HTTPS hosts are allowed by default. Every host in an OIDC issuer and in the authorization, token, and JWKS URLs returned by discovery must be listed under custom SSO allowed origins, one full origin per line. Redirects are forbidden. An explicitly allowlisted self-hosted provider can use HTTP; OIDC also permits HTTP discovery and endpoints in this case. The operator maintains the allowlist together with egress policy. Do not trust mutable untrusted DNS or open arbitrary private addresses.
 
 Type, issuer, and client id are an immutable namespace. A new issuer or application is a new provider. Users link it themselves. Do not point an old id at another provider. Name, credential id, and enabled state use a version optimistic lock and invalidate old authorization flows. Disabling a provider can lock out users who only had that source. Arrange another link first. A new sign-in method is not forced unless an administrator is replacing an old one and sets "require users to add a sign-in method".
 
@@ -60,7 +60,7 @@ Type, issuer, and client id are an immutable namespace. A new issuer or applicat
 4. The browser is redirected to `/#/auth/complete`. A same-origin POST finishes and restores the Strict session. Linking must still be the user and session that started it, and the security-check credential must still be valid.
 5. A transaction consumes the flow and checks the provider version, unique identity ownership, registration policy, and user status. Pending does not issue a session. Active issues only a Doca session.
 
-Third-party access and refresh tokens are not stored. The subject, the display name at the time, and the link metadata are stored. An HTTPS avatar URL declared by the source may be shown. The server does not fetch it blindly. An uploaded avatar still uses site storage.
+Third-party access and refresh tokens are not stored. The subject, the display name at the time, and the link metadata are stored. An HTTP(S) avatar URL declared by the source may be shown. The server does not fetch it blindly. An uploaded avatar still uses site storage.
 
 Unlinking requires a recent verification and cannot remove the last usable method. A disabled provider or one missing credentials does not count as that last method. An account without a password can set a site password after a recent verification. An account that already has a password uses the normal password change. The public user id and the local login are one meaningful unique string. If the source does not provide a suitable id, the user must supply one. A UUID is not generated as the name. The internal user UUID stays stable.
 
@@ -108,6 +108,6 @@ SQLite and an isolated PostgreSQL database both run the full regression against 
 
 ## September 2026 module split
 
-Identity lives in `packages/core/src/modules/identity`. Protocol adapters live in `apps/server/src/adapters/identity-providers.ts`. A custom OAuth 2 authorization-code and PKCE adapter can configure endpoints and a stable identity field, still under the HTTPS allowlist. It is separate from OIDC. An ordinary OAuth token is not treated as an ID token.
+Identity lives in `packages/core/src/modules/identity`. Protocol adapters live in `apps/server/src/adapters/identity-providers.ts`. A custom OAuth 2 authorization-code and PKCE adapter can configure endpoints and a stable identity field, still under the HTTP(S) origin allowlist. It is separate from OIDC. An ordinary OAuth token is not treated as an ID token.
 
 Each source's `profile_config` declares registration fields, their source, and whether they can be edited or synced. If the profile is incomplete, `/auth/complete` returns `needs_profile` and does not create a full session. Registration or approval continues after the required profile and contact-verification credential are submitted. Username uniqueness and the provider-plus-subject binding are independent. A duplicate name does not merge accounts. A custom protocol configuration cannot be pointed at another identity namespace after it is created.

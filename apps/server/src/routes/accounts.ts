@@ -1036,8 +1036,8 @@ export function registerAccounts(
             } catch {
               fail(400, "头像地址无效");
             }
-            if (url.protocol !== "https:" || url.username || url.password)
-              fail(400, "头像需为 HTTPS 地址");
+            if (!["http:", "https:"].includes(url.protocol) || url.username || url.password)
+              fail(400, "头像需为 HTTP(S) 地址");
           }
           m.avatarUrl = req.body.avatar;
           m.overrides.avatar = true;

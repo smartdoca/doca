@@ -9,7 +9,7 @@ import type { Provider } from "../apps/server/src/adapters/identity-providers.js
 
 const origin = "http://localhost:39130",
   password = "identity-test-password",
-  issuer = "https://sso.example.test";
+  issuer = "http://sso.example.test";
 const { privateKey, publicKey } = generateKeyPairSync("rsa", {
   modulusLength: 2048,
 });

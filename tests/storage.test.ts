@@ -61,23 +61,27 @@ describe("storage adapters", () => {
       "DeleteObjectCommand",
     ]);
   });
-  it("requires configured credentials and explicit HTTPS endpoint allowlisting", () => {
+  it("requires configured credentials and explicit HTTP(S) endpoint allowlisting", () => {
     expect(() =>
       validateStorage({ ...config, credentialRef: "unknown" }, runtime),
     ).toThrow();
     for (const endpoint of [
-      "http://storage.example.com",
+      "ftp://storage.example.com",
+      "http://127.0.0.1",
+      "http://storage.example.com/path",
+      "http://user:pw@storage.example.com",
+      "http://storage.example.com/?secret=token",
+      "http://storage.example.com/#token",
       "https://127.0.0.1",
       "https://storage.example.com/path",
       "https://user:pw@storage.example.com",
     ])
       expect(() => validateStorage({ ...config, endpoint }, runtime)).toThrow();
-    expect(() =>
-      validateStorage(
-        { ...config, endpoint: "https://storage.example.com" },
-        runtime,
-      ),
-    ).not.toThrow();
+    for (const endpoint of [
+      "http://storage.example.com",
+      "https://storage.example.com",
+    ])
+      expect(() => validateStorage({ ...config, endpoint }, runtime)).not.toThrow();
   });
   it("never falls back to an unsigned public CDN URL", () => {
     expect(() =>
@@ -98,6 +102,26 @@ describe("storage adapters", () => {
       privateKeyEncoding: { type: "pkcs8", format: "pem" },
       publicKeyEncoding: { type: "spki", format: "pem" },
     });
+    expect(() =>
+      validateStorage(
+        {
+          ...config,
+          cdnDomain: "ftp://files.example.com",
+          cdnPrivateKey: privateKey,
+          cdnKeyPairId: "test-pair",
+        },
+        runtime,
+      ),
+    ).toThrow("CDN 请填写 HTTP(S) 域名");
+    const internalUrl = new URL(
+      createStorage({
+        ...runtime,
+        cdnPrivateKey: privateKey,
+        cdnKeyPairId: "test-pair",
+      }).cdnUrl({ ...config, cdnDomain: "http://files.internal" }, key)!,
+    );
+    expect(internalUrl.protocol).toBe("http:");
+    expect(internalUrl.searchParams.get("Signature")).toBeTruthy();
     const url = new URL(
       createStorage({
         ...runtime,

@@ -32,7 +32,7 @@ export function mfluxImageProviderRequest(input: ImageProviderInput) {
     fail(400, "图片生成请求无效", { code: "image_mflux_request_invalid" });
   const url = new URL(input.baseUrl);
   if (url.username || url.password || url.search || url.hash || url.pathname.replace(/\/$/, "") !== "/v1" ||
-    !(url.protocol === "https:" || (url.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname))))
+    !["http:", "https:"].includes(url.protocol))
     fail(400, "不支持所选图片接口", { code: "image_protocol_unsupported" });
   const [width, height] = input.size.split("x").map(Number);
   return { url: input.baseUrl.replace(/\/$/, "") + "/images", body: JSON.stringify({

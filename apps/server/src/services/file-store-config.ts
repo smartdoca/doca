@@ -6,21 +6,22 @@ const nonEmpty = z
   .string()
   .min(1)
   .refine((value) => value.trim() === value && !/[\x00-\x1f\x7f]/.test(value));
-const httpsOrigin = nonEmpty.refine((value) => {
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === "https:" &&
-      !url.username &&
-      !url.password &&
-      !url.search &&
-      !url.hash &&
-      url.pathname === "/"
-    );
-  } catch {
-    return false;
-  }
-});
+const rootOrigin = (protocols: readonly string[]) =>
+  nonEmpty.refine((value) => {
+    try {
+      const url = new URL(value);
+      return (
+        protocols.includes(url.protocol) &&
+        !url.username &&
+        !url.password &&
+        !url.search &&
+        !url.hash &&
+        url.pathname === "/"
+      );
+    } catch {
+      return false;
+    }
+  });
 const credentials = z
   .object({
     accessKeyId: nonEmpty,
@@ -30,7 +31,7 @@ const credentials = z
   .strict();
 const cdn = z
   .object({
-    domain: httpsOrigin,
+    domain: rootOrigin(["http:", "https:"]),
     keyPairId: nonEmpty,
     privateKey: z
       .string()
@@ -54,7 +55,7 @@ const store = z.discriminatedUnion("provider", [
       provider: z.literal("s3"),
       bucket: z.string().regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/),
       region: z.string().regex(/^[a-zA-Z0-9-]{1,64}$/),
-      endpoint: httpsOrigin.optional(),
+      endpoint: rootOrigin(["http:", "https:"]).optional(),
       forcePathStyle: z.boolean(),
       credentials,
       cdn: cdn.optional(),

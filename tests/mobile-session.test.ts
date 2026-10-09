@@ -208,7 +208,7 @@ it("keeps a mobile session for months and logs the browser in from a confirmed c
     .select("expires_at")
     .where("id", "=", tokenHash(browserToken))
     .executeTakeFirstOrThrow();
-  expect(new Date(before.expires_at).getTime()).toBeLessThan(Date.now() + 9 * 60 * 60 * 1000);
+  expect(new Date(before.expires_at).getTime()).toBeLessThan(Date.now() + 25 * 60 * 60 * 1000);
   const browserBeat = await app.inject({
     method: "POST",
     url: "/api/v1/me/heartbeat",

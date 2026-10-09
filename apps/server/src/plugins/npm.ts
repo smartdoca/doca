@@ -8,7 +8,7 @@ export function npmRegistry() {
       "https://registry.npmjs.org",
   );
   if (
-    url.protocol !== "https:" ||
+    !["http:", "https:"].includes(url.protocol) ||
     url.username ||
     url.password ||
     url.search ||
@@ -107,7 +107,7 @@ export async function downloadNpm(
   const url = new URL(metadata.dist.tarball);
   if (
     url.origin !== registry ||
-    url.protocol !== "https:" ||
+    !["http:", "https:"].includes(url.protocol) ||
     url.username ||
     url.password ||
     url.hash

@@ -20,7 +20,7 @@ DOCA_PLUGIN_NPM_REGISTRY=https://registry.npmjs.org
 DOCA_PLUGINS_DIR=/data/plugins
 ```
 
-Store/registry addresses are HTTPS origins without credentials, path prefixes, query, or fragment. Empty values use defaults. Private registry login is unsupported in v1. The Doca server proxies store requests without browser Cookie, Authorization, user IDs, or business data; the remote service needs no browser CORS.
+Store/registry addresses are HTTP(S) origins without credentials, path prefixes, query, or fragment. Empty values use defaults. Private registry login is unsupported in v1. The Doca server proxies store requests without browser Cookie, Authorization, user IDs, or business data; the remote service needs no browser CORS.
 
 API prefix is `/api/v1`. JSON is UTF-8 and responses include protocolVersion:1. Times are UTC ISO 8601. Counts are nonnegative safe integers or null when unknown; unknown must not become zero. All endpoints are public read-only and need no store login.
 
@@ -51,7 +51,7 @@ Constraints:
 
 - id matches manifest.id and `^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$`, maximum 100 characters.
 - name/author.name: 1–160 characters; summary: at most 300; all plain text.
-- author.url: HTTPS URL or null for user clicks only, without automatic host fetching.
+- author.url: HTTP(S) URL or null for user clicks only, without automatic host fetching.
 - categoryId: 1–60 characters matching `[a-z0-9-]+`. Fetch categories separately rather than infer them from a page.
 - icon: PNG data URL or null, at most 24 KiB encoded; no SVG, scripts, or remote image URLs.
 - detailPath: same-origin absolute `/plugins/<id>`, joined with the configured origin. Reject external origins, query/fragment, and traversal. New windows use noopener,noreferrer.
@@ -187,7 +187,7 @@ Returns `{protocolVersion:1,release:Release}`. Installation refetches exact revi
 1. Check Release.npm.registry equals the configured registry (default npmjs); the store cannot choose arbitrary origins.
 2. Fetch exact version metadata at `GET /<encodeURIComponent(packageName)>/<encodeURIComponent(version)>`, without latest/tag/range resolution.
 3. Verify name/version and dist.integrity against approved SRI, then download dist.tarball.
-4. The tarball is HTTPS at the registry origin without credentials/fragment; no redirects. Metadata: 2 MiB/15 seconds. Download: 32 MiB/120 seconds, exact size and SHA-512 validation.
+4. The tarball is HTTP(S) at the registry origin without credentials/fragment; no redirects. Metadata: 2 MiB/15 seconds. Download: 32 MiB/120 seconds, exact size and SHA-512 validation.
 5. Safely extract npm tgz under exactly one package/ wrapper. Accept ordinary files/directories only; reject symbolic/hard links, devices, absolute/traversal/duplicate paths. Skip POSIX pax x/g extension headers (used for mtime/xattr by npm/macOS libarchive), neither extracting them nor adopting their path overrides. Validate the following ustar path. Enforce at most 10000 entries and 128 MiB expanded data with streaming limits.
 6. Verify package/manifest/review metadata and publish the complete archive/target state. Never run npm lifecycle scripts, npm install, or downloads for missing runtime dependencies.
 

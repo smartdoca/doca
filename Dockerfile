@@ -75,7 +75,7 @@ USER node
 FROM render-runtime AS runtime
 
 # AI's SQLite file defaults to ai.db alongside DOCA_SQLITE_PATH.
-# Supply DOCA_ORIGIN=https://your-domain at runtime, behind an HTTPS proxy.
+# Supply the browser-facing HTTP(S) DOCA_ORIGIN at runtime, behind a proxy.
 COPY --from=build /app/package.json /app/tsconfig.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages ./packages

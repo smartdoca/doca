@@ -1,6 +1,6 @@
 # Production-oriented single-host deployment.
-# Put DOCA_ORIGIN=https://docs.example.com in .env.
-# Terminate TLS in a reverse proxy and forward to 127.0.0.1:39120.
+# Put the browser-facing HTTP(S) DOCA_ORIGIN in .env.
+# Use a reverse proxy for HTTPS or internal HTTP; forward to 127.0.0.1:39120.
 # The published image is docker.io/smartdoca/doca:0.1.13.
 # `docker compose up -d` pulls that tag. Add `--build` to build from this checkout.
 services:
@@ -20,9 +20,11 @@ services:
     stop_grace_period: 30s
     environment:
       NODE_ENV: production
-      DOCA_ORIGIN: "${DOCA_ORIGIN:?Set the public HTTPS origin in .env}"
+      DOCA_ORIGIN: "${DOCA_ORIGIN:?Set the HTTP(S) origin in .env}"
       DOCA_HOST: 0.0.0.0
       DOCA_PORT: "39120"
+      DOCA_SESSION_TTL_SECONDS: "${DOCA_SESSION_TTL_SECONDS-86400}"
+      DOCA_MOBILE_SESSION_TTL_SECONDS: "${DOCA_MOBILE_SESSION_TTL_SECONDS-15552000}"
       DOCA_DATABASE: "${DOCA_DATABASE:-sqlite}"
       DOCA_DATABASE_URL: "${DOCA_DATABASE_URL:-}"
       DOCA_DATABASE_POOL_MAX: "${DOCA_DATABASE_POOL_MAX:-10}"

@@ -23,7 +23,7 @@ The default image installs no quick-notes, mail, calendar, membership, or modera
 
 ## Quick start with Docker
 
-Requires Git, Docker Engine, Docker Compose, and an HTTPS domain served by a reverse proxy. This installs the published 0.1.13 image into a fresh database. Existing installations must read the [release requirements](https://smartdoca.github.io/doca/#/en/releases/0.1.13) and preserve their data before changing versions.
+Requires Git, Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. This installs the published 0.1.13 image into a fresh database. Existing installations must read the [release requirements](https://smartdoca.github.io/doca/#/en/releases/0.1.13) and preserve their data before changing versions.
 
 ```sh
 # 1. Clone the matching release
@@ -32,7 +32,7 @@ cd doca
 
 # 2. Configure the environment
 cp docker.env.example .env
-# Edit .env: set DOCA_ORIGIN to your HTTPS origin.
+# Edit .env: set DOCA_ORIGIN to your HTTP(S) origin.
 # Keep the example local file-store configuration for a single server.
 
 # 3. Pull the image
@@ -47,7 +47,7 @@ docker compose ps
 bash scripts/bootstrap-admin.sh
 ```
 
-The password must be at least 12 characters. There is no default account. Compose binds to `127.0.0.1:39120`; configure the HTTPS reverse proxy before browser access. SQLite, files, plugins, and the AI database persist in `doca_data`.
+The password must be at least 12 characters. There is no default account. Compose binds to `127.0.0.1:39120`; configure an HTTP(S) reverse proxy before browser access. SQLite, files, plugins, and the AI database persist in `doca_data`.
 
 The [complete quick start](https://smartdoca.github.io/doca/#/en/getting-started/quickstart) includes `.env`, the reverse proxy, health checks, administrator recovery, and data preservation.
 

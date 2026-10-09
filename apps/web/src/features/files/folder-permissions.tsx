@@ -1,4 +1,5 @@
 import { useI18n } from "@web/shared/i18n.js";
+import { writeClipboardText } from "@web/shared/clipboard.js";
 import { ArrowLeft, ChevronRight, Copy, Link2, Search, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, type FileFolder } from "@web/shared/api.js";
@@ -91,8 +92,13 @@ const labels = { owner: t("search.owner"), admin: t("admin.badge"), reader: t("f
   }
   async function copyLink() {
     if (!link?.url) return;
-    await navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}${link.url}`);
-    setNotice(t("sharingUi.linkCopied"));
+    try {
+      await writeClipboardText(`${window.location.origin}${window.location.pathname}${link.url}`);
+      setError("");
+      setNotice(t("sharingUi.linkCopied"));
+    } catch {
+      setError(t("fileManager.copyFailed"));
+    }
   }
   const title = page === "main" ? t("share.title") : page === "invite" ? t("share.invite") : t("share.members");
   return <div ref={panel} className="permissions-panel permissions-floating folder-permissions-panel" role="dialog" aria-label={t("share.title")} onKeyDown={(event) => { if (event.key === "Escape") page === "main" ? close() : setPage("main"); }}>

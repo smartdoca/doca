@@ -49,6 +49,7 @@
     "@mlightcad/mtext-renderer": "^0.12.13",
     "@mlightcad/three-renderer": "1.7.1",
     "@modelcontextprotocol/sdk": "1.30.0",
+    "@noble/hashes": "2.4.0",
     "@open-file-viewer/core": "0.1.47",
     "@open-file-viewer/react": "0.1.47",
     "@sinclair/typebox": "^0.34.52",

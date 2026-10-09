@@ -1,7 +1,6 @@
 import { defaultOfficialSkills } from "./skills.js";
 import { z } from "zod";
 import { sql } from "kysely";
-import ipaddr from "ipaddr.js";
 import type { DB } from "../../../../db/src/index.js";
 import { transact } from "../../../../db/src/transactions.js";
 import { fail } from "../../shared/errors.js";
@@ -254,13 +253,6 @@ export function displayModel(
 ) {
   return config.display === "alias" ? model.alias : model.model;
 }
-function intranetServiceHost(hostname: string) {
-  try {
-    return ipaddr.process(hostname).range() !== "unicast";
-  } catch {
-    return true;
-  }
-}
 function normalizeConfigInput(input: unknown) {
   if (!input || typeof input !== "object" || Array.isArray(input)) return input;
   const value = input as Record<string, unknown>;
@@ -302,10 +294,9 @@ export async function saveAIConfig(db: DB, input: unknown, revision: number) {
       url.username ||
       url.password ||
       url.search ||
-      url.hash ||
-      (url.protocol === "http:" && !intranetServiceHost(url.hostname))
+      url.hash
     )
-      fail(400, "网页读取服务地址必须使用 HTTPS，内网自建服务可用 HTTP");
+      fail(400, "网页读取服务地址必须使用 HTTP(S)，不含凭据、参数或片段");
   }
   if (new Set(config.vendors.map((v) => v.id)).size !== config.vendors.length)
     fail(400, "厂商 ID 不得重复");
@@ -316,13 +307,9 @@ export async function saveAIConfig(db: DB, input: unknown, revision: number) {
       url.password ||
       url.search ||
       url.hash ||
-      !(
-        url.protocol === "https:" ||
-        (url.protocol === "http:" &&
-          ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname))
-      )
+      !["http:", "https:"].includes(url.protocol)
     )
-      fail(400, "厂商地址必须使用 HTTPS，本地服务可用 HTTP");
+      fail(400, "厂商地址必须使用 HTTP(S)，不含凭据、参数或片段");
   }
   if (
     new Set(config.officialSkills?.map((s) => s.id)).size !==
@@ -354,13 +341,9 @@ export async function saveAIConfig(db: DB, input: unknown, revision: number) {
       url.password ||
       url.search ||
       url.hash ||
-      !(
-        url.protocol === "https:" ||
-        (url.protocol === "http:" &&
-          ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname))
-      )
+      !["http:", "https:"].includes(url.protocol)
     )
-      fail(400, "模型地址必须使用 HTTPS，本地服务可用 HTTP");
+      fail(400, "模型地址必须使用 HTTP(S)，不含凭据、参数或片段");
     if (config.display === "alias" && model.enabled) {
       if (!model.alias || aliases.has(model.alias))
         fail(400, "别名模式下每个启用模型需要不同的别名");

@@ -23,7 +23,7 @@ Doca 是面向个人和小团队的开源文档与知识工作台。一次部署
 
 ## Docker 快速开始
 
-需要 Git、Docker Engine、Docker Compose，以及通过反向代理提供 HTTPS 的域名。本流程在新空数据库中安装已发布的 0.1.13 镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.13)并保留原数据。
+需要 Git、Docker Engine、Docker Compose，以及通过反向代理访问的 HTTP(S) 地址。本流程在新空数据库中安装已发布的 0.1.13 镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.13)并保留原数据。
 
 ```sh
 # 1. 拉取对应发行版代码
@@ -32,7 +32,7 @@ cd doca
 
 # 2. 配置环境变量
 cp docker.env.example .env
-# 编辑 .env，将 DOCA_ORIGIN 改成自己的 HTTPS 来源。
+# 编辑 .env，将 DOCA_ORIGIN 改成自己的 HTTP(S) 来源。
 # 单机部署保留示例中的本地文件存储配置。
 
 # 3. 拉取镜像
@@ -47,7 +47,7 @@ docker compose ps
 bash scripts/bootstrap-admin.sh
 ```
 
-密码至少 12 位，没有默认账号。Compose 绑定 `127.0.0.1:39120`，浏览器访问前需要配置 HTTPS 反向代理。SQLite、文件、插件和 AI 数据库保存在 `doca_data` 卷。
+密码至少 12 位，没有默认账号。Compose 绑定 `127.0.0.1:39120`，浏览器访问前需要配置 HTTP(S) 反向代理。SQLite、文件、插件和 AI 数据库保存在 `doca_data` 卷。
 
 [完整快速开始](https://smartdoca.github.io/doca/#/zh-cn/getting-started/quickstart)包含 `.env`、反向代理、健康检查、管理员恢复和数据保留说明。
 

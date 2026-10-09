@@ -395,13 +395,13 @@ it("saves a keyless Firecrawl service on private HTTP and docker hostnames", asy
           ...aiDefaults,
           webFetch: {
             provider: "firecrawl",
-            baseUrl: "http://8.8.8.8:3002",
+            baseUrl: "http://user:secret@8.8.8.8:3002",
             apiKey: "",
           },
         },
         2,
       ),
-    ).rejects.toThrow("HTTPS");
+    ).rejects.toThrow("HTTP(S)");
   } finally {
     await db.destroy();
   }

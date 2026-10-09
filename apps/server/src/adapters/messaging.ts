@@ -33,7 +33,11 @@ export function configuredMessaging(config: {
       ? {
           send: async (message: VerificationMessage) => {
             const url = new URL(endpoint);
-            if (url.protocol !== "https:" || url.username || url.password)
+            if (
+              !["http:", "https:"].includes(url.protocol) ||
+              url.username ||
+              url.password
+            )
               throw new Error("验证码发送服务配置无效");
             const response = await fetch(url, {
               method: "POST",

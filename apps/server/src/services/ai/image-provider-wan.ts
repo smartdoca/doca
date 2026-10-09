@@ -45,7 +45,7 @@ export function wanImageProviderRequest(input: ImageProviderInput) {
     });
   }
   if (
-    url.protocol !== "https:" ||
+    !["http:", "https:"].includes(url.protocol) ||
     url.username ||
     url.password ||
     url.search ||

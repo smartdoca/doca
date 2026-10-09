@@ -1,5 +1,6 @@
 import { createUserDirectory } from "@core/modules/discovery/users.js";
 import { HOST_VERSION } from "./version.js";
+import { sessionDurations } from "./session-policy.js";
 import { imagePageAttemptLimit } from "../services/ai/image-attempt-policy.js";
 import { pluginMobileActor } from "../plugins/mobile-session.js";
 import { emitIntegrationEvent } from "@core/modules/automation/events.js";
@@ -106,6 +107,7 @@ export interface CreateAppOptions {
 
 export async function createApp(db: DB, options: CreateAppOptions) {
   imagePageAttemptLimit();
+  sessionDurations();
   const origin = new URL(options.origin),
     api = Fastify({
       logger: options.logging
@@ -167,7 +169,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     if (!(await realtimeCluster.consumeRateLimit(key, max, 600_000)))
       fail(429, "请求过于频繁，请稍后再试");
   }
-  function cookie(token: string, maxAge = 28800) {
+  function cookie(token: string, maxAge = sessionDurations().browserSeconds) {
     return `doca_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${origin.protocol === "https:" ? "; Secure" : ""}`;
   }
   const scopedPlugins = new WeakMap<FastifyRequest,string>();

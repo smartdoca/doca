@@ -367,7 +367,7 @@ it("keeps synchronous request construction independent of async reference decodi
 });
 
 it.each([
-  "http://workspace.example/compatible-mode/v1",
+  "ftp://workspace.example/compatible-mode/v1",
   "https://workspace.example/api/v1",
   "https://workspace.example/v1",
   "https://workspace.example/nested/compatible-mode/v1",

@@ -143,6 +143,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.30.0
         version: 1.30.0(supports-color@8.1.1)(zod@4.6.4)
+      '@noble/hashes':
+        specifier: 2.4.0
+        version: 2.4.0
       '@open-file-viewer/core':
         specifier: 0.1.47
         version: 0.1.47(@mlightcad/cad-simple-viewer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@mlightcad/three-renderer@1.7.1(@mlightcad/data-model@1.14.12)(@mlightcad/mtext-renderer@0.12.13(three@0.172.0))(@velipso/polybool@1.1.1)(three@0.172.0))(lodash-es@4.17.21)(three@0.172.0))(@mlightcad/data-model@1.14.12)(@mlightcad/libredwg-web@0.7.14)(lodash-es@4.17.21)(pdfjs-dist@5.7.284)
@@ -2730,6 +2733,10 @@ packages:
 
   '@noble/hashes@2.2.0':
     resolution: {integrity: sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==}
+    engines: {node: '>= 20.19.0'}
+
+  '@noble/hashes@2.4.0':
+    resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
     engines: {node: '>= 20.19.0'}
 
   '@nodable/entities@3.0.0':
@@ -12303,6 +12310,8 @@ snapshots:
   '@noble/ed25519@3.1.0': {}
 
   '@noble/hashes@2.2.0': {}
+
+  '@noble/hashes@2.4.0': {}
 
   '@nodable/entities@3.0.0': {}
 

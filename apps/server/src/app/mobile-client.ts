@@ -8,22 +8,22 @@ import type { MobilePush } from "@core/modules/mobile/push.js";
 import { processProjections } from "@core/modules/automation/jobs.js";
 import { fail } from "@core/shared/errors.js";
 import type { DB } from "@db/index.js";
+import { sessionDurations } from "./session-policy.js";
 
 const sessionPattern = /^[a-f0-9]{64}$/;
 const qrCodePattern = /^[a-f0-9]{64}$/;
 
-/** Browser cookies stay at eight hours. The phone bearer lasts 180 days. */
-export const browserSessionMs = 8 * 60 * 60 * 1000;
-export const mobileSessionMs = 180 * 24 * 60 * 60 * 1000;
-
 export function sessionExpiresAt(req: { headers: FastifyRequest["headers"] }) {
   const mobile = req.headers["x-doca-client"] === "mobile";
+  const { browserSeconds, mobileSeconds } = sessionDurations();
   return new Date(
-    Date.now() + (mobile ? mobileSessionMs : browserSessionMs),
+    Date.now() + (mobile ? mobileSeconds : browserSeconds) * 1000,
   ).toISOString();
 }
 
 export async function renewMobileSession(db: DB, token: string) {
+  const mobileSessionMs = sessionDurations().mobileSeconds * 1000;
+  const renewalIntervalMs = Math.min(30 * 24 * 60 * 60 * 1000, mobileSessionMs / 6);
   await db
     .updateTable("sessions")
     .set({ expires_at: new Date(Date.now() + mobileSessionMs).toISOString() })
@@ -32,7 +32,7 @@ export async function renewMobileSession(db: DB, token: string) {
       "expires_at",
       "<",
       new Date(
-        Date.now() + mobileSessionMs - 30 * 24 * 60 * 60 * 1000,
+        Date.now() + mobileSessionMs - renewalIntervalMs,
       ).toISOString(),
     )
     .execute();
@@ -170,7 +170,9 @@ export function registerMobileClient(
         .values({
           id: tokenHash(token),
           user_id: user.id,
-          expires_at: new Date(Date.now() + 28800000).toISOString(),
+          expires_at: new Date(
+            Date.now() + sessionDurations().browserSeconds * 1000,
+          ).toISOString(),
         })
         .execute();
       await recordLogin(db, user.id);
@@ -363,7 +365,9 @@ async function claimQrLogin(
     .values({
       id: tokenHash(token),
       user_id: row.user_id,
-      expires_at: new Date(Date.now() + browserSessionMs).toISOString(),
+      expires_at: new Date(
+        Date.now() + sessionDurations().browserSeconds * 1000,
+      ).toISOString(),
     })
     .execute();
   await recordLogin(db, row.user_id);

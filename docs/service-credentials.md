@@ -4,8 +4,8 @@
 
 Open Admin → Platform settings → Service credentials. The current host-managed platform record covers:
 
-- Identity: named SSO client secrets and permitted HTTPS origins. Identity providers refer to the credential name.
-- Verification gateway: HTTPS endpoint, bearer secret, and phone/email channels.
+- Identity: named SSO client secrets and permitted HTTP(S) origins. Identity providers refer to the credential name.
+- Verification gateway: HTTP(S) endpoint, bearer secret, and phone/email channels.
 - Document search: Meilisearch API key and permitted origins.
 
 File backend credentials and CloudFront signing keys are configured only in `DOCA_FILE_STORES_JSON`; the storage administration page is read-only. They are not editable in this platform record. [Plugin credentials](plugin-credentials.md) use the separate server-only encrypted service and its deployment master key.

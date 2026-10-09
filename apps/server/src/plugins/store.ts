@@ -56,7 +56,7 @@ const plugin = z.object({
   summary: z.string().max(300),
   author: z.object({
     name: z.string().min(1).max(160),
-    url: z.string().url().startsWith("https://").nullable(),
+    url: z.string().url().regex(/^https?:\/\//).nullable(),
   }),
   categoryId: z.string().regex(/^[a-z0-9-]{1,60}$/),
   icon: z
@@ -101,14 +101,14 @@ export function pluginStoreUrl() {
     process.env.DOCA_PLUGIN_STORE_URL?.trim() || "https://store.smartdoca.cc",
   );
   if (
-    url.protocol !== "https:" ||
+    !["http:", "https:"].includes(url.protocol) ||
     url.username ||
     url.password ||
     url.search ||
     url.hash ||
     url.pathname !== "/"
   )
-    throw new Error("DOCA_PLUGIN_STORE_URL must be an HTTPS origin");
+    throw new Error("DOCA_PLUGIN_STORE_URL must be an HTTP(S) origin");
   return url.origin;
 }
 export async function readBounded(response: Response, max: number) {

@@ -58,7 +58,7 @@ export function Avatar({
   const { t } = useI18n();
   return (
     <span className={"user-avatar " + (avatar ?? "initials")}>
-      {sourceUrl && /^https:\/\//.test(sourceUrl) ? (
+      {sourceUrl && /^https?:\/\//.test(sourceUrl) ? (
         <img
           src={sourceUrl}
           referrerPolicy="no-referrer"

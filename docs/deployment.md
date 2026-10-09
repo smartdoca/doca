@@ -26,9 +26,9 @@ Edit `.env` before the first start.
 
 File storage also requires `DOCA_FILE_STORE_ID` and `DOCA_FILE_STORES_JSON`, as provided by `docker.env.example`. Backend paths and credentials are read from the environment; the administration page is read-only. See [file storage](storage.md).
 
-0.1.13 uses the new `doca-2026-10-08-knowledge-books-v2` database baseline. Databases from 0.1.12 and earlier are rejected before schema changes; no automatic migration, conversion, or reset is provided. Preserve the original deployment, databases, files, and configuration. Use a separate empty database and separate storage for this release. Roll back with the previous code and unchanged old database while retaining new data. See the [release requirements](releases/0.1.13.md).
+0.1.13 uses the new `doca-2026-10-08-knowledge-books-v2` database baseline. Databases from 0.1.12 and earlier are rejected before schema changes; no automatic migration, conversion, or reset is provided. Preserve the original deployment, databases, files, and configuration. Use a separate empty database and separate storage. Roll back with the previous code and unchanged old database while retaining new data. See the [release requirements](releases/0.1.13.md).
 
-`DOCA_ORIGIN` is the origin users type in the browser. Production rejects any value that is not HTTPS. Use only the origin without a subpath, query, or fragment; a root trailing slash is normalized.
+`DOCA_ORIGIN` is the origin users type in the browser. HTTP and HTTPS are accepted, including in production. Use only the origin without a subpath, query, or fragment; a root trailing slash is normalized.
 
 ```text
 DOCA_ORIGIN=https://docs.example.com
@@ -76,6 +76,8 @@ Caddy proxies WebSocket upgrades by default. An Nginx server needs `Upgrade` and
 
 If a load balancer on another machine connects to this host, publish the container port on the private interface instead of only loopback, and set `DOCA_TRUST_PROXY` to that load balancer's IP range. Do not trust the public internet.
 
+For a trusted internal HTTP site, set `DOCA_ORIGIN=http://doca.internal` and serve that address through an HTTP reverse proxy. You can also publish the container port on a chosen private interface and include that port in the origin. The supplied Compose mapping binds only to loopback. No development-mode override is needed; keep production mode. HTTP support does not alter Host or Origin validation.
+
 ## Create the administrator
 
 There is no default account or password. After the container is healthy, run this in the directory that contains `compose.yaml`:
@@ -102,7 +104,7 @@ This does not create an account and it is not available over HTTP. If the databa
 
 The HTML page and the API stay on `DOCA_ORIGIN`. `DOCA_ASSET_BASE` changes only `/assets/...` URLs inside that HTML.
 
-Leave it unset to serve JavaScript, CSS, and the other built files from the container at `/assets`. When you set it, use an HTTPS prefix with no userinfo, query, hash, or trailing slash:
+Leave it unset to serve JavaScript, CSS, and the other built files from the container at `/assets`. When you set it, use an HTTP(S) prefix with no userinfo, query, hash, or trailing slash:
 
 ```text
 DOCA_ASSET_BASE=https://cdn.example.com/doca/0.1.11
@@ -122,4 +124,4 @@ The container keeps its own `/assets` files. Fonts and images referenced from st
 
 `index.html` is sent with `Cache-Control: no-cache`, so a new visit after a release fetches the new page. Hashed files under `/assets/` are sent with `Cache-Control: public, max-age=31536000, immutable`. Their names change when the content changes, so a year-long cache does not keep an old script after the new HTML is loaded. A CDN in front of `DOCA_ASSET_BASE` needs the same long cache on those hashed files.
 
-0.1.13 uses the new `doca-2026-10-08-knowledge-books-v2` database baseline. Databases from 0.1.12 and earlier are rejected before schema changes; no automatic migration, conversion, or reset is provided. Preserve the original deployment, databases, files, and configuration. Use a separate empty database and separate storage for this release. Roll back with the previous code and unchanged old database while retaining new data. See the [release requirements](releases/0.1.13.md).
+0.1.13 uses the new `doca-2026-10-08-knowledge-books-v2` database baseline. Databases from 0.1.12 and earlier are rejected before schema changes; no automatic migration, conversion, or reset is provided. Preserve the original deployment, databases, files, and configuration. Use a separate empty database and separate storage. Roll back with the previous code and unchanged old database while retaining new data. See the [release requirements](releases/0.1.13.md).

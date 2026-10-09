@@ -434,10 +434,10 @@ export async function registrationProfile(
     try {
       u = new URL(values.avatar);
     } catch {
-      fail(400, "头像必须为 HTTPS 地址");
+      fail(400, "头像必须为 HTTP(S) 地址");
     }
-    if (u.protocol !== "https:" || u.username || u.password)
-      fail(400, "头像必须为 HTTPS 地址");
+    if (!["http:", "https:"].includes(u.protocol) || u.username || u.password)
+      fail(400, "头像必须为 HTTP(S) 地址");
   }
   for (const key of ["email", "phone"] as const)
     if (values[key]) {
@@ -599,7 +599,7 @@ export async function applySourceProfile(
     (global.fields[key].mode === "sso" || policy.fields[key].sync);
   if (sync("avatar") && !m.overrides?.avatar && source.avatar) {
     const url = new URL(source.avatar);
-    if (url.protocol === "https:" && !url.username && !url.password)
+    if (["http:", "https:"].includes(url.protocol) && !url.username && !url.password)
       m.avatarUrl = url.href;
   }
   m.allowLinking = policy.allowLinking;
