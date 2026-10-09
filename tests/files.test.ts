@@ -352,6 +352,9 @@ it("supports the personal file lifecycle and keeps copies on the same object", a
     purpose: "ai_attachment",
   });
   expect(aiAttachment.statusCode, aiAttachment.body).toBe(200);
+  const attachedFile = await db.selectFrom("file_items").selectAll().where("id", "=", aiAttachment.json().fileId).executeTakeFirstOrThrow();
+  expect(JSON.parse(attachedFile.metadata).assetId).toBe(aiAttachment.json().id);
+  expect(attachedFile.storage_object_id).toBe(item.storage_object_id);
   expect(aiAttachment.json()).toEqual(
     expect.objectContaining({ filename: "说明.txt", mime: "text/plain" }),
   );

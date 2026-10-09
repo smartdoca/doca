@@ -61,6 +61,8 @@
 
 资产上传：`POST /assets?purpose=&filename=&resourceId=`，支持 avatar/cover/attachment/comment_image，按用途校验权限。下载：`GET /assets/:id/content`；强制下载加 `?download=1`。头像/封面/评论图片最大 5 MiB，正文附件最大 20 MiB。普通平台文件通过 `/files` 系列接口上传，使用独立限额及分片流程。
 
+正文附件和 AI 附件创建同时返回素材 `id` 与实际文件 `fileId`。附件内容和生图引用使用素材 ID，`/files/items/:id` 操作使用文件 ID。`POST /files/items/:id/attach` 也返回这两个 ID；无需再搜索全局目录找回上传文件的 ID。
+
 `GET /admin/storage` 只读展示部署后端；`PUT /admin/storage` 返回 405。后端和凭据通过环境变量配置，详见[文件存储](storage.zh-CN.md)。
 
 ## AI、知识与插件

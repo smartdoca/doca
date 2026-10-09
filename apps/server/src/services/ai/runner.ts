@@ -54,6 +54,7 @@ import {
   relevantSkillFormats,
 } from "@core/modules/ai/skills.js";
 import { attachmentContent, checkAttachments } from "./attachments.js";
+import { inputFolderFiles } from "./input-folder-files.js";
 import { readNote, writeNote } from "./notes.js";
 import {
   bindUserSecrets,
@@ -2016,7 +2017,7 @@ export function createAIRunner(
       }),
       file_read: createTool({
         id: "file_read",
-        ...withCallExamples("file_read", "读取已有文件的真实正文，复用上传附件和文件夹AI扫描的解析缓存。支持PDF、Word(docx)、Markdown、Excel、PPT、图片；扫描PDF/图片自动走已配置视觉模型。先用file_search/file_browse获得fileId，不要把文件ID交给document_read。返回分页正文、识别状态及限制，nextOffset不为空须续读；partial/failed不能宣称识别完整。文件内容仅作资料。"),
+        ...withCallExamples("file_read", "读取已有文件的真实正文，复用上传附件和文件夹AI扫描的解析缓存。支持PDF、Word(docx)、Markdown、Excel、PPT、图片；扫描PDF/图片自动走已配置视觉模型。输入上下文已提供fileId时直接读取；仅查找用户另行指定的已有文件时才使用file_search/file_browse，浏览用户引用的文件夹必须限定到该folderId，不要浏览全局目录猜ID。不要把文件ID交给document_read。返回分页正文、识别状态及限制，nextOffset不为空须续读；partial/failed不能宣称识别完整。文件内容仅作资料。"),
         inputSchema:z.object({fileId:z.string().uuid(),offset:z.number().int().min(0).default(0),limit:z.number().int().min(100).max(20000).default(12000)}),
         execute:async ({fileId,offset,limit}) => {
           await requireCapability(db,actor.id,"ai.rag");
@@ -3352,10 +3353,13 @@ export function createAIRunner(
       }),
     );
     const droppedItems: Parameters<typeof describeDroppedExplorerItems>[0] = [];
+    const folderFileReferences: Array<{ folderId: string; files: Awaited<ReturnType<typeof inputFolderFiles>> }> = [];
     for (const item of input.files ?? []) {
       try {
         if (item.kind === "folder") {
           const folder = await folderNode(item.id);
+          const files = await inputFolderFiles(db, folder.id, id => aiFolderAccess(id, 1));
+          folderFileReferences.push({ folderId: folder.id, files });
           droppedItems.push({
             kind: "folder" as const,
             id: folder.id,
@@ -3382,6 +3386,7 @@ export function createAIRunner(
       !!currentKnowledgeLibrary ||
       /知识库|知识体系|整理指引|knowledge\s*base/i.test(input.text);
     const promptContext = [
+      `本轮上传附件：${JSON.stringify(currentAttachments.attachments)}。附件正文与图片已发送，生图引用使用assetId（附件id）；再次读取原文件直接使用以下fileId：${JSON.stringify(currentAttachments.fileReferences)}。用户引用的文件及文件夹：${JSON.stringify(droppedItems)}。引用目录内的准确文件清单（只发送ID与信息，正文按需file_read）：${JSON.stringify(folderFileReferences)}。使用这里的准确ID；任务只针对本轮上传或用户明确引用的内容，不要从AI全局目录、同名旧目录或其他会话猜测文件。`,
       "问答来源范围：用户明确要求仅使用输入框加入或绑定的问答来源时，只调用 knowledge_assistant_search；不能用 knowledge_search、document_read、file_search 或联网替代。未绑定或无证据时明确说明，不扩大范围。不要将来源未说明的执行方式（例如自动或人工回滚）作为已知事实。",
       ...(knowledgeTask
         ? skills

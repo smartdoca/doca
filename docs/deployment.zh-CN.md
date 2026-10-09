@@ -2,7 +2,7 @@
 
 [English](deployment.md)
 
-一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.1.11`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
+一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.1.12`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
 
 ## 条件
 
@@ -26,7 +26,7 @@ cp docker.env.example .env
 
 文件存储还需要 `DOCA_FILE_STORE_ID` 和 `DOCA_FILE_STORES_JSON`，示例见 `docker.env.example`。后端路径和密钥通过环境变量提供，管理页只读展示。见[文件存储](storage.zh-CN.md)。
 
-0.1.11 使用与 0.1.10 相同的数据库基线，从 0.1.10 升级无需迁移或存储转换；升级前备份数据并保留旧镜像。0.1.9 及更早版本的旧数据库基线、插件安装清单、SDK 范围和存储配置仍会被拒绝，应保留原部署及数据，使用新空数据库和独立存储，不提供自动转换或迁移。见[发行要求](releases/0.1.11.zh-CN.md)。
+0.1.12 使用与 0.1.10 相同的数据库基线，从 0.1.10 升级无需迁移或存储转换；升级前备份数据并保留旧镜像。0.1.9 及更早版本的旧数据库基线、插件安装清单、SDK 范围和存储配置仍会被拒绝，应保留原部署及数据，使用新空数据库和独立存储，不提供自动转换或迁移。见[发行要求](releases/0.1.12.zh-CN.md)。
 
 `DOCA_ORIGIN` 是用户在浏览器里打开的地址。生产环境拒绝不是 HTTPS 的值。不要加子路径、查询参数或片段；根路径末尾斜杠会被规范化。
 
@@ -43,7 +43,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker compose up -d` 会拉取 `docker.io/smartdoca/doca:0.1.11`。只有要从当前检出构建镜像时才加 `--build`。
+`docker compose up -d` 会拉取 `docker.io/smartdoca/doca:0.1.12`。只有要从当前检出构建镜像时才加 `--build`。
 
 检查容器：
 
@@ -54,7 +54,7 @@ curl -fsS -H 'Host: docs.example.com' http://127.0.0.1:39120/health
 
 将 `docs.example.com` 替换为配置来源的主机名，非标准端口也需带上。镜像内置探针已经携带正确 Host，等待 `docker compose ps` 显示 `healthy`。直接以回环地址 curl 会返回 421。
 
-健康的进程返回 `{"status":"ok","version":"0.1.11"}`。
+健康的进程返回 `{"status":"ok","version":"0.1.12"}`。
 
 SQLite、上传文件和 AI 数据库保存在 `doca_data` 卷。首次启动时数据库必须是空的。非空且结构不是当前基线的数据库会被拒绝。不要删除已经有用户的数据库。
 
@@ -103,13 +103,13 @@ HTML 页面和接口留在 `DOCA_ORIGIN`。`DOCA_ASSET_BASE` 只改写这份 HTM
 留空时，JavaScript、CSS 和其他构建文件由容器从 `/assets` 提供。填写时使用没有账号信息、查询参数、哈希或末尾斜杠的 HTTPS 前缀：
 
 ```text
-DOCA_ASSET_BASE=https://cdn.example.com/doca/0.1.11
+DOCA_ASSET_BASE=https://cdn.example.com/doca/0.1.12
 ```
 
 页面里原来的 `/assets/index-abc.js` 会变成：
 
 ```text
-https://cdn.example.com/doca/0.1.11/assets/index-abc.js
+https://cdn.example.com/doca/0.1.12/assets/index-abc.js
 ```
 
 把整个 `apps/web/dist/assets` 目录发布到这个前缀下，并保留 `assets` 这一层。文件名包含内容哈希，必须和同一个镜像里的 HTML 一致。接口请求仍发往 `DOCA_ORIGIN`。
@@ -120,4 +120,4 @@ https://cdn.example.com/doca/0.1.11/assets/index-abc.js
 
 `index.html` 使用 `Cache-Control: no-cache`，发版后重新打开会拿到新页面。`/assets/` 下带哈希的文件使用 `Cache-Control: public, max-age=31536000, immutable`，缓存一年。内容变化时文件名会变，所以拿到新 HTML 之后不会继续用旧脚本。`DOCA_ASSET_BASE` 前面的 CDN 也要对这些带哈希的文件使用同样的长期缓存。
 
-本版宿主 0.1.11 / SDK 0.1.9 提供托管插件凭证，仅安装要求凭证服务的插件时才需设置 `DOCA_CREDENTIAL_MASTER_KEY`，核心启动不需要该项；credentials-v2 数据库基线拒绝 0.1.9 和更早的库，不自动迁移，保留原部署和数据并使用新空数据库。Compose 转发数据库与云存储环境变量，见 [配置示例](../docker.env.example)、[凭证部署说明](plugin-credentials.md)和[发行说明](releases/0.1.11.zh-CN.md)。
+本版宿主 0.1.12 / SDK 0.1.9 提供托管插件凭证，仅安装要求凭证服务的插件时才需设置 `DOCA_CREDENTIAL_MASTER_KEY`，核心启动不需要该项；credentials-v2 数据库基线拒绝 0.1.9 和更早的库，不自动迁移，保留原部署和数据并使用新空数据库。Compose 转发数据库与云存储环境变量，见 [配置示例](../docker.env.example)、[凭证部署说明](plugin-credentials.md)和[发行说明](releases/0.1.12.zh-CN.md)。

@@ -9,12 +9,13 @@ Node.js 22.12 or newer, or Node.js 24 LTS, and pnpm 11.25.0. Versions are locked
 ```sh
 pnpm install --frozen-lockfile
 cp .env.example .env
+# Set the storage root in .env to an absolute writable local directory.
 pnpm dev
 ```
 
 Open http://127.0.0.1:39130. The API listens on 39120 and the dev server proxies it on the same origin. Opening 39120 directly, or using `localhost` instead of `127.0.0.1`, does not match the configuration.
 
-Copy `.env.example` before starting: file-store variables are required. Its local origin, SQLite path, and storage directory work together. Adjust `.env` when needed and never commit secrets.
+Copy `.env.example` before starting: file-store variables are required. Its storage root is `/data/storage` for Docker; set that root to an absolute writable directory on your machine before running from source. Keep the local origin and SQLite path, and never commit secrets.
 
 ## Create the administrator
 

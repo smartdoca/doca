@@ -61,6 +61,8 @@ Administration uses `GET/PUT /admin/search`, `POST /admin/search/reindex`, `POST
 
 Asset upload uses `POST /assets?purpose=&filename=&resourceId=` with avatar/cover/attachment/comment_image and purpose-specific authorization. Download uses `GET /assets/:id/content`, with `?download=1` for attachment disposition. Avatar/cover/comment images allow 5 MiB; document attachments allow 20 MiB. Ordinary platform files use `/files` routes with separate limits and multipart workflows.
 
+Attachment and AI-attachment creation return the asset `id` and the actual stored `fileId`. Use the asset ID for attachment content and image references, and the file ID for `/files/items/:id` operations. The same IDs are returned by `POST /files/items/:id/attach`; a global directory search is not needed to rediscover the uploaded file.
+
 `GET /admin/storage` reports the deployment backend; `PUT /admin/storage` returns 405. Environment variables configure backends and credentials; see [file storage](storage.md).
 
 ## AI, knowledge, and plugins

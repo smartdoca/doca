@@ -2,7 +2,7 @@
 
 [中文](configuration.zh-CN.md)
 
-Choose `docker.env.example` for Compose and `.env.example` for source development, then copy it to the repository-root `.env`. They use different origins and physical paths. Do not interchange them or commit secrets.
+Choose `docker.env.example` for Compose and `.env.example` for source development, then copy it to the repository-root `.env`. They use different origins and database paths; both show `/data/storage` for the container's persistent file volume. For source development, change the storage root to an absolute writable directory on your machine. Do not interchange origins or commit secrets.
 
 ## Required Compose settings
 

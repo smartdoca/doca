@@ -1,4 +1,5 @@
 .git
+.cache
 .archive
 .local
 .agents

@@ -6,7 +6,7 @@
 
 ## 环境变量配置
 
-文件存储由必填的 `DOCA_FILE_STORE_ID` 和 `DOCA_FILE_STORES_JSON` 指定。开发环境复制 `.env.example`，示例使用 `./data/v1/storage`；正式镜像显式提供 `/data/storage` 本地存储环境默认值。Compose 要求填写 `docker.env.example` 中的存储变量。数据库只记录稳定存储 ID 和对象引用，不保存后端凭据；管理页只读展示。
+文件存储由必填的 `DOCA_FILE_STORE_ID` 和 `DOCA_FILE_STORES_JSON` 指定。两份环境示例均使用 `/data/storage`，与正式镜像的持久数据卷一致。源码开发时复制 `.env.example`，把本地 root 改为本机可写的绝对路径。Compose 使用 `docker.env.example`。数据库只记录稳定存储 ID 和对象引用，不保存后端凭据；管理页只读展示。
 
 ```dotenv
 DOCA_FILE_STORE_ID=local

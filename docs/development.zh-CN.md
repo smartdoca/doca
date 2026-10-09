@@ -9,12 +9,13 @@ Node.js 22.12+或24 LTS、pnpm 11.25.0。版本锁定pnpm-lock.yaml；better-sql
 ```sh
 pnpm install --frozen-lockfile
 cp .env.example .env
+# 将 .env 中的存储 root 改为本机可写的绝对路径。
 pnpm dev
 ```
 
 入口 http://127.0.0.1:39130，API监听39120，通过前端同源代理访问。直接访问39120或用localhost替换127.0.0.1会与配置不符。
 
-启动前复制 `.env.example`，文件存储变量为必填；示例中的本地 origin、SQLite 路径和存储目录配套使用。按需调整 `.env`，不提交凭证。
+启动前复制 `.env.example`，文件存储变量为必填；示例的存储 root 为 Docker 使用的 `/data/storage`，源码运行前须改为本机可写的绝对路径。本地 origin 和 SQLite 路径按示例使用，不提交凭证。
 
 ## 初始化管理员
 

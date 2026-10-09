@@ -1857,6 +1857,7 @@ export function registerFiles(
       } else if (req.body.resourceId) fail(400, "AI 对话附件不能关联文档");
       const now = new Date().toISOString();
       const assetId = randomUUID();
+      const fileId = randomUUID();
       await transact(db, async (tx) => {
         await tx
           .insertInto("assets")
@@ -1875,7 +1876,6 @@ export function registerFiles(
             deleted_at: null,
           })
           .execute();
-        const fileId = randomUUID();
         await tx
           .insertInto("file_items")
           .values({
@@ -1911,6 +1911,7 @@ export function registerFiles(
           await loadFileExtract(db, source.storage_object_id));
       return {
         id: assetId,
+        fileId,
         filename: source.name,
         mime: source.mime,
         size: source.size,

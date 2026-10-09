@@ -6,7 +6,7 @@ This module stores avatars, library covers, document images, and attachments. Th
 
 ## Environment configuration
 
-File storage is selected with required `DOCA_FILE_STORE_ID` and `DOCA_FILE_STORES_JSON`. For local development, copy `.env.example`; the example uses `./data/v1/storage`. The published container has an explicit local environment default at `/data/storage`. Compose requires the variables in `docker.env.example`. The database records stable storage IDs and object references, not backend credentials. The administration page is read-only.
+File storage is selected with required `DOCA_FILE_STORE_ID` and `DOCA_FILE_STORES_JSON`. Both environment examples use `/data/storage`, matching the published container's persistent volume. For source development, copy `.env.example` and set the local root to an absolute writable directory on your machine. Compose uses `docker.env.example`. The database records stable storage IDs and object references, not backend credentials. The administration page is read-only.
 
 ```dotenv
 DOCA_FILE_STORE_ID=local
