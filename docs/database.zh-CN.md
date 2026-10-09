@@ -4,7 +4,7 @@
 
 当前基线为 `doca-2026-10-09-history-storage-v1`。[create-schema.ts](../packages/db/src/create-schema.ts) 定义建表、索引、外键和检查约束；[schema.ts](../packages/db/src/schema.ts) 定义 Kysely 类型；[connection.ts](../packages/db/src/connection.ts) 管理连接；[transactions.ts](../packages/db/src/transactions.ts) 管理事务和冲突重试。
 
-空数据库按当前结构初始化，启动时校验基线及必需的存储、凭证结构。正常启动拒绝旧基线，不自动迁移或转换；仅上一基线可按[发行要求](releases/0.1.14.zh-CN.md)显式离线升级，保留原数据、文件和配置。已有 document_templates 表保留，不提供原 CRUD，也不自动注册为资源来源，见[模板与素材](creation-resources.zh-CN.md)。这些是现有实现事实，不是新的迁移方案。
+空数据库按当前结构初始化，启动时校验基线及必需的存储、凭证结构。正常启动拒绝旧基线，不自动迁移或转换；仅上一基线可按[发行要求](releases/0.1.15.zh-CN.md)显式离线升级，保留原数据、文件和配置。已有 document_templates 表保留，不提供原 CRUD，也不自动注册为资源来源，见[模板与素材](creation-resources.zh-CN.md)。这些是现有实现事实，不是新的迁移方案。
 
 ## 连接、初始化与备份
 

@@ -224,11 +224,17 @@ export async function wakeAIContinuations(
       invalid = false;
     try {
       saved = JSON.parse(job.result);
-      if (
-        saved.checkpoint?.continuations === undefined ||
-        saved.progress?.phase !== "waiting_dependency"
-      )
-        return;
+    } catch {
+      // An unreadable result cannot prove that this is an explicitly registered
+      // continuation. Leave unrelated or historical records untouched.
+      return;
+    }
+    if (
+      saved?.checkpoint?.continuations === undefined ||
+      saved?.progress?.phase !== "waiting_dependency"
+    )
+      return;
+    try {
       const state = continuationStateSchema.parse(
         saved.checkpoint.continuations,
       );
@@ -330,9 +336,14 @@ export async function wakeAIContinuations(
 /** Public presentation of an explicitly registered wait; storage keeps its existing status constraint. */
 export function continuationJobStatus(job: { status: string; result: string }) {
   if (job.status !== "awaiting_approval" || !job.result) return job.status;
-  const saved = JSON.parse(job.result);
-  return saved.progress?.phase === "waiting_dependency" &&
-    saved.checkpoint?.continuations?.version === 1
+  let saved: any;
+  try {
+    saved = JSON.parse(job.result);
+  } catch {
+    return job.status;
+  }
+  return saved?.progress?.phase === "waiting_dependency" &&
+    saved?.checkpoint?.continuations?.version === 1
     ? "awaiting_dependency"
     : job.status;
 }
