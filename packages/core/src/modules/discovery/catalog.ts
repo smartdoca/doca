@@ -15,7 +15,7 @@ import {
   type PublicResourceKind,
 } from "../deployment/policies.js";
 import { setCollection } from "./collections.js";
-import { knowledgeAssistantAccess } from "../knowledge/system.js";
+
 import { fail } from "../../shared/errors.js";
 
 export async function catalogPage(
@@ -46,20 +46,7 @@ export async function catalogPage(
       where r.kind = ${kind} and ${accessibleQuery(sql.ref("r.id"), actor)}
         and lower(r.title) like ${pattern} escape '!'
         and ${input.collected ? sql`e.resource_id is not null` : sql`r.library_id is null and ${policyFieldQuery(sql.ref("r.id"), "visibility")} in ('public','authenticated')`}`;
-    if (kind === "assistant")
-      return sql`
-      select b.id, b.title, 'assistant' as kind, b.updated_at,
-        case when u.resource_id is not null then 1 else 0 end as collected
-      from knowledge_assistants b left join resource_collections u on u.resource_id = b.id and u.resource_kind = 'assistant' and u.user_id = ${actor.id}
-      where b.enabled = 1 and ${
-        input.collected
-          ? sql`(b.visibility in ('public','authenticated') or b.owner_id=${actor.id}
-        or coalesce(b.manager_ids,'[]') like ${'%"' + actor.id + '"%'}
-        or (b.member_ids like ${'%"' + actor.id + '"%'} and (${policy.grantMode === "direct" ? 1 : 0}=1 or exists(select 1 from knowledge_assistant_users accepted where accepted.assistant_id=b.id and accepted.user_id=${actor.id} and accepted.accepted=1))))`
-          : sql`b.visibility in ('public','authenticated')`
-      }
-        and lower(b.title) like ${pattern} escape '!'
-        ${input.collected ? sql`and u.resource_id is not null` : sql``}`;
+
     return sql`
       select f.id, f.name as title, 'folder' as kind, f.updated_at,
         case when e.resource_id is not null then 1 else 0 end as collected
@@ -116,14 +103,6 @@ export async function collectPublicResource(
   if (kind === "document" || kind === "library") {
     const { resource } = await authorize(db, actor, id);
     if (resource.kind !== kind) fail(404, "资源不存在");
-  } else if (kind === "assistant") {
-    const bot = await db
-      .selectFrom("knowledge_assistants")
-      .selectAll()
-      .where("id", "=", id)
-      .executeTakeFirst();
-    if (!bot || !(await knowledgeAssistantAccess(db, actor, bot)).accessible)
-      fail(404, "问答不存在");
   } else await authorizeFileFolder(db, actor, id);
   return setCollection(db, actor.id, kind, id, true);
 }

@@ -14,6 +14,7 @@ import {
 import { fromBase64 } from "@web/features/documents/realtime.js";
 import { assetUrl } from "@web/shared/api.js";
 import { Feedback } from "@web/shared/components/feedback.js";
+import { useAttachmentPreview } from "./attachment-preview.js";
 import "@smartdoca/canvas/style.css";
 import "@smartdoca/sheet/style.css";
 import "@web/features/documents/surface.css";
@@ -35,6 +36,7 @@ export default function SurfacePreview({
   audit?: boolean;
 }) {
   const { t, locale } = useI18n();
+  const attachmentPreview = useAttachmentPreview({ trash, audit });
   const [model, setModel] = useState<
       CanvasModel | ExlsxCollaborationSession | Y.Doc | null
     >(null),
@@ -92,6 +94,7 @@ export default function SurfacePreview({
       : "";
   return (
     <div className="surface-editor" style={{ height: "65vh" }}>
+      {attachmentPreview.dialog}
       <Feedback message={error} tone="error" />
       {model instanceof Y.Doc ? (
         <PresentationWorkspace
@@ -119,6 +122,7 @@ export default function SurfacePreview({
       ) : model ? (
         <SpreadsheetEditor
           locale={locale}
+          onAttachmentPreview={attachmentPreview.onSheetAttachmentPreview}
           workbookId={id}
           collaboration={model}
           readOnly

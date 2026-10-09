@@ -52,7 +52,7 @@ Once Redis is configured it is required. A failed startup connection, a later ou
 
 A collaboration update is stored in a PostgreSQL transaction and acknowledged, then Redis tells the other replicas. Redis is not the document log. Duplicate events are removed by the protocol. A short loss is repaired from the database after reconnect. Presence expires, so a crashed instance disappears.
 
-File recognition, text extraction, knowledge curation, and mobile push use database jobs and leases. An occurrence key makes sure several replicas scanning together create only one business occurrence. Handlers must be idempotent, because another replica may retry after a lease expires.
+File recognition, text extraction, knowledge-book workflows, and mobile push use database jobs and leases. An occurrence key makes sure several replicas scanning together create only one business occurrence. Handlers must be idempotent, because another replica may retry after a lease expires.
 
 ## Capacity
 

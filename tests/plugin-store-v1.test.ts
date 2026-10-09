@@ -1,9 +1,10 @@
-import { expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { gzipSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { unpackNpm, downloadNpm } from "@server/plugins/npm.js";
-import { PluginStore } from "@server/plugins/store.js";
+import { PluginStore, pluginStoreUrl } from "@server/plugins/store.js";
 import { unpack } from "@server/plugins/archive.js";
+afterEach(() => vi.unstubAllEnvs());
 function tarEntry(name: string, content: string, type = "0") {
   const bytes = Buffer.from(content),
     h = Buffer.alloc(512);
@@ -36,7 +37,8 @@ function tarEntries(entries: Array<[string, string, string?]>) {
     ]),
   );
 }
-it("verifies exact npm bytes and refuses foreign tarballs, links, traversal and digest substitution", async () => {
+it.each(["https://registry.npmjs.org", "http://registry.internal:4873"])("verifies exact npm bytes from %s and refuses foreign tarballs, links, traversal and digest substitution", async (registry) => {
+  vi.stubEnv("DOCA_PLUGIN_NPM_REGISTRY", registry);
   const bytes = tar(
     "package/package.json",
     JSON.stringify({ name: "@example/mail", version: "1.0.0" }),
@@ -47,7 +49,7 @@ it("verifies exact npm bytes and refuses foreign tarballs, links, traversal and 
     version: "1.0.0",
     dist: {
       integrity,
-      tarball: "https://registry.npmjs.org/@example/mail/-/mail-1.0.0.tgz",
+      tarball: `${registry}/@example/mail/-/mail-1.0.0.tgz`,
     },
   };
   const requests: string[] = [];
@@ -61,7 +63,7 @@ it("verifies exact npm bytes and refuses foreign tarballs, links, traversal and 
   const result = await downloadNpm(
     "@example/mail",
     "1.0.0",
-    { registry: "https://registry.npmjs.org", integrity, size: bytes.length },
+    { registry, integrity, size: bytes.length },
     fetcher,
   );
   expect(unpack(result.bytes)["package.json"]).toBeDefined();
@@ -74,7 +76,7 @@ it("verifies exact npm bytes and refuses foreign tarballs, links, traversal and 
       "@example/mail",
       "1.0.0",
       {
-        registry: "https://registry.npmjs.org",
+        registry,
         integrity: "sha512-" + "a".repeat(86) + "==",
         size: bytes.length,
       },
@@ -87,6 +89,16 @@ it("verifies exact npm bytes and refuses foreign tarballs, links, traversal and 
   ).rejects.toThrow("Untrusted");
   expect(() => unpackNpm(tar("package/../escape", "x"))).toThrow("path");
   expect(() => unpackNpm(tar("package/link", "x", "2"))).toThrow("Links");
+});
+
+it("accepts a configured HTTP plugin store origin without changing its allowlist boundaries", () => {
+  vi.stubEnv("DOCA_PLUGIN_STORE_URL", "http://store.internal:8080");
+  expect(pluginStoreUrl()).toBe("http://store.internal:8080");
+  for (const value of ["ftp://store.internal", "http://user:secret@store.internal", "http://store.internal/path", "http://store.internal/?token=secret"])
+  {
+    vi.stubEnv("DOCA_PLUGIN_STORE_URL", value);
+    expect(() => pluginStoreUrl()).toThrow("HTTP(S) origin");
+  }
 });
 it("skips libarchive pax headers and still checks the following ustar path", () => {
   const pax = "30 mtime=1790863819.111169654\n";

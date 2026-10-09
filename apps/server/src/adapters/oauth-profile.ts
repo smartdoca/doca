@@ -26,13 +26,13 @@ export function oauthProfile(raw?: string): OAuthProfile {
       fail(400, "OAuth 端点配置无效");
     }
     if (
-      url.protocol !== "https:" ||
+      !["http:", "https:"].includes(url.protocol) ||
       url.username ||
       url.password ||
       url.search ||
       url.hash
     )
-      fail(400, "OAuth 端点必须为不含凭据、参数及片段的 HTTPS 地址");
+      fail(400, "OAuth 端点必须为不含凭据、参数及片段的 HTTP(S) 地址");
   }
   value.nameField ??= "";
   value.scopes ??= "";

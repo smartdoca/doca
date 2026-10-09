@@ -42,14 +42,14 @@
 
 ## 部署步骤
 
-1. 在各平台注册应用。生产使用固定 HTTPS `DOCA_ORIGIN`，代理保留已配置的 Host。
+1. 在各平台注册应用。使用已配置的 HTTP(S) `DOCA_ORIGIN`，代理保留已配置的 Host。
 2. 在「平台设置 → 服务凭据 → SSO 认证」添加凭据名称和 Client Secret，设置自定义 SSO 允许来源。密钥保存在数据库，保存后生效，不回显。
 
 3. 添加身份源，填写显示名、Issuer（仅 OIDC）、Client/App ID 和凭据标识。先保持关闭，保存取得回调地址。
 4. 原样填入平台回调白名单：`https://doca.example.com/api/v1/auth/providers/<UUID>/callback`。每个身份源独立地址，不支持任意返回 URL。
 5. 配置注册策略并启用。在个人信息页面绑定或退出后测试登录。验证完成前保留原管理员登录方式。
 
-Google/GitHub/微信/QQ 的固定 HTTPS 域名内置允许。OIDC Issuer 及 Discovery 返回的授权、token、JWKS 等所有域名必须加入 服务凭据页的「自定义 SSO 允许来源」（完整 origin，每行一个）。禁止网络重定向，即使自建身份源也要求 HTTPS。白名单由部署者维护，须配合网络出口策略，不要信任可变的不可信 DNS 或开放任意内网地址。
+Google/GitHub/微信/QQ 的固定 HTTPS 域名内置允许。OIDC Issuer 及 Discovery 返回的授权、token、JWKS 等所有域名必须加入 服务凭据页的「自定义 SSO 允许来源」（完整 origin，每行一个）。禁止网络重定向，显式加入允许来源的自建身份源可用 HTTP，OIDC 同时允许其 HTTP Discovery 和端点。白名单由部署者维护，须配合网络出口策略，不要信任可变的不可信 DNS 或开放任意内网地址。
 
 类型、Issuer、Client ID 是不可修改的命名空间。更换发行者或应用时新建身份源，让用户主动绑定，不把原 ID 指向另一身份源。修改名称、凭据标识和启停状态使用 version 乐观锁，使旧授权流程失效。停用身份源可能让仅绑定该来源的用户无法再次登录，应先安排替代绑定。新增登录方式默认不强制用户使用；只有准备替换旧方式时，管理员才应设置“强制用户补充登录方式”，待用户完成补充后再关闭旧方式。
 
@@ -61,7 +61,7 @@ Google/GitHub/微信/QQ 的固定 HTTPS 域名内置允许。OIDC Issuer 及 Dis
 4. 固定重定向 `/#/auth/complete`，前端同源 POST 完成，恢复 Strict 主会话。绑定必须仍为最初发起的用户和同一个会话，且独立安全验证凭证仍有效。
 5. 事务消费流程，检查 provider 版本、唯一身份归属、注册策略与用户状态。pending 不发会话，active 只发 Doca 会话。
 
-不持久化第三方 access/refresh token；仅保存 subject、当时显示名与关联信息。来源声明的HTTPS头像URL可用于展示，服务端不盲目抓取；用户上传头像仍走本站资源存储。
+不持久化第三方 access/refresh token；仅保存 subject、当时显示名与关联信息。来源声明的 HTTP(S) 头像 URL可用于展示，服务端不盲目抓取；用户上传头像仍走本站资源存储。
 
 解绑须最近验证，不能移除最后一种**可用**方式，停用/缺凭据的提供方不计入保底。无密码账号可经最近验证首次设置本站密码；已有密码走原修改密码流程。公开用户ID与本地登录名统一为有意义的唯一字符串；来源未提供合适的用户ID时必须补全，不再生成UUID名称。内部用户UUID保持稳定。
 
@@ -109,6 +109,6 @@ SQLite 与隔离 PostgreSQL 实库均按当前建表定义运行完整回归。�
 
 ## 2026-09 模块重构补充
 
-身份领域位于 `packages/core/src/modules/identity`，协议适配位于 `apps/server/src/adapters/identity-providers.ts`。新增自定义 OAuth 2.0 授权码/PKCE 适配，支持配置端点及稳定身份字段，仍受 HTTPS 白名单约束。该适配与 OIDC 独立，不把普通 OAuth token 当作 ID Token。
+身份领域位于 `packages/core/src/modules/identity`，协议适配位于 `apps/server/src/adapters/identity-providers.ts`。新增自定义 OAuth 2.0 授权码/PKCE 适配，支持配置端点及稳定身份字段，仍受 HTTP(S) 来源白名单约束。该适配与 OIDC 独立，不把普通 OAuth token 当作 ID Token。
 
 每个来源的 `profile_config` 声明注册字段、来源、可修改与同步规则。资料不完整时 `/auth/complete` 返回 `needs_profile`，不创建完整会话；提交所需资料和联系方式验证凭证后继续注册或审批。用户名唯一约束和 provider+subject 身份绑定独立，重名不合并账号。自定义协议配置创建后不可重新指向其他身份命名空间。

@@ -33,10 +33,7 @@ import { useSurfaceSync, type SurfaceFactory } from "@web/features/documents/sur
 import { RegionComments, type RegionController } from "@web/features/comments/region-comments.js";
 import { activeCommentCandidate } from "@web/features/comments/region-comment-interaction.js";
 import { renderSheetObject } from "@web/features/documents/sheet-interactions.js";
-import {
-  DocumentFilePreview,
-  type PreviewSource,
-} from "@web/features/documents/document-file-preview.js";
+import { useAttachmentPreview } from "@web/features/documents/attachment-preview.js";
 import { SheetNativeMentions } from "@web/features/documents/sheet-native-mentions.js";
 import { useSheetDocumentLinks } from "@web/features/documents/sheet-document-links.js";
 import { useSheetDocumentPicker } from "@web/features/documents/sheet-document-picker.js";
@@ -110,7 +107,7 @@ export default function SheetDocument({
     [candidateIds, setCandidateIds] = useState<string[]>([]),
     [error, setError] = useState("");
   const [showCommentMarks, setShowCommentMarks] = useState(true);
-  const [filePreview, setFilePreview] = useState<PreviewSource | null>(null);
+  const attachmentPreview = useAttachmentPreview();
   const pasteDocumentLink = useSheetDocumentLinks(handle, editable, setError);
   const documentPicker = useSheetDocumentPicker(id, editable);
   const [slots, setSlots] = useState<{
@@ -239,9 +236,7 @@ export default function SheetDocument({
   return (
     <section className={`surface-editor sheet-document ${reading ? "is-reading" : ""}`}>
       {documentPicker.picker}
-      {filePreview && (
-        <DocumentFilePreview file={filePreview} close={() => setFilePreview(null)} />
-      )}
+      {attachmentPreview.dialog}
       <button
         className="icon canvas-comment-visibility"
         aria-label={showCommentMarks ? "隐藏表格评论标记" : "显示表格评论标记"}
@@ -300,7 +295,8 @@ export default function SheetDocument({
           toolbarLayout="two-row"
           menus={menus}
           cellRenderers={elements.renderers}
-          renderCellObject={(object) => renderSheetObject(object, setFilePreview)}
+          renderCellObject={(object) => renderSheetObject(object, attachmentPreview.previewFile)}
+          onAttachmentPreview={attachmentPreview.onSheetAttachmentPreview}
           onPasteContent={pasteDocumentLink}
           ref={ref}
           workbookId={id}

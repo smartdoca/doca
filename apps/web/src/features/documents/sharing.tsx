@@ -1,4 +1,5 @@
 import { htmlLang } from "@doca/i18n";
+import { writeClipboardText } from "@web/shared/clipboard.js";
 import {
   useEffect,
   useLayoutEffect,
@@ -147,7 +148,9 @@ export function ShareLinkSettings({
           setRevokedItems(r.revokedItems);
           setEnabled(r.sharingEnabled);
           setSupportsDescendants(r.supportsDescendants);
-          const first = r.items.find((l) => l.enabled && !l.expired);
+          const first = r.items.find(
+            (l) => l.enabled && !l.expired && allowedRoles.includes(l.role),
+          );
           setRole(first?.role ?? "reader");
           setIncludeDescendants(
             r.supportsDescendants && (first?.includeDescendants ?? true),
@@ -193,7 +196,7 @@ export function ShareLinkSettings({
   }
   async function copy(l: ShareLink) {
     try {
-      await navigator.clipboard.writeText(linkUrl(l));
+      await writeClipboardText(linkUrl(l));
       setCopied(l.id);
       setFallback("");
     } catch {
@@ -605,7 +608,7 @@ export function ShareLinkSettings({
                           </button>
                         )}
                         <button
-                          disabled={busy || l.expired || l.revoked}
+                          disabled={busy || l.expired || l.revoked || !allowedRoles.includes(l.role)}
                           onClick={() => void change(l)}
                         >
                           {l.revoked
@@ -615,7 +618,7 @@ export function ShareLinkSettings({
                               : t("sharingUi.enable")}
                         </button>
                         <button
-                          disabled={busy || l.revoked}
+                          disabled={busy || l.revoked || !allowedRoles.includes(l.role)}
                           onClick={() => setConfirm(l.id)}
                         >
                           {t("sharingUi.revoke")}

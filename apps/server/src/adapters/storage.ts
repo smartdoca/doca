@@ -115,7 +115,7 @@ export function validateStorage(c: StorageConfig, runtime: StorageRuntime) {
       return fail(400, "云存储端点格式无效");
     }
     if (
-      u.protocol !== "https:" ||
+      !["http:", "https:"].includes(u.protocol) ||
       u.username ||
       u.password ||
       u.search ||
@@ -123,7 +123,7 @@ export function validateStorage(c: StorageConfig, runtime: StorageRuntime) {
       u.pathname !== "/" ||
       !runtime.endpointHosts.includes(u.host)
     )
-      fail(400, "云存储端点必须为 HTTPS，且位于文件存储环境变量配置中");
+      fail(400, "云存储端点必须为 HTTP(S)，且位于文件存储环境变量配置中");
   }
   if (c.cdnDomain) {
     let u: URL;
@@ -133,14 +133,14 @@ export function validateStorage(c: StorageConfig, runtime: StorageRuntime) {
       return fail(400, "CDN 域名格式无效");
     }
     if (
-      u.protocol !== "https:" ||
+      !["http:", "https:"].includes(u.protocol) ||
       u.username ||
       u.password ||
       u.search ||
       u.hash ||
       u.pathname !== "/"
     )
-      fail(400, "CDN 请填写 HTTPS 域名，不带路径或参数");
+      fail(400, "CDN 请填写 HTTP(S) 域名，不带路径或参数");
     if (
       !(c.cdnKeyPairId ?? runtime.cdnKeyPairId) ||
       !(c.cdnPrivateKey ?? runtime.cdnPrivateKey)

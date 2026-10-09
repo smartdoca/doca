@@ -410,12 +410,53 @@ const presentationWireFields = {
   action: z.string().min(1).max(20).optional(),
 };
 
+const richTextWireFields = {
+  type: wireOperation.shape.type.describe(
+    "每种命令只传该命令允许的字段。insertBlock 只用 type、block、parentId、afterId，不能带 blockId；insertTable 只用 type、rows、columns、parentId、afterId，不能带 table、tableId、cells。",
+  ),
+  blockId: wireOperation.shape.blockId.describe(
+    "已有文字或块的 ID，仅 text、link、formatText、setBlock、moveBlock、deleteBlock 使用。insertBlock 新节点的 ID 放在 block.id，不能传本字段。",
+  ),
+  block: wireOperation.shape.block.describe(
+    'insertBlock 的原生节点对象，例如 {id:"新唯一ID",type:"paragraph",title:"h2",children:[{text:"章节标题"}]}，不能传 JSON 字符串。',
+  ),
+  parentId: optionalId.describe("结构命令的已读取父容器 ID，可省略"),
+  afterId: optionalId.describe("结构命令插入在此块后；可用本批前面新插入的 block.id"),
+  rows: count.optional().describe("insertTable 行数，顶层正整数"),
+  columns: count.optional().describe("insertTable 列数，顶层正整数"),
+  tableId: optionalId.describe("已有表格命令的表 ID，必须从 document_read 获取；insertTable 不允许此字段"),
+  cellId: optionalId.describe("setCellContent 的真实单元格 ID，取 outline 的 cells[].id"),
+  children: z.array(z.any()).optional().describe("setCellContent 的原生块数组；insertBlock 的 children 应放在 block 内"),
+  index: index.optional(),
+  deleteCount: index.optional(),
+  length: count.optional(),
+  url: z.string().optional(),
+  properties: z.any().optional().describe("setBlock 的属性对象，不能更换 id 或 children"),
+  style: z.any().optional(),
+  unset: z.array(z.string()).optional(),
+  count: count.optional(),
+  referenceId: optionalId,
+  side: z.enum(["before", "after"]).optional(),
+  ids: ids.optional(),
+  cellIds: ids.optional(),
+  rowIds: ids.optional(),
+  columnIds: ids.optional(),
+  mergeIds: ids.optional(),
+  size: z.number().positive().optional(),
+  rowId: optionalId,
+  columnId: optionalId,
+  payload: z.any().optional(),
+  layoutId: optionalId,
+};
+
 export function editToolSchema(format: DocumentFormat) {
   const operation =
     format === "spreadsheet"
       ? wireOperation.extend({ cells: wireCells.optional() })
       : format === "presentation"
         ? wireOperation.extend(presentationWireFields)
+        : format === "rich_text"
+          ? wireOperation.extend(richTextWireFields)
         : wireOperation;
   // Keep union checks out of the wire schema: Mastra reports those as a bare
   // "Invalid input". Named fields still have to be listed, otherwise providers
@@ -427,7 +468,9 @@ export function editToolSchema(format: DocumentFormat) {
       epochId: id,
       sheetId: z.string().min(1).max(200).optional(),
       cells: (format === "spreadsheet" ? wireCells : z.any()).optional(),
-      operations: z.array(operation).min(1).max(80),
+      operations: z.array(operation).min(1).max(80).describe(
+        '直接传 JSON 对象数组，例如 [{type:"append",text:"正文"}]，不能将数组序列化成带引号的字符串。80 限制的是操作数量，不是字符数；类型错误时应修正数组形状，不能靠缩短正文解决。',
+      ),
     })
     .passthrough();
 }

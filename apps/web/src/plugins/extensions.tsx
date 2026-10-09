@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Drawer, Modal, Tooltip } from "antd";
-import { Package } from "lucide-react";
+import { PluginStoreIcon } from "./store-icon.js";
 import type {
   ExtensionContext,
   ExtensionResource,
@@ -108,7 +108,7 @@ export function PluginSlot({
                   mouseEnterDelay={0.3}
                 >
                   <summary aria-label={view.title[context.locale]}>
-                    <Package size={20} />
+                    <PluginStoreIcon pluginId={placement.pluginId} />
                   </summary>
                 </Tooltip>
                 <section className="plugin-view">
@@ -179,7 +179,7 @@ export function PluginSlot({
               }}
             >
               {display === "icon" ? (
-                <Package size={20} />
+                <PluginStoreIcon pluginId={placement.pluginId} />
               ) : (
                 title?.[context.locale]
               )}

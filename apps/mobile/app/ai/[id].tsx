@@ -15,6 +15,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, uuid } from "../../src/api";
 import { AnswerBody, ApprovalCards, type ApprovalItem } from "../../src/ai-answer";
 import { AiTrace, type TraceEvent, type TraceOperation } from "../../src/ai-trace";
+import { systemErrorMessage } from "../../src/system-errors";
+import { useI18n } from "../../src/locale";
 import { useAuth } from "../../src/auth";
 import { consumeAssistantDraft } from "../../src/ai-launch";
 import { colors } from "../../src/chrome";
@@ -141,6 +143,7 @@ const prompts = ["帮我列一个提纲", "把这段话写得更清楚", "总结
 const screenWidth = Dimensions.get("window").width;
 
 export function Conversation({ sessionId, heading }: { sessionId?: string; heading?: string }) {
+  const { t } = useI18n();
   const params = useLocalSearchParams<{ id: string; title?: string; launch?: string }>();
   const id = sessionId || (typeof params.id === "string" ? params.id : "");
   const title = heading ?? (typeof params.title === "string" ? params.title : undefined);
@@ -771,7 +774,7 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
                 ))}
               </View>
             ) : null}
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={styles.error}>{systemErrorMessage(error, t)}</Text> : null}
           </View>
         )}
         renderInputToolbar={(props) => (

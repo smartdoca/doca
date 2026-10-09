@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   answerSegments,
+  aiSessionFolderHref,
   folderExplorerHash,
   navigationHref,
   resolveExplorerClick,
@@ -16,6 +17,23 @@ const folder = {
   href: "/files?path=%5B%7B%22id%22%3A%22root%22%7D%5D",
   shared: false,
 };
+
+it("opens the current conversation folder and keeps its session across navigation", () => {
+  const session = {
+    id: "20117e32-13ad-4c3f-87ec-0541eb39fc97",
+    title: '设计 / 图片? #历史 & "版本1".png',
+  };
+  const href = aiSessionFolderHref(session, "AI 助手");
+  const url = new URL(href, "http://localhost");
+  expect(url.pathname).toBe("/files");
+  expect(url.searchParams.get("session")).toBe(session.id);
+  expect(JSON.parse(url.searchParams.get("path")!)).toEqual([
+    { type: "system", id: "ai", name: "AI 助手" },
+    { type: "system", id: `ai-session:${session.id}`, name: session.title },
+  ]);
+  expect(navigationHref(href)).toBe(true);
+  expect(keepsAssistantSession(href)).toBe(true);
+});
 
 it("turns a fenced folder path in the final answer into a card segment", () => {
   const segments = answerSegments(

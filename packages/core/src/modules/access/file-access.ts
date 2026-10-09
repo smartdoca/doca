@@ -2,6 +2,7 @@ import type { DB } from "@db/index.js";
 import type { Actor } from "../identity/passwords.js";
 import { authorize } from "./queries.js";
 import { fail } from "../../shared/errors.js";
+import { authorizeKnowledgeFile } from "../knowledge/file-folders.js";
 
 export async function authorizeFileFolder(
   tx: DB,
@@ -72,6 +73,7 @@ export async function authorizeFileItem(db: DB, actor: Actor, id: string) {
     .where("deleted_at", "is", null)
     .executeTakeFirst();
   if (!row) fail(404, "文件不存在");
+  if (await authorizeKnowledgeFile(db, actor, row)) return row;
   if (row.parent_type === "document")
     await authorize(db, actor, row.parent_id, 1);
   else if (row.parent_type === "folder")

@@ -65,9 +65,19 @@ it("records document, file and folder activity without granting session authorit
       title: "Folder",
       href: "#/files?folder=folder",
     });
+    const retired = {
+      session_id: sessionId,
+      kind: "assistant",
+      resource_id: randomUUID(),
+      title: "Retired robot",
+      href: "#/knowledge-assistants?bot=retired",
+      touched_at: now,
+    };
+    await db.insertInto("ai_session_resources").values(retired).execute();
     const history = await sessionResourceHistory(db, userId, sessionId);
     expect(history).toHaveLength(3);
     expect(history.find((x) => x.id === doc.id)?.title).toBe("Updated");
+    expect(await db.selectFrom("ai_session_resources").selectAll().where("resource_id", "=", retired.resource_id).executeTakeFirstOrThrow()).toEqual(retired);
     expect(await sessionResourceHistory(db, other, sessionId)).toEqual([]);
     await expect(
       recordSessionResource(db, other, sessionId, doc),

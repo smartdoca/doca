@@ -11,7 +11,7 @@ DOCA_PLUGIN_STORE_URL=https://store.smartdoca.cc
 DOCA_PLUGINS_DIR=/data/plugins
 ```
 
-The store address is a configurable HTTPS origin. Verify remote-service availability separately; an unavailable store leaves local upload and installed plugins usable. Empty `DOCA_PLUGINS_DIR` falls back to `${DOCA_DATA_DIR:-./data}/plugins`, relative to the working directory. Only the host configures durable database/object storage. There is no plugin business-data-directory environment variable; plugin APIs never expose whether the host stores locally or remotely.
+The store address is a configurable HTTP(S) origin. Verify remote-service availability separately; an unavailable store leaves local upload and installed plugins usable. Empty `DOCA_PLUGINS_DIR` falls back to `${DOCA_DATA_DIR:-./data}/plugins`, relative to the working directory. Only the host configures durable database/object storage. There is no plugin business-data-directory environment variable; plugin APIs never expose whether the host stores locally or remotely.
 
 For the supplied Compose deployment, execute in the deployment directory:
 

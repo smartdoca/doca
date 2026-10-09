@@ -36,12 +36,12 @@ const builtinOrigins = [
 export function createIdentityAdapter(runtime: IdentityRuntime) {
   function allowed(url: URL) {
     if (
-      url.protocol !== "https:" ||
+      !["http:", "https:"].includes(url.protocol) ||
       url.username ||
       url.password ||
       ![...builtinOrigins, ...runtime.allowedOrigins].includes(url.origin)
     )
-      fail(400, "认证端点必须使用 HTTPS，并加入“服务凭据”的 SSO 允许来源");
+      fail(400, "认证端点必须使用 HTTP(S)，并加入“服务凭据”的 SSO 允许来源");
   }
   const safeFetch: typeof fetch = async (input, init) => {
     const url = new URL(
@@ -85,7 +85,13 @@ export function createIdentityAdapter(runtime: IdentityRuntime) {
       {
         [oidc.customFetch]: (url, options) =>
           safeFetch(url, options as RequestInit),
-        execute: [oidc.enableNonRepudiationChecks],
+        execute: [
+          oidc.enableNonRepudiationChecks,
+          ...(p.type === "oidc" &&
+          runtime.allowedOrigins.some((value) => value.startsWith("http://"))
+            ? [oidc.allowInsecureRequests]
+            : []),
+        ],
       },
     );
     const m = c.serverMetadata();

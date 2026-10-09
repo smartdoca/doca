@@ -670,7 +670,7 @@ export function SearchPanel({
                       </span>
                       <small>
                         {r.libraryName ?? (r.inLibrary ? t("search.libraryDoc") : t("search.personalDoc"))}
-                        {r.aiCurated ? ` · ${t("search.aiCurated")}` : ""}{" "}
+                        {" "}
                         ·{" "}
                         {r.owner_id && (
                           <UserBadge id={r.owner_id} name={r.ownerName} />

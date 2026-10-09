@@ -1,6 +1,17 @@
 import type { MessageKey } from "@doca/i18n";
 
 type Translator = (key: MessageKey) => string;
+export function fileLocationError(message: string, t: Translator) {
+  const keys: Record<string, MessageKey> = {
+    "fileManager.invalidSessionBinding": "fileManager.invalidSessionBinding",
+    "fileManager.invalidSessionFolder": "fileManager.invalidSessionFolder",
+    "fileManager.sessionFolderMissing": "fileManager.sessionFolderMissing",
+    "fileManager.sessionFolderReadOnly": "fileManager.sessionFolderReadOnly",
+  };
+  const key = keys[message];
+  return key ? t(key) : message;
+}
+
 export function fileLocationLabel(
   location: { type: string; id: string; name: string },
   t: Translator,
@@ -10,8 +21,9 @@ export function fileLocationLabel(
     shared: "nav.sharedFiles",
     ai: "nav.assistant",
     documents: "nav.documents",
+
   };
-  const key = location.type === "system" ? keys[location.id] : undefined;
+  const key = location.type === "system" ? (location.id.startsWith("knowledge-assistant:") ? "fileManager.knowledgeAssistantFiles" : keys[location.id]) : undefined;
   return key ? t(key) : location.name;
 }
 

@@ -2,15 +2,15 @@
 
 [English](editor-integration.md)
 
-当前宿主 0.1.10 已接入五种编辑器。按安装包真实导出使用接口，目标能力与未实现项不能作为已有 API；详细职责见[接入参考](../skills/doca-editor-integration/references/integration.md)及[协同契约](collaboration-sdk-contract.zh-CN.md)。
+当前宿主 0.1.11 已接入五种编辑器。按安装包真实导出使用接口，目标能力与未实现项不能作为已有 API；详细职责见[接入参考](../skills/doca-editor-integration/references/integration.md)及[协同契约](collaboration-sdk-contract.zh-CN.md)。
 
 ## 已安装包与宿主适配
 
 | 格式 | 当前安装包 | 宿主入口 |
 | --- | --- | --- |
-| 富文本 | @smartdoca/slate 0.4.12 | document-editor.tsx |
+| 富文本 | @smartdoca/slate 0.4.13 | document-editor.tsx |
 | Markdown | @smartdoca/markdown 0.4.3 | markdown-editor.tsx |
-| 表格 | @smartdoca/sheet 0.2.0-rc.17 | spreadsheet-editor.tsx |
+| 表格 | @smartdoca/sheet 0.2.0-rc.18 | spreadsheet-editor.tsx |
 | 画布 | @smartdoca/canvas 0.4.2 | canvas-editor.tsx |
 | 幻灯片 | @smartdoca/slides 0.3.0-alpha.2 | presentation-editor.tsx |
 
@@ -21,6 +21,8 @@
 内部文档引用保存稳定 UUID 和 `#/r/{id}` 相对位置；提及保留用户 UUID，候选使用当前用户目录策略。引用及反向引用按当前阅读权过滤，引用本身不授予访问权。
 
 图片、附件和素材使用宿主资源回调。上传进度、取消、错误和迟到回调需绑定原目标；下载通过 `assets/:id/content?download=1` 鉴权，不把物理存储地址当永久引用。
+
+富文本与表格向实际安装包传入稳定的 `onAttachmentPreview` 回调。富文本提供 `AttachmentElement.path/name/mimeType`；表格原生行内附件提供 `event.node.refId/label`。宿主将资产 UUID 解析为鉴权内容端点，打开共用的 `DocumentFilePreview`，只读、历史及回收站视图也接入并保留各自访问参数。富文本编辑模式先点击选中，再点击或使用预览按钮打开；只读模式单击预览。表格点击原生附件标签触发预览，现有整单元格对象渲染仍可用。预览不修改模型、协同会话或持久化格式。
 
 查找替换通过各编辑器的模型或原生能力完成。富文本使用宿主 Slate 模型适配；其他格式使用实际安装包提供的 find/replace 或原生面板。只读、断线及演示状态不提供正文替换。没有通用公开编辑器任意修改句柄，不承诺所有格式具有相同文本范围或正则能力。
 

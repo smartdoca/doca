@@ -15,7 +15,6 @@ export const distributionDefaults = {
   internetPublication: {
     document: true,
     library: true,
-    assistant: true,
   } as Record<InternetPublicationKind, boolean>,
   internetPublicationUsers: [] as string[],
 };
@@ -30,14 +29,12 @@ export type ContentDistribution = Pick<
 export const publicResourceKinds = [
   "document",
   "library",
-  "assistant",
   "folder",
 ] as const;
 export type PublicResourceKind = (typeof publicResourceKinds)[number];
 export const internetPublicationKinds = [
   "document",
   "library",
-  "assistant",
 ] as const;
 export type InternetPublicationKind =
   (typeof internetPublicationKinds)[number];
@@ -98,6 +95,9 @@ export async function distributionPolicy(
     .where("id", "=", "system")
     .executeTakeFirstOrThrow();
   const configured = JSON.parse(row.config);
+  // Retired robot policy keys are ignored without rewriting persisted settings.
+  for (const field of ["publicModes", "resourcePolicies", "internetPublication"])
+    if (configured[field]) delete configured[field].assistant;
   return resourceDistribution(
     {
       ...distributionDefaults,

@@ -1,7 +1,7 @@
 import { MaterialPicker } from "@web/features/creation-resources/pickers.js";
 import { PluginSlot } from "@web/plugins/extensions.js";
 import { CollectionAction } from "@web/features/discovery/collection-action.js";
-import { fileLocationLabel } from "@web/shared/utils/system-labels.js";
+import { fileLocationLabel, fileLocationError } from "@web/shared/utils/system-labels.js";
 import type { Locale } from "@doca/i18n";
 import {
   ArrowLeft,
@@ -52,6 +52,7 @@ import {
   type FileParentType,
 } from "@web/shared/api.js";
 import { useAI } from "@web/features/ai/ai-context.js";
+import { aiSessionFilesChanged, type AISessionFilesChange } from "@web/features/ai/ai-file-events.js";
 import { readPageState, writePageState, } from "@web/features/page-state/client.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
 import { FolderPermissionPanel } from "./folder-permissions.js";
@@ -505,6 +506,7 @@ export function FilesExplorer({
     id: string;
     draft: string;
   } | null>(null);
+  const renameInFlight = useRef(false);
   const [showExtensions, setShowExtensions] = useState(true);
   const [sortMode, setSortMode] = useState<SortMode>("name");
   const [search, setSearch] = useState("");
@@ -589,7 +591,12 @@ export function FilesExplorer({
     null,
   );
   const [largePreview, setLargePreview] = useState<FileItem | null>(null);
-  useEffect(()=>{if(largePreview)void api(`/workspace/files/${largePreview.id}/visit`,"POST",{}).catch(()=>{});},[largePreview?.id]);
+  useEffect(() => {
+    if (largePreview)
+      void api(`/workspace/files/${largePreview.id}/visit`, "POST", {}).catch(
+        () => {},
+      );
+  }, [largePreview?.id]);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const largePreviewRef = useRef<HTMLElement>(null);
   const [documentPicker, setDocumentPicker] = useState<{
@@ -607,6 +614,7 @@ export function FilesExplorer({
   const appliedFocus = useRef<string | null>(null);
   const [columnsRev, setColumnsRev] = useState(0);
   const columnPagesRef = useRef(columnPages);
+  const currentColumnRef = useRef<HTMLDivElement>(null);
   const refreshColumnsRef = useRef(false);
   columnPagesRef.current = columnPages;
   const navigationKey = trailKey(trail);
@@ -791,7 +799,7 @@ export function FilesExplorer({
           return;
         }
       }
-      setError(message);
+      setError(fileLocationError(message, t));
     } finally {
       if (current()) setLoading(false);
     }
@@ -799,6 +807,36 @@ export function FilesExplorer({
   useEffect(() => {
     void load();
   }, [location.type, location.id]);
+  useEffect(() => {
+    if (trail[0]?.type !== "system" || trail[0].id !== "ai") return;
+    const changed = (event: Event) => {
+      const detail = (event as CustomEvent<AISessionFilesChange>).detail;
+      const folderId = `ai-session:${detail.sessionId}`;
+      if (detail.deleted) {
+        const recovered = trailAfterRemovedFolders(trail, [folderId]);
+        if (recovered.kind === "parent") {
+          setFuture([]);
+          setSelection(null);
+          setSelectedIds(new Set());
+          setLargePreview(null);
+          navigateTrail(recovered.trail);
+          void load(recovered.trail[recovered.trail.length - 1]!, { refreshColumns: true });
+          return;
+        }
+      }
+      const renamed = (item: Location): Location => item.id === folderId && detail.title !== undefined
+        ? { ...item, name: detail.title } : item;
+      if (detail.title !== undefined) {
+        const nextTrail = trail.map(renamed);
+        setFuture((old) => old.map(renamed));
+        navigateTrail(nextTrail);
+      }
+      void load(renamed(location), { refreshColumns: true });
+    };
+    window.addEventListener(aiSessionFilesChanged, changed);
+    return () => window.removeEventListener(aiSessionFilesChanged, changed);
+  }, [navigationKey, view]);
+
   useEffect(() => {
     const parsing = data?.files.some(
       (file) =>
@@ -871,6 +909,9 @@ export function FilesExplorer({
       cancelled = true;
     };
   }, [columnsRev, navigationKey, view]);
+  useEffect(() => {
+    if (view === "columns") currentColumnRef.current?.scrollIntoView({ block: "nearest", inline: "end" });
+  }, [navigationKey, view, columnPages.length]);
   useEffect(() => {
     const close = () => {
       setContextMenu(null);
@@ -1297,11 +1338,17 @@ export function FilesExplorer({
     setShareFolder(folder);
   }
   async function commitRename() {
-    if (!renaming) return;
+    if (!renaming || renameInFlight.current) return;
     const current =
       renaming.kind === "folder"
-        ? data?.folders.find((folder) => folder.id === renaming.id)
-        : data?.files.find((file) => file.id === renaming.id);
+        ? (data?.folders.find((folder) => folder.id === renaming.id) ??
+          columnPages
+            .flatMap((column) => column.page.folders)
+            .find((folder) => folder.id === renaming.id))
+        : (data?.files.find((file) => file.id === renaming.id) ??
+          columnPages
+            .flatMap((column) => column.page.files)
+            .find((file) => file.id === renaming.id));
     const name = renaming.draft.trim();
     if (!current || !name) {
       setRenaming(null);
@@ -1311,25 +1358,49 @@ export function FilesExplorer({
       setRenaming(null);
       return;
     }
+    renameInFlight.current = true;
     try {
       const path =
         renaming.kind === "folder"
           ? `/files/folders/${current.id}`
           : `/files/items/${current.id}`;
       await api(path, "PATCH", { name, version: current.version });
+      if (renaming.kind === "folder") {
+        const renamed = (item: Location) =>
+          item.type === "folder" && item.id === current.id
+            ? { ...item, name }
+            : item;
+        const nextTrail = trail.map(renamed);
+        setTrail(nextTrail);
+        setLocation(renamed(location));
+        setFuture((old) => old.map(renamed));
+        setColumnPages((old) =>
+          old.map((column) => ({
+            ...column,
+            location: renamed(column.location),
+          })),
+        );
+        if (
+          trail.some((item) => item.type === "folder" && item.id === current.id)
+        )
+          writeFileNavigation(nextTrail, routeBase);
+      }
       setRenaming(null);
       clearSelection();
-      await load();
+      await load(location, { refreshColumns: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : t("fileManager.renameFailed"));
+    } finally {
+      renameInFlight.current = false;
     }
   }
   function renameSelected() {
-    if (!selection || selection.value.locked) return;
+    const target = contextMenu?.target ?? selection;
+    if (!target || target.value.locked) return;
     setRenaming({
-      kind: selection.kind,
-      id: selection.value.id,
-      draft: selection.value.name,
+      kind: target.kind,
+      id: target.value.id,
+      draft: target.value.name,
     });
     setContextMenu(null);
   }
@@ -1967,11 +2038,9 @@ export function FilesExplorer({
                   : value.value.name
               }
             >
-              {visibleName(
-                value.kind === "folder"
-                  ? fileLocationLabel(value.value, t)
-                  : value.value.name,
-              )}
+              {value.kind === "folder"
+                ? fileLocationLabel(value.value, t)
+                : visibleName(value.value.name)}
             </span>
           )}
           <span className="file-entry-type">
@@ -2063,10 +2132,22 @@ export function FilesExplorer({
         setContextMenu({ x: event.clientX, y: event.clientY, target: null });
       }}
     >
-
-
-      <PluginSlot slot="folder.toolbar" scope="folder" resource={{ id: location.id, kind: location.type }} />
-      {selectedValues.length > 0 && <PluginSlot slot="resource.bulkActions" scope="resources" resources={selectedValues.map(item => ({ id: item.value.id, kind: item.kind, title: item.value.name }))} />}
+      <PluginSlot
+        slot="folder.toolbar"
+        scope="folder"
+        resource={{ id: location.id, kind: location.type }}
+      />
+      {selectedValues.length > 0 && (
+        <PluginSlot
+          slot="resource.bulkActions"
+          scope="resources"
+          resources={selectedValues.map((item) => ({
+            id: item.value.id,
+            kind: item.kind,
+            title: item.value.name,
+          }))}
+        />
+      )}
       <header className="files-toolbar">
         <div className="files-toolbar-actions">
           <button
@@ -2127,8 +2208,7 @@ export function FilesExplorer({
               }}
               disabled={
                 location.type === "document" ||
-                location.id === "documents" ||
-                location.id === "ai"
+                (location.type === "system" && !["root", "shared"].includes(location.id))
               }
             >
               <Upload size={16} />
@@ -2200,6 +2280,7 @@ export function FilesExplorer({
                       <small>{t("fileManager.aiFolderHelp")}</small>
                     </span>
                   </button>
+
                   <button
                     onClick={() =>
                       openSystemFolder("documents", t("recognition.documents"))
@@ -2461,6 +2542,7 @@ export function FilesExplorer({
                     return (
                       <div
                         className={`files-column ${dropTargetId === column.location.id ? "drop-target" : ""}`}
+                        ref={column.location.type === location.type && column.location.id === location.id ? currentColumnRef : undefined}
                         key={`${column.location.type}:${column.location.id}`}
                         onDragOver={(event) => {
                           event.stopPropagation();
@@ -2470,7 +2552,7 @@ export function FilesExplorer({
                           handleCanvasDrop(event, column.location)
                         }
                       >
-                        <div className="files-column-title">
+                        <div className="files-column-title" title={fileLocationLabel(column.location, t)}>
                           {fileLocationLabel(column.location, t)}
                         </div>
                         <div className="files-column-list">
@@ -3261,6 +3343,9 @@ export function FilesExplorer({
 export function SharedFoldersPage() {
   const [tab,setTab]=useState("all");
   const { t, locale } = useI18n();
+  const token = new URLSearchParams(
+    window.location.hash.split("?")[1] ?? "",
+  ).get("token");
 
   const [items, setItems] = useState<SharedFolderSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3287,27 +3372,31 @@ export function SharedFoldersPage() {
   }
 
   useEffect(() => {
-    const token = new URLSearchParams(
-      window.location.hash.split("?")[1] ?? "",
-    ).get("token");
     if (!token) {
       void loadSharedFolders();
       return;
     }
+    let active = true;
     setLoading(true);
+    setError("");
     void api<{ id: string; name: string }>("/files/share/redeem", "POST", {
       token,
     })
       .then((folder) => {
+        if (!active) return;
         window.location.hash = `/shared-files/${folder.id}?name=${encodeURIComponent(folder.name)}`;
       })
       .catch((e) => {
+        if (!active) return;
         setError(
           e instanceof Error ? e.message : t("fileManager.sharedJoinFailed"),
         );
         setLoading(false);
       });
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, [token]);
 
   async function createSharedFolder() {
     const name = draftName.trim();
@@ -3329,7 +3418,13 @@ export function SharedFoldersPage() {
     }
   }
 
-  const displayed = items.filter(x=>tab==='all'||tab==='owned'&&x.owned||tab==='shared'&&x.collaborating||tab==='collected'&&x.collected);
+  const displayed = items.filter(
+    (x) =>
+      tab === "all" ||
+      (tab === "owned" && x.owned) ||
+      (tab === "shared" && x.collaborating) ||
+      (tab === "collected" && x.collected),
+  );
   function openSharedFolder(folder: SharedFolderSummary) {
     window.location.hash = `/shared-files/${folder.id}?name=${encodeURIComponent(folder.name)}`;
   }
@@ -3361,7 +3456,26 @@ export function SharedFoldersPage() {
           </button>
         </div>
       )}
-      <div className="home-tabs resource-filter-tabs" role="tablist">{([['all','workspace.all'],['owned','workspace.sharedByMe'],['shared','workspace.sharedWithMe'],['collected','workspace.collectedFolders']] as const).map(([key,label])=><button key={key} role="tab" aria-selected={tab===key} className={tab===key?'active':''} onClick={()=>setTab(key)}>{t(label)}</button>)}</div>
+      <div className="home-tabs resource-filter-tabs" role="tablist">
+        {(
+          [
+            ["all", "workspace.all"],
+            ["owned", "workspace.sharedByMe"],
+            ["shared", "workspace.sharedWithMe"],
+            ["collected", "workspace.collectedFolders"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={tab === key}
+            className={tab === key ? "active" : ""}
+            onClick={() => setTab(key)}
+          >
+            {t(label)}
+          </button>
+        ))}
+      </div>
       <div
         className="shared-folders-table"
         role="table"
@@ -3378,7 +3492,12 @@ export function SharedFoldersPage() {
           <p className="empty">{t("fileManager.sharedLoading")}</p>
         ) : (
           displayed.map((folder) => (
-            <div tabIndex={0} onKeyDown={e=>{if(e.target===e.currentTarget&&e.key==='Enter')openSharedFolder(folder)}}
+            <div
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && e.key === "Enter")
+                  openSharedFolder(folder);
+              }}
               className="shared-folder-row"
               role="row"
               key={folder.id}
@@ -3388,7 +3507,15 @@ export function SharedFoldersPage() {
               <span className="shared-folder-name">
                 <FolderGlyph />
                 <strong>{folder.name}</strong>
-                {(folder.public||folder.collected) && <CollectionAction id={folder.id} kind="folder" collected={folder.collected} changed={()=>void loadSharedFolders()} onError={setError}/>}
+                {(folder.public || folder.collected) && (
+                  <CollectionAction
+                    id={folder.id}
+                    kind="folder"
+                    collected={folder.collected}
+                    changed={() => void loadSharedFolders()}
+                    onError={setError}
+                  />
+                )}
               </span>
               <code title={folder.id}>{folder.id}</code>
               <span className="shared-folder-owner">
@@ -3488,18 +3615,35 @@ export function SharedFoldersPage() {
 export function FolderFilePicker(props: {
   close: () => void;
   select?: (file: FileItem) => Promise<void> | void;
-  selectFolder?: (folder: {id:string;name:string}) => Promise<void> | void;
+  selectFolder?: (folder: {
+    id: string;
+    name: string;
+    type: Location["type"];
+  }) => Promise<void> | void;
   accept?: (file: FileItem) => boolean;
   initialSource?: "folders" | "materials";
+  selectFiles?: (files: FileItem[]) => Promise<void> | void;
 }) {
-  const {t}=useI18n();
-  const [source,setSource]=useState(props.initialSource??"folders");
-  if(source==="materials" && props.select) return <MaterialPicker close={props.close} select={async file=>{
-    const item=await api<FileInfo>(`/files/items/${file.id}/info`);
-    if(props.accept&&!props.accept(item))throw new Error(t("fileManager.selectionFailed"));
-    await props.select!(item);
-  }}/>;
-  return <FolderBrowserPicker {...props} chooseMaterials={props.select?()=>setSource("materials"):undefined}/>;
+  const { t } = useI18n();
+  const [source, setSource] = useState(props.initialSource ?? "folders");
+  if (source === "materials" && props.select)
+    return (
+      <MaterialPicker
+        close={props.close}
+        select={async (file) => {
+          const item = await api<FileInfo>(`/files/items/${file.id}/info`);
+          if (props.accept && !props.accept(item))
+            throw new Error(t("fileManager.selectionFailed"));
+          await props.select!(item);
+        }}
+      />
+    );
+  return (
+    <FolderBrowserPicker
+      {...props}
+      chooseMaterials={props.select ? () => setSource("materials") : undefined}
+    />
+  );
 }
 
 function FolderBrowserPicker({
@@ -3508,12 +3652,18 @@ function FolderBrowserPicker({
   selectFolder,
   accept,
   chooseMaterials,
+  selectFiles,
 }: {
   close: () => void;
   select?: (file: FileItem) => Promise<void> | void;
-  selectFolder?: (folder: { id: string; name: string }) => Promise<void> | void;
+  selectFolder?: (folder: {
+    id: string;
+    name: string;
+    type: Location["type"];
+  }) => Promise<void> | void;
   accept?: (file: FileItem) => boolean;
   chooseMaterials?: () => void;
+  selectFiles?: (files: FileItem[]) => Promise<void> | void;
 }) {
   const { t, locale } = useI18n();
 
@@ -3521,6 +3671,7 @@ function FolderBrowserPicker({
     root,
     { type: "system", id: "shared", name: t("nav.sharedFiles") },
     { type: "system", id: "ai", name: t("nav.assistant"), locked: true },
+
     {
       type: "system",
       id: "documents",
@@ -3537,6 +3688,20 @@ function FolderBrowserPicker({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [chosen, setChosen] = useState<FileItem | null>(null);
+  const [chosenFiles, setChosenFiles] = useState<FileItem[]>([]);
+  const chooseFile = (file: FileItem) => {
+    setChosen(
+      selectFiles && chosenFiles.some((item) => item.id === file.id)
+        ? null
+        : file,
+    );
+    if (selectFiles)
+      setChosenFiles((items) =>
+        items.some((item) => item.id === file.id)
+          ? items.filter((item) => item.id !== file.id)
+          : [...items, file],
+      );
+  };
   useEffect(() => {
     const controller = new AbortController();
     setError("");
@@ -3603,10 +3768,13 @@ function FolderBrowserPicker({
     return () => controller.abort();
   }, [query, trail]);
   async function confirm(file = chosen) {
-    if (!file || !select) return;
+    const picked =
+      selectFiles && chosenFiles.length ? chosenFiles : file ? [file] : [];
+    if (!picked.length || (!select && !selectFiles)) return;
     setBusy(true);
     try {
-      await select(file);
+      if (selectFiles) await selectFiles(picked);
+      else await select!(picked[0]!);
       close();
     } catch (e) {
       setError(
@@ -3620,7 +3788,11 @@ function FolderBrowserPicker({
     if (!selectFolder) return;
     setBusy(true);
     try {
-      await selectFolder({ id: current.id, name: current.name });
+      await selectFolder({
+        id: current.id,
+        name: current.name,
+        type: current.type,
+      });
       close();
     } catch (e) {
       setError(
@@ -3640,7 +3812,7 @@ function FolderBrowserPicker({
         role="dialog"
         aria-modal="true"
         aria-label={
-          selectFolder
+          selectFolder && !select
             ? t("fileManager.selectFolder")
             : t("fileManager.chooseDoca")
         }
@@ -3649,14 +3821,16 @@ function FolderBrowserPicker({
         <header>
           <div>
             <strong>
-              {selectFolder
+              {selectFolder && !select
                 ? t("fileManager.selectFolder")
                 : t("fileManager.chooseDoca")}
             </strong>
             <span>
-              {selectFolder
-                ? t("fileManager.folderAiHelp")
-                : t("fileManager.selectHelp")}
+              {selectFolder && select
+                ? t("fileManager.selectFilesOrFolder")
+                : selectFolder && !select
+                  ? t("fileManager.folderAiHelp")
+                  : t("fileManager.selectHelp")}
             </span>
           </div>
           <button
@@ -3668,7 +3842,11 @@ function FolderBrowserPicker({
           </button>
         </header>
         <div className="folder-file-picker-toolbar">
-          {chooseMaterials && <button onClick={chooseMaterials}>{t("resources.materials")}</button>}
+          {chooseMaterials && (
+            <button onClick={chooseMaterials}>
+              {t("resources.materials")}
+            </button>
+          )}
           <button
             className="icon"
             disabled={trail.length <= 1}
@@ -3732,9 +3910,19 @@ function FolderBrowserPicker({
                   .map((file) => (
                     <button
                       key={file.id}
-                      className={chosen?.id === file.id ? "selected" : ""}
-                      onClick={() => setChosen(file)}
-                      onDoubleClick={() => void confirm(file)}
+                      className={
+                        (
+                          selectFiles
+                            ? chosenFiles.some((item) => item.id === file.id)
+                            : chosen?.id === file.id
+                        )
+                          ? "selected"
+                          : ""
+                      }
+                      onClick={() => chooseFile(file)}
+                      onDoubleClick={
+                        selectFiles ? undefined : () => void confirm(file)
+                      }
                     >
                       <FileGlyph file={file} />
                       <span>
@@ -3786,9 +3974,19 @@ function FolderBrowserPicker({
                     .map((file) => (
                       <button
                         key={file.id}
-                        className={chosen?.id === file.id ? "selected" : ""}
-                        onClick={() => setChosen(file)}
-                        onDoubleClick={() => void confirm(file)}
+                        className={
+                          (
+                            selectFiles
+                              ? chosenFiles.some((item) => item.id === file.id)
+                              : chosen?.id === file.id
+                          )
+                            ? "selected"
+                            : ""
+                        }
+                        onClick={() => chooseFile(file)}
+                        onDoubleClick={
+                          selectFiles ? undefined : () => void confirm(file)
+                        }
                       >
                         <FileGlyph file={file} />
                         <span>
@@ -3807,24 +4005,26 @@ function FolderBrowserPicker({
         </div>
         <footer>
           <span>
-            {selectFolder
-              ? t("fileManager.currentPath", {
-                  path: trail
-                    .map((item) => fileLocationLabel(item, t))
-                    .join(" / "),
-                })
-              : chosen
-                ? chosen.name
-                : t("fileManager.chooseFile")}
+            {selectFiles && chosenFiles.length
+              ? t("fileManager.selectedCount", { count: chosenFiles.length })
+              : selectFolder
+                ? t("fileManager.currentPath", {
+                    path: trail
+                      .map((item) => fileLocationLabel(item, t))
+                      .join(" / "),
+                  })
+                : chosen
+                  ? chosen.name
+                  : t("fileManager.chooseFile")}
           </span>
           <div>
             <button className="secondary" onClick={close}>
               {t("common.cancel")}
             </button>
-            {selectFolder ? (
+            {selectFolder && !chosenFiles.length && (!select || !chosen) ? (
               <button
                 className="primary"
-                disabled={busy}
+                disabled={busy || current.type === "system"}
                 onClick={() => void confirmFolder()}
               >
                 {busy
@@ -3836,7 +4036,7 @@ function FolderBrowserPicker({
             ) : (
               <button
                 className="primary"
-                disabled={!chosen || busy}
+                disabled={(!chosen && !chosenFiles.length) || busy}
                 onClick={() => void confirm()}
               >
                 {busy ? t("fileManager.copying") : t("fileManager.select")}
@@ -4044,76 +4244,74 @@ export function FileSourceDialog({
           </button>
         </header>
         <div>
-          <button
-            onClick={() => {
-              close();
-              chooseDoca();
-            }}
-          >
-            <span className="source-icon doca">
-              <Folder size={24} />
-            </span>
-            <span>
-              <strong>{t("fileManager.chooseDocaFiles")}</strong>
-              <small>{t("fileManager.browseHelp")}</small>
-            </span>
-            <ChevronDown size={16} />
-          </button>
-          <button onClick={() => {close();chooseDoca("materials");}}>
-            <span className="source-icon doca"><LayoutGrid size={24}/></span>
-            <span><strong>{t("resources.materials")}</strong><small>{t("resources.materialHelp")}</small></span>
-            <ChevronDown size={16}/>
-          </button>
-          {chooseFolder && (
+          <div className="file-source-choice">
             <button
               onClick={() => {
                 close();
-                chooseFolder();
+                chooseDoca();
               }}
             >
               <span className="source-icon doca">
                 <Folder size={24} />
               </span>
               <span>
-                <strong>{t("fileManager.chooseAiFolder")}</strong>
-                <small>{t("fileManager.aiFolderScope")}</small>
+                <strong>{t("fileManager.chooseDocaFiles")}</strong>
+                <small>{t("fileManager.browseHelp")}</small>
               </span>
               <ChevronDown size={16} />
             </button>
-          )}
-          <button
-            onClick={() => {
-              close();
-              chooseLocal();
-            }}
-          >
-            <span className="source-icon local">
-              <Upload size={24} />
-            </span>
-            <span>
-              <strong>{t("fileManager.uploadLocal")}</strong>
-              <small>{t("fileManager.uploadLocalHelp")}</small>
-            </span>
-            <ChevronDown size={16} />
-          </button>
-          {chooseLocalFolder && (
+            {chooseFolder && (
+              <button
+                className="file-source-subaction"
+                onClick={() => {
+                  close();
+                  chooseFolder();
+                }}
+              >
+                {t("fileManager.selectFolder")}
+              </button>
+            )}
+          </div>
+          <div className="file-source-choice">
             <button
               onClick={() => {
                 close();
-                chooseLocalFolder();
+                chooseLocal();
               }}
             >
               <span className="source-icon local">
                 <Upload size={24} />
               </span>
               <span>
-                <strong>{t("fileManager.uploadFolder")}</strong>
-                <small>{t("fileManager.uploadFolderHelp")}</small>
+                <strong>{t("fileManager.uploadLocal")}</strong>
+                <small>{t("fileManager.uploadLocalHelp")}</small>
               </span>
               <ChevronDown size={16} />
             </button>
-          )}
+            {chooseLocalFolder && (
+              <button
+                className="file-source-subaction"
+                onClick={() => {
+                  close();
+                  chooseLocalFolder();
+                }}
+              >
+                {t("fileManager.uploadFolder")}
+              </button>
+            )}
+          </div>
         </div>
+        <footer className="file-source-extras">
+          <button
+            onClick={() => {
+              close();
+              chooseDoca("materials");
+            }}
+          >
+            <LayoutGrid size={14} />
+            {t("resources.materials")}
+          </button>
+        </footer>
       </section>
     </div>,
     document.body,

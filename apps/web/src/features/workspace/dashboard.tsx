@@ -487,7 +487,6 @@ export function Dashboard({
                     />
                   )}
                   <BookOpen size={30} />
-                  {Number(r.ai_curated)===1 && <span className="library-curation-badge"><BookOpenCheck size={13}/>{t("curator.cardEnabled")}</span>}
                   <strong>{r.title}</strong>
                   <span>
                     {t("home.libraries")} ·{" "}
@@ -551,7 +550,7 @@ export function Dashboard({
                     }}
                   >
                     <FileIcon r={r} />
-                    <span>{r.title}{r.kind === "library" && r.ai_curated ? ` · ${t("home.aiCurated")}` : ""}</span>
+                    <span>{r.title}</span>
                   </button>
                   {home && (
                     <span className="table-row-actions">

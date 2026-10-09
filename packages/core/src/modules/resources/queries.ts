@@ -1,4 +1,3 @@
-import { withContentDocumentAccess } from "../knowledge/content-access.js";
 import { distributionBehavior } from "../access/distribution-behavior.js";
 import { policyFieldQuery } from "../access/queries.js";
 import { sql } from "kysely";
@@ -484,5 +483,5 @@ async function queryResourcePageUnchecked(
 }
 
 export async function queryResourcePage(db:DB, actor:Actor|null, input:ResourceQuery) {
-  return withContentDocumentAccess(db, actor, () => queryResourcePageUnchecked(db, actor, input), input.matchedIds ?? (input.libraryId ? [input.libraryId] : input.libraryIds));
+  return queryResourcePageUnchecked(db, actor, input);
 }

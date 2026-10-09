@@ -163,13 +163,13 @@ it("rejects unsafe endpoint, malformed keys and unexpected configuration fields"
   const c = await read();
   for (const update of [
     (v: any) => {
-      v.identity.allowedOrigins = ["http://sso.example.test"];
+      v.identity.allowedOrigins = ["ftp://sso.example.test"];
     },
     (v: any) => {
       v.storage = { credentials: {} };
     },
     (v: any) => {
-      v.messaging.endpoint = "http://localhost:1234";
+      v.messaging.endpoint = "ftp://localhost:1234";
     },
     (v: any) => {
       v.identity.credentials.constructor = "secret";
@@ -188,6 +188,26 @@ it("rejects unsafe endpoint, malformed keys and unexpected configuration fields"
     );
     expect(r.statusCode, r.body).toBe(400);
   }
+});
+it("accepts explicitly configured HTTP identity and verification services", async () => {
+  const c = await read();
+  c.config.identity.allowedOrigins = ["http://sso.internal:8080"];
+  c.config.messaging = {
+    endpoint: "http://messages.internal:8080/send",
+    secret: "isolated-http-gateway-secret",
+    channels: ["email"],
+  };
+  const saved = await request("PUT", "/admin/service-credentials", admin, c);
+  expect(saved.statusCode, saved.body).toBe(200);
+  expect(runtime.allowedOrigins).toContain("http://sso.internal:8080");
+  const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+  const challenge = await request("POST", "/auth/challenges", user, {
+    kind: "email",
+    value: "http-services@example.test",
+    purpose: "profile",
+  });
+  expect(challenge.statusCode, challenge.body).toBe(200);
+  expect(String(fetcher.mock.calls[0]?.[0])).toBe("http://messages.internal:8080/send");
 });
 it("rotates verification gateway credentials live and refreshes another running instance", async () => {
   const otherRuntime: IdentityRuntime = { credentials: {}, allowedOrigins: [] };

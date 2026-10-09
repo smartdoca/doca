@@ -24,7 +24,7 @@ const icons = new Set([
   "book",
   "folder",
 ]);
-const kinds = new Set(["document", "library", "assistant", "folder", "file"]);
+const kinds = new Set(["document", "library", "folder", "file"]);
 const textOrder = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 const positionOrder = (a: ActivityPosition, b: ActivityPosition) =>
   textOrder(b.visitedAt, a.visitedAt) || textOrder(a.id, b.id);

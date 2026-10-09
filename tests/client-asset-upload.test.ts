@@ -17,11 +17,20 @@ const response = (index: number) =>
 
 afterEach(() => vi.unstubAllGlobals());
 
+const mockFetch = (upload: (url: string) => Promise<Response>) =>
+  vi.stubGlobal("fetch", (url: string) =>
+    url === "/api/v1/ai/upload-policy"
+      ? Promise.resolve(
+          Response.json({ maxFiles: 100, maxFileBytes: 0, maxTotalBytes: 0 }),
+        )
+      : upload(url),
+  );
+
 it("queues eight selected files below the server concurrency limit without dropping attachments", async () => {
   let active = 0;
   let peak = 0;
   const requests: string[] = [];
-  vi.stubGlobal("fetch", async (url: string) => {
+  mockFetch(async (url: string) => {
     const index = requests.length;
     requests.push(url);
     active++;
@@ -48,7 +57,7 @@ it("queues eight selected files below the server concurrency limit without dropp
 
 it("continues the queue after a failed upload and preserves the server error for diagnosis", async () => {
   let requests = 0;
-  vi.stubGlobal("fetch", async () => {
+  mockFetch(async () => {
     const index = requests++;
     await new Promise((resolve) => setTimeout(resolve, 5));
     return index === 0
@@ -80,7 +89,7 @@ it("continues the queue after a failed upload and preserves the server error for
 it("cancels a queued upload before sending its bytes and lets later files proceed", async () => {
   const pending: (() => void)[] = [];
   const requests: string[] = [];
-  vi.stubGlobal("fetch", (url: string) => {
+  mockFetch((url: string) => {
     const index = requests.length;
     requests.push(url);
     return new Promise<Response>((resolve) =>
@@ -99,6 +108,7 @@ it("cancels a queued upload before sending its bytes and lets later files procee
   const last = uploadFile(file(3), "ai_attachment");
   controller.abort();
   await expect(removed).rejects.toMatchObject({ name: "AbortError" });
+  await vi.waitFor(() => expect(requests).toHaveLength(2));
   expect(requests).toHaveLength(2);
   pending[0]!();
   pending[1]!();
@@ -132,6 +142,9 @@ it("never starts an upload whose signal was already cancelled, including uploads
 });
 
 it("queues progress-enabled uploads too and reports progress and HTTP failures", async () => {
+  mockFetch(async () => {
+    throw Error("Upload must use XHR when progress is requested");
+  });
   let active = 0;
   let peak = 0;
   let sent = 0;

@@ -5,6 +5,7 @@ import {
   extractWebText,
   isPublicAddress,
   publicWebUrl,
+  isRetryableWebFileFailure,
   type PageTransport,
 } from "../apps/server/src/services/ai/web-fetch.js";
 import {
@@ -15,6 +16,87 @@ import {
 } from "@core/modules/ai/config.js";
 import { openTestDatabase } from "./database.js";
 const publicDns = async () => [{ address: "93.184.216.34", family: 4 }];
+it.each([429, 500, 502, 503, 504])(
+  "privately identifies temporary file HTTP %s failures without changing public errors",
+  async (status) => {
+    const error = await fetchWebFile(
+      "https://example.com/result.png",
+      undefined,
+      {
+        resolve: publicDns,
+        request: async () => ({ status, headers: {}, body: Buffer.alloc(0) }),
+      },
+    ).catch((error) => error);
+    expect(error.message).toBe(`文件下载失败（HTTP ${status}）`);
+    expect(error.status).toBe(502);
+    expect(isRetryableWebFileFailure(error)).toBe(true);
+    expect(error).not.toHaveProperty("retryable");
+    expect(JSON.stringify(error)).not.toContain("temporary");
+  },
+);
+it.each([401, 403, 404, 413, 422])(
+  "keeps authentication and validation HTTP %s failures nonretryable",
+  async (status) => {
+    const error = await fetchWebFile(
+      "https://example.com/result.png",
+      undefined,
+      {
+        resolve: publicDns,
+        request: async () => ({ status, headers: {}, body: Buffer.alloc(0) }),
+      },
+    ).catch((error) => error);
+    expect(isRetryableWebFileFailure(error)).toBe(false);
+  },
+);
+it("identifies coded network/timeout failures but never infers retries from error text or cancellation", async () => {
+  for (const error of [
+    Object.assign(new Error("private socket detail"), { code: "ECONNRESET" }),
+    new DOMException("private timeout", "TimeoutError"),
+  ]) {
+    const returned = await fetchWebFile(
+      "https://example.com/result.png",
+      undefined,
+      {
+        resolve: publicDns,
+        request: async () => {
+          throw error;
+        },
+      },
+    ).catch((error) => error);
+    expect(isRetryableWebFileFailure(returned)).toBe(true);
+    expect(returned.message).toBe(
+      "文件下载失败、过大或超时，请稍后重试或上传文件",
+    );
+    expect(returned.message).not.toContain("private");
+  }
+  for (const error of [
+    new Error("HTTP 503 timeout network"),
+    Object.assign(new Error("TLS"), { code: "ERR_TLS_CERT_ALTNAME_INVALID" }),
+  ]) {
+    const returned = await fetchWebFile(
+      "https://example.com/result.png",
+      undefined,
+      {
+        resolve: publicDns,
+        request: async () => {
+          throw error;
+        },
+      },
+    ).catch((error) => error);
+    expect(isRetryableWebFileFailure(returned)).toBe(false);
+  }
+  const abort = new AbortController();
+  abort.abort(new DOMException("cancelled", "AbortError"));
+  const request = vi.fn<PageTransport>();
+  const cancelled = await fetchWebFile(
+    "https://example.com/result.png",
+    abort.signal,
+    { resolve: publicDns, request },
+  ).catch((error) => error);
+  expect(cancelled).toBe(abort.signal.reason);
+  expect(isRetryableWebFileFailure(cancelled)).toBe(false);
+  expect(request).not.toHaveBeenCalled();
+});
 const page = (
   html: string,
   status = 200,
@@ -313,13 +395,13 @@ it("saves a keyless Firecrawl service on private HTTP and docker hostnames", asy
           ...aiDefaults,
           webFetch: {
             provider: "firecrawl",
-            baseUrl: "http://8.8.8.8:3002",
+            baseUrl: "http://user:secret@8.8.8.8:3002",
             apiKey: "",
           },
         },
         2,
       ),
-    ).rejects.toThrow("HTTPS");
+    ).rejects.toThrow("HTTP(S)");
   } finally {
     await db.destroy();
   }
@@ -371,8 +453,16 @@ it("does not start an external read after cancellation", async () => {
 });
 
 it("preserves withdrawn claims as obsolete instead of current research evidence", () => {
-  for (const tag of ['s', 'del', 'strike', 'span style="text-decoration: line-through"']) {
-    const result = extractWebText(`<main><${tag}>Old transaction limit.</${tag.split(' ')[0]}> Since version 3.11 the limit no longer applies.</main>`, "https://example.com");
+  for (const tag of [
+    "s",
+    "del",
+    "strike",
+    'span style="text-decoration: line-through"',
+  ]) {
+    const result = extractWebText(
+      `<main><${tag}>Old transaction limit.</${tag.split(" ")[0]}> Since version 3.11 the limit no longer applies.</main>`,
+      "https://example.com",
+    );
     expect(result.text).toContain("已删除或废弃的原文：Old transaction limit.");
     expect(result.text).toContain("不作为现行结论");
     expect(result.text).toContain("Since version 3.11");

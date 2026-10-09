@@ -10,15 +10,13 @@ import { EditorRecoveryBoundary } from "@web/features/documents/editor-recovery-
 import {
   DocumentDownload,
   downloadResult,
-  embeddedImage,
-  preparePdfImage,
   readAsset,
   reportWarnings,
   saveToPlatformFolder,
 } from "@web/features/documents/file-transfer.js";
-import { loadPdfFontBytes } from "@web/features/documents/pdf-font.js";
 import { createEditorDocument } from "@smartdoca/slate/headless";
 import { renderKatex } from "@smartdoca/slate/katex";
+import { useRichTextPdfProjection } from "./rich-text-pdf.js";
 import { ModelFind } from "@web/features/search/model-find.js";
 import { replaceRichText } from "@web/features/search/rich-text-search.js";
 import {
@@ -82,12 +80,7 @@ import { OutlineDrawer } from "@web/features/documents/outline-drawer.js";
 import { DocumentOutline } from "@web/features/documents/document-outline.js";
 import { documentPageLayout } from "@web/features/documents/document-page-layout.js";
 import { DocumentPageWidthMenu, canEditPageWidth, useDocumentPageWidth } from "@web/features/documents/document-page-width.js";
-import {
-  DocumentFilePreview,
-  guessMime,
-  isVisualMedia,
-  type PreviewSource,
-} from "@web/features/documents/document-file-preview.js";
+import { useAttachmentPreview } from "@web/features/documents/attachment-preview.js";
 import { UpdateOutbox } from "@web/features/documents/update-outbox.js";
 import { openReplica } from "@web/features/documents/offline-replica.js";
 import { documentLinkPlugin, internalDocumentId } from "@web/features/documents/document-link.js";
@@ -200,7 +193,7 @@ function RichDocument({
     canEditPageWidth(detail.resource),
     changed,
   );
-  const [filePreview, setFilePreview] = useState<PreviewSource | null>(null);
+  const attachmentPreview = useAttachmentPreview();
   const session = useMemo(() => {
     const doc = new Doc();
     return { doc, runtime: new YjsDocument(doc) };
@@ -598,6 +591,7 @@ function RichDocument({
         /^[a-f0-9-]{36}$/.test(path) ? assetUrl(path) + "?download=1" : "",
     };
   }, [id]);
+  const pdfProjection = useRichTextPdfProjection({ resources, plugins: documentPlugins, locale, formulaRenderer: renderKatex });
   function captureAISelection() {
       const editor = handle.current?.editor;
       const dom = editor ? selectedTextRange(editor, contentHost.current) : null;
@@ -736,9 +730,8 @@ function RichDocument({
         change={setPageWidth}
         disabled={!canEditPageWidth(detail.resource)}
       />
-      {filePreview && (
-        <DocumentFilePreview file={filePreview} close={() => setFilePreview(null)} />
-      )}
+      {attachmentPreview.dialog}
+      {pdfProjection.view}
       <DocumentDownload
         disabled={!ready}
         onError={setError}
@@ -754,34 +747,9 @@ function RichDocument({
               await import("@smartdoca/slate/conversion");
             const signal = new AbortController().signal;
             if (format === "pdf") {
-              const markdown = await exportDocument(session.runtime.getValue(), {
-                format: "markdown",
-                filename: detail.resource.title,
-                signal,
-                includeDiagramPreviews: true,
-                resources: {
-                  signal,
-                  resolveResource: async (r) => ({
-                    bytes: await readAsset(r.path, signal),
-                  }),
-                },
-              });
-              reportWarnings(markdown.warnings);
-              const { exportPdfFile } =
-                await import("@smartdoca/markdown");
-              const markdownText = await markdown.blob.text();
-              downloadResult(
-                await exportPdfFile(markdownText, {
-                  fileName: `${detail.resource.title}.pdf`,
-                  signal,
-                  fontBytes: await loadPdfFontBytes(markdownText),
-                  fontSubset: false,
-                  resolveResource: async ({ path }) => {
-                    const source = embeddedImage(path) ?? await readAsset(path, signal);
-                    return { bytes: await preparePdfImage(source) };
-                  },
-                }),
-              );
+              const page = shell.current?.querySelector<HTMLElement>(".sk-page");
+              if (!page) throw Error(t("pdf.previewNotReady"));
+              downloadResult(await pdfProjection.exportPdf(session.runtime.getValue(), id, detail.resource.title, page.getBoundingClientRect().width, shell.current));
               return;
             }
             downloadResult(
@@ -960,30 +928,6 @@ function RichDocument({
           className="editor-content"
           style={{ maxWidth: mobileEditor ? "none" : pageLayout.paper || "none" }}
           ref={contentHost}
-          onClick={(e) => {
-            const card = (e.target as HTMLElement).closest(".sk-attachment");
-            if (
-              !card ||
-              (e.target as HTMLElement).closest(".sk-attachment-download")
-            )
-              return;
-            const editor = handle.current?.editor;
-            if (!editor) return;
-            const entry = Editor.nodes(editor, {
-              match: (n) => Element.isElement(n) && n.type === "attachment",
-            }).next().value;
-            const node = entry?.[0] as
-              | { path?: string; name?: string; mimeType?: string }
-              | undefined;
-            if (!node?.path || !/^[a-f0-9-]{36}$/i.test(node.path)) return;
-            const mime = guessMime(node.name ?? "", node.mimeType);
-            if (isVisualMedia(mime, node.name)) return;
-            setFilePreview({
-              url: assetUrl(node.path),
-              name: node.name || "附件",
-              mime,
-            });
-          }}
           onPasteCapture={(e) => {
             if (
               !editable ||
@@ -1057,6 +1001,7 @@ function RichDocument({
                   initialValue={session.runtime.getValue()}
                   collaboration={adapter}
                   resources={resources}
+                  onAttachmentPreview={attachmentPreview.onRichAttachmentPreview}
                   mode={editable ? "edit" : "readonly"}
                   onReady={editorReady}
                   onOutlineChange={outlineChanged}

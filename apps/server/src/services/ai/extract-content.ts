@@ -1,12 +1,11 @@
 import { unzipSync, strFromU8 } from "fflate";
 import { XMLParser } from "fast-xml-parser";
 import { fail } from "@core/shared/errors.js";
-import { extractPdfParts, extractPdfPartsRich } from "./pdf-text.js";
+import { extractPdfPages } from "./pdf-text.js";
+import { officePdf } from "./office-render.js";
 
 export const textExtensions = /\.(txt|md|csv|json|log|yaml|yml)$/i;
 export const officeExtensions = /\.(docx|xlsx|pptx)$/i;
-const MAX_TEXT = 120000;
-const MAX_IMAGES = 16;
 
 export type ExtractedPart =
   | { type: "text"; text: string }
@@ -29,12 +28,6 @@ export function attachmentMime(filename: string, body: Buffer): string {
   );
 }
 
-function clip(text: string) {
-  return text.length > MAX_TEXT
-    ? text.slice(0, MAX_TEXT) + "\n[附件文字超过上限，后文已截断]"
-    : text;
-}
-
 function sniffImage(data: Buffer) {
   if (data[0] === 0x89 && data[1] === 0x50) return "image/png";
   if (data[0] === 0xff && data[1] === 0xd8) return "image/jpeg";
@@ -46,37 +39,6 @@ function sniffImage(data: Buffer) {
   if (["GIF87a", "GIF89a"].includes(data.toString("ascii", 0, 6)))
     return "image/gif";
   return "";
-}
-
-function clipParts(parts: ExtractedPart[]): ExtractedPart[] {
-  const out: ExtractedPart[] = [];
-  let text = 0;
-  let images = 0;
-  let omitted = false;
-  for (const part of parts) {
-    if (part.type === "text") {
-      if (text >= MAX_TEXT) {
-        omitted = true;
-        continue;
-      }
-      const remaining = MAX_TEXT - text;
-      const next =
-        part.text.length > remaining
-          ? part.text.slice(0, remaining) + "\n[附件文字超过上限，后文已截断]"
-          : part.text;
-      text += next.length;
-      out.push({ type: "text", text: next });
-    } else if (images < MAX_IMAGES && sniffImage(part.data)) {
-      images += 1;
-      out.push(part);
-    } else omitted = true;
-  }
-  if (omitted)
-    out.push({
-      type: "text",
-      text: "[部分文字或图片超过上限或无法解码，未识别]",
-    });
-  return out;
 }
 
 function resolveZipPath(relsFile: string, target: string) {
@@ -98,14 +60,17 @@ function extractOfficeParts(body: Buffer): ExtractedPart[] {
     files = unzipSync(body, {
       filter: (file) => {
         if (++count > 2048) throw Error("Too many entries");
+        if (file.name.endsWith("/")) return false;
+        if (/(?:vbaProject\.bin|activeX\/|embeddings\/)/i.test(file.name))
+          throw Error("Active Office content unsupported");
         const include =
-          /^(word\/document\.xml|word\/_rels\/document\.xml\.rels|word\/media\/|ppt\/slides\/slide\d+\.xml|ppt\/slides\/_rels\/slide\d+\.xml\.rels|ppt\/media\/|xl\/(sharedStrings\.xml|worksheets\/sheet\d+\.xml)|xl\/media\/)/.test(
+          /^(?:(?:word|ppt|xl)\/(?:.*\.(?:xml|rels)$|media\/)|_rels\/.*\.rels$)/.test(
             file.name,
           );
         if (
           include &&
-          (file.originalSize > 5 * 1024 * 1024 ||
-            (total += file.originalSize) > 20 * 1024 * 1024)
+          (file.originalSize > 64 * 1024 * 1024 ||
+            (total += file.originalSize) > 256 * 1024 * 1024)
         )
           throw Error("Expanded file too large");
         return include;
@@ -160,9 +125,29 @@ function extractOfficeParts(body: Buffer): ExtractedPart[] {
     for (const rel of Array.isArray(rels) ? rels : [rels]) {
       const id = rel["@_Id"],
         target = rel["@_Target"];
-      if (id && target) map[id] = resolveZipPath(name, String(target));
+      if (
+        rel["@_TargetMode"] === "External" &&
+        !/(?:\/hyperlink)$/.test(String(rel["@_Type"]))
+      )
+        fail(400, "office_external_resource_unsupported");
+      if (id && target && rel["@_TargetMode"] !== "External")
+        map[id] = resolveZipPath(name, String(target));
     }
     return map;
+  };
+  for (const name of Object.keys(files).filter((name) =>
+    name.endsWith(".rels"),
+  ))
+    relsOf(name);
+  const ordered = new XMLParser({
+    ignoreAttributes: false,
+    parseTagValue: false,
+    preserveOrder: true,
+  });
+  const parseOrdered = (bytes: Uint8Array) => {
+    const xml = strFromU8(bytes);
+    if (/<!DOCTYPE|<!ENTITY/i.test(xml)) fail(400, "不支持包含外部实体的文档");
+    return ordered.parse(xml);
   };
   const walk = (node: any, rels: Record<string, string>) => {
     if (!node || typeof node !== "object") return;
@@ -173,17 +158,14 @@ function extractOfficeParts(body: Buffer): ExtractedPart[] {
     for (const [key, value] of Object.entries(node)) {
       if (key === "w:t" || key === "a:t") {
         pushText(
-          String(
-            typeof value === "object" && value
-              ? ((value as { "#text"?: string })["#text"] ?? "")
-              : value,
-          ),
+          Array.isArray(value)
+            ? value.map((item) => item["#text"] ?? "").join("")
+            : String(value ?? ""),
         );
         continue;
       }
       if (key === "a:blip") {
-        const embed =
-          (value as { "@_r:embed"?: string } | undefined)?.["@_r:embed"] ?? "";
+        const embed = node[":@"]?.["@_r:embed"] ?? "";
         if (embed && rels[embed]) pushImage(rels[embed]!);
         continue;
       }
@@ -194,14 +176,25 @@ function extractOfficeParts(body: Buffer): ExtractedPart[] {
 
   if (files["word/document.xml"])
     walk(
-      parse(files["word/document.xml"]!),
+      parseOrdered(files["word/document.xml"]!),
       relsOf("word/_rels/document.xml.rels"),
     );
+  for (const name of Object.keys(files)
+    .filter((name) =>
+      /^word\/(?:header|footer|footnotes|endnotes|comments).*\.xml$/.test(name),
+    )
+    .sort()) {
+    pushText(`## ${name}`);
+    walk(
+      parseOrdered(files[name]!),
+      relsOf(name.replace("word/", "word/_rels/") + ".rels"),
+    );
+  }
   for (const name of Object.keys(files)
     .filter((item) => /^ppt\/slides\/slide\d+\.xml$/.test(item))
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))) {
     walk(
-      parse(files[name]!),
+      parseOrdered(files[name]!),
       relsOf(name.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels"),
     );
   }
@@ -228,7 +221,6 @@ function extractOfficeParts(body: Buffer): ExtractedPart[] {
           )
           .join(" | "),
       );
-      if (excel.join("\n").length > MAX_TEXT) break;
     }
   }
   if (excel.length) pushText(excel.join("\n"));
@@ -236,19 +228,18 @@ function extractOfficeParts(body: Buffer): ExtractedPart[] {
     .filter((item) => item.startsWith("xl/media/"))
     .sort())
     pushImage(name);
-  if (!parts.length)
-    fail(400, "未找到可读取的 Office 文本，请导出为文本或 PDF");
+  for (const name of Object.keys(files)
+    .filter((name) =>
+      /(?:styles|theme\d*|drawing\d*|chart\d*|workbook|presentation|notesSlide\d*)\.xml$/.test(
+        name,
+      ),
+    )
+    .sort()) {
+    pushText(`## 结构与样式：${name}\n${JSON.stringify(parse(files[name]!))}`);
+  }
+  if (!files["word/document.xml"] && !files["ppt/presentation.xml"] && !files["xl/workbook.xml"])
+    fail(400, "office_package_invalid");
   return parts;
-}
-
-function pdfFallback(parts: ExtractedPart[]): ExtractedPart[] {
-  if (parts.length) return clipParts(parts);
-  return [
-    {
-      type: "text",
-      text: "未能从该 PDF 提取到可复制文字。若是扫描件，需要视觉模型做 OCR。",
-    },
-  ];
 }
 
 export function extractFileParts(
@@ -257,20 +248,48 @@ export function extractFileParts(
 ): ExtractedPart[] {
   attachmentMime(filename, body);
   if (textExtensions.test(filename))
-    return [{ type: "text", text: clip(body.toString("utf8")) }];
-  if (/\.pdf$/i.test(filename)) return pdfFallback(extractPdfParts(body));
+    return [
+      {
+        type: "text",
+        text: new TextDecoder("utf-8", { fatal: true }).decode(body),
+      },
+    ];
+  if (/\.pdf$/i.test(filename)) fail(400, "pdf_requires_async_parser");
   if (!officeExtensions.test(filename)) fail(400, "此文件需要模型原生读取");
-  return clipParts(extractOfficeParts(body));
+  return extractOfficeParts(body);
+}
+
+export async function* extractFilePartsStream(
+  filename: string,
+  body: Buffer,
+): AsyncGenerator<ExtractedPart> {
+  attachmentMime(filename, body);
+  if (/\.pdf$/i.test(filename)) {
+    yield* extractPdfPages(body);
+    return;
+  }
+  if (officeExtensions.test(filename)) {
+    const native = extractOfficeParts(body);
+    const pdf = await officePdf(filename, body);
+    yield* extractPdfPages(pdf);
+    yield {
+      type: "text",
+      text: "## Office 源文件文字、公式与结构（包含打印区域之外的内容）",
+    };
+    yield* native;
+    return;
+  }
+  yield* extractFileParts(filename, body);
 }
 
 export async function extractFilePartsAsync(
   filename: string,
   body: Buffer,
 ): Promise<ExtractedPart[]> {
-  attachmentMime(filename, body);
-  if (/\.pdf$/i.test(filename))
-    return pdfFallback(await extractPdfPartsRich(body));
-  return extractFileParts(filename, body);
+  const parts: ExtractedPart[] = [];
+  for await (const part of extractFilePartsStream(filename, body))
+    parts.push(part);
+  return parts;
 }
 
 export function extractAttachmentText(filename: string, body: Buffer) {

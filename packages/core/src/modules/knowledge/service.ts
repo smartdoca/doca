@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { enqueueProjection } from "../automation/jobs.js";
+import { authorizeKnowledgeFile, isRetiredKnowledgeSessionFile, readKnowledgeSessionFolder } from "./file-folders.js";
+import { AppError } from "../../shared/errors.js";
 
 import type { DB } from "../../../../db/src/index.js";
 
@@ -119,6 +121,34 @@ export function readerTokensFor(userId: string) {
 export function canReadChunk(readerIds: string[], userId: string) {
   const tokens = new Set(readerTokensFor(userId));
   return readerIds.some((id) => tokens.has(id));
+}
+
+async function currentFileSourceAccess(db: DB, userId: string, kind: string, id: string) {
+  if (kind !== "file") return true;
+  const file = await db.selectFrom("file_items").select(["parent_type", "parent_id", "metadata", "deleted_at"])
+    .where("id", "=", id).executeTakeFirst();
+  if (!file || file.deleted_at) return false;
+  if (isRetiredKnowledgeSessionFile(file.metadata)) return false;
+  if (file.parent_type !== "system" || file.parent_id !== "ai" || !readKnowledgeSessionFolder(file.metadata)) return true;
+  const actor = await db.selectFrom("users").select(["id", "admin", "display_name"])
+    .where("id", "=", userId).where("status", "=", "active").executeTakeFirst();
+  if (!actor) return false;
+  try { await authorizeKnowledgeFile(db, actor, file); return true; }
+  catch (error) {
+    if (error instanceof AppError && [401,403,404].includes(error.status)) return false;
+    throw error;
+  }
+}
+
+async function currentFileSources<T extends {source_kind: string; source_id: string}>(db: DB, userId: string, rows: T[]) {
+  const decisions = new Map<string, boolean>();
+  const visible: T[] = [];
+  for (const row of rows) {
+    const key = `${row.source_kind}:${row.source_id}`;
+    if (!decisions.has(key)) decisions.set(key, await currentFileSourceAccess(db, userId, row.source_kind, row.source_id));
+    if (decisions.get(key)) visible.push(row);
+  }
+  return visible;
 }
 
 async function documentReaders(db: DB, id: string) {
@@ -248,6 +278,10 @@ export async function rebuildKnowledge(
   id: string,
   indexer?: KnowledgeIndexer,
 ) {
+  if (kind === "file") {
+    const file = await db.selectFrom("file_items").select("metadata").where("id", "=", id).executeTakeFirst();
+    if (file && isRetiredKnowledgeSessionFile(file.metadata)) return { chunks: 0 };
+  }
   const record = kind === "document"
     ? await documentReaders(db, id)
     : kind === "file"
@@ -332,7 +366,7 @@ type KnowledgeHit = {
 async function lexicalHits(db: DB, userId: string, query: string, feedback: Map<string, { judgment: string; query: string }>) {
   const pattern = readerTokensFor(userId).map((token) => `%"${token}"%`);
   const rows = await db.selectFrom("knowledge_chunks").selectAll().where((eb) => eb.or(pattern.map((value) => eb("reader_ids", "like", value)))).limit(400).execute();
-  return rows.flatMap((row) => {
+  return (await currentFileSources(db, userId, rows)).flatMap((row) => {
     if (!canReadChunk(JSON.parse(row.reader_ids), userId)) return [];
     const matched = matchKnowledge(query, `${row.title}\n${row.text}`);
     if (!matched) return [];
@@ -434,7 +468,7 @@ export async function searchKnowledgeChunks(
   if (remote?.length) {
     const rows = await db.selectFrom("knowledge_chunks").selectAll().where("id", "in", remote.map((hit) => hit.id)).execute();
     const rank = new Map(remote.map((hit) => [hit.id, hit.score]));
-    hits = rows.flatMap((row) => {
+    hits = (await currentFileSources(db, userId, rows)).flatMap((row) => {
       if (!canReadChunk(JSON.parse(row.reader_ids), userId)) return [];
       const matched = matchKnowledge(query, `${row.title}\n${row.text}`);
       if (!matched) return [];
@@ -494,8 +528,9 @@ export async function recordKnowledgeFeedback(
   judgment: "useful" | "irrelevant",
   query = "",
 ) {
-  const chunk = await db.selectFrom("knowledge_chunks").select(["id", "reader_ids"]).where("id", "=", chunkId).executeTakeFirst();
+  const chunk = await db.selectFrom("knowledge_chunks").select(["id", "reader_ids", "source_kind", "source_id"]).where("id", "=", chunkId).executeTakeFirst();
   if (!chunk || !canReadChunk(JSON.parse(chunk.reader_ids), userId)) return false;
+  if (!await currentFileSourceAccess(db, userId, chunk.source_kind, chunk.source_id)) return false;
   await db.insertInto("knowledge_feedback").values({
     id: randomUUID(),
     user_id: userId,
@@ -526,7 +561,7 @@ async function sourceLabel(db: DB, kind: string, id: string) {
 export async function knowledgeGraph(db: DB, userId: string) {
   const tokens = readerTokensFor(userId);
   const rows = await db.selectFrom("knowledge_chunks").selectAll().where((eb) => eb.or(tokens.map((token) => eb("reader_ids", "like", `%"${token}"%`)))).orderBy("updated_at", "desc").limit(500).execute();
-  const visible = rows.filter((row) => canReadChunk(JSON.parse(row.reader_ids), userId));
+  const visible = await currentFileSources(db, userId, rows.filter((row) => canReadChunk(JSON.parse(row.reader_ids), userId)));
   const sources = new Map<string, { kind: string; id: string; title: string; chunks: number }>();
   for (const row of visible) {
     const key = `${row.source_kind}:${row.source_id}`;
@@ -626,7 +661,7 @@ function clusterTopics(
 async function endpointVisible(db: DB, userId: string, kind: string, id: string) {
   if (kind === "folder") return (await folderReaders(db, id)).includes(userId);
   if (kind === "library" || kind === "document") return (await documentReaders(db, id)).readers.some((reader) => readerTokensFor(userId).includes(reader));
-  if (kind === "file") return (await fileRecord(db, id)).readers.some((reader) => readerTokensFor(userId).includes(reader));
+  if (kind === "file") return await currentFileSourceAccess(db, userId, kind, id) && (await fileRecord(db, id)).readers.some((reader) => readerTokensFor(userId).includes(reader));
   return false;
 }
 

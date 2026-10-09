@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { writeClipboardText } from "@web/shared/clipboard.js";
+import { useI18n } from "@web/shared/i18n.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 
 export function QrLogin({ logged }: { logged: () => Promise<void> }) {
+  const { t } = useI18n();
   const loggedRef = useRef(logged);
   loggedRef.current = logged;
   const [svg, setSvg] = useState("");
@@ -75,8 +78,11 @@ export function QrLogin({ logged }: { logged: () => Promise<void> }) {
           type="button"
           className="text-button"
           onClick={() => {
-            void navigator.clipboard.writeText(payload).then(() => {
+            void writeClipboardText(payload).then(() => {
+              setError("");
               setCopied(true);
+            }).catch(() => {
+              setError(t("fileManager.copyFailed"));
             });
           }}
         >

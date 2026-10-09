@@ -1,3 +1,4 @@
+import { checkUploadLimits, userUploadLimits } from "@core/modules/ai/upload-policy.js";
 import { sql } from "kysely";
 import { recordActivity } from "@core/modules/workspace/activity.js";
 import { folderInSearch } from "@core/modules/discovery/catalog.js";
@@ -28,12 +29,21 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { authorize } from "@core/modules/access/queries.js";
 import { canChangeMemberRole, type Role } from "@core/modules/access/roles.js";
 import type { Actor } from "@core/modules/identity/passwords.js";
-import { fail } from "@core/shared/errors.js";
+import { AppError, fail } from "@core/shared/errors.js";
+import { isRetiredKnowledgeSessionFile, knowledgeFolderKind, knowledgeFileLocation, projectKnowledgeSessionFiles, readKnowledgeSessionFolder, requireKnowledgeFolder } from "@core/modules/knowledge/file-folders.js";
 import {
   isCopyOnlyParent,
   normalizeFolderParentId,
   systemFolder,
+  aiSessionIdFromFolderId,
 } from "../services/ai/file-locations.js";
+import {
+  aiFileFolderLocation,
+  pendingAISessionFolder,
+  projectAISessionFiles,
+  requireAISessionFolder,
+  readAISessionFolder,
+} from "../services/ai/session-file-folders.js";
 import { searchIntent } from "@core/modules/discovery/search-intent.js";
 import {
   textMentionsTopic,
@@ -474,6 +484,11 @@ export function registerFiles(
       const actor = auth(req);
       const type = req.query.parentType ?? "system";
       const id = req.query.parentId ?? "root";
+      const aiSessionId = type === "system" ? aiSessionIdFromFolderId(id) : null;
+      const knowledgeKind = type === "system" ? knowledgeFolderKind(id) : null;
+      {}
+      if (type === "system" && id.startsWith("ai-session:"))
+        await requireAISessionFolder(db, actor.id, id);
       let currentFolder: Schema["file_folders"] | null = null;
       if (type === "document") await authorize(db, actor, id, 1);
       if (type === "folder") {
@@ -700,6 +715,7 @@ export function registerFiles(
           "file_items.version",
           "file_items.created_at",
           "file_items.updated_at",
+          "file_items.metadata",
           "file_storage_objects.ai_description",
           "file_storage_objects.ai_status",
           "file_extracts.status as extract_status",
@@ -709,15 +725,16 @@ export function registerFiles(
       {
         files = files
           .where("file_items.parent_type", "=", type)
-          .where("file_items.parent_id", "=", id);
+          .where("file_items.parent_id", "=", aiSessionId || knowledgeKind ? "ai" : id);
         if (type === "folder" && currentFolder)
           files = files.where(
             "file_items.owner_id",
             "=",
             currentFolder.owner_id,
           );
-        else if (type !== "document")
+        else if (type !== "document" && !knowledgeKind)
           files = files.where("file_items.owner_id", "=", actor.id);
+        {}
       }
       if (req.query.sessionId && type === "system" && id === "ai") {
         files = files.where(
@@ -727,6 +744,16 @@ export function registerFiles(
         );
       }
       const rows = await files.execute();
+      let visibleRows = rows;
+      {}
+      if (type === "system" && (id === "ai" || aiSessionId)) {
+        const projection = await projectAISessionFiles(db, actor.id, rows);
+        if (aiSessionId) visibleRows = projection.sessionFiles.get(aiSessionId) ?? [];
+        else {
+          visibleRows = projection.rootFiles;
+          virtualFolders.push(...projection.folders);
+        }
+      }
       return {
         parent: { type, id },
         folders: [
@@ -743,7 +770,7 @@ export function registerFiles(
           })),
           ...virtualFolders,
         ],
-        files: rows.map((file) => ({
+        files: visibleRows.map((file) => ({
           id: file.id,
           name: file.name,
           mime: file.mime,
@@ -832,6 +859,7 @@ export function registerFiles(
           "f.size",
           "f.parent_type",
           "f.parent_id",
+          "f.metadata",
           "f.updated_at",
           "f.ai_description_override",
           "o.ai_description",
@@ -996,6 +1024,10 @@ export function registerFiles(
             );
           }
         } else if (row.parent_type === "system") {
+          const knowledgeLocation = await knowledgeFileLocation(db, actor, row);
+          if (knowledgeLocation) return { navigation: knowledgeLocation.navigation, sharedRoot };
+          const aiLocation = await aiFileFolderLocation(db, actor.id, row);
+          if (aiLocation) return { navigation: aiLocation.navigation, sharedRoot };
           navigation.push({
             type: "system",
             id: row.parent_id,
@@ -1042,6 +1074,7 @@ export function registerFiles(
             "f.size",
             "f.parent_type",
             "f.parent_id",
+            "f.metadata",
             "f.updated_at",
             "f.ai_description_override",
             "o.ai_description",
@@ -1159,7 +1192,7 @@ export function registerFiles(
   }>(
     "/api/v1/files/items",
     {
-      bodyLimit: uploadLimits.file,
+      bodyLimit: Number.MAX_SAFE_INTEGER,
       onRequest: async (req) => {
         auth(req);
       },
@@ -1184,7 +1217,7 @@ export function registerFiles(
       const filename = cleanName(req.query.filename);
       const ownerId = await parentOwner(db, actor, parent);
       await requireCapability(db, actor.id, "assets.upload");
-      const maxBytes = uploadLimits.file;
+      const maxBytes = (await userUploadLimits(db, actor.id)).maxFileBytes || Number.MAX_SAFE_INTEGER;
       if (Number(req.headers["content-length"]) > maxBytes)
         fail(413, "文件超过上传大小限制");
       const staged = await stageUpload(
@@ -1259,6 +1292,7 @@ export function registerFiles(
           if ((await parentOwner(tx, actor, parent)) !== ownerId)
             fail(409, "目标文件夹已变化，请重新上传");
           await requireCapability(tx, actor.id, "assets.upload");
+          checkUploadLimits(await userUploadLimits(tx, actor.id), [size]);
           await checkStorage(tx, ownerId, size);
           let object = await findExisting(tx);
           if (!object) {
@@ -1849,6 +1883,7 @@ export function registerFiles(
     async (req) => {
       const actor = auth(req);
       const source = await readableItem(db, actor, req.params.id);
+      if (req.body.purpose === "ai_attachment") checkUploadLimits(await userUploadLimits(db, actor.id), [source.size]);
       let ownerId = actor.id;
       if (req.body.purpose === "attachment") {
         if (!req.body.resourceId) fail(400, "文档附件需要目标文档");
@@ -1893,6 +1928,7 @@ export function registerFiles(
               assetId,
               resourceId: req.body.resourceId ?? null,
               copiedFrom: source.id,
+              ...(req.body.purpose === "ai_attachment" ? { aiSessionFolder: pendingAISessionFolder } : {}),
             }),
             ai_description_override: source.ai_description_override,
             locked: req.body.purpose === "attachment" ? 1 : 0,
@@ -2329,17 +2365,21 @@ export function registerFiles(
       } else {
         const type = req.body.parentType ?? "system";
         const id = req.body.parentId ?? "root";
+        const aiSessionId = type === "system" ? aiSessionIdFromFolderId(id) : null;
+        const knowledgeKind = type === "system" ? knowledgeFolderKind(id) : null;
+        {}
+        if (aiSessionId) await requireAISessionFolder(db, actor.id, id);
         if (type === "document") await authorize(db, actor, id, 1);
         let rows = db
           .selectFrom("file_items")
-          .select(["storage_object_id", "owner_id"])
+          .select(["storage_object_id", "owner_id", "metadata"])
           .where("deleted_at", "is", null)
           .where("parent_type", "=", type);
         if (type === "system") {
-          if (!["root", "ai", "shared"].includes(id))
+          if (!["root", "ai", "shared"].includes(id) && !aiSessionId && !knowledgeKind)
             fail(403, "这个系统文件夹不支持批量识别");
-          rows = rows.where("owner_id", "=", actor.id);
-          if (id !== "root") rows = rows.where("parent_id", "=", id);
+          if (!knowledgeKind) rows = rows.where("owner_id", "=", actor.id);
+          if (id !== "root") rows = rows.where("parent_id", "=", aiSessionId || knowledgeKind ? "ai" : id);
         } else if (type === "folder") {
           const folderIds = new Set<string>([id]);
           if (req.body.recursive !== false) {
@@ -2368,7 +2408,11 @@ export function registerFiles(
         } else {
           rows = rows.where("parent_id", "=", id);
         }
-        for (const row of await rows.execute()) {
+        const candidates = await rows.execute();
+        let selected = candidates;
+        if (type === "system" && id === "ai") selected = candidates.filter(row => !isRetiredKnowledgeSessionFile(row.metadata) && !readKnowledgeSessionFolder(row.metadata));
+        for (const row of selected) {
+          if (aiSessionId && readAISessionFolder(row.metadata)?.sessionId !== aiSessionId) continue;
           objectIds.push(row.storage_object_id);
           ownerByObject.set(row.storage_object_id, row.owner_id);
         }

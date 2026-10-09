@@ -8,7 +8,7 @@ Implemented on 2026-09-30 and publicly exported from `@smartdoca/plugin-sdk/plat
 
 Plugins register through `activityServiceToken` (`activity.v1`). They own visit records, history queries, current business authorization, and deletion cleanup, using host-managed persistence. The service only aggregates sources; it creates no business mirror or special visit-writing endpoint. Use the [current managed storage contract](plugin-horizontal-scaling.md).
 
-Built-in records remain in `resource_visits`, `knowledge_assistant_users.visited_at`, and `workspace_activity`. This increment changed no table, moved no history, and introduced no dual writing. The public discovery page's `/workspace/recent?publicOnly=true` collection logic applies to built-in resources. Registering activity does not register discovery, favorites, search, or AI.
+Built-in records remain in `resource_visits` and `workspace_activity`. This increment changed no table, moved no history, and introduced no dual writing. The public discovery page's `/workspace/recent?publicOnly=true` collection logic applies to built-in resources. Registering activity does not register discovery, favorites, search, or AI.
 
 Disposal removes runtime registrations and opening/listing stops offering that source. Stored records remain. Re-enabling queries current plugin data. Actual installation/disable follows the host's restart-based lifecycle.
 

@@ -3,7 +3,8 @@ import { distributionPolicy } from "../deployment/policies.js";
 import { sql, type Transaction } from "kysely";
 import { requireCapability } from "../access/operation-policy.js";
 import { checkMemberAdmission } from "../access/operation-policy.js";
-import { label, namedPermission, permission, ranks } from "./policy.js";
+import { isResourceOwnerLike, label, namedPermission, permission, ranks } from "./policy.js";
+import { canChangeMemberRole } from "./roles.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { DB, Schema } from "../../../../db/src/index.js";
 import { transact } from "../../../../db/src/transactions.js";
@@ -176,9 +177,9 @@ export function createShareLinks(db: DB) {
       },
     ) {
       return transact(db, async (tx) => {
-        await authorize(tx, actor, id, "manage_sharing");
-        if (!["reader", "commenter", "editor"].includes(input.role))
-          fail(403, "邀请链接不能授予管理权限");
+        const ctx = await authorize(tx, actor, id, "manage_sharing");
+        if (!["reader", "commenter", "editor", "manager"].includes(input.role))
+          fail(400, "链接角色无效");
         if (
           input.maxMembers !== undefined &&
           input.maxMembers !== null &&
@@ -199,6 +200,12 @@ export function createShareLinks(db: DB) {
               .executeTakeFirst()
           : null;
         if (input.version && !old) fail(409, "链接已变化，请刷新");
+        if (!canChangeMemberRole(
+          isResourceOwnerLike(ctx.resource, actor, ctx.resources) ? "owner" : label(ctx.rank),
+          old?.role ?? null,
+          input.role,
+        ))
+          fail(403, "只有所有者可以调整管理权限链接");
         if (old?.revoked) fail(409, "链接已撤销，不能重新启用");
         if (!old && !input.enabled) fail(400, "请选择要停用的链接");
         const supportsDescendants =
@@ -292,7 +299,7 @@ export function createShareLinks(db: DB) {
     },
     revokeShare(actor: Actor, id: string, linkId: string, version: string) {
       return transact(db, async (tx) => {
-        await authorize(tx, actor, id, "manage_sharing");
+        const ctx = await authorize(tx, actor, id, "manage_sharing");
         const link = await tx
           .selectFrom("share_links")
           .selectAll()
@@ -300,15 +307,27 @@ export function createShareLinks(db: DB) {
           .where("generation", "=", linkId)
           .executeTakeFirst();
         if (!link) fail(404, "链接不存在");
+        if (!canChangeMemberRole(
+          isResourceOwnerLike(ctx.resource, actor, ctx.resources) ? "owner" : label(ctx.rank),
+          link.role,
+          null,
+        ))
+          fail(403, "只有所有者可以撤销管理权限链接");
         if (link.revision !== version) fail(409, "链接已变化，请刷新");
         const members = await tx
           .selectFrom("grants")
-          .select("user_id")
+          .select(["user_id", "role"])
           .where("resource_id", "=", id)
           .where("source_type", "=", "link")
           .where("source_id", "=", linkId)
           .where("status", "=", "active")
           .execute();
+        if (members.some((member) => !canChangeMemberRole(
+          isResourceOwnerLike(ctx.resource, actor, ctx.resources) ? "owner" : label(ctx.rank),
+          member.role,
+          null,
+        )))
+          fail(403, "只有所有者可以撤销管理权限来源");
         const revokedAt = new Date().toISOString();
         await tx
           .insertInto("share_link_revocations")
@@ -391,7 +410,7 @@ export function createShareLinks(db: DB) {
             )?.deleted_at)
         )
           fail(404, "文档不存在");
-        if (!["reader", "commenter", "editor"].includes(link.role))
+        if (!["reader", "commenter", "editor", "manager"].includes(link.role))
           fail(403, "链接角色无效");
         const policy = await distributionPolicy(tx, r.kind);
         const existing = await tx

@@ -14,6 +14,11 @@ type HistoryOptions = {
   userId: string;
   sessionId: string;
   excludeId: string;
+  /** Host preparation runs once after the owner-scoped load, before any model call. */
+  beforeCompact?: (history: {
+    messages: MastraDBMessage[];
+    summary: string;
+  }) => Promise<void>;
   onCompact?: (state: "start" | "success" | "error") => Promise<void>;
 };
 
@@ -95,6 +100,7 @@ export async function conversationHistory(options: HistoryOptions) {
   let messages = await load();
   let summary =
     (await om.getObservations(scope.threadId, scope.resourceId)) ?? "";
+  await options.beforeCompact?.({ messages, summary });
   const counter = om.getTokenCounter();
   const size = (items: MastraDBMessage[]) =>
     counter.countMessages(
@@ -132,17 +138,45 @@ export async function conversationHistory(options: HistoryOptions) {
           413,
           "单轮历史内容超过当前模型的压缩容量，请切换更大上下文的模型后继续",
         );
+      const before = await store.getObservationalMemory(
+        scope.threadId,
+        scope.resourceId,
+      );
+      if (!before) fail(502, "历史上下文压缩未完成，原始对话已保留，请重试");
       const result = await om.observe({
         ...scope,
         messages: block.map(observationMessage),
       });
-      if (!result.observed || !result.record.activeObservations?.trim())
+      if (!result.observed)
         fail(502, "历史上下文压缩未完成，原始对话已保留，请重试");
+      // Use the actual committed generation after normal SDK reflection, not
+      // a returned observation snapshot or a guessed replacement cursor.
+      const current = await store.getObservationalMemory(
+        scope.threadId,
+        scope.resourceId,
+      );
+      const boundary = Math.max(
+        ...block.map((message) => +new Date(message.createdAt)),
+      );
+      if (
+        !current ||
+        current.scope !== "thread" ||
+        current.threadId !== scope.threadId ||
+        current.resourceId !== owner ||
+        !current.activeObservations?.trim() ||
+        !current.lastObservedAt ||
+        !Number.isFinite(current.lastObservedAt.getTime()) ||
+        current.lastObservedAt.getTime() < boundary ||
+        (before.lastObservedAt &&
+          current.lastObservedAt.getTime() < before.lastObservedAt.getTime()) ||
+        current.totalTokensObserved < before.totalTokensObserved
+      )
+        fail(502, "历史上下文压缩未推进，原始对话已保留，请重试");
       const remaining = await load();
       if (remaining.length >= messages.length)
         fail(502, "历史上下文压缩未推进，原始对话已保留，请重试");
       messages = remaining;
-      summary = result.record.activeObservations;
+      summary = current.activeObservations;
       await options.onCompact?.("success");
     } catch (error) {
       await options.onCompact?.("error");

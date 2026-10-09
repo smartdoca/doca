@@ -1,12 +1,5 @@
 import { FileText } from "lucide-react";
-import {
-  BookOpen,
-  Bot,
-  FolderOpen,
-  Home,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { BookOpen, FolderOpen, Home, Users, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import type {
   FileDelivery,
@@ -77,7 +70,7 @@ export const BUILTIN_CLIENT_MANIFESTS = {
     navigation: [
       "doca.documents.navigation.home",
       "doca.documents.navigation.libraries",
-      "doca.documents.navigation.knowledge-qa",
+
     ],
     conversationKinds: ["document"],
   },
@@ -88,6 +81,7 @@ export const BUILTIN_CLIENT_MANIFESTS = {
     routes: [
       "doca.files.route.files",
       "doca.files.route.shared",
+      "doca.files.route.shared-join",
       "doca.files.route.shared-folder",
     ],
     navigation: ["doca.files.navigation.files", "doca.files.navigation.shared"],
@@ -131,15 +125,7 @@ const documentsBundle: WebPluginBundle<AppWebPluginTypes> = {
       labelKey: "doca.documents.nav.libraries",
       icon: BookOpen,
     },
-    {
-      id: "doca.documents.navigation.knowledge-qa",
-      pluginId: "doca.documents",
-      order: 41,
-      scope: "knowledge-assistants",
-      path: "/knowledge-assistants",
-      labelKey: "doca.documents.nav.knowledge-qa",
-      icon: Bot,
-    },
+
   ],
   searchResults: [
     {
@@ -175,7 +161,7 @@ const documentsBundle: WebPluginBundle<AppWebPluginTypes> = {
         en: {
           "doca.documents.nav.documents": "Documents",
           "doca.documents.nav.libraries": "Libraries",
-          "doca.documents.nav.knowledge-qa": "Knowledge Q&A",
+
           "doca.documents.search.result": "Document",
           "doca.documents.knowledge.source": "Document source",
           "doca.documents.knowledge.url": "Link",
@@ -183,7 +169,7 @@ const documentsBundle: WebPluginBundle<AppWebPluginTypes> = {
         zh: {
           "doca.documents.nav.documents": "文档",
           "doca.documents.nav.libraries": "知识库",
-          "doca.documents.nav.knowledge-qa": "知识库问答",
+
           "doca.documents.search.result": "文档",
           "doca.documents.knowledge.source": "文档来源",
           "doca.documents.knowledge.url": "链接",
@@ -208,6 +194,14 @@ const filesBundle: WebPluginBundle<AppWebPluginTypes> = {
       id: "doca.files.route.shared",
       pluginId: "doca.files",
       path: "/shared-files",
+      render: () => <SharedFoldersPage />,
+    },
+    {
+      id: "doca.files.route.shared-join",
+      pluginId: "doca.files",
+      path: "/shared-files/join",
+      // Resolve the reserved join path before the folder-ID route.
+      order: -1,
       render: () => <SharedFoldersPage />,
     },
     {

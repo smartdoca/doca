@@ -26,6 +26,8 @@ node_modules/
 dist/
 coverage/
 .cache/
+__pycache__/
+*.pyc
 .vite/
 .vite-temp/
 *.tsbuildinfo
@@ -36,6 +38,7 @@ coverage/
 !/plugins/README.md
 
 # Local browser-test output, scratch work and logs; keep reusable tests.
+/artifacts/knowledge-book-network-demo/
 test-results/
 playwright-report/
 blob-report/

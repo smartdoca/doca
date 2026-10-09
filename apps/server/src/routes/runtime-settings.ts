@@ -201,13 +201,11 @@ export async function registerRuntimeSettings(
         }
         c.messaging.secret = keep(c.messaging.secret, old.messaging.secret);
         c.search.apiKey = keep(c.search.apiKey, old.search.apiKey);
-        const origin = (value: string, https: boolean) => {
+        const origin = (value: string) => {
           try {
             const u = new URL(value);
             if (
-              (https
-                ? u.protocol !== "https:"
-                : !["http:", "https:"].includes(u.protocol)) ||
+              !["http:", "https:"].includes(u.protocol) ||
               u.username ||
               u.password ||
               u.pathname !== "/" ||
@@ -221,18 +219,23 @@ export async function registerRuntimeSettings(
           }
         };
         c.identity.allowedOrigins = c.identity.allowedOrigins.map((v: string) =>
-          origin(v, true),
+          origin(v),
         );
         c.search.allowedOrigins = c.search.allowedOrigins.map((v: string) =>
-          origin(v, false),
+          origin(v),
         );
         if (c.messaging.endpoint) {
           try {
             const u = new URL(c.messaging.endpoint);
-            if (u.protocol !== "https:" || u.username || u.password || u.hash)
+            if (
+              !["http:", "https:"].includes(u.protocol) ||
+              u.username ||
+              u.password ||
+              u.hash
+            )
               throw new Error();
           } catch {
-            fail(400, "验证码网关必须是 HTTPS 地址");
+            fail(400, "验证码网关必须是 HTTP(S) 地址");
           }
           if (!c.messaging.secret || !c.messaging.channels.length)
             fail(400, "请设置网关密钥并选择发送渠道");

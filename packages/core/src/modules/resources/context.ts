@@ -1,4 +1,3 @@
-import { withContentDocumentAccess } from "../knowledge/content-access.js";
 import { effectiveResource } from "../access/inheritance.js";
 import type { Transaction } from "kysely";
 import { randomUUID } from "node:crypto";
@@ -28,14 +27,14 @@ export function createResourceRunner(db: DB) {
   ) {
     const fn = typeof subtreesOrFn === "function" ? subtreesOrFn : maybeFn!;
     const subtrees = Array.isArray(subtreesOrFn) ? subtreesOrFn : [];
-    return withContentDocumentAccess(db, actor, () => transact(db, async (tx) => {
+    return transact(db, async (tx) => {
       const ctx: Context = {
         tx,
         distribution: await distributionPolicy(tx),
         ...(await accessContext(tx, actor, ids, subtrees)),
       };
       return fn(ctx);
-    }), [...ids,...subtrees].filter((id):id is string=>!!id));
+    });
   };
 }
 export interface Context {

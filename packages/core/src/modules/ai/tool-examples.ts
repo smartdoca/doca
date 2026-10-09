@@ -4,6 +4,7 @@ export const SAMPLE = {
   asset: "22222222-2222-4222-8222-222222222222",
   file: "33333333-3333-4333-8333-333333333333",
   folder: "44444444-4444-4444-8444-444444444444",
+  referenceImage: "55555555-5555-4555-8555-555555555555",
   note: "66666666-6666-4666-8666-666666666666",
   sheet: "77777777-7777-4777-8777-777777777777",
 };
@@ -68,11 +69,23 @@ export const TOOL_EXAMPLES: Record<string, Record<string, unknown>[]> = {
   ],
   image_generate: [
     { prompt: "蓝色几何图标，白底，无文字" },
+  ],
+  image_reference_generate: [
+    { prompt: "参考图1的配色和风格，生成一个竹林场景", referenceImageIds: [SAMPLE.asset] },
+  ],
+  image_edit: [
     {
       prompt: "保留参考图中的主体，将背景改成竹林",
-      referenceImageIds: [SAMPLE.asset],
+      sourceImageId: SAMPLE.asset,
     },
   ],
+  image_edit_saved:[{
+    originalReferenceImageId:SAMPLE.referenceImage,
+    baseAssetId:SAMPLE.asset,
+    prompt:"修正当前成品中的文字，保留已经完成的动作与其他正确内容",
+  }],
+  image_edit_saved_local_preview:[{originalReferenceImageId:SAMPLE.referenceImage,baseAssetId:SAMPLE.asset,prompt:"修复选区中的多余手脚，保留其他已正确内容",region:{left:0.35,top:0.45,width:0.25,height:0.25}}],
+  image_edit_saved_local:[{originalReferenceImageId:SAMPLE.referenceImage,baseAssetId:SAMPLE.asset,prompt:"修复选区中的多余手脚，保留其他已正确内容",region:{left:0.35,top:0.45,width:0.25,height:0.25}}],
   image_show: [{}, { assetId: SAMPLE.asset }],
   ask_user: [
     {
@@ -203,6 +216,22 @@ export const TOOL_EXAMPLES: Record<string, Record<string, unknown>[]> = {
     },
   ],
   rich_text_edit: [
+    {
+      ...editBase,
+      operations: [
+        {
+          type: "insertBlock",
+          afterId: "已读取的块ID",
+          block: { id: "new-section", type: "paragraph", title: "h2", children: [{ text: "年度业绩回顾" }] },
+        },
+        {
+          type: "insertBlock",
+          afterId: "new-section",
+          block: { id: "new-item", type: "paragraph", list: "ul", children: [{ text: "填写核心成果" }] },
+        },
+        { type: "insertTable", rows: 3, columns: 2, afterId: "new-item" },
+      ],
+    },
     {
       ...editBase,
       operations: [{ type: "append", text: "第一段\n第二段" }],

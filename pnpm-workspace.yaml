@@ -10,8 +10,8 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@smartdoca/canvas@0.4.1 || 0.4.2'
   - '@smartdoca/markdown@0.4.2 || 0.4.3'
-  - '@smartdoca/sheet@0.2.0-rc.16 || 0.2.0-rc.17'
-  - '@smartdoca/slate@0.4.9 || 0.4.10 || 0.4.11 || 0.4.12'
+  - '@smartdoca/sheet@0.2.0-rc.16 || 0.2.0-rc.17 || 0.2.0-rc.18'
+  - '@smartdoca/slate@0.4.9 || 0.4.10 || 0.4.11 || 0.4.12 || 0.4.13'
   - '@smartdoca/slides@0.3.0-alpha.1 || 0.3.0-alpha.2'
 overrides:
   yjs: 13.6.32
@@ -69,3 +69,7 @@ overrides:
   '@leafer/task': 2.1.0
   '@leafer/watcher': 2.1.0
   '@leafer/web-core': 2.1.0
+patchedDependencies:
+  '@mastra/memory@1.29.0': patches/@mastra__memory@1.29.0.patch
+  '@smartdoca/markdown@0.4.3': patches/@smartdoca__markdown@0.4.3.patch
+  '@smartdoca/slate@0.4.13': patches/@smartdoca__slate@0.4.13.patch

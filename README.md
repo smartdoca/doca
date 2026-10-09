@@ -11,7 +11,8 @@ Doca is an open-source document and knowledge workspace for individuals and smal
 ## Features
 
 - Rich text, Markdown, spreadsheets, slides, and canvas documents, with realtime collaboration and history.
-- Knowledge libraries, source curation, Q&A assistants, and a personal AI assistant.
+- Knowledge libraries and shared knowledge books with workflows, source evidence, and human review.
+- A personal AI assistant with PDF/Office reading, image generation/editing, durable attachments, and browser drafts.
 - Personal files and shared folders, with local or S3-compatible storage.
 - Invitations, permissions, sharing, comments, notifications, search, and trash.
 - Password, OIDC, Google, GitHub, WeChat QR, and QQ sign-in; Chinese and English interface text.
@@ -22,16 +23,16 @@ The default image installs no quick-notes, mail, calendar, membership, or modera
 
 ## Quick start with Docker
 
-Requires Git, Docker Engine, Docker Compose, and an HTTPS domain served by a reverse proxy. This installs the published 0.1.12 image into a fresh database. Existing installations must read the [release requirements](https://smartdoca.github.io/doca/#/en/releases/0.1.12) and preserve their data before changing versions.
+Requires Git, Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. This installs the published 0.1.13 image into a fresh database. Existing installations must read the [release requirements](https://smartdoca.github.io/doca/#/en/releases/0.1.13) and preserve their data before changing versions.
 
 ```sh
 # 1. Clone the matching release
-git clone --branch v0.1.12 --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch v0.1.13 --depth 1 https://github.com/smartdoca/doca.git
 cd doca
 
 # 2. Configure the environment
 cp docker.env.example .env
-# Edit .env: set DOCA_ORIGIN to your HTTPS origin.
+# Edit .env: set DOCA_ORIGIN to your HTTP(S) origin.
 # Keep the example local file-store configuration for a single server.
 
 # 3. Pull the image
@@ -46,7 +47,7 @@ docker compose ps
 bash scripts/bootstrap-admin.sh
 ```
 
-The password must be at least 12 characters. There is no default account. Compose binds to `127.0.0.1:39120`; configure the HTTPS reverse proxy before browser access. SQLite, files, plugins, and the AI database persist in `doca_data`.
+The password must be at least 12 characters. There is no default account. Compose binds to `127.0.0.1:39120`; configure an HTTP(S) reverse proxy before browser access. SQLite, files, plugins, and the AI database persist in `doca_data`.
 
 The [complete quick start](https://smartdoca.github.io/doca/#/en/getting-started/quickstart) includes `.env`, the reverse proxy, health checks, administrator recovery, and data preservation.
 
@@ -69,7 +70,7 @@ Open `http://127.0.0.1:39130`. Initialize the administrator with `bash scripts/b
 - [Deployment and configuration](https://smartdoca.github.io/doca/#/en/operations/deployment)
 - [Plugin development](https://smartdoca.github.io/doca/#/en/plugins/plugin-development)
 - [HTTP API](https://smartdoca.github.io/doca/#/en/reference/api); the running application also provides `/api/openapi.json`.
-- [Release notes](https://smartdoca.github.io/doca/#/en/releases/0.1.12)
+- [Release notes](https://smartdoca.github.io/doca/#/en/releases/0.1.13)
 - [Documentation source](docs/README.md)
 
 For a documentation preview, run `pnpm docs:dev` and open `http://127.0.0.1:39140/#/en/`. `pnpm docs:check` verifies bilingual coverage and local links. GitHub Pages setup is in [documentation maintenance](docs/documentation.md).

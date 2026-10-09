@@ -14,6 +14,7 @@ import {
 import { createApp } from "../apps/server/src/app/create-app.js";
 import { completionResponse } from "./ai-mock.js";
 import { readAIDocument } from "@core/workflows/ai-documents.js";
+import { defaultOfficialSkills } from "@core/modules/ai/skills.js";
 
 let db: DB, owner: Actor;
 beforeEach(async () => {
@@ -48,7 +49,7 @@ beforeEach(async () => {
           model: "private-real-model",
           alias: "创作助手",
           enabled: true,
-          maxInput: 32000,
+          maxInput: 64000,
           maxOutput: 4000,
           tools: true,
         },
@@ -160,7 +161,7 @@ const linkReview: Script = ({ toolMessages, prompt }) => {
 async function runJob(
   app: Awaited<ReturnType<typeof createApp>>,
   cookie: string,
-  docId: string,
+  docId: string | null,
   text: string,
 ) {
   const request = (method: any, path: string, payload?: any) =>
@@ -173,7 +174,7 @@ async function runJob(
   const sid = (
     await request("POST", "/ai/sessions", {
       modelId: "test",
-      resourceIds: [docId],
+      resourceIds: docId ? [docId] : [],
     })
   ).json().id;
   const jobId = randomUUID();
@@ -181,8 +182,9 @@ async function runJob(
     id: jobId,
     text,
     modelId: "test",
-    scope: "document",
-    references: [{ resourceId: docId }],
+    scope: docId ? "document" : "all",
+    references: docId ? [{ resourceId: docId }] : [],
+    ...(docId ? {} : { skipApprovals: { create: true } }),
   });
   for (let i = 0; i < 200; i++) {
     const result = (await request("GET", `/ai/sessions/${sid}`)).json();
@@ -327,4 +329,106 @@ it("unknown edit commands return a precise server error the model can fix", asyn
   ).toBe(true);
   const after = await readAIDocument(db, { actor: owner }, doc.id);
   expect(JSON.stringify(after.value)).toContain("修正后的内容");
+}, 60000);
+
+it.each([
+  ["帮我生成一个年会报告的文档模板", true],
+  ["新建采购清单", false],
+])("creates and fills a native table with an automatically supplied manual: %s", async (text, preload) => {
+  const writing = defaultOfficialSkills.find((skill) => skill.id === "writing")!;
+  const calls: string[] = [];
+  let createdId = "";
+  const script: Script = ({ toolMessages, prompt, body }) => {
+    const step = toolMessages.length;
+    if (!step) {
+      expect(prompt.includes(writing.content)).toBe(preload);
+      if (preload) expect(prompt.indexOf(writing.content)).toBeLessThan(prompt.lastIndexOf("【用户要求】"));
+      expect(JSON.stringify(body.messages.filter((message: any) => message.role === "system"))).not.toContain(writing.content);
+      calls.push("document_create");
+      return { name: "document_create", args: { title: "隔离文档模板" } };
+    }
+    const created = JSON.parse(toolMessages[0]);
+    createdId = created.id;
+    expect(createdId).toBeTruthy();
+    expect(created.format).toBe("rich_text");
+    if (!preload) expect(created.editingSkill).toEqual({ id: writing.id, name: writing.name, instructions: writing.content });
+    if (step === 1 || step === 3) {
+      calls.push("document_read");
+      return { name: "document_read", args: { resourceId: createdId } };
+    }
+    if (step === 2) {
+      const read = JSON.parse(toolMessages[1]);
+      expect(read.editingSkill).toBeUndefined();
+      calls.push("rich_text_edit");
+      return { name: "rich_text_edit", args: {
+        resourceId: createdId, seq: read.seq, epochId: read.epochId,
+        operations: [{ type: "insertTable", rows: 2, columns: 2, afterId: read.outline.blocks.at(-1).id }],
+      } };
+    }
+    if (step === 4) {
+      const read = JSON.parse(toolMessages[3]);
+      const table = read.outline.blocks.find((block: any) => block.type === "table");
+      expect(table.rows).toHaveLength(2);
+      calls.push("rich_text_edit");
+      return { name: "rich_text_edit", args: {
+        resourceId: createdId, seq: read.seq, epochId: read.epochId,
+        operations: table.rows[0].cells.map((cell: any, index: number) => ({
+          type: "setCellContent", tableId: table.id, cellId: cell.id,
+          children: [{ id: randomUUID(), type: "paragraph", children: [{ text: ["指标", "目标值"][index] }] }],
+        })),
+      } };
+    }
+    return { text: "文档模板已保存。" };
+  };
+  const review: Script = ({ toolMessages }) => {
+    if (!toolMessages.length) return { name: "document_read", args: { resourceId: createdId } };
+    const read = JSON.parse(toolMessages.at(-1));
+    if (read.accepted) return { text: "验收完成。" };
+    const saved = String(read.content).includes("指标") && String(read.content).includes("目标值");
+    return { name: "submit_review", args: {
+      verdict: saved ? "pass" : "revise", summary: "核对隔离模板表格",
+      checks: [{ requirement: "原生表格内容已保存", passed: saved, evidence: String(read.content).slice(0, 500) }],
+    } };
+  };
+  const { app, cookie } = await setup(scriptedAI(script, review));
+  try {
+    const job = await runJob(app, cookie, null, text);
+    expect(job.status, job.error ?? JSON.stringify(job.progress?.events)).toBe("completed");
+    expect(job.progress.events.filter((event: any) => event.kind === "tool" && event.status === "error")).toEqual([]);
+    expect(calls).toEqual(["document_create", "document_read", "rich_text_edit", "document_read", "rich_text_edit"]);
+    const saved = await readAIDocument(db, { actor: owner }, createdId);
+    const table = (saved.value as any[]).find((block) => block.type === "table");
+    expect(table.children[0].children.map((cell: any) => cell.children[0].children[0].text)).toEqual(["指标", "目标值"]);
+  } finally {
+    await app.close();
+  }
+}, 60000);
+
+it("supplies the actual document manual on a read when the request did not identify its format", async () => {
+  const writing = defaultOfficialSkills.find((skill) => skill.id === "writing")!;
+  let targetId = "";
+  const script: Script = ({ toolMessages, prompt }) => {
+    if (!toolMessages.length) {
+      expect(prompt).not.toContain(writing.content);
+      return { name: "document_read", args: { resourceId: targetId } };
+    }
+    const read = JSON.parse(toolMessages[0]);
+    expect(read.editingSkill).toEqual({ id: writing.id, name: writing.name, instructions: writing.content });
+    if (toolMessages.length === 1) return { name: "rich_text_edit", args: {
+      resourceId: targetId, seq: read.seq, epochId: read.epochId,
+      operations: [{ type: "append", text: "说明详见 [Doca 官网](https://doca.example.com)" }],
+    } };
+    return { text: "已补充说明。" };
+  };
+  const { app, cookie, doc } = await setup(scriptedAI(script, linkReview));
+  targetId = doc.id;
+  try {
+    const job = await runJob(app, cookie, null, "补充一段说明");
+    expect(job.status, job.error).toBe("completed");
+    expect(job.progress.review.verdict).toBe("pass");
+    const saved = await readAIDocument(db, { actor: owner }, doc.id);
+    expect(JSON.stringify(saved.value)).toContain("https://doca.example.com");
+  } finally {
+    await app.close();
+  }
 }, 60000);

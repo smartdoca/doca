@@ -1,0 +1,62 @@
+diff --git a/dist/src-BNB8ko_o.js b/dist/src-BNB8ko_o.js
+index 974d62a614b404ce25462157e1591de3039012a8..6be3b624f09323129301f995d9f6098ef07758bf 100644
+--- a/dist/src-BNB8ko_o.js
++++ b/dist/src-BNB8ko_o.js
+@@ -24159,11 +24159,13 @@ var ObservationStrategy = class ObservationStrategy {
+ 			const processed = await this.process(output, existingObservations);
+ 			await this.persist(processed);
+ 			await this.emitEndMarkers(cycleId, processed);
+-			if (this.needsReflection) await this.deps.reflector.maybeReflect({
+-				record: {
+-					...record,
+-					activeObservations: processed.observations
+-				},
++			if (this.needsReflection) {
++				// Reflect only the complete record committed by this observation.
++				// Passing the pre-observation snapshot regresses its cursor and totals.
++				const freshRecord = await this.storage.getObservationalMemory(record.threadId, record.resourceId);
++				if (!freshRecord || freshRecord.id !== record.id || freshRecord.scope !== record.scope || freshRecord.threadId !== record.threadId || freshRecord.resourceId !== record.resourceId || freshRecord.activeObservations !== processed.observations || !freshRecord.lastObservedAt || freshRecord.lastObservedAt.getTime() !== processed.lastObservedAt.getTime() || freshRecord.observationTokenCount !== processed.observationTokens || JSON.stringify(freshRecord.observedMessageIds) !== JSON.stringify(processed.observedMessageIds)) throw new Error("Observational memory changed after observation; refusing to reflect a stale record");
++				await this.deps.reflector.maybeReflect({
++				record: freshRecord,
+ 				observationTokens: processed.observationTokens,
+ 				threadId,
+ 				writer,
+@@ -24176,6 +24178,7 @@ var ObservationStrategy = class ObservationStrategy {
+ 				requestContext,
+ 				observabilityContext: this.opts.observabilityContext
+ 			});
++			}
+ 			return {
+ 				observed: true,
+ 				usage: output.usage,
+diff --git a/dist/src-DjCR8GJe.cjs b/dist/src-DjCR8GJe.cjs
+index 46e70ab59793204261225ae7602855d66d697a05..278c27ba28a11c702f13b2dadd497d68f9f7d046 100644
+--- a/dist/src-DjCR8GJe.cjs
++++ b/dist/src-DjCR8GJe.cjs
+@@ -24181,11 +24181,13 @@ var ObservationStrategy = class ObservationStrategy {
+ 			const processed = await this.process(output, existingObservations);
+ 			await this.persist(processed);
+ 			await this.emitEndMarkers(cycleId, processed);
+-			if (this.needsReflection) await this.deps.reflector.maybeReflect({
+-				record: {
+-					...record,
+-					activeObservations: processed.observations
+-				},
++			if (this.needsReflection) {
++				// Reflect only the complete record committed by this observation.
++				// Passing the pre-observation snapshot regresses its cursor and totals.
++				const freshRecord = await this.storage.getObservationalMemory(record.threadId, record.resourceId);
++				if (!freshRecord || freshRecord.id !== record.id || freshRecord.scope !== record.scope || freshRecord.threadId !== record.threadId || freshRecord.resourceId !== record.resourceId || freshRecord.activeObservations !== processed.observations || !freshRecord.lastObservedAt || freshRecord.lastObservedAt.getTime() !== processed.lastObservedAt.getTime() || freshRecord.observationTokenCount !== processed.observationTokens || JSON.stringify(freshRecord.observedMessageIds) !== JSON.stringify(processed.observedMessageIds)) throw new Error("Observational memory changed after observation; refusing to reflect a stale record");
++				await this.deps.reflector.maybeReflect({
++				record: freshRecord,
+ 				observationTokens: processed.observationTokens,
+ 				threadId,
+ 				writer,
+@@ -24198,6 +24200,7 @@ var ObservationStrategy = class ObservationStrategy {
+ 				requestContext,
+ 				observabilityContext: this.opts.observabilityContext
+ 			});
++			}
+ 			return {
+ 				observed: true,
+ 				usage: output.usage,

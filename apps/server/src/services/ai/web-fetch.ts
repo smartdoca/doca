@@ -10,6 +10,38 @@ import type { AIConfig } from "@core/modules/ai/config.js";
 const maxBytes = 2 * 1024 * 1024;
 export const webFileLimit = 20 * 1024 * 1024;
 export const webPageLimit = 200000;
+const webFileFailureReasons = new WeakMap<
+  Error,
+  "temporary-http" | "temporary-network"
+>();
+/** Private runtime provenance only; public errors and persisted records stay unchanged. */
+export function isRetryableWebFileFailure(error: unknown): boolean {
+  return error instanceof Error && webFileFailureReasons.has(error);
+}
+const temporaryNetworkCodes = new Set([
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EAI_AGAIN",
+  "EPIPE",
+  "ERR_STREAM_PREMATURE_CLOSE",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+  "UND_ERR_SOCKET",
+]);
+function temporaryNetworkFailure(error: unknown): boolean {
+  for (let depth = 0; depth < 4 && error instanceof Error; depth++) {
+    if (error.name === "TimeoutError") return true;
+    const code = (error as NodeJS.ErrnoException).code;
+    if (typeof code === "string" && temporaryNetworkCodes.has(code))
+      return true;
+    error = error.cause;
+  }
+  return false;
+}
 export function publicWebUrl(value: string) {
   let url: URL;
   try {
@@ -99,13 +131,15 @@ function makeTransport(kind: "page" | "file"): PageTransport {
           let bytes = 0;
           res.on("data", (part: Buffer) => {
             bytes += part.length;
-            if (bytes > limit)
-              res.destroy(
-                new Error(
-                  kind === "file" ? "file too large" : "page too large",
-                ),
+            if (bytes > limit) {
+              const error = new Error(
+                kind === "file" ? "file too large" : "page too large",
               );
-            else parts.push(part);
+              // Preserve the size failure even if destroying the socket also
+              // emits a network error; validation failures never authorize retries.
+              reject(error);
+              res.destroy(error);
+            } else parts.push(part);
           });
           res.on("end", () =>
             resolve({
@@ -133,7 +167,12 @@ export function extractWebText(html: string, base: string) {
   let title = "",
     titleDepth = 0,
     skip = 0;
-  const stack: { skip: boolean; title: boolean; main: boolean; obsolete: boolean }[] = [];
+  const stack: {
+    skip: boolean;
+    title: boolean;
+    main: boolean;
+    obsolete: boolean;
+  }[] = [];
   let mainDepth = 0;
   const all: string[] = [],
     main: string[] = [],
@@ -159,8 +198,11 @@ export function extractWebText(html: string, base: string) {
         const isTitle = name === "title",
           isMain =
             name === "main" || name === "article" || attrs.role === "main";
-        const obsolete = /^(del|s|strike)$/.test(name) ||
-          /text-decoration(?:-line)?\s*:[^;]*line-through/i.test(attrs.style ?? "");
+        const obsolete =
+          /^(del|s|strike)$/.test(name) ||
+          /text-decoration(?:-line)?\s*:[^;]*line-through/i.test(
+            attrs.style ?? "",
+          );
         stack.push({ skip: hidden, title: isTitle, main: isMain, obsolete });
         if (hidden) skip++;
         if (isTitle) titleDepth++;
@@ -232,6 +274,7 @@ async function fetchPublicResponse(
     request?: PageTransport;
   },
   options: {
+    kind: "page" | "file";
     timeoutMs: number;
     defaultRequest: PageTransport;
     intranetMessage: string;
@@ -325,15 +368,25 @@ async function fetchPublicResponse(
         continue;
       }
       if ([401, 403].includes(res.status)) fail(502, options.loginMessage);
-      if (res.status < 200 || res.status >= 300)
-        fail(502, options.statusMessage(res.status));
+      if (res.status < 200 || res.status >= 300) {
+        const error = new AppError(502, options.statusMessage(res.status));
+        if (
+          options.kind === "file" &&
+          (res.status === 429 || (res.status >= 500 && res.status <= 599))
+        )
+          webFileFailureReasons.set(error, "temporary-http");
+        throw error;
+      }
       return { url, res };
     }
     fail(502, "网页跳转次数过多");
   } catch (error) {
     signal?.throwIfAborted();
     if (error instanceof AppError) throw error;
-    fail(502, options.fallbackMessage);
+    const publicError = new AppError(502, options.fallbackMessage);
+    if (options.kind === "file" && temporaryNetworkFailure(error))
+      webFileFailureReasons.set(publicError, "temporary-network");
+    throw publicError;
   }
 }
 
@@ -346,6 +399,7 @@ async function fetchBuiltinWebPage(
   } = {},
 ) {
   const { url, res } = await fetchPublicResponse(value, signal, dependencies, {
+    kind: "page",
     timeoutMs: 20000,
     defaultRequest: requestPage,
     intranetMessage: "链接指向本机或内网，无法作为公开网页读取",
@@ -416,6 +470,7 @@ export async function fetchWebFile(
   } = {},
 ) {
   const { url, res } = await fetchPublicResponse(value, signal, dependencies, {
+    kind: "file",
     timeoutMs: 60000,
     defaultRequest: requestAsset,
     intranetMessage: "链接指向本机或内网，无法作为公开文件下载",

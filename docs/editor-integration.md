@@ -2,15 +2,15 @@
 
 [中文](editor-integration.zh-CN.md)
 
-Host 0.1.10 integrates five editors. Use actual installed exports; target interfaces and gaps are not existing APIs. Responsibilities are detailed in the [integration reference](../skills/doca-editor-integration/references/integration.md) and [collaboration contract](collaboration-sdk-contract.md).
+Host 0.1.11 integrates five editors. Use actual installed exports; target interfaces and gaps are not existing APIs. Responsibilities are detailed in the [integration reference](../skills/doca-editor-integration/references/integration.md) and [collaboration contract](collaboration-sdk-contract.md).
 
 ## Installed packages and host adapters
 
 | Format | Installed package | Host entry |
 | --- | --- | --- |
-| Rich text | @smartdoca/slate 0.4.12 | document-editor.tsx |
+| Rich text | @smartdoca/slate 0.4.13 | document-editor.tsx |
 | Markdown | @smartdoca/markdown 0.4.3 | markdown-editor.tsx |
-| Spreadsheet | @smartdoca/sheet 0.2.0-rc.17 | spreadsheet-editor.tsx |
+| Spreadsheet | @smartdoca/sheet 0.2.0-rc.18 | spreadsheet-editor.tsx |
 | Canvas | @smartdoca/canvas 0.4.2 | canvas-editor.tsx |
 | Slides | @smartdoca/slides 0.3.0-alpha.2 | presentation-editor.tsx |
 
@@ -21,6 +21,8 @@ Entries are in the [document feature](../apps/web/src/features/documents). Packa
 Internal references retain stable UUIDs and relative `#/r/{id}` locations. Mentions retain user UUIDs and obey current directory policy. Forward/reverse references recheck reading permission; references grant no access.
 
 Images, attachments, and materials use host resource callbacks. Progress, cancel, errors, and late callbacks stay bound to the original target. Downloads authorize through `assets/:id/content?download=1`; physical storage locations are not durable references.
+
+Rich text and spreadsheets pass stable `onAttachmentPreview` callbacks to the installed editors. Rich text supplies `AttachmentElement.path/name/mimeType`; spreadsheet native inline attachments supply `event.node.refId/label`. The host resolves asset UUIDs to permission-checked content endpoints and opens the shared `DocumentFilePreview`, also in readonly/history/trash views with their existing access flags. Rich text selects an attachment on the first edit-mode click and previews on the next click or its preview button; readonly previews on the first click. Spreadsheet previews clicks on the native attachment label. The existing whole-cell object renderer remains available. Preview does not change the model, collaboration session, or persisted format.
 
 Find/replace uses editor models or native capabilities. Rich text uses a host Slate adapter; other formats use installed package find/replace or native panels. Readonly, disconnected, and presentation modes offer no content replacement. There is no generic public arbitrary-editor mutation handle or promise of identical text ranges/regex across formats.
 

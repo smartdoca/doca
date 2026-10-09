@@ -35,9 +35,18 @@ docker compose up -d --no-deps --force-recreate --pull never --no-build doca
 
 ## S3 与 CDN
 
-`provider:"s3"` 的环境 JSON 配置需要 `bucket`、`region`、`forcePathStyle` 和 `credentials:{accessKeyId,secretAccessKey,sessionToken?}`，可选 `endpoint` 为 HTTPS 根 origin。部署者控制目标和网络出口，管理界面不配置密钥或端点。桶保持私有，凭据只授予宿主和插件对应前缀所需的读写删除权限。配置校验不代表真实连接成功。
+`provider:"s3"` 的环境 JSON 配置需要 `bucket`、`region`、`forcePathStyle` 和 `credentials:{accessKeyId,secretAccessKey,sessionToken?}`，可选 `endpoint` 为 HTTP(S) 根 origin，不带账号密码、子路径、查询参数或片段。HTTP 用于部署者显式配置的可信内网端点；应用不会解析 DNS 来自动判定目标是否为内网。部署者控制目标和网络出口，管理界面不配置密钥或端点。桶保持私有，凭据只授予宿主和插件对应前缀所需的读写删除权限。配置校验不代表真实连接成功。
 
-可选 `cdn:{domain,keyPairId,privateKey}` 使用 CloudFront 签名 URL 协议。部署私有 S3 源站、OAC 和要求签名的可信密钥组；CDN 保留完整对象 key、Content-Type 和 Content-Disposition。环境变量提供 HTTPS 分配 origin 和 PEM 签名私钥。宿主先检查最新 ACL，再发放 60 秒有效链接。撤权后不再发新链接，已发链接在到期前可能有效；已下载字节无法撤回。
+RustFS 与 Doca 位于共享容器网络时，先创建私有桶，再配置 S3 API 监听器（默认端口 `9000`，控制台为 `9001`），启用路径式寻址。`region` 与 `RUSTFS_REGION` 一致，默认 `us-east-1`：
+
+```dotenv
+DOCA_FILE_STORE_ID=cloud
+DOCA_FILE_STORES_JSON='{"version":1,"stores":{"cloud":{"provider":"s3","bucket":"doca-files","region":"us-east-1","endpoint":"http://rustfs:9000","forcePathStyle":true,"credentials":{"accessKeyId":"replace-me","secretAccessKey":"replace-me"}}}}'
+```
+
+使用 Doca 容器可访问的主机名或内网地址。站点、静态资源和 CDN 来源也支持 HTTP(S)。见 [RustFS S3 文档](https://docs.rustfs.com/zh/administration/protocols/s3)。示例用于新安装，修改已有存储的端点不会搬运对象。
+
+可选 `cdn:{domain,keyPairId,privateKey}` 使用 CloudFront 签名 URL 协议。部署私有 S3 源站、OAC 和要求签名的可信密钥组；CDN 保留完整对象 key、Content-Type 和 Content-Disposition。环境变量提供 HTTP(S) 分配 origin 和 PEM 签名私钥。宿主先检查最新 ACL，再发放 60 秒有效链接。撤权后不再发新链接，已发链接在到期前可能有效；已下载字节无法撤回。
 
 未使用 CDN 时，宿主代理私有云文件，不向浏览器返回存储秘密。其他 CDN 签名协议需要新增适配器，不提供永久公开 URL 降级。密钥轮换需保留被引用的存储 ID 及其字节访问能力；轮换不是数据迁移。
 

@@ -12,7 +12,7 @@ import {
   authorizeFileFolder,
   authorizeFileItem,
 } from "../access/file-access.js";
-import { knowledgeAssistantAccess } from "../knowledge/system.js";
+
 import { AppError, fail } from "../../shared/errors.js";
 
 export async function recordActivity(
@@ -38,40 +38,10 @@ export async function recordActivity(
     )
     .execute();
 }
-export async function setAssistantFavorite(
-  db: DB,
-  actor: Actor,
-  id: string,
-  favorite: boolean,
-) {
-  await activeActor(db, actor);
-  const bot = await db
-    .selectFrom("knowledge_assistants")
-    .selectAll()
-    .where("id", "=", id)
-    .executeTakeFirst();
-  if (!bot || !(await knowledgeAssistantAccess(db, actor, bot)).accessible)
-    fail(404, "问答不存在");
-  await db
-    .insertInto("workspace_activity")
-    .values({
-      user_id: actor.id,
-      resource_kind: "assistant",
-      resource_id: id,
-      visited_at: null,
-      favorite: Number(favorite),
-    })
-    .onConflict((oc) =>
-      oc
-        .columns(["user_id", "resource_kind", "resource_id"])
-        .doUpdateSet({ favorite: Number(favorite) }),
-    )
-    .execute();
-  return { favorite };
-}
+
 export type RecentItem = {
   id: string;
-  kind: "document" | "library" | "assistant" | "folder" | "file";
+  kind: "document" | "library" | "folder" | "file";
   title: string;
   visited_at: string;
   updated_at: string;
@@ -100,7 +70,6 @@ export async function recentActivity(
   const pattern = `%${(input.q ?? "").trim().toLowerCase().replaceAll("!", "!!").replaceAll("%", "!%").replaceAll("_", "!_")}%`;
   const union = sql`
     select r.id,r.kind,r.title,v.visited_at,r.updated_at from resource_visits v join resources r on r.id=v.resource_id where v.user_id=${actor.id} and ${accessibleQuery(sql.ref("r.id"), actor)}
-    union all select b.id,'assistant',b.title,v.visited_at,b.updated_at from knowledge_assistant_users v join knowledge_assistants b on b.id=v.assistant_id where v.user_id=${actor.id} and v.visited_at is not null
     union all select f.id,'folder',f.name,v.visited_at,f.updated_at from workspace_activity v join file_folders f on f.id=v.resource_id where v.user_id=${actor.id} and v.resource_kind='folder' and v.visited_at is not null and f.deleted_at is null
     union all select f.id,'file',f.name,v.visited_at,f.updated_at from workspace_activity v join file_items f on f.id=v.resource_id where v.user_id=${actor.id} and v.resource_kind='file' and v.visited_at is not null and f.deleted_at is null`;
   const items: RecentItem[] = [];
@@ -147,18 +116,6 @@ export async function recentActivity(
           isPublic = ["public", "authenticated"].includes(
             visibility.rows[0]?.v ?? "",
           );
-        } else if (row.kind === "assistant") {
-          const bot = await db
-            .selectFrom("knowledge_assistants")
-            .selectAll()
-            .where("id", "=", row.id)
-            .executeTakeFirstOrThrow();
-          if (!(await knowledgeAssistantAccess(db, actor, bot)).accessible)
-            continue;
-          isPublic = ["public", "authenticated"].includes(
-            bot.visibility ?? "invited",
-          );
-          href = `#/knowledge-assistants?bot=${row.id}`;
         } else if (row.kind === "folder") {
           await authorizeFileFolder(db, actor, row.id);
           const pub = await sql<{

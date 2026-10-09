@@ -1,3 +1,4 @@
+import { KnowledgeBooksPage } from "@web/features/knowledge-books/knowledge-books.js";
 import { PluginSlot } from "@web/plugins/extensions.js";
 import { extensionViews } from "@web/plugins/extension-ui.js";
 import { MobilePluginPage } from "@web/plugins/mobile-page.js";
@@ -5,10 +6,9 @@ import { NavigationArea, MoreNavigation, LeftNavigation, navigateToDefaultHome, 
 import { isAdminNavigationPath } from "@smartdoca/web-plugin-registry";
 import { WorkspaceHome } from "@web/features/workspace/home.js";
 import { DiscoveryPage } from "@web/features/discovery/discovery.js";
-import { KnowledgePublicPage } from "@web/features/knowledge/knowledge-public-page.js";
+
 import { pluginRouteScope } from "./plugin-route-scope.js";
-import { KnowledgeCurationToggle } from "@web/features/documents/library-relations.js";
-import { KnowledgeAssistants } from "@web/features/knowledge/knowledge-assistants.js";
+
 import type { MessageKey } from "@doca/i18n";
 import { AIProvider } from "@web/features/ai/ai-context.js";
 import { useI18n } from "@web/shared/i18n.js";
@@ -36,15 +36,7 @@ import { LibraryFavorite } from "@web/features/documents/library-favorite.js";
 import { DocumentReferences } from "@web/features/documents/document-references.js";
 import { PinnedDocuments } from "@web/features/workspace/pinned-nav.js";
 import { DocumentReactionButtons } from "@web/features/documents/document-reactions.js";
-import {
-  LibrarySettings,
-  LibraryLanding,
-  LibrarySystemPage,
-  LibraryQaPage,
-  librarySettingsUrl,
-  librarySystemUrl,
-  libraryQaUrl,
-} from "@web/features/documents/library.js";
+import { LibrarySettings, LibraryLanding, LibrarySystemPage, librarySettingsUrl, librarySystemUrl } from "@web/features/documents/library.js";
 import {
   CommentComposer,
   CommentMessage,
@@ -55,31 +47,7 @@ import { realtime } from "@web/features/documents/realtime.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
 import { setCurrentUserId } from "@web/shared/components/user-mention.js";
 import React, { lazy, Suspense, useEffect, useState, useRef, useMemo } from "react";
-import {
-  BookOpen,
-  Sparkles,
-  Plus,
-  Search,
-  Clock,
-  Users,
-  Trash2,
-  Settings,
-  Bell,
-  MoreHorizontal,
-  ShieldCheck,
-  ThumbsUp,
-  LogOut,
-  FolderOpen,
-  ArrowLeft,
-  Home,
-  PanelLeft,
-  LockKeyhole,
-  UserRound,
-  BookOpenCheck,
-  Bot,
-  Network,
-  MessageSquare,
-} from "lucide-react";
+import { BookOpen, Sparkles, Plus, Search, Clock, Users, Trash2, Settings, Bell, MoreHorizontal, ShieldCheck, ThumbsUp, LogOut, FolderOpen, ArrowLeft, Home, PanelLeft, LockKeyhole, UserRound, BookOpenCheck, Network, MessageSquare } from "lucide-react";
 import {
   api,
   roleRank,
@@ -138,6 +106,7 @@ const DocumentEditor = lazy(() =>
 );
 
 const titleKeys: Record<string, MessageKey> = {
+  "knowledge-books": "books.title",
   home: "workspace.home",
   documents: "home.title",
   discover: "workspace.publicResources",
@@ -145,7 +114,7 @@ const titleKeys: Record<string, MessageKey> = {
   todos: "nav.tickets",
   tickets: "nav.tickets",
   ai: "nav.assistant",
-  "knowledge-assistants": "knowledge.assistants",
+
   preferences: "account.settings",
   shared: "nav.shared",
   favorites: "nav.favorites",
@@ -174,7 +143,7 @@ type ShareInvitation = {
   pending: true;
   id: string;
   title: string;
-  kind: "document" | "library" | "assistant";
+  kind: "document" | "library";
   role: string;
 };
 export function App() {
@@ -263,7 +232,7 @@ function WorkspaceApp() {
               }
             }
             try { sessionStorage.removeItem("doca.pending-share-token"); } catch {}
-            location.hash = r.kind === "assistant" ? "/knowledge-assistants?bot=" + r.id : "/r/" + r.id;
+            location.hash = "/r/" + r.id;
           }
         }
       })
@@ -354,7 +323,7 @@ function WorkspaceApp() {
   const canManageLibrary = roleRank(libraryRole) >= 4;
   const librarySettingsPage = libraryView === "settings" && canManageLibrary;
   const librarySystemPage = libraryView === "system" && canManageLibrary;
-  const libraryQaPage = libraryView === "qa";
+
   const currentDetail = detail?.resource.id === resourceId ? detail : null;
   const sharedPersonalView = !!(
     bootstrap?.user &&
@@ -391,9 +360,7 @@ function WorkspaceApp() {
         ? t("nav.librarySettings")
         : librarySystemPage && currentDetail.resource.kind === "library"
           ? t("nav.librarySystem")
-          : libraryQaPage && currentDetail.resource.kind === "library"
-            ? t("nav.libraryQa")
-            : currentDetail.resource.title
+          : currentDetail.resource.title
       : t("nav.opening")
     : ticketsPage
       ? t("nav.tickets")
@@ -587,6 +554,7 @@ function WorkspaceApp() {
       controller.signal,
     )
       .then(async (d) => {
+        if (d.resource.knowledgeBook) { location.hash = `/knowledge-books/${d.resource.id}`; return; }
         if (targetComment && /^[a-f0-9-]{36}$/.test(targetComment)) {
           try {
             const context = await api<{ items: Detail["comments"] }>(
@@ -760,10 +728,7 @@ function WorkspaceApp() {
         </section>
       </main>
     );
-  const publicBotId = new URLSearchParams(hash.split("?")[1]).get("bot");
-  const embeddedKnowledgeBot = /^\/knowledge\/embed\/([a-f0-9-]{36})$/.exec(location.pathname)?.[1];
-  if(embeddedKnowledgeBot)return <KnowledgePublicPage botId={embeddedKnowledgeBot} channel="embed" authenticated={!!bootstrap.user}/>;
-  if(!bootstrap.user&&scope==="knowledge-assistants"&&publicBotId&&/^[a-f0-9-]{36}$/.test(publicBotId))return <KnowledgePublicPage botId={publicBotId}/>;
+
   if (!bootstrap.user && !resourceId)
     return (
       <Login
@@ -771,6 +736,7 @@ function WorkspaceApp() {
         logged={async () => {
           setBootstrap(await api("/bootstrap"));
           const token = rememberedShareToken();
+          if (hash.split("?")[0] === "#/shared-files/join") return;
           if(token) location.hash = "/s/" + token; else await navigateToDefaultHome().catch(()=>{location.hash="/home"});
         }}
       />
@@ -783,7 +749,7 @@ function WorkspaceApp() {
           <h1 id="share-invitation-title">{t("shell.inviteTitle")}</h1>
           <p>
             {t("shell.inviteBody", {
-              kind: shareInvitation.kind === "assistant" ? t("nav.libraryQa") : shareInvitation.kind === "library" ? t("shell.inviteKind.library") : t("shell.inviteKind.document"),
+              kind: shareInvitation.kind === "library" ? t("shell.inviteKind.library") : t("shell.inviteKind.document"),
               title: shareInvitation.title,
               role: shareInvitation.role,
             })}
@@ -807,7 +773,7 @@ function WorkspaceApp() {
                   .then((r) => {
                     setShareInvitation(null);
                     try { sessionStorage.removeItem("doca.pending-share-token"); } catch {}
-                    location.hash = r.kind === "assistant" ? "/knowledge-assistants?bot=" + r.id : "/r/" + r.id;
+                    location.hash = "/r/" + r.id;
                   })
                   .catch((e) => setError(e.message));
               }}
@@ -1075,7 +1041,7 @@ function WorkspaceApp() {
             userId={user?.id ?? "anonymous"}
             selected={resourceId}
             libraryId={currentLibraryId}
-            knowledgeEnabled={!!libraryInfo?.ai_curated && roleRank(libraryInfo.role) >= 4}
+            knowledgeEnabled={false}
             accountActions={!!user}
             create={(r) => create("document", r)}
             changed={() => setRefresh((n) => n + 1)}
@@ -1108,7 +1074,8 @@ function WorkspaceApp() {
                 <ArrowLeft size={19} />
               </BackLink>
             )}
-            {(librarySystemPage || libraryQaPage || (!resourceId && scope === "knowledge-assistants")) && <div className="files-topbar-title knowledge-topbar-title">{librarySystemPage ? <BookOpenCheck size={20}/> : <Bot size={20}/>}<h1>{t(librarySystemPage ? "nav.librarySystem" : "knowledge.assistants")}</h1>{librarySystemPage && detail && <KnowledgeCurationToggle detail={detail} changed={reload}/>}</div>}
+            {librarySystemPage && <div className="files-topbar-title knowledge-topbar-title"><BookOpenCheck size={20}/><h1>{t("nav.librarySystem")}</h1></div>}
+            {!resourceId && scope === "knowledge-books" && <div id="knowledge-books-header-title" />}
             {!resourceId && scope === "ai" && <div id="ai-header-slot" />}
 
             {!resourceId && pluginRoute && (scope === "files" || scope === "shared-files") && user && (
@@ -1197,6 +1164,7 @@ function WorkspaceApp() {
             </div>}
           </div>
           <div className="inline document-topbar-actions">
+            {!resourceId && scope === "knowledge-books" && <div id="knowledge-books-header-actions" />}
 
             {!resourceId && scope === "shared-files" && sharedFolderId && <span id="files-header-actions" />}
             {resourceId &&
@@ -1238,11 +1206,11 @@ function WorkspaceApp() {
                   }
                 </>
               )}
+
             {user ? (
               <div className="global-header-tools">
                 <NavigationArea slot="web.topRight" action="other" />
                 <MoreNavigation />
-                {scope === "knowledge-assistants" && <span id="knowledge-share-slot" />}
 
                 <Notifications />
                 <LocaleSwitch />
@@ -1266,10 +1234,10 @@ function WorkspaceApp() {
           </div>
         </header>
         <AIDocumentLayout
-          disabled={librarySystemPage || libraryQaPage || scope === "knowledge-assistants"}
+          disabled={false}
           format={detail?.resource.kind === "document" ? detail.resource.format : undefined}
           surface={
-            !resourceId && user && (scope === "files" || (scope === "shared-files" && !!sharedFolderId))
+            scope === "knowledge-books" ? "knowledge" : !resourceId && user && (scope === "files" || (scope === "shared-files" && !!sharedFolderId))
               ? "files"
               : undefined
           }
@@ -1284,6 +1252,8 @@ function WorkspaceApp() {
             "main-scroll" +
             (pluginRoute
               ? " plugin-scroll-host"
+              : !resourceId && scope === "knowledge-books"
+                ? " knowledge-books-scroll-host"
               : !resourceId && scope === "home"
                 ? " workspace-home-scroll"
                 : !resourceId && scope !== "trash"
@@ -1307,8 +1277,8 @@ function WorkspaceApp() {
             <><NavigationArea slot="web.home"/><WorkspaceHome name={user.display_name} /></>
           ) : !resourceId && (scope === "discover" || scope === "collected") && user ? (
             <DiscoveryPage key={scope + hash} collected={scope === "collected"} />
-          ) : !resourceId && scope === "knowledge-assistants" && user ? (
-            <KnowledgeAssistants />
+          ) : !resourceId && scope === "knowledge-books" && (user || /^#\/knowledge-books\/[0-9a-f-]{36}/i.test(hash)) ? (
+            <KnowledgeBooksPage id={hash.replace(/^#\/knowledge-books\/?/, "").split("?")[0] || undefined} />
           ) : !resourceId && scope === "ai" ? (
             <AIChat full />
           ) : ticketsPage ? (
@@ -1323,8 +1293,6 @@ function WorkspaceApp() {
                     <LibrarySettings detail={detail} changed={reload} />
                   ) : librarySystemPage ? (
                     <LibrarySystemPage detail={detail} changed={reload} />
-                  ) : libraryQaPage ? (
-                    <LibraryQaPage detail={detail} changed={reload} />
                   ) : (
                     <LibraryLanding
                       resource={detail.resource}

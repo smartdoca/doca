@@ -140,7 +140,7 @@ export function WorkspaceHome({ name }: { name: string }) {
             </h2>
           </header>
           <div className="home-tabs" role="tablist">
-            {["", "document", "library", "assistant", "folder", "file"].map(
+            {["", "document", "library", "folder", "file"].map(
               (k) => (
                 <button
                   key={k}
@@ -192,9 +192,7 @@ export function WorkspaceHome({ name }: { name: string }) {
                   ? activityIcons[item.icon]
                   : item.kind === "library"
                     ? BookOpen
-                    : item.kind === "assistant"
-                      ? Bot
-                      : item.kind === "folder"
+                    : item.kind === "folder"
                         ? FolderOpen
                         : File;
               return (
@@ -301,7 +299,7 @@ export function WorkspaceHome({ name }: { name: string }) {
                   {t(
                     group.kind === "tickets"
                       ? "workspace.tickets"
-                      : "workspace.curation",
+                      : "books.humanTasks",
                   )}{" "}
                   <span>
                     {group.status === "ready"
@@ -326,7 +324,7 @@ export function WorkspaceHome({ name }: { name: string }) {
                     href={
                       group.kind === "tickets"
                         ? "#/tickets"
-                        : group.items[5]!.href
+                        : "#/knowledge-books/tasks"
                     }
                   >
                     {t("workspace.viewMore")}

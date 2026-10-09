@@ -41,9 +41,7 @@ type Item = {
 };
 type Page = { items: Item[]; total: number; nextOffset: number | null };
 const resourceHref = (item: Item) =>
-  item.href ?? (item.kind === "assistant"
-    ? `#/knowledge-assistants?bot=${item.id}`
-    : item.kind === "folder"
+  item.href ?? (item.kind === "folder"
       ? `#/shared-files/${item.id}`
       : `#/r/${item.id}`);
 export function DiscoveryPage({ collected: initialCollected = false }: { collected?: boolean }) {

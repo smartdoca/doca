@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 import { resolve } from "node:path";
 import { expect, it } from "vitest";
 import {
@@ -85,7 +86,26 @@ it("rejects unversioned, unknown, partial, or mixed-provider configurations", ()
 });
 
 it.each([
-  "http://store.example",
+  "http://rustfs:9000",
+  "http://10.0.0.10:9000",
+  "http://[fd00::1]:9000",
+  "https://store.example",
+])("accepts explicit HTTP(S) deployment endpoint %j", (endpoint) => {
+  const config = parseFileStoreEnvironment(
+    environment({ current: { ...s3, endpoint, forcePathStyle: true } }),
+  );
+  expect(configuredFileStore(config, "current")).toMatchObject({
+    endpoint,
+    forcePathStyle: true,
+  });
+});
+
+it.each([
+  "ftp://store.example",
+  "http://user:secret@rustfs:9000",
+  "http://rustfs:9000/path",
+  "http://rustfs:9000/?secret=token",
+  "http://rustfs:9000/#token",
   "https://user:secret@store.example",
   "https://store.example/path",
   "https://store.example/?secret=token",
@@ -153,6 +173,35 @@ it("rejects malformed CDN signing keys before startup without exposing their val
             keyPairId: "test",
             privateKey: invalidKey,
           },
+        },
+      }),
+    ),
+  ).toThrow("Invalid file storage configuration");
+});
+
+it("accepts HTTP(S) CDN origins with signing keys and rejects other protocols", () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+  });
+  const store = {
+    ...s3,
+    endpoint: "http://rustfs:9000",
+    cdn: { domain: "https://cdn.example", keyPairId: "test", privateKey },
+  };
+  for (const domain of ["http://cdn.internal", "https://cdn.example"])
+    expect(() =>
+      parseFileStoreEnvironment(
+        environment({ current: { ...store, cdn: { ...store.cdn, domain } } }),
+      ),
+    ).not.toThrow();
+  expect(() =>
+    parseFileStoreEnvironment(
+      environment({
+        current: {
+          ...store,
+          cdn: { ...store.cdn, domain: "ftp://cdn.example" },
         },
       }),
     ),

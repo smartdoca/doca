@@ -1,4 +1,5 @@
 import { runAssetUpload } from "./upload-queue.js";
+import { apiErrorMessage } from "./system-errors.js";
 
 export interface User {
   public_id?: string;
@@ -24,12 +25,11 @@ export interface Bootstrap {
   plugins: { id: string; version: string }[];
 }
 export interface Resource {
+  knowledgeBook?: boolean;
   can_remove?: boolean;
   last_editor_id?: string | null;
   cover_asset_id?: string | null;
   page_width?: string | null;
-  ai_curated?: number;
-  aiCurated?: boolean;
   id: string;
   kind: "document" | "library";
   format: "rich_text" | "spreadsheet" | "presentation" | "markdown" | "canvas";
@@ -177,7 +177,7 @@ export async function api<T>(
       window.dispatchEvent(new Event("profile-required"));
     if (response.status === 401)
       window.dispatchEvent(new Event("session-expired"));
-    throw Object.assign(new Error(data.message ?? "请求失败"), {
+    throw Object.assign(new Error(apiErrorMessage(data.message ?? "请求失败")), {
       status: response.status,
       payload: data,
     });
@@ -205,33 +205,37 @@ export type UploadProgress = {
 export async function uploadFile(
   file: File,
   purpose:
-    | "avatar"
-    | "cover"
-    | "attachment"
-    | "comment_image"
-    | "ai_attachment",
+    "avatar" | "cover" | "attachment" | "comment_image" | "ai_attachment",
   resourceId?: string,
   signal?: AbortSignal,
   onProgress?: (progress: UploadProgress) => void,
 ) {
-  const limit =
-    (["attachment", "ai_attachment"].includes(purpose)
-      ? 20
-      : 5) *
-    1024 *
-    1024;
-  if (!file.size || file.size > limit)
-    throw new Error(`请选择非空且不超过 ${limit / 1024 / 1024}MB 的文件`);
   const query = new URLSearchParams({
     purpose,
     filename: file.name,
     ...(resourceId ? { resourceId } : {}),
   });
   const url = "/api/v1/assets?" + query;
-  return runAssetUpload(
-    () => sendAssetUpload(file, url, signal, onProgress),
-    signal,
-  );
+  return runAssetUpload(async () => {
+    signal?.throwIfAborted();
+    const limit =
+      purpose === "ai_attachment"
+        ? (
+            await api<{ maxFileBytes: number }>(
+              "/ai/upload-policy",
+              "GET",
+              undefined,
+              signal,
+            )
+          ).maxFileBytes
+        : (purpose === "attachment" ? 20 : 5) * 1024 * 1024;
+    if (!file.size || (limit > 0 && file.size > limit)) {
+      if (purpose === "ai_attachment") throw new Error(!file.size ? "upload_file_empty" : "upload_file_size_exceeded");
+      throw new Error(`请选择非空且不超过 ${limit / 1024 / 1024}MB 的文件`);
+    }
+    signal?.throwIfAborted();
+    return sendAssetUpload(file, url, signal, onProgress);
+  }, signal);
 }
 
 async function sendAssetUpload(
@@ -249,7 +253,7 @@ async function sendAssetUpload(
       window.dispatchEvent(new Event("profile-required"));
     if (status === 401) window.dispatchEvent(new Event("session-expired"));
     if (status < 200 || status >= 300)
-      throw Object.assign(new Error(data?.message || "上传失败"), {
+      throw Object.assign(new Error(apiErrorMessage(data?.message || "上传失败")), {
         status,
         payload: data,
       });

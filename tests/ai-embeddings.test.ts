@@ -5,6 +5,8 @@ import {
   aiDefaults,
   availableModels,
   requireModel,
+  requireInferenceModel,
+  requireImageModel,
   saveAIConfig,
   type AIModel,
 } from "@core/modules/ai/config.js";
@@ -13,6 +15,7 @@ import { testAIEmbeddingModel } from "../apps/server/src/services/ai/embeddings.
 import { createAIModel } from "../apps/server/src/services/ai/providers.js";
 import { embeddingSettings } from "@core/modules/ai/embeddings.js";
 import { embeddingApi } from "@core/modules/ai/providers.js";
+import { systemErrorReason } from "@core/shared/errors.js";
 
 const model: AIModel = {
   id: "embedding",
@@ -89,6 +92,10 @@ it("persists vector capability and dimensions but never exposes vector models as
       0,
     );
     const { revision, ...current } = await aiConfig(db);
+    const saved = await db.selectFrom("account_settings").selectAll()
+      .where("id", "=", "ai").executeTakeFirstOrThrow();
+    const unchanged = async () => expect(await db.selectFrom("account_settings").selectAll()
+      .where("id", "=", "ai").executeTakeFirstOrThrow()).toEqual(saved);
     expect(current.models[0]).toMatchObject({
       embedding: true,
       embeddingDimensions: 3,
@@ -100,20 +107,25 @@ it("persists vector capability and dimensions but never exposes vector models as
     expect(
       (await availableModels(db, user.id)).models.map((m) => m.id),
     ).toContain("chat");
-    await expect(requireModel(db, user.id, "embedding")).rejects.toThrow();
+    await expect(requireModel(db, user.id, "embedding")).rejects.toMatchObject({ status: 403 });
+    await expect(requireInferenceModel(db, user.id, "embedding")).rejects.toMatchObject({ status: 403 });
+    await expect(requireImageModel(db, user.id, "embedding")).rejects.toMatchObject({ status: 403 });
+    await unchanged();
     await expect(
-      saveAIConfig(db, { ...current, defaultModel: "embedding" }, 1),
+      saveAIConfig(db, { ...current, defaultModel: "embedding" }, revision),
     ).rejects.toThrow("非向量模型");
-    await expect(
-      saveAIConfig(db, { ...current, imageModel: "embedding" }, 1),
-    ).rejects.toThrow("不能使用向量模型");
+    await unchanged();
+    const imageSave = saveAIConfig(db, { ...current, imageModel: "embedding" }, revision);
+    await expect(imageSave).rejects.toMatchObject({ status: 400 });
+    expect(systemErrorReason(await imageSave.catch(error => error))).toMatchObject({ code: "image_model_not_enabled" });
+    await unchanged();
     for (const patch of [
       { embeddingDimensions: undefined },
       { embeddingDimensions: 0 },
       { embeddingDimensions: 1.5 },
       { tools: true },
       { imageGeneration: true },
-    ])
+    ]) {
       await expect(
         saveAIConfig(
           db,
@@ -131,9 +143,11 @@ it("persists vector capability and dimensions but never exposes vector models as
             ],
             models: [{ ...model, ...patch }],
           },
-          1,
+          revision,
         ),
       ).rejects.toThrow();
+      await unchanged();
+    }
     expect(() => createAIModel(model)).toThrow("不能用于聊天");
   } finally {
     await db.destroy();

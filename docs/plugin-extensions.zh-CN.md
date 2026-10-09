@@ -57,6 +57,8 @@ const folders = await host.platform.files.folders.list({ parentId: null });
 
 title 为 `{zh,en}`；ID 必须属于插件命名空间。supportedContexts 为 global/home/document/library/folder/resources。conditions 可按 targets、resourceKinds、formats、capabilities 过滤。平台支持和可见条件只是展示规则，不能代替服务端授权。重复 ID、非法位置、缺失或跨插件引用会使整个 bundle 注册失败并撤回已注册贡献。
 
+仅显示图标的操作/视图入口使用配置的插件商店中的同一张 PNG 图标。宿主通过需要登录的 `GET /api/v1/plugin-icons/<id>` 为运行中、具有 Web 资源的商店/npm 安装提供图标；本地安装保留通用图标。商店详情沿用现有协议校验，同一插件的并发请求共用一次读取，成功、缺失和失败结果仅在宿主内存缓存 60 秒。加载中、商店没有图标或图片加载失败时保留通用图标，入口仍可使用。现有插件 bundle、SDK 版本和持久化数据均不变，无需声明图标、转换或迁移数据；回退宿主代码即可恢复原显示。
+
 | 已接入 Web 位置 | 上下文 |
 | --- | --- |
 | global.more | 全局操作；与 web.more 导航共用右上角应用图标；操作和视图入口显示为图标，悬浮在下方显示名称；二者过滤后均为空则隐藏 |

@@ -15,9 +15,9 @@ This page was checked against current source for host **0.1.10** and plugin SDK 
 | Discovery, collections, recent activity | Implemented; visibility in a list and resource access are checked separately | [Discovery and collections](public-resource-discovery.md) |
 | Files and attachments | Personal files, shared folders, authorized upload/download; local or S3 storage is required | [File storage](storage.md) |
 | Comments and in-app notifications | Implemented across five formats, including stable spreadsheet row/column anchors | [Comments and notifications](comments-and-community.md) |
-| Document search | Basic database search is available; full-text, vector, and Q&A indexes require Meilisearch and suitable models | [HTTP API](api.md#search) |
+| Document search | Basic database search is available; full-text and vector indexes require Meilisearch and suitable models | [HTTP API](api.md#search) |
 | Personal AI assistant | Sessions, tools, approvals, and raw usage records are implemented; requires available models and credentials | [User guide](user-guide.md) |
-| Knowledge curation and independent Q&A | Remain core features; sources, curation sessions, publication, bot sharing, API/MCP are implemented and require model/index configuration | [Knowledge curation](knowledge-studio.md) |
+| Knowledge books and source subscriptions | Core: source subscriptions, immutable knowledge books, editable workflows, provenance, and human feedback; old curation and Q&A robots removed | [Knowledge books](knowledge-books.md) |
 | Local accounts and external login | Passwords, contact verification codes, recovery, registration review, OIDC/OAuth, and social adapters are implemented; external services need real credentials | [Authentication](authentication.md) |
 | Webhooks | Asynchronous delivery, retries, and records are implemented; requires a configured receiver | [Webhooks](webhooks.md) |
 | Plugin installation and public SDK | Trusted prebuilt packages, installation-directory discovery, restart activation; managed SQL, objects, and encrypted credentials are implemented | [Plugin deployment](plugin-deployment.md) |

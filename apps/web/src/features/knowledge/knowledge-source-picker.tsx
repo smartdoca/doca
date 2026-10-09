@@ -49,8 +49,13 @@ export function SourcePicker({
   contentAdded,
   contentInitial,
 }: {
-  contentInitial?: {groupId:string;sourceId:string;title:string;config:import("@smartdoca/plugin-sdk").JsonObject};
-  contentAdded?: (title:string)=>void;
+  contentInitial?: {
+    groupId: string;
+    sourceId: string;
+    title: string;
+    config: import("@smartdoca/plugin-sdk").JsonObject;
+  };
+  contentAdded?: (title: string) => void;
   libraryId: string;
   locale: string;
   busy: boolean;
@@ -59,27 +64,52 @@ export function SourcePicker({
     sourceIds: string[],
     urls: string[],
     title: string,
-    guide: string,
   ) => void;
   initial?: {
     sourceKind: string;
     title: string;
     sourceIds: string[];
     urls: string[];
-    guide?: string;
   };
 }) {
   const { t } = useI18n();
-  const [contentSources,setContentSources]=useState<ContentSourceDescriptor[]>([]);
-  useEffect(()=>{const controller=new AbortController();if(contentAdded) void api<{items:ContentSourceDescriptor[]}>("/content/sources?purpose=knowledge",undefined,undefined,controller.signal).then(result=>setContentSources(result.items.filter(source=>!source.id.startsWith("doca.documents.")&&!source.id.startsWith("doca.files.")))).catch(error=>{if(!controller.signal.aborted)setError(error.message);});return()=>controller.abort();},[!!contentAdded]);
+  const [contentSources, setContentSources] = useState<
+    ContentSourceDescriptor[]
+  >([]);
+  useEffect(() => {
+    const controller = new AbortController();
+    if (contentAdded)
+      void api<{ items: ContentSourceDescriptor[] }>(
+        "/content/sources?purpose=knowledge",
+        undefined,
+        undefined,
+        controller.signal,
+      )
+        .then((result) =>
+          setContentSources(
+            result.items.filter(
+              (source) =>
+                !source.id.startsWith("doca.documents.") &&
+                !source.id.startsWith("doca.files."),
+            ),
+          ),
+        )
+        .catch((error) => {
+          if (!controller.signal.aborted) setError(error.message);
+        });
+    return () => controller.abort();
+  }, [!!contentAdded]);
   const sources = webPluginRegistry.knowledgeSources.list();
-  const [kind, setKind] = useState(contentInitial?`content:${contentInitial.sourceId}`:initial?.sourceKind ?? ""),
+  const [kind, setKind] = useState(
+      contentInitial
+        ? `content:${contentInitial.sourceId}`
+        : (initial?.sourceKind ?? ""),
+    ),
     [name, setName] = useState(initial?.title ?? "");
   const [documents, setDocuments] = useState(
     initial?.sourceKind === "document" ? initial.sourceIds.join("\n") : "",
   );
   const [loading, setLoading] = useState(false);
-  const [guide, setGuide] = useState(initial?.guide ?? "");
   const [selected, setSelected] = useState<string[]>(initial?.sourceIds ?? []),
     [url, setUrl] = useState(initial?.urls.join("\n") ?? "");
   const [rows, setRows] = useState<
@@ -196,12 +226,15 @@ export function SourcePicker({
       "folder",
       "file",
       ...sources.map((x) => x.sourceKind),
-      ...contentSources.map(source=>`content:${source.id}`),
+      ...contentSources.map((source) => `content:${source.id}`),
     ]),
   ];
   const label = (k: string) => {
-    const content=contentSources.find(source=>`content:${source.id}`===k);
-    if(content) return locale.startsWith("zh")?content.title.zh:content.title.en;
+    const content = contentSources.find(
+      (source) => `content:${source.id}` === k,
+    );
+    if (content)
+      return locale.startsWith("zh") ? content.title.zh : content.title.en;
     const source = sources.find((x) => x.sourceKind === k);
     return k === "library"
       ? t("sourceGroup.libraries")
@@ -226,8 +259,20 @@ export function SourcePicker({
     folder: Folder,
     file: File,
   };
-  const content=contentSources.find(source=>`content:${source.id}`===kind);
-  if(content && contentAdded) return <ContentSourceForm key={content.id} initial={contentInitial} source={content} libraryId={libraryId} back={()=>setKind("")} added={contentAdded}/>;
+  const content = contentSources.find(
+    (source) => `content:${source.id}` === kind,
+  );
+  if (content && contentAdded)
+    return (
+      <ContentSourceForm
+        key={content.id}
+        initial={contentInitial}
+        source={content}
+        libraryId={libraryId}
+        back={() => setKind("")}
+        added={contentAdded}
+      />
+    );
   return (
     <div className="library-source-picker source-wizard">
       {!kind ? (
@@ -385,15 +430,6 @@ export function SourcePicker({
                   })}
               </>
             )}
-            <details className="source-guide-optional">
-              <summary>{t("knowledge.sourceGuide")}</summary>
-              <textarea
-                rows={3}
-                value={guide}
-                onChange={(e) => setGuide(e.target.value)}
-                placeholder={t("sourceGroup.guideHint")}
-              />
-            </details>
           </div>
           <footer className="source-wizard-footer">
             <span>
@@ -411,7 +447,7 @@ export function SourcePicker({
                 !(kind === "url" ? urls.length : chosen.length) ||
                 (kind === "document" && !!parsed.unresolved.length)
               }
-              onClick={() => bind(kind, chosen, urls, name, guide)}
+              onClick={() => bind(kind, chosen, urls, name)}
             >
               {t(initial ? "sourceGroup.save" : "sourceGroup.create")}
             </button>

@@ -8,7 +8,6 @@ import type { PluginRequestContext } from "@smartdoca/plugin-sdk/platform";
 import { createContentService } from "../content/service.js";
 import {
   readContentInventory,
-  readChangedContent,
 } from "../content/snapshot.js";
 import { authorize } from "../access/queries.js";
 import { fail } from "../../shared/errors.js";
@@ -19,8 +18,6 @@ const configSchema = z
     sourceId: z.string().min(1).max(200),
     config: z.record(z.string(), z.json()),
     principalId: z.string().uuid(),
-    instructionHash: z.string(),
-    fingerprints: z.array(z.tuple([z.string(), z.string()])),
   })
   .strict();
 export function contentRequest(actor: Actor): PluginRequestContext {
@@ -75,8 +72,6 @@ export async function createContentSubscription(
     sourceId: input.sourceId,
     config: input.config,
     principalId: actor.id,
-    instructionHash: "",
-    fingerprints: [],
   });
   // Validate provider scope before persisting; do not acknowledge any blocks until analysis succeeds.
   await readContentInventory(createContentService(db), contentRequest(actor), {
@@ -111,7 +106,6 @@ export async function createContentSubscription(
         source_kind: "content",
         source_id: groupId,
         url: "",
-        node_id: null,
         source_version: "",
         status: "active",
         created_at: now,
@@ -132,85 +126,6 @@ export async function contentSubscriptionInventory(
     config: value.config as JsonObject,
   });
 }
-export async function prepareContentSubscription(
-  db: DB,
-  actor: Actor,
-  source: Schema["knowledge_subscriptions"],
-  instructionHash: string,
-  excludedResourceIds: readonly string[] = [],
-) {
-  const { group, value } = await contentSubscriptionConfig(db, source);
-  const input = {
-    sourceId: value.sourceId,
-    purpose: "knowledge" as const,
-    config: value.config as JsonObject,
-  };
-  const delta = await readChangedContent(
-    createContentService(db),
-    contentRequest(actor),
-    input,
-    new Map(
-      value.instructionHash === instructionHash ? value.fingerprints : [],
-    ),
-    120_000,
-    (item) => !excludedResourceIds.includes(item.ref.resourceId),
-  );
-  return {
-    delta,
-    async validate() {
-      const current = await readContentInventory(
-        createContentService(db),
-        contentRequest(actor),
-        input,
-      );
-      if (current.fingerprint !== delta.fingerprint)
-        fail(409, "Content scope changed during analysis");
-    },
-    async commit(tx: DB) {
-      const currentSource = await tx
-        .selectFrom("knowledge_subscriptions")
-        .selectAll()
-        .where("id", "=", source.id)
-        .executeTakeFirst();
-      if (
-        !currentSource ||
-        currentSource.status === "detached" ||
-        currentSource.creator_id !== actor.id
-      )
-        fail(409, "Content subscription changed during analysis");
-      if (
-        !(
-          await createContentService(tx).sources(
-            contentRequest(actor),
-            "knowledge",
-          )
-        ).some((item) => item.id === value.sourceId)
-      )
-        fail(409, "Content source unavailable");
-      const saved = await tx
-        .updateTable("knowledge_source_groups")
-        .set({
-          config: JSON.stringify({
-            ...value,
-            instructionHash,
-            fingerprints: [...delta.fingerprints],
-          }),
-        })
-        .where("id", "=", group.id)
-        .where("config", "=", group.config!)
-        .executeTakeFirst();
-      if (!Number(saved.numUpdatedRows))
-        fail(409, "Content subscription changed during analysis");
-      await tx
-        .updateTable("knowledge_subscriptions")
-        .set({ source_version: delta.fingerprint, status: "active" })
-        .where("id", "=", source.id)
-        .where("status", "!=", "detached")
-        .execute();
-    },
-  };
-}
-
 export async function updateContentSubscription(
   db: DB,
   actor: Actor,
@@ -249,8 +164,6 @@ export async function updateContentSubscription(
         config: JSON.stringify({
           ...value,
           config: input.config,
-          instructionHash: scopeChanged ? "" : value.instructionHash,
-          fingerprints: scopeChanged ? [] : value.fingerprints,
         }),
       })
       .where("id", "=", group.id)

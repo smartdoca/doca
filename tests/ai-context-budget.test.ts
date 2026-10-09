@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { createOpenAI } from "@ai-sdk/openai";
 import {
   collapseOlderExchanges,
   exceedsModelInput,
@@ -7,9 +8,15 @@ import {
   trimToolCalls,
   trimToolResults,
 } from "../apps/server/src/services/ai/context-budget.js";
-import { contextParts, stablePromptCatalog } from "../apps/server/src/services/ai/prompt-context.js";
+import {
+  contextParts,
+  stablePromptCatalog,
+} from "../apps/server/src/services/ai/prompt-context.js";
 import { needsLlmReview } from "../apps/server/src/services/ai/delivery.js";
-import { documentCapabilities, documentReadCapabilities } from "../packages/core/src/modules/ai/capabilities.js";
+import {
+  documentCapabilities,
+  documentReadCapabilities,
+} from "../packages/core/src/modules/ai/capabilities.js";
 import { skillPrefixInstructions } from "../packages/core/src/modules/ai/skills.js";
 
 it("keeps recent tool results and stubs older bulky payloads", () => {
@@ -58,11 +65,76 @@ it("keeps recent tool results and stubs older bulky payloads", () => {
   expect(JSON.stringify(trimmed[0]!.content[0]!.result)).not.toContain(
     "x".repeat(400),
   );
-  expect(String(trimmed[0]!.content[0]!.result.contentPreview).length).toBeLessThan(
-    400,
-  );
+  expect(
+    String(trimmed[0]!.content[0]!.result.contentPreview).length,
+  ).toBeLessThan(400);
   expect(trimmed[1]!.content[0]!.result).toEqual({ error: "409 版本冲突" });
   expect(trimmed[2]!.content[0]!.result.content).toBe("latest page");
+});
+
+it("sends a trimmed diagnostic through the installed SDK as valid content without its original metadata", async () => {
+  const original = [
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "diagnostic",
+          toolName: "image_mask_segment",
+          output: {
+            type: "content",
+            value: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  proposalReceiptId: "source",
+                  details: "x".repeat(7000),
+                }),
+              },
+              { type: "text", text: "original-frame-window-label" },
+            ],
+          },
+        },
+      ],
+    },
+  ];
+  const prompt = trimToolResults(original, 0);
+  expect(prompt[0].content[0].output.value).toEqual([
+    { type: "text", text: expect.stringContaining("[truncated]") },
+  ]);
+  let requests = 0;
+  const model = createOpenAI({
+    apiKey: "isolated-key",
+    fetch: (async (_url, init) => {
+      requests++;
+      const sent = JSON.parse(String(init?.body));
+      expect(sent.messages[0]).toMatchObject({
+        role: "tool",
+        tool_call_id: "diagnostic",
+      });
+      expect(sent.messages[0].content).toContain("[truncated]");
+      expect(sent.messages[0].content).not.toContain(
+        "original-frame-window-label",
+      );
+      return Response.json({
+        id: "fixture",
+        object: "chat.completion",
+        created: 1,
+        model: "fixture",
+        choices: [
+          {
+            index: 0,
+            finish_reason: "stop",
+            message: { role: "assistant", content: "ok" },
+          },
+        ],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      });
+    }) as typeof fetch,
+  }).chat("fixture");
+  await model.doGenerate({ prompt });
+  expect(requests).toBe(1);
+  expect(original[0]!.content[0]!.output.value).toHaveLength(2);
 });
 
 function exchange(id: string, seq: number, bulky = false) {
@@ -79,7 +151,9 @@ function exchange(id: string, seq: number, bulky = false) {
             resourceId: "doc-1",
             seq,
             epochId: "epoch-1",
-            operations: bulky ? [{ type: "replace", text: blob }] : [{ type: "ping" }],
+            operations: bulky
+              ? [{ type: "replace", text: blob }]
+              : [{ type: "ping" }],
           },
         },
       ],
@@ -112,7 +186,11 @@ it("keeps recent tool-call arguments and stubs older bulky payloads", () => {
           type: "tool-call",
           toolCallId: "old",
           toolName: "canvas_edit",
-          args: { resourceId: "doc-1", seq: 3, operations: [{ text: "x".repeat(4000) }] },
+          args: {
+            resourceId: "doc-1",
+            seq: 3,
+            operations: [{ text: "x".repeat(4000) }],
+          },
         },
       ],
     },
@@ -123,7 +201,11 @@ it("keeps recent tool-call arguments and stubs older bulky payloads", () => {
           type: "tool-call",
           toolCallId: "new",
           toolName: "canvas_edit",
-          args: { resourceId: "doc-1", seq: 4, operations: [{ text: "latest" }] },
+          args: {
+            resourceId: "doc-1",
+            seq: 4,
+            operations: [{ text: "latest" }],
+          },
         },
       ],
     },
@@ -134,7 +216,9 @@ it("keeps recent tool-call arguments and stubs older bulky payloads", () => {
     resourceId: "doc-1",
     seq: 3,
   });
-  expect(JSON.stringify(trimmed[0]!.content[0]!.args)).not.toContain("x".repeat(400));
+  expect(JSON.stringify(trimmed[0]!.content[0]!.args)).not.toContain(
+    "x".repeat(400),
+  );
   expect(trimmed[1]!.content[0]!.args.operations[0].text).toBe("latest");
 });
 
@@ -150,7 +234,7 @@ it("collapses older completed tool exchanges and keeps the current request plus 
   expect(JSON.stringify(collapsed)).toContain("请继续改画板");
   expect(JSON.stringify(collapsed)).toContain("已自动压缩");
   expect(JSON.stringify(collapsed)).not.toContain("画板a内容");
-  expect(JSON.stringify(collapsed)).toContain("toolCallId\":\"c\"");
+  expect(JSON.stringify(collapsed)).toContain('toolCallId":"c"');
   expect(taskStateFromMessages(collapsed)).toMatchObject({
     resourceId: "doc-1",
     seq: 4,
@@ -199,12 +283,12 @@ it("gives document reads a compact first page and keeps the full manual off the 
   expect(documentReadCapabilities("rich_text", 1)).toEqual({});
   expect(documentReadCapabilities("rich_text", 0).loadSkill).toBe("writing");
   expect("firstEdit" in documentReadCapabilities("rich_text", 0)).toBe(false);
-  expect(skillPrefixInstructions({ id: "writing", name: "文档创作" })).toContain(
-    "load_skill",
-  );
-  expect(skillPrefixInstructions({ id: "writing", name: "文档创作" })).not.toContain(
-    "insertBlock",
-  );
+  expect(
+    skillPrefixInstructions({ id: "writing", name: "文档创作" }),
+  ).toContain("load_skill");
+  expect(
+    skillPrefixInstructions({ id: "writing", name: "文档创作" }),
+  ).not.toContain("insertBlock");
 });
 
 it("preserves plugin approval and pagination facts while bounding old errors", () => {
@@ -216,10 +300,26 @@ it("preserves plugin approval and pagination facts while bounding old errors", (
     hasMore: true,
     fileId: "file-1",
   };
-  const source = [{ role: "tool", content: [{ type: "tool-result", toolCallId: "plugin-1", output: { type: "json", value: receipt } }] }];
+  const source = [
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "plugin-1",
+          output: { type: "json", value: receipt },
+        },
+      ],
+    },
+  ];
   const result = trimToolResults(source, 0);
   expect(result[0].content[0].output.value).toMatchObject({
-    requiresApproval: true, approvalId: "approval-1", nextCursor: "page-2", hasMore: true, fileId: "file-1", truncated: true,
+    requiresApproval: true,
+    approvalId: "approval-1",
+    nextCursor: "page-2",
+    hasMore: true,
+    fileId: "file-1",
+    truncated: true,
   });
   expect(JSON.stringify(result).length).toBeLessThan(1000);
   expect(source[0]!.content[0]!.output.value).toBe(receipt);
@@ -227,17 +327,27 @@ it("preserves plugin approval and pagination facts while bounding old errors", (
 });
 
 it("compacts nested history parts without mutating persisted messages", () => {
-  const source = exchange("nested", 1, true).map(message => ({ ...message, content: { parts: message.content } }));
+  const source = exchange("nested", 1, true).map((message) => ({
+    ...message,
+    content: { parts: message.content },
+  }));
   const before = JSON.stringify(source);
   const result = trimToolResults(trimToolCalls(source, 0), 0);
   expect(JSON.stringify(result).length).toBeLessThan(1500);
-  expect(taskStateFromMessages(result)).toMatchObject({ resourceId: "doc-1", seq: 2 });
+  expect(taskStateFromMessages(result)).toMatchObject({
+    resourceId: "doc-1",
+    seq: 2,
+  });
   expect(JSON.stringify(source)).toBe(before);
 });
 
-
 it("keeps the skill prefix identical across plugin installation orders", () => {
-  const skills = [{ id: "z.plugin", name: "Z" }, { id: "a.plugin", name: "A" }];
-  expect(stablePromptCatalog(skills)).toEqual(stablePromptCatalog([...skills].reverse()));
+  const skills = [
+    { id: "z.plugin", name: "Z" },
+    { id: "a.plugin", name: "A" },
+  ];
+  expect(stablePromptCatalog(skills)).toEqual(
+    stablePromptCatalog([...skills].reverse()),
+  );
   expect(skills[0]!.id).toBe("z.plugin");
 });

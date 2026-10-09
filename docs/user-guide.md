@@ -26,7 +26,7 @@ Comments support replies, mentions, resolving, and notifications according to re
 
 ## Knowledge and AI
 
-[Knowledge curation](knowledge-studio.md) organizes authorized sources into a maintained library. Q&A assistants retrieve permitted sources; [Q&A sharing](knowledge-sharing.md) controls who can use an assistant.
+[Knowledge books](knowledge-books.md) turn explicitly authorized sources and human feedback into immutable Markdown document trees. Edit the workflow and acceptance criteria in the page or through your personal AI assistant. Native libraries and subscriptions remain source management tools.
 
 The personal AI assistant can use authorized documents and files. Attached references and session approvals narrow the scope; they do not expand your own permissions. Model and service availability depend on administrator configuration.
 

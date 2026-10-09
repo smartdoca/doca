@@ -1,6 +1,14 @@
 import { sessionResourceHistory } from "@core/modules/ai/session-resources.js";
 import { defaultOfficialSkills } from "@core/modules/ai/skills.js";
 import { checkAttachments } from "../services/ai/attachments.js";
+import { bindAISessionAttachments, deleteAISessionFiles } from "../services/ai/session-file-folders.js";
+import { captureAIInputFileSnapshot, verifyAIInputFileSnapshot } from "../services/ai/ai-input-file-snapshot.js";
+import {
+  readUploadPolicy,
+  saveUploadPolicy,
+  uploadPolicySchema,
+  userUploadLimits,
+} from "@core/modules/ai/upload-policy.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -8,6 +16,7 @@ import {
   testAIModel,
   discoverAIModels,
   modelConnectionError,
+  modelConnectionReason,
   modelConnectionDetail,
 } from "../services/ai/providers.js";
 import { aiProviders } from "@core/modules/ai/providers.js";
@@ -39,6 +48,7 @@ import {
   previewAIDocument,
 } from "@core/workflows/ai-documents.js";
 import { createAIRunner, sessionSources } from "../services/ai/runner.js";
+import { resolveSegmentationProfile } from "../services/ai/segmentation-profile.js";
 import {
   explorerTargets,
   memoryOwner,
@@ -96,8 +106,29 @@ export async function registerAI(
   admin: (req: FastifyRequest) => Actor,
   options: Parameters<typeof createAIRunner>[1] = {},
 ) {
-  const runner = createAIRunner(db, { ...options, logger: api.log });
+  const segmentationProfile = options.segmentationProfile ?? await resolveSegmentationProfile();
+  const runner = createAIRunner(db, { ...options, segmentationProfile, logger: api.log });
   const sessionEvents = createAISessionEventStore(db);
+  api.get("/api/v1/admin/ai/upload-policy", async (req) => {
+    admin(req);
+    return readUploadPolicy(db);
+  });
+  api.put("/api/v1/admin/ai/upload-policy", async (req) => {
+    admin(req);
+    const body = parse(
+      z
+        .object({
+          policy: uploadPolicySchema,
+          revision: z.number().int().min(0),
+        })
+        .strict(),
+      req.body,
+    );
+    return saveUploadPolicy(db, body.policy, body.revision);
+  });
+  api.get("/api/v1/ai/upload-policy", async (req) =>
+    userUploadLimits(db, auth(req).id),
+  );
   api.get<{ Params: { id: string } }>(
     "/api/v1/ai/images/:id/status",
     async (req) =>
@@ -215,6 +246,7 @@ export async function registerAI(
           ? !!config.webSearch.baseUrl
           : !!config.webSearch?.apiKey,
       preferences: prefs,
+      uploadLimits: await userUploadLimits(db, user.id),
       defaultModel: config.defaultModel,
       models: models.map((m) => ({
         id: m.id,
@@ -476,7 +508,8 @@ export async function registerAI(
             input_tokens: u.inputTokens?.total ?? 0,
             output_tokens: u.outputTokens?.total ?? 0,
             cached_tokens: usage?.cached ?? 0,
-            usage: JSON.stringify(u),
+            usage: JSON.stringify({ ...u, ...(imageTest && "nativeUsage" in result
+              ? { images: 1, nativeUsage: result.nativeUsage } : {}) }),
             created_at: stamp,
             updated_at: new Date().toISOString(),
           })
@@ -511,11 +544,13 @@ export async function registerAI(
         if (error instanceof AppError) throw error;
         const generic = modelConnectionError(error);
         const detail = modelConnectionDetail(error, model);
+        const reason = modelConnectionReason(error);
         fail(
           502,
           detail && !generic.includes(detail)
             ? `${generic}：${detail}`
             : generic,
+          { ...reason, data: { ...reason.data, ...(detail && !generic.includes(detail) ? { detail } : {}) } },
         );
       }
     },
@@ -1247,6 +1282,7 @@ export async function registerAI(
         )
           fail(409, "请先停止该会话的运行任务");
         await m.memory.deleteThread(s.id);
+        await deleteAISessionFiles(tx, actor.id, s.id);
         await tx.deleteFrom("ai_jobs").where("session_id", "=", s.id).execute();
         await tx.deleteFrom("ai_sessions").where("id", "=", s.id).execute();
       });
@@ -1256,6 +1292,7 @@ export async function registerAI(
   api.post<{ Params: { id: string } }>(
     "/api/v1/ai/sessions/:id/messages",
     async (req) => {
+      let retryFileSnapshot: unknown;
       const actor = auth(req),
         s = await session(actor, req.params.id),
         body = parse(
@@ -1285,7 +1322,7 @@ export async function registerAI(
               )
               .max(20)
               .default([]),
-            attachments: z.array(id).max(8).default([]),
+            attachments: z.array(id).default([]),
             files: z
               .array(
                 z.object({
@@ -1294,7 +1331,6 @@ export async function registerAI(
                   name: z.string().max(255).optional(),
                 }),
               )
-              .max(20)
               .default([]),
             skillIds: z.array(z.string().max(100)).max(20).default([]),
             webSearch: z.boolean().default(true),
@@ -1310,6 +1346,7 @@ export async function registerAI(
           req.body,
         );
       if (s.archived) fail(409, "请先恢复归档会话");
+      if (req.body && typeof req.body === "object" && Object.hasOwn(req.body, "fileInputSnapshot")) fail(400, "文件来源快照只能由服务器创建，客户端不能提交");
       if (body.retryOf) {
         const previous = await db
           .selectFrom("ai_jobs")
@@ -1323,6 +1360,7 @@ export async function registerAI(
           fail(409, "只能重试失败、停止或中断的任务");
         const original = JSON.parse(previous.input);
         if (!original.text) fail(409, "原任务要求已不可用，请重新发送");
+        retryFileSnapshot = original.fileInputSnapshot;
         Object.assign(body, {
           text: original.text,
           scope: original.scope,
@@ -1372,6 +1410,8 @@ export async function registerAI(
         if (old) {
           if (old.user_id !== actor.id || old.digest !== hash)
             fail(409, "重复发送内容不同");
+          const savedInput = JSON.parse(old.input);
+          if (savedInput.files?.length) await verifyAIInputFileSnapshot(tx, actor, savedInput.files, savedInput.fileInputSnapshot);
           return old;
         }
         if (body.retryOf) {
@@ -1387,7 +1427,11 @@ export async function registerAI(
               "completed",
             ])
             .executeTakeFirst();
-          if (ongoing) return ongoing;
+          if (ongoing) {
+            const savedInput = JSON.parse(ongoing.input);
+            if (savedInput.files?.length) await verifyAIInputFileSnapshot(tx, actor, savedInput.files, savedInput.fileInputSnapshot);
+            return ongoing;
+          }
         }
         const pending = await tx
           .selectFrom("ai_jobs")
@@ -1396,6 +1440,11 @@ export async function registerAI(
           .where("status", "in", ["running", "queued", "awaiting_approval"])
           .execute();
         if (pending.length >= 5) fail(429, "待处理任务过多，请等待或取消");
+        const fileInputSnapshot = body.files.length
+          ? body.retryOf
+            ? await verifyAIInputFileSnapshot(tx, actor, body.files, retryFileSnapshot)
+            : await captureAIInputFileSnapshot(tx, actor, body.files)
+          : undefined;
         const now = new Date().toISOString();
         const row = {
           id: jobId,
@@ -1403,7 +1452,7 @@ export async function registerAI(
           user_id: actor.id,
           model_id: modelId,
           status: "queued" as const,
-          input: JSON.stringify(input),
+          input: JSON.stringify({ ...input, ...(fileInputSnapshot ? { fileInputSnapshot } : {}) }),
           digest: hash,
           result: "",
           error: "",
@@ -1415,6 +1464,10 @@ export async function registerAI(
           updated_at: now,
         };
         await tx.insertInto("ai_jobs").values(row).execute();
+        await bindAISessionAttachments(tx, actor.id, {
+          id: s.id,
+          title: currentSession.title === "新对话" ? body.text.slice(0, 40) : currentSession.title,
+        }, body.attachments);
         await tx
           .updateTable("ai_sessions")
           .set({

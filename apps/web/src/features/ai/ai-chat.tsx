@@ -1,4 +1,4 @@
-import { KnowledgeConnections } from "@web/features/knowledge/knowledge-connections.js";
+
 import { assistantDraft, consumeAssistantDraft, subscribeAssistantDraft } from "./ai-launch.js";
 import { htmlLang } from "@doca/i18n";
 import { AIChoiceCard } from "@web/features/ai/ai-choice-card.js";
@@ -16,6 +16,17 @@ import {
 } from "@web/features/ai/ai-progress-label.js";
 import { AIGeneratedImage } from "@web/features/ai/ai-generated-image.js";
 import { FolderDeliveryCard } from "@web/features/ai/ai-folder-card.js";
+import { AIFolderPreview } from "./ai-folder-preview.js";
+import { notifyAISessionFilesChanged } from "./ai-file-events.js";
+import { uploadErrorMessage } from "./ai-upload-errors.js";
+import { systemErrorMessage } from "@web/shared/system-errors.js";
+import type { AIUploadLimits } from "@core/modules/ai/upload-policy.js";
+import {
+  composerDraftKey,
+  readComposerDraft,
+  writeComposerDraft,
+  type ComposerDraft,
+} from "./ai-composer-draft.js";
 import { FileDeliveryCard } from "@web/features/ai/ai-file-card.js";
 import { renderPluginAIBlock } from "@web/plugins/registry.js";
 import {
@@ -29,7 +40,10 @@ import {
   type FileDelivery,
   type FolderDelivery,
 } from "@core/modules/ai/progress.js";
-import { withSessionHash } from "@web/features/ai/ai-folder-mentions.js";
+import {
+  aiSessionFolderHref,
+  withSessionHash,
+} from "@web/features/ai/ai-folder-mentions.js";
 import {
   lazy,
   memo,
@@ -56,6 +70,7 @@ import {
   WandSparkles,
   Folder,
   FolderOpen,
+  Link2,
   Bot,
   File as FileIcon,
   Settings,
@@ -263,6 +278,7 @@ type Session = {
   executionFailed?: boolean;
 };
 type Options = {
+  uploadLimits: AIUploadLimits;
   enabled: boolean;
   memoryAvailable: boolean;
   webSearchAvailable: boolean;
@@ -330,6 +346,26 @@ function isComposerEditable(target: EventTarget | null) {
         : null;
   return !!el?.closest("[contenteditable='true'], .ant-sender-input");
 }
+function composerLineAnchor() {
+  const anchor = document.createElement("span");
+  anchor.dataset.composerLineAnchor = "";
+  anchor.contentEditable = "false";
+  anchor.setAttribute("aria-hidden", "true");
+  Object.assign(anchor.style, {
+    display: "inline-block",
+    width: "0px",
+    height: "1em",
+    verticalAlign: "text-bottom",
+    pointerEvents: "none",
+  });
+  return anchor;
+}
+function anchorComposerTrailingLine(sender: SenderRef | null) {
+  const editable = sender?.inputElement;
+  const last = editable?.lastChild;
+  if (last?.nodeType === Node.TEXT_NODE && last.textContent?.endsWith("\n"))
+    editable?.append(composerLineAnchor());
+}
 function insertComposerPlainText(sender: SenderRef | null, text: string) {
   const value = text
     .replace(/\u200B/g, "")
@@ -343,6 +379,13 @@ function insertComposerPlainText(sender: SenderRef | null, text: string) {
     const node = document.createTextNode(value);
     range.insertNode(node);
     range.setStartAfter(node);
+    if (value.endsWith("\n")) {
+      // Chrome needs a line box after a terminal LF to keep it when typing resumes.
+      // The empty anchor contributes no text to Sender values or persisted slots.
+      const anchor = composerLineAnchor();
+      range.insertNode(anchor);
+      range.setStartBefore(anchor);
+    }
     range.collapse(true);
     selection?.removeAllRanges();
     selection?.addRange(range);
@@ -356,6 +399,7 @@ function insertComposerPlainText(sender: SenderRef | null, text: string) {
     return;
   }
   sender?.insert([{ type: "text", value }], "cursor");
+  anchorComposerTrailingLine(sender);
 }
 
 type Conversation = {
@@ -497,7 +541,7 @@ export function AIDocumentLayout({
   children: ReactNode;
   disabled?: boolean;
   format?: string;
-  surface?: "document" | "files";
+  surface?: "document" | "files" | "knowledge";
 }) {
   const { t, locale } = useI18n();
 
@@ -507,7 +551,7 @@ export function AIDocumentLayout({
   const enabled =
     !disabled &&
     !!ai?.userId &&
-    (filesSurface ||
+    (surface === "knowledge" || filesSurface ||
       (!!ai.resource &&
         (ai.resource.kind === "document" || ai.resource.kind === "library")));
   return (
@@ -596,9 +640,14 @@ export function AIChat({ full = false }: { full?: boolean }) {
   currentAI.current = ai;
   const [modal, modalContext] = Modal.useModal();
   const [files, setFiles] = useState<Attachment<ChatFile>[]>([]);
-  const [filePickerOpen, setFilePickerOpen] = useState<boolean | "materials">(false);
-  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const [filePickerOpen, setFilePickerOpen] = useState<boolean | "materials">(
+    false,
+  );
   const [fileSourceOpen, setFileSourceOpen] = useState(false);
+  const [previewFolder, setPreviewFolder] = useState<{
+    id: string;
+    name?: string;
+  } | null>(null);
   const filesRef = useRef<Attachment<ChatFile>[]>([]);
   const localUploads = useRef(
     new Map<string, { controller: AbortController; preview?: string }>(),
@@ -619,7 +668,19 @@ export function AIChat({ full = false }: { full?: boolean }) {
   const initialSlots = useRef<SlotConfigType[]>([]);
   const composerReady = useRef(false);
   const composerSelection = useRef<Range | null>(null);
-  const previousResource = useRef(ai.resource?.id);
+  const draftKey = ai.userId
+    ? composerDraftKey(
+        ai.userId,
+        ai.sessionId ??
+          `new:${full ? "assistant" : (ai.resource?.id ?? ai.fileContext?.id ?? "assistant")}`,
+      )
+    : null;
+  const currentDraftKey = useRef(draftKey);
+  currentDraftKey.current = draftKey;
+  const draftRecord = useRef<{ key: string; value: ComposerDraft } | null>(
+    null,
+  );
+  const restoringDraft = useRef(false);
   const referenceSlots = useRef(new Map<string, AIReference>());
   const referenceIdentity = (r: AIReference) =>
     JSON.stringify([r.resourceId, r.anchor, r.epochId, r.seq]);
@@ -668,6 +729,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
   const replaceComposerText = (value: string) => {
     clearComposer();
     senderRef.current?.insert([{ type: "text", value }], "end");
+    anchorComposerTrailingLine(senderRef.current);
   };
   const replaceFiles = (value: Attachment<ChatFile>[]) => {
     const retained = new Set(value.map((file) => file.uid));
@@ -724,9 +786,10 @@ export function AIChat({ full = false }: { full?: boolean }) {
   const upload = async (file: File) => {
     if (busy) return;
     if (
-      filesRef.current.length >= 8 ||
-      filesRef.current.reduce((n, f) => n + (f.size ?? 0), 0) + file.size >
-        25 * 1024 * 1024
+      !allowsAttachments([
+        ...filesRef.current.map((f) => f.size ?? 0),
+        file.size,
+      ])
     ) {
       ai.setError(t("chat.attachmentLimit"));
       return;
@@ -746,7 +809,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
         size: file.size,
         status: "uploading",
         percent: 0,
-        description: t("bot.uploading"),
+        description: t("common.uploading"),
         thumbUrl: preview,
         cardType: image ? "image" : "file",
       },
@@ -776,7 +839,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
       localUploads.current.delete(uid);
     } catch (e) {
       if (controller.signal.aborted) return;
-      const message = e instanceof Error ? e.message : t("chat.uploadFailed");
+      const message =
+        e instanceof Error ? uploadErrorMessage(e, t) : t("chat.uploadFailed");
       replaceFiles(
         filesRef.current.map((f) =>
           f.uid === uid
@@ -797,9 +861,10 @@ export function AIChat({ full = false }: { full?: boolean }) {
     )
       return;
     if (
-      filesRef.current.length >= 8 ||
-      filesRef.current.reduce((n, f) => n + (f.size ?? 0), 0) + file.size >
-        25 * 1024 * 1024
+      !allowsAttachments([
+        ...filesRef.current.map((f) => f.size ?? 0),
+        file.size,
+      ])
     ) {
       throw new Error(t("chat.attachmentLimit"));
     }
@@ -819,7 +884,13 @@ export function AIChat({ full = false }: { full?: boolean }) {
       ),
     ]);
   };
-  const [folderTargets, setFolderTargets] = useState<ExplorerTarget[]>([]);
+  const [folderTargets, setFolderTargetsState] = useState<ExplorerTarget[]>([]);
+  const folderTargetsRef = useRef<ExplorerTarget[]>([]);
+  const setFolderTargets = (value: ExplorerTarget[] | ((previous: ExplorerTarget[]) => ExplorerTarget[])) => {
+    const next = typeof value === "function" ? value(folderTargetsRef.current) : value;
+    folderTargetsRef.current = next;
+    setFolderTargetsState(next);
+  };
   const [composerDrop, setComposerDrop] = useState(false);
   const [folderImport, setFolderImport] = useState("");
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -830,7 +901,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
         : [
             ...prev,
             { kind: "folder" as const, id: folder.id, name: folder.name },
-          ].slice(0, 8),
+          ],
     );
   };
   const importDroppedFolders = async (entries: DroppedUpload[]) => {
@@ -840,14 +911,18 @@ export function AIChat({ full = false }: { full?: boolean }) {
     const loose = entries.filter(
       (entry) => entry.file && !entry.directory && !entry.path.includes("/"),
     );
-    for (const entry of loose) if (entry.file) void upload(entry.file);
-    if (!tree.length) return;
-    const bytes = tree.reduce((sum, entry) => sum + (entry.file?.size ?? 0), 0);
     const files = tree.filter((entry) => entry.file);
-    if (files.length > 200 || bytes > 100 * 1024 * 1024) {
+    if (
+      !allowsAttachments([
+        ...filesRef.current.map((file) => file.size ?? 0),
+        ...entries.flatMap((entry) => (entry.file ? [entry.file.size] : [])),
+      ])
+    ) {
       ai.setError(t("chat.folderTooLarge"));
       return;
     }
+    for (const entry of loose) if (entry.file) void upload(entry.file);
+    if (!tree.length) return;
     setFolderImport(tree[0]?.path.split("/")[0] || t("trash.folder"));
     try {
       const created = await uploadDroppedTree(tree, null, (path) => {
@@ -857,7 +932,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
         ai.setError(t("chat.folderUnavailable"));
       for (const folder of created.folders) addFolderTarget(folder);
     } catch (e) {
-      ai.setError((e as Error).message);
+      ai.setError(uploadErrorMessage(e, t));
     } finally {
       setFolderImport("");
     }
@@ -900,7 +975,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                         id: item.id,
                         name: item.name || detail.resource.title,
                       },
-                    ].slice(0, 8),
+                    ],
               );
           } catch (e) {
             ai.setError((e as Error).message);
@@ -917,7 +992,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                   id: item.id,
                   name: item.name || t("trash.folder"),
                 },
-              ].slice(0, 8),
+              ],
         );
         continue;
       }
@@ -941,7 +1016,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
         id: file.response!.sourceFileId!,
         name: file.response!.sourceName || file.response!.filename,
       }));
-    return [...files, ...folderTargets].slice(0, 20);
+    return [...files, ...folderTargetsRef.current];
   };
   const onExplorerDragOver = (event: ReactDragEvent) => {
     if (
@@ -1009,6 +1084,136 @@ export function AIChat({ full = false }: { full?: boolean }) {
       explorer?: ExplorerTarget[];
     } | null>(null);
   const requestId = useRef<string | null>(null);
+  const allowsAttachments = (sizes: number[]) => {
+    const limits = options?.uploadLimits;
+    return (
+      !!limits &&
+      (!limits.maxFiles || sizes.length <= limits.maxFiles) &&
+      (!limits.maxFileBytes ||
+        sizes.every((size) => size <= limits.maxFileBytes)) &&
+      (!limits.maxTotalBytes ||
+        sizes.reduce((sum, size) => sum + size, 0) <= limits.maxTotalBytes)
+    );
+  };
+  const persistComposer = (
+    slots = senderRef.current?.getValue().slotConfig ?? [],
+  ) => {
+    if (
+      restoringDraft.current ||
+      !draftKey ||
+      draftRecord.current?.key !== draftKey
+    )
+      return;
+    const value: ComposerDraft = {
+      version: 1,
+      segments: slots.flatMap<ComposerDraft["segments"][number]>((slot) => {
+        if (slot.type === "text")
+          return [{ type: "text" as const, value: String(slot.value ?? "") }];
+        const reference = referenceSlots.current.get(slot.key!);
+        return reference ? [{ type: "reference" as const, reference }] : [];
+      }),
+      attachments: filesRef.current.flatMap((file) =>
+        file.response ? [asChatFile(file.response)] : [],
+      ),
+      folders: folderTargetsRef.current.filter(
+        (folder): folder is ExplorerTarget & { kind: "folder" } =>
+          folder.kind === "folder",
+      ),
+    };
+    draftRecord.current = { key: draftKey, value };
+    try {
+      writeComposerDraft(draftKey, value);
+    } catch {
+      ai.setError(t("chat.draftSaveFailed"));
+    }
+  };
+  useLayoutEffect(() => {
+    restoringDraft.current = true;
+    skipReferenceInsert.current = true;
+    clearComposer();
+    replaceFiles([]);
+    setFolderTargets([]);
+    let saved: ComposerDraft | null = null;
+    if (draftKey) {
+      try {
+        saved = readComposerDraft(draftKey);
+        draftRecord.current = {
+          key: draftKey,
+          value: saved ?? {
+            version: 1,
+            segments: [],
+            attachments: [],
+            folders: [],
+          },
+        };
+      } catch {
+        draftRecord.current = null;
+        ai.setError(t("chat.draftReadFailed"));
+      }
+    } else draftRecord.current = null;
+    if (saved) {
+      const slots: SlotConfigType[] = saved.segments.map((segment) => {
+        if (segment.type === "text")
+          return { type: "text", value: segment.value };
+        const r = segment.reference,
+          key = `ref-${crypto.randomUUID()}`,
+          label = referenceLabel(r);
+        referenceSlots.current.set(key, r);
+        return {
+          type: "tag",
+          key,
+          props: {
+            label: (
+              <AIReferenceTag
+                reference={r}
+                reveal={() => currentAI.current.reveal(r)}
+              />
+            ),
+            value: label,
+          },
+          formatResult: () => `@【${label}】`,
+        };
+      });
+      senderRef.current?.insert(slots, "end");
+      anchorComposerTrailingLine(senderRef.current);
+      replaceFiles(
+        saved.attachments.map((file) => composerFile(asChatFile(file))),
+      );
+      setFolderTargets(saved.folders);
+      ai.setReferences(
+        saved.segments.flatMap((segment) =>
+          segment.type === "reference" ? [segment.reference] : [],
+        ),
+      );
+      setHasDraft(
+        saved.segments.some(
+          (segment) => segment.type === "reference" || !!segment.value.trim(),
+        ),
+      );
+    } else ai.setReferences([]);
+    queueMicrotask(() => {
+      restoringDraft.current = false;
+      skipReferenceInsert.current = false;
+    });
+  }, [draftKey]);
+  useEffect(() => {
+    persistComposer();
+  }, [files, folderTargets]);
+  useEffect(() => {
+    const flush = () => {
+      const record = draftRecord.current;
+      if (record) {
+        try {
+          writeComposerDraft(record.key, record.value);
+        } catch {}
+      }
+    };
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, []);
   const haltJobId = useRef<string | null>(null);
   const sendingSession = useRef<string | null>(null);
   const submitting = useRef(false);
@@ -1237,12 +1442,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
   }, [ai.userId]);
   useEffect(() => {
     composerReady.current = true;
-    if (previousResource.current !== ai.resource?.id) {
-      replaceFiles([]);
-      clearComposer();
-      previousResource.current = ai.resource?.id;
-    }
-  }, [ai.resource?.id]);
+  }, []);
   useEffect(() => {
     if (skipReferenceInsert.current) return;
     const values = senderRef.current?.getValue().slotConfig ?? [];
@@ -1269,7 +1469,9 @@ export function AIChat({ full = false }: { full?: boolean }) {
   useEffect(() => {
     if (!full || !launchDraft) return;
     replaceComposerText(launchDraft.text);
-    replaceFiles(launchDraft.attachments.map(file => composerFile(asChatFile(file))));
+    replaceFiles(
+      launchDraft.attachments.map((file) => composerFile(asChatFile(file))),
+    );
     setFolderTargets([]);
     ai.setReferences(launchDraft.references);
     ai.setFileContext(null);
@@ -1376,6 +1578,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
           : current,
       );
       if (!previous || previous.status !== job.status) void load();
+      if (previous?.status !== job.status && !freshJob(job))
+        notifyAISessionFilesChanged({ sessionId });
     });
     events.addEventListener("revoked", () => {
       events.close();
@@ -1484,9 +1688,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
     ai.setSessionId(null);
     if (!full) setList(false);
     ai.setReferences([]);
-    clearComposer();
-    replaceFiles([]);
-    setFolderTargets([]);
     ai.setError("");
   };
   const action = async (fn: () => Promise<unknown>) => {
@@ -1613,6 +1814,10 @@ export function AIChat({ full = false }: { full?: boolean }) {
       return;
     }
     const refs = ai.references;
+    const sendingDraftKey = draftKey;
+    const sendingUserId = ai.userId;
+    const sendingDraft =
+      draftRecord.current?.key === draftKey ? draftRecord.current.value : null;
     const id = (requestId.current ??= crypto.randomUUID());
     submitting.current = true;
     setBusy(true);
@@ -1636,8 +1841,17 @@ export function AIChat({ full = false }: { full?: boolean }) {
         });
         sid = s.id;
         sendingSession.current = sid;
-        if (ai.userId) setPending(adoptDraftQueue(ai.userId, sid));
-        ai.setSessionId(sid);
+        if (sendingDraft && sendingUserId && sendingDraftKey) {
+          const nextKey = composerDraftKey(sendingUserId, sid);
+          writeComposerDraft(nextKey, sendingDraft);
+          localStorage.removeItem(sendingDraftKey);
+          if (currentDraftKey.current === sendingDraftKey)
+            draftRecord.current = { key: nextKey, value: sendingDraft };
+        }
+        if (currentDraftKey.current === sendingDraftKey) {
+          if (sendingUserId) setPending(adoptDraftQueue(sendingUserId, sid));
+          ai.setSessionId(sid);
+        }
       }
       await api(`/ai/sessions/${sid}/messages`, "POST", {
         id,
@@ -1659,11 +1873,24 @@ export function AIChat({ full = false }: { full?: boolean }) {
         haltJobId.current = null;
         await api(`/ai/jobs/${id}/cancel`, "POST");
       }
+      notifyAISessionFilesChanged({ sessionId: sid });
       requestId.current = null;
-      replaceFiles([]);
-      setFolderTargets([]);
-      clearComposer();
-      ai.setReferences([]);
+      if (sendingUserId)
+        localStorage.removeItem(composerDraftKey(sendingUserId, sid));
+      if (sendingDraftKey) localStorage.removeItem(sendingDraftKey);
+      if (
+        currentAI.current.userId === sendingUserId &&
+        currentAI.current.sessionId === sid
+      ) {
+        replaceFiles([]);
+        setFolderTargets([]);
+        clearComposer();
+        ai.setReferences([]);
+        draftRecord.current = {
+          key: composerDraftKey(sendingUserId!, sid),
+          value: { version: 1, segments: [], attachments: [], folders: [] },
+        };
+      }
       void refresh();
     } catch (e) {
       ai.setError((e as Error).message);
@@ -1896,9 +2123,19 @@ export function AIChat({ full = false }: { full?: boolean }) {
           {!!m.explorer?.length && (
             <div className="ai-sent-targets">
               {m.explorer.map((item) => (
-                <span
+                <button
+                  type="button"
                   className={`ai-sent-target ai-sent-target-${item.kind}`}
                   key={`${item.kind}:${item.id}`}
+                  onClick={() =>
+                    item.kind === "folder"
+                      ? setPreviewFolder(item)
+                      : window.open(
+                          `/api/v1/files/items/${encodeURIComponent(item.id)}/content`,
+                          "_blank",
+                          "noopener,noreferrer",
+                        )
+                  }
                 >
                   {item.kind === "folder" ? (
                     <Folder size={14} />
@@ -1911,7 +2148,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                         ? t("trash.folder")
                         : t("search.files"))}
                   </span>
-                </span>
+                </button>
               ))}
             </div>
           )}
@@ -2115,9 +2352,9 @@ export function AIChat({ full = false }: { full?: boolean }) {
                   ? "abort"
                   : "success") as "loading" | "error" | "abort" | "success",
             description:
-              j.error ||
+              systemErrorMessage(j.error, t) ||
               (j.status === "running" ? t("chat.background") : undefined),
-            extra: ["failed", "interrupted", "cancelled"].includes(j.status) ? (
+            footer: ["failed", "interrupted", "cancelled"].includes(j.status) ? (
               <Button
                 size="small"
                 disabled={busy || !model || jobs.length > 0}
@@ -2136,8 +2373,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
               >
                 {t("chat.retry")}
               </Button>
-            ) : undefined,
-            footer: ["queued", "running", "awaiting_approval"].includes(
+            ) : ["queued", "running", "awaiting_approval"].includes(
               j.status,
             ) ? (
               <Button
@@ -2569,7 +2805,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
             const imageItems: BubbleItemType[] = [
               ...new Map(
                 (j.progress.events ?? [])
-                  .filter((e) => e.image)
+                  .filter((e) => e.image && (!e.image.validation || e.image.validation.state === "passed"))
                   .map((e) => [e.image!.assetId, e.image!]),
               ).values(),
             ].map((image) => ({
@@ -2760,6 +2996,20 @@ export function AIChat({ full = false }: { full?: boolean }) {
             compact
           />
           {!full && <span className="ai-flex" />}
+          <button
+            type="button"
+            title={t("chat.sessionFiles")}
+            aria-label={t("chat.sessionFiles")}
+            disabled={!ai.sessionId || conversation?.session.id !== ai.sessionId}
+            onClick={() => {
+              if (conversation?.session.id !== ai.sessionId) return;
+              openFolderDelivery(
+                aiSessionFolderHref(conversation.session, t("nav.assistant")),
+              );
+            }}
+          >
+            <FolderOpen size={17} />
+          </button>
           {!!conversation?.resources?.length && (
             <Popover
               trigger="click"
@@ -2789,7 +3039,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                 aria-label={t("chat.operatedResources")}
                 title={t("chat.operatedResources")}
               >
-                <FolderOpen size={17} />
+                <Link2 size={17} />
               </Button>
             </Popover>
           )}
@@ -2949,9 +3199,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
                     behavior: "instant",
                   });
                   if (!full) setList(false);
-                  clearComposer();
-                  replaceFiles([]);
-                  setFolderTargets([]);
                   ai.setReferences([]);
                   ai.setError("");
                 }}
@@ -2996,6 +3243,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                                 await api(`/ai/sessions/${item.key}`, "PATCH", {
                                   title,
                                 });
+                                notifyAISessionFilesChanged({ sessionId: String(item.key), title });
                                 await refresh();
                               },
                             });
@@ -3013,6 +3261,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                               okButtonProps: { danger: true },
                               onOk: async () => {
                                 await api(`/ai/sessions/${item.key}`, "DELETE");
+                                notifyAISessionFilesChanged({ sessionId: String(item.key), deleted: true });
                                 if (ai.sessionId === item.key)
                                   ai.setSessionId(null);
                                 await refresh();
@@ -3199,8 +3448,14 @@ export function AIChat({ full = false }: { full?: boolean }) {
                 <div className="ai-drop-targets">
                   {folderTargets.map((folder) => (
                     <span className="ai-drop-target" key={folder.id}>
-                      {t("chat.folderLabel")}
-                      {folder.name || t("shell.unnamed")}
+                      <button
+                        type="button"
+                        className="ai-folder-preview-trigger"
+                        onClick={() => setPreviewFolder(folder)}
+                      >
+                        <Folder size={14} />
+                        {folder.name || t("shell.unnamed")}
+                      </button>
                       <button
                         type="button"
                         aria-label={t("chat.removeFolder", {
@@ -3241,6 +3496,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                       .cloneRange();
                 }}
                 onChange={(value, _event, slots) => {
+                  persistComposer(slots);
                   requestId.current = null;
                   const next =
                     !!value.trim() ||
@@ -3281,7 +3537,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                       ref={attachmentRef}
                       style={{ display: files.length ? undefined : "none" }}
                       overflow="scrollX"
-                      maxCount={8}
+                      maxCount={options?.uploadLimits.maxFiles || undefined}
                       className="ai-upload-list"
                       items={files}
                       accept=".txt,.md,.csv,.json,.log,.yaml,.yml,.docx,.xlsx,.pptx,.pdf,.png,.jpg,.jpeg,.webp,.gif"
@@ -3424,22 +3680,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                         {full && t("chat.approvals")}
                       </Button>
                     </Popover>
-                    <Popover
-                      trigger="click"
-                      placement="topLeft"
-                      destroyOnHidden
-                      content={<KnowledgeConnections compact />}
-                    >
-                      <Button
-                        type="text"
-                        size="small"
-                        aria-label={t("chat.answerSources")}
-                        title={t("chat.answerSources")}
-                      >
-                        <Bot size={16} />
-                        {full && t("chat.answerSources")}
-                      </Button>
-                    </Popover>
+
                     <span className="ai-flex" />
                     <Select
                       aria-label={t("chat.selectModel")}
@@ -3567,20 +3808,31 @@ export function AIChat({ full = false }: { full?: boolean }) {
             initialSource={filePickerOpen === "materials" ? "materials" : "folders"}
             close={() => setFilePickerOpen(false)}
             select={chooseStoredFile}
+            selectFiles={async (items) => {
+              for (const item of items) await chooseStoredFile(item);
+            }}
+            selectFolder={async (folder) => {
+              if (folder.type === "document") {
+                const { resource } = await api<{ resource: Resource }>(
+                  `/resources/${folder.id}`,
+                );
+                ai.addDocument(resource);
+              } else addFolderTarget(folder);
+            }}
           />
         )}
-        {folderPickerOpen && (
-          <FolderFilePicker
-            close={() => setFolderPickerOpen(false)}
-            selectFolder={(folder) => addFolderTarget(folder)}
+        {previewFolder && (
+          <AIFolderPreview
+            key={previewFolder.id}
+            folder={previewFolder}
+            close={() => setPreviewFolder(null)}
           />
         )}
         {fileSourceOpen && (
           <FileSourceDialog
             title={t("chat.addFiles")}
             close={() => setFileSourceOpen(false)}
-            chooseDoca={source => setFilePickerOpen(source ?? true)}
-            chooseFolder={() => setFolderPickerOpen(true)}
+            chooseDoca={(source) => setFilePickerOpen(source ?? true)}
             chooseLocal={() =>
               attachmentRef.current?.select({ multiple: true })
             }

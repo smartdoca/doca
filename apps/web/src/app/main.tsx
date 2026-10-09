@@ -1,3 +1,4 @@
+import "../shared/browser-crypto.js";
 import { PluginExtensionHost } from "../plugins/extensions.js";
 import { createRoot } from "react-dom/client";
 import { App } from "./app.js";

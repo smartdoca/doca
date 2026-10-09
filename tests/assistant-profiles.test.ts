@@ -12,28 +12,7 @@ describe("assistant visual profiles", () => {
     });
   });
 
-  it("keeps knowledge answers grounded and thread-only", () => {
-    const profile = ASSISTANT_PROFILES["knowledge-answer"];
-    expect(profile.capabilities).toMatchObject({
-      personalMemory: false,
-      feedback: true,
-      references: false,
-      webSearch: false,
-      approvals: false,
-      sourceManagement: false,
-    });
-  });
-
-  it("keeps curation shared, actionable, and free of personal memory", () => {
-    const profile = ASSISTANT_PROFILES["knowledge-curation"];
-    expect(profile.capabilities).toMatchObject({
-      personalMemory: false,
-      modelPicker: true,
-      humanTasks: true,
-      sourceManagement: true,
-      feedback: false,
-    });
-  });
+  it("shows one personal assistant profile", () => { expect(Object.keys(ASSISTANT_PROFILES)).toEqual(["personal"]); });
 
   it("uses one visual language across assistant identities", () => {
     expect(

@@ -2,7 +2,7 @@
 
 [中文](database.zh-CN.md)
 
-The current baseline is `doca-2026-10-03-credentials-v2`. [create-schema.ts](../packages/db/src/create-schema.ts) defines tables, indexes, foreign keys, and checks; [schema.ts](../packages/db/src/schema.ts) defines Kysely types; [connection.ts](../packages/db/src/connection.ts) opens connections; [transactions.ts](../packages/db/src/transactions.ts) manages transactions and conflict retries.
+The current baseline is `doca-2026-10-08-knowledge-books-v2`. [create-schema.ts](../packages/db/src/create-schema.ts) defines tables, indexes, foreign keys, and checks; [schema.ts](../packages/db/src/schema.ts) defines Kysely types; [connection.ts](../packages/db/src/connection.ts) opens connections; [transactions.ts](../packages/db/src/transactions.ts) manages transactions and conflict retries.
 
 Empty databases are initialized with the current schema. Startup validates the baseline and required storage/credential shapes. Old baselines are rejected; this release does not migrate or convert them. Preserve existing data/deployments and follow [release requirements](releases/0.1.10.md). The existing document_templates table is retained without CRUD or automatic registration as a resource provider; see [templates and materials](creation-resources.md). These are current implementation facts, not a new migration plan.
 
@@ -51,7 +51,7 @@ Plugin namespaces bind plugin_id, namespace, data_version, generation, state, an
 
 AI sessions separate user-mentioned resources, explicitly approved resources, and display/history associations; resource_ids alone does not authorize model access. Jobs store approval summaries and parameter digests, relinquish leases while awaiting approval, and resume only after authenticated ownership checks. AI calls preserve original usage facts; accounting/policy business modules do not replace them. Secrets, skills, MCP keys, notes, operation receipts, and session events have separate tables and access boundaries.
 
-Knowledge subscriptions, instructions, sources, entries/versions, chunks/links, human tasks, assistants/runs, bots/sharing/keys, conversations/messages/cases, and publication records support [knowledge curation](knowledge-studio.md) and [Q&A sharing](knowledge-sharing.md). Provider-owned content remains provider-owned; indexed knowledge does not bypass source authorization.
+Native source subscriptions, chunks and links retain indexing/search. The knowledge-book tables below persist editable configuration histories, contributor sources, feedback, workflow runs, immutable releases and human tasks. Original source permissions protect all derived results. Old curation and Q&A tables are absent from fresh databases; old records are never migrated or deleted.
 
 ## Current table and field inventory
 
@@ -133,7 +133,7 @@ The inventory below reflects the current Schema interface. Field names are liste
 | `plugin_webview_auth` | `id`, `kind`, `plugin_id`, `parent_session`, `expires_at` |
 | `navigation_settings` | `id`, `revision`, `draft`, `published` |
 | `settings` | `directory_mode`, `id`, `registration`, `revision`, `site_name`, `default_locale`, `default_timezone`, `registration_review`, `sso_registration`, `social_registration` |
-| `resources` | `permission_overrides`, `content_bytes`, `authz_revision`, `history_readers`, `discoverable`, `last_editor_id`, `last_edited_at`, `cover_asset_id`, `page_width`, `ai_curated`, `knowledge_schedule`, `knowledge_preset`, `id`, `kind`, `format`, `title`, `owner_id`, `library_id`, `parent_id`, `tree_order`, `access_mode`, `visibility`, `requests_enabled`, `share_links_enabled`, `public_role`, `version`, `deleted_at`, `delete_batch`, `created_at`, `updated_at` |
+| `resources` | `permission_overrides`, `content_bytes`, `authz_revision`, `history_readers`, `discoverable`, `last_editor_id`, `last_edited_at`, `cover_asset_id`, `page_width`, `id`, `kind`, `format`, `title`, `owner_id`, `library_id`, `parent_id`, `tree_order`, `access_mode`, `visibility`, `requests_enabled`, `share_links_enabled`, `public_role`, `version`, `deleted_at`, `delete_batch`, `created_at`, `updated_at` |
 | `document_templates` | `id`, `format`, `title`, `content`, `preview`, `created_by`, `created_at`, `updated_at` |
 | `grants` | `include_descendants`, `source_type`, `source_id`, `source_resource_id`, `status`, `created_by`, `created_at`, `updated_at`, `resource_id`, `user_id`, `role` |
 | `comments` | `body_json`, `anchor`, `id`, `resource_id`, `author_id`, `body`, `parent_id`, `resolved`, `deleted_at`, `version`, `created_at`, `updated_at` |
@@ -149,34 +149,22 @@ The inventory below reflects the current Schema interface. Field names are liste
 | `plugin_archives` | `sha256`, `plugin_id`, `version`, `store_id`, `object_key`, `size`, `file_index`, `created_at` |
 | `audit_events` | `id`, `actor_id`, `resource_id`, `action`, `created_at` |
 | `user_page_state` | `user_id`, `key`, `value`, `version`, `updated_at` |
+| `knowledge_books` | `id`, `revision`, `configuration`, `published_release_id`, `created_at`, `updated_at` |
+| `knowledge_book_configurations` | `book_id`, `revision`, `configuration`, `author_id`, `created_at` |
+| `knowledge_book_sources` | `id`, `book_id`, `title`, `creator_id`, `revision`, `configuration`, `status`, `created_at`, `updated_at` |
+| `knowledge_book_source_versions` | `source_id`, `revision`, `title`, `configuration`, `status`, `author_id`, `created_at` |
+| `knowledge_book_feedback` | `id`, `book_id`, `author_id`, `revision`, `detail`, `status`, `created_at`, `updated_at` |
+| `knowledge_book_feedback_versions` | `feedback_id`, `revision`, `detail`, `status`, `author_id`, `created_at` |
+| `knowledge_book_runs` | `id`, `book_id`, `actor_id`, `configuration_revision`, `configuration`, `input_hash`, `status`, `lease_id`, `started_at`, `heartbeat_at`, `artifact`, `error`, `trigger_key`, `created_at`, `updated_at` |
+| `knowledge_book_node_runs` | `run_id`, `node_id`, `type`, `status`, `input_refs`, `output`, `error`, `started_at`, `completed_at` |
+| `knowledge_book_releases` | `id`, `book_id`, `run_id`, `revision`, `artifact`, `created_at` |
+| `knowledge_book_human_tasks` | `id`, `book_id`, `run_id`, `node_id`, `kind`, `title`, `status`, `revision`, `input_hash`, `resolution`, `created_at`, `updated_at` |
 | `knowledge_chunks` | `id`, `source_kind`, `source_id`, `ordinal`, `title`, `text`, `anchor`, `content_hash`, `reader_ids`, `updated_at` |
 | `knowledge_links` | `id`, `from_kind`, `from_id`, `to_kind`, `to_id`, `relation`, `score`, `reason`, `created_at` |
 | `knowledge_link_hides` | `user_id`, `link_id`, `created_at` |
 | `knowledge_feedback` | `id`, `user_id`, `chunk_id`, `judgment`, `query`, `created_at` |
-| `knowledge_conversations` | `access_key_id`, `id`, `scope_id`, `kind`, `owner_id`, `title`, `summary`, `state`, `archived`, `created_at`, `updated_at` |
-| `knowledge_messages` | `id`, `conversation_id`, `role`, `author_id`, `trigger`, `content`, `detail`, `created_at` |
-| `knowledge_tasks` | `id`, `conversation_id`, `actor_id`, `status`, `error`, `created_at`, `updated_at` |
-| `knowledge_checkpoints` | `task_id`, `detail`, `attempts`, `available_at` |
-| `knowledge_source_observations` | `library_id`, `source_id`, `fingerprint`, `updated_at` |
-| `knowledge_cases` | `id`, `bot_id`, `message_id`, `user_id`, `judgment`, `reason`, `snapshot`, `status`, `created_at` |
-| `knowledge_source_actions` | `id`, `library_id`, `source_key`, `actor_id`, `action`, `detail`, `created_at` |
-| `knowledge_human_tasks` | `id`, `library_id`, `conversation_id`, `task_key`, `kind`, `title`, `detail`, `status`, `revision`, `resolution`, `created_at`, `updated_at` |
-| `knowledge_publications` | `library_id`, `revision`, `fingerprint`, `documents`, `status`, `error`, `updated_at` |
 | `knowledge_source_groups` | `config`, `id`, `library_id`, `title`, `source_kind`, `created_at` |
-| `knowledge_subscriptions` | `name`, `group_id`, `id`, `creator_id`, `library_id`, `source_kind`, `source_id`, `url`, `node_id`, `source_version`, `status`, `created_at`, `preset` |
-| `knowledge_instructions` | `library_id`, `path`, `revision`, `markdown`, `author_id`, `created_at` |
-| `knowledge_settings` | `library_id`, `revision`, `config`, `updated_at` |
-| `knowledge_entries` | `id`, `library_id`, `title`, `markdown`, `origin`, `status`, `revision`, `source_refs`, `instruction_hash`, `review_state`, `author_id`, `created_at`, `updated_at` |
-| `knowledge_entry_versions` | `entry_id`, `revision`, `snapshot`, `author_id`, `created_at` |
-| `knowledge_assistant_users` | `assistant_id`, `user_id`, `accepted`, `visited_at`, `integration`, `revision` |
-| `knowledge_bot_sharing` | `bot_id`, `enabled` |
-| `knowledge_bot_share_links` | `id`, `bot_id`, `token`, `enabled`, `revoked_at`, `expires_at`, `max_members`, `version`, `created_at` |
-| `knowledge_bot_link_members` | `link_id`, `user_id`, `created_at` |
-| `knowledge_bot_keys` | `id`, `bot_id`, `creator_id`, `name`, `channel`, `token_hash`, `expires_at`, `created_at` |
-| `knowledge_assistants` | `manager_ids`, `config`, `visibility`, `id`, `owner_id`, `title`, `revision`, `library_ids`, `member_ids`, `enabled`, `updated_at` |
-| `knowledge_directories` | `library_id`, `path`, `resource_id` |
-| `knowledge_runs` | `id`, `library_id`, `trigger`, `status`, `detail`, `created_at` |
-| `knowledge_bots` | `library_id`, `title`, `published`, `updated_at` |
+| `knowledge_subscriptions` | `name`, `group_id`, `id`, `creator_id`, `library_id`, `source_kind`, `source_id`, `url`, `source_version`, `status`, `created_at` |
 | `knowledge_gaps` | `id`, `user_id`, `query`, `status`, `detail`, `created_at` |
 | `webview_tickets` | `id`, `user_id`, `expires_at` |
 | `qr_logins` | `id`, `secret_hash`, `user_id`, `expires_at` |

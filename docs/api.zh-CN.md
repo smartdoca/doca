@@ -41,7 +41,7 @@
 | `GET /resources/:id/versions`、`POST /resources/:id/versions` | 历史列表 / 手动快照 |
 | `GET /resources/:id/versions/:versionId` | 预览；表格、幻灯片、画布的 canRestore 为 false |
 | `POST /resources/:id/versions/:versionId/restore` | `{expectedSeq}`，管理者恢复富文本/Markdown |
-| `POST /share/redeem` | 登录后预览或接受文档/问答链接 |
+| `POST /share/redeem` | 登录后预览或接受文档链接 |
 
 正文编辑使用 `/api/v1/ws`，见[协同](collaboration.zh-CN.md)。权限字段、来源和继承见[权限](permission-inheritance.zh-CN.md)；分享及历史见[文档指南](document-experience.zh-CN.md)。
 
@@ -61,15 +61,13 @@
 
 资产上传：`POST /assets?purpose=&filename=&resourceId=`，支持 avatar/cover/attachment/comment_image，按用途校验权限。下载：`GET /assets/:id/content`；强制下载加 `?download=1`。头像/封面/评论图片最大 5 MiB，正文附件最大 20 MiB。普通平台文件通过 `/files` 系列接口上传，使用独立限额及分片流程。
 
-正文附件和 AI 附件创建同时返回素材 `id` 与实际文件 `fileId`。附件内容和生图引用使用素材 ID，`/files/items/:id` 操作使用文件 ID。`POST /files/items/:id/attach` 也返回这两个 ID；无需再搜索全局目录找回上传文件的 ID。
-
 `GET /admin/storage` 只读展示部署后端；`PUT /admin/storage` 返回 405。后端和凭据通过环境变量配置，详见[文件存储](storage.zh-CN.md)。
 
 ## AI、知识与插件
 
 AI 会话和任务位于 `/ai`，模型工具受会话范围、真实资源权限和审批约束。`POST /ai/jobs/:id/approval` 接受 `{approvalId,approved}`，仅任务所属用户可决定；审批不改变用户原有资源权限。
 
-知识整理、机器人 API/MCP、独立密钥和流式回答见[知识整理](knowledge-studio.zh-CN.md)；统一来源在 `/content`，见[内容协议](plugin-content.zh-CN.md)。已安装插件业务路由为 `/plugins/:pluginId/...`，实际可用性取决于当前加载的包。宿主没有随手记或邮箱专用业务 API，见[功能与边界](features.zh-CN.md)。
+知识册命令、编排运行、人工待办与来源订阅见[知识册](knowledge-books.zh-CN.md)；统一来源在 `/content`，见[内容协议](plugin-content.zh-CN.md)。已安装插件业务路由为 `/plugins/:pluginId/...`，实际可用性取决于当前加载的包。宿主没有随手记或邮箱专用业务 API，见[功能与边界](features.zh-CN.md)。
 
 ## 健康与源码
 

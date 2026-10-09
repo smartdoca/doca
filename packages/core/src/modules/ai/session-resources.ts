@@ -53,6 +53,7 @@ export async function sessionResourceHistory(
     ])
     .where("s.user_id", "=", userId)
     .where("s.id", "=", sessionId)
+    .where("r.kind", "!=", "assistant")
     .orderBy("r.touched_at", "desc")
     .execute();
 }

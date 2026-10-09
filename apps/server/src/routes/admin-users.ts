@@ -123,10 +123,10 @@ export async function createAdminUser(
       try {
         u = new URL(input.avatar);
       } catch {
-        fail(400, "头像需为 HTTPS 地址");
+        fail(400, "头像需为 HTTP(S) 地址");
       }
-      if (u.protocol !== "https:" || u.username || u.password)
-        fail(400, "头像需为 HTTPS 地址");
+      if (!["http:", "https:"].includes(u.protocol) || u.username || u.password)
+        fail(400, "头像需为 HTTP(S) 地址");
     }
     const u = await createUser(
       tx,

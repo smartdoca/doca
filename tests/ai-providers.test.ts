@@ -205,7 +205,8 @@ it("normalizes catalog IDs and does not forward redirects", async () => {
 });
 
 it("uses a minimal plain-text connection probe regardless of model capabilities", async () => {
-  const { testAIModel } = await import("../apps/server/src/services/ai/providers.js");
+  const { testAIModel } =
+    await import("../apps/server/src/services/ai/providers.js");
   const requests: any[] = [];
   const fetcher = (async (_url, init) => {
     const body = JSON.parse(String(init?.body));
@@ -248,7 +249,8 @@ it("uses a minimal plain-text connection probe regardless of model capabilities"
 });
 
 it("degrades the connection probe when a vendor rejects optional parameters", async () => {
-  const { testAIModel } = await import("../apps/server/src/services/ai/providers.js");
+  const { testAIModel } =
+    await import("../apps/server/src/services/ai/providers.js");
   const requests: any[] = [];
   const fetcher = (async (_url, init) => {
     const body = JSON.parse(String(init?.body));
@@ -319,23 +321,65 @@ it("reports connection categories without leaking provider request details", asy
 
 it("retries provider 504s and leaves incompatible workflow failures alone", async () => {
   const { AppError } = await import("../packages/core/src/shared/errors.js");
-  const { transientModelFailure } = await import(
-    "../apps/server/src/services/ai/providers.js"
-  );
+  const { transientModelFailure } =
+    await import("../apps/server/src/services/ai/providers.js");
   expect(
     transientModelFailure(
       new AppError(502, "模型厂商服务暂时异常（504），请稍后重试"),
     ),
   ).toBe(true);
   expect(
-    transientModelFailure(new AppError(502, "模型连接超时，请检查网络或稍后重试")),
+    transientModelFailure(
+      new AppError(502, "模型连接超时，请检查网络或稍后重试"),
+    ),
   ).toBe(true);
   expect(
     transientModelFailure(
-      new AppError(502, "AI 工作流执行失败，模型返回格式或工具调用不兼容，请检查模型配置"),
+      new AppError(
+        502,
+        "AI 工作流执行失败，模型返回格式或工具调用不兼容，请检查模型配置",
+      ),
     ),
   ).toBe(false);
-  expect(transientModelFailure(new AppError(400, "不支持的幻灯片命令"))).toBe(false);
+  expect(transientModelFailure(new AppError(400, "不支持的幻灯片命令"))).toBe(
+    false,
+  );
+});
+
+it("recognizes the host's explicit workflow connection-interruption reason without treating unknown 502s or forged public fields as transport evidence", async () => {
+  const { AppError } = await import("../packages/core/src/shared/errors.js");
+  const { transientModelFailure } =
+    await import("../apps/server/src/services/ai/providers.js");
+  expect(
+    transientModelFailure(
+      new AppError(502, "AI 模型连接中断，已保存成果保留，可重试继续。", {
+        code: "ai_workflow_connection_interrupted",
+      }),
+    ),
+  ).toBe(true);
+  // Classification follows the host-owned reason, not localized message text.
+  expect(
+    transientModelFailure(
+      new AppError(502, "AI workflow connection interrupted", {
+        code: "ai_workflow_connection_interrupted",
+      }),
+    ),
+  ).toBe(true);
+  for (const error of [
+    new AppError(502, "AI 模型连接中断，已保存成果保留，可重试继续。"),
+    new AppError(502, "Unknown workflow failure", {
+      code: "ai_workflow_failed",
+    }),
+    Object.assign(new Error("Unknown provider failure"), {
+      status: 502,
+      code: "ai_workflow_connection_interrupted",
+      reason: { code: "ai_workflow_connection_interrupted" },
+    }),
+    new AppError(401, "Invalid credentials", {
+      code: "ai_workflow_connection_interrupted",
+    }),
+  ])
+    expect(transientModelFailure(error)).toBe(false);
 });
 
 it("enables Claude automatic caching without adding flags to compatible vendors", async () => {
@@ -388,11 +432,8 @@ it("enables Claude automatic caching without adding flags to compatible vendors"
   ] as const)
     expect(promptCacheOptions({ ...model, provider }, options)).toBe(options);
   expect(
-    promptCacheOptions(
-      { ...model, provider: "openai" },
-      options,
-      "session-1",
-    ).providerOptions.openai.promptCacheKey,
+    promptCacheOptions({ ...model, provider: "openai" }, options, "session-1")
+      .providerOptions.openai.promptCacheKey,
   ).toBe("session-1");
 });
 
@@ -776,7 +817,11 @@ it("enables thinking for Claude and Gemini and retries without it when rejected"
   });
 
   const rejected: any[] = [];
-  const legacy = { ...model, provider: "anthropic" as const, model: "claude-legacy-qa" };
+  const legacy = {
+    ...model,
+    provider: "anthropic" as const,
+    model: "claude-legacy-qa",
+  };
   const legacyFetcher = (async (_url, init) => {
     const body = JSON.parse(String(init?.body));
     rejected.push(body);
@@ -784,7 +829,10 @@ it("enables thinking for Claude and Gemini and retries without it when rejected"
       return Response.json(
         {
           type: "error",
-          error: { type: "invalid_request_error", message: "thinking: Extra inputs are not permitted" },
+          error: {
+            type: "invalid_request_error",
+            message: "thinking: Extra inputs are not permitted",
+          },
         },
         { status: 400 },
       );

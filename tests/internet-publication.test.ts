@@ -5,7 +5,6 @@ import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import { authorize } from "@core/modules/access/queries.js";
 import { permissionOverview } from "@core/modules/access/presentation.js";
-import { saveKnowledgeAssistant } from "@core/modules/knowledge/system.js";
 
 let db: DB, owner: Actor, content: ReturnType<typeof createContent>;
 
@@ -32,7 +31,7 @@ async function fresh(id: string) {
 }
 
 async function allowInternet(
-  kind: "document" | "library" | "assistant",
+  kind: "document" | "library",
   allowed: boolean,
 ) {
   const row = await db
@@ -49,7 +48,6 @@ async function allowInternet(
         internetPublication: {
           document: true,
           library: true,
-          assistant: true,
           ...config.internetPublication,
           [kind]: allowed,
         },
@@ -149,7 +147,7 @@ it("lets an individually allowed person publish after the type is closed", async
   ).toBe(false);
 });
 
-it("blocks new public libraries and assistants without changing ones already public", async () => {
+it("blocks new public libraries without changing ones already public", async () => {
   const library = await content.create(owner, {
     kind: "library",
     format: "rich_text",
@@ -164,32 +162,4 @@ it("blocks new public libraries and assistants without changing ones already pub
     title: "Closed library",
   });
   await expect(publish(closed)).rejects.toMatchObject({ status: 403 });
-  const bot = await saveKnowledgeAssistant(db, owner, {
-    expectedRevision: 0,
-    title: "Public bot",
-    libraryIds: [],
-    memberIds: [],
-    enabled: true,
-    visibility: "public",
-  });
-  await allowInternet("assistant", false);
-  await saveKnowledgeAssistant(db, owner, {
-    id: bot.id,
-    expectedRevision: bot.revision,
-    title: "Public bot renamed",
-    libraryIds: [],
-    memberIds: [],
-    enabled: true,
-    visibility: "public",
-  });
-  await expect(
-    saveKnowledgeAssistant(db, owner, {
-      expectedRevision: 0,
-      title: "New public bot",
-      libraryIds: [],
-      memberIds: [],
-      enabled: true,
-      visibility: "public",
-    }),
-  ).rejects.toMatchObject({ status: 403 });
 });

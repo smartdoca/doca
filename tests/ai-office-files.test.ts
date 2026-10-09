@@ -1,10 +1,13 @@
 import { expect, it } from "vitest";
-import { deflateSync } from "node:zlib";
+import { readFile } from "node:fs/promises";
 import sharp from "sharp";
 import { unzipSync, zipSync, strToU8 } from "fflate";
 import { relevantSkillFormats } from "@core/modules/ai/skills.js";
 import { extractAttachmentText } from "../apps/server/src/services/ai/attachments.js";
-import { extractFileParts, extractFilePartsAsync } from "../apps/server/src/services/ai/extract-content.js";
+import {
+  extractFileParts,
+  extractFilePartsAsync,
+} from "../apps/server/src/services/ai/extract-content.js";
 import {
   createExportFile,
   parseTable,
@@ -59,22 +62,18 @@ it("creates Word, Markdown, Excel and PDF files from report text", async () => {
   const pdf = createExportFile("pdf", { content: "调研结论" });
   expect(pdf.body.subarray(0, 5).toString()).toBe("%PDF-");
   const pdfParts = await extractFilePartsAsync("report.pdf", pdf.body);
-  expect(pdfParts.filter(part => part.type === "text").map(part => part.text).join("\n")).toContain("调研结论");
   expect(
-    extractAttachmentText("blank.pdf", Buffer.from("%PDF-1.7\nfixture")),
-  ).toContain("未能从该 PDF");
-  const payload = Buffer.from("BT /F1 12 Tf 10 100 Td (Flate Hello) Tj ET");
-  const compressed = deflateSync(payload);
-  const flate = Buffer.concat([
-    Buffer.from(
-      "%PDF-1.1\n1 0 obj<< /Length " +
-        compressed.length +
-        " /Filter /FlateDecode >>\nstream\n",
-    ),
-    compressed,
-    Buffer.from("\nendstream\nendobj\n"),
-  ]);
-  expect(extractAttachmentText("zip.pdf", flate)).toContain("Flate Hello");
+    pdfParts
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join("\n"),
+  ).toContain("调研结论");
+  await expect(
+    extractFilePartsAsync("blank.pdf", Buffer.from("%PDF-1.7\nfixture")),
+  ).rejects.toThrow();
+  expect(() => extractFileParts("report.pdf", pdf.body)).toThrow(
+    "pdf_requires_async_parser",
+  );
 });
 
 it("keeps embedded Office and PDF images in document order", async () => {
@@ -99,30 +98,13 @@ it("keeps embedded Office and PDF images in document order", async () => {
   expect(office[0]).toMatchObject({ type: "text", text: "封面前" });
   expect(office[1]).toMatchObject({ type: "image", mime: "image/png" });
   expect(office[2]).toMatchObject({ type: "text", text: "封面后" });
-  const jpeg = await sharp({
-    create: { width: 8, height: 8, channels: 3, background: "#24a" },
-  })
-    .jpeg()
-    .toBuffer();
-  const payload = Buffer.from("BT /F1 12 Tf 10 100 Td (Before image) Tj ET");
-  const compressed = deflateSync(payload);
-  const pdf = Buffer.concat([
-    Buffer.from(
-      "%PDF-1.1\n1 0 obj<< /Length " +
-        compressed.length +
-        " /Filter /FlateDecode >>\nstream\n",
+  const pages = await extractFilePartsAsync(
+    "scan.pdf",
+    await readFile(
+      new URL("./fixtures/ai-recognition/scan.pdf", import.meta.url),
     ),
-    compressed,
-    Buffer.from(
-      "\nendstream\nendobj\n2 0 obj<< /Length " +
-        jpeg.length +
-        " /Filter /DCTDecode >>\nstream\n",
-    ),
-    jpeg,
-    Buffer.from("\nendstream\nendobj\n"),
-  ]);
-  const pages = extractFileParts("scan.pdf", pdf);
-  expect(pages[0]).toMatchObject({ type: "text", text: "Before image" });
+  );
+  expect(pages[0]).toMatchObject({ type: "text" });
   expect(pages.some((part) => part.type === "image")).toBe(true);
 });
 

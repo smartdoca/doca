@@ -1,0 +1,5 @@
+mflux==0.22.0
+mlx==0.32.3
+fastapi==0.143.0
+uvicorn==0.54.0
+httpx==0.28.1

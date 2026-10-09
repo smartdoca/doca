@@ -1,4 +1,5 @@
 import { fail } from "@core/shared/errors.js";
+import { knowledgeFolderKind } from "@core/modules/knowledge/file-folders.js";
 
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -35,6 +36,7 @@ export const systemFolders = [
     copyOnly: true,
     role: "AI 生成的图片保存在这里。目录不能增删改；里面的文件只能复制出去，不能移动、重命名或删除。",
   },
+
   {
     id: "shared",
     name: "共享文件夹",
@@ -69,6 +71,17 @@ export const systemLocations = systemFolders.map((folder) => ({
 
 export function isFileUuid(value: string) {
   return uuid.test(value);
+}
+
+export function aiSessionFolderId(sessionId: string) {
+  return `ai-session:${sessionId}`;
+}
+
+export function aiSessionIdFromFolderId(id: string) {
+  const sessionId = id.startsWith("ai-session:")
+    ? id.slice("ai-session:".length)
+    : "";
+  return isFileUuid(sessionId) ? sessionId : null;
 }
 
 export function requireUuid(id: string, label: string) {
@@ -119,7 +132,8 @@ export function preferDisplayLocation<
   return (
     locations.find((item) => item.parentType === "folder") ??
     locations.find(
-      (item) => item.parentType === "system" && item.parentId === "ai",
+      (item) => item.parentType === "system" &&
+        (item.parentId === "ai" || !!aiSessionIdFromFolderId(item.parentId ?? "") || !!knowledgeFolderKind(item.parentId ?? "")),
     ) ??
     locations.find(
       (item) => item.parentType === "system" && item.parentId === "root",
@@ -128,12 +142,14 @@ export function preferDisplayLocation<
   );
 }
 
-/** Resolve a folder node id: root / ai / shared / documents / UUID. */
+/** Resolve a system, AI session, or physical folder node id. */
 export function parseFolderId(id?: string | null): FileParent {
   const value = id?.trim() || "root";
   if (myFiles.has(value)) return { type: "system", id: "root" };
   if (value === "ai" || value === "AI助手" || value === "AI 助手")
     return { type: "system", id: "ai" };
+  if (aiSessionIdFromFolderId(value)) return { type: "system", id: value };
+  if (knowledgeFolderKind(value)) return { type: "system", id: value };
   if (value === "shared" || value === "共享文件夹")
     return { type: "system", id: "shared" };
   if (
@@ -189,7 +205,7 @@ export function describeFileParent(parent: FileParent) {
       ...parent,
       name: known?.name ?? parent.id,
       path: known?.path ?? parent.id,
-      parentId: known?.parentId ?? null,
+      parentId: aiSessionIdFromFolderId(parent.id) ? "ai" : known?.parentId ?? null,
       inMyFilesRoot: parent.id === "root",
       writable: known?.writable ?? false,
       copyOnly: known?.copyOnly ?? true,
@@ -250,7 +266,7 @@ export function isCopyOnlyParent(parentType: string, parentId: string) {
   if (parentType === "document") return true;
   return (
     parentType === "system" &&
-    (parentId === "ai" || parentId === "documents")
+    (parentId === "ai" || parentId === "documents" || !!aiSessionIdFromFolderId(parentId) || !!knowledgeFolderKind(parentId))
   );
 }
 

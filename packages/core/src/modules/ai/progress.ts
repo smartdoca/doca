@@ -1,3 +1,5 @@
+import type { SystemErrorReason } from "@doca/i18n";
+
 export type FolderDelivery = {
   id: string;
   name: string;
@@ -69,7 +71,6 @@ export type AIApprovalCode =
   | "update_knowledge_settings"
   | "subscribe_knowledge_source"
   | "curate_knowledge"
-  | "configure_knowledge_assistant"
   | "write_knowledge_entry"
   | "review_knowledge_entry"
   | "delete_files"
@@ -106,6 +107,7 @@ type AIProgressEventBase = {
     width: number;
     height: number;
     ready: boolean;
+    validation?: { state:"pending" | "passed" | "rejected"; evidence?:string };
   };
   folder?: FolderDelivery;
   file?: FileDelivery;
@@ -133,6 +135,7 @@ export type AIProgressEvent = AIProgressEventBase &
 export type AIProgress = {
   pageState?: { key: string; value: unknown };
   imageGenerationError?: string;
+  imageGenerationFailure?: SystemErrorReason;
   questions?: { id: string; title: string; options: string[] }[];
   pendingAccess?: { requestId: string; resourceId: string };
   approvals?: AIApproval[];
@@ -222,6 +225,7 @@ export function applyProgressPatch(
     approvals: patch.approvals,
     questions: patch.questions,
     imageGenerationError: patch.imageGenerationError,
+    imageGenerationFailure: patch.imageGenerationFailure,
     pendingAccess: patch.pendingAccess,
     pageState: patch.pageState ?? previous?.pageState,
     text: (patch.appendText ? (previous?.text ?? "") : "") + patch.text,

@@ -20,7 +20,7 @@ DOCA_PLUGIN_NPM_REGISTRY=https://registry.npmjs.org
 DOCA_PLUGINS_DIR=/data/plugins
 ```
 
-两个地址都是 HTTPS origin，不允许凭据、路径前缀、query 或 fragment。空值使用默认值。首版不支持私有 registry 登录。Doca 服务端代理全部商城 API 请求，不向远端转发浏览器 Cookie、Authorization、用户 ID 或业务数据；远端无需开放浏览器 CORS。
+两个地址都是 HTTP(S) origin，不允许凭据、路径前缀、query 或 fragment。空值使用默认值。首版不支持私有 registry 登录。Doca 服务端代理全部商城 API 请求，不向远端转发浏览器 Cookie、Authorization、用户 ID 或业务数据；远端无需开放浏览器 CORS。
 
 API 前缀 `/api/v1`。JSON UTF-8，响应带 `protocolVersion: 1`。时间为 UTC ISO 8601，计数为非负安全整数，未知计数为 `null`，不能以 0 代替未知。所有接口公共只读，无需商城登录。
 
@@ -51,7 +51,7 @@ API 前缀 `/api/v1`。JSON UTF-8，响应带 `protocolVersion: 1`。时间为 U
 
 - `id`：与安装包 manifest.id 相同，匹配 `^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$`，最多 100 字符。
 - `name` / `author.name`：1–160 字符；`summary`：最多 300 字符，均为纯文本。
-- `author.url`：HTTPS URL 或 null，仅供用户点击，不由宿主自动抓取。
+- `author.url`：HTTP(S) URL 或 null，仅供用户点击，不由宿主自动抓取。
 - `categoryId`：1–60 字符，`[a-z0-9-]+`；分类列表单独获取，不从当前页推导。
 - `icon`：PNG data URL 或 null，编码后总长不超过 24 KiB；不接受 SVG、脚本或远端图片 URL。
 - `detailPath`：商城同源绝对路径 `/plugins/<id>`；由 Doca 拼接配置的商城 origin，禁止外部 origin、query、fragment、路径穿越。打开新页使用 `noopener,noreferrer`。
@@ -186,7 +186,7 @@ items 为 PluginSummary[]，不超过 limit。total 为匹配总数或 null；ne
 1. 验证 Release.npm.registry 等于宿主配置的 registry（首版默认 npmjs），禁止商城任意指定下载源。
 2. 从 registry 获取精确包版本元数据：`GET /<encodeURIComponent(packageName)>/<encodeURIComponent(version)>`，不解析 latest/tag/range。
 3. 验证 registry 元数据 name/version、dist.integrity 与商城审核的 SRI 一致；下载 dist.tarball。
-4. tarball 必须 HTTPS 且同 registry origin，无凭据、fragment；不跟随重定向。元数据不超过 2 MiB，15 秒；下载不超过 32 MiB，120 秒，校验大小和 SHA-512。
+4. tarball 必须 HTTP(S) 且同 registry origin，无凭据、fragment；不跟随重定向。元数据不超过 2 MiB，15 秒；下载不超过 32 MiB，120 秒，校验大小和 SHA-512。
 5. 安全解包 npm tgz，要求根目录 `package/`，剥离一次；只接受普通文件/目录，拒绝符号链接、硬链接、设备、绝对路径、穿越、重复路径。POSIX pax 扩展头（typeflag `x`/`g`，macOS libarchive 与 npm 用来写 mtime、xattr）跳过，不作为文件解出，也不采用其中的 path 覆盖，下一则 ustar 头的路径才参与校验。最大 10000 项、128 MiB 展开量；流式限制解压大小。
 6. 核对 package / manifest / 审核元数据，发布完整归档和目标状态。npm 生命周期脚本一律不运行，不执行 npm install，也不下载缺失运行依赖。
 

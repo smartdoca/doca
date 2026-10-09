@@ -286,8 +286,8 @@ export async function createImportedDocument(
         phase: "parsing",
         message: "正在识别 PDF 内容…",
       });
-      const { importPdfFile } = await import("@smartdoca/markdown");
-      const pdf = await importPdfFile(file, { signal });
+      const { importEditablePdf } = await import("./pdf-import.js");
+      const pdf = await importEditablePdf(file, signal);
       reportProgress(onProgress, {
         phase: "preparing",
         message: "正在整理 PDF 结构…",
@@ -303,23 +303,15 @@ export async function createImportedDocument(
           }),
         });
       }
-      const { importDocument } = await import("@smartdoca/slate/conversion");
-      const { createEditorDocument } =
-        await import("@smartdoca/slate/headless");
-      const result = await importDocument(pdf.markdown, {
-        filename: file.name.replace(/\.pdf$/i, ".md"),
-        signal: signal ?? new AbortController().signal,
-        resources: {
-          signal: signal ?? new AbortController().signal,
-          importResource: async (r) => {
-            const key = r.path ? pathMap.get(r.path) : undefined;
-            if (!key) throw Error("PDF 图片资源未找到");
-            return { path: key };
-          },
-        },
-      });
-      value = createEditorDocument(result.initialValue);
-      reportWarnings([...pdf.warnings, ...result.warnings]);
+      const { createEditorDocument } = await import("@smartdoca/slate/headless");
+      const replacePaths = (node: any) => {
+        if (!node || typeof node !== "object") return;
+        if (node.type === "image" && pathMap.has(node.path)) node.path = pathMap.get(node.path);
+        node.children?.forEach(replacePaths);
+      };
+      pdf.initialValue.forEach(replacePaths);
+      value = createEditorDocument(pdf.initialValue);
+      reportWarnings(pdf.warnings);
     } else {
       reportProgress(onProgress, {
         phase: "parsing",
@@ -400,8 +392,8 @@ export async function createImportedDocument(
       phase: "parsing",
       message: "正在识别 PDF 内容…",
     });
-    const { importPdfFile } = await import("@smartdoca/markdown");
-    const pdf = await importPdfFile(file, { signal });
+    const { importEditablePdf } = await import("./pdf-import.js");
+    const pdf = await importEditablePdf(file, signal);
     reportWarnings(pdf.warnings);
     if (!pdf.resources.length) {
       reportProgress(onProgress, { phase: "finalizing", message: "正在创建文档…" });

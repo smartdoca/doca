@@ -35,9 +35,18 @@ The host generates object paths under `host/`; plugin-created ordinary files use
 
 ## S3 and CDN
 
-A store with `provider:"s3"` requires `bucket`, `region`, `forcePathStyle` and `credentials:{accessKeyId,secretAccessKey,sessionToken?}` in the environment JSON. An optional `endpoint` is an HTTPS root origin. The operator controls these destinations and network egress; no credential or endpoint is configured through the administration UI. The bucket stays private; grant only the necessary read/write/delete operations for the host and plugin prefixes. Configuration validation does not prove real connectivity.
+A store with `provider:"s3"` requires `bucket`, `region`, `forcePathStyle` and `credentials:{accessKeyId,secretAccessKey,sessionToken?}` in the environment JSON. An optional `endpoint` is an HTTP(S) root origin without credentials, a subpath, query, or fragment. HTTP is intended for an explicitly configured endpoint on a trusted internal network; the application does not resolve DNS to classify a destination as private. The operator controls these destinations and network egress; no credential or endpoint is configured through the administration UI. The bucket stays private; grant only the necessary read/write/delete operations for the host and plugin prefixes. Configuration validation does not prove real connectivity.
 
-Optional `cdn:{domain,keyPairId,privateKey}` uses the CloudFront signed-URL protocol. Configure a private S3 origin with OAC and a trusted key group requiring signed URLs; the CDN must preserve complete object keys, content type and disposition. The environment contains the HTTPS distribution origin and PEM signing key. After checking the latest ACL, the host issues a URL valid for 60 seconds. Revocation prevents new links; an existing link can remain usable until it expires. Downloaded bytes cannot be recalled.
+For RustFS on a shared container network, create a private bucket and configure its S3 API listener (default port `9000`, console port `9001`) with path-style addressing. Match `region` to `RUSTFS_REGION`, which defaults to `us-east-1`:
+
+```dotenv
+DOCA_FILE_STORE_ID=cloud
+DOCA_FILE_STORES_JSON='{"version":1,"stores":{"cloud":{"provider":"s3","bucket":"doca-files","region":"us-east-1","endpoint":"http://rustfs:9000","forcePathStyle":true,"credentials":{"accessKeyId":"replace-me","secretAccessKey":"replace-me"}}}}'
+```
+
+Use a hostname or internal address reachable from the Doca container. Site, asset and CDN origins also accept HTTP(S). See the [RustFS S3 documentation](https://docs.rustfs.com/zh/administration/protocols/s3). This example is for a new installation; changing an existing store's endpoint does not move its objects.
+
+Optional `cdn:{domain,keyPairId,privateKey}` uses the CloudFront signed-URL protocol. Configure a private S3 origin with OAC and a trusted key group requiring signed URLs; the CDN must preserve complete object keys, content type and disposition. The environment contains the HTTP(S) distribution origin and PEM signing key. After checking the latest ACL, the host issues a URL valid for 60 seconds. Revocation prevents new links; an existing link can remain usable until it expires. Downloaded bytes cannot be recalled.
 
 Without a CDN, the host proxies private cloud files. Storage secrets are never returned to the browser. A different CDN signing protocol requires an adapter; no permanent public-URL fallback is provided. Keep every referenced store ID configured and preserve access to its bytes during credential rotations. Rotation is not a data migration.
 

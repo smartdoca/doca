@@ -8,7 +8,7 @@
 
 插件通过 `activityServiceToken`（服务 ID `activity.v1`）注册数据源。插件定义访问记录、历史查询、当前业务权限与删除清理逻辑；持久化依赖宿主托管能力，不能自建数据库或持久目录。activity.v1 只聚合来源，不另建业务记录镜像，也不提供专用的代写访问接口。持久化使用当前公开的托管 SQL/对象服务，见[存储规范](plugin-horizontal-scaling.zh-CN.md)。
 
-宿主已有记录继续保存在 `resource_visits`、`knowledge_assistant_users.visited_at`、`workspace_activity`，由内置来源加入汇总。没有表结构变更、历史搬迁或双写。公共资源发现页继续使用 `/workspace/recent?publicOnly=true`，其收录逻辑仅适用于内置资源；插件注册最近访问不意味着接入公共发现、收藏、搜索或 AI。
+宿主已有记录继续保存在 `resource_visits`、`workspace_activity`，由内置来源加入汇总。没有表结构变更、历史搬迁或双写。公共资源发现页继续使用 `/workspace/recent?publicOnly=true`，其收录逻辑仅适用于内置资源；插件注册最近访问不意味着接入公共发现、收藏、搜索或 AI。
 
 插件停用后注册随生命周期释放，列表及打开入口立即不再提供该来源；持久记录不被宿主删除。重新启用后重新查询插件当前数据。实际安装、停用仍遵循各宿主实例重启生效的插件生命周期。
 

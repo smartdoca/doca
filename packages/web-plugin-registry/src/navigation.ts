@@ -64,14 +64,8 @@ export const builtinNavigation: NavigationEntry[] = [
   ["ai", "AI assistant", "AI 助手", "/ai", "/ai", 20],
   ["documents", "Documents", "文档", "/documents", "/libraries", 30],
   ["libraries", "Libraries", "知识库", "/libraries", "/libraries", 40],
-  [
-    "knowledge",
-    "Knowledge assistants",
-    "知识库问答",
-    "/knowledge-assistants",
-    undefined,
-    45,
-  ],
+  ["knowledge-books", "Knowledge books", "知识册", "/knowledge-books", undefined, 45],
+
   ["files", "Folders", "文件夹", "/files", "/files", 50],
   [
     "shared-files",

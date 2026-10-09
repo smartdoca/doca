@@ -1,10 +1,3 @@
-import { registerKnowledgeStudio } from "./knowledge-studio.js";
-import type { AnswerIndex } from "@core/modules/knowledge/publications.js";
-import { createScheduledKnowledgeConversation } from "@core/modules/knowledge/conversations.js";
-import { randomUUID } from "node:crypto";
-import { registerKnowledgeSystem } from "./knowledge-system.js";
-import { executeKnowledgeCuration, queueKnowledgeCuration } from "@core/modules/knowledge/system.js";
-import { knowledgeGenerator } from "../services/ai/knowledge-curation.js";
 import { fetchWebPage } from "../services/ai/web-fetch.js";
 import { Type } from "@sinclair/typebox";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -29,22 +22,21 @@ import { createContent } from "@core/workflows/resources.js";
 import type { DB } from "@db/index.js";
 import type { StorageRuntime } from "../adapters/storage.js";
 import { waitFileExtract } from "../services/ai/file-extract.js";
-import { sweepKnowledgeFeedbackSchedules } from "@core/modules/knowledge/feedback-schedule.js";
+
 import { normalizeWebExclude, normalizeWebSites, searchWeb, type WebSearchConstraints } from "../services/ai/web-search.js";
-import { askKnowledgeLibrary, confirmKnowledgeSubscription, dismissKnowledgeSubscription, draftLibraryPresetForActor, draftSourcePresetForActor, getKnowledgeBot, knowledgeSchedule, listKnowledgeSubscriptions, runKnowledgeLibrary, saveKnowledgeBot, saveLibraryGuide, saveLibraryPreset, saveSourcePreset, setKnowledgeSchedule, setLibraryCuration, subscribeKnowledgeSource, updateKnowledgeSourceGroup, deleteKnowledgeSourceGroup, subscriptionKind, sweepKnowledgeSchedules } from "@core/modules/knowledge/subscriptions.js";
+import { confirmKnowledgeSubscription, dismissKnowledgeSubscription, listKnowledgeSubscriptions, subscribeKnowledgeSource, updateKnowledgeSourceGroup, deleteKnowledgeSourceGroup, subscriptionKind } from "@core/modules/knowledge/subscriptions.js";
+import { createContentSubscription, updateContentSubscription } from "@core/modules/knowledge/content-subscriptions.js";
+import { detachKnowledgeSource } from "@core/modules/knowledge/source-access.js";
 
 export function registerKnowledge(
   api: FastifyInstance,
   db: DB,
   auth: (req: FastifyRequest) => Actor,
-  options: { indexer?: KnowledgeIndexer; storage?: StorageRuntime; answerIndex?: AnswerIndex; notify?: (id:string)=>Promise<void>; consumeRateLimit?: (key: string, max: number, windowMs: number) => Promise<boolean> } = {},
+  options: { indexer?: KnowledgeIndexer; storage?: StorageRuntime; notify?: (id:string)=>Promise<void> } = {},
 ) {
-  registerKnowledgeSystem(api, db, auth, options.notify);
-  registerKnowledgeStudio(api, db, auth, options.answerIndex, options.notify, options.consumeRateLimit);
   const content = createContent(db);
   let stopped = false;
   let processing: Promise<void> | null = null;
-  let lastSweep = Date.now();
   const rebuild = async (payload: Record<string, unknown>) => {
     const kind = String(payload.kind ?? "");
     const id = String(payload.id ?? "");
@@ -53,37 +45,7 @@ export function registerKnowledge(
   };
   const drain = async () => {
     if (processing || stopped) return;
-    processing = Promise.resolve(processProjections(db, "knowledge", rebuild)).then(async () => {
-      // Jobs are persisted; stale attempts fail visibly rather than reporting success.
-      const stale = await db.selectFrom("knowledge_runs").select(["id", "detail"]).where("status", "=", "running").execute();
-      for (const run of stale) {
-        const detail = JSON.parse(run.detail);
-        if (Date.now() - Date.parse(detail.startedAt || "") > 300_000)
-          await db.updateTable("knowledge_runs").set({ status: "failed", detail: JSON.stringify({ ...detail, error: "整理中断，请重新发起" }) }).where("id", "=", run.id).where("status", "=", "running").execute();
-      }
-      const next = await db.selectFrom("knowledge_runs").select(["id", "detail"]).where("status", "=", "queued").orderBy("created_at").executeTakeFirst();
-      if (next && !stopped) {
-        const detail = JSON.parse(next.detail);
-        await executeKnowledgeCuration(db, next.id, knowledgeGenerator(db, detail.actorId, next.id), async url => {
-          const page = await fetchWebPage(url, AbortSignal.timeout(20000));
-          if (page.truncated) fail(413, "网页正文过长，请使用具体章节来源");
-          return page;
-        });
-      }
-      if (Date.now() - lastSweep < 60_000) return;
-      lastSweep = Date.now();
-      await sweepKnowledgeSchedules(db, async (actor, id, occurrenceKey) => {
-        return createScheduledKnowledgeConversation(
-          db,
-          actor,
-          id,
-          new Date(),
-          "sources",
-          occurrenceKey,
-        );
-      });
-      await sweepKnowledgeFeedbackSchedules(db);
-    })
+    processing = Promise.resolve(processProjections(db, "knowledge", rebuild)).then(() => {})
       .catch(() => {})
       .finally(() => {
         processing = null;
@@ -111,7 +73,6 @@ export function registerKnowledge(
         body: Type.Object({
           sourceKind: Type.String({ minLength: 3, maxLength: 16 }),
           title: Type.Optional(Type.String({maxLength:200})),
-          guide: Type.Optional(Type.String({maxLength:20000})),
           sourceIds: Type.Optional(Type.Array(Type.String({format:"uuid"}),{minItems:1,maxItems:500})),
           urls: Type.Optional(Type.Array(Type.String({maxLength:500}),{minItems:1,maxItems:500})),
           sourceId: Type.Optional(Type.String({ maxLength: 36 })),
@@ -127,7 +88,7 @@ export function registerKnowledge(
     }),
   );
 
-  api.put<{Params:{id:string;groupId:string};Body:{title?:string;guide?:string;sourceIds?:string[];urls?:string[]}}>("/api/v1/knowledge/libraries/:id/source-groups/:groupId",{schema:{params:Type.Object({id:Type.String({format:"uuid"}),groupId:Type.String({format:"uuid"})}),body:Type.Object({guide:Type.Optional(Type.String({maxLength:20000})),title:Type.Optional(Type.String({minLength:1,maxLength:200})),sourceIds:Type.Optional(Type.Array(Type.String({format:"uuid"}),{minItems:1,maxItems:500})),urls:Type.Optional(Type.Array(Type.String({maxLength:500}),{minItems:1,maxItems:500}))})}},async req=>updateKnowledgeSourceGroup(db,auth(req),req.params.id,req.params.groupId,req.body));
+  api.put<{Params:{id:string;groupId:string};Body:{title?:string;sourceIds?:string[];urls?:string[]}}>("/api/v1/knowledge/libraries/:id/source-groups/:groupId",{schema:{params:Type.Object({id:Type.String({format:"uuid"}),groupId:Type.String({format:"uuid"})}),body:Type.Object({title:Type.Optional(Type.String({minLength:1,maxLength:200})),sourceIds:Type.Optional(Type.Array(Type.String({format:"uuid"}),{minItems:1,maxItems:500})),urls:Type.Optional(Type.Array(Type.String({maxLength:500}),{minItems:1,maxItems:500}))})}},async req=>updateKnowledgeSourceGroup(db,auth(req),req.params.id,req.params.groupId,req.body));
   api.delete<{Params:{id:string;groupId:string}}>("/api/v1/knowledge/libraries/:id/source-groups/:groupId",{schema:{params:Type.Object({id:Type.String({format:"uuid"}),groupId:Type.String({format:"uuid"})})}},async req=>deleteKnowledgeSourceGroup(db,auth(req),req.params.id,req.params.groupId));
 
   api.post<{ Params: { id: string; subscriptionId: string } }>(
@@ -149,117 +110,11 @@ export function registerKnowledge(
     async (req) => dismissKnowledgeSubscription(db, auth(req), req.params.id, req.params.subscriptionId),
   );
 
-  api.post<{ Params: { id: string }; Body: { markdown?: string } }>(
-    "/api/v1/knowledge/libraries/:id/guide",
-    {
-      schema: {
-        params: Type.Object({ id: Type.String({ format: "uuid" }) }),
-        body: Type.Object({ markdown: Type.Optional(Type.String({ maxLength: 20000 })) }),
-      },
-    },
-    async (req) => saveLibraryGuide(db, auth(req), req.params.id, req.body.markdown ?? ""),
-  );
-
-  api.post<{ Params: { id: string }; Body: { enabled: boolean } }>(
-    "/api/v1/knowledge/libraries/:id/curation",
-    {
-      schema: {
-        params: Type.Object({ id: Type.String({ format: "uuid" }) }),
-        body: Type.Object({ enabled: Type.Boolean() }),
-      },
-    },
-    async (req) => setLibraryCuration(db, auth(req), req.params.id, req.body.enabled),
-  );
-
-  api.post<{ Params: { id: string }; Body: { mode: string } }>(
-    "/api/v1/knowledge/libraries/:id/schedule",
-    {
-      schema: {
-        params: Type.Object({ id: Type.String({ format: "uuid" }) }),
-        body: Type.Object({ mode: Type.Union([Type.Literal("off"), Type.Literal("daily"), Type.Literal("weekly")]) }),
-      },
-    },
-    async (req) => setKnowledgeSchedule(db, auth(req), req.params.id, knowledgeSchedule(req.body.mode)),
-  );
-
-  const libraryPresetBody = Type.Object({
-    weight: Type.Integer({ minimum: 1, maximum: 10 }),
-    frequency: Type.Union([Type.Literal("off"), Type.Literal("daily"), Type.Literal("weekly")]),
-    copyText: Type.Boolean(),
-    note: Type.String({ maxLength: 20000 }),
-  });
-  const sourcePresetBody = Type.Object({
-    weight: Type.Union([Type.Integer({ minimum: 1, maximum: 10 }), Type.Null()]),
-    frequency: Type.Union([Type.Literal("inherit"), Type.Literal("off"), Type.Literal("daily"), Type.Literal("weekly")]),
-    copyText: Type.Union([Type.Literal("inherit"), Type.Literal("yes"), Type.Literal("no")]),
-    note: Type.String({ maxLength: 20000 }),
-  });
-
-  api.post<{ Params: { id: string }; Body: { weight: number; frequency: "off" | "daily" | "weekly"; copyText: boolean; note: string } }>(
-    "/api/v1/knowledge/libraries/:id/preset",
-    { schema: { params: Type.Object({ id: Type.String({ format: "uuid" }) }), body: libraryPresetBody } },
-    async (req) => saveLibraryPreset(db, auth(req), req.params.id, req.body),
-  );
-
-  api.post<{ Params: { id: string } }>(
-    "/api/v1/knowledge/libraries/:id/preset/draft",
-    { schema: { params: Type.Object({ id: Type.String({ format: "uuid" }) }) } },
-    async (req) => draftLibraryPresetForActor(db, auth(req), req.params.id),
-  );
-
-  api.post<{ Params: { id: string; subscriptionId: string }; Body: { weight: number | null; frequency: "inherit" | "off" | "daily" | "weekly"; copyText: "inherit" | "yes" | "no"; note: string } }>(
-    "/api/v1/knowledge/libraries/:id/subscriptions/:subscriptionId/preset",
-    {
-      schema: {
-        params: Type.Object({ id: Type.String({ format: "uuid" }), subscriptionId: Type.String({ format: "uuid" }) }),
-        body: sourcePresetBody,
-      },
-    },
-    async (req) => saveSourcePreset(db, auth(req), req.params.id, req.params.subscriptionId, req.body),
-  );
-
-  api.post<{ Params: { id: string; subscriptionId: string } }>(
-    "/api/v1/knowledge/libraries/:id/subscriptions/:subscriptionId/preset/draft",
-    { schema: { params: Type.Object({ id: Type.String({ format: "uuid" }), subscriptionId: Type.String({ format: "uuid" }) }) } },
-    async (req) => draftSourcePresetForActor(db, auth(req), req.params.id, req.params.subscriptionId),
-  );
-
-  api.post<{ Params: { id: string } }>(
-    "/api/v1/knowledge/libraries/:id/runs",
-    { schema: { params: Type.Object({ id: Type.String({ format: "uuid" }) }) } },
-    async (req) => runKnowledgeLibrary(db, auth(req), req.params.id, "manual"),
-  );
-
-  api.get<{ Params: { id: string } }>(
-    "/api/v1/knowledge/libraries/:id/bot",
-    { schema: { params: Type.Object({ id: Type.String({ format: "uuid" }) }) } },
-    async (req) => getKnowledgeBot(db, auth(req), req.params.id),
-  );
-
-  api.post<{ Params: { id: string }; Body: { title?: string; published: boolean } }>(
-    "/api/v1/knowledge/libraries/:id/bot",
-    {
-      schema: {
-        params: Type.Object({ id: Type.String({ format: "uuid" }) }),
-        body: Type.Object({
-          title: Type.Optional(Type.String({ maxLength: 200 })),
-          published: Type.Boolean(),
-        }),
-      },
-    },
-    async (req) => saveKnowledgeBot(db, auth(req), req.params.id, { title: req.body.title ?? "", published: req.body.published }),
-  );
-
-  api.post<{ Params: { id: string }; Body: { query: string } }>(
-    "/api/v1/knowledge/libraries/:id/ask",
-    {
-      schema: {
-        params: Type.Object({ id: Type.String({ format: "uuid" }) }),
-        body: Type.Object({ query: Type.String({ minLength: 1, maxLength: 300 }) }),
-      },
-    },
-    async (req) => askKnowledgeLibrary(db, auth(req), req.params.id, req.body.query),
-  );
+  const sourceRoot = "/api/v1/knowledge/libraries/:id";
+  const sourceParams = Type.Object({id:Type.String({format:"uuid"})},{additionalProperties:false});
+  api.post<{Params:{id:string};Body:{sourceId:string;config:Record<string,any>;title:string}}>(`${sourceRoot}/content-subscriptions`,{schema:{params:sourceParams,body:Type.Object({sourceId:Type.String({minLength:1,maxLength:200}),title:Type.String({minLength:1,maxLength:200}),config:Type.Record(Type.String(),Type.Unknown())},{additionalProperties:false})}},req=>createContentSubscription(db,auth(req),req.params.id,req.body));
+  api.put<{Params:{id:string;groupId:string};Body:{sourceId:string;config:Record<string,any>;title:string}}>(`${sourceRoot}/content-source-groups/:groupId`,{schema:{params:Type.Object({id:Type.String({format:"uuid"}),groupId:Type.String({format:"uuid"})}),body:Type.Object({sourceId:Type.String({minLength:1,maxLength:200}),title:Type.String({minLength:1,maxLength:200}),config:Type.Record(Type.String(),Type.Unknown())},{additionalProperties:false})}},req=>updateContentSubscription(db,auth(req),req.params.id,req.params.groupId,req.body));
+  api.post<{Params:{id:string;subscriptionId:string}}>(`${sourceRoot}/subscriptions/:subscriptionId/detach`,{schema:{params:Type.Object({id:Type.String({format:"uuid"}),subscriptionId:Type.String({format:"uuid"})})}},req=>detachKnowledgeSource(db,auth(req),req.params.id,req.params.subscriptionId));
 
   api.get("/api/v1/knowledge/graph", async (req) => {
     if (await enqueueMissingKnowledge(db)) await processProjections(db, "knowledge", rebuild);

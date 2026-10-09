@@ -2,6 +2,7 @@ import "dotenv/config";
 import { resolve } from "node:path";
 import type { DatabaseConfig } from "@db/index.js";
 import { webhookDatabaseConfig } from "@db/webhook-database.js";
+import { sessionDurations } from "../app/session-policy.js";
 export function assetBase(value: string | undefined) {
   const raw = value?.trim();
   if (!raw) return undefined;
@@ -21,12 +22,11 @@ export function assetBase(value: string | undefined) {
     throw new Error(
       "DOCA_ASSET_BASE must be an HTTP(S) URL without credentials, query, or hash",
     );
-  if (process.env.NODE_ENV === "production" && url.protocol !== "https:")
-    throw new Error("DOCA_ASSET_BASE must use HTTPS in production");
   return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
 }
 
 export function config() {
+  sessionDurations();
   const origin = new URL(process.env.DOCA_ORIGIN ?? "http://127.0.0.1:39130");
   if (
     !["http:", "https:"].includes(origin.protocol) ||
@@ -37,8 +37,6 @@ export function config() {
     origin.hash
   )
     throw new Error("DOCA_ORIGIN must be an HTTP(S) origin");
-  if (process.env.NODE_ENV === "production" && origin.protocol !== "https:")
-    throw new Error("Production requires HTTPS origin behind a TLS gateway");
   const port = (value: string | undefined, fallback: number) => {
     const n = Number(value ?? fallback);
     if (!Number.isInteger(n) || n < 1 || n > 65535)

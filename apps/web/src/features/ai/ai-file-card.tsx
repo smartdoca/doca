@@ -39,6 +39,8 @@ export function FileDeliveryCard({
           className="ai-file-card-thumb"
           src={preview}
           alt=""
+          loading="lazy"
+          decoding="async"
           onError={() => setPreviewFailed(true)}
         />
       ) : (

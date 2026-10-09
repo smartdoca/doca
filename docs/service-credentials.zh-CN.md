@@ -4,8 +4,8 @@
 
 入口：管理员后台 → 平台设置 → 服务凭据。当前宿主持有的平台配置包含：
 
-- 身份认证：具名 SSO Client Secret 和允许的 HTTPS 来源；身份源引用凭据名称。
-- 验证码网关：HTTPS 地址、Bearer 密钥和手机/邮箱渠道。
+- 身份认证：具名 SSO Client Secret 和允许的 HTTP(S) 来源；身份源引用凭据名称。
+- 验证码网关：HTTP(S) 地址、Bearer 密钥和手机/邮箱渠道。
 - 文档搜索：Meilisearch API 密钥及允许来源。
 
 文件后端凭据和 CloudFront 签名密钥只通过 `DOCA_FILE_STORES_JSON` 配置，存储管理页只读，不在平台记录中编辑。[插件凭证](plugin-credentials.zh-CN.md)使用独立的服务端加密服务和部署主密钥。
