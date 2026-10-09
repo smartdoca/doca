@@ -1,25 +1,92 @@
-# Doca
+<p align="center">
+  <a href="https://d.smartdoca.cc"><img src="docs/images/doca-logo.svg" alt="Doca" width="72" height="72"></a>
+</p>
 
-[Documentation](https://smartdoca.github.io/doca/#/en/) · [简体中文](README.zh-CN.md)
+<h1 align="center">Doca</h1>
 
-Doca is an open-source document and knowledge workspace for individuals and small teams. One deployment has one account system.
+<p align="center">
+  <b>Your documents. Your knowledge. Your workspace.</b><br>
+  Open-source document management, a knowledge base, and real-time collaborative editing<br>
+  for individuals and small teams. Self-hosted, with a personal AI assistant.
+</p>
 
-[Live demo](https://d.smartdoca.cc) · [Plugin marketplace](https://store.smartdoca.cc)
+<p align="center">
+  <a href="https://github.com/smartdoca/doca/releases"><img src="https://img.shields.io/github/v/release/smartdoca/doca?style=flat-square&amp;color=3370ff" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3370ff?style=flat-square" alt="License: MIT"></a>
+  <a href="#quick-start-with-docker"><img src="https://img.shields.io/badge/deploy-Docker-2496ed?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Deploy with Docker"></a>
+  <img src="https://img.shields.io/badge/editors-5_formats-6750a4?style=flat-square" alt="Five document formats">
+</p>
 
-**Demo data is cleared from time to time. Please do not store important data in the demo.**
+<p align="center">
+  <a href="https://d.smartdoca.cc"><b>Try the live demo →</b></a> &nbsp;·&nbsp;
+  <a href="https://smartdoca.github.io/doca/#/en/">Documentation</a> &nbsp;·&nbsp;
+  <a href="https://store.smartdoca.cc">Plugin marketplace</a> &nbsp;·&nbsp;
+  <a href="#quick-start-with-docker">Self-host Doca</a>
+</p>
 
-## Features
+<p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
 
-- Rich text, Markdown, spreadsheets, slides, and canvas documents, with realtime collaboration and history.
-- Knowledge libraries and shared knowledge books with workflows, source evidence, and human review.
-- A personal AI assistant with PDF/Office reading, image generation/editing, durable attachments, and browser drafts.
-- Personal files and shared folders, with local or S3-compatible storage.
-- Invitations, permissions, sharing, comments, notifications, search, and trash.
-- Password, OIDC, Google, GitHub, WeChat QR, and QQ sign-in; Chinese and English interface text.
-- SQLite for one server; shared PostgreSQL, Redis, and file storage for multiple replicas.
-- Business plugins built against the public `@smartdoca/plugin-sdk`.
+**中文简介：** Doca 是面向个人和小团队的开源文档管理与知识库系统，支持多人协同编辑、在线文档、Markdown、在线表格、幻灯片、无限画布和 AI 助手，可通过 Docker 私有化部署。
 
-The default image installs no quick-notes, mail, calendar, membership, or moderation plugins. Templates and materials need a separately installed provider. See [capabilities and limits](https://smartdoca.github.io/doca/#/en/getting-started/features).
+![Doca workspace with recent documents, a team knowledge library, and the AI assistant entry](docs/images/workspace.jpg)
+
+<p align="center"><sub>Pick up where you left off. Documents, team knowledge, and your AI assistant in one workspace.</sub></p>
+
+> [!NOTE]
+> The [live demo](https://d.smartdoca.cc) is for exploration. Demo data is cleared from time to time; please do not store important data there.
+
+## Make room for your next idea
+
+| Write and collaborate | Build a shared memory | Make it your own |
+| --- | --- | --- |
+| Draft a proposal, track a budget, or sketch a plan. Invite collaborators and discuss details in comments. | Organize documents into knowledge libraries. Build knowledge books with source evidence, workflows, and human review. | Deploy on your own server. Connect your AI models and extend the workspace with business plugins. |
+
+## See Doca in action
+
+### Documents that bring the team together
+
+Rich text for plans and meeting notes, with a library tree, formatting tools, permissions, and document history close at hand.
+
+![Doca rich text editor displaying a team collaboration guide beside the knowledge library tree](docs/images/rich-text.jpg)
+
+### Five formats, one workspace
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/markdown.jpg" alt="Doca Markdown editor with a team development note"><br><b>Markdown</b> — notes, code, and structured writing.</td>
+    <td width="50%"><img src="docs/images/spreadsheet.jpg" alt="Doca spreadsheet editor with a formatted project budget"><br><b>Spreadsheets</b> — budgets, data, and project tracking.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/slides.jpg" alt="Doca presentation editor displaying a product introduction"><br><b>Slides</b> — present ideas and project updates.</td>
+    <td width="50%"><img src="docs/images/canvas.jpg" alt="Doca canvas editor showing a project roadmap"><br><b>Canvas</b> — map out a process on an infinite board.</td>
+  </tr>
+</table>
+
+<p align="center"><sub>Actual Doca UI, captured with sample content in an isolated local deployment.</sub></p>
+
+## What you can do
+
+| Capability | What it brings to your workspace |
+| --- | --- |
+| **Online documents and collaboration** | Rich text, Markdown, spreadsheets, slides, and canvas; realtime collaboration, comments, and history. |
+| **Knowledge management** | Knowledge libraries with document trees, plus shared knowledge books with workflows, source evidence, and human review. |
+| **Personal AI assistant** | Work with authorized documents and files, read PDF/Office attachments, generate or edit images, and prepare browser drafts. Requires configured models and services. |
+| **Files and sharing** | Personal files, shared folders, invitations, permission controls, share links, search, notifications, and trash. Local or S3-compatible file storage. |
+| **Accounts and languages** | Password, OIDC, Google, GitHub, WeChat QR, and QQ sign-in; Chinese and English interfaces. External login requires service configuration. |
+| **Self-hosting and extensions** | Docker deployment; SQLite for one server, or shared PostgreSQL, Redis, and file storage for multiple replicas. Business plugins use the public `@smartdoca/plugin-sdk`. |
+
+One deployment has one account system. The default image installs no quick-notes, mail, calendar, membership, or moderation plugins. Templates and materials need a separately installed provider. See [capabilities and limits](https://smartdoca.github.io/doca/#/en/getting-started/features).
+
+## Useful links
+
+| Destination | Address |
+| --- | --- |
+| **Live demo** | [d.smartdoca.cc](https://d.smartdoca.cc) |
+| **Documentation** | [smartdoca.github.io/doca](https://smartdoca.github.io/doca/#/en/) |
+| **Plugin marketplace** | [store.smartdoca.cc](https://store.smartdoca.cc) |
+| **Source code** | [github.com/smartdoca/doca](https://github.com/smartdoca/doca) |
+| **Releases** | [Download and release notes](https://github.com/smartdoca/doca/releases) |
+| **Feedback** | [Report an issue or request a feature](https://github.com/smartdoca/doca/issues) |
 
 ## Quick start with Docker
 

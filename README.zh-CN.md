@@ -1,25 +1,92 @@
-# Doca
+<p align="center">
+  <a href="https://d.smartdoca.cc"><img src="docs/images/doca-logo.svg" alt="Doca" width="72" height="72"></a>
+</p>
 
-[详细文档](https://smartdoca.github.io/doca/#/zh-cn/) · [English](README.md)
+<h1 align="center">Doca</h1>
 
-Doca 是面向个人和小团队的开源文档与知识工作台。一次部署只有一套账号系统。
+<p align="center">
+  <b>把知识留在触手可及的地方。</b><br>
+  面向个人和小团队的开源文档管理与知识库系统，支持多人协同编辑。<br>
+  文档、表格、幻灯片、画布与个人 AI 助手，在一个可以私有化部署的工作台里。
+</p>
 
-[Demo 体验](https://d.smartdoca.cc) · [插件商城](https://store.smartdoca.cc)
+<p align="center">
+  <a href="https://github.com/smartdoca/doca/releases"><img src="https://img.shields.io/github/v/release/smartdoca/doca?style=flat-square&amp;color=3370ff" alt="最新发行版"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3370ff?style=flat-square" alt="MIT 开源许可证"></a>
+  <a href="#docker-快速开始"><img src="https://img.shields.io/badge/deploy-Docker-2496ed?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="通过 Docker 部署"></a>
+  <img src="https://img.shields.io/badge/editors-5_formats-6750a4?style=flat-square" alt="五种文档格式">
+</p>
 
-**Demo 数据会不定期清理，请不要存放重要数据。**
+<p align="center">
+  <a href="https://d.smartdoca.cc"><b>在线体验 →</b></a> &nbsp;·&nbsp;
+  <a href="https://smartdoca.github.io/doca/#/zh-cn/">详细文档</a> &nbsp;·&nbsp;
+  <a href="https://store.smartdoca.cc">插件商城</a> &nbsp;·&nbsp;
+  <a href="#docker-快速开始">部署自己的 Doca</a>
+</p>
 
-## 功能
+<p align="center">简体中文 · <a href="README.md">English</a></p>
 
-- 富文本、Markdown、表格、幻灯片和画布文档，支持实时协同与历史记录。
-- 知识库与多人共建的知识册，支持编排、来源溯源和人工审阅。
-- 个人 AI 助手，支持 PDF/Office 读取、图片生成与编辑、持久附件和浏览器草稿。
-- 个人文件与共享文件夹，支持本地或兼容 S3 的存储。
-- 邀请、权限、分享、评论、通知、搜索和回收站。
-- 密码、OIDC、Google、GitHub、微信扫码和 QQ 登录；中英文界面。
-- 单服务器使用 SQLite；多副本使用共享 PostgreSQL、Redis 和文件存储。
-- 通过公开 `@smartdoca/plugin-sdk` 开发业务插件。
+Doca 把**在线文档、Markdown、在线表格、幻灯片、无限画布、知识管理和团队协作**放在一起。记录个人想法，沉淀团队知识，也可以连接自己的 AI 模型辅助工作。
 
-默认镜像不安装随手记、邮箱、日历、会员或内容审核插件。模板和素材需要单独安装提供者，详见[功能与边界](https://smartdoca.github.io/doca/#/zh-cn/getting-started/features)。
+![Doca 工作台：最近访问的文档、团队知识库与 AI 助手入口](docs/images/workspace.jpg)
+
+<p align="center"><sub>从上次停下的地方继续。文档、团队知识与 AI 助手，都在同一个工作台。</sub></p>
+
+> [!NOTE]
+> [在线演示](https://d.smartdoca.cc)用于体验，数据会不定期清理，请不要存放重要数据。
+
+## 从一个想法，开始一起创作
+
+| 写下来，一起完善 | 让知识成为团队记忆 | 建立自己的工作空间 |
+| --- | --- | --- |
+| 写项目方案、记录会议、管理预算、梳理流程。邀请伙伴协同编辑，用评论讨论细节。 | 用知识库目录组织文档，用知识册连接来源、编排和人工审阅，让结论有据可查。 | 部署到自己的服务器，连接自己的 AI 模型，再通过业务插件扩展工作台。 |
+
+## 看看 Doca 能做什么
+
+### 在文档里，把团队连接起来
+
+用富文本写方案与会议纪要。知识库目录、格式工具、权限和文档历史就在手边。
+
+![Doca 在线文档编辑器：团队协作指南与知识库目录](docs/images/rich-text.jpg)
+
+### 五种文档格式，一个工作台
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/markdown.jpg" alt="Doca Markdown 编辑器中的研发笔记"><br><b>Markdown</b>：写笔记、贴代码、整理结构化内容。</td>
+    <td width="50%"><img src="docs/images/spreadsheet.jpg" alt="Doca 在线表格编辑器中的项目预算"><br><b>在线表格</b>：管理预算、数据与项目进度。</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/slides.jpg" alt="Doca 幻灯片编辑器中的产品介绍"><br><b>幻灯片</b>：表达想法，展示方案与阶段成果。</td>
+    <td width="50%"><img src="docs/images/canvas.jpg" alt="Doca 无限画布中的项目路线规划"><br><b>无限画布</b>：把流程、结构与思路放到画板上。</td>
+  </tr>
+</table>
+
+<p align="center"><sub>以上为 Doca 真实系统截图，使用隔离本地部署中的示例内容。</sub></p>
+
+## 主要功能
+
+| 能力 | 可以用来做什么 |
+| --- | --- |
+| **在线文档与协同编辑** | 富文本、Markdown、表格、幻灯片和画布，支持实时协同、评论与历史记录。 |
+| **知识管理** | 带文档目录的知识库，以及支持编排、来源溯源和人工审阅的多人共建知识册。 |
+| **个人 AI 助手** | 围绕有权限访问的文档与文件工作，读取 PDF/Office 附件，生成与编辑图片，准备浏览器草稿。需要配置可用的模型和服务。 |
+| **文件与分享** | 个人文件、共享文件夹、邀请、权限、分享链接、搜索、通知和回收站。支持本地或兼容 S3 的文件存储。 |
+| **账号与语言** | 密码、OIDC、Google、GitHub、微信扫码和 QQ 登录，中英文界面。外部登录需配置对应服务。 |
+| **私有化部署与扩展** | Docker 部署，单机 SQLite，多副本共享 PostgreSQL、Redis 和文件存储。业务插件通过公开 `@smartdoca/plugin-sdk` 扩展。 |
+
+一次部署只有一套账号系统。默认镜像不安装随手记、邮箱、日历、会员或内容审核插件。模板和素材需要单独安装提供者，详见[功能与边界](https://smartdoca.github.io/doca/#/zh-cn/getting-started/features)。
+
+## 常用地址
+
+| 入口 | 地址 |
+| --- | --- |
+| **在线体验** | [d.smartdoca.cc](https://d.smartdoca.cc) |
+| **详细文档** | [smartdoca.github.io/doca](https://smartdoca.github.io/doca/#/zh-cn/) |
+| **插件商城** | [store.smartdoca.cc](https://store.smartdoca.cc) |
+| **项目源码** | [github.com/smartdoca/doca](https://github.com/smartdoca/doca) |
+| **发行版本** | [下载与发行说明](https://github.com/smartdoca/doca/releases) |
+| **问题反馈** | [提交问题或功能建议](https://github.com/smartdoca/doca/issues) |
 
 ## Docker 快速开始
 
