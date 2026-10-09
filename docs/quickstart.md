@@ -2,16 +2,16 @@
 
 [中文](quickstart.zh-CN.md)
 
-This guide installs Doca 0.1.10 on one server with the published Docker image, SQLite, and local file storage. You need Git, Docker Engine, the Docker Compose plugin, and a domain pointing at the server. Production requires HTTPS through a reverse proxy on that server. You do not need Node.js or pnpm to run the image.
+This guide installs Doca 0.1.12 on one server with the published Docker image, SQLite, and local file storage. You need Git, Docker Engine, the Docker Compose plugin, and a domain pointing at the server. Production requires HTTPS through a reverse proxy on that server. You do not need Node.js or pnpm to run the image.
 
-This is a fresh installation. Existing deployments must read the [release requirements](releases/0.1.10.md) first: this release rejects older database baselines and provides no automatic migration. Preserve existing databases, files, and configuration.
+This is a fresh installation. Existing deployments must read the [release requirements](releases/0.1.12.md) first: this release rejects older database baselines and provides no automatic migration. Preserve existing databases, files, and configuration.
 
 ## 1. Clone the repository
 
 Use the checkout matching the image so Compose and the administrator scripts match the release:
 
 ```sh
-git clone --branch v0.1.10 --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch v0.1.12 --depth 1 https://github.com/smartdoca/doca.git
 cd doca
 ```
 
@@ -47,7 +47,7 @@ Caddy terminates TLS and forwards HTTP and WebSocket traffic. DNS must point to 
 docker compose pull
 ```
 
-Compose uses `docker.io/smartdoca/doca:0.1.10`. This step downloads the prebuilt image; it does not build the source checkout.
+Compose uses `docker.io/smartdoca/doca:0.1.12`. This step downloads the prebuilt image; it does not build the source checkout.
 
 ## 4. Start Doca
 
@@ -59,7 +59,7 @@ docker compose ps
 Wait for the container to become healthy. The health response is:
 
 ```json
-{"status":"ok","version":"0.1.10"}
+{"status":"ok","version":"0.1.12"}
 ```
 
 If startup fails, inspect `docker compose logs --tail=100 doca`. The Compose port is bound to `127.0.0.1`; browser access uses your HTTPS domain through the proxy.

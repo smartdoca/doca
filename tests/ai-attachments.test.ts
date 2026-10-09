@@ -169,12 +169,20 @@ async function wait(sid: string) {
   throw Error("Job did not finish");
 }
 it("keeps uploaded files private, reads text in the agent and restores attachment history", async () => {
+  const unrelated = (await upload(
+    "previous-conversation.md",
+    Buffer.from("# 附件经验\n部署前必须备份 ATTACHMENT_PRIVATE_MARKER"),
+  )).json();
   const r = await upload(
     "notes.md",
     Buffer.from("# 附件经验\n部署前必须备份 ATTACHMENT_PRIVATE_MARKER"),
   );
   expect(r.statusCode, r.body).toBe(201);
   const id = r.json().id;
+  const fileId = r.json().fileId;
+  expect(fileId).toEqual(expect.any(String));
+  const file = await db.selectFrom("file_items").selectAll().where("id", "=", fileId).executeTakeFirstOrThrow();
+  expect(JSON.parse(file.metadata).assetId).toBe(id);
   expect(
     (await app.inject({ url: `/api/v1/assets/${id}/content`, headers: b }))
       .statusCode,
@@ -194,11 +202,45 @@ it("keeps uploaded files private, reads text in the agent and restores attachmen
     result.messages.find((m: any) => m.role === "user").attachments,
   ).toEqual([expect.objectContaining({ id, filename: "notes.md" })]);
   expect(JSON.stringify(requests)).toContain("ATTACHMENT_PRIVATE_MARKER");
+  expect(JSON.stringify(requests)).toContain(fileId);
+  expect(JSON.stringify(requests)).toContain("不要从AI全局目录");
+  expect(JSON.stringify(requests)).not.toContain(unrelated.id);
+  expect(JSON.stringify(requests)).not.toContain(unrelated.fileId);
+  expect(JSON.stringify(requests)).not.toContain("previous-conversation.md");
   // A later turn gets the authenticated attachment content again, not a public URL.
   requests.length = 0;
   await send(sid, []);
   await wait(sid);
   expect(JSON.stringify(requests)).toContain("ATTACHMENT_PRIVATE_MARKER");
+});
+it("provides exact nested folder file IDs without including an earlier conversation directory", async () => {
+  const createFolder = async (name: string, parentId?: string) => {
+    const response = await app.inject({ method: "POST", url: "/api/v1/files/folders", headers: a, payload: { name, parentId } });
+    expect(response.statusCode, response.body).toBe(200);
+    return response.json().id as string;
+  };
+  const uploadFile = async (parentId: string, filename: string) => {
+    const response = await app.inject({ method: "POST", url: `/api/v1/files/items?filename=${filename}&parentType=folder&parentId=${parentId}`, headers: { ...a, "content-type": "application/octet-stream" }, payload: Buffer.from("isolated folder fixture") });
+    expect(response.statusCode, response.body).toBe(200);
+    return response.json().id as string;
+  };
+  const oldFolder = await createFolder("pdf2png");
+  const unrelated = await uploadFile(oldFolder, "older-conversation.txt");
+  const currentFolder = await createFolder("pdf2png (2)");
+  const nestedFolder = await createFolder("photos", currentFolder);
+  const currentFile = await uploadFile(currentFolder, "current-book.txt");
+  const nestedFile = await uploadFile(nestedFolder, "current-dad.txt");
+  const sid = await session();
+  const sent = await app.inject({ method: "POST", url: `/api/v1/ai/sessions/${sid}/messages`, headers: a, payload: { id: randomUUID(), text: "处理我本次上传的文件夹", modelId: "test", scope: "all", files: [{ kind: "folder", id: currentFolder, name: "pdf2png (2)" }] } });
+  expect(sent.statusCode, sent.body).toBe(200);
+  expect((await wait(sid)).jobs[0].status).toBe("completed");
+  const context = JSON.stringify(requests);
+  expect(context).toContain(currentFile);
+  expect(context).toContain(nestedFile);
+  expect(context).toContain("photos/current-dad.txt");
+  expect(context).not.toContain(unrelated);
+  expect(context).not.toContain(oldFolder);
+  expect(context).not.toContain("older-conversation.txt");
 });
 it("preserves original downloads, sends normalized images to vision models and rejects incompatible models", async () => {
   const png = await sharp({

@@ -86,6 +86,7 @@ export async function attachmentContent(
     | { type: "image"; image: Uint8Array; mediaType: string }
     | { type: "file"; data: Uint8Array; mediaType: string; filename: string }
   )[] = [];
+  const fileReferences: Array<{ assetId: string; fileId: string; filename: string }> = [];
   for (const row of rows) {
     const profile = await db
       .selectFrom("storage_profiles")
@@ -96,6 +97,21 @@ export async function attachmentContent(
     const data = await storage.read(config, row.object_key);
     if (data.length !== row.size) fail(409, "附件内容已改变，请重新上传");
     const objectId = await storageObjectIdForAsset(db, row);
+    const storedFiles = await db
+      .selectFrom("file_items")
+      .select(["id", "metadata"])
+      .where("storage_object_id", "=", objectId)
+      .where("owner_id", "=", userId)
+      .where("parent_type", "=", "system")
+      .where("parent_id", "=", "ai")
+      .where("deleted_at", "is", null)
+      .execute();
+    for (const file of storedFiles) {
+      const metadata: unknown = JSON.parse(file.metadata);
+      if (metadata && typeof metadata === "object" && "assetId" in metadata && metadata.assetId === row.id) {
+        fileReferences.push({ assetId: row.id, fileId: file.id, filename: row.filename });
+      }
+    }
     const prepared = await prepareFileRecognition(db, {
       objectId,
       storage: runtime,
@@ -160,5 +176,5 @@ export async function attachmentContent(
       parts.push({ type: "text", text: prepared.warning });
     parts.push({ type: "text", text: "[附件资料结束]" });
   }
-  return { parts, attachments: rows.map(attachmentInfo) };
+  return { parts, attachments: rows.map(attachmentInfo), fileReferences };
 }

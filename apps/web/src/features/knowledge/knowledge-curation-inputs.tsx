@@ -144,6 +144,8 @@ export function CurationInputs({
                     await uploadDroppedTree(
                       files.map((file) => ({ path: file.name, file })),
                       folderId,
+                      undefined,
+                      { rootConflict: "merge" },
                     );
                     await api(
                       `/knowledge/libraries/${libraryId}/subscriptions`,

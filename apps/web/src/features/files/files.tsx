@@ -495,7 +495,7 @@ export function FilesExplorer({
   );
   const [trail, setTrail] = useState<Location[]>(initialTrail);
   const [future, setFuture] = useState<Location[]>([]);
-  const [data, setData] = useState<FilePage | null>(null);
+  const [loadedPage, setLoadedPage] = useState<{ key: string; page: FilePage } | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorId, setAnchorId] = useState<string | null>(null);
@@ -610,6 +610,11 @@ export function FilesExplorer({
   const refreshColumnsRef = useRef(false);
   columnPagesRef.current = columnPages;
   const navigationKey = trailKey(trail);
+  const currentLocationKey = `${location.type}:${location.id}`;
+  const currentLocationRef = useRef(currentLocationKey);
+  currentLocationRef.current = currentLocationKey;
+  const loadSequence = useRef(0);
+  const data = loadedPage?.key === currentLocationKey ? loadedPage.page : null;
   const setAIFileContext = ai?.setFileContext;
   useEffect(() => {
     if (!setAIFileContext) return;
@@ -740,6 +745,9 @@ export function FilesExplorer({
   const atSystemRoot = trail.length <= 1 && systemReadonly;
 
   async function load(next = location, options?: { refreshColumns?: boolean }) {
+    const sequence = ++loadSequence.current;
+    const requestedKey = `${next.type}:${next.id}`;
+    const current = () => sequence === loadSequence.current && currentLocationRef.current === requestedKey;
     const keepColumns = view === "columns" && columnPagesRef.current.length > 0;
     if (!keepColumns) setLoading(true);
     setError("");
@@ -749,7 +757,8 @@ export function FilesExplorer({
         parentId: next.id,
       });
       const page = await api<FilePage>(`/files?${params}`);
-      setData(page);
+      if (!current()) return;
+      setLoadedPage({ key: requestedKey, page });
       if (view === "columns")
         setColumnPages((old) => replaceColumnPage(old, next, page));
       if (options?.refreshColumns) {
@@ -757,6 +766,7 @@ export function FilesExplorer({
         setColumnsRev((value) => value + 1);
       }
     } catch (e) {
+      if (!current()) return;
       const message =
         e instanceof Error ? e.message : t("fileManager.loadFailed");
       if (
@@ -783,7 +793,7 @@ export function FilesExplorer({
       }
       setError(message);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }
   useEffect(() => {
@@ -1118,7 +1128,7 @@ export function FilesExplorer({
             ? { ...old, current: path, completed, total: total || old.total }
             : old,
         );
-      });
+      }, { rootConflict: "merge" });
       await load();
       setUploadProgress((old) =>
         old

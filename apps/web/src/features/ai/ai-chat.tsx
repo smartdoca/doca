@@ -852,7 +852,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
     try {
       const created = await uploadDroppedTree(tree, null, (path) => {
         setFolderImport(path);
-      });
+      }, { rootConflict: "create-new" });
       if (!created.folders.length && files.length)
         ai.setError(t("chat.folderUnavailable"));
       for (const folder of created.folders) addFolderTarget(folder);

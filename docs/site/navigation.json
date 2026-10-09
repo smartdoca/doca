@@ -52,6 +52,7 @@
     ["editor-file-exchange-contract","File exchange contract","文件交换契约"]
   ]},
   {"id":"releases","en":"Releases","zh":"发行记录", "pages":[
+    ["releases/0.1.12","0.1.12","0.1.12"],
     ["releases/0.1.11","0.1.11","0.1.11"],
     ["releases/0.1.10","0.1.10","0.1.10"],
     ["releases/0.1.9","0.1.9","0.1.9"],

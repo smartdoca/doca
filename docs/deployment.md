@@ -2,7 +2,7 @@
 
 [中文](deployment.zh-CN.md)
 
-One server can run the published image `docker.io/smartdoca/doca:0.1.11`. A single container uses SQLite and does not need PostgreSQL or Redis. Use those only when you run more than one application replica. See [single instance and horizontal scaling](horizontal-scaling.md).
+One server can run the published image `docker.io/smartdoca/doca:0.1.12`. A single container uses SQLite and does not need PostgreSQL or Redis. Use those only when you run more than one application replica. See [single instance and horizontal scaling](horizontal-scaling.md).
 
 ## Requirements
 
@@ -26,7 +26,7 @@ Edit `.env` before the first start.
 
 File storage also requires `DOCA_FILE_STORE_ID` and `DOCA_FILE_STORES_JSON`, as provided by `docker.env.example`. Backend paths and credentials are read from the environment; the administration page is read-only. See [file storage](storage.md).
 
-Version 0.1.11 uses the same database baseline as 0.1.10; upgrading from 0.1.10 requires no migration or storage conversion. Back up data and retain the previous image before upgrading. Database baselines, plugin installation lists, SDK ranges and storage configuration from 0.1.9 and earlier remain rejected: preserve that deployment and data, and use a new empty database and separate storage. No conversion or migration is provided. See [release requirements](releases/0.1.11.md).
+Version 0.1.12 uses the same database baseline as 0.1.10; upgrading from 0.1.10 requires no migration or storage conversion. Back up data and retain the previous image before upgrading. Database baselines, plugin installation lists, SDK ranges and storage configuration from 0.1.9 and earlier remain rejected: preserve that deployment and data, and use a new empty database and separate storage. No conversion or migration is provided. See [release requirements](releases/0.1.12.md).
 
 `DOCA_ORIGIN` is the origin users type in the browser. Production rejects any value that is not HTTPS. Use only the origin without a subpath, query, or fragment; a root trailing slash is normalized.
 
@@ -43,7 +43,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker compose up -d` pulls `docker.io/smartdoca/doca:0.1.11`. Add `--build` only when you want an image built from this checkout.
+`docker compose up -d` pulls `docker.io/smartdoca/doca:0.1.12`. Add `--build` only when you want an image built from this checkout.
 
 Check the container:
 
@@ -54,7 +54,7 @@ curl -fsS -H 'Host: docs.example.com' http://127.0.0.1:39120/health
 
 Replace `docs.example.com` with the host in your configured origin, including its port if nonstandard. The built-in container probe already supplies this Host; wait for `docker compose ps` to show `healthy`. A bare loopback curl is rejected with 421.
 
-A healthy process returns `{"status":"ok","version":"0.1.11"}`.
+A healthy process returns `{"status":"ok","version":"0.1.12"}`.
 
 SQLite, uploaded files, and the AI database are stored in the `doca_data` volume. The database must be empty on first start. A non-empty database whose schema is not the current baseline is refused. Do not delete a database that already contains users.
 
@@ -103,13 +103,13 @@ The HTML page and the API stay on `DOCA_ORIGIN`. `DOCA_ASSET_BASE` changes only 
 Leave it unset to serve JavaScript, CSS, and the other built files from the container at `/assets`. When you set it, use an HTTPS prefix with no userinfo, query, hash, or trailing slash:
 
 ```text
-DOCA_ASSET_BASE=https://cdn.example.com/doca/0.1.11
+DOCA_ASSET_BASE=https://cdn.example.com/doca/0.1.12
 ```
 
 A page that referenced `/assets/index-abc.js` then loads:
 
 ```text
-https://cdn.example.com/doca/0.1.11/assets/index-abc.js
+https://cdn.example.com/doca/0.1.12/assets/index-abc.js
 ```
 
 Publish the whole `apps/web/dist/assets` directory at that prefix and keep the `assets` path segment. The file names include a content hash and must match the HTML inside the same image. API requests remain on `DOCA_ORIGIN`.
@@ -120,4 +120,4 @@ The container keeps its own `/assets` files. Fonts and images referenced from st
 
 `index.html` is sent with `Cache-Control: no-cache`, so a new visit after a release fetches the new page. Hashed files under `/assets/` are sent with `Cache-Control: public, max-age=31536000, immutable`. Their names change when the content changes, so a year-long cache does not keep an old script after the new HTML is loaded. A CDN in front of `DOCA_ASSET_BASE` needs the same long cache on those hashed files.
 
-Host 0.1.11 / SDK 0.1.9 provides managed plugin credentials. `DOCA_CREDENTIAL_MASTER_KEY` is required only when an installed plugin requires the credential service; core startup does not require it. The credentials-v2 baseline rejects databases from 0.1.9 and earlier without migration; preserve the old deployment and data and use a new empty database. Compose forwards database and cloud-storage environment settings; see [environment example](../docker.env.example), [credential deployment](plugin-credentials.md) and [release notes](releases/0.1.11.md).
+Host 0.1.12 / SDK 0.1.9 provides managed plugin credentials. `DOCA_CREDENTIAL_MASTER_KEY` is required only when an installed plugin requires the credential service; core startup does not require it. The credentials-v2 baseline rejects databases from 0.1.9 and earlier without migration; preserve the old deployment and data and use a new empty database. Compose forwards database and cloud-storage environment settings; see [environment example](../docker.env.example), [credential deployment](plugin-credentials.md) and [release notes](releases/0.1.12.md).

@@ -275,6 +275,7 @@ export function registerAssets(
           created_at: new Date().toISOString(),
           deleted_at: null,
         };
+        let createdFileId: string | undefined;
         await transact(db, async (tx) => {
           await lock(tx, a);
           if (q.resourceId)
@@ -338,6 +339,7 @@ export function registerAssets(
             await registerStoredObject(tx, fileObject);
             if (q.purpose === "attachment" || q.purpose === "ai_attachment") {
               const fileId = randomUUID();
+              createdFileId = fileId;
               await tx
                 .insertInto("file_items")
                 .values({
@@ -395,6 +397,7 @@ export function registerAssets(
         if (extractStatus === "pending") beginFileExtract(db, id, runtime);
         return reply.code(201).send({
           id,
+          fileId: createdFileId,
           filename,
           mime,
           size: body.length,
