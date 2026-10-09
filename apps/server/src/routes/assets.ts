@@ -5,6 +5,9 @@ import {
   uploadLimits,
 } from "../services/storage-policy.js";
 import { readUploadBuffer } from "../services/upload-stream.js";
+import { uploadAIAttachment } from "../services/ai/upload-attachment.js";
+import { userUploadLimits } from "@core/modules/ai/upload-policy.js";
+import { Readable } from "node:stream";
 import {
   registerStoredObject,
   thumbnailFor,
@@ -28,6 +31,7 @@ import sharp from "sharp";
 import { authorize } from "@core/modules/access/queries.js";
 import type { Actor } from "@core/modules/identity/passwords.js";
 import { fail } from "@core/shared/errors.js";
+import { authorizeKnowledgeAsset } from "@core/modules/knowledge/file-folders.js";
 import type { DB, Schema } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import {
@@ -105,7 +109,12 @@ export function registerAssets(
     );
   });
   api.addContentTypeParser("application/octet-stream", (req, payload, done) => {
-    if (req.routeOptions.url === "/api/v1/files/items")
+    if (req.routeOptions.url === "/api/v1/files/items" || req.routeOptions.url === "/api/v1/knowledge/conversations/:id/files")
+      return done(null, payload);
+    if (
+      new URL(req.url, "http://localhost").searchParams.get("purpose") ===
+      "ai_attachment"
+    )
       return done(null, payload);
     void readUploadBuffer(payload, uploadLimits.asset).then(
       (body) => done(null, body),
@@ -124,14 +133,18 @@ export function registerAssets(
       resourceId?: string;
       filename: string;
     };
-    Body: Buffer;
+    Body: Buffer | Readable;
   }>(
     "/api/v1/assets",
     {
-      bodyLimit: uploadLimits.asset,
+      bodyLimit: Number.MAX_SAFE_INTEGER,
       onRequest: async (req) => {
         const a = auth(req);
-        await limit?.(`upload:${a.id}`, 60);
+        if (
+          new URL(req.url, "http://localhost").searchParams.get("purpose") !==
+          "ai_attachment"
+        )
+          await limit?.(`upload:${a.id}`, 60);
         if (concurrent >= 4) fail(429, "上传繁忙，请稍后重试");
         concurrent++;
         uploads.add(req);
@@ -158,18 +171,26 @@ export function registerAssets(
     async (req, reply) => {
       const a = auth(req),
         q = req.query;
+      if (q.purpose === "ai_attachment") {
+        const maxBytes = (await userUploadLimits(db, a.id)).maxFileBytes;
+        if (maxBytes && Number(req.headers["content-length"]) > maxBytes)
+          fail(413, "upload_file_size_exceeded");
+        if (q.resourceId) fail(400, "对话附件不能关联文档");
+        if (!Buffer.isBuffer(req.body) && !(req.body instanceof Readable))
+          fail(400, "upload_body_invalid");
+        const row = await uploadAIAttachment(
+          db,
+          a.id,
+          q.filename,
+          req.body,
+          runtime,
+        );
+        return reply.code(201).send(row);
+      }
       if (!Buffer.isBuffer(req.body) || !req.body.length)
         fail(400, "请上传非空文件");
-      if (
-        q.purpose !== "avatar" &&
-        q.purpose !== "ai_attachment" &&
-        !q.resourceId
-      )
+      if (q.purpose !== "avatar" && !q.resourceId)
         fail(400, "请指定所属文档或知识库");
-      if (q.purpose === "ai_attachment") {
-        await requireCapability(db, a.id, "ai.create");
-        if (q.resourceId) fail(400, "对话附件不能关联文档");
-      }
       if (q.purpose === "avatar" && q.resourceId) fail(400, "头像不属于文档");
       const recent = await db
         .selectFrom("assets")
@@ -207,8 +228,7 @@ export function registerAssets(
           filename = Array.from(q.filename.replace(/[\x00-\x1f\x7f/\\]/g, "_"))
             .slice(0, 240)
             .join("");
-        const imageRequired =
-          q.purpose !== "attachment" && q.purpose !== "ai_attachment";
+        const imageRequired = q.purpose !== "attachment";
         const raster =
           body
             .subarray(0, 8)
@@ -255,8 +275,6 @@ export function registerAssets(
             fail(400, "图片无法解析，或分辨率过大");
           }
         }
-        if (q.purpose === "ai_attachment" && !raster)
-          mime = attachmentMime(filename, body);
         mime = await detectBufferMime(body, filename);
         key = objectKey(id, mime);
         await storage.put(c, key, body, mime, filename);
@@ -275,7 +293,6 @@ export function registerAssets(
           created_at: new Date().toISOString(),
           deleted_at: null,
         };
-        let createdFileId: string | undefined;
         await transact(db, async (tx) => {
           await lock(tx, a);
           if (q.resourceId)
@@ -337,18 +354,15 @@ export function registerAssets(
               created_at: row.created_at,
             };
             await registerStoredObject(tx, fileObject);
-            if (q.purpose === "attachment" || q.purpose === "ai_attachment") {
+            if (q.purpose === "attachment") {
               const fileId = randomUUID();
-              createdFileId = fileId;
               await tx
                 .insertInto("file_items")
                 .values({
                   id: fileId,
                   owner_id: row.owner_id,
-                  parent_type:
-                    q.purpose === "ai_attachment" ? "system" : "document",
-                  parent_id:
-                    q.purpose === "ai_attachment" ? "ai" : q.resourceId!,
+                  parent_type: "document",
+                  parent_id: q.resourceId!,
                   storage_object_id: fileObject.id,
                   name: row.filename,
                   mime: row.mime,
@@ -397,7 +411,6 @@ export function registerAssets(
         if (extractStatus === "pending") beginFileExtract(db, id, runtime);
         return reply.code(201).send({
           id,
-          fileId: createdFileId,
           filename,
           mime,
           size: body.length,
@@ -434,6 +447,7 @@ export function registerAssets(
         .where("deleted_at", "is", null)
         .executeTakeFirst();
       if (!asset) fail(404, "附件不存在或无权访问");
+      await authorizeKnowledgeAsset(db, a, asset.id);
       if (asset.mime.startsWith("image/"))
         return { status: "ready", imageCount: 0 };
       const objectId = await storageObjectIdForAsset(db, asset);
@@ -545,6 +559,7 @@ export function registerAssets(
       const cdn = storage.cdnUrl(c, selected.object_key);
       if (asset.purpose === "ai_attachment")
         reply.header("Cache-Control", "private, no-store");
+      if (asset.purpose === "ai_attachment" && a) await authorizeKnowledgeAsset(db, a, asset.id);
       if (
         cdn &&
         !asset.resource_id &&

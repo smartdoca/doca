@@ -13,6 +13,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -21,6 +22,7 @@ import {
   readPageState,
   writePageState,
 } from "@web/features/page-state/client.js";
+import { setAPIErrorLocale } from "./system-errors.js";
 
 const storageKey = "doca.locale";
 
@@ -43,6 +45,9 @@ const I18nContext = createContext<I18nValue | null>(null);
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(storedLocale);
+  useLayoutEffect(() => {
+    setAPIErrorLocale(locale);
+  }, [locale]);
   useEffect(() => {
     document.documentElement.lang = htmlLang(locale);
     try {

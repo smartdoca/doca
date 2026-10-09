@@ -17,6 +17,13 @@ const KEEP_KEYS = [
   "approvalId",
   "callId",
   "fileId",
+  "assetId",
+  "referenceImageId",
+  "filename",
+  "imageOffset",
+  "imageLimit",
+  "totalImages",
+  "nextImageOffset",
   "jobId",
   "href",
   "code",
@@ -66,7 +73,17 @@ function resultPayload(part: any) {
 function withPayload(part: any, preview: unknown) {
   if (part.result !== undefined) return { ...part, result: preview };
   if (part.output && typeof part.output === "object" && "value" in part.output)
-    return { ...part, output: { ...part.output, value: preview } };
+    return {
+      ...part,
+      output: {
+        ...part.output,
+        // The current SDK requires content.value to remain a part array. A
+        // truncated summary is text, never the original diagnostic metadata.
+        value: part.output.type === "content" && !Array.isArray(preview)
+          ? [{ type: "text", text: typeof preview === "string" ? preview : JSON.stringify(preview) }]
+          : preview,
+      },
+    };
   return { ...part, output: preview };
 }
 
@@ -79,7 +96,12 @@ function cloneMessage(message: any) {
           part && typeof part === "object" ? { ...part } : part,
         )
       : Array.isArray(message.content?.parts)
-        ? { ...message.content, parts: message.content.parts.map((part: any) => part && typeof part === "object" ? { ...part } : part) }
+        ? {
+            ...message.content,
+            parts: message.content.parts.map((part: any) =>
+              part && typeof part === "object" ? { ...part } : part,
+            ),
+          }
         : message.content,
   };
 }
@@ -88,11 +110,7 @@ const CALL_TYPES = new Set(["tool-call", "tool_call", "function_call"]);
 export const MODEL_INPUT_BYTE_FACTOR = 4;
 
 function isToolCallPart(part: any) {
-  return !!(
-    part &&
-    CALL_TYPES.has(part.type) &&
-    !isToolResultPart(part)
-  );
+  return !!(part && CALL_TYPES.has(part.type) && !isToolResultPart(part));
 }
 
 function callPayload(part: any) {
@@ -131,7 +149,8 @@ export function trimToolResults(messages: any[], keepRecent = 2) {
       return preview === payload ? part : withPayload(part, preview);
     });
     if (Array.isArray(message?.content)) message.content = parts;
-    else if (Array.isArray(message?.content?.parts)) message.content.parts = parts;
+    else if (Array.isArray(message?.content?.parts))
+      message.content.parts = parts;
   }
   return cloned;
 }
@@ -153,17 +172,16 @@ export function trimToolCalls(messages: any[], keepRecent = 2) {
       return preview === payload ? part : withCallPayload(part, preview);
     });
     if (Array.isArray(message?.content)) message.content = parts;
-    else if (Array.isArray(message?.content?.parts)) message.content.parts = parts;
+    else if (Array.isArray(message?.content?.parts))
+      message.content.parts = parts;
   }
   return cloned;
 }
 
 export function promptPayloadBytes(prompt: unknown, tools?: unknown) {
   return Buffer.byteLength(
-    JSON.stringify(
-      { prompt, tools },
-      (key, value) =>
-        key === "data" || key === "image" ? "[binary]" : value,
+    JSON.stringify({ prompt, tools }, (key, value) =>
+      key === "data" || key === "image" ? "[binary]" : value,
     ),
   );
 }
@@ -225,7 +243,8 @@ function exchangeComplete(group: any[]) {
   for (const message of group) {
     for (const part of messageParts(message)) {
       if (isToolCallPart(part) && part.toolCallId) calls.add(part.toolCallId);
-      if (isToolResultPart(part) && part.toolCallId) results.add(part.toolCallId);
+      if (isToolResultPart(part) && part.toolCallId)
+        results.add(part.toolCallId);
     }
   }
   return !calls.size || [...calls].every((id) => results.has(id));
@@ -242,7 +261,8 @@ export function collapseOlderExchanges(messages: any[], keepRecent = 2) {
     if (message.role === "assistant" || !groups.length) groups.push([]);
     groups.at(-1)!.push(message);
   }
-  const tail = groups.length && !exchangeComplete(groups.at(-1)!) ? groups.pop()! : [];
+  const tail =
+    groups.length && !exchangeComplete(groups.at(-1)!) ? groups.pop()! : [];
   const keep = Math.max(0, keepRecent);
   if (groups.length <= keep) return messages;
   return [
@@ -284,9 +304,18 @@ export function fitPromptToModelInput(
   prompt: any[],
   maxInput: number,
   tools?: unknown,
+  protectedPrefix = 0,
 ) {
-  if (!Array.isArray(prompt) || !exceedsModelInput(prompt, maxInput, tools))
-    return prompt;
+  if (!Array.isArray(prompt)) return prompt;
+  if (
+    !Number.isSafeInteger(protectedPrefix) ||
+    protectedPrefix < 0 ||
+    protectedPrefix > prompt.length
+  )
+    throw new RangeError(
+      "Protected prompt prefix must name an existing message boundary",
+    );
+  if (!exceedsModelInput(prompt, maxInput, tools)) return prompt;
   const stages = [
     (items: any[]) => trimToolResults(items, 1),
     (items: any[]) => trimToolCalls(items, 1),
@@ -300,12 +329,16 @@ export function fitPromptToModelInput(
     (items: any[]) => trimToolCalls(items, 0),
     (items: any[]) => trimToolResults(items, 0),
   ];
-  let next = prompt;
+  // Host-authored task requirements are immutable. Every fit decision includes
+  // their full bytes and the tool definitions; only execution history can shrink.
+  const prefix = prompt.slice(0, protectedPrefix);
+  let next = prompt.slice(protectedPrefix);
   for (const stage of stages) {
     next = stage(next);
-    if (!exceedsModelInput(next, maxInput, tools)) return next;
+    const full = [...prefix, ...next];
+    if (!exceedsModelInput(full, maxInput, tools)) return full;
   }
-  return next;
+  return [...prefix, ...next];
 }
 
 export function taskStateHint(state: {

@@ -1,6 +1,6 @@
 import { useI18n } from "@web/shared/i18n.js";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Image, Modal, Space } from "antd";
+import { Alert, Button, Image, Modal, Space, Tag, Tooltip } from "antd";
 import { Download, FilePlus2 } from "lucide-react";
 import { api, assetUrl } from "@web/shared/api.js";
 import { SearchPanel } from "@web/features/search/search.js";
@@ -16,6 +16,7 @@ export function AIGeneratedImage({
     width: number;
     height: number;
     ready: boolean;
+    validation?: { state:"pending" | "passed" | "rejected"; evidence?:string };
   };
   currentDocument?: { id: string; title: string };
   sessionId?: string | null;
@@ -108,6 +109,11 @@ const { t } = useI18n();
     );
   return (
     <div className="ai-generated-image">
+      <Tooltip title={image.validation?.evidence}>
+        <Tag color={image.validation?.state === "passed" ? "success" : image.validation?.state === "rejected" ? "error" : "warning"}>
+          {t(image.validation?.state === "passed" ? "chat.imageValidationPassed" : image.validation?.state === "rejected" ? "chat.imageValidationFailed" : image.validation?.state === "pending" ? "chat.imageAwaitingValidation" : "chat.imageValidationUnrecorded")}
+        </Tag>
+      </Tooltip>
       <Image
         src={assetUrl(image.assetId)}
         alt="AI 生成图片"

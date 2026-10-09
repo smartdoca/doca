@@ -134,7 +134,9 @@ async function configured() {
         model: "private-real-model",
         alias: "创作助手",
         enabled: true,
-        maxInput: 32000,
+        // These behavior tests exercise the complete host tool catalog. Input
+        // budget enforcement and compaction have their own smaller fixtures.
+        maxInput: 128000,
         maxOutput: 1000,
         tools: true,
       },
@@ -718,6 +720,7 @@ it("displays reasoning from the OpenAI Responses API without any interface setti
   config.models[0] = {
     ...config.models[0]!,
     model: "gpt-5-mini-reasoning-e2e",
+    maxInput: 128000,
   } as (typeof config.models)[number];
   await saveAIConfig(db, config, 1);
   const requests: any[] = [];

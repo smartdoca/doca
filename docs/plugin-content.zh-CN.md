@@ -46,12 +46,10 @@ HTTP：GET `/api/v1/content/sources?purpose=analysis`；POST `/api/v1/content/li
 
 全局搜索只调用声明 search 的来源。知识库/文档筛选不能套到插件业务范围时，不混入插件结果。点击再次 resolve。
 
-知识库 content 订阅复用 `knowledge_subscriptions`、`knowledge_source_groups.config`、现有整理任务；配置中只存来源配置、身份和已消费块指纹，不保存额外完整邮件正文。新订阅入口为 POST `/api/v1/knowledge/libraries/:id/content-subscriptions`，参数 `{sourceId,config,title}`。来源必须支持 knowledge。整理逐块读取和分析变化正文，成功事务才确认指纹；草稿引用携带 contentRef。
+原知识库保留 `knowledge_subscriptions` 和 `knowledge_source_groups.config` 的来源登记，不再创建整理任务、派生条目或消费指纹副本。POST `/api/v1/knowledge/libraries/:id/content-subscriptions` 接收 `{sourceId,config,title}`，要求来源支持 knowledge。仅贡献者可以修改提供方来源范围。
 
-来源删除、解绑或撤权的用户确认策略：暂停衍生结果访问和检索，保留内容供管理员处理。新文档读取、资源列表（含搜索候选）和问答快照均按当前来源清单与指纹过滤。来源失败同样阻止本次返回，不删除内容。管理端保留条目。既有已打开协作连接的即时踢出和已下发内容撤回不在本次实现保证内。
+知识册独立在运行时读取完整授权清单，发布前复验。证据保留 `contentRef`、来源版本、内容哈希与精确引用片段。提供方、绑定、贡献者或原来源权限不可用时，衍生成果停止展示；保留数据不授予访问权，不建立额外完整正文存储。
 
-外部来源复验在事务前完成；事务内只提交配置 CAS、订阅状态和消费指纹。资源预检只在本次操作内复用，绑定读取者和条目引用签名；缺少预检的事务读取保守阻止派生内容。单文档或指定库查询限制预检范围，跨库列表检查候选派生条目。
+来源选择器提供基础 schema 表单；复杂嵌套配置需要插件自己的配置页。编辑接口为 PUT `/api/v1/knowledge/libraries/:id/content-source-groups/:groupId`，参数同新增接口；仅订阅发起者可修改来源范围。配置变化影响后续来源读取。
 
-来源选择器提供基础 schema 表单；复杂嵌套配置需要插件自己的配置页。编辑接口为 PUT `/api/v1/knowledge/libraries/:id/content-source-groups/:groupId`，参数同新增接口；仅订阅发起者可修改来源范围。配置变化后重新对账，保留既有内容供复核。
-
-现有 knowledge.sources.v1 没有自动适配为 content.v1；业务插件需实现公开标准。未新增数据库结构、历史数据转换或旧协议兼容代码。
+现有 knowledge.sources.v1 没有自动适配为 content.v1；业务插件需实现公开标准。知识册使用新数据库基线，不提供历史转换或旧协议适配。

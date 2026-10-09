@@ -57,6 +57,8 @@ Mobile plugins use host-issued WebView sessions scoped to a single plugin. Publi
 
 Titles use `{zh,en}`; IDs belong to the plugin namespace. supportedContexts is global/home/document/library/folder/resources. conditions filters targets, resourceKinds, formats, and capabilities. Support and visibility are display rules, separate from server authorization. Duplicate IDs, invalid slots, missing references, and cross-plugin references reject the whole bundle and withdraw registered contributions.
 
+Icon-only command/view entries use the same PNG branding as the configured plugin store. The host serves it through authenticated `GET /api/v1/plugin-icons/<id>` for running store/npm installations with Web assets; local installations retain the generic icon. Store details are validated with the existing store protocol, requests for the same plugin share a pending read, and successes/misses/failures are cached only in host memory for 60 seconds. While loading, when no store icon exists, or when an image cannot be loaded, the entry retains its generic icon and remains usable. Existing plugin bundles, SDK versions and persisted data are unchanged; no icon declaration, conversion or migration is required. Reverting this host change restores the previous display.
+
 | Implemented Web slot | Context |
 | --- | --- |
 | global.more | Global actions share the upper-right app icon with web.more navigation; action/view entries use icons with hover labels; hide when both filtered sets are empty |

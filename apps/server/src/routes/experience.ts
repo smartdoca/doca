@@ -1,4 +1,4 @@
-import { redeemKnowledgeShare } from "@core/modules/knowledge/permissions.js";
+
 import { Type } from "@sinclair/typebox";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { createDocuments } from "@core/modules/collaboration/documents.js";
@@ -89,7 +89,7 @@ export function registerExperience(
               Type.Union([Type.String({ format: "date-time" }), Type.Null()]),
             ),
             role: Type.Union(
-              ["reader", "commenter", "editor"].map((x) => Type.Literal(x)),
+              ["reader", "commenter", "editor", "manager"].map((x) => Type.Literal(x)),
             ),
             version: Type.Union([id, Type.Null()]),
           },
@@ -137,7 +137,7 @@ export function registerExperience(
       },
     },
     async (req) =>
-      (await redeemKnowledgeShare(db, authenticated(req), req.body.token, req.body.accept ?? true)) ?? service.redeem(
+      service.redeem(
         authenticated(req),
         req.body.token,
         req.body.accept ?? true,

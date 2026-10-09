@@ -3,7 +3,7 @@ import type { Actor } from "../identity/passwords.js";
 import { activeActor, accessibleQuery } from "../access/queries.js";
 import { sql } from "kysely";
 import { createTickets } from "../tickets/service.js";
-import { reconcileHumanTasks } from "../knowledge/human-tasks.js";
+import { listBookHumanTasks } from "../knowledge-books/human-tasks.js";
 import { entryQuery } from "../resources/queries.js";
 import { distributionPolicy } from "../deployment/policies.js";
 import { distributionBehavior } from "../access/distribution-behavior.js";
@@ -48,24 +48,8 @@ export async function homeOverview(db: DB, actor: Actor) {
       };
     })(),
     (async () => {
-      const libs = await db
-        .selectFrom("resources as r")
-        .select("r.id")
-        .where("r.kind", "=", "library")
-        .where("r.ai_curated", "=", 1)
-        .where(accessibleQuery(sql.ref("r.id"), actor, 4))
-        .execute();
-      const items = [];
-      for (const lib of libs) {
-        for (const x of await reconcileHumanTasks(db, actor, lib.id))
-          items.push({
-            id: x.id,
-            title: x.title,
-            updatedAt: x.updated_at,
-            href: `#/r/${lib.id}?view=system`,
-          });
-      }
-      return { kind: "curation", more: false, items };
+      const page = await listBookHumanTasks(db, actor, {status:"pending"});
+      return {kind:"knowledge-books", more:page.nextOffset !== null, items:page.items.map(task=>({id:task.id,title:task.title,updatedAt:task.updated_at,href:`#/knowledge-books/${task.book_id}`}))};
     })(),
   ]);
   return {
@@ -75,7 +59,7 @@ export async function homeOverview(db: DB, actor: Actor) {
       result.status === "fulfilled"
         ? { ...result.value, status: "ready" }
         : {
-            kind: i === 0 ? "tickets" : "curation",
+            kind: i === 0 ? "tickets" : "knowledge-books",
             status: "error",
             more: false,
             items: [],

@@ -4,6 +4,12 @@ import { type Locale } from "./locales";
 export { en, type MessageKey } from "./catalogs/en";
 export { zh } from "./catalogs/zh";
 export {
+  encodeSystemError,
+  decodeSystemError,
+  systemErrorMessage,
+  type SystemErrorReason,
+} from "./system-errors";
+export {
   createTranslator,
   interpolate,
   lookupTemplate,

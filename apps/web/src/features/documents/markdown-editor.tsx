@@ -6,10 +6,7 @@ import { AtSign, MessageSquare } from "lucide-react";
 import {
   DocumentDownload,
   downloadResult,
-  readAsset,
-  preparePdfImage,
 } from "@web/features/documents/file-transfer.js";
-import { loadPdfFontBytes } from "@web/features/documents/pdf-font.js";
 import { OutlineDrawer } from "@web/features/documents/outline-drawer.js";
 import { attachMarkdownScroll } from "@web/features/documents/markdown-scroll.js";
 import { useDocumentReadOnly } from "@web/features/documents/document-mode.js";
@@ -590,21 +587,10 @@ export default function MarkdownDocument({
   );
   const downloadPdf = useCallback(
     async (markdown: string) => {
-      const { exportPdfFile } = await import("@smartdoca/markdown");
-      downloadResult(
-        await exportPdfFile(markdown, {
-          fileName: `${detail.resource.title}.pdf`,
-          fontBytes: await loadPdfFontBytes(markdown),
-          fontSubset: false,
-          resolveResource: async ({ path }) => ({
-            bytes: await preparePdfImage(
-              await readAsset(platformAssetId(path) ?? path),
-            ),
-          }),
-        }),
-      );
+      const { exportMarkdownPdf } = await import("./rendered-pdf.js");
+      downloadResult(await exportMarkdownPdf(markdown, id, detail.resource.title, locale));
     },
-    [detail.resource.title],
+    [id, detail.resource.title, locale],
   );
   const headings = useMemo(() => {
     const tree = fromMarkdown(model.text.toString());

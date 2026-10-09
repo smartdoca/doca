@@ -1,0 +1,22 @@
+import { sql, type Kysely } from "kysely";
+
+export const knowledgeBookStatements = [
+  `CREATE TABLE knowledge_books (id varchar(36) primary key references resources(id) on delete cascade, revision integer not null, configuration text not null, published_release_id varchar(36), created_at varchar(32) not null, updated_at varchar(32) not null)`,
+  `CREATE TABLE knowledge_book_configurations (book_id varchar(36) not null references knowledge_books(id) on delete cascade, revision integer not null, configuration text not null, author_id varchar(36) not null references users(id), created_at varchar(32) not null, primary key(book_id, revision))`,
+  `CREATE TABLE knowledge_book_sources (id varchar(36) primary key, book_id varchar(36) not null references knowledge_books(id) on delete cascade, title varchar(200) not null, creator_id varchar(36) not null references users(id), revision integer not null, configuration text not null, status varchar(16) not null, created_at varchar(32) not null, updated_at varchar(32) not null)`,
+  `CREATE INDEX knowledge_book_sources_book ON knowledge_book_sources(book_id, status)`,
+  `CREATE TABLE knowledge_book_source_versions (source_id varchar(36) not null references knowledge_book_sources(id) on delete cascade, revision integer not null, title varchar(200) not null, configuration text not null, status varchar(16) not null, author_id varchar(36) not null references users(id), created_at varchar(32) not null, primary key(source_id, revision))`,
+  `CREATE TABLE knowledge_book_feedback (id varchar(36) primary key, book_id varchar(36) not null references knowledge_books(id) on delete cascade, author_id varchar(36) not null references users(id), revision integer not null, detail text not null, status varchar(16) not null, created_at varchar(32) not null, updated_at varchar(32) not null)`,
+  `CREATE INDEX knowledge_book_feedback_book ON knowledge_book_feedback(book_id, status)`,
+  `CREATE TABLE knowledge_book_feedback_versions (feedback_id varchar(36) not null references knowledge_book_feedback(id) on delete cascade, revision integer not null, detail text not null, status varchar(16) not null, author_id varchar(36) not null references users(id), created_at varchar(32) not null, primary key(feedback_id, revision))`,
+  `CREATE TABLE knowledge_book_runs (id varchar(36) primary key, book_id varchar(36) not null references knowledge_books(id) on delete cascade, actor_id varchar(36) not null references users(id), configuration_revision integer not null, configuration text not null, input_hash varchar(64) not null, status varchar(32) not null, lease_id varchar(36), started_at varchar(32), heartbeat_at varchar(32), artifact text, error text not null, trigger_key varchar(100), created_at varchar(32) not null, updated_at varchar(32) not null, unique(book_id, trigger_key))`,
+  `CREATE INDEX knowledge_book_runs_queue ON knowledge_book_runs(status, created_at)`,
+  `CREATE TABLE knowledge_book_node_runs (run_id varchar(36) not null references knowledge_book_runs(id) on delete cascade, node_id varchar(100) not null, type varchar(32) not null, status varchar(24) not null, input_refs text not null, output text not null, error text not null, started_at varchar(32) not null, completed_at varchar(32), primary key(run_id, node_id))`,
+  `CREATE TABLE knowledge_book_releases (id varchar(36) primary key, book_id varchar(36) not null references knowledge_books(id) on delete cascade, run_id varchar(36) not null unique references knowledge_book_runs(id), revision integer not null, artifact text not null, created_at varchar(32) not null, unique(book_id, revision))`,
+  `CREATE TABLE knowledge_book_human_tasks (id varchar(36) primary key, book_id varchar(36) not null references knowledge_books(id) on delete cascade, run_id varchar(36) not null references knowledge_book_runs(id) on delete cascade, node_id varchar(100) not null, kind varchar(24) not null, title text not null, status varchar(24) not null, revision integer not null, input_hash varchar(64) not null, resolution text not null, created_at varchar(32) not null, updated_at varchar(32) not null, unique(run_id, node_id, kind))`,
+  `CREATE INDEX knowledge_book_human_tasks_status ON knowledge_book_human_tasks(status, created_at)`,
+];
+export async function createKnowledgeBookSchema(db: Kysely<any>) {
+  for (const statement of knowledgeBookStatements)
+    await sql.raw(statement).execute(db);
+}

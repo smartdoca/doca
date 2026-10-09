@@ -30,6 +30,19 @@ export function withSessionHash(href: string, sessionId?: string | null) {
   return `${normalized}${query ? `?${query}` : ""}`;
 }
 
+export function aiSessionFolderHref(
+  session: { id: string; title: string },
+  assistantName: string,
+) {
+  const params = new URLSearchParams({
+    path: JSON.stringify([
+      { type: "system", id: "ai", name: assistantName },
+      { type: "system", id: `ai-session:${session.id}`, name: session.title },
+    ]),
+  });
+  return withSessionHash(`/files?${params}`, session.id);
+}
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

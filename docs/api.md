@@ -41,7 +41,7 @@ Contact verification, recovery, identity linking, security verification, account
 | `GET /resources/:id/versions`, `POST /resources/:id/versions` | History / manual snapshot |
 | `GET /resources/:id/versions/:versionId` | Preview; spreadsheet/slide/canvas canRestore is false |
 | `POST /resources/:id/versions/:versionId/restore` | `{expectedSeq}`, manager restore for rich text/Markdown |
-| `POST /share/redeem` | Signed-in preview or acceptance of a document/Q&A link |
+| `POST /share/redeem` | Signed-in preview or acceptance of a document link |
 
 Content editing uses `/api/v1/ws`; see [collaboration](collaboration.md). Fields, grant sources, and inheritance are in [permissions](permission-inheritance.md). Sharing and history are in the [document guide](document-experience.md).
 
@@ -61,15 +61,13 @@ Administration uses `GET/PUT /admin/search`, `POST /admin/search/reindex`, `POST
 
 Asset upload uses `POST /assets?purpose=&filename=&resourceId=` with avatar/cover/attachment/comment_image and purpose-specific authorization. Download uses `GET /assets/:id/content`, with `?download=1` for attachment disposition. Avatar/cover/comment images allow 5 MiB; document attachments allow 20 MiB. Ordinary platform files use `/files` routes with separate limits and multipart workflows.
 
-Attachment and AI-attachment creation return the asset `id` and the actual stored `fileId`. Use the asset ID for attachment content and image references, and the file ID for `/files/items/:id` operations. The same IDs are returned by `POST /files/items/:id/attach`; a global directory search is not needed to rediscover the uploaded file.
-
 `GET /admin/storage` reports the deployment backend; `PUT /admin/storage` returns 405. Environment variables configure backends and credentials; see [file storage](storage.md).
 
 ## AI, knowledge, and plugins
 
 AI sessions and jobs use `/ai`. Tools honor session scope, actual resource permissions, and approval. `POST /ai/jobs/:id/approval` takes `{approvalId,approved}` from the job's owner; approval does not change resource ACLs.
 
-Curation, bot API/MCP, independent keys, and streamed answers are in [knowledge curation](knowledge-studio.md). Unified sources use `/content`; see the [content protocol](plugin-content.md). Installed plugin business routes use `/plugins/:pluginId/...` and depend on the loaded release. The host has no quick-notes or mail business API; see [capabilities and limits](features.md).
+Knowledge-book commands, workflow runs, human tasks and source subscriptions are described in [knowledge books](knowledge-books.md). Unified sources use `/content`; see the [content protocol](plugin-content.md). Installed plugin business routes use `/plugins/:pluginId/...` and depend on the loaded release. The host has no quick-notes or mail business API; see [capabilities and limits](features.md).
 
 ## Health and source
 

@@ -100,6 +100,7 @@ export function createResourceReads(
         return {
           resource: {
             ...project(ctx, r),
+            knowledgeBook: !!(await ctx.tx.selectFrom("knowledge_books").select("id").where("id", "=", r.id).executeTakeFirst()),
             entry_state: actor
               ? (
                   await ctx.tx

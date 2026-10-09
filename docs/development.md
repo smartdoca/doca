@@ -17,6 +17,18 @@ Open http://127.0.0.1:39130. The API listens on 39120 and the dev server proxies
 
 Copy `.env.example` before starting: file-store variables are required. Its storage root is `/data/storage` for Docker; set that root to an absolute writable directory on your machine before running from source. Keep the local origin and SQLite path, and never commit secrets.
 
+## PDF rendering for source development
+
+Rich-text and Markdown PDF export use sandboxed Chromium. Install the matching browser after dependencies:
+
+```sh
+pnpm exec playwright-core install chromium --only-shell
+```
+
+Alternatively set `DOCA_PDF_CHROMIUM` to a supported Chromium executable. On Linux the browser's system libraries and sandbox must be available. This checkout's Dockerfile installs Chromium and CJK fonts for the non-root runtime; a published image gains these changes only after a build/release. Renderer failures return a visible export error.
+
+Run the isolated visual regression with `node --import tsx scripts/qa-document-pdf.mts`. It opens no user documents and writes online screenshots, PDFs and native reimports to `.local/document-pdf-qa/`. See [file exchange](editor-file-exchange-contract.md#rendered-pdf-and-editable-import) for fidelity and verified limits.
+
 ## Create the administrator
 
 There is no default account. In the project directory:

@@ -14,7 +14,7 @@ Images and attachments use host uploads, asset IDs, and authorized downloads. Ed
 
 The sharing panel manages visibility, invitations, member authorization sources, and links. Changes check a version or revision; refresh after a 409 conflict. Management and ownership operations follow their own authorization rules; see [permissions](permission-inheritance.md).
 
-Links use `#/s/{token}` for signed-in preview and acceptance. Documents and Q&A share the entry point, but a Q&A link grants bot reading only. The global link switch, individual link disable/expiry, and member-source revocation are distinct actions; removing one source leaves other valid sources intact. See [Q&A sharing](knowledge-sharing.md). Public reading, discovery, collections, and favorites are separate; collecting grants no access, and system administrators do not automatically gain private-content access.
+Links use `#/s/{token}` for signed-in preview and acceptance. The global link switch, individual link disable/expiry, and member-source revocation are distinct actions; removing one source leaves other valid sources intact. Public reading, discovery, collections, and favorites are separate; collecting grants no access, and system administrators do not automatically gain private-content access.
 
 ## History and restore
 

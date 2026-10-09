@@ -38,6 +38,8 @@ Turning inheritance off does not copy the parent's settings. Existing overrides 
 
 Redeeming a link writes a `link` grant with the share id. Changing, disabling, or expiring a link controls later redemptions. Grants already written are adjusted or revoked through the member source.
 
+Document and library links can grant reader, commenter, editor, or manager access. Only owners can create, change, or revoke manager links.
+
 ## Approval, notifications, and immediate effect
 
 The requested role on an access ticket cannot change. Approval can choose the role and scope that are actually granted. Only the resource owner approves a management request, and only the owner can grant management.

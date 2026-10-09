@@ -5,7 +5,8 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createAzure } from "@ai-sdk/azure";
 import type { AIModel } from "@core/modules/ai/config.js";
 import { providerPreset } from "@core/modules/ai/providers.js";
-import { fail } from "@core/shared/errors.js";
+import { AppError, fail, systemErrorReason } from "@core/shared/errors.js";
+import type { SystemErrorReason } from "@doca/i18n";
 
 const hourCache = { type: "ephemeral" as const, ttl: "1h" as const };
 
@@ -61,7 +62,10 @@ export function markPromptCacheBoundary<T extends { providerOptions?: any }>(
 // summaries only when the Responses request opts in, Claude and Gemini keep
 // thinking hidden without an explicit switch. Ask by default; endpoints that
 // reject the switch are remembered and retried once without it.
-const adaptation = new Map<string, { chatOnly?: boolean; noReasoning?: boolean }>();
+const adaptation = new Map<
+  string,
+  { chatOnly?: boolean; noReasoning?: boolean }
+>();
 function rememberAdaptation(
   key: string,
   patch: { chatOnly?: boolean; noReasoning?: boolean },
@@ -109,12 +113,80 @@ export type DetectedAIModelLimits = {
   maxOutput?: number;
 };
 
+const doubaoSeedProVersions = new Set([
+  "doubao-seed-2-1-pro-260628",
+  "doubao-seed-2-1-pro-260915",
+]);
+function knownDoubaoSeedPro(model: AIModel) {
+  if (model.provider !== "doubao") return false;
+  if (doubaoSeedProVersions.has(model.model)) return true;
+  if (model.model !== "doubao-seed-2.1-pro") return false;
+  // The undated alias is documented for these official plan endpoints.
+  // Do not infer a deployment/model identity from an arbitrary compatible URL.
+  try {
+    const url = new URL(model.baseUrl);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "ark.cn-beijing.volces.com" &&
+      ["/api/plan/v3", "/api/coding/v3"].includes(
+        url.pathname.replace(/\/$/, ""),
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+function knownArkPlanKimi(model: AIModel) {
+  if (model.provider !== "doubao" || model.model !== "kimi-k3") return false;
+  try {
+    const url = new URL(model.baseUrl);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "ark.cn-beijing.volces.com" &&
+      !url.port && !url.username && !url.password && !url.search && !url.hash &&
+      url.pathname.replace(/\/$/, "") === "/api/plan/v3"
+    );
+  } catch {
+    return false;
+  }
+}
+function defaultNativeReasoningOptions(model: AIModel, options: any) {
+  if (!knownDoubaoSeedPro(model) && !knownArkPlanKimi(model)) return options;
+  const doca = options.providerOptions?.doca;
+  if (
+    doca !== undefined &&
+    (doca === null || typeof doca !== "object" || Array.isArray(doca))
+  )
+    return options;
+  // Keep explicit current SDK options, including generic provider options,
+  // intact. Explicit thinking may disable reasoning, which cannot mix with low.
+  const explicitEffort = Object.values(options.providerOptions ?? {}).some(
+    (value: any) => value?.reasoningEffort !== undefined,
+  );
+  if (
+    explicitEffort ||
+    options.reasoning !== undefined ||
+    doca?.thinking !== undefined
+  )
+    return options;
+  return {
+    ...options,
+    providerOptions: {
+      ...options.providerOptions,
+      doca: { ...doca, reasoningEffort: "low" },
+    },
+  };
+}
+
 export function createAIModel(
   model: AIModel,
   fetcher: typeof fetch = fetch,
   onApiMode?: (mode: DetectedAIModelMode) => void,
 ) {
-  if (model.embedding) fail(400, "向量模型不能用于聊天或 Agent 调用");
+  if (model.embedding)
+    fail(400, "向量模型不能用于聊天或 Agent 调用", {
+      code: "model_embedding_chat",
+    });
   const settings = {
     baseURL: model.baseUrl.replace(/\/$/, ""),
     apiKey: model.apiKey || (model.provider === "ollama" ? "ollama" : ""),
@@ -157,11 +229,19 @@ export function createAIModel(
   // endpoints without it fall back to Chat Completions once and are remembered.
   const adaptable =
     !model.apiMode && (protocol === "openai" || protocol === "azure");
-  const key = [model.provider, model.baseUrl, model.apiVersion ?? "", model.model].join("|");
+  const key = [
+    model.provider,
+    model.baseUrl,
+    model.apiVersion ?? "",
+    model.model,
+  ].join("|");
   const invoke = async (
     method: "doGenerate" | "doStream",
     options: any,
   ): Promise<any> => {
+    // A native runtime default, outside the old optional-summary adaptation.
+    // Rejection of this effort is an error; it is never retried without it.
+    options = defaultNativeReasoningOptions(model, options);
     const state = adaptation.get(key);
     const apiMode =
       protocol === "openai" || protocol === "azure"
@@ -258,7 +338,10 @@ export async function discoverAIModels(
   fetcher: typeof fetch = fetch,
 ) {
   const protocol = providerPreset(model.provider).protocol;
-  if (protocol === "azure") fail(400, "Azure 请填写控制台中的部署名称");
+  if (protocol === "azure")
+    fail(400, "Azure 请填写控制台中的部署名称", {
+      code: "model_azure_deployment",
+    });
   const headers: Record<string, string> =
     protocol === "anthropic"
       ? { "x-api-key": model.apiKey!, "anthropic-version": "2023-06-01" }
@@ -271,7 +354,10 @@ export async function discoverAIModels(
       redirect: "error",
       signal: AbortSignal.timeout(15000),
     });
-    if (!r.ok) fail(502, "供应商未提供可用模型列表，请手动填写模型 ID");
+    if (!r.ok)
+      fail(502, "供应商未提供可用模型列表，请手动填写模型 ID", {
+        code: "model_list_unavailable",
+      });
     const body = (await r.json()) as any;
     return {
       models: (body.data ?? body.models ?? [])
@@ -297,7 +383,9 @@ export async function discoverAIModels(
     };
   } catch (e) {
     if ((e as any)?.status) throw e;
-    fail(502, "模型列表读取失败，请检查配置或手动填写模型 ID");
+    fail(502, "模型列表读取失败，请检查配置或手动填写模型 ID", {
+      code: "model_list_failed",
+    });
   }
 }
 
@@ -350,12 +438,17 @@ export function transientModelFailure(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? "");
   if ([400, 401, 403, 404, 409, 413, 422, 429].includes(status ?? 0))
     return false;
+  if (
+    error instanceof AppError &&
+    systemErrorReason(error)?.code === "ai_workflow_connection_interrupted"
+  )
+    return true;
   if (/模型返回格式|工具调用不兼容|请检查模型配置/.test(message)) return false;
   return /模型厂商服务暂时异常|模型连接超时|无法完成模型连接/.test(message);
 }
 
 // Never return provider request bodies, headers or secrets in an error response.
-export function modelConnectionError(error: unknown): string {
+function modelConnectionFailure(error: unknown) {
   const e = error as {
     statusCode?: number;
     name?: string;
@@ -363,15 +456,44 @@ export function modelConnectionError(error: unknown): string {
     cause?: { code?: string };
   };
   const status = e?.statusCode;
+  const failure = (
+    message: string,
+    code: string,
+    data?: SystemErrorReason["data"],
+  ) => ({
+    message,
+    reason: { code, ...(data ? { data } : {}) } satisfies SystemErrorReason,
+  });
   if (status === 401)
-    return "模型认证失败（401），请检查厂商密钥是否正确或已失效";
-  if (status === 402) return "模型厂商账户余额不足（402），请在厂商平台充值";
+    return failure(
+      "模型认证失败（401），请检查厂商密钥是否正确或已失效",
+      "model_auth_failed",
+    );
+  if (status === 402)
+    return failure(
+      "模型厂商账户余额不足（402），请在厂商平台充值",
+      "model_balance_insufficient",
+    );
   if (status === 403)
-    return "厂商拒绝访问（403），请检查密钥权限与模型开通状态";
+    return failure(
+      "厂商拒绝访问（403），请检查密钥权限与模型开通状态",
+      "model_access_denied",
+    );
   if (status === 404)
-    return "模型或接口不存在（404），请核对厂商地址和模型标识";
+    return failure(
+      "模型或接口不存在（404），请核对厂商地址和模型标识",
+      "model_not_found",
+    );
   if (status === 429)
-    return "模型厂商限流或额度不足（429），请稍后重试或检查厂商额度";
+    return failure(
+      "模型厂商限流或额度不足（429），请稍后重试或检查厂商额度",
+      "model_rate_limited",
+    );
+  if (status === 413)
+    return failure(
+      "模型请求体超过厂商接口容量（413），请分批读取页面或减小图像预览；附件原文件仍保留，无需重新上传",
+      "model_payload_large",
+    );
   if (status === 400 || status === 422) {
     if (/max_(?:completion_|output_)?tokens/i.test(e.message ?? "")) {
       const maximum =
@@ -379,18 +501,54 @@ export function modelConnectionError(error: unknown): string {
           e.message ?? "",
         )?.[1];
       return maximum
-        ? `单次输出上限超过厂商限制，当前接口最多允许 ${Number(maximum).toLocaleString("en-US")} Token，请在模型管理中调整`
-        : "单次输出上限不符合厂商要求，请在模型管理中检查输出参数";
+        ? failure(
+            `单次输出上限超过厂商限制，当前接口最多允许 ${Number(maximum).toLocaleString("en-US")} Token，请在模型管理中调整`,
+            "model_output_limit",
+            { maximum: Number(maximum).toLocaleString("en-US") },
+          )
+        : failure(
+            "单次输出上限不符合厂商要求，请在模型管理中检查输出参数",
+            "model_output_parameters",
+          );
     }
     if (/tool_choice/i.test(e.message ?? ""))
-      return "模型不支持本次工具调用参数，请检查工具调用能力和思考模式配置";
-    return `厂商拒绝请求（${status}），请核对模型标识及其支持的参数`;
+      return failure(
+        "模型不支持本次工具调用参数，请检查工具调用能力和思考模式配置",
+        "model_tool_parameters",
+      );
+    return failure(
+      `厂商拒绝请求（${status}），请核对模型标识及其支持的参数`,
+      "model_request_rejected",
+      { status },
+    );
   }
   if (status && status >= 500)
-    return `模型厂商服务暂时异常（${status}），请稍后重试`;
+    return failure(
+      `模型厂商服务暂时异常（${status}），请稍后重试`,
+      "model_provider_unavailable",
+      { status },
+    );
   if (e?.name === "TimeoutError" || e?.name === "AbortError")
-    return "模型连接超时，请检查网络或稍后重试";
-  if (/invalid\s+json|unexpected\s+token|unexpected\s+character|json\s+response/i.test(e?.message ?? ""))
-    return "厂商返回了非 JSON 响应，请检查 API 地址和协议类型";
-  return "无法完成模型连接，请检查网络、厂商地址及服务状态";
+    return failure("模型连接超时，请检查网络或稍后重试", "model_timeout");
+  if (
+    /invalid\s+json|unexpected\s+token|unexpected\s+character|json\s+response/i.test(
+      e?.message ?? "",
+    )
+  )
+    return failure(
+      "厂商返回了非 JSON 响应，请检查 API 地址和协议类型",
+      "model_response_not_json",
+    );
+  return failure(
+    "无法完成模型连接，请检查网络、厂商地址及服务状态",
+    "model_connection_failed",
+  );
+}
+
+export function modelConnectionError(error: unknown): string {
+  return modelConnectionFailure(error).message;
+}
+
+export function modelConnectionReason(error: unknown): SystemErrorReason {
+  return modelConnectionFailure(error).reason;
 }

@@ -1347,9 +1347,9 @@ button.shared-folder-row:hover { background: #f7f9fc; }
 .file-source-dialog > header { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid #edf0f4; }
 .file-source-dialog > header strong { font-size: 16px; }
 .file-source-dialog > div { display: grid; gap: 8px; padding: 14px; }
-.file-source-dialog > div > button { min-height: 72px; display: grid; grid-template-columns: 46px minmax(0, 1fr) 18px; align-items: center; gap: 11px; padding: 10px 12px; border: 1px solid #e5e9ef; border-radius: 11px; color: #536071; background: #fff; text-align: left; }
-.file-source-dialog > div > button:hover { border-color: #bdd0f8; background: #f4f7ff; }
-.file-source-dialog > div > button > span:nth-child(2) { display: grid; gap: 4px; }
+.file-source-choice > button:first-child { min-height: 72px; display: grid; grid-template-columns: 46px minmax(0, 1fr) 18px; align-items: center; gap: 11px; padding: 10px 12px; border: 1px solid #e5e9ef; border-radius: 11px; color: #536071; background: #fff; text-align: left; }
+.file-source-choice > button:first-child:hover { border-color: #bdd0f8; background: #f4f7ff; }
+.file-source-choice > button:first-child > span:nth-child(2) { display: grid; gap: 4px; }
 .file-source-dialog small { color: #929ba8; font-size: 11px; }
 .source-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 10px; color: #356ff1; background: #edf3ff; }
 .source-icon.local { color: #59706a; background: #edf5f2; }
@@ -2327,3 +2327,8 @@ button.shared-folder-row:hover { background: #f7f9fc; }
   min-height: 0;
   background: rgba(248, 249, 251, .94);
 }
+
+.file-source-choice { display: grid; gap: 4px; }
+.file-source-subaction { justify-self: end; padding: 4px 8px; border: 0; background: transparent; color: #536071; font-size: 12px; cursor: pointer; }
+.file-source-extras { display: flex; justify-content: flex-end; padding: 0 18px 12px; }
+.file-source-extras button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: #929ba8; font-size: 12px; cursor: pointer; }

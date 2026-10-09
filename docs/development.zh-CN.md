@@ -17,6 +17,18 @@ pnpm dev
 
 启动前复制 `.env.example`，文件存储变量为必填；示例的存储 root 为 Docker 使用的 `/data/storage`，源码运行前须改为本机可写的绝对路径。本地 origin 和 SQLite 路径按示例使用，不提交凭证。
 
+## 源码环境的 PDF 渲染
+
+富文本和 Markdown 的 PDF 导出使用启用沙箱的 Chromium。安装依赖后安装匹配的浏览器：
+
+```sh
+pnpm exec playwright-core install chromium --only-shell
+```
+
+也可用 `DOCA_PDF_CHROMIUM` 指向支持的 Chromium 可执行文件。Linux 需要相应系统库并允许浏览器沙箱。本工作区 Dockerfile 为非 root 运行环境安装 Chromium 和中文字体；已发布镜像只有重新构建、发布后才包含这些改动。渲染不可用时会显示导出错误。
+
+运行 `node --import tsx scripts/qa-document-pdf.mts` 执行隔离视觉回归，不打开用户文档，在线截图、PDF 和本机重导入结果写入 `.local/document-pdf-qa/`。样式保真与已验收范围见[文件交换约定](editor-file-exchange-contract.zh-CN.md#按在线样式导出-pdf-与可编辑导入)。
+
 ## 初始化管理员
 
 没有默认账号密码。本地开发环境首次初始化时，在项目目录运行：

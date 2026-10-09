@@ -77,7 +77,7 @@ export function ContentSourceForm({
     }
   }
   return (
-    <div className="curator-form">
+    <div className="source-wizard-form">
       <button type="button" disabled={busy} onClick={back}>
         {t("library.relations.back")}
       </button>

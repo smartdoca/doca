@@ -1,9 +1,9 @@
 .git
-.cache
 .archive
 .local
 .agents
 .codex
+.cache
 .pnpm-store
 data
 **/node_modules

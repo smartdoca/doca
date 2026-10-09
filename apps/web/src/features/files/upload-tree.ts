@@ -3,22 +3,13 @@ import type { DroppedUpload } from "@web/features/files/file-interactions.js";
 
 type FolderRow = { id: string; name: string };
 
-async function ensureFolder(
-  name: string,
-  parentId: string | null,
-  conflict: "merge" | "create-new",
-) {
+async function ensureFolder(name: string, parentId: string | null, conflict: "merge" | "create-new") {
   if (conflict === "create-new") {
     let conflictError: unknown;
     for (let suffix = 0; suffix < 10000; suffix++) {
-      const candidate = suffix
-        ? `${Array.from(name).slice(0, 220).join("")} (${suffix + 1})`
-        : name;
+      const candidate = suffix ? `${Array.from(name).slice(0, 220).join("")} (${suffix + 1})` : name;
       try {
-        return await api<FolderRow>("/files/folders", "POST", {
-          name: candidate,
-          parentId,
-        });
+        return await api<FolderRow>("/files/folders", "POST", { name: candidate, parentId });
       } catch (error) {
         if ((error as { status?: number }).status !== 409) throw error;
         conflictError = error;
@@ -44,8 +35,7 @@ async function ensureFolder(
 export async function uploadDroppedTree(
   entries: DroppedUpload[],
   initialParent: string | null,
-  onProgress:
-    ((path: string, completed: number, total: number) => void) | undefined,
+  onProgress: ((path: string, completed: number, total: number) => void) | undefined,
   options: { rootConflict: "merge" | "create-new" },
 ) {
   const folderCache = new Map<string, string>();
@@ -63,11 +53,7 @@ export async function uploadDroppedTree(
       const key = (parentId ?? "root") + "/" + segment;
       let folderId = folderCache.get(key);
       if (!folderId) {
-        const folder = await ensureFolder(
-          segment,
-          parentId,
-          index === 0 ? options.rootConflict : "merge",
-        );
+        const folder = await ensureFolder(segment, parentId, index === 0 ? options.rootConflict : "merge");
         folderId = folder.id;
         folderCache.set(key, folderId);
         if (index === 0 && !seenTop.has(folderId)) {

@@ -2,7 +2,7 @@
 
 [English](database.md)
 
-当前基线为 `doca-2026-10-03-credentials-v2`。[create-schema.ts](../packages/db/src/create-schema.ts) 定义建表、索引、外键和检查约束；[schema.ts](../packages/db/src/schema.ts) 定义 Kysely 类型；[connection.ts](../packages/db/src/connection.ts) 管理连接；[transactions.ts](../packages/db/src/transactions.ts) 管理事务和冲突重试。
+当前基线为 `doca-2026-10-08-knowledge-books-v2`。[create-schema.ts](../packages/db/src/create-schema.ts) 定义建表、索引、外键和检查约束；[schema.ts](../packages/db/src/schema.ts) 定义 Kysely 类型；[connection.ts](../packages/db/src/connection.ts) 管理连接；[transactions.ts](../packages/db/src/transactions.ts) 管理事务和冲突重试。
 
 空数据库按当前结构初始化，启动时校验基线及必需的存储、凭证结构。旧基线明确拒绝，本版不迁移或转换；保留原数据和部署，按[发行要求](releases/0.1.10.zh-CN.md)准备新环境。已有 document_templates 表保留，不提供原 CRUD，也不自动注册为资源来源，见[模板与素材](creation-resources.zh-CN.md)。这些是现有实现事实，不是新的迁移方案。
 
@@ -51,7 +51,7 @@ storage_profiles 只有稳定 id、active 和 created_at，后端配置与凭据
 
 AI 会话分别保存用户主动提及、用户明确批准和展示/历史关联的资源，resource_ids 本身不能授权模型访问。任务保存审批摘要与参数摘要，等待审批时释放租约，认证并校验归属后恢复。AI calls 保留原始用量事实，业务计费/策略模块不能替代。密钥、技能、MCP key、记忆、操作回执和会话事件分别遵循各自边界。
 
-知识订阅、指令、来源、条目/版本、chunk/link、人工任务、助手/run、机器人/分享/key、会话/消息/案例和发布记录支持[知识整理](knowledge-studio.zh-CN.md)与[问答分享](knowledge-sharing.zh-CN.md)。来源正文仍归提供者，知识索引不能绕过来源授权。
+来源订阅、知识分块与关联继续提供索引和搜索。下方知识册表保存配置历史、贡献者来源、人工反馈、运行、不可变成果和人工待办。所有衍生成果遵守原来源权限。新库不创建旧整理和问答表，已有记录不迁移、不删除。
 
 ## 当前表与字段清单
 
@@ -133,7 +133,7 @@ AI 会话分别保存用户主动提及、用户明确批准和展示/历史关�
 | `plugin_webview_auth` | `id`, `kind`, `plugin_id`, `parent_session`, `expires_at` |
 | `navigation_settings` | `id`, `revision`, `draft`, `published` |
 | `settings` | `directory_mode`, `id`, `registration`, `revision`, `site_name`, `default_locale`, `default_timezone`, `registration_review`, `sso_registration`, `social_registration` |
-| `resources` | `permission_overrides`, `content_bytes`, `authz_revision`, `history_readers`, `discoverable`, `last_editor_id`, `last_edited_at`, `cover_asset_id`, `page_width`, `ai_curated`, `knowledge_schedule`, `knowledge_preset`, `id`, `kind`, `format`, `title`, `owner_id`, `library_id`, `parent_id`, `tree_order`, `access_mode`, `visibility`, `requests_enabled`, `share_links_enabled`, `public_role`, `version`, `deleted_at`, `delete_batch`, `created_at`, `updated_at` |
+| `resources` | `permission_overrides`, `content_bytes`, `authz_revision`, `history_readers`, `discoverable`, `last_editor_id`, `last_edited_at`, `cover_asset_id`, `page_width`, `id`, `kind`, `format`, `title`, `owner_id`, `library_id`, `parent_id`, `tree_order`, `access_mode`, `visibility`, `requests_enabled`, `share_links_enabled`, `public_role`, `version`, `deleted_at`, `delete_batch`, `created_at`, `updated_at` |
 | `document_templates` | `id`, `format`, `title`, `content`, `preview`, `created_by`, `created_at`, `updated_at` |
 | `grants` | `include_descendants`, `source_type`, `source_id`, `source_resource_id`, `status`, `created_by`, `created_at`, `updated_at`, `resource_id`, `user_id`, `role` |
 | `comments` | `body_json`, `anchor`, `id`, `resource_id`, `author_id`, `body`, `parent_id`, `resolved`, `deleted_at`, `version`, `created_at`, `updated_at` |
@@ -149,34 +149,22 @@ AI 会话分别保存用户主动提及、用户明确批准和展示/历史关�
 | `plugin_archives` | `sha256`, `plugin_id`, `version`, `store_id`, `object_key`, `size`, `file_index`, `created_at` |
 | `audit_events` | `id`, `actor_id`, `resource_id`, `action`, `created_at` |
 | `user_page_state` | `user_id`, `key`, `value`, `version`, `updated_at` |
+| `knowledge_books` | `id`, `revision`, `configuration`, `published_release_id`, `created_at`, `updated_at` |
+| `knowledge_book_configurations` | `book_id`, `revision`, `configuration`, `author_id`, `created_at` |
+| `knowledge_book_sources` | `id`, `book_id`, `title`, `creator_id`, `revision`, `configuration`, `status`, `created_at`, `updated_at` |
+| `knowledge_book_source_versions` | `source_id`, `revision`, `title`, `configuration`, `status`, `author_id`, `created_at` |
+| `knowledge_book_feedback` | `id`, `book_id`, `author_id`, `revision`, `detail`, `status`, `created_at`, `updated_at` |
+| `knowledge_book_feedback_versions` | `feedback_id`, `revision`, `detail`, `status`, `author_id`, `created_at` |
+| `knowledge_book_runs` | `id`, `book_id`, `actor_id`, `configuration_revision`, `configuration`, `input_hash`, `status`, `lease_id`, `started_at`, `heartbeat_at`, `artifact`, `error`, `trigger_key`, `created_at`, `updated_at` |
+| `knowledge_book_node_runs` | `run_id`, `node_id`, `type`, `status`, `input_refs`, `output`, `error`, `started_at`, `completed_at` |
+| `knowledge_book_releases` | `id`, `book_id`, `run_id`, `revision`, `artifact`, `created_at` |
+| `knowledge_book_human_tasks` | `id`, `book_id`, `run_id`, `node_id`, `kind`, `title`, `status`, `revision`, `input_hash`, `resolution`, `created_at`, `updated_at` |
 | `knowledge_chunks` | `id`, `source_kind`, `source_id`, `ordinal`, `title`, `text`, `anchor`, `content_hash`, `reader_ids`, `updated_at` |
 | `knowledge_links` | `id`, `from_kind`, `from_id`, `to_kind`, `to_id`, `relation`, `score`, `reason`, `created_at` |
 | `knowledge_link_hides` | `user_id`, `link_id`, `created_at` |
 | `knowledge_feedback` | `id`, `user_id`, `chunk_id`, `judgment`, `query`, `created_at` |
-| `knowledge_conversations` | `access_key_id`, `id`, `scope_id`, `kind`, `owner_id`, `title`, `summary`, `state`, `archived`, `created_at`, `updated_at` |
-| `knowledge_messages` | `id`, `conversation_id`, `role`, `author_id`, `trigger`, `content`, `detail`, `created_at` |
-| `knowledge_tasks` | `id`, `conversation_id`, `actor_id`, `status`, `error`, `created_at`, `updated_at` |
-| `knowledge_checkpoints` | `task_id`, `detail`, `attempts`, `available_at` |
-| `knowledge_source_observations` | `library_id`, `source_id`, `fingerprint`, `updated_at` |
-| `knowledge_cases` | `id`, `bot_id`, `message_id`, `user_id`, `judgment`, `reason`, `snapshot`, `status`, `created_at` |
-| `knowledge_source_actions` | `id`, `library_id`, `source_key`, `actor_id`, `action`, `detail`, `created_at` |
-| `knowledge_human_tasks` | `id`, `library_id`, `conversation_id`, `task_key`, `kind`, `title`, `detail`, `status`, `revision`, `resolution`, `created_at`, `updated_at` |
-| `knowledge_publications` | `library_id`, `revision`, `fingerprint`, `documents`, `status`, `error`, `updated_at` |
 | `knowledge_source_groups` | `config`, `id`, `library_id`, `title`, `source_kind`, `created_at` |
-| `knowledge_subscriptions` | `name`, `group_id`, `id`, `creator_id`, `library_id`, `source_kind`, `source_id`, `url`, `node_id`, `source_version`, `status`, `created_at`, `preset` |
-| `knowledge_instructions` | `library_id`, `path`, `revision`, `markdown`, `author_id`, `created_at` |
-| `knowledge_settings` | `library_id`, `revision`, `config`, `updated_at` |
-| `knowledge_entries` | `id`, `library_id`, `title`, `markdown`, `origin`, `status`, `revision`, `source_refs`, `instruction_hash`, `review_state`, `author_id`, `created_at`, `updated_at` |
-| `knowledge_entry_versions` | `entry_id`, `revision`, `snapshot`, `author_id`, `created_at` |
-| `knowledge_assistant_users` | `assistant_id`, `user_id`, `accepted`, `visited_at`, `integration`, `revision` |
-| `knowledge_bot_sharing` | `bot_id`, `enabled` |
-| `knowledge_bot_share_links` | `id`, `bot_id`, `token`, `enabled`, `revoked_at`, `expires_at`, `max_members`, `version`, `created_at` |
-| `knowledge_bot_link_members` | `link_id`, `user_id`, `created_at` |
-| `knowledge_bot_keys` | `id`, `bot_id`, `creator_id`, `name`, `channel`, `token_hash`, `expires_at`, `created_at` |
-| `knowledge_assistants` | `manager_ids`, `config`, `visibility`, `id`, `owner_id`, `title`, `revision`, `library_ids`, `member_ids`, `enabled`, `updated_at` |
-| `knowledge_directories` | `library_id`, `path`, `resource_id` |
-| `knowledge_runs` | `id`, `library_id`, `trigger`, `status`, `detail`, `created_at` |
-| `knowledge_bots` | `library_id`, `title`, `published`, `updated_at` |
+| `knowledge_subscriptions` | `name`, `group_id`, `id`, `creator_id`, `library_id`, `source_kind`, `source_id`, `url`, `source_version`, `status`, `created_at` |
 | `knowledge_gaps` | `id`, `user_id`, `query`, `status`, `detail`, `created_at` |
 | `webview_tickets` | `id`, `user_id`, `expires_at` |
 | `qr_logins` | `id`, `secret_hash`, `user_id`, `expires_at` |

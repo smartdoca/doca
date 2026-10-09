@@ -15,11 +15,7 @@ import {
   distributionDefaults,
   type PublicMode,
 } from "@core/modules/deployment/policies.js";
-import {
-  knowledgeAssistantAccess,
-  listKnowledgeAssistants,
-  visitKnowledgeAssistant,
-} from "@core/modules/knowledge/system.js";
+
 let db: DB;
 const owner = { id: randomUUID(), display_name: "Owner", admin: 0 },
   reader = { id: randomUUID(), display_name: "Reader", admin: 0 };
@@ -54,7 +50,7 @@ async function policy(
         publicModes: {
           document: "link",
           library: "link",
-          assistant: "link",
+
           folder: "link",
           ...modes,
         },
@@ -243,40 +239,7 @@ it("public folder readers do not lose their existing management grant", async ()
     .execute();
   expect((await authorizeFileFolder(db, reader, root.id)).role).toBe("admin");
 });
-it("Q&A collection adds search candidates without changing the connection preference", async () => {
-  await policy({ assistant: "discover" });
-  const bot = {
-    id: randomUUID(),
-    owner_id: owner.id,
-    title: "Public Q&A",
-    revision: 1,
-    library_ids: "[]",
-    member_ids: "[]",
-    enabled: 1,
-    visibility: "public",
-    updated_at: new Date().toISOString(),
-  };
-  await db.insertInto("knowledge_assistants").values(bot).execute();
-  expect(ids(await catalogPage(db, reader, {}))).toEqual([bot.id]);
-  await visitKnowledgeAssistant(db, reader, bot.id);
-  expect((await knowledgeAssistantAccess(db, reader, bot)).connected).toBe(
-    false,
-  );
-  await collectPublicResource(db, reader, "assistant", bot.id, true);
-  expect(await knowledgeAssistantAccess(db, reader, bot)).toMatchObject({
-    connected: false,
-    collected: true,
-  });
-  expect(
-    (await listKnowledgeAssistants(db, reader))
-      .filter((bot) => bot.connected || (bot.collected && bot.accessible))
-      .map((bot) => bot.id),
-  ).toContain(bot.id);
-  await collectPublicResource(db, reader, "assistant", bot.id, false);
-  expect((await knowledgeAssistantAccess(db, reader, bot)).connected).toBe(
-    false,
-  );
-});
+
 it("catalog paginates stable results and escapes wildcard characters", async () => {
   await policy({ document: "discover" });
   for (let i = 0; i < 52; i++) await resource("document", `Page ${i}`);
@@ -289,7 +252,7 @@ it("catalog paginates stable results and escapes wildcard characters", async () 
   expect((await catalogPage(db, reader, { q: "%" })).items).toHaveLength(0);
 });
 
-it("HTTP policy validates four independent modes and hides discovery when all are link-only", async () => {
+it("HTTP policy validates three independent modes and hides discovery when all are link-only", async () => {
   const { default: Fastify } = await import("fastify");
   const { registerDistribution } = await import("@server/routes/discovery.js");
   const app = Fastify();
@@ -306,7 +269,7 @@ it("HTTP policy validates four independent modes and hides discovery when all ar
     const modes = {
       document: "link",
       library: "link",
-      assistant: "link",
+
       folder: "link",
     };
     const saved = await app.inject({
@@ -417,38 +380,7 @@ it("collects own and already-authorized public resources without changing their 
   ).toEqual(grantsBefore);
 });
 
-it("collection does not overwrite Q&A connection preferences or automatically import connections", async () => {
-  const { saveKnowledgeAssistantConnection } =
-    await import("@core/modules/knowledge/system.js");
-  await policy({ assistant: "discover" });
-  const bot = {
-    id: randomUUID(),
-    owner_id: owner.id,
-    title: "Connected public bot",
-    revision: 1,
-    library_ids: "[]",
-    member_ids: "[]",
-    enabled: 1,
-    visibility: "public",
-    updated_at: new Date().toISOString(),
-  };
-  await db.insertInto("knowledge_assistants").values(bot).execute();
-  await saveKnowledgeAssistantConnection(db, reader, bot.id, "enabled", 0);
-  expect(ids(await catalogPage(db, reader, { collected: true }))).toEqual([]);
-  await collectPublicResource(db, reader, "assistant", bot.id, true);
-  await collectPublicResource(db, reader, "assistant", bot.id, false);
-  expect(await knowledgeAssistantAccess(db, reader, bot)).toMatchObject({
-    connected: true,
-    preference: "enabled",
-    preferenceRevision: 1,
-  });
-  await collectPublicResource(db, owner, "assistant", bot.id, true);
-  expect(ids(await catalogPage(db, owner, { collected: true }))).toEqual([
-    bot.id,
-  ]);
-});
-
-it("allows collecting accessible private folders and bots, keeping collection separate from their access", async () => {
+it("allows collecting accessible private folders, keeping collection separate from their access", async () => {
   const root = await folder();
   await collectPublicResource(db, owner, "folder", root.id, true);
   expect(ids(await catalogPage(db, owner, { collected: true }))).toEqual([
@@ -456,23 +388,4 @@ it("allows collecting accessible private folders and bots, keeping collection se
   ]);
   await collectPublicResource(db, owner, "folder", root.id, false);
   expect(await folderInSearch(db, owner, root.id)).toBe(true);
-  const bot = {
-    id: randomUUID(),
-    owner_id: owner.id,
-    title: "Private bot",
-    revision: 1,
-    library_ids: "[]",
-    member_ids: "[]",
-    enabled: 1,
-    visibility: "invited",
-    updated_at: new Date().toISOString(),
-  };
-  await db.insertInto("knowledge_assistants").values(bot).execute();
-  await collectPublicResource(db, owner, "assistant", bot.id, true);
-  expect(ids(await catalogPage(db, owner, { collected: true }))).toEqual([
-    bot.id,
-  ]);
-  await expect(
-    collectPublicResource(db, reader, "assistant", bot.id, true),
-  ).rejects.toMatchObject({ status: 404 });
 });

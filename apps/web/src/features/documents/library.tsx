@@ -14,10 +14,10 @@ import { PermissionDialog, TransferDialog } from "@web/features/documents/dialog
 import { CoverDialog, ResourceActionDialog } from "@web/features/documents/uploads.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
 import "./library-system.css";
-export { LibraryQaPage, LibrarySystemPage } from "./library-relations.js";
+export { LibrarySystemPage } from "./library-relations.js";
 export const librarySettingsUrl = (id: string) => `#/r/${id}?view=settings`;
 export const librarySystemUrl = (id: string) => `#/r/${id}?view=system`;
-export const libraryQaUrl = (id: string) => `#/r/${id}?view=qa`;
+
 export function LibraryLanding({
   resource,
   create,

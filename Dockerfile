@@ -9,6 +9,9 @@ FROM base AS build
 # better-sqlite3 may fall back to node-gyp when the platform's prebuilt
 # binary is unavailable. Keep the compiler only in this build stage.
 RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install --yes --no-install-recommends ca-certificates \
+    && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=5 install --yes --no-install-recommends \
       python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -22,6 +25,7 @@ RUN pnpm config set store-dir /pnpm/store \
     && pnpm config set network-concurrency 8
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY patches ./patches
 RUN --mount=type=cache,id=pnpm-${TARGETARCH},target=/pnpm/store,sharing=locked \
     pnpm fetch --reporter=append-only
 
@@ -40,7 +44,7 @@ COPY docker/prune-runtime-modules.mjs docker/prune-runtime-modules.mjs
 RUN pnpm build \
     && node docker/prune-runtime-modules.mjs --apply /app
 
-FROM ${NODE_IMAGE} AS runtime
+FROM ${NODE_IMAGE} AS render-runtime
 
 WORKDIR /app
 
@@ -51,7 +55,24 @@ ENV NODE_ENV=production \
     DOCA_DATA_DIR=/data \
     DOCA_SQLITE_PATH=/data/doca.db \
     DOCA_FILE_STORE_ID=local \
+    DOCA_PDF_CHROMIUM=/usr/bin/chromium \
+    DOCA_OFFICE_RENDERER=/usr/bin/soffice \
     DOCA_FILE_STORES_JSON="{\"version\":1,\"stores\":{\"local\":{\"provider\":\"local\",\"root\":\"/data/storage\"}}}"
+
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install --yes --no-install-recommends ca-certificates \
+    && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install --yes --no-install-recommends \
+      chromium chromium-sandbox fonts-noto-cjk fonts-liberation \
+      libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-math \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /data/storage && chown -R node:node /data
+USER node
+
+# Rendering dependencies are cached independently from application source.
+FROM render-runtime AS runtime
 
 # AI's SQLite file defaults to ai.db alongside DOCA_SQLITE_PATH.
 # Supply DOCA_ORIGIN=https://your-domain at runtime, behind an HTTPS proxy.
@@ -61,8 +82,6 @@ COPY --from=build /app/packages ./packages
 COPY --from=build /app/apps/server ./apps/server
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 
-RUN mkdir -p /data/storage && chown -R node:node /data
-USER node
 
 # Mount a persistent volume here for SQLite, AI memory and local file storage.
 VOLUME ["/data"]

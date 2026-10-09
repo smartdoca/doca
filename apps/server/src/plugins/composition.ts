@@ -1,3 +1,4 @@
+import { registerKnowledgeBooks } from "../routes/knowledge-books.js";
 import { createHostFileStore } from "../services/host-file-store.js";
 import { createCredentialCipher } from "../services/credential-cipher.js";
 import { verifyCredentialKey } from "../services/plugin-credentials.js";
@@ -50,6 +51,7 @@ import {
 } from "../services/search/sources.js";
 import { importInstalledPlugins, pluginDirectory } from "./installation.js";
 import { registerPluginAssets, pluginWebUrl } from "./web-assets.js";
+import { registerStorePluginIcons } from "./store-icons.js";
 import { providePlatform } from "./platform.js";
 
 export interface ServerPluginDescriptor {
@@ -255,15 +257,15 @@ function documentsPlugin(
     ],
     async mount({ runtime, search }) {
       const registration = search.require();
-      const mounted = await mountFastifyAdapter(runtime.api, (api) =>
-        registerKnowledge(api, runtime.db, runtime.auth, {
+      const mounted = await mountFastifyAdapter(runtime.api, (api) => {
+        registerKnowledgeBooks(api, runtime.db, runtime.auth, runtime.runtime.storage);
+        return registerKnowledge(api, runtime.db, runtime.auth, {
           indexer: registration.knowledgeIndex,
-          answerIndex: registration.answerIndex,
+
           notify: runtime.realtime.documentChanged,
           storage: runtime.runtime.storage,
-          consumeRateLimit: runtime.consumeRateLimit,
-        }),
-      );
+        });
+      });
       return mounted.dispose;
     },
   });
@@ -292,7 +294,7 @@ function aiPlugin(files: FilesServiceV1) {
             files,
             notify: runtime.realtime.documentChanged,
             search: search.search,
-            answerIndex: search.answerIndex,
+
             fileSearch: search.searchFiles,
             contributions,
           }),
@@ -457,6 +459,22 @@ export async function composeServerPlugins(
       throw error;
     }
     registerPluginManagement(runtime.api, runtime.db, runtime.admin, manager);
+    const iconPluginIds = new Set(
+      (await manager.inventory()).plugins
+        .filter(
+          (plugin) =>
+            plugin.source !== "local" &&
+            plugin.runningVersion !== null &&
+            installed.some((item) => item.manifest.id === plugin.id && !!item.web),
+        )
+        .map((plugin) => plugin.id),
+    );
+    registerStorePluginIcons(
+      runtime.api,
+      runtime.auth,
+      iconPluginIds,
+      manager.store,
+    );
     registerPluginMobileSessions(
       runtime.api,
       runtime.db,

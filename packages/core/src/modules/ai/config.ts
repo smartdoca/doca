@@ -7,6 +7,7 @@ import { transact } from "../../../../db/src/transactions.js";
 import { fail } from "../../shared/errors.js";
 import { requireCapability } from "../access/operation-policy.js";
 import { aiProviders, embeddingSource } from "./providers.js";
+import { defaultImageProfile, imageProfileForModel, imageOperations, validImageSize, type ImageOperation } from "./image-model-catalog.js";
 
 function emptyToUndefined(value: unknown) {
   return typeof value === "string" && !value.trim() ? undefined : value;
@@ -55,6 +56,7 @@ export const modelSchema = z
     vision: z.boolean().optional(),
     pdf: z.boolean().optional(),
     imageGeneration: z.boolean().optional(),
+    imageProfile: z.string().max(160).optional(),
     embedding: z.boolean().optional(),
     embeddingApi: z.enum(["openai", "doubao-multimodal"]).optional(),
     embeddingDimensions: z.number().int().min(1).max(65536).optional(),
@@ -99,6 +101,11 @@ export const aiConfigSchema = z
     display: z.enum(["real", "alias"]),
     defaultModel: z.string().max(64),
     imageModel: z.string().max(64).optional(),
+    imageToolModels: z.object({
+      generate: z.string().max(64).optional(),
+      reference: z.string().max(64).optional(),
+      edit: z.string().max(64).optional(),
+    }).strict().optional(),
     mediaModel: z.string().max(64).optional(),
     memoryEnabled: z.boolean(),
     historyRounds: z.number().int().min(1).max(50),
@@ -177,11 +184,23 @@ export async function aiConfig(db: DB) {
     ...resolveConfig(
       aiConfigSchema.parse({
         ...aiDefaults,
-        ...(row ? JSON.parse(row.config) : {}),
+        ...existingImageDefaults(row ? JSON.parse(row.config) : {}),
       }),
     ),
     revision: row?.revision ?? 0,
   };
+}
+// Old image settings receive one explicit profile/default size. No legacy
+// protocol remains in execution, and the actual deployment ID stays intact.
+function existingImageDefaults(input: Record<string, any>) {
+  if (!Array.isArray(input.models)) return input;
+  return { ...input, models: input.models.map((value: Record<string, any>) => {
+    const { imageEditApi: _discarded, ...model } = value;
+    if (!model.imageGeneration || model.imageProfile) return model;
+    const vendor = input.vendors?.find((item: Record<string, any>) => item.id === model.vendorId);
+    const profile = defaultImageProfile(vendor?.provider, model.model);
+    return profile ? { ...model, imageProfile: profile.id, imageSize: profile.defaultSize } : model;
+  }) };
 }
 // Stored models reference vendors; resolved credentials exist only on the server.
 function resolveConfig(input: z.infer<typeof aiConfigSchema>): AIConfig {
@@ -313,6 +332,11 @@ export async function saveAIConfig(db: DB, input: unknown, revision: number) {
   const ids = new Set<string>();
   const aliases = new Set<string>();
   for (const model of config.models) {
+    if (!model.embedding && model.imageGeneration) {
+      const profile = imageProfileForModel(model);
+      if (!profile) fail(400, "请从适配器支持清单选择图片模型", { code: model.imageProfile ? "image_profile_invalid" : "image_profile_required" });
+      if (model.imageSize && !validImageSize(profile, model.imageSize)) fail(400, "图片默认尺寸超出所选模型支持范围", { code: "image_size_invalid" });
+    }
     if (model.embedding) {
       const source = embeddingSource(model.provider);
       if (!source)
@@ -352,9 +376,14 @@ export async function saveAIConfig(db: DB, input: unknown, revision: number) {
     fail(400, "默认模型必须是已启用的非向量模型");
   if (
     config.imageModel &&
-    config.models.find((m) => m.id === config.imageModel)?.embedding
+    !config.models.some((m) => m.id === config.imageModel && m.enabled && imageProfileForModel(m))
   )
-    fail(400, "图片生成工具不能使用向量模型");
+    fail(400, "图片工具默认模型必须是已启用且有适配器的图片模型", { code: "image_model_not_enabled" });
+  for (const operation of imageOperations) {
+    const id = config.imageToolModels?.[operation];
+    if (id && !config.models.some(model => model.id === id && model.enabled && imageProfileForModel(model)?.operations.includes(operation)))
+      fail(400, "工具覆盖模型必须已启用并支持对应图片操作", { code: "image_operation_unsupported" });
+  }
   if (config.mediaModel) {
     const media = config.models.find((m) => m.id === config.mediaModel);
     if (!media || media.embedding)
@@ -443,10 +472,18 @@ export async function availableModels(db: DB, userId: string) {
 export async function requireModel(db: DB, userId: string, id: string) {
   const { config, models } = await availableModels(db, userId);
   const model = models.find((m) => m.id === id);
-  if (!model) fail(403, "所选模型未启用或尚未配置");
+  if (!model) fail(403, "所选模型未启用或尚未配置", { code: "model_not_enabled" });
   return { config, model };
 }
-export async function requireImageModel(db: DB, userId: string, id: string) {
+/** Reading and verification do not need tool calling; agent selection still does. */
+export async function requireInferenceModel(db: DB, userId: string, id: string) {
+  await requireCapability(db, userId, "ai.create");
+  const config = await aiConfig(db);
+  const model = config.models.find(m => m.id === id && m.enabled && !m.embedding && !m.imageGeneration && config.vendors.some(v => v.id === m.vendorId && v.enabled) && (!!m.apiKey || m.provider === "ollama"));
+  if (!model) fail(403, "所选推理模型未启用或尚未配置", { code: "model_inference_not_enabled" });
+  return {config,model};
+}
+export async function requireImageModel(db: DB, userId: string, id: string, operation?: ImageOperation) {
   await requireCapability(db, userId, "ai.create");
   const config = await aiConfig(db);
   const model = config.models.find((m) => m.id === id);
@@ -457,6 +494,9 @@ export async function requireImageModel(db: DB, userId: string, id: string) {
     !model.apiKey ||
     !config.vendors.some((v) => v.id === model.vendorId && v.enabled)
   )
-    fail(403, "图片生成模型未配置或未启用");
-  return { config, model };
+    fail(403, "图片生成模型未配置或未启用", { code: "image_model_not_enabled" });
+  const profile = imageProfileForModel(model);
+  if (!profile) fail(400, "所选图片模型没有已实现的适配器", { code: "image_profile_invalid" });
+  if (operation && !profile.operations.includes(operation)) fail(400, "所选模型不支持这项图片操作", { code: "image_operation_unsupported" });
+  return { config, model, profile };
 }

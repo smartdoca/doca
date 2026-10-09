@@ -8,6 +8,7 @@ export function pluginRouteScope(routeId: string): string {
     case "doca.files.route.files":
       return "files";
     case "doca.files.route.shared":
+    case "doca.files.route.shared-join":
     case "doca.files.route.shared-folder":
       return "shared-files";
     default:

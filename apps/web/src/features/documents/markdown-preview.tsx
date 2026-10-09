@@ -1,4 +1,7 @@
-import { MarkdownPreview } from "@smartdoca/markdown";
+import {
+  MarkdownPreview,
+  type MarkdownPreviewInteraction,
+} from "@smartdoca/markdown";
 import { useI18n } from "@web/shared/i18n.js";
 import { assetUrl } from "@web/shared/api.js";
 import { platformAssetId } from "@web/shared/utils/asset-path.js";
@@ -9,10 +12,12 @@ export default function Preview({
   value,
   trash = false,
   audit = false,
+  interaction,
 }: {
   value: string;
   trash?: boolean;
   audit?: boolean;
+  interaction?: MarkdownPreviewInteraction;
 }) {
   const { locale } = useI18n();
   return (
@@ -20,6 +25,7 @@ export default function Preview({
       <MarkdownPreview
         locale={locale}
         value={value}
+        interaction={interaction}
         resolveImageUrl={(path) =>
           platformAssetId(path)
             ? assetUrl(platformAssetId(path)!) +

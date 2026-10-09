@@ -1,4 +1,5 @@
 import type { Kysely } from "kysely";
+import type { KnowledgeBookTables } from "./knowledge-books-types.js";
 export interface User {
   profile_metadata?: string;
   profile_revision?: number;
@@ -23,9 +24,6 @@ export interface Resource {
   last_edited_at?: string | null;
   cover_asset_id?: string | null;
   page_width?: string | null;
-  ai_curated?: number;
-  knowledge_schedule?: string;
-  knowledge_preset?: string;
   id: string;
   kind: "document" | "library";
   format: "rich_text" | "spreadsheet" | "presentation" | "markdown" | "canvas";
@@ -45,7 +43,7 @@ export interface Resource {
   created_at: string;
   updated_at: string;
 }
-export interface Schema {
+export interface Schema extends KnowledgeBookTables {
   schema_baseline: {
     id: string;
     created_at: string;
@@ -227,7 +225,7 @@ export interface Schema {
   invitation_history: Schema["access_invitations"] & { id: string };
   resource_collections: {
     user_id: string;
-    resource_kind: "document" | "library" | "assistant" | "folder";
+    resource_kind: "document" | "library" | "folder";
     resource_id: string;
     created_at: string;
   };
@@ -622,7 +620,7 @@ export interface Schema {
   };
   workspace_activity: {
     user_id: string;
-    resource_kind: "assistant" | "folder" | "file";
+    resource_kind: "folder" | "file";
     resource_id: string;
     visited_at: string | null;
     favorite: number;
@@ -835,93 +833,6 @@ export interface Schema {
     query: string;
     created_at: string;
   };
-  knowledge_conversations: {
-    access_key_id?: string | null;
-    id: string;
-    scope_id: string;
-    kind: string;
-    owner_id: string;
-    title: string;
-    summary: string;
-    state: string;
-    archived: number;
-    created_at: string;
-    updated_at: string;
-  };
-  knowledge_messages: {
-    id: string;
-    conversation_id: string;
-    role: string;
-    author_id: string | null;
-    trigger: string;
-    content: string;
-    detail: string;
-    created_at: string;
-  };
-  knowledge_tasks: {
-    id: string;
-    conversation_id: string;
-    actor_id: string;
-    status: string;
-    error: string;
-    created_at: string;
-    updated_at: string;
-  };
-  knowledge_checkpoints: {
-    task_id: string;
-    detail: string;
-    attempts: number;
-    available_at: string;
-  };
-  knowledge_source_observations: {
-    library_id: string;
-    source_id: string;
-    fingerprint: string;
-    updated_at: string;
-  };
-  knowledge_cases: {
-    id: string;
-    bot_id: string;
-    message_id: string;
-    user_id: string;
-    judgment: string;
-    reason: string;
-    snapshot: string;
-    status: string;
-    created_at: string;
-  };
-  knowledge_source_actions: {
-    id: string;
-    library_id: string;
-    source_key: string;
-    actor_id: string;
-    action: string;
-    detail: string;
-    created_at: string;
-  };
-  knowledge_human_tasks: {
-    id: string;
-    library_id: string;
-    conversation_id: string;
-    task_key: string;
-    kind: string;
-    title: string;
-    detail: string;
-    status: string;
-    revision: number;
-    resolution: string;
-    created_at: string;
-    updated_at: string;
-  };
-  knowledge_publications: {
-    library_id: string;
-    revision: number;
-    fingerprint: string;
-    documents: string;
-    status: string;
-    error: string;
-    updated_at: string;
-  };
   knowledge_source_groups: {
     config?: string;
     id: string;
@@ -939,114 +850,9 @@ export interface Schema {
     source_kind: string;
     source_id: string;
     url: string;
-    node_id: string | null;
     source_version: string;
     status: string;
     created_at: string;
-    preset?: string;
-  };
-  knowledge_instructions: {
-    library_id: string;
-    path: string;
-    revision: number;
-    markdown: string;
-    author_id: string;
-    created_at: string;
-  };
-  knowledge_settings: {
-    library_id: string;
-    revision: number;
-    config: string;
-    updated_at: string;
-  };
-  knowledge_entries: {
-    id: string;
-    library_id: string;
-    title: string;
-    markdown: string;
-    origin: string;
-    status: string;
-    revision: number;
-    source_refs: string;
-    instruction_hash: string;
-    review_state: string;
-    author_id: string;
-    created_at: string;
-    updated_at: string;
-  };
-  knowledge_entry_versions: {
-    entry_id: string;
-    revision: number;
-    snapshot: string;
-    author_id: string;
-    created_at: string;
-  };
-  knowledge_assistant_users: {
-    assistant_id: string;
-    user_id: string;
-    accepted: number;
-    visited_at: string | null;
-    integration: string;
-    revision: number;
-  };
-  knowledge_bot_sharing: { bot_id: string; enabled: number };
-  knowledge_bot_share_links: {
-    id: string;
-    bot_id: string;
-    token: string;
-    enabled: number;
-    revoked_at: string | null;
-    expires_at: string | null;
-    max_members: number | null;
-    version: string;
-    created_at: string;
-  };
-  knowledge_bot_link_members: {
-    link_id: string;
-    user_id: string;
-    created_at: string;
-  };
-  knowledge_bot_keys: {
-    id: string;
-    bot_id: string;
-    creator_id: string;
-    name: string;
-    channel: string;
-    token_hash: string;
-    expires_at: string;
-    created_at: string;
-  };
-  knowledge_assistants: {
-    manager_ids?: string;
-    config?: string;
-    visibility?: string;
-    id: string;
-    owner_id: string;
-    title: string;
-    revision: number;
-    library_ids: string;
-    member_ids: string;
-    enabled: number;
-    updated_at: string;
-  };
-  knowledge_directories: {
-    library_id: string;
-    path: string;
-    resource_id: string;
-  };
-  knowledge_runs: {
-    id: string;
-    library_id: string;
-    trigger: string;
-    status: string;
-    detail: string;
-    created_at: string;
-  };
-  knowledge_bots: {
-    library_id: string;
-    title: string;
-    published: number;
-    updated_at: string;
   };
   knowledge_gaps: {
     id: string;

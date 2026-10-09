@@ -467,7 +467,7 @@ it("link expiry and disable stop admission, independent sources survive explicit
   });
   expect((await authorize(db, user, doc.id)).rank).toBe(1);
 });
-it("HTTP contracts reject manager links and expose privacy controls only to system admins", async () => {
+it("HTTP contracts restrict manager links to owners and expose privacy controls only to system admins", async () => {
   const app = await createApp(db, { origin: "http://localhost" });
   try {
     const login = async (name: string) => {
@@ -496,7 +496,22 @@ it("HTTP contracts reject manager links and expose privacy controls only to syst
           version: null,
         })
       ).statusCode,
-    ).toBe(400);
+    ).toBe(403);
+    const managerLink = await call(ownerCookie, `/resources/${doc.id}/share-link`, {
+      enabled: true,
+      role: "manager",
+      version: null,
+    });
+    expect(managerLink.statusCode, managerLink.body).toBe(200);
+    const userCookie = await login("applicant");
+    const joined = await app.inject({
+      method: "POST",
+      url: "/api/v1/share/redeem",
+      headers: { host: "localhost", origin: "http://localhost", cookie: userCookie },
+      payload: { token: managerLink.json().token, accept: true },
+    });
+    expect(joined.statusCode, joined.body).toBe(200);
+    expect((await authorize(db, user, doc.id, "manage_sharing")).rank).toBe(4);
     const settings = await app.inject({
       url: "/api/v1/admin/distribution",
       headers: { host: "localhost", cookie: ownerCookie },
@@ -521,6 +536,64 @@ it("HTTP contracts reject manager links and expose privacy controls only to syst
     await app.close();
   }
 });
+
+it.each(["document", "library"] as const)(
+  "owners can share management of a %s while managers cannot change its management links",
+  async (kind) => {
+    await config({ grantMode: "invite" });
+    const resource = kind === "document" ? doc : await content.create(owner, {
+      kind,
+      format: "rich_text",
+      title: "Management link library",
+    });
+    const links = createShareLinks(db);
+    const link = await links.setShare(owner, resource.id, {
+      enabled: true,
+      role: "manager",
+      version: null,
+      includeDescendants: true,
+      maxMembers: 1,
+    });
+    expect(await links.redeem(user, link.token!, false)).toMatchObject({
+      pending: true,
+      role: "manager",
+    });
+    await expect(authorize(db, user, resource.id)).rejects.toThrow();
+    await links.redeem(user, link.token!, true);
+    expect((await permissionOverview(db, user, resource.id)).role).toBe("manager");
+    expect((await authorize(db, user, resource.id, "manage_sharing")).rank).toBe(4);
+    if (kind === "library") {
+      const child = await content.create(owner, {
+        kind: "document",
+        format: "rich_text",
+        title: "Child",
+        libraryId: resource.id,
+      });
+      expect((await authorize(db, user, child.id, "manage_sharing")).rank).toBe(4);
+    }
+    await expect(links.redeem(a, link.token!, true)).rejects.toMatchObject({ status: 403 });
+    await expect(links.setShare(user, resource.id, {
+      enabled: true, role: "manager", version: null,
+    })).rejects.toMatchObject({ status: 403 });
+    await expect(links.setShare(user, resource.id, {
+      enabled: false, role: "reader", version: link.version,
+    })).rejects.toMatchObject({ status: 403 });
+    await expect(links.revokeShare(user, resource.id, link.id, link.version))
+      .rejects.toMatchObject({ status: 403 });
+    const paused = await links.setShare(owner, resource.id, {
+      enabled: false, role: "manager", version: link.version,
+    });
+    expect((await authorize(db, user, resource.id, "manage_sharing")).rank).toBe(4);
+    const downgraded = await links.setShare(owner, resource.id, {
+      enabled: false, role: "reader", version: paused.version,
+    });
+    await expect(links.revokeShare(user, resource.id, link.id, downgraded.version))
+      .rejects.toMatchObject({ status: 403 });
+    expect((await authorize(db, user, resource.id, "manage_sharing")).rank).toBe(4);
+    await links.revokeShare(owner, resource.id, link.id, downgraded.version);
+    await expect(authorize(db, user, resource.id)).rejects.toThrow();
+  },
+);
 
 it("member changes preserve requestability and structural rearrangement cannot grant managers", async () => {
   await acl(

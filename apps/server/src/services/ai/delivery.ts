@@ -62,7 +62,7 @@ export function unverifiedImageDelivery(
   return {
     verdict: "revise",
     summary:
-      "图片交付未通过：本轮没有真实图片回执，不能声称生成成功或猜测客户端展示故障。先调用 image_show 核实已有图片；没有记录且用户要求生图时必须实际调用 image_generate，失败则如实报告工具错误。",
+      "图片交付未通过：本轮没有真实图片回执，不能声称生成成功或猜测客户端展示故障。先调用 image_show 核实已有图片；没有记录且用户要求生图时必须实际调用相应图片工具：文生图 image_generate、参考图生图 image_reference_generate、底图修改 image_edit；失败则如实报告工具错误。",
     checks: [
       {
         requirement: "图片交付必须有可展示的真实素材回执",

@@ -7,7 +7,7 @@ import { emitIntegrationEvent } from "../automation/events.js";
 import {
   aiConfig,
   lockAIUser,
-  requireModel,
+  requireInferenceModel,
   requireImageModel,
   displayModel,
   modelUsageRates,
@@ -72,7 +72,7 @@ export async function beginCall(
   return transact(db, async (tx) => {
     await lockAIUser(tx, userId);
     const { model, config } = await (
-      imageCount === undefined ? requireModel : requireImageModel
+      imageCount === undefined ? requireInferenceModel : requireImageModel
     )(tx, userId, modelId);
     if (jobId) {
       const job = await tx
@@ -202,7 +202,9 @@ export async function settleCall(
         input_tokens: providerMetrics.input ?? 0,
         output_tokens: providerMetrics.output ?? 0,
         cached_tokens: providerMetrics.cached ?? 0,
-        usage: JSON.stringify({ known: true, metrics, providerMetrics, rates }),
+        usage: JSON.stringify({ known: true, metrics, providerMetrics, rates,
+          ...(usage.raw !== undefined ? { raw: usage.raw } : {}),
+        }),
         updated_at: new Date().toISOString(),
       })
       .where("id", "=", id)

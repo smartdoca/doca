@@ -1,4 +1,4 @@
-import type { AnswerIndex } from "@core/modules/knowledge/publications.js";
+
 import { Type } from "@sinclair/typebox";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -634,43 +634,9 @@ export async function registerSearch(
       }
     },
   };
-  const answerIndex: AnswerIndex = {
-    async mode() {
-      return (await config()).enabled && (await embeddings.queryEmbedder())
-        ? "hybrid"
-        : "keyword";
-    },
-    async prepare(chunks) {
-      if (!(await config()).enabled) return;
-      const descriptor = {
-        pluginId: "doca.knowledge",
-        sourceId: "answers",
-        schemaVersion: 1,
-        renderer: { kind: "knowledge", version: 1 },
-      };
-      await provider.createIndex("knowledge_answers", descriptor);
-      await provider.upsertProjections(
-        "knowledge_answers",
-        chunks.map((chunk) => ({
-          id: chunk.id,
-          text: chunk.text,
-          metadata: { title: `${chunk.title} — ${chunk.heading}` },
-        })),
-      );
-    },
-    async search(ids, query) {
-      if (!(await config()).enabled) return null;
-      const hits = await provider.queryIndex("knowledge_answers", {
-        query,
-        candidateIds: ids,
-        semantic: true,
-        limit: 16,
-      });
-      return [...hits];
-    },
-  };
+
   return {
-    answerIndex,
+
     searchHost,
     registerSource,
     knowledgeIndex,

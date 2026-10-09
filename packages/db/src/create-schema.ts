@@ -1,6 +1,7 @@
 import { currentSchemaTables } from "./introspection.js";
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
+import { createKnowledgeBookSchema } from "./knowledge-books-schema.js";
 
 const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS "plugin_webview_auth" ("id" varchar(64) primary key,"kind" varchar(16) not null,"plugin_id" varchar(100) not null,"parent_session" varchar(64) not null,"expires_at" varchar(32) not null);`,
@@ -19,7 +20,7 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS "user_page_state" ("user_id" varchar(36) not null references "users" ("id") on delete cascade, "key" varchar(160) not null, "value" text not null, "version" integer not null, "updated_at" varchar(32) not null, constraint "user_page_state_pk" primary key ("user_id", "key"), constraint "user_page_state_version" check (version > 0));`,
   `CREATE TABLE IF NOT EXISTS "sessions" ("id" varchar(64) primary key, "user_id" varchar(36) not null references "users" ("id"), "expires_at" varchar(32) not null);`,
   `CREATE TABLE IF NOT EXISTS "settings" ("id" varchar(16) primary key, "registration" integer not null, "revision" integer not null, "site_name" varchar(160) not null, "registration_review" integer default 0 not null, "sso_registration" varchar(16) default 'closed' not null, "social_registration" varchar(16) default 'closed' not null, "directory_mode" varchar(16) default 'all' not null, "default_locale" varchar(16) default 'zh' not null, "default_timezone" varchar(100) default 'Asia/Shanghai' not null);`,
-  `CREATE TABLE IF NOT EXISTS "resources" ("id" varchar(36) primary key, "kind" varchar(16) not null, "format" varchar(24) not null, "title" varchar(160) not null, "owner_id" varchar(36) not null references "users" ("id"), "library_id" varchar(36) references "resources" ("id"), "parent_id" varchar(36) references "resources" ("id"), "access_mode" varchar(16) not null, "visibility" varchar(16) not null, "version" integer not null, "deleted_at" varchar(32), "delete_batch" varchar(36), "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "last_editor_id" varchar(36) references "users" ("id"), "last_edited_at" varchar(32), "requests_enabled" integer default 0 not null, "tree_order" integer default 0 not null, "authz_revision" integer default 1 not null, "history_readers" integer default 0 not null, "discoverable" integer default 0 not null, "public_role" varchar(16) default 'reader' not null, "content_bytes" bigint default 0 not null, "share_links_enabled" integer default 0 not null, "permission_overrides" integer default 0 not null, "page_width" varchar(16) default 'a4', "cover_asset_id" varchar(36), "ai_curated" integer default 0 not null, "knowledge_schedule" varchar(16) not null default 'off', "knowledge_preset" text not null default '', constraint "resource_kind" check (kind in ('document','library')), constraint "resource_access" check (access_mode in ('inherit','custom')), constraint "resource_visibility" check (visibility in ('invited','requestable','authenticated','public')), constraint "resource_version" check (version > 0));`,
+  `CREATE TABLE IF NOT EXISTS "resources" ("id" varchar(36) primary key, "kind" varchar(16) not null, "format" varchar(24) not null, "title" varchar(160) not null, "owner_id" varchar(36) not null references "users" ("id"), "library_id" varchar(36) references "resources" ("id"), "parent_id" varchar(36) references "resources" ("id"), "access_mode" varchar(16) not null, "visibility" varchar(16) not null, "version" integer not null, "deleted_at" varchar(32), "delete_batch" varchar(36), "created_at" varchar(32) not null, "updated_at" varchar(32) not null, "last_editor_id" varchar(36) references "users" ("id"), "last_edited_at" varchar(32), "requests_enabled" integer default 0 not null, "tree_order" integer default 0 not null, "authz_revision" integer default 1 not null, "history_readers" integer default 0 not null, "discoverable" integer default 0 not null, "public_role" varchar(16) default 'reader' not null, "content_bytes" bigint default 0 not null, "share_links_enabled" integer default 0 not null, "permission_overrides" integer default 0 not null, "page_width" varchar(16) default 'a4', "cover_asset_id" varchar(36), constraint "resource_kind" check (kind in ('document','library')), constraint "resource_access" check (access_mode in ('inherit','custom')), constraint "resource_visibility" check (visibility in ('invited','requestable','authenticated','public')), constraint "resource_version" check (version > 0));`,
   `CREATE INDEX "resources_owner" on "resources" ("owner_id", "deleted_at");`,
   `CREATE INDEX "resources_parent" on "resources" ("parent_id");`,
   `CREATE INDEX "resources_library" on "resources" ("library_id");`,
@@ -274,18 +275,7 @@ const knowledgeSchemaStatements = [
   `CREATE INDEX IF NOT EXISTS "knowledge_gaps_user" on "knowledge_gaps" ("user_id", "created_at")`,
 ];
 
-const knowledgeSystemStatements = [
-  `CREATE TABLE IF NOT EXISTS knowledge_instructions (library_id varchar(36) not null references resources(id), path varchar(160) not null, revision integer not null, markdown text not null, author_id varchar(36) not null, created_at varchar(32) not null, primary key(library_id, path, revision))`,
-  `CREATE TABLE IF NOT EXISTS knowledge_settings (library_id varchar(36) primary key references resources(id), revision integer not null, config text not null, updated_at varchar(32) not null)`,
-  `CREATE TABLE IF NOT EXISTS knowledge_entries (id varchar(36) primary key, library_id varchar(36) not null references resources(id), title varchar(200) not null, markdown text not null, origin varchar(24) not null, status varchar(24) not null, revision integer not null, source_refs text not null, instruction_hash varchar(64) not null, review_state text not null, author_id varchar(36) not null, created_at varchar(32) not null, updated_at varchar(32) not null)`,
-  `CREATE INDEX IF NOT EXISTS knowledge_entries_library ON knowledge_entries(library_id, status)`,
-  `CREATE TABLE IF NOT EXISTS knowledge_entry_versions (entry_id varchar(36) not null references knowledge_entries(id), revision integer not null, snapshot text not null, author_id varchar(36) not null, created_at varchar(32) not null, primary key(entry_id, revision))`,
-  `CREATE TABLE IF NOT EXISTS knowledge_assistants (id varchar(36) primary key, owner_id varchar(36) not null references users(id), title varchar(200) not null, revision integer not null, library_ids text not null, member_ids text not null, enabled integer not null, visibility varchar(24) not null default 'invited', manager_ids text not null default '[]', config text not null default '{}', updated_at varchar(32) not null)`,
-];
-
 async function createKnowledgeSchema(db: Kysely<any>) {
-  for (const statement of knowledgeSystemStatements)
-    await sql.raw(statement).execute(db);
   await sql
     .raw(
       "CREATE TABLE IF NOT EXISTS ai_session_resources (session_id varchar(36) not null references ai_sessions(id) on delete cascade, kind varchar(32) not null, resource_id varchar(160) not null, title text not null, href text not null, touched_at varchar(32) not null, primary key(session_id,kind,resource_id))",
@@ -296,73 +286,18 @@ async function createKnowledgeSchema(db: Kysely<any>) {
       "CREATE INDEX IF NOT EXISTS ai_session_resources_recent ON ai_session_resources(resource_id,touched_at desc)",
     )
     .execute(db);
-  await sql
-    .raw(
-      "CREATE TABLE IF NOT EXISTS knowledge_bot_sharing (bot_id varchar(36) primary key references knowledge_assistants(id) on delete cascade, enabled integer not null default 0)",
-    )
-    .execute(db);
-  await sql
-    .raw(
-      "CREATE TABLE IF NOT EXISTS knowledge_bot_share_links (id varchar(36) primary key, bot_id varchar(36) not null references knowledge_assistants(id) on delete cascade, token varchar(43) not null unique, enabled integer not null, revoked_at varchar(32), expires_at varchar(32), max_members integer, version varchar(36) not null, created_at varchar(32) not null)",
-    )
-    .execute(db);
-  await sql
-    .raw(
-      "CREATE TABLE IF NOT EXISTS knowledge_bot_link_members (link_id varchar(36) not null references knowledge_bot_share_links(id) on delete cascade, user_id varchar(36) not null references users(id), created_at varchar(32) not null, primary key (link_id,user_id))",
-    )
-    .execute(db);
-  await sql
-    .raw(
-      "CREATE INDEX IF NOT EXISTS knowledge_bot_share_links_bot ON knowledge_bot_share_links (bot_id, created_at)",
-    )
-    .execute(db);
-  await sql
-    .raw(
-      "CREATE INDEX IF NOT EXISTS knowledge_bot_link_members_user ON knowledge_bot_link_members (user_id, link_id)",
-    )
-    .execute(db);
-  await sql
-    .raw(
-      "CREATE TABLE IF NOT EXISTS knowledge_bot_keys (id varchar(36) primary key, bot_id varchar(36) not null references knowledge_assistants(id) on delete cascade, creator_id varchar(36) not null references users(id), name text not null, channel varchar(16) not null, token_hash varchar(64) not null unique, expires_at varchar(32) not null, created_at varchar(32) not null)",
-    )
-    .execute(db);
-  await sql
-    .raw(
-      "CREATE TABLE IF NOT EXISTS knowledge_assistant_users (assistant_id varchar(36) not null references knowledge_assistants(id) on delete cascade, user_id varchar(36) not null references users(id), accepted integer not null default 0, visited_at varchar(32), integration varchar(16) not null default 'default', revision integer not null default 1, primary key (assistant_id, user_id))",
-    )
-    .execute(db);
+
   for (const statement of knowledgeSchemaStatements)
     await sql.raw(statement).execute(db);
   for (const statement of [
     `CREATE TABLE IF NOT EXISTS knowledge_source_groups (id varchar(36) primary key, library_id varchar(36) not null references resources(id) on delete cascade, title text not null, source_kind varchar(16) not null, config text not null default '{}', created_at varchar(32) not null)`,
-    `CREATE TABLE IF NOT EXISTS "knowledge_subscriptions" ("id" varchar(36) primary key, "library_id" varchar(36) not null references "resources" ("id") on delete cascade, "source_kind" varchar(16) not null, "source_id" varchar(36) not null default '', "url" text not null default '', "node_id" varchar(36) references "resources" ("id") on delete set null, "source_version" varchar(64) not null default '', "status" varchar(16) not null default 'active', "creator_id" varchar(36) not null default '', "preset" text not null default '', "group_id" varchar(36) references "knowledge_source_groups" ("id") on delete set null, "name" text not null default '', "created_at" varchar(32) not null, constraint "knowledge_subscription_source" unique ("library_id", "source_kind", "source_id", "url"))`,
+    `CREATE TABLE IF NOT EXISTS "knowledge_subscriptions" ("id" varchar(36) primary key, "library_id" varchar(36) not null references "resources" ("id") on delete cascade, "source_kind" varchar(16) not null, "source_id" varchar(36) not null default '', "url" text not null default '', "source_version" varchar(64) not null default '', "status" varchar(16) not null default 'active', "creator_id" varchar(36) not null default '', "group_id" varchar(36) references "knowledge_source_groups" ("id") on delete set null, "name" text not null default '', "created_at" varchar(32) not null, constraint "knowledge_subscription_source" unique ("library_id", "source_kind", "source_id", "url"))`,
     `CREATE INDEX IF NOT EXISTS "knowledge_subscriptions_library" on "knowledge_subscriptions" ("library_id")`,
-    `CREATE TABLE IF NOT EXISTS "knowledge_runs" ("id" varchar(36) primary key, "library_id" varchar(36) not null references "resources" ("id") on delete cascade, "trigger" varchar(16) not null, "status" varchar(16) not null, "detail" text not null default '', "created_at" varchar(32) not null)`,
-    `CREATE INDEX IF NOT EXISTS "knowledge_runs_library" on "knowledge_runs" ("library_id", "created_at")`,
-    `CREATE TABLE IF NOT EXISTS "knowledge_bots" ("library_id" varchar(36) primary key references "resources" ("id") on delete cascade, "title" varchar(200) not null default '', "published" integer not null default 0, "updated_at" varchar(32) not null)`,
-    `CREATE TABLE IF NOT EXISTS "knowledge_directories" ("library_id" varchar(36) not null references "resources" ("id") on delete cascade, "path" varchar(800) not null, "resource_id" varchar(36) not null references "resources" ("id") on delete cascade, primary key ("library_id", "path"))`,
   ])
     await sql.raw(statement).execute(db);
 }
 
-async function createKnowledgeStudioSchema(db: Kysely<any>) {
-  for (const statement of [
-    `CREATE TABLE IF NOT EXISTS knowledge_checkpoints (task_id varchar(36) primary key, detail text not null default '{}', attempts integer not null default 0, available_at varchar(32) not null)`,
-    `CREATE TABLE IF NOT EXISTS knowledge_source_observations (library_id varchar(36) not null, source_id varchar(36) not null, fingerprint text not null, updated_at varchar(32) not null, PRIMARY KEY(library_id,source_id))`,
-    `CREATE TABLE IF NOT EXISTS knowledge_conversations (id varchar(36) primary key, scope_id varchar(36) not null, kind varchar(16) not null, owner_id varchar(36) not null, title text not null, summary text not null default '', state varchar(16) not null default 'idle', archived integer not null default 0, access_key_id varchar(36), created_at varchar(32) not null, updated_at varchar(32) not null)`,
-    `CREATE TABLE IF NOT EXISTS knowledge_human_tasks (id varchar(36) primary key, library_id varchar(36) not null references resources(id) on delete cascade, conversation_id varchar(36) not null references knowledge_conversations(id) on delete cascade, task_key varchar(300) not null, kind varchar(32) not null, title text not null, detail text not null, status varchar(16) not null, revision integer not null, resolution text not null default '', created_at varchar(32) not null, updated_at varchar(32) not null, UNIQUE(library_id,task_key))`,
-    `CREATE INDEX IF NOT EXISTS knowledge_conversation_scope ON knowledge_conversations(scope_id,kind)`,
-    `CREATE TABLE IF NOT EXISTS knowledge_messages (id varchar(36) primary key, conversation_id varchar(36) not null references knowledge_conversations(id) on delete cascade, role varchar(16) not null, author_id varchar(36), trigger varchar(16) not null, content text not null, detail text not null default '{}', created_at varchar(32) not null)`,
-    `CREATE INDEX IF NOT EXISTS knowledge_message_thread ON knowledge_messages(conversation_id,created_at)`,
-    `CREATE TABLE IF NOT EXISTS knowledge_tasks (id varchar(36) primary key, conversation_id varchar(36) not null references knowledge_conversations(id) on delete cascade, actor_id varchar(36) not null, status varchar(16) not null, error text not null default '', created_at varchar(32) not null, updated_at varchar(32) not null)`,
-    `CREATE TABLE IF NOT EXISTS knowledge_cases (id varchar(36) primary key, bot_id varchar(36) not null, message_id varchar(36) not null, user_id varchar(36) not null, judgment varchar(16) not null, reason text not null, snapshot text not null, status varchar(16) not null default 'open', created_at varchar(32) not null, UNIQUE(message_id,user_id))`,
-    `CREATE TABLE IF NOT EXISTS knowledge_source_actions (id varchar(36) primary key, library_id varchar(36) not null, source_key text not null, actor_id varchar(36) not null, action varchar(32) not null, detail text not null, created_at varchar(32) not null)`,
-    `CREATE TABLE IF NOT EXISTS knowledge_publications (library_id varchar(36) primary key, revision integer not null, fingerprint text not null, documents text not null, status varchar(16) not null, error text not null, updated_at varchar(32) not null)`,
-  ])
-    await sql.raw(statement).execute(db);
-}
-
-export const CURRENT_SCHEMA_BASELINE = "doca-2026-10-03-credentials-v2";
+export const CURRENT_SCHEMA_BASELINE = "doca-2026-10-08-knowledge-books-v2";
 
 async function createSystemSchema(db: Kysely<any>) {
   await sql
@@ -466,7 +401,7 @@ export async function createSchema(db: Kysely<any>) {
   await createDiscoverySchema(db);
   await createSearchSchema(db);
   await createKnowledgeSchema(db);
-  await createKnowledgeStudioSchema(db);
+  await createKnowledgeBookSchema(db);
   await createMobileSchema(db);
   await seedSystemRows(db);
   await createSystemSchema(db);

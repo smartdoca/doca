@@ -20,7 +20,7 @@ Core domain rules / Kysely database access
 SQLite single instance, or shared PostgreSQL + Redis + file backend
 ```
 
-The default host contains rich text, Markdown, spreadsheets, slides, canvas, document permissions, discovery, files, knowledge curation, Q&A assistants, authentication, registration review, security audit, and raw AI usage facts. Quick notes, mail, calendar, membership, billing, business quotas, and moderation are independent business concerns; no such provider is installed by default. Templates/materials/elements expose interfaces with zero default providers.
+The default host contains rich text, Markdown, spreadsheets, slides, canvas, document permissions, discovery, files, source subscriptions and knowledge books, authentication, registration review, security audit, and raw AI usage facts. Quick notes, mail, calendar, membership, billing, business quotas, and moderation are independent business concerns; no such provider is installed by default. Templates/materials/elements expose interfaces with zero default providers.
 
 ## Directories
 

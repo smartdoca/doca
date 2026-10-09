@@ -35,7 +35,7 @@ export async function stageUpload(
   const cleanup = () => rm(directory, { recursive: true, force: true });
   try {
     await pipeline(
-      Buffer.isBuffer(source) ? Readable.from([source]) : source,
+      Buffer.isBuffer(source) ? Readable.from([source]) : Readable.from(source.iterator({ destroyOnReturn: false })),
       new Transform({
         transform(chunk: Buffer, _encoding, callback) {
           size += chunk.length;
@@ -63,6 +63,8 @@ export async function stageUpload(
       cleanup,
     };
   } catch (error) {
+    // Keep the HTTP request alive long enough to return its size/validation error.
+    if (!Buffer.isBuffer(source) && !source.destroyed) source.resume();
     await cleanup();
     throw error;
   }

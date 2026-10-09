@@ -46,9 +46,14 @@ DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root"
 | `DOCA_TRUST_PROXY` | 逗号分隔的可信代理 IP/CIDR；**默认不信任任何代理，回环地址也不例外** |
 | `DOCA_CREDENTIAL_MASTER_KEY` | 仅要求 `storage.credentials.v1` 的插件必填；严格 64 位十六进制（32 字节） |
 | `DOCA_PLUGINS_DIR` | 可写的安装与缓存目录；Compose 默认 `/data/plugins` |
+| `DOCA_PDF_CHROMIUM` | 富文本/Markdown PDF 导出的可选 Chromium 路径；不设置时须安装匹配的 Playwright 浏览器，沙箱保持启用 |
 | `DOCA_PLUGIN_STORE_URL` | HTTPS 来源，默认 `https://store.smartdoca.cc` |
 | `DOCA_PLUGIN_NPM_REGISTRY` | 预构建包的注册表，默认 `https://registry.npmjs.org` |
 | `DOCA_ASSET_BASE` | 可选的构建资源前缀；空值由 Doca 提供 `/assets` |
+| `DOCA_AI_IMAGE_MAX_ATTEMPTS_PER_PAGE` | 每来源页已提交的付费图片请求上限；未设置时默认 5。只接受十进制正安全整数，0、空字符串或非法值会导致启动失败 |
+| `DOCA_AI_IMAGE_SEGMENT_PROFILE` | 可选的可信本地 SAM2 严格 version 1 profile 绝对路径；未设置时关闭分割。显式配置无效会拒绝启动，已校验运行环境不可用时不开放工具；见[本地分割](ai-image-segmentation.md) |
+
+图片请求上限在服务启动时固定。例如在源码或 Compose 的 `.env` 设置 `DOCA_AI_IMAGE_MAX_ATTEMPTS_PER_PAGE=10`，重启服务或重建容器后生效；所有副本须使用相同上限。重试、续跑、修改提示词或重新登记批次都不会清零累计次数，已提交但结果或费用待核对的请求也计数，原样导出和本地重合成不计数。原图片、请求记录与费用事实保持不变。降低上限后，后续付费请求以及序号超过新上限的付费回执复用会明确拒绝，不跳过、转换或删除原记录。批次 version 3 和 paid-attempt version 1 保持不变；旧批次格式仍拒绝，不迁移。
 
 没有主密钥时核心可以启动，凭证服务不注册，声明为必需注入的插件无法启用。填写格式错误的密钥会导致启动失败。用 `openssl rand -hex 32` 生成一次并独立备份，各实例和重启必须使用同一密钥，见[托管凭证](plugin-credentials.zh-CN.md)。
 
@@ -60,16 +65,7 @@ Webhook 投递始终使用独立数据库。SQLite 在主库旁创建 `webhooks.
 
 `.env` 用于 Compose 插值，不会自动把每个变量传入容器。只有 `compose.yaml` 中声明的项生效；容器监听地址、端口和 SQLite/AI/数据目录在当前文件中固定。需要改这些项时同时调整 Compose 的 environment、端口映射与持久挂载。
 
-例如跨站嵌入问答页面的 `DOCA_KNOWLEDGE_EMBED_ORIGINS` 已由宿主支持，但 0.1.10 Compose 尚未传递。需在部署目录创建 `compose.override.yaml`：
-
-```yaml
-services:
-  doca:
-    environment:
-      DOCA_KNOWLEDGE_EMBED_ORIGINS: "${DOCA_KNOWLEDGE_EMBED_ORIGINS:-}"
-```
-
-再在 `.env` 设置逗号分隔的完整来源，例如 `DOCA_KNOWLEDGE_EMBED_ORIGINS=https://portal.example.com`，执行 `docker compose up -d`。默认仅允许同源嵌入；普通页面仍禁止 iframe。仅配置可信嵌入来源，授权与机器人渠道设置仍独立校验。
+扩展环境变量需在 Compose 服务的 environment 中显式传递，并在部署目录的 `.env` 设置。
 
 ## 管理配置与生效
 

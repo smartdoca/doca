@@ -458,7 +458,7 @@ export function PermissionDialog({
               <ShareLinkSettings
                 id={id}
                 basePath={basePath}
-                allowedRoles={adapter?.publicRoles}
+                allowedRoles={adapter?.publicRoles ?? roles(data.isOwner)}
                 changed={load}
                 inheritedEnabled={data.sharingEnabled}
                 inheritanceControl={origin("share_links_enabled")}

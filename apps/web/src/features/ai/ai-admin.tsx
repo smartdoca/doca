@@ -1,10 +1,13 @@
-import {
-  htmlLang,
-  type MessageKey,
-  type MessageValues,
-} from "@doca/i18n";
+import { htmlLang, type MessageKey, type MessageValues } from "@doca/i18n";
 import { useI18n } from "@web/shared/i18n.js";
-import { AutoComplete, Select, Switch } from "antd";
+import {
+  AutoComplete,
+  Input,
+  InputNumber,
+  Popconfirm,
+  Select,
+  Switch,
+} from "antd";
 import { useEffect, useState } from "react";
 import {
   Boxes,
@@ -16,6 +19,13 @@ import {
 } from "lucide-react";
 import { defaultOfficialSkills } from "@core/modules/ai/skills.js";
 import {
+  imageModelProfiles,
+  imageProfilesForProvider,
+  imageProfileForModel,
+  imageOperations,
+  type ImageOperation,
+} from "@core/modules/ai/image-model-catalog.js";
+import {
   aiProviders,
   providerPreset,
   embeddingSource,
@@ -26,6 +36,7 @@ import { Feedback } from "@web/shared/components/feedback.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
 import { SettingsTabs } from "@web/features/settings/settings-tabs.js";
 import "@web/features/ai/ai.css";
+import { AIUploadSettings } from "./ai-upload-settings.js";
 
 function Choice({
   value,
@@ -240,6 +251,33 @@ export function AIAdmin() {
   const d = edit?.draft;
   const modelVendor = config.vendors.find((v: any) => v.id === d?.vendorId);
   const modelProtocol = providerPreset(modelVendor?.provider).protocol;
+  const imageChoices = (operation?: ImageOperation) =>
+    config.models
+      .filter((m: any) => {
+        const vendor = config.vendors.find((v: any) => v.id === m.vendorId);
+        const profile = imageProfileForModel({
+          ...m,
+          provider: vendor?.provider,
+        });
+        return (
+          m.enabled &&
+          vendor?.enabled &&
+          !!profile &&
+          (!operation || profile.operations.includes(operation))
+        );
+      })
+      .map((m: any) => ({ value: m.id, label: m.alias || m.model }));
+  const clearImageSelection = (id: string) => ({
+    imageModel: config.imageModel === id ? "" : config.imageModel,
+    imageToolModels: Object.fromEntries(
+      imageOperations.map((operation) => [
+        operation,
+        config.imageToolModels?.[operation] === id
+          ? ""
+          : config.imageToolModels?.[operation],
+      ]),
+    ),
+  });
   const supportsApiMode =
     modelProtocol === "openai" || modelProtocol === "azure";
   const newModel = () =>
@@ -318,13 +356,16 @@ export function AIAdmin() {
     const values = config[key] ?? [];
     void save({
       ...config,
-      ...(edit.type === "model" && d.embedding
+      ...(edit.type === "model" && (d.embedding || d.imageGeneration)
         ? {
             defaultModel:
               config.defaultModel === d.id ? "" : config.defaultModel,
-            imageModel: config.imageModel === d.id ? "" : config.imageModel,
             mediaModel: config.mediaModel === d.id ? "" : config.mediaModel,
           }
+        : {}),
+      ...(edit.type === "model" &&
+      (d.embedding || !d.imageGeneration || !d.enabled)
+        ? clearImageSelection(d.id)
         : {}),
       [key]: values.some((x: any) => x.id === d.id)
         ? values.map((x: any) => (x.id === d.id ? d : x))
@@ -372,14 +413,13 @@ export function AIAdmin() {
           ["models", t("aiAdmin.tab.models")],
           ["skills", t("aiAdmin.tab.skills")],
           ["tools", t("aiAdmin.tab.tools")],
+          ["uploads", t("aiUpload.title")],
         ]}
       />
       {!edit && (
         <>
           <Feedback message={error?.message ?? ""} tone="error" />
-          <Feedback
-            message={notice ? adminNotice(notice, t, locale) : ""}
-          />
+          <Feedback message={notice ? adminNotice(notice, t, locale) : ""} />
           {error?.status === 409 && (
             <button onClick={() => void load().then(() => setError(null))}>
               {t("aiAdmin.refreshConfig")}
@@ -387,7 +427,9 @@ export function AIAdmin() {
           )}
         </>
       )}
-      {tab === "tools" ? (
+      {tab === "uploads" ? (
+        <AIUploadSettings />
+      ) : tab === "tools" ? (
         <>
           <div className="ai-section-heading">
             <div>
@@ -419,24 +461,36 @@ export function AIAdmin() {
                   }
                   options={[
                     { value: "", label: t("aiAdmin.tools.chooseImage") },
-                    ...config.models
-                      .filter(
-                        (m: any) =>
-                          m.enabled &&
-                          !m.embedding &&
-                          m.imageGeneration &&
-                          (!m.vendorId ||
-                            config.vendors.some(
-                              (v: any) => v.id === m.vendorId && v.enabled,
-                            )),
-                      )
-                      .map((m: any) => ({
-                        value: m.id,
-                        label: m.alias || m.model,
-                      })),
+                    ...imageChoices(),
                   ]}
                 />
               </label>
+              <details>
+                <summary>{t("aiAdmin.imageToolOverrides")}</summary>
+                {imageOperations.map((operation) => (
+                  <label key={operation}>
+                    {t(`aiAdmin.imageOperation.${operation}`)}
+                    <Choice
+                      label={t(`aiAdmin.imageOperation.${operation}`)}
+                      disabled={busy}
+                      value={config.imageToolModels?.[operation] ?? ""}
+                      options={[
+                        { value: "", label: t("aiAdmin.imageUseDefault") },
+                        ...imageChoices(operation),
+                      ]}
+                      onChange={(id) =>
+                        void save({
+                          ...config,
+                          imageToolModels: {
+                            ...config.imageToolModels,
+                            [operation]: id,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                ))}
+              </details>
               <p className="subtle ai-tool-card-note">
                 {t("aiAdmin.tools.imageNote")}
               </p>
@@ -505,7 +559,8 @@ export function AIAdmin() {
                     brave: "Brave Search",
                     searxng: t("aiAdmin.tools.search.searxng"),
                   } as Record<string, string>
-                )[config.webSearch?.provider] ?? t("aiAdmin.tools.searchMissing")}
+                )[config.webSearch?.provider] ??
+                  t("aiAdmin.tools.searchMissing")}
               </p>
               <p className="subtle ai-tool-card-note">
                 {t("aiAdmin.tools.searchNote")}
@@ -695,6 +750,7 @@ export function AIAdmin() {
                         onChange={(enabled) =>
                           void save({
                             ...config,
+                            ...(!enabled ? clearImageSelection(m.id) : {}),
                             models: config.models.map((model: any) =>
                               model.id === m.id ? { ...model, enabled } : model,
                             ),
@@ -850,7 +906,9 @@ export function AIAdmin() {
                     (id: string) => {
                       const key = formatKey[id as (typeof formatIds)[number]];
                       return (
-                        <span key={id}>{key ? t(key) : t("aiAdmin.general")}</span>
+                        <span key={id}>
+                          {key ? t(key) : t("aiAdmin.general")}
+                        </span>
                       );
                     },
                   )}
@@ -898,6 +956,7 @@ export function AIAdmin() {
           className="ai-admin ai-config-dialog"
         >
           <form
+            noValidate
             onSubmit={(e) => {
               e.preventDefault();
               saveDraft();
@@ -931,7 +990,7 @@ export function AIAdmin() {
                   </label>
                   <label>
                     {t("aiAdmin.vendorName")}
-                    <input
+                    <Input
                       required
                       maxLength={80}
                       placeholder={t("aiAdmin.vendorNamePlaceholder")}
@@ -941,7 +1000,7 @@ export function AIAdmin() {
                   </label>
                   <label className="ai-field-wide">
                     {t("aiAdmin.apiUrl")}
-                    <input
+                    <Input
                       type="url"
                       required
                       value={d.baseUrl}
@@ -950,8 +1009,7 @@ export function AIAdmin() {
                   </label>
                   <label className="ai-field-wide">
                     {t("aiAdmin.apiKey")}
-                    <input
-                      type="password"
+                    <Input.Password
                       autoComplete="new-password"
                       value={d.apiKey ?? ""}
                       placeholder={
@@ -975,17 +1033,16 @@ export function AIAdmin() {
                   {d.provider === "azure" && (
                     <label>
                       {t("aiAdmin.apiVersion")}
-                      <input
+                      <Input
                         value={d.apiVersion ?? ""}
                         onChange={(e) => change({ apiVersion: e.target.value })}
                       />
                     </label>
                   )}
                   <label>
-                    <input
-                      type="checkbox"
+                    <Switch
                       checked={d.enabled}
-                      onChange={(e) => change({ enabled: e.target.checked })}
+                      onChange={(checked) => change({ enabled: checked })}
                     />
                     {t("aiAdmin.enableVendor")}
                   </label>
@@ -1001,37 +1058,111 @@ export function AIAdmin() {
                     <Choice
                       label={t("aiAdmin.vendorOf")}
                       value={d.vendorId}
-                      onChange={(vendorId) => change({ vendorId })}
+                      onChange={(vendorId) =>
+                        change({
+                          vendorId,
+                          ...(d.imageGeneration
+                            ? {
+                                imageProfile: undefined,
+                                model: "",
+                                imageSize: undefined,
+                              }
+                            : {}),
+                        })
+                      }
                       options={config.vendors.map((v: any) => ({
                         value: v.id,
                         label: v.name,
                       }))}
                     />
                   </label>
-                  <label>
-                    {modelVendor?.provider === "azure"
-                      ? t("aiAdmin.azureDeployment")
-                      : t("aiAdmin.modelId")}
-                    <AutoComplete
-                      className="ai-choice"
-                      value={d.model}
-                      placeholder={t("aiAdmin.modelIdPlaceholder")}
-                      options={(catalogs[d.vendorId] ?? []).map((m) => ({
-                        value: m.id,
-                        label:
-                          m.name && m.name !== m.id
-                            ? `${m.id} (${m.name})`
-                            : m.id,
-                      }))}
-                      filterOption={(input, option) =>
-                        String(option?.label ?? "")
-                          .toLowerCase()
-                          .includes(input.trim().toLowerCase())
-                      }
-                      onChange={(model) => change({ model: model.slice(0, 160) })}
-                    />
-                  </label>
-                  {supportsApiMode && (
+                  {d.imageGeneration ? (
+                    <>
+                      <label>
+                        {t("aiAdmin.imageProfile")}
+                        <Choice
+                          label={t("aiAdmin.imageProfile")}
+                          value={d.imageProfile ?? ""}
+                          options={[
+                            {
+                              value: "",
+                              label: t("aiAdmin.imageProfileChoose"),
+                            },
+                            ...imageProfilesForProvider(
+                              modelVendor?.provider,
+                            ).map((profile) => ({
+                              value: profile.id,
+                              label: profile.id,
+                            })),
+                          ]}
+                          onChange={(imageProfile) => {
+                            const profile = imageModelProfiles.find(
+                              (item) => item.id === imageProfile,
+                            );
+                            change({
+                              imageProfile: imageProfile || undefined,
+                              model: imageProfile,
+                              imageSize: profile?.defaultSize,
+                            });
+                          }}
+                        />
+                        <small>{t("aiAdmin.imageProfileHelp")}</small>
+                      </label>
+                      <label>
+                        {t("aiAdmin.imageDeploymentId")}
+                        <Input
+                          required
+                          maxLength={160}
+                          value={d.model}
+                          disabled={!d.imageProfile}
+                          onChange={(e) => change({ model: e.target.value })}
+                        />
+                        <small>{t("aiAdmin.imageDeploymentHelp")}</small>
+                      </label>
+                      {d.imageProfile && (
+                        <p className="subtle ai-field-wide">
+                          {t("aiAdmin.imageSupportedOperations", {
+                            operations:
+                              imageModelProfiles
+                                .find(
+                                  (profile) => profile.id === d.imageProfile,
+                                )
+                                ?.operations.map((operation) =>
+                                  t(`aiAdmin.imageOperation.${operation}`),
+                                )
+                                .join(" / ") ?? "",
+                          })}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <label>
+                      {modelVendor?.provider === "azure"
+                        ? t("aiAdmin.azureDeployment")
+                        : t("aiAdmin.modelId")}
+                      <AutoComplete
+                        className="ai-choice"
+                        value={d.model}
+                        placeholder={t("aiAdmin.modelIdPlaceholder")}
+                        options={(catalogs[d.vendorId] ?? []).map((m) => ({
+                          value: m.id,
+                          label:
+                            m.name && m.name !== m.id
+                              ? `${m.id} (${m.name})`
+                              : m.id,
+                        }))}
+                        filterOption={(input, option) =>
+                          String(option?.label ?? "")
+                            .toLowerCase()
+                            .includes(input.trim().toLowerCase())
+                        }
+                        onChange={(model) =>
+                          change({ model: model.slice(0, 160) })
+                        }
+                      />
+                    </label>
+                  )}
+                  {supportsApiMode && !d.imageGeneration && (
                     <label>
                       {t("aiAdmin.protocol")}
                       <Choice
@@ -1051,7 +1182,7 @@ export function AIAdmin() {
                   )}
                   <label>
                     {t("aiAdmin.alias")}
-                    <input
+                    <Input
                       required={config.display === "alias" && d.enabled}
                       maxLength={80}
                       value={d.alias}
@@ -1063,7 +1194,13 @@ export function AIAdmin() {
                     {t("aiAdmin.purpose")}
                     <Choice
                       label={t("aiAdmin.purpose")}
-                      value={d.embedding ? "embedding" : "generation"}
+                      value={
+                        d.embedding
+                          ? "embedding"
+                          : d.imageGeneration
+                            ? "image"
+                            : "generation"
+                      }
                       onChange={(purpose) =>
                         change(
                           purpose === "embedding"
@@ -1073,14 +1210,38 @@ export function AIAdmin() {
                                 vision: false,
                                 pdf: false,
                                 imageGeneration: false,
+                                imageProfile: undefined,
                               }
-                            : { embedding: false, tools: true },
+                            : purpose === "image"
+                              ? {
+                                  embedding: false,
+                                  tools: false,
+                                  vision: false,
+                                  pdf: false,
+                                  imageGeneration: true,
+                                  imageProfile: undefined,
+                                  model: "",
+                                  imageSize: undefined,
+                                }
+                              : {
+                                  embedding: false,
+                                  tools: true,
+                                  imageGeneration: false,
+                                  imageProfile: undefined,
+                                },
                         )
                       }
                       options={[
                         {
                           value: "generation",
                           label: t("aiAdmin.purposeChat"),
+                        },
+                        {
+                          value: "image",
+                          label: t("aiAdmin.purposeImage"),
+                          disabled: !imageProfilesForProvider(
+                            modelVendor?.provider,
+                          ).length,
                         },
                         {
                           value: "embedding",
@@ -1133,8 +1294,7 @@ export function AIAdmin() {
                         }) !== "doubao-multimodal"
                           ? t("aiAdmin.dimensionsOptional")
                           : t("aiAdmin.dimensions")}
-                        <input
-                          type="number"
+                        <InputNumber
                           min={1}
                           max={65536}
                           step={1}
@@ -1146,12 +1306,12 @@ export function AIAdmin() {
                               provider: modelVendor?.provider,
                             }) === "doubao-multimodal"
                           }
-                          value={d.embeddingDimensions ?? ""}
+                          value={d.embeddingDimensions ?? null}
                           placeholder={t("aiAdmin.dimensionsPlaceholder")}
-                          onChange={(e) =>
+                          onChange={(value) =>
                             change({
-                              embeddingDimensions: e.target.value
-                                ? Number(e.target.value)
+                              embeddingDimensions: value
+                                ? Number(value)
                                 : undefined,
                             })
                           }
@@ -1181,21 +1341,19 @@ export function AIAdmin() {
                     </>
                   )}
                   {!d.embedding &&
+                    !d.imageGeneration &&
                     [
                       ["maxInput", "aiAdmin.maxInput", 1000, 10000000],
                       ["maxOutput", "aiAdmin.maxOutput", 32, 1000000],
                     ].map(([f, label, min, max]) => (
                       <label key={f}>
                         {t(label as MessageKey)}
-                        <input
-                          type="number"
+                        <InputNumber
                           required
-                          min={min}
-                          max={max}
+                          min={Number(min)}
+                          max={Number(max)}
                           value={d[f!]}
-                          onChange={(e) =>
-                            change({ [f!]: Number(e.target.value) })
-                          }
+                          onChange={(value) => change({ [f!]: Number(value) })}
                         />
                         {f === "maxInput" && (
                           <small>{t("aiAdmin.limitsHelp")}</small>
@@ -1205,48 +1363,55 @@ export function AIAdmin() {
                   {!d.embedding && (
                     <fieldset className="ai-field-wide">
                       <legend>{t("aiusage.rates")}</legend>
-                      <p className="subtle">{t("aiusage.rateHelp")}</p>
+                      <p className="subtle">
+                        {t(
+                          d.imageGeneration
+                            ? "aiusage.imageRateHelp"
+                            : "aiusage.rateHelp",
+                        )}
+                      </p>
                       <div className="ai-admin-grid">
-                        <label>
-                          {t("aiusage.inputRate")}
-                          <input
-                            type="number"
-                            required
-                            min={0}
-                            max={1000}
-                            step="0.000001"
-                            value={d.inputRate ?? 1}
-                            onChange={(e) =>
-                              change({ inputRate: Number(e.target.value) })
-                            }
-                          />
-                        </label>
-                        <label>
-                          {t("aiusage.outputRate")}
-                          <input
-                            type="number"
-                            required
-                            min={0}
-                            max={1000}
-                            step="0.000001"
-                            value={d.outputRate ?? 1}
-                            onChange={(e) =>
-                              change({ outputRate: Number(e.target.value) })
-                            }
-                          />
-                        </label>
+                        {!d.imageGeneration && (
+                          <>
+                            <label>
+                              {t("aiusage.inputRate")}
+                              <InputNumber
+                                required
+                                min={0}
+                                max={1000}
+                                step="0.000001"
+                                value={d.inputRate ?? 1}
+                                onChange={(value) =>
+                                  change({ inputRate: Number(value) })
+                                }
+                              />
+                            </label>
+                            <label>
+                              {t("aiusage.outputRate")}
+                              <InputNumber
+                                required
+                                min={0}
+                                max={1000}
+                                step="0.000001"
+                                value={d.outputRate ?? 1}
+                                onChange={(value) =>
+                                  change({ outputRate: Number(value) })
+                                }
+                              />
+                            </label>
+                          </>
+                        )}
                         {d.imageGeneration && (
                           <label>
                             {t("aiusage.imageRate")}
-                            <input
-                              type="number"
+                            <InputNumber
                               required
                               min={0}
                               max={1000000000}
                               step={1}
                               value={d.imageRate ?? 1}
-                              onChange={(e) =>
-                                change({ imageRate: Number(e.target.value) })
+                              onChange={(value) =>
+                                change({ imageRate: Number(value) })
                               }
                             />
                           </label>
@@ -1261,38 +1426,42 @@ export function AIAdmin() {
                       onChange={(enabled) => change({ enabled })}
                     />
                   </label>
-                  <div className="ai-field-wide ai-actions">
-                    {!d.embedding && (
-                      <p className="subtle">{t("aiAdmin.limitsDiffer")}</p>
-                    )}
-                    {(
-                      [
-                        ["tools", "aiAdmin.cap.tools"],
-                        ["vision", "aiAdmin.cap.vision"],
-                        ["pdf", "aiAdmin.cap.pdfNative"],
-                        ["imageGeneration", "aiAdmin.cap.imageApi"],
-                      ] as const
-                    )
-                      .filter(() => !d.embedding)
-                      .map(([f, label]) => (
-                        <label key={f}>
-                          <input
-                            type="checkbox"
-                            checked={!!d[f!]}
-                            onChange={(e) => change({ [f!]: e.target.checked })}
-                          />
-                          {t(label)}
-                        </label>
-                      ))}
-                    {!d.embedding && (
-                      <small className="subtle">{t("aiAdmin.pdfHelp")}</small>
-                    )}
-                  </div>
+                  {!d.embedding && !d.imageGeneration && (
+                    <div className="ai-field-wide ai-actions">
+                      {!d.embedding && !d.imageGeneration && (
+                        <p className="subtle">{t("aiAdmin.limitsDiffer")}</p>
+                      )}
+                      {(
+                        [
+                          ["tools", "aiAdmin.cap.tools"],
+                          ["vision", "aiAdmin.cap.vision"],
+                          ["pdf", "aiAdmin.cap.pdfNative"],
+                        ] as const
+                      )
+                        .filter(() => !d.embedding && !d.imageGeneration)
+                        .map(([f, label]) => (
+                          <label key={f}>
+                            <Switch
+                              checked={!!d[f!]}
+                              onChange={(checked) => change({ [f!]: checked })}
+                            />
+                            {t(label)}
+                          </label>
+                        ))}
+                      {!d.embedding && !d.imageGeneration && (
+                        <small className="subtle">{t("aiAdmin.pdfHelp")}</small>
+                      )}
+                    </div>
+                  )}
                   {!d.embedding && d.imageGeneration && (
                     <label>
                       {t("aiAdmin.imageSize")}
-                      <input
-                        placeholder="1024x1024"
+                      <Input
+                        placeholder={
+                          imageModelProfiles.find(
+                            (profile) => profile.id === d.imageProfile,
+                          )?.defaultSize ?? "1024x1024"
+                        }
                         pattern="[0-9]{2,4}x[0-9]{2,4}"
                         value={d.imageSize ?? ""}
                         onChange={(e) =>
@@ -1310,7 +1479,7 @@ export function AIAdmin() {
                 <>
                   <label className="ai-field-wide">
                     {t("aiAdmin.skillName")}
-                    <input
+                    <Input
                       required
                       maxLength={80}
                       value={d.name}
@@ -1319,7 +1488,7 @@ export function AIAdmin() {
                   </label>
                   <label className="ai-field-wide">
                     {t("aiAdmin.skillPurpose")}
-                    <input
+                    <Input
                       required
                       maxLength={500}
                       value={d.description}
@@ -1328,7 +1497,7 @@ export function AIAdmin() {
                   </label>
                   <label className="ai-field-wide">
                     {t("aiAdmin.skillInstructions")}
-                    <textarea
+                    <Input.TextArea
                       required
                       rows={9}
                       maxLength={12000}
@@ -1352,10 +1521,9 @@ export function AIAdmin() {
                     />
                   </label>
                   <label>
-                    <input
-                      type="checkbox"
+                    <Switch
                       checked={d.enabled}
-                      onChange={(e) => change({ enabled: e.target.checked })}
+                      onChange={(checked) => change({ enabled: checked })}
                     />
                     {t("aiAdmin.enableSkill")}
                   </label>
@@ -1394,7 +1562,7 @@ export function AIAdmin() {
                       options={[
                         { value: "", label: t("aiAdmin.userChooses") },
                         ...config.models
-                          .filter((m: any) => m.enabled && !m.embedding)
+                          .filter((m: any) => m.enabled && !m.embedding && !m.imageGeneration)
                           .map((m: any) => ({
                             value: m.id,
                             label: m.alias || m.model,
@@ -1410,15 +1578,12 @@ export function AIAdmin() {
                   ).map(([f, label, min, max]) => (
                     <label key={f}>
                       {t(label)}
-                      <input
-                        type="number"
+                      <InputNumber
                         required
-                        min={min}
-                        max={max}
+                        min={Number(min)}
+                        max={Number(max)}
                         value={d[f!]}
-                        onChange={(e) =>
-                          change({ [f!]: Number(e.target.value) })
-                        }
+                        onChange={(value) => change({ [f!]: Number(value) })}
                       />
                     </label>
                   ))}
@@ -1467,7 +1632,7 @@ export function AIAdmin() {
                       {d.webSearch?.provider === "searxng" && (
                         <label>
                           {t("aiAdmin.searchUrl")}
-                          <input
+                          <Input
                             type="url"
                             required
                             placeholder="https://search.example.com/"
@@ -1488,8 +1653,7 @@ export function AIAdmin() {
                           {d.webSearch.provider === "searxng"
                             ? t("aiAdmin.searchToken")
                             : t("aiAdmin.searchKey")}
-                          <input
-                            type="password"
+                          <Input.Password
                             autoComplete="new-password"
                             value={d.webSearch.apiKey ?? ""}
                             placeholder={
@@ -1576,7 +1740,7 @@ export function AIAdmin() {
                         <>
                           <label>
                             {t("aiAdmin.fetchUrl")}
-                            <input
+                            <Input
                               type={
                                 d.webFetch?.provider === "firecrawl"
                                   ? "text"
@@ -1605,8 +1769,7 @@ export function AIAdmin() {
                             {d.webFetch?.provider === "firecrawl"
                               ? t("aiAdmin.apiKeyOptional")
                               : t("aiAdmin.apiKey")}
-                            <input
-                              type="password"
+                            <Input.Password
                               autoComplete="new-password"
                               value={d.webFetch?.apiKey ?? ""}
                               placeholder={
@@ -1675,18 +1838,19 @@ export function AIAdmin() {
                     config.models.some((m: any) => m.vendorId === d.id);
                   return (
                     exists && (
-                      <button
-                        className="danger"
-                        type="button"
+                      <Popconfirm
+                        title={t("aiAdmin.removeConfigConfirm", {
+                          name: d.alias || d.name || d.model,
+                        })}
+                        okText={t("credentials.remove")}
+                        cancelText={t("common.cancel")}
                         disabled={busy || hasModels}
-                        title={
-                          hasModels
-                            ? t("aiAdmin.removeBlocked")
-                            : t("aiAdmin.removeConfig")
-                        }
-                        onClick={() =>
+                        onConfirm={() =>
                           void save({
                             ...config,
+                            ...(edit.type === "model"
+                              ? clearImageSelection(d.id)
+                              : {}),
                             [key]: config[key].filter(
                               (x: any) => x.id !== d.id,
                             ),
@@ -1698,10 +1862,21 @@ export function AIAdmin() {
                           })
                         }
                       >
-                        {hasModels
-                          ? t("aiAdmin.removeWithModels")
-                          : t("credentials.remove")}
-                      </button>
+                        <button
+                          className="danger"
+                          type="button"
+                          disabled={busy || hasModels}
+                          title={
+                            hasModels
+                              ? t("aiAdmin.removeBlocked")
+                              : t("aiAdmin.removeConfig")
+                          }
+                        >
+                          {hasModels
+                            ? t("aiAdmin.removeWithModels")
+                            : t("credentials.remove")}
+                        </button>
+                      </Popconfirm>
                     )
                   );
                 })()}

@@ -11,7 +11,8 @@ Doca 是面向个人和小团队的开源文档与知识工作台。一次部署
 ## 功能
 
 - 富文本、Markdown、表格、幻灯片和画布文档，支持实时协同与历史记录。
-- 知识库、来源整理、问答助手和个人 AI 助手。
+- 知识库与多人共建的知识册，支持编排、来源溯源和人工审阅。
+- 个人 AI 助手，支持 PDF/Office 读取、图片生成与编辑、持久附件和浏览器草稿。
 - 个人文件与共享文件夹，支持本地或兼容 S3 的存储。
 - 邀请、权限、分享、评论、通知、搜索和回收站。
 - 密码、OIDC、Google、GitHub、微信扫码和 QQ 登录；中英文界面。
@@ -22,11 +23,11 @@ Doca 是面向个人和小团队的开源文档与知识工作台。一次部署
 
 ## Docker 快速开始
 
-需要 Git、Docker Engine、Docker Compose，以及通过反向代理提供 HTTPS 的域名。本流程在新空数据库中安装已发布的 0.1.12 镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.12)并保留原数据。
+需要 Git、Docker Engine、Docker Compose，以及通过反向代理提供 HTTPS 的域名。本流程在新空数据库中安装已发布的 0.1.13 镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.13)并保留原数据。
 
 ```sh
 # 1. 拉取对应发行版代码
-git clone --branch v0.1.12 --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch v0.1.13 --depth 1 https://github.com/smartdoca/doca.git
 cd doca
 
 # 2. 配置环境变量
@@ -68,7 +69,7 @@ pnpm dev
 - [部署与配置](https://smartdoca.github.io/doca/#/zh-cn/operations/deployment)
 - [插件开发](https://smartdoca.github.io/doca/#/zh-cn/plugins/plugin-development)
 - [HTTP API](https://smartdoca.github.io/doca/#/zh-cn/reference/api)，运行中的应用还提供 `/api/openapi.json`。
-- [发行记录](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.12)
+- [发行记录](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.13)
 - [文档源码](docs/README.zh-CN.md)
 
 预览文档时，执行 `pnpm docs:dev` 并打开 `http://127.0.0.1:39140/#/zh-cn/`。`pnpm docs:check` 校验双语覆盖和本地链接。GitHub Pages 设置见[文档维护](docs/documentation.zh-CN.md)。

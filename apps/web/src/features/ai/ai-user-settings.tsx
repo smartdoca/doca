@@ -328,7 +328,7 @@ export function AIUserSettings({
                   {t("users.enable")}
                 </label>
                 <button className="primary" disabled={busy}>
-                  {t("library.qa.save")}
+                  {t("aiAdmin.save")}
                 </button>
                 <button type="button" onClick={() => setSkill(null)}>
                   {t("common.cancel")}

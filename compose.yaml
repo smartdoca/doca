@@ -1,17 +1,22 @@
 # Production-oriented single-host deployment.
 # Put DOCA_ORIGIN=https://docs.example.com in .env.
 # Terminate TLS in a reverse proxy and forward to 127.0.0.1:39120.
-# The published image is docker.io/smartdoca/doca:0.1.12.
+# The published image is docker.io/smartdoca/doca:0.1.13.
 # `docker compose up -d` pulls that tag. Add `--build` to build from this checkout.
 services:
   doca:
     build:
       context: .
       dockerfile: Dockerfile
-    image: docker.io/smartdoca/doca:0.1.12
+    image: docker.io/smartdoca/doca:0.1.13
     pull_policy: always
     restart: unless-stopped
     init: true
+    # Pinned Playwright policy permits Chromium's non-root namespace sandbox.
+    # The host kernel must also allow user namespaces; never disable the sandbox.
+    security_opt:
+      - seccomp=./docker/chromium-seccomp.json
+    shm_size: "1gb"
     stop_grace_period: 30s
     environment:
       NODE_ENV: production
@@ -28,6 +33,7 @@ services:
       DOCA_TRUST_PROXY: "${DOCA_TRUST_PROXY:-}"
       DOCA_SQLITE_PATH: /data/doca.db
       DOCA_AI_SQLITE_PATH: /data/ai.db
+      DOCA_AI_IMAGE_MAX_ATTEMPTS_PER_PAGE: "${DOCA_AI_IMAGE_MAX_ATTEMPTS_PER_PAGE-5}"
       DOCA_FILE_STORE_ID: "${DOCA_FILE_STORE_ID:?Set the shared file store ID}"
       # Local roots must refer to writable persistent mounts, such as /data/storage.
       # Development .env paths (./data/...) resolve under the image's /app directory.

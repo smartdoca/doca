@@ -59,6 +59,16 @@ it("renders approval codes and data without persisted display copy", () => {
   expect(approval).not.toHaveProperty("detail");
 });
 
+it("labels the candidate-region tool in both locales on web and mobile", async () => {
+  const mobile = await import("../apps/mobile/src/ai-progress-label.js");
+  const event: AIProgressEvent = { id: "region", at: "2026-10-06T00:00:00.000Z", kind: "tool",
+    code: "tool_call", data: { toolName: "image_candidate_region_view" }, status: "success" };
+  for (const label of [aiEventLabel, mobile.aiEventLabel]) {
+    expect(label(event, createTranslator("zh"))).toBe("查看候选小框像素");
+    expect(label(event, createTranslator("en"))).toBe("Inspect candidate region pixels");
+  }
+});
+
 it("uses safe labels for missing, future and inherited object keys", async () => {
   const mobile = await import("../apps/mobile/src/ai-progress-label.js");
   const web = await import("../apps/web/src/features/ai/ai-progress-label.js");

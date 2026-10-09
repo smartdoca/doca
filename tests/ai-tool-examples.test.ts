@@ -19,6 +19,8 @@ const required = [
   "document_request_access",
   "image_insert",
   "image_generate",
+  "image_reference_generate",
+  "image_edit",
   "image_show",
   "ask_user",
   "task_plan",

@@ -136,7 +136,7 @@ async function sourceImage(
   if (
     !generated.some((r) => {
       const v = JSON.parse(r.result);
-      return v.kind === "image_generation" && v.assetId === id;
+      return isSavedImageReceipt(v) && v.assetId === id;
     })
   )
     fail(403, "只能插入自己生成的图片");
@@ -498,7 +498,7 @@ export async function showGeneratedImage(
     .map((r) => JSON.parse(r.result))
     .find(
       (r) =>
-        r.kind === "image_generation" &&
+        isSavedImageReceipt(r) &&
         r.assetId &&
         (!assetId || r.assetId === assetId),
     );
@@ -510,3 +510,4 @@ export async function showGeneratedImage(
   const status = await generatedImageStatus(db, ctx, image.assetId);
   return { ...image, ...status, kind: "image_display" };
 }
+import { isSavedImageReceipt } from "./image-revision-contract.js";

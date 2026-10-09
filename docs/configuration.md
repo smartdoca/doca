@@ -46,9 +46,14 @@ Store IDs and physical locations must remain available after objects are written
 | `DOCA_TRUST_PROXY` | Comma-separated trusted proxy IPs/CIDRs; **no proxy is trusted by default**, including loopback |
 | `DOCA_CREDENTIAL_MASTER_KEY` | Required only for plugins that require `storage.credentials.v1`; exactly 64 hexadecimal characters (32 bytes) |
 | `DOCA_PLUGINS_DIR` | Writable installation/cache directory; Compose defaults to `/data/plugins` |
+| `DOCA_PDF_CHROMIUM` | Optional Chromium executable for rich-text/Markdown PDF export; otherwise install the matching Playwright browser. The sandbox stays enabled |
 | `DOCA_PLUGIN_STORE_URL` | HTTPS origin; default `https://store.smartdoca.cc` |
 | `DOCA_PLUGIN_NPM_REGISTRY` | Prebuilt-package registry; default `https://registry.npmjs.org` |
 | `DOCA_ASSET_BASE` | Optional built-asset prefix; empty serves `/assets` from Doca |
+| `DOCA_AI_IMAGE_MAX_ATTEMPTS_PER_PAGE` | Submitted paid image requests per source page; default 5 when unset. A positive safe decimal integer is required; 0, empty or malformed values fail startup |
+| `DOCA_AI_IMAGE_SEGMENT_PROFILE` | Optional absolute path to a trusted, strict version 1 local SAM2 profile; unset disables segmentation. Malformed explicit configuration fails startup; an unavailable verified runtime does not expose the tool. See [local segmentation](ai-image-segmentation.md) |
+
+Image request limits are fixed when the server starts. For example, set `DOCA_AI_IMAGE_MAX_ATTEMPTS_PER_PAGE=10` in the source or Compose `.env` and restart the server or recreate the container. All replicas must use the same limit. Retrying, resuming, changing prompts or re-registering a batch does not clear accumulated attempts. Pending or uncertain submitted requests count; reference exports and local recomposition do not. Existing images, request records and usage remain untouched. Lowering the limit rejects further paid requests, including reuse of a paid-attempt receipt whose ordinal now exceeds the limit; it never skips or converts those records. Batch version 3 and paid-attempt version 1 remain unchanged; older batch formats are still rejected without migration.
 
 Without a master key, core services start and the credential service is absent; a plugin declaring it as a required injection cannot activate. A supplied malformed key fails startup. Generate one once with `openssl rand -hex 32`, back it up separately, and use the same key on every replica/restart. See [managed credentials](plugin-credentials.md).
 
@@ -60,16 +65,7 @@ Multiple replicas require shared PostgreSQL, Redis, and file storage. Changing a
 
 `.env` supplies Compose interpolation; it does not automatically forward every variable to the container. Only settings declared in `compose.yaml` reach the service. Container bind address, port, SQLite/AI paths, and data directory are fixed in the current file. Change its environment, port mappings, and persistent mounts together when customizing those values.
 
-For example, the host supports `DOCA_KNOWLEDGE_EMBED_ORIGINS` for cross-site Q&A embedding, but the 0.1.10 Compose file does not forward it. Create `compose.override.yaml` in the deployment directory:
-
-```yaml
-services:
-  doca:
-    environment:
-      DOCA_KNOWLEDGE_EMBED_ORIGINS: "${DOCA_KNOWLEDGE_EMBED_ORIGINS:-}"
-```
-
-Set comma-separated complete origins in `.env`, for example `DOCA_KNOWLEDGE_EMBED_ORIGINS=https://portal.example.com`, then run `docker compose up -d`. Same-origin embedding is allowed by default; ordinary pages still deny framing. Allow only trusted embedding origins; bot authorization and channel settings remain separate checks.
+Additional environment variables must be forwarded explicitly in the Compose service environment and configured in the deployment directory’s `.env`.
 
 ## Administrator settings and applying changes
 

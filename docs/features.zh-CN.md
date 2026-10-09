@@ -15,9 +15,9 @@
 | 发现、收录与最近访问 | 已实现；展示与访问权限分别校验 | [发现与收录](public-resource-discovery.zh-CN.md) |
 | 文件与附件 | 个人文件、共享文件夹、授权上传下载；部署必须配置本地或 S3 存储 | [文件存储](storage.zh-CN.md) |
 | 评论与站内通知 | 五种格式已实现，包括表格稳定行列锚点 | [评论与通知](comments-and-community.zh-CN.md) |
-| 文档搜索 | 数据库基础检索可用；全文、向量与问答索引需要配置 Meilisearch 和相应模型 | [HTTP API](api.zh-CN.md#搜索) |
+| 文档搜索 | 数据库基础检索可用；全文与向量索引需要配置 Meilisearch 和相应模型 | [HTTP API](api.zh-CN.md#搜索) |
 | 个人 AI 助手 | 已实现会话、工具、审批和用量事实记录；需要配置可用模型及凭据 | [使用指南](user-guide.zh-CN.md) |
-| 知识整理与独立问答 | 仍属于核心；来源、整理会话、发布、机器人分享、API/MCP 已实现，运行依赖模型和索引配置 | [知识整理](knowledge-studio.zh-CN.md) |
+| 知识册与来源订阅 | 属于核心；保留文档与来源订阅，新增知识册、可编辑编排、溯源及人工反馈；旧整理与问答机器人已移除 | [知识册](knowledge-books.zh-CN.md) |
 | 本地账号与外部登录 | 密码、联系方式验证码、恢复、注册审批、OIDC/OAuth 及社交适配已实现；外部服务需要实际凭据 | [身份认证](authentication.zh-CN.md) |
 | Webhook | 异步投递、重试和记录已实现；需要配置接收端 | [Webhook](webhooks.zh-CN.md) |
 | 插件安装和公开 SDK | 可信预构建包、安装目录发现、重启应用；托管 SQL、对象和加密凭证已实现 | [插件部署](plugin-deployment.zh-CN.md) |

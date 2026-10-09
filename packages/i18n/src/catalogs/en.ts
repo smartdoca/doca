@@ -1,7 +1,528 @@
 /** English copy is the source catalog. Every other locale must provide these keys. */
 export const en = {
+  "books.openBook": "Open book",
+  "books.viewMode": "Reading view",
+  "books.readingMode": "Read",
+  "books.reviewMode": "Review",
+  "books.onThisPage": "On this page",
+  "books.pageParagraphs": "Page paragraphs",
+  "books.documentPath": "Document path",
+  "books.sectionAnchor": "Go to section",
+  "books.previousDocument": "Previous article",
+  "books.nextDocument": "Next article",
+  "books.backToTop": "Back to top",
+  "books.bindingCount": "{count} source bindings",
+  "books.moreBindings": "{count} more bindings",
+  "books.bindingHelp":
+    "One source can combine documents, links and plugin content. Add your selections below, then save the entire source. Every binding uses your own authorization.",
+  "books.boundSources": "Bound sources",
+  "books.addBindings": "Add bindings",
+  "books.addToSource": "Add to source",
+  "books.clearSelection": "Clear selection",
+  "books.webQuery": "Search web sources",
+  "books.findWebSources": "Search the web",
+  "books.webSites": "Limit websites",
+  "books.webSitesHelp": "Optional domains, such as rfc-editor.org",
+  "books.noWebResults":
+    "No results returned. Try different search terms or domains.",
+  "books.webSearchFailed":
+    "Web search is unavailable. Check the configured search service and its upstream engines.",
+  "books.webResultsHelp":
+    "Search snippets are discovery hints. Read and verify the actual pages before binding them.",
+  "books.selectWebSource": "Select source",
+  "books.useWebResults": "Check selected links",
+  "books.checkWebLinks": "Verify links",
+  "books.checkWebHelp":
+    "Verify all current links before adding them. Saving rechecks the original pages.",
+  "books.webChecksFailed":
+    "Some links failed verification. Remove or correct them, then verify again.",
+  "books.webGroupTooLarge":
+    "The combined pages exceed the source limit. Select narrower sections or split them into several sources.",
+  "books.webCheckFailed":
+    "Link verification failed. Check the links and try again.",
+  "books.webVerified": "Verified",
+  "books.webUnavailable": "Unavailable",
+  "books.webCharacterCount": "{count} readable characters",
+  "books.webPreview": "Preview page content",
+  "books.webError.invalid_url":
+    "Use an HTTP or HTTPS link without embedded credentials.",
+  "books.webError.unavailable":
+    "The page or selected section is unavailable, or access is blocked.",
+  "books.webError.empty": "The page has no readable body text.",
+  "books.webError.too_large":
+    "The content exceeds the group limit. Select a section or narrower page.",
+  "books.editBinding": "Edit binding",
+  "books.updateBinding": "Update binding",
+  "books.removeBinding": "Remove binding",
+  "books.noBindings": "Add documents, links or plugin content",
+  "books.chooseResources": "Select resources",
+  "books.bulkUrls": "Web links",
+  "books.bulkUrlsHelp":
+    "One HTTP or HTTPS link per line; all links are added together.",
+  "books.duplicateBinding":
+    "This source already contains the selected binding. Remove duplicates before adding.",
+  "books.bindingLimit":
+    "Each source supports up to 50 bindings. Split larger selections into several sources.",
+  "books.invalidBindings":
+    "Select at least one valid binding and complete its required fields.",
+  "books.invalidUrls":
+    "Enter valid HTTP or HTTPS links without credentials, one per line, without duplicates.",
+  "books.unappliedBindings":
+    "Add or update the pending bindings before saving the source.",
+  "books.myAssistantCases": "My operation history",
+  "books.myAssistantCasesHelp":
+    "Only your own conversations about this book appear here. Other contributors’ assistant chats and memory remain private.",
+  "books.nodeCheckResults": "{count} node review results",
+  "books.criteriaHelp":
+    "Define shared quality requirements once and reuse them across acceptance nodes. Keep domain-specific scope in each node’s rules.",
+  "books.assistantCases": "AI examples",
+  "books.assistantCasesHelp":
+    "These examples open your personal assistant with the current book. Review or change the request before sending; the assistant uses your permissions.",
+  "books.tryCase": "Try with assistant",
+  "books.case.sources.title": "Add a group of sources",
+  "books.case.sources.description":
+    "Combine several documents, web links and plugin bindings in one source, with individual permission checks.",
+  "books.case.sources.prompt":
+    "List documents, web links and plugin content I can access, then combine my selected items in one source. Give each binding a stable ID, check every permission and report unavailable items. Preserve published releases.",
+  "books.case.criteria.title": "Reuse acceptance requirements",
+  "books.case.criteria.description":
+    "Manage common quality rules once and apply them across the workflow.",
+  "books.case.criteria.prompt":
+    "Combine repeated general acceptance requirements into one shared criterion for the acceptance nodes. Keep domain-specific requirements in their node rules, keep mandatory checks, and do not publish directly.",
+  "books.case.feedback.title": "Register a correction",
+  "books.case.feedback.description":
+    "Turn a concern into anchored feedback with evidence and a reviewable decision.",
+  "books.case.feedback.prompt":
+    "TCP provides a reliable ordered byte stream; applications must handle message boundaries. Find the relevant paragraph and register this as correction feedback. Check its sources and explain the decision. Do not edit a published release or skip human approval.",
+  "books.origin.manual": "Entered manually",
+  "books.origin.assistant": "Entered through AI assistant",
+  "books.criterionLabel": "Acceptance criterion",
+
+  "books.error.book_invalid":
+    "Check the book configuration, sources and inputs.",
+  "books.error.book_forbidden":
+    "Required permissions or source authorization are unavailable.",
+  "books.error.book_not_found": "The book or selected record is unavailable.",
+  "books.error.book_conflict":
+    "Configuration, sources or task state changed. Refresh and retry.",
+  "books.error.book_size_limit":
+    "Content exceeds processing limits. Narrow the source scope or split workflow nodes.",
+  "books.error.book_acceptance":
+    "Inputs or results did not meet acceptance conditions. Inspect the node and adjust its configuration.",
+  "books.error.book_model_output":
+    "Model output did not meet structure, citation or completeness requirements. Adjust the node and retry.",
+  "books.error.book_model_unavailable":
+    "Configure an available knowledge-book model.",
+  "books.error.book_failed":
+    "The knowledge-book run failed. Inspect human tasks and run history.",
+
+  "books.assistant": "AI assistant",
+  "books.assistantPrompt":
+    "Use knowledge_book to inspect and improve this knowledge book: sources, workflow, acceptance rules and human feedback.",
+
+  "books.libraryManualSource":
+    "Create an editable document as a library source. Human book inputs belong to knowledge books.",
+  "books.title": "Knowledge books",
+  "books.lead": "Maintain sources, workflows and acceptance rules together.",
+  "books.create": "Create book",
+  "books.humanTasks": "Human tasks",
+  "books.name": "Name",
+  "books.empty": "No knowledge books yet",
+  "books.revision": "Configuration revision",
+  "books.published": "Published",
+  "books.unpublished": "Unpublished",
+  "books.previous": "Previous",
+  "books.next": "Next",
+  "books.cancel": "Cancel",
+  "books.save": "Save",
+  "books.edit": "Edit",
+  "books.inspect": "Inspect",
+  "books.removeGroup": "Remove source group",
+  "books.remove": "Remove",
+  "books.refresh": "Refresh",
+  "books.permissions": "Permissions",
+  "books.run": "Start run",
+  "books.loading": "Loading…",
+  "books.result": "Knowledge result",
+  "books.workflow": "Workflow",
+  "books.provenance": "Provenance",
+  "books.openSource": "Open original source",
+  "books.sources": "Sources",
+  "books.criteria": "Acceptance criteria",
+  "books.feedbackTitle": "Human feedback",
+  "books.runs": "Runs",
+  "books.release": "Release",
+  "books.readOnly": "Read-only result",
+  "books.restricted": "Original source access is required to view this result.",
+  "books.noRelease": "Configure sources and workflow to create a release.",
+  "books.addFeedback": "Add feedback",
+  "books.feedbackHelp":
+    "Feedback enters the workflow. Its rules and evidence determine adoption.",
+  "books.targetParagraph": "View target",
+  "books.evidenceCount": "Evidence count",
+  "books.decision": "Decision and sources",
+  "books.goal": "Goal and scope",
+  "books.model": "Model",
+  "books.depth": "Maximum tree depth",
+  "books.schedule": "Schedule (UTC)",
+  "books.schedule.off": "Off",
+  "books.schedule.daily": "Daily",
+  "books.schedule.weekly": "Weekly",
+  "books.autoPublish": "Publish automatically after acceptance",
+  "books.addNode": "Add workflow node",
+  "books.unsaved": "Save changes before running",
+  "books.noInstructions": "No additional instructions",
+  "books.addSource": "Add source",
+  "books.sourceHelp":
+    "Each contributor grants their own source access. Revocation stops ingestion; retained results follow original source permissions.",
+  "books.restrictedSource": "Restricted source",
+  "books.manageSource": "Manage source",
+  "books.required": "Required",
+  "books.addCriterion": "Add criterion",
+  "books.cancelRun": "Cancel run",
+  "books.instructions": "Node instructions",
+  "books.selectedSources": "Selected sources (empty means all)",
+  "books.selectedCriteria": "Criteria (empty means all)",
+  "books.sourceWeight": "Source weight",
+  "books.feedbackWeight": "Human feedback weight",
+  "books.inputs": "Input nodes",
+  "books.runDetails": "Run details",
+  "books.sourceKind": "Source type",
+  "books.chooseResource": "Choose source resource",
+  "books.resourceReference": "File or folder link / ID",
+  "books.resourceReferenceHelp":
+    "Copy its link from the folders page. Original access is checked.",
+  "books.provider": "Content provider",
+  "books.providerConfiguration": "Provider configuration",
+  "books.url": "Web URL",
+  "books.sourceText": "Human source content",
+  "books.sourceStatus": "Status",
+  "books.feedbackKind": "Feedback type",
+  "books.feedbackContent": "Feedback content",
+  "books.taskStatus": "Task status",
+  "books.taskKind": "Task kind",
+  "books.nodeLabel": "Workflow node",
+  "books.staleTask":
+    "Inputs changed; start a new run with the current configuration",
+  "books.noTasks": "No matching human tasks",
+  "books.reviewNote": "Review note",
+  "books.approve": "Approve and continue",
+  "books.reject": "Reject and stop run",
+  "books.retry": "Retry current configuration",
+  "books.includeExecution": "Include execution and model context",
+  "books.wholeGraph": "Entire provenance graph",
+  "books.searchSources": "Search sources",
+  "books.searchTasks": "Search books, tasks or nodes",
+  "books.zoomIn": "Zoom in",
+  "books.zoomOut": "Zoom out",
+  "books.palette.inputs": "Sources and feedback",
+  "books.palette.models": "AI knowledge processing",
+  "books.palette.checks": "Review and publication",
+  "books.paletteHelp": "Click a node to add it to the canvas",
+  "books.addTypedNode": "Add {type} node",
+  "books.graphNodeCount": "{count} nodes",
+  "books.graphSourceCount": "{count} source groups",
+  "books.graphAllSources": "All active sources",
+  "books.graphCriterionCount": "{count} acceptance criteria",
+  "books.graphAllCriteria": "Shared acceptance criteria",
+  "books.graphExpand": "Expand canvas",
+  "books.graphCollapse": "Collapse canvas",
+  "books.nodeHint.sources": "Read authorized source materials",
+  "books.nodeHint.feedback": "Read annotations and corrections",
+  "books.nodeHint.extract": "Extract facts and supporting evidence",
+  "books.nodeHint.synthesize": "Combine knowledge and resolve differences",
+  "books.nodeHint.organize": "Organize the document hierarchy",
+  "books.nodeHint.acceptance": "Check shared or selected criteria",
+  "books.nodeHint.human_review": "Wait for a human review",
+  "books.nodeHint.publish": "Publish accepted knowledge",
+  "books.hideNodePanel": "Hide node panel",
+  "books.showNodePanel": "Show node panel",
+  "books.hideGraphToolbar": "Hide graph toolbar",
+  "books.showGraphToolbar": "Show graph toolbar",
+  "books.fit": "Fit graph",
+  "books.workflowGraphHelp":
+    "Click a node to inspect its rules. Drag the canvas to pan; Ctrl / Command + wheel zooms.",
+  "books.graphHelp":
+    "Drag nodes, connect inputs, double-click an edge to remove it. Click a node to configure it.",
+  "books.provenanceHelp":
+    "Generated from actual execution. Click a node for evidence; Ctrl / Command + wheel to zoom.",
+  "books.node.sources": "Read sources",
+  "books.node.feedback": "Read feedback",
+  "books.node.extract": "Extract claims",
+  "books.node.synthesize": "Synthesize",
+  "books.node.organize": "Organize pages",
+  "books.node.acceptance": "Acceptance",
+  "books.node.human_review": "Human review",
+  "books.node.publish": "Publish",
+  "books.source.document": "Document",
+  "books.source.library": "Library",
+  "books.source.file": "File",
+  "books.source.folder": "Folder",
+  "books.source.url": "Web page",
+  "books.source.manual": "Human input",
+  "books.source.content": "Plugin content",
+  "books.feedback.comment": "Comment",
+  "books.feedback.correction": "Correction",
+  "books.feedback.supplement": "Supplement",
+  "books.feedback.question": "Question",
+  "books.task.all": "All nodes",
+  "books.task.review": "Human review",
+  "books.task.publication": "Publication",
+  "books.task.repair": "Run repair",
+  "books.active": "Active",
+  "books.paused": "Paused",
+  "books.removed": "Removed",
+  "books.withdraw": "Withdraw feedback",
+  "books.withdrawn": "Withdrawn",
+  "books.pending": "Pending",
+  "books.resolved": "Resolved",
+  "books.cancelled": "Cancelled",
+  "books.superseded": "Superseded",
+  "books.status.queued": "Queued",
+  "books.status.running": "Running",
+  "books.status.awaiting_input": "Awaiting human input",
+  "books.status.queued_resume": "Queued to resume",
+  "books.status.awaiting_publication": "Awaiting publication",
+  "books.status.queued_publish": "Queued to publish",
+  "books.status.published": "Published",
+  "books.status.failed": "Failed",
+  "books.status.cancelled": "Cancelled",
+  "books.status.completed": "Completed",
+  "books.provenance.source": "Source version",
+  "books.provenance.evidence": "Evidence",
+  "books.provenance.claim": "Claim",
+  "books.provenance.decision": "Decision",
+  "books.provenance.paragraph": "Paragraph",
+  "books.provenance.page": "Page",
+  "books.provenance.release": "Release",
+  "books.provenance.execution": "Execution",
+
+  "common.uploading": "Uploading…",
+  "ai.progress.tool.imageReferenceGenerate": "Generate from reference images",
+  "ai.progress.tool.imageEditSaved": "Revise saved image",
+  "ai.progress.tool.imageSceneInspect": "Check source scene and requirements",
+  "ai.progress.tool.imageSavedCandidates": "Compare saved image candidates",
+  "ai.progress.tool.imageEditSavedLocal": "Revise saved image region",
+  "ai.progress.tool.imageEditSavedLocalPreview":
+    "Inspect saved image repair region",
+  "ai.progress.tool.imageRevisionView": "Inspect image revision",
+  "ai.error.image_revision_batch_upgrade_required":
+    "This task needs an upgrade to continue revising its saved images. Existing results are retained.",
+  "ai.error.image_revision_base_stale":
+    "The image has changed. Continue from its latest saved version.",
+  "ai.error.image_revision_local_unsupported":
+    "Saved-image revision supports the whole page; these local-edit parameters are not supported.",
+  "ai.error.image_revision_view_required":
+    "The assistant must inspect the original and current image before revising it.",
+  "ai.error.image_revision_input_invalid":
+    "The image revision parameters are invalid. The assistant must adjust them before retrying.",
+  "ai.error.image_content_rejected":
+    "The provider rejected the image request during content review. Existing images are preserved.",
+  "ai.progress.tool.imageEdit": "Edit image",
+  "aiAdmin.imageProfile": "Supported image model",
+  "aiAdmin.imageProfileChoose": "Choose a supported model",
+  "aiAdmin.imageProfileHelp":
+    "The selected model determines its adapter and capabilities.",
+  "aiAdmin.imageDeploymentId": "Model or deployment ID",
+  "aiAdmin.imageDeploymentHelp":
+    "Use the selected model ID, or the deployment ID or gateway alias that serves this model.",
+  "aiAdmin.imageSupportedOperations": "Supported operations: {operations}",
+  "aiAdmin.imageToolOverrides": "Choose separate models for each image tool",
+  "aiAdmin.imageUseDefault": "Use the default image model",
+  "aiAdmin.purposeImage": "Image generation and editing",
+  "aiAdmin.imageOperation.generate": "Text to image",
+  "aiAdmin.imageOperation.reference": "Reference image generation",
+  "aiAdmin.imageOperation.edit": "Image editing",
+  "ai.error.image_reference_file_large":
+    "A reference image file is empty or exceeds 10 MiB.",
+  "ai.error.image_profile_required":
+    "Select a supported image model in the adapter catalog before using this model.",
+  "ai.error.image_profile_invalid":
+    "The selected image model has no adapter for this provider connection.",
+  "ai.error.image_generate_references":
+    "Text-to-image generation does not accept reference images. Use reference generation or image editing.",
+  "ai.error.image_reference_limit":
+    "The selected image model accepts up to {count} reference images.",
+  "ai.error.image_mask_unsupported":
+    "The selected image model does not support native mask editing.",
+  "ai.error.image_operation_unsupported":
+    "The selected model adapter does not support this image operation.",
+  "ai.error.image_qwen_endpoint_invalid":
+    "The Qwen service URL must end with /compatible-mode/v1 or /api/v1.",
+  "ai.error.image_edit_api_missing":
+    "Ask an administrator to configure the image editing protocol explicitly. The API cannot be inferred from the model or provider name.",
+  "ai.error.image_edit_api_invalid":
+    "The Seedream JSON editing protocol can only be used with Seedream models.",
+  "ai.error.image_page_attempt_limit":
+    "This page has reached the configured paid-request limit. Keep the failure evidence and revise the approach before continuing; do not relax the acceptance criteria.",
+  "ai.error.image_reference_ignored":
+    "The image service explicitly reported using no reference images. The image-to-image result was rejected, and the failed candidate and actual usage were saved. Fix the API before continuing; do not switch to text-to-image or repeat paid requests.",
+  "ai.error.image_edit_preview_required":
+    "Preview the edit coverage before local editing and check that the entire target is covered. Changed outlines need a new preview. No image service request or charge has occurred yet.",
+  "ai.error.image_edit_preview_vision_required":
+    "Precise local editing requires a vision model that can inspect the edit coverage preview.",
+  "ai.error.image_session_unavailable":
+    "The reference image session does not exist or is not accessible.",
+  "ai.error.image_reference_duplicate": "Reference images cannot be repeated.",
+  "ai.error.image_reference_invalid_id":
+    "The reference image does not exist, was deleted, or does not belong to this conversation. Use session_attachments or attachment_read to find a valid ID; refreshing does not invalidate images.",
+  "ai.error.image_reference_unavailable":
+    "The reference image does not exist, was deleted, or does not belong to this conversation.",
+  "ai.error.image_reference_format":
+    "Reference images must be PNG, JPEG, or WebP.",
+  "ai.error.image_reference_changed":
+    "The reference image has changed. Please upload it again.",
+  "ai.error.image_reference_mismatch":
+    "The reference image format does not match its contents, or the image has multiple frames.",
+  "ai.error.image_reference_decode":
+    "The reference image could not be decoded, has an unsupported format, or has too high a resolution.",
+  "ai.error.image_protocol_unsupported":
+    "Image generation currently supports the OpenAI Images API and compatible services.",
+  "ai.error.image_size_invalid":
+    "The image dimensions are invalid or too large.",
+  "ai.error.image_seedream_size_small":
+    "This Seedream model does not support such a small image. Set the default dimensions to 2048x2048.",
+  "ai.error.image_empty_response":
+    "The image service returned an empty response.",
+  "ai.error.image_response_large": "The image response exceeds the size limit.",
+  "ai.error.image_response_invalid":
+    "The image service returned an invalid response.",
+  "ai.error.image_mflux_request_invalid":
+    "The local image model, input or endpoint configuration is invalid. Check the selected MFLUX model and its versioned service.",
+  "ai.error.image_base64_missing":
+    "The image service did not return a base64 image. Use an Images API that supports b64_json.",
+  "ai.error.image_connection_failed":
+    "Could not connect to the image model. Check the model ID, API endpoint, and provider key.",
+  "ai.error.image_size_conflict":
+    "Choose either an aspect ratio or image dimensions.",
+  "ai.error.image_model_missing":
+    "No image generation model is configured. Ask an administrator to select one in the AI model tool settings.",
+  "ai.error.image_read_only": "This authorisation only permits reading.",
+  "ai.error.image_references_invalid":
+    "Invalid reference images. Select up to 8 images.",
+  "ai.error.image_export_invalid":
+    "Exporting an original image requires exactly one reference image and does not permit edits.",
+  "ai.error.image_edit_original_missing":
+    "For a local edit, provide the original image as the first reference image.",
+  "ai.error.image_edit_regions_invalid": "The local edit contours are invalid.",
+  "ai.error.image_reference_crops_invalid":
+    "Invalid reference crops. Use valid bounds and actual reference IDs from image 2 onwards.",
+  "ai.error.image_seedream_size_invalid":
+    "This Seedream model does not support these dimensions. Omit size to use the default, or use 2048x2048.",
+  "ai.error.image_reference_size_unsupported":
+    "The source page exceeds this image model's supported dimensions or aspect ratio. Its aspect ratio and resolution cannot both be preserved. No image request has been made.",
+  "ai.error.image_recompose_aspect_mismatch":
+    "The full-page candidate has a different aspect ratio from the source. It cannot be stretched for free recomposition. The candidate and existing usage are retained; no new image was saved.",
+  "ai.error.image_destination_missing":
+    "Create a document or canvas for the image first.",
+  "ai.error.image_operation_conflict":
+    "The image operation ID conflicts with another request.",
+  "ai.error.image_save_failed_retry_blocked":
+    "The image was generated but could not be saved. Ask an administrator to check storage; do not generate it again.",
+  "ai.error.image_request_already_executed":
+    "This image request has already run or its result needs checking. Do not generate it again. Check the task record before making a new request.",
+  "ai.error.image_generated_unavailable":
+    "The generated image is no longer available.",
+  "ai.error.image_format_unsupported": "The image format is not supported.",
+  "ai.error.image_generated_decode":
+    "The generated image could not be decoded or has too high a resolution.",
+  "ai.error.image_file_large": "The generated image file is too large.",
+  "ai.error.image_save_failed":
+    "The image model returned a result, but the image could not be saved. Usage was recorded. Ask an administrator to check storage and the database.",
+  "ai.error.image_result_uncertain":
+    "Image generation did not complete. The result and charges need checking. Check the task record later.",
+  "ai.error.model_config_changed":
+    "The model configuration has changed. Start the task again.",
+  "ai.error.model_context_large":
+    "The context is too long. Reduce the references or start a new conversation.",
+  "ai.error.model_not_enabled":
+    "The selected model is disabled or has not been configured.",
+  "ai.error.model_inference_not_enabled":
+    "The selected inference model is disabled or has not been configured.",
+  "ai.error.image_model_not_enabled":
+    "The image generation model is not configured or is disabled.",
+  "ai.error.model_embedding_chat":
+    "Embedding models cannot be used for chat or agent calls.",
+  "ai.error.model_azure_deployment":
+    "For Azure, enter the deployment name shown in the console.",
+  "ai.error.model_list_unavailable":
+    "The provider did not supply a usable model list. Enter the model ID manually.",
+  "ai.error.model_list_failed":
+    "Could not read the model list. Check the configuration or enter the model ID manually.",
+  "ai.error.image_auth_failed":
+    "Image model authentication failed. Check the provider key.",
+  "ai.error.image_request_failed":
+    "The image model request failed. Check the model ID, API endpoint, and supported dimensions.",
+  "ai.error.image_request_failed_http":
+    "The image model request failed (HTTP {status}). Check the model ID, API endpoint, and supported dimensions.",
+  "ai.error.image_edit_failed":
+    "The image-to-image request failed (HTTP {status}). Check reference image support, the API endpoint, and supported dimensions. It will not automatically switch to text-to-image.",
+  "ai.error.image_duplicate_save_failed":
+    "The same image request generated a result but could not save it. Do not submit it again. Ask an administrator to check storage.",
+  "ai.error.image_duplicate_pending":
+    "The same image request is running or its result needs checking. Do not submit it again. Check the existing result first.",
+  "ai.error.image_generation_failed":
+    "Image generation failed. Please try again.",
+  "ai.error.ai_workflow_failed":
+    "The AI workflow failed because the model response format or tool call is incompatible. Check the model configuration.",
+  "ai.error.ai_workflow_incomplete":
+    "The AI workflow did not complete. Check the model configuration and try again.",
+  "ai.error.ai_workflow_connection_interrupted":
+    "The model connection was interrupted. Saved work is retained; retry to continue.",
+  "ai.error.image_review_reinspection_loop":
+    "Image review stopped after repeated requests without fresh visual evidence. Saved images and recorded usage are preserved.",
+  "ai.error.image_review_result_invalid":
+    "The image verifier returned an incomplete or invalid result. Saved images and recorded usage are preserved.",
+  "ai.error.image_candidate_region_invalid":
+    "The candidate region or verification points are invalid. Use full source-page coordinates and keep every point inside the region.",
+  "ai.error.image_mask_segment_inspection_required":
+    "View every segmentation proposal referenced by this mask before continuing.",
+  "ai.error.image_mask_proposal_binding_mismatch":
+    "A segmentation proposal has the wrong source or selection role for this mask. Correct it before continuing.",
+  "ai.error.ai_worker_interrupted":
+    "The service was interrupted. Saved operations are preserved. Continue the conversation and check the results before taking further action.",
+  "ai.error.ai_task_stopped":
+    "The task was stopped. Saved content is preserved. Check the results before trying again.",
+  "ai.error.ai_task_interrupted":
+    "The task was interrupted. Saved content is preserved. Check the results before trying again.",
+  "ai.error.ai_task_failed":
+    "The AI task did not complete. Saved operations are preserved. Check the model and document status.",
+  "ai.error.ai_worker_failed":
+    "The background AI workflow encountered an error.",
+  "ai.error.model_auth_failed":
+    "Model authentication failed (401). Check whether the provider key is correct and still valid.",
+  "ai.error.model_balance_insufficient":
+    "The model provider account has insufficient funds (402). Top up the account on the provider platform.",
+  "ai.error.model_access_denied":
+    "The provider denied access (403). Check the key permissions and model availability.",
+  "ai.error.model_not_found":
+    "The model or API endpoint was not found (404). Check the provider URL and model ID.",
+  "ai.error.model_rate_limited":
+    "The model provider rate limit or quota was exceeded (429). Try again later or check the provider quota.",
+  "ai.error.model_payload_large":
+    "The model request exceeds the provider capacity (413). Read pages in smaller batches or reduce image preview sizes. Original attachments are preserved; no re-upload is needed.",
+  "ai.error.model_output_limit":
+    "The output limit exceeds the provider limit of {maximum} tokens per request. Adjust it in model settings.",
+  "ai.error.model_output_parameters":
+    "The output limit does not meet provider requirements. Check the output parameters in model settings.",
+  "ai.error.model_tool_parameters":
+    "The model does not support these tool call parameters. Check tool calling capabilities and reasoning settings.",
+  "ai.error.model_request_rejected":
+    "The provider rejected the request ({status}). Check the model ID and supported parameters.",
+  "ai.error.model_provider_unavailable":
+    "The model provider service is temporarily unavailable ({status}). Try again later.",
+  "ai.error.model_timeout":
+    "The model connection timed out. Check the network or try again later.",
+  "ai.error.model_response_not_json":
+    "The provider returned a non-JSON response. Check the API URL and protocol type.",
+  "ai.error.model_connection_failed":
+    "Could not connect to the model. Check the network, provider URL, and service status.",
+  "ai.error.unknown":
+    "The operation failed. Try again or contact an administrator.",
+  "ai.error.with_detail": "{message}: {detail}",
   "storage.environmentTitle": "File storage",
-  "storage.environmentHelp": "File storage is managed by deployment environment variables. Restart the service after changing configuration.",
+  "storage.environmentHelp":
+    "File storage is managed by deployment environment variables. Restart the service after changing configuration.",
   "storage.storeId": "Store ID",
   "storage.provider": "Provider",
   "storage.bucket": "Bucket",
@@ -13,7 +534,8 @@ export const en = {
   "editor.element.invalid": "Invalid element data",
   "editor.element.failed": "Element could not be displayed",
   "editor.element.empty": "No element providers installed",
-  "editor.element.cellReplacement": "This replaces the selected cell's contents.",
+  "editor.element.cellReplacement":
+    "This replaces the selected cell's contents.",
   "editor.element.singleCell": "Select one cell to insert or edit an element.",
   "resources.back": "Back to resources",
   "resources.templates": "Templates",
@@ -48,7 +570,8 @@ export const en = {
   "resources.retrieval.unsupported": "This search mode is unsupported",
   "resources.retrieval.failed": "Search is temporarily unavailable",
   "resources.retrieval.timeout": "Search timed out",
-  "resources.retrievalLimit": "Showing a selection of relevant results. Refine the query or select sources.",
+  "resources.retrievalLimit":
+    "Showing a selection of relevant results. Refine the query or select sources.",
   "resources.source": "Source",
   "resources.allSources": "All sources",
   "resources.sort": "Sort",
@@ -60,7 +583,8 @@ export const en = {
   "resources.partial": "Some sources are unavailable. Results are incomplete.",
   "resources.blank": "Blank document",
   "resources.blankHelp": "Start with an empty document",
-  "resources.empty": "No matching resources. Providers are supplied by plugins.",
+  "resources.empty":
+    "No matching resources. Providers are supplied by plugins.",
   "resources.loading": "Loading…",
   "resources.more": "Load more",
   "resources.parameters": "Template parameters (JSON)",
@@ -75,7 +599,8 @@ export const en = {
   "personPicker.reselect": "Choose another collaborator",
   "personPicker.label": "Find people",
   "personPicker.shortPlaceholder": "Search username or display name",
-  "personPicker.placeholder": "Enter at least 2 characters or a full account name",
+  "personPicker.placeholder":
+    "Enter at least 2 characters or a full account name",
   "personPicker.find": "Find",
   "content.chooseValue": "Choose a value",
   "content.enabled": "Enabled",
@@ -84,16 +609,20 @@ export const en = {
   "content.configUnsupported": "Configure this source from its plugin page.",
   "content.connecting": "Connecting…",
 
-  "content.searchUnavailable": "Some plugin sources are unavailable. Please try again.",
+  "content.searchUnavailable":
+    "Some plugin sources are unavailable. Please try again.",
   "content.unavailable": "This content is no longer accessible",
 
-  "plugins.confirmOperation": "Confirm {action} for “{name}”? Changes take effect after restart.",
+  "plugins.confirmOperation":
+    "Confirm {action} for “{name}”? Changes take effect after restart.",
   "plugins.historyUnidentified": "Operations without an identified plugin",
   "plugins.history": "Operation history",
   "plugins.historyEmpty": "No operations yet",
   "plugins.historyFailed": "Could not load operation history. Try again.",
-  "plugins.elapsed": "In progress · {seconds}s elapsed. Do not repeat the operation.",
-  "plugins.completed": "Completed. Changes are saved and will take effect after restart.",
+  "plugins.elapsed":
+    "In progress · {seconds}s elapsed. Do not repeat the operation.",
+  "plugins.completed":
+    "Completed. Changes are saved and will take effect after restart.",
   "plugins.requested": "Started",
   "plugins.staged": "Completed · restart required",
   "plugins.failed": "Failed",
@@ -119,17 +648,21 @@ export const en = {
     "Configure the store with DOCA_PLUGIN_STORE_URL in .env, then restart the service.",
   "navigation.platformHome": "Platform and default home",
   "navigation.searchEntries": "Search navigation entries",
-  "navigation.entriesHelp": "Select where each entry appears, then expand its settings to change labels, order, and groups. Drafts do not affect users until published.",
+  "navigation.entriesHelp":
+    "Select where each entry appears, then expand its settings to change labels, order, and groups. Drafts do not affect users until published.",
   "navigation.details": "Detailed settings",
   "navigation.expanded": "Expanded by default",
-  "navigation.previewHelp": "Preview this rule. Actual visibility still depends on user permissions; More provides a fallback for plugins without a placement.",
+  "navigation.previewHelp":
+    "Preview this rule. Actual visibility still depends on user permissions; More provides a fallback for plugins without a placement.",
   "navigation.webUser": "Web user navigation",
   "navigation.appUser": "App user navigation",
   "navigation.webAdmin": "Web admin navigation",
   "navigation.pluginEntry": "Plugin entry",
-  "navigation.globalHelp": "One global layout with separate Web user, App user, and Web admin navigation. Save a draft, then publish to apply it.",
+  "navigation.globalHelp":
+    "One global layout with separate Web user, App user, and Web admin navigation. Save a draft, then publish to apply it.",
   "navigation.title": "Navigation",
-  "navigation.help": "Built-in features and plugins share layouts. Hiding entries does not change access permissions. The highest-priority matching rule applies.",
+  "navigation.help":
+    "Built-in features and plugins share layouts. Hiding entries does not change access permissions. The highest-priority matching rule applies.",
   "navigation.save": "Save draft",
   "navigation.publish": "Publish layout",
   "navigation.reset": "Restore defaults",
@@ -145,10 +678,12 @@ export const en = {
   "navigation.more": "More",
   "navigation.unavailable": "This feature is unavailable",
   "navigation.openFailed": "Unable to open page. Try again.",
-  "plugins.contentUnsupported": "Some content is unsupported. Visit the store for full details.",
+  "plugins.contentUnsupported":
+    "Some content is unsupported. Visit the store for full details.",
   "plugins.npmInstall": "Install from npm",
   "plugins.packageName": "npm package",
-  "plugins.unreviewed": "This source has not been reviewed by the official store. Plugin code runs on your server.",
+  "plugins.unreviewed":
+    "This source has not been reviewed by the official store. Plugin code runs on your server.",
   "plugins.sort": "Sort",
   "plugins.platform": "Platform",
   "plugins.allPlatforms": "All platforms",
@@ -161,9 +696,11 @@ export const en = {
   "plugins.likes": "{count} likes",
   "plugins.details": "Details",
   "plugins.loadMore": "Load more",
-  "plugins.likeExternal": "Open the remote store in a new page to sign in and like this plugin?",
+  "plugins.likeExternal":
+    "Open the remote store in a new page to sign in and like this plugin?",
   "plugins.visitStore": "Like on store",
-  "plugins.switchSource": "Switch this plugin’s installation source to the official store?",
+  "plugins.switchSource":
+    "Switch this plugin’s installation source to the official store?",
   "navigation.slot.web.left": "Left navigation",
   "navigation.slot.web.top": "Top navigation",
   "navigation.slot.web.topRight": "Header actions",
@@ -199,7 +736,8 @@ export const en = {
   "plugins.store": "Official store",
   "plugins.upload": "Upload local plugin",
   "plugins.uploadLimit": "Plugin ZIP must not exceed 32 MiB.",
-  "plugins.categoriesFailed": "Categories could not be loaded. Refresh the page to retry.",
+  "plugins.categoriesFailed":
+    "Categories could not be loaded. Refresh the page to retry.",
   "plugins.loading": "Loading…",
   "plugins.empty":
     "No plugins installed. Browse the store or upload a local ZIP.",
@@ -250,7 +788,8 @@ export const en = {
   "workspace.welcome": "Pick up where you left off.",
   "workspace.refresh": "Refresh",
   "workspace.pending": "Needs my attention",
-  "workspace.recentUnavailable": "Some recent activity sources are unavailable. Refresh to retry.",
+  "workspace.recentUnavailable":
+    "Some recent activity sources are unavailable. Refresh to retry.",
   "workspace.noRecent": "Resources you open will appear here.",
   "workspace.aiHint":
     "Find information, organize ideas, and move your work forward with AI.",
@@ -262,7 +801,7 @@ export const en = {
   "workspace.publicHelp":
     "Revisit public resources, discover new ones, and manage your collections.",
   "workspace.browsed": "Visited",
-  "workspace.myAssistants": "My assistants",
+
   "workspace.favorite": "Favorite",
   "workspace.unfavorite": "Unfavorite",
   "workspace.sharedByMe": "Shared by me",
@@ -270,7 +809,7 @@ export const en = {
   "workspace.collectedFolders": "Collected folders",
   "workspace.kind.document": "Documents",
   "workspace.kind.library": "Libraries",
-  "workspace.kind.assistant": "Knowledge assistants",
+
   "workspace.kind.folder": "Folders",
   "workspace.kind.file": "Files",
 
@@ -288,7 +827,7 @@ export const en = {
   "curator.upload": "Upload files",
   "curator.reference": "Reference documents or libraries",
   "curator.uploadHint":
-    "Files are stored in a folder you can edit and registered as sources. This does not grant other administrators access to the original folder.",
+    "Files are saved in this library’s assistant folder, grouped by conversation, and registered as sources. Library managers can access them.",
   "curator.destination": "Destination",
   "curator.newFolder": "Create a personal folder",
   "curator.todos": "Human tasks",
@@ -301,15 +840,7 @@ export const en = {
   "curator.decision": "Your decision or comments",
   "curator.submitDecision": "Submit to assistant",
   "curator.dismiss": "Dismiss",
-  "curator.feedbackHint":
-    "Review feedback associated with this library and start a curation conversation to improve it.",
-  "curator.analyzeFeedback": "Analyze and improve",
-  "curator.feedbackSchedule": "Feedback analysis schedule",
-  "curator.snapshotHint":
-    "This is the conversation snapshot captured with the feedback. The reviewed answer is highlighted.",
-  "curator.question": "Question",
-  "curator.answer": "Answer",
-  "curator.feedbackTarget": "Reviewed answer",
+
   "curator.addedSource":
     "Source “{name}” has been added. Please use it in the curation.",
   "curator.enabled": "Enabled",
@@ -347,7 +878,7 @@ export const en = {
   "discovery.mode.search": "Discoverable and searchable site-wide",
   "discovery.kind.document": "Documents",
   "discovery.kind.library": "Libraries",
-  "discovery.kind.assistant": "Q&A",
+
   "discovery.kind.folder": "Folders",
   "discovery.inherited": "Reading access is managed by the public library.",
   "discovery.containerSettings": "Open library settings",
@@ -358,67 +889,6 @@ export const en = {
     "Publishing grants reading access to all existing and future pages. Page settings continue to manage editing and management access.",
   "discovery.policyManaged":
     "Discovery of public resources is configured by the administrator for each resource type.",
-
-  "bot.guest": "Guest",
-  "bot.loginAttachments": "Sign in to include attachments in your questions.",
-
-  "bot.newName": "New Q&A bot",
-  "bot.listHint": "Choose a bot to chat with, or create a new one.",
-  "bot.create": "Create knowledge Q&A bot",
-  "bot.creator": "Created by {name}",
-  "bot.libraryCount": "{count} connected libraries",
-  "bot.openManage": "Open chat and management",
-  "bot.open": "Open chat",
-  "bot.noAccess": "Connected here; chat access is not granted",
-  "bot.emptyList": "No Q&A bots yet",
-  "bot.back": "Back to bots",
-  "bot.manage": "Manage bot",
-  "bot.invited": "You are invited to this bot",
-  "bot.accept": "Accept and chat",
-  "bot.noActiveLibraries": "No available libraries",
-  "bot.noLibraries": "No libraries connected",
-  "bot.revokedHint":
-    "Some libraries are excluded because the creator lost management access. Restore access or update connections.",
-  "bot.bindHint": "Connect a library in management to start chatting.",
-  "bot.webDisabled": "Web chat is disabled",
-  "bot.chooseLibraries": "Search and select libraries",
-  "bot.unavailableLibrary": "Unavailable library · {id}",
-  "bot.attachments": "Allow attachments",
-  "bot.attachmentsHint":
-    "Up to 8 files and 25 MB per message. Attachments provide chat context and are not added to libraries.",
-  "bot.model": "Answer model",
-  "bot.modelHint":
-    "Used only by this bot. Leave it empty to use the site default, which can be changed in AI settings.",
-  "bot.defaultModel": "Use the site default model",
-  "bot.channels": "Enabled channels",
-  "bot.channel.web": "Web chat",
-  "bot.channel.embed": "Embedded page",
-  "bot.channel.api": "Streaming API",
-  "bot.channel.mcp": "MCP",
-  "bot.keys": "Access keys and endpoints",
-  "bot.keyHint":
-    "Save enabled channels first. Keys are scoped to this bot, expire after 90 days, and can be revoked.",
-  "bot.keyName": "Key name, e.g. website support",
-  "bot.createKey": "Generate key",
-  "bot.keyOnce": "This key is shown only once. Save it securely.",
-  "bot.copied": "Copied",
-  "bot.copy": "Copy",
-  "bot.copyLink": "Copy link",
-  "bot.revokeKey": "Revoke key",
-  "bot.visibility": "Access scope",
-  "bot.private": "Invited members only",
-  "bot.authenticated": "Signed-in users",
-  "bot.public": "Public access",
-  "bot.shareHint":
-    "Links respect access scope. Members can chat; managers can change settings and permissions.",
-  "bot.roleReader": "Can chat",
-  "bot.roleManager": "Can manage",
-  "bot.upload": "Add attachments",
-  "bot.uploading": "Uploading…",
-  "knowledge.loading": "Loading…",
-  "knowledge.botName": "Bot name",
-  "knowledge.botLibraries": "Connected libraries",
-  "knowledge.botEnabled": "Enable bot",
 
   "studio.automationSettings": "Curation settings",
   "studio.sourceScope": "Allowed sources",
@@ -459,8 +929,7 @@ export const en = {
   "studio.tool.overview": "Update overview",
   "studio.tool.work_plan": "Update task checklist",
 
-  "studio.tool.test_feedback": "Retest feedback case",
-  "studio.failedAnswer": "This answer was interrupted. Please try again.",
+  "studio.failedAnswer": "Curation was interrupted. Please retry.",
   "studio.manualSourceChange": "Administrator changed source status",
   "studio.resumeSource": "Resume",
   "studio.pauseSource": "Pause",
@@ -469,33 +938,24 @@ export const en = {
   "studio.setPriority": "Set priority",
   "studio.editSourceGuide": "Help me edit the curation rules for this source: ",
   "studio.editGuide": "Edit guide",
-  "studio.regressionPassed": "Retest passed (AI-assisted assessment)",
-  "studio.regressionFailed": "Retest found issues",
+
   "studio.toolFailed": "Needs attention",
   "studio.writtenCharacters": "Wrote {count} characters",
   "studio.inspectedDocuments": "Inspected {count} documents",
   "studio.auditDetails": "Full operation record",
-  "studio.integrations": "Integrations and embedding",
-  "studio.integrationHint":
-    "Pages, embeds, API and MCP share the same knowledge scope. Embedded pages require a signed-in session and an allowed embedding origin. MCP credentials must authorize the bot's libraries.",
-  "studio.embedPage": "Open answer-only page",
-  "studio.qaGuide":
-    "Create an answer bot for this library or connect it to an existing bot. One bot can use multiple libraries.",
-  "studio.manageBots": "Create or manage answer bots",
-  "home.knowledgeBotsHint": "Create and use bots grounded in your libraries",
+
   "studio.settingsTab": "Settings",
   "studio.curator": "Knowledge curator",
-  "studio.answer": "Knowledge answers",
+
   "studio.sharedHint":
     "Shared conversations and instructions for library administrators",
-  "studio.answerHint":
-    "Grounded answers · Independent conversations · No personal memory",
+
   "assistant.memory.personalOn": "Personal memory on",
   "assistant.memory.personalOff": "Personal memory off",
   "assistant.memory.thread": "This conversation only",
   "assistant.memory.crossSession": "Cross-conversation long-term memory",
   "assistant.memory.library": "Shared library context",
-  "studio.bots": "Answer bots",
+
   "studio.new": "New conversation",
   "studio.schedule": "Scheduled task",
   "studio.system": "System trigger",
@@ -504,7 +964,7 @@ export const en = {
   "studio.running": "Working",
   "studio.done": "Executed",
   "studio.thinking": "Preparing an answer…",
-  "studio.withdrawn": "The answer scope has changed. Please ask again.",
+
   "studio.welcomeCurate": "Turn materials into useful knowledge",
   "studio.welcomeAnswer": "Start with a question",
   "studio.sharedSources":
@@ -515,8 +975,7 @@ export const en = {
     "Review coverage and improve topics while preserving human edits",
   "studio.suggestSources":
     "Evaluate sources and recommend reliable materials for missing topics",
-  "studio.suggestFeedback":
-    "Analyze answer feedback, classify causes and propose improvements",
+
   "studio.suggestOverview": "What topics does this knowledge base cover?",
   "studio.suggestTroubleshoot":
     "How can I troubleshoot a problem step by step?",
@@ -524,25 +983,18 @@ export const en = {
   "studio.addInstruction": "Add instructions for the next execution step…",
   "studio.curatePlaceholder":
     "Describe your goal, paste a source link, or explain what to improve…",
-  "studio.answerPlaceholder": "Ask a question or follow up…",
+
   "studio.send": "Send",
   "studio.auditHint":
     "Enter to send, Shift + Enter for a new line. Author and trigger are recorded for traceability.",
-  "studio.feedbackHint":
-    "Feedback does not interrupt your conversation. Relevant excerpts are shared with administrators for improvement.",
-  "studio.useful": "Helpful",
-  "studio.unhelpful": "Not helpful",
-  "studio.feedbackSaved": "Thanks for your feedback. Recorded.",
-  "studio.citations": "View {count} supporting passages",
-  "studio.publication": "Answer publication",
+
   "studio.automatic": "Automatically after saving",
   "studio.manual": "Publish manually",
   "studio.pending": "Changes awaiting synchronization",
-  "studio.current": "Current answer release v{version}",
-  "studio.publish": "Publish changes",
+
   "studio.documents": "Documents",
   "studio.sources": "Sources",
-  "studio.feedback": "Feedback",
+
   "studio.editDocument": "Edit document",
   "studio.reviewDraft": "Review proposed changes",
   "studio.adopt": "Accept this version",
@@ -556,7 +1008,7 @@ export const en = {
   "studio.ignore": "Do not recommend",
   "studio.ignoredManually": "Ignored by an administrator",
   "studio.analyzeFeedback": "Start improvement review",
-  "studio.noFeedback": "No feedback yet. Users can rate each answer.",
+
   "studio.advanced": "Instructions and advanced settings",
   "studio.tool.inspect": "Inspect library",
   "studio.tool.read_document": "Read document",
@@ -568,8 +1020,7 @@ export const en = {
   "studio.tool.draft": "Draft document",
   "studio.tool.review": "Review changes",
   "studio.tool.curate": "Curate materials",
-  "studio.tool.feedback": "Read feedback",
-  "studio.tool.classify_feedback": "Classify feedback",
+
   "studio.action.recommend": "Recommended source",
   "studio.action.ignore": "Ignored",
   "studio.action.restore": "Restored",
@@ -634,33 +1085,21 @@ export const en = {
   "knowledge.linkFollow": "Follow source permissions",
   "knowledge.linkClosed": "Hide link",
   "knowledge.linkAccessHint":
-    "Controls source links only, without affecting knowledge answers. Following permissions limits URL visibility to its creator; use this for links with personal tokens.",
-  "knowledge.connections": "Knowledge Q&A connections",
-  "knowledge.connectionsHint":
-    "The AI assistant searches connected bots. Defaults follow sharing policies; public bots requiring prior interaction are not automatically connected before a visit. Connections do not grant document or source access.",
-  "knowledge.connectionActive": "Connected",
-  "knowledge.connectionInactive": "Not connected",
-  "knowledge.acceptInvitation": "Accept invitation",
-  "knowledge.connectionDefault": "Follow sharing policies",
-  "knowledge.connectionEnabled": "Connect this bot",
-  "knowledge.connectionDisabled": "Do not connect",
-  "knowledge.botVisibility": "Q&A access",
-  "knowledge.botPrivate": "Invited members",
-  "knowledge.botAuthenticated": "Signed-in users",
-  "knowledge.botPublic": "Public",
+    "Controls source link visibility only. Following permissions limits URL visibility to its creator; use this for links with personal tokens.",
+
   "knowledge.maxDepth": "Maximum depth (including documents)",
   "knowledge.autoWeighted":
     "Automatically apply revisions resolved by explicit weights",
   "knowledge.autoWeightedHint":
     "AI must quote a Markdown rule and report both weights. Only higher-weight revisions may apply automatically. Uncertain conflicts still require review; when off, every revision requires review.",
   "knowledge.conflictPending":
-    "Pending decision: answers still use the current version.",
+    "Pending decision: the proposed revision has not replaced current knowledge.",
   "knowledge.currentVersion": "Current version",
   "knowledge.proposedVersion": "Proposed revision",
   "knowledge.humanSources": "Human amendments ({count} independent records)",
   "knowledge.entryPath": "Directory",
   "knowledge.entryPathHint": "Example: Technology / Recursive resolution",
-  "knowledge.botPermalink": "Link to this Q&A bot",
+
   "knowledge.assistantWelcome": "Build this knowledge base together",
   "knowledge.assistantHelp":
     "Discover sources, write instructions, curate knowledge and resolve conflicts.",
@@ -670,12 +1109,12 @@ export const en = {
   "knowledge.assistantReview": "Review curation and conflicts",
   "knowledge.assistantReviewPrompt":
     "Check curation progress, human amendments and pending conflicts in this library, and show the specific decisions needed.",
-  "knowledge.toolAssistantSearch": "Searching connected knowledge bots",
+
   "knowledge.toolInstructions": "Maintaining curation instructions",
   "knowledge.toolSettings": "Configuring knowledge base",
   "knowledge.toolSubscribe": "Subscribing to knowledge sources",
   "knowledge.toolCurate": "Curating knowledge",
-  "knowledge.toolAssistant": "Configuring Q&A bots",
+
   "knowledge.toolEntry": "Editing knowledge drafts",
   "knowledge.toolReview": "Reviewing knowledge",
   "knowledge.sourceSafety": "Source safety boundaries",
@@ -700,7 +1139,7 @@ export const en = {
   "knowledge.addGuide": "Add guide",
   "knowledge.runtime": "Model and safety settings",
   "knowledge.safetyHint":
-    "Excluded text is replaced before model input and in answers. Contact filtering detects common email and phone formats only; use pre-sanitized sources for complex sensitive data.",
+    "Excluded text is replaced before source material enters the model. Contact filtering detects common email and phone formats only; use pre-sanitized sources for complex sensitive data.",
   "knowledge.model": "Curation model",
   "knowledge.defaultModel": "Use the default model",
   "knowledge.redactContacts": "Filter common email and phone formats",
@@ -742,23 +1181,16 @@ export const en = {
   "knowledge.manageOnly": "Library managers maintain instructions and drafts.",
   "knowledge.skipped":
     "{count} sources were not read. Check their status or narrow the scope.",
-  "knowledge.assistants": "Knowledge assistants",
-  "knowledge.assistantsHint":
-    "Independent assistants search published knowledge across libraries. Access does not grant permission to open full documents or sources.",
+
   "knowledge.disabled": "Disabled",
-  "knowledge.createBot": "Create assistant",
-  "knowledge.configureBot": "Configure assistant",
-  "knowledge.botsEmpty":
-    "No assistants available. Library managers can create one and invite members.",
+
   "knowledge.boundLibraries": "Choose libraries",
-  "knowledge.botMembers": "Who can use it",
-  "knowledge.botMembersHint":
-    "The creator has access. Added members may search published knowledge in the selected libraries.",
+
   "knowledge.memberNumber": "Authorized member {index}",
   "knowledge.removeMember": "Remove member",
-  "knowledge.enableBot": "Enable assistant",
+
   "knowledge.questionPlaceholder": "For example: When does this process apply?",
-  "knowledge.answering": "Finding knowledge…",
+
   "knowledge.noEvidence":
     "No matching published knowledge. Try another keyword or ask a manager to add it.",
   "knowledge.evidence": "Knowledge evidence",
@@ -899,6 +1331,11 @@ export const en = {
   "fileManager.aiFolderHelp":
     "Browse generated and uploaded files by conversation",
   "fileManager.documentsHelp": "Browse attachments in documents you can access",
+
+  "fileManager.knowledgeAssistantFiles": "Assistant files",
+
+  "fileManager.sessionFolderReadOnly":
+    "Archived conversation folders are read-only",
   "fileManager.mailSystem": "Mail",
   "fileManager.mailHelp": "Browse mail attachments",
   "fileManager.viewMode": "View mode",
@@ -998,13 +1435,42 @@ export const en = {
   "fileManager.copyHere": "Copy here",
   "fileManager.moveHere": "Move here",
   "fileManager.addFile": "Add file",
-  "fileManager.chooseDocaFiles": "Choose files from Doca folders",
+  "fileManager.selectFilesOrFolder":
+    "Choose a folder, or select multiple files.",
+  "chat.draftSaveFailed":
+    "The draft could not be saved in this browser. Check storage space and browser settings.",
+  "chat.draftReadFailed":
+    "This draft has an invalid format. Its stored record has been preserved.",
+  "aiUpload.title": "Upload limits",
+  "aiUpload.help":
+    "Set attachment and folder count, individual file size and total size. Zero means unlimited; user overrides take precedence.",
+  "aiUpload.scope": "Applies to",
+  "aiUpload.global": "Global",
+  "aiUpload.inherit": "Use global settings",
+  "aiUpload.maxFiles": "File count",
+  "aiUpload.maxFileBytes": "Individual file size",
+  "aiUpload.maxTotalBytes": "Total attachment or folder size",
+  "aiUpload.unlimited": "Unlimited",
+  "aiUpload.files": "files",
+  "aiUpload.unlimitAll": "Set all to unlimited",
+  "aiUpload.error.count": "The file count exceeds your upload limit.",
+  "aiUpload.error.fileSize":
+    "A file exceeds your individual upload size limit.",
+  "aiUpload.error.totalSize": "The total file size exceeds your upload limit.",
+  "aiUpload.error.empty": "Select a nonempty file.",
+  "aiUpload.error.duplicate": "An attachment was selected more than once.",
+  "aiUpload.error.format": "This file format is not supported.",
+  "aiUpload.error.changed":
+    "The upload settings changed. Refresh before saving.",
+  "aiUpload.error.userMissing": "The selected user no longer exists.",
+  "fileManager.selectedCount": "{count} files selected",
+  "fileManager.chooseDocaFiles": "Doca files",
   "fileManager.browseHelp":
     "Browse My folders, shared folders, and system files",
   "fileManager.chooseAiFolder": "Choose a folder for AI",
   "fileManager.aiFolderScope":
     "Use the entire folder as the target for this task",
-  "fileManager.uploadLocal": "Upload local files",
+  "fileManager.uploadLocal": "Local upload",
   "fileManager.uploadLocalHelp": "Select files or images from this device",
   "fileManager.uploadFolder": "Upload a local folder",
   "fileManager.uploadFolderHelp":
@@ -1157,9 +1623,9 @@ export const en = {
   "accountPolicy.notConfigured": "Not configured",
   "chat.folderLabel": "Folder ·",
   "chat.openResult": "Open {kind}: {title}",
-  "chat.answerSources": "Q&A sources",
-  "chat.selectAllAnswers": "Select all Q&A assistants",
+
   "chat.operatedResources": "Resources used",
+  "chat.sessionFiles": "Current conversation folder",
   "chat.relatedCount": "Related documents: {count}",
   "chat.selectedCount": "Selected: {count}",
   "chat.selectSession": "Select conversation {name}",
@@ -1201,10 +1667,10 @@ export const en = {
   "chat.writing": "AI writing assistant",
   "chat.referenceLimit": "You can reference up to 20 items per message",
   "chat.attachmentLimit":
-    "Each message allows up to 8 attachments, totaling no more than 25 MB",
+    "The upload exceeds the current count or size limit. Adjust it in AI administration > Upload limits.",
   "chat.uploadFailed": "Upload failed. Remove the attachment and try again.",
   "chat.folderTooLarge":
-    "This folder is too large. Upload it to Doca folders first, then select it.",
+    "This folder exceeds the current upload count or size limit. Adjust it in AI administration > Upload limits.",
   "chat.folderUnavailable":
     "The folder was uploaded but is not available for selection",
   "chat.accessChanged":
@@ -1237,6 +1703,12 @@ export const en = {
   "chat.requirementsNeeded": "More requirements needed",
   "chat.correctionsNeeded": "Corrections needed",
   "chat.imageSaved": "Generated image saved as an asset",
+  "chat.imageAwaitingValidation":
+    "Intermediate result · Awaiting quality review",
+  "chat.imageValidationFailed": "Intermediate result · Quality review failed",
+  "chat.imageValidationPassed": "AI quality review passed",
+  "chat.imageValidationUnrecorded":
+    "Generated result · No quality review recorded",
   "chat.imageSaveFailed": "Image generated, but could not be saved",
   "chat.imageReview": "Image result awaiting review",
   "chat.documentSaved": "Document changes saved",
@@ -1263,7 +1735,8 @@ export const en = {
   "ai.progress.phase.usingTool": "Using a tool",
   "ai.progress.phase.reviewing": "Reviewing saved work",
   "ai.progress.phase.completed": "Completed",
-  "ai.progress.event.richTextFallback": "Normalized the generated rich-text content",
+  "ai.progress.event.richTextFallback":
+    "Normalized the generated rich-text content",
   "ai.progress.event.checkpointResumed":
     "Resumed from a checkpoint and checking saved work",
   "ai.progress.event.retryResumed":
@@ -1298,6 +1771,15 @@ export const en = {
   "ai.progress.tool.taskPlan": "Plan deliverables",
   "ai.progress.tool.loadSkill": "Load creation guidance",
   "ai.progress.tool.imageGenerate": "Generate image",
+  "ai.progress.tool.imageExport": "Export original image",
+  "ai.progress.tool.imageView": "Inspect reference images",
+  "ai.progress.tool.imageCandidateRegionView":
+    "Inspect candidate region pixels",
+  "ai.progress.tool.imageEditPreview": "Preview edit coverage",
+  "ai.progress.tool.imageMaskPrepare": "Check edit boundaries",
+  "ai.progress.tool.imageMaskSegment": "Propose image selection",
+  "ai.progress.tool.imageMaskCompose": "Save repaired image",
+  "ai.progress.tool.imageBatch": "Track image delivery batches",
   "ai.progress.tool.imageShow": "Show generated image",
   "ai.progress.tool.askUser": "Ask for a choice",
   "ai.progress.tool.imageInsert": "Insert image into document",
@@ -1357,10 +1839,7 @@ export const en = {
   "ai.approval.knowledgeCurate.title": "Curate this library",
   "ai.approval.knowledgeCurate.detail":
     "Read subscribed material and use the model to create drafts for review.",
-  "ai.approval.knowledgeAssistant.title":
-    "Configure knowledge assistant “{title}”",
-  "ai.approval.knowledgeAssistant.detail":
-    "Update its connected libraries and allowed members.",
+
   "ai.approval.knowledgeWrite.title": "Save knowledge draft “{title}”",
   "ai.approval.knowledgeWrite.detail":
     "Save this authored or revised knowledge entry as a draft for review.",
@@ -1445,12 +1924,16 @@ export const en = {
   "chat.sessionName": "Conversation name",
   "chat.nameRequired": "Enter a conversation name",
   "chat.deleteConfirm": "Delete this conversation?",
-  "chat.deleteHelp": "Deletes message history. Your preferences are kept.",
+  "fileManager.invalidSessionBinding": "Invalid AI file conversation binding",
+  "fileManager.invalidSessionFolder": "Invalid conversation folder ID",
+  "fileManager.sessionFolderMissing": "Conversation folder not found",
+  "chat.deleteHelp":
+    "Permanently deletes message history and this conversation’s AI folder and files. This cannot be undone. Your preferences are kept.",
   "chat.deleteKnowledgeHelp":
-    "Permanently deletes this conversation and its message history. This cannot be undone.",
+    "Permanently deletes this conversation, its messages, and new files in its assistant folder. Independent copies are kept. This cannot be undone.",
   "chat.deleteSelectedConfirm": "Delete selected conversations?",
   "chat.deleteSelectedHelp":
-    "Permanently deletes the selected conversations and their message history. This cannot be undone.",
+    "Permanently deletes the selected conversations, their messages, and new files in their assistant folders. Independent copies are kept. This cannot be undone.",
   "chat.historyEmpty": "Your conversations will appear here",
   "chat.earlierChats": "Show earlier conversations",
   "chat.earlierMessages": "Load earlier messages",
@@ -2086,8 +2569,8 @@ export const en = {
   "nav.collapseSidebar": "Collapse sidebar",
   "nav.expandSidebar": "Expand sidebar",
   "nav.librarySettings": "Library settings",
-  "nav.librarySystem": "AI knowledge curation",
-  "nav.libraryQa": "Q&A",
+  "nav.librarySystem": "Sources and subscriptions",
+
   "nav.loadingLibrary": "Loading library…",
   "nav.contents": "Contents",
   "nav.newLibraryDocument": "New library document",
@@ -2164,7 +2647,7 @@ export const en = {
   "mobile.ai.delivery.viewDocument": "Open document",
   "library.curated.title": "Knowledge relations",
   "library.curated.body":
-    "Maintain curation instructions, subscribe sources, and review knowledge. Q&A uses published knowledge independently of source content.",
+    "Maintain curation instructions, subscribe sources, and review knowledge.",
   "library.curated.enable": "Use as a knowledge system",
   "library.curated.disable": "Use as a regular library",
   "library.curated.openGuide": "Open structure guide",
@@ -2187,13 +2670,13 @@ export const en = {
   "library.split.content": "By knowledge",
   "library.split.outline": "By outline",
   "library.split.custom": "By the guide",
-  "library.status.pending": "Awaiting curation",
+  "library.status.pending": "Awaiting confirmation",
   "library.status.active": "Subscribed",
   "library.status.stale": "Source updated",
   "library.status.missing": "Unavailable or inaccessible",
   "library.relations.switch": "Enable AI curation",
   "library.relations.switchHint":
-    "Enable manual or scheduled curation. Turning it off keeps published knowledge and Q&A available.",
+    "Enable manual or scheduled curation. Turning it off keeps published knowledge available.",
   "library.relations.tab.structure": "Structure",
   "library.relations.tab.preset": "Preset",
   "library.relations.tab.sources": "Sources",
@@ -2223,21 +2706,7 @@ export const en = {
   "library.trigger.empty": "No runs yet.",
   "library.trigger.manual": "Manual",
   "library.trigger.schedule": "Scheduled",
-  "library.qa.title": "Q&A bot",
-  "library.qa.body": "Answers come from confirmed nodes in this library.",
-  "library.qa.name": "Name",
-  "library.qa.publish": "Publish",
-  "library.qa.save": "Save",
-  "library.qa.ask": "Ask",
-  "library.qa.question": "Question",
-  "library.qa.empty": "No matching node yet.",
-  "library.qa.channel.page": "This page",
-  "library.qa.channel.mcp": "MCP",
-  "library.qa.channel.api": "External API",
-  "library.qa.channel.pageHint":
-    "People who can open this library can ask here.",
-  "library.qa.channel.mcpHint": "A dedicated credential is not issued yet.",
-  "library.qa.channel.apiHint": "An external API credential is not issued yet.",
+
   "editor.bodyPlaceholder": "Type, or type / to insert",
   "editor.citeAi": "Cite for AI",
   "editor.commentSelection": "Comment on selection",
@@ -3071,6 +3540,8 @@ export const en = {
   "aiusage.inputRate": "Input token rate",
   "aiusage.outputRate": "Output token rate",
   "aiusage.imageRate": "Tokens per generated image",
+  "aiusage.imageRateHelp":
+    "Images are charged by the number successfully generated. Rate changes apply only to new calls.",
   "aiusage.rateHelp":
     "Chat usage is rated as input tokens × input rate plus output tokens × output rate. Image generation is rated only by successful image count. Changes apply to new calls only.",
   "aiusage.rateSummary":
@@ -3137,12 +3608,12 @@ export const en = {
     "Choose services for image generation, web search, and page reading. Each one can be configured on its own.",
   "aiAdmin.tools.image": "Image generation",
   "aiAdmin.tools.imageHelp":
-    "Create images for documents, presentations, and canvases.",
+    "Text generation, reference generation, and editing share one default image model.",
   "aiAdmin.tools.useModel": "Model",
-  "aiAdmin.tools.imageModel": "Model used for image generation",
+  "aiAdmin.tools.imageModel": "Default image model",
   "aiAdmin.tools.chooseImage": "Choose an image model",
   "aiAdmin.tools.imageNote":
-    "Only enabled image-generation models are listed. Each image is charged in credits and shares the member quota and extra credits with chat.",
+    "Choose separate tool models only when needed. Each model must support its selected operation.",
   "aiAdmin.tools.media": "Attachment recognition",
   "aiAdmin.tools.mediaHelp":
     "When the main model cannot read images, use this model for uploaded images.",
@@ -3295,6 +3766,13 @@ export const en = {
   "aiAdmin.pdfHelp":
     "Everyday PDFs are parsed into text first. Turn on native PDF reading only when the vendor can accept the original PDF.",
   "aiAdmin.imageSize": "Default image size",
+  "aiAdmin.imageEditApi": "Image editing protocol",
+  "aiAdmin.imageEditApiChoose": "Select the protocol supported by your service",
+  "aiAdmin.imageEditApiOpenAI": "OpenAI Images Edits (multipart)",
+  "aiAdmin.imageEditApiSeedream":
+    "Seedream Images Generations (JSON references)",
+  "aiAdmin.imageEditApiHelp":
+    "Follow the service documentation. Compatible gateways may use a different edit endpoint; the model name does not determine its protocol. Rejected requests never trigger automatic protocol switching.",
   "aiAdmin.imageSizeHelp":
     "Use a size the vendor supports, such as 1024x1024 or 2048x2048.",
   "aiAdmin.skillName": "Skill name",
@@ -3341,8 +3819,28 @@ export const en = {
   "aiAdmin.fetchTest":
     "Page reading connected ({provider}, {length} characters read).",
   "aiAdmin.removeBlocked": "Remove or move this vendor’s models first",
+  "aiAdmin.removeConfigConfirm": "Remove “{name}” from the configuration?",
   "aiAdmin.removeConfig": "Remove configuration",
   "aiAdmin.removeWithModels": "Remove (has models)",
+  "pdf.videoPlaceholder": "Video (play or download in the online document)",
+  "pdf.audioPlaceholder": "Audio (play or download in the online document)",
+  "pdf.importLayoutApproximate":
+    "PDF backgrounds, vector drawings or complex layouts may be simplified. Please review the imported result.",
+  "pdf.importScanImage":
+    "This page has no extractable text and is retained as an image. Scanned text is not directly editable.",
+  "pdf.exportFailed": "PDF export failed",
+  "pdf.previewNotReady": "The document preview is not ready",
+  "pdf.assetInvalid": "A PDF image has no verifiable asset identifier",
+  "pdf.mediaReadFailed": "Could not read a PDF image",
+  "pdf.fontReadFailed": "Could not read a PDF font",
+  "pdf.renderTimeout": "PDF image or diagram rendering timed out",
+  "pdf.tooLarge":
+    "PDF content exceeds 32 MB. Split the document before exporting.",
+  "pdf.busy": "PDF export is busy. Please try again shortly.",
+  "pdf.unavailable":
+    "The PDF renderer is unavailable. Install Chromium or configure DOCA_PDF_CHROMIUM.",
+  "pdf.invalidRequest": "Invalid PDF rendering request",
+  "pdf.unsupportedFormat": "PDF export is unavailable for this document type",
 } as const;
 
 export type MessageKey = keyof typeof en;

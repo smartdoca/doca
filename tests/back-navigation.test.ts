@@ -30,15 +30,15 @@ describe("page back navigation", () => {
 
   it("returns a folder, assistant, or profile to its own list", () => {
     const folder = target("#/files?path=nested");
-    const assistant = target("#/knowledge-assistants?bot=1");
+    const assistant = target("#/libraries?view=all");
     const profile = target("#/account");
 
     navigateBackOr("/files", folder);
-    navigateBackOr("/knowledge-assistants", assistant);
+    navigateBackOr("/libraries", assistant);
     navigateBackOr("/home", profile);
 
     expect(folder.location.hash).toBe("/files");
-    expect(assistant.location.hash).toBe("/knowledge-assistants");
+    expect(assistant.location.hash).toBe("/libraries");
     expect(profile.location.hash).toBe("/home");
   });
 });

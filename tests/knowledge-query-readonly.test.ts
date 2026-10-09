@@ -15,7 +15,7 @@ it("queries a prepared hybrid index without queuing embedder updates after resta
     queryEmbedder: async () => "default",
   });
   expect(
-    await provider.queryIndex("knowledge_answers", {
+    await provider.queryIndex("knowledge", {
       query: "DNS TTL",
       candidateIds: ["chunk"],
       semantic: true,

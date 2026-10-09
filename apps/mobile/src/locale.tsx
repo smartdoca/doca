@@ -8,9 +8,10 @@ import {
   type MessageValues,
 } from "@doca/i18n";
 import * as SecureStore from "expo-secure-store";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { api } from "./api";
 import { useAuth } from "./auth";
+import { setAPIErrorLocale } from "./system-errors";
 
 const storageKey = "doca.locale";
 
@@ -25,6 +26,9 @@ const I18nContext = createContext<I18nValue | null>(null);
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const [locale, setLocaleState] = useState<Locale>(defaultLocale);
+  useLayoutEffect(() => {
+    setAPIErrorLocale(locale);
+  }, [locale]);
   useEffect(() => {
     let active = true;
     void SecureStore.getItemAsync(storageKey)

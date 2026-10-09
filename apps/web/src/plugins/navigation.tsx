@@ -89,6 +89,7 @@ const icons: Record<string, typeof Package> = {
   home: Home,
   documents: FileText,
   libraries: BookOpen,
+  "knowledge-books": BookOpen,
   files: FolderOpen,
   ai: Sparkles,
   preferences: Settings,
@@ -99,7 +100,7 @@ const icons: Record<string, typeof Package> = {
   admin: ShieldCheck,
   menu: Menu,
   tickets: ClipboardList,
-  knowledge: Bot,
+
   "shared-files": Users,
 };
 const adminIcons: Record<string, typeof Package> = {

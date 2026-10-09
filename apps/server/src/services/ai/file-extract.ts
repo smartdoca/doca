@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { fail } from "@core/shared/errors.js";
+import { z } from "zod";
 import sharp from "sharp";
 import type { DB, Schema } from "@db/index.js";
 import {
@@ -9,7 +11,7 @@ import {
   type StorageConfig,
 } from "../../adapters/storage.js";
 import { derivativeKey } from "../storage-policy.js";
-import { extractFilePartsAsync } from "./extract-content.js";
+import { extractFilePartsStream } from "./extract-content.js";
 import {
   enqueueProjectionOnce,
   processProjections,
@@ -26,7 +28,7 @@ export type FileExtract = {
   markdown: string;
 };
 
-const PARSER_VERSION = 2;
+export const PARSER_VERSION = 4;
 const activeByDatabase = new WeakMap<DB, Set<Promise<void>>>();
 
 function profileConfig(
@@ -36,14 +38,24 @@ function profileConfig(
   return storageConfigForProfile(runtime, profile);
 }
 
-function parseResult(raw: string): StoredExtractPart[] {
-  try {
-    const value = JSON.parse(raw) as { parts?: StoredExtractPart[] };
-    return Array.isArray(value.parts) ? value.parts : [];
-  } catch {
-    return [];
-  }
-}
+const extractResultSchema = z
+  .object({
+    parserVersion: z.literal(PARSER_VERSION),
+    parts: z.array(
+      z.discriminatedUnion("type", [
+        z.object({ type: z.literal("text"), text: z.string() }).strict(),
+        z
+          .object({
+            type: z.literal("image"),
+            recipe: z.string(),
+            mime: z.string(),
+            filename: z.string(),
+          })
+          .strict(),
+      ]),
+    ),
+  })
+  .strict();
 
 function markdownOf(parts: StoredExtractPart[]) {
   return parts
@@ -65,7 +77,8 @@ export async function storageObjectIdForAsset(
     .select("id")
     .where("object_key", "=", asset.object_key)
     .executeTakeFirst();
-  return row?.id ?? asset.id;
+  if (!row) fail(409, "attachment_storage_object_missing");
+  return row.id;
 }
 
 export async function loadFileExtract(
@@ -78,21 +91,26 @@ export async function loadFileExtract(
     .where("storage_object_id", "=", objectId)
     .executeTakeFirst();
   if (!row) return null;
-  const parts = parseResult(row.result);
-  let version: unknown;
+  if (row.status !== "ready")
+    return {
+      status: row.status === "failed" ? "failed" : "pending",
+      error: row.error ?? undefined,
+      parts: [],
+      markdown: "",
+    };
+  let value: unknown;
   try {
-    version = JSON.parse(row.result || "{}").parserVersion;
-  } catch {}
-  const stale = row.status === "ready" && version !== PARSER_VERSION;
+    value = JSON.parse(row.result);
+  } catch {
+    fail(409, "file_parser_version_or_format_invalid");
+  }
+  const result = extractResultSchema.safeParse(value);
+  if (!result.success) fail(409, "file_parser_version_or_format_invalid");
   return {
-    status: stale
-      ? "pending"
-      : row.status === "ready" || row.status === "failed"
-        ? row.status
-        : "pending",
+    status: "ready",
     error: row.error ?? undefined,
-    parts: stale ? [] : parts,
-    markdown: stale ? "" : markdownOf(parts),
+    parts: result.data.parts,
+    markdown: markdownOf(result.data.parts),
   };
 }
 
@@ -135,8 +153,8 @@ async function normalizeImage(data: Buffer) {
       animated: false,
     })
       .rotate()
-      .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 80 })
+      .resize(2000, 2000, { fit: "inside", withoutEnlargement: true })
+      .png()
       .toBuffer();
     return out;
   } catch {
@@ -149,9 +167,9 @@ export async function processFileExtract(
   objectId: string,
   runtime: StorageRuntime,
 ) {
+  const current = await loadFileExtract(db, objectId);
+  if (current?.status === "ready") return;
   try {
-    const current = await loadFileExtract(db, objectId);
-    if (current?.status === "ready") return;
     await markExtract(db, objectId, "pending");
     const object = await db
       .selectFrom("file_storage_objects")
@@ -175,7 +193,8 @@ export async function processFileExtract(
       .executeTakeFirstOrThrow();
     const config = profileConfig(runtime, profile);
     const storage = createStorage(runtime);
-    const body = await storage.read(config, object.object_key);
+    const body = await storage.read(config, object.object_key, object.size);
+    if (body.length !== object.size) fail(409, "file_content_size_changed");
     const filename = item?.name || object.object_key;
     const raw = object.mime.startsWith("image/")
       ? [
@@ -186,16 +205,16 @@ export async function processFileExtract(
             data: Buffer.from(body),
           },
         ]
-      : await extractFilePartsAsync(filename, Buffer.from(body));
+      : extractFilePartsStream(filename, Buffer.from(body));
     const parts: StoredExtractPart[] = [];
     let index = 0;
-    for (const part of raw) {
+    for await (const part of raw) {
       if (part.type === "text") {
         parts.push(part);
         continue;
       }
-      const jpeg = await normalizeImage(part.data);
-      if (!jpeg) {
+      const png = await normalizeImage(part.data);
+      if (!png) {
         parts.push({
           type: "text",
           text: `[图片 ${part.filename} 解码失败，未识别]`,
@@ -204,8 +223,8 @@ export async function processFileExtract(
       }
       const recipe = `v${PARSER_VERSION}-img-${index++}`;
       const id = randomUUID();
-      const key = derivativeKey(object.id, object.mime, recipe, `${id}.jpg`);
-      await storage.put(config, key, jpeg, "image/jpeg", part.filename);
+      const key = derivativeKey(object.id, object.mime, recipe, `${id}.png`);
+      await storage.put(config, key, png, "image/png", part.filename);
       let retained = false;
       try {
         const inserted = await db
@@ -217,8 +236,8 @@ export async function processFileExtract(
             object_key: key,
             kind: "extract-image",
             recipe,
-            mime: "image/jpeg",
-            size: jpeg.length,
+            mime: "image/png",
+            size: png.length,
             created_at: new Date().toISOString(),
           })
           .onConflict((oc) =>
@@ -229,7 +248,7 @@ export async function processFileExtract(
         parts.push({
           type: "image",
           recipe,
-          mime: "image/jpeg",
+          mime: "image/png",
           filename: part.filename,
         });
       } finally {

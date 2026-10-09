@@ -1,5 +1,6 @@
 import { createUserDirectory } from "@core/modules/discovery/users.js";
 import { HOST_VERSION } from "./version.js";
+import { imagePageAttemptLimit } from "../services/ai/image-attempt-policy.js";
 import { pluginMobileActor } from "../plugins/mobile-session.js";
 import { emitIntegrationEvent } from "@core/modules/automation/events.js";
 import {
@@ -51,7 +52,7 @@ import {
   visibleUsers,
 } from "@core/modules/interactions/community.js";
 import { createVisitBuffer } from "@core/modules/interactions/visits.js";
-import { AppError, fail } from "@core/shared/errors.js";
+import { AppError, fail, systemErrorText } from "@core/shared/errors.js";
 import {
   cursorFingerprint,
   decodePageCursor,
@@ -64,6 +65,7 @@ import type { IdentityRuntime } from "../adapters/identity-providers.js";
 import { type StorageRuntime } from "../adapters/storage.js";
 import { registerAssets } from "../routes/assets.js";
 import { registerPageState } from "../routes/page-state.js";
+import { registerDocumentPdf } from "../routes/document-pdf.js";
 import { registerExperience } from "../routes/experience.js";
 import { registerIdentity } from "../routes/identity.js";
 import { registerRegistrationReviews } from "../routes/registration-reviews.js";
@@ -103,6 +105,7 @@ export interface CreateAppOptions {
 }
 
 export async function createApp(db: DB, options: CreateAppOptions) {
+  imagePageAttemptLimit();
   const origin = new URL(options.origin),
     api = Fastify({
       logger: options.logging
@@ -207,23 +210,6 @@ export async function createApp(db: DB, options: CreateAppOptions) {
       .header("X-Content-Type-Options", "nosniff")
       .header("Referrer-Policy", "no-referrer")
       .header("X-Frame-Options", "DENY");
-    if (/^\/knowledge\/embed\/[a-f0-9-]{36}(?:\?|$)/.test(req.url)) {
-      const origins = (process.env.DOCA_KNOWLEDGE_EMBED_ORIGINS ?? "")
-        .split(",")
-        .map((value) => value.trim())
-        .filter((value) => {
-          try {
-            return new URL(value).origin === value && /^https?:/.test(value);
-          } catch {
-            return false;
-          }
-        });
-      reply.removeHeader("X-Frame-Options");
-      reply.header(
-        "Content-Security-Policy",
-        `frame-ancestors 'self' ${origins.join(" ")}`,
-      );
-    }
     if (
       req.raw.rawHeaders
         .filter((_, i) => i % 2 === 0)
@@ -351,7 +337,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     reply.code(status).send({
       message:
         error instanceof AppError
-          ? error.message
+          ? systemErrorText(error)
           : status === 400
             ? "请求参数无效"
             : status === 409
@@ -481,6 +467,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     if (ownsWebhookDatabase) await webhookDb.destroy();
   });
   registerPageState(api, db, authenticated);
+  registerDocumentPdf(api, db, actor);
   const pluginComposition = await composeServerPlugins({
     api,
     db,

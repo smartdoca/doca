@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { BookOpenCheck, Bot, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Prompts, Welcome } from "@ant-design/x";
 import "./assistant-profile.css";
 
 export type AssistantProfileId =
-  "personal" | "knowledge-answer" | "knowledge-curation";
+  "personal";
 
 export type AssistantCapabilities = {
   attachments: boolean;
@@ -36,40 +36,13 @@ export const ASSISTANT_PROFILES: Record<
       personalMemory: true,
     },
   },
-  "knowledge-answer": {
-    accent: "#7859b8",
-    capabilities: {
-      attachments: true,
-      references: false,
-      webSearch: false,
-      modelPicker: false,
-      approvals: false,
-      feedback: true,
-      humanTasks: false,
-      sourceManagement: false,
-      personalMemory: false,
-    },
-  },
-  "knowledge-curation": {
-    accent: "#7859b8",
-    capabilities: {
-      attachments: false,
-      references: false,
-      webSearch: false,
-      modelPicker: true,
-      approvals: false,
-      feedback: false,
-      humanTasks: true,
-      sourceManagement: true,
-      personalMemory: false,
-    },
-  },
+
+
 };
 
 const PROFILE_ICONS = {
   personal: Sparkles,
-  "knowledge-answer": Bot,
-  "knowledge-curation": BookOpenCheck,
+
 } satisfies Record<AssistantProfileId, typeof Sparkles>;
 
 export function assistantProfileClass(profile: AssistantProfileId) {

@@ -28,6 +28,7 @@ const required = [
   "pg",
   "sharp",
   "pdfjs-dist",
+  "playwright-core",
   "@napi-rs/canvas",
   "@mastra/core",
   "@mastra/memory",

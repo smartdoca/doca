@@ -1,4 +1,5 @@
 import { loadSession, removeAccount, type Session } from "./session";
+import { apiErrorMessage } from "./system-errors";
 
 export class ApiError extends Error {
   status: number;
@@ -47,7 +48,7 @@ export async function api<T>(path: string, options: Options = {}): Promise<T> {
     await removeAccount(session.origin);
     onUnauthorized?.();
   }
-  if (!response.ok) throw new ApiError(response.status, data.message ?? "请求失败");
+  if (!response.ok) throw new ApiError(response.status, apiErrorMessage(data.message ?? "请求失败"));
   return data as T;
 }
 
@@ -62,7 +63,7 @@ export async function login(origin: string, loginName: string, password: string)
     body: JSON.stringify({ login: loginName, password }),
   });
   const data = await response.json();
-  if (!response.ok) throw new ApiError(response.status, data.message ?? "登录失败");
+  if (!response.ok) throw new ApiError(response.status, apiErrorMessage(data.message ?? "登录失败"));
   if (data.status === "pending") throw new ApiError(403, "注册申请等待管理员审核");
   if (!data.sessionToken) throw new ApiError(500, "服务端没有返回移动会话");
   return {
@@ -81,7 +82,7 @@ export async function confirmQrLogin(account: Session, code: string) {
   });
   const text = await response.text();
   const data = text ? JSON.parse(text) : {};
-  if (!response.ok) throw new ApiError(response.status, data.message ?? "确认登录失败");
+  if (!response.ok) throw new ApiError(response.status, apiErrorMessage(data.message ?? "确认登录失败"));
 }
 
 export function uuid() {

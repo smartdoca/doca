@@ -224,6 +224,7 @@ export function createResourceCommands(
         }
         if (libraryId && get(ctx, libraryId, "edit_content").kind !== "library")
           fail(400, "知识库无效");
+        if (libraryId && await ctx.tx.selectFrom("knowledge_books").select("id").where("id", "=", libraryId).executeTakeFirst()) fail(403, "Knowledge book content is generated only by its workflow");
         await checkCreation(ctx.tx, actor.id, input.kind, input.format);
         if (input.initialContent !== undefined || input.markdown !== undefined)
           await requireCapability(ctx.tx, actor.id, "documents.import");
@@ -618,6 +619,7 @@ export function createResourceCommands(
             get(ctx, libraryId, "edit_content").kind !== "library"
           )
             fail(400, "目标知识库无效");
+          if (libraryId && await ctx.tx.selectFrom("knowledge_books").select("id").where("id", "=", libraryId).executeTakeFirst()) fail(403, "Knowledge book content is generated only by its workflow");
           if (
             r.library_id !== libraryId &&
             affected.some((x) => !isResourceOwnerLike(x, actor, ctx.resources))
@@ -894,6 +896,8 @@ export function createResourceCommands(
                 fail(400, "目标知识库无效");
             }
           }
+          if (destinationLibrary && await ctx.tx.selectFrom("knowledge_books").select("id").where("id", "=", destinationLibrary).executeTakeFirst()) fail(403, "Knowledge book content is generated only by its workflow");
+          if (await ctx.tx.selectFrom("knowledge_books").select("id").where("id", "=", r.id).executeTakeFirst()) fail(403, "Copy knowledge book configuration through the knowledge book API");
           const targets = (currentOnly ? [r] : descendants(ctx, r)).filter(
             (x) => !x.deleted_at,
           );

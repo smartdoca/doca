@@ -1,15 +1,21 @@
 import {
   createAIModel,
   modelConnectionError,
+  modelConnectionReason,
   promptCacheOptions,
 } from "./providers.js";
 import type { DB } from "@db/index.js";
 import { AppError, fail } from "@core/shared/errors.js";
-import { requireModel } from "@core/modules/ai/config.js";
+import { requireInferenceModel } from "@core/modules/ai/config.js";
 import {
-  beginCall,
-  settleCall,
-} from "@core/modules/ai/usage.js";
+  hoistToolImages,
+  bindToolImageFrames,
+  transmittedToolImageFrames,
+  type ToolImageSelection,
+  type TransmittedToolImage,
+} from "./tool-media.js";
+import { modelPromptImages } from "./model-image.js";
+import { beginCall, settleCall } from "@core/modules/ai/usage.js";
 import {
   MODEL_INPUT_BYTE_FACTOR,
   fitPromptToModelInput,
@@ -55,6 +61,10 @@ export function usageOf(usage: any) {
     raw: usage,
   };
 }
+export type ScopedModelPrompt = {
+  prompt: any[];
+  protectedPrefix: number;
+};
 export async function meteredModel(
   db: DB,
   userId: string,
@@ -63,8 +73,15 @@ export async function meteredModel(
   fetcher?: typeof fetch,
   beforeCall?: () => Promise<void>,
   cacheKey?: string,
+  scopePrompt?: (prompt: any[]) => ScopedModelPrompt,
+  scopeTools?: (tools: any) => any,
+  preparedPrompt?: (
+    prompt: any[],
+    frames: TransmittedToolImage[],
+  ) => { complete(): void; abort(): void },
+  normalizePromptImages: (prompt: any[]) => Promise<any[]> = modelPromptImages,
 ) {
-  const { model } = await requireModel(db, userId, modelId);
+  const { model } = await requireInferenceModel(db, userId, modelId);
   const base = createAIModel(model, fetcher);
   return new Proxy(base, {
     get(target, key) {
@@ -74,8 +91,10 @@ export async function meteredModel(
       }
       return async (options: any) => {
         options = promptCacheOptions(model, options, cacheKey);
+        if (scopeTools)
+          options = { ...options, tools: scopeTools(options.tools) };
         await beforeCall?.();
-        const current = await requireModel(db, userId, modelId);
+        const current = await requireInferenceModel(db, userId, modelId);
         if (
           current.model.model !== model.model ||
           current.model.baseUrl !== model.baseUrl ||
@@ -88,19 +107,40 @@ export async function meteredModel(
           current.model.maxInput !== model.maxInput ||
           current.model.maxOutput !== model.maxOutput
         )
-          fail(409, "模型配置已变化，请重新发起任务");
-        if (Array.isArray(options.prompt))
+          fail(409, "模型配置已变化，请重新发起任务", {
+            code: "model_config_changed",
+          });
+        let transmittedFrames: TransmittedToolImage[] = [];
+        if (Array.isArray(options.prompt)) {
+          const selected: ToolImageSelection[] = [];
+          const scoped = scopePrompt
+            ? scopePrompt(options.prompt)
+            : { prompt: options.prompt, protectedPrefix: 0 };
+          const hoisted = hoistToolImages(scoped.prompt, 4, (frame) =>
+            selected.push(frame),
+          );
+          const normalized = normalizePromptImages === modelPromptImages
+            ? await modelPromptImages(hoisted, new Set(selected
+                .filter(frame => frame.toolName === "image_mask_region_view" || frame.toolName === "image_candidate_region_view")
+                .map(frame => frame.part.data)))
+            : await normalizePromptImages(hoisted);
+          const bound = bindToolImageFrames(selected, normalized);
           options = {
             ...options,
             prompt: fitPromptToModelInput(
-              options.prompt,
+              normalized,
               model.maxInput,
               options.tools,
+              scoped.protectedPrefix,
             ),
           };
+          transmittedFrames = transmittedToolImageFrames(options.prompt, bound);
+        }
         const bytes = promptPayloadBytes(options.prompt, options.tools);
         if (bytes > model.maxInput * MODEL_INPUT_BYTE_FACTOR)
-          fail(413, "当前上下文过长，请减少引用或新建会话");
+          fail(413, "当前上下文过长，请减少引用或新建会话", {
+            code: "model_context_large",
+          });
         // UTF-8 bytes bound common byte-tokenizers conservatively; reserve against enforced output limit.
         const media = (Array.isArray(options.prompt) ? options.prompt : [])
           .flatMap((m: any) => (Array.isArray(m.content) ? m.content : []))
@@ -123,13 +163,37 @@ export async function meteredModel(
           inputUpper,
           maxOutput,
         );
+        let observation:
+          ReturnType<NonNullable<typeof preparedPrompt>> | undefined;
+        let failed = false;
+        const abortObservation = () => {
+          failed = true;
+          observation?.abort();
+        };
+        const confirm = (finishReason: any) => {
+          const reason =
+            typeof finishReason === "string"
+              ? finishReason
+              : finishReason?.unified;
+          if (
+            failed ||
+            options.abortSignal?.aborted ||
+            !["stop", "tool-calls", "length"].includes(reason)
+          )
+            abortObservation();
+          else observation?.complete();
+        };
         try {
+          // No private frame identifiers are added to options or provider JSON.
+          // Confirmation is committed only after a successful response finishes.
+          observation = preparedPrompt?.(options.prompt, transmittedFrames);
           if (key === "doGenerate") {
             const result = await target.doGenerate({
               ...options,
               maxOutputTokens: maxOutput,
             });
             await settleCall(db, call.id, usageOf(result.usage));
+            confirm(result.finishReason);
             return result;
           }
           const result = await target.doStream({
@@ -137,38 +201,77 @@ export async function meteredModel(
             maxOutputTokens: maxOutput,
           });
           let ended = false;
+          let finishReason: any;
+          const held: any[] = [];
           const reader = result.stream.getReader();
           const stream = new ReadableStream({
             async pull(controller) {
               try {
-                const next = await reader.read();
-                if (next.done) {
-                  if (!ended) await settleCall(db, call.id, null);
-                  controller.close();
+                // Mastra synthesizes a complete tool-call at tool-input-end.
+                // Retain either executable boundary and its tail until success.
+                while (true) {
+                  const next = await reader.read();
+                  if (next.done) {
+                    if (!ended) {
+                      abortObservation();
+                      await settleCall(db, call.id, null);
+                    }
+                    if (observation && ended) {
+                      confirm(finishReason);
+                      for (const value of held)
+                        if (!failed || value.type === "finish")
+                          controller.enqueue(value);
+                    }
+                    controller.close();
+                    return;
+                  }
+                  if (next.value.type === "error") {
+                    abortObservation();
+                    held.length = 0;
+                  }
+                  if (next.value.type === "finish") {
+                    await settleCall(db, call.id, usageOf(next.value.usage));
+                    ended = true;
+                    finishReason = next.value.finishReason;
+                    if (observation) {
+                      held.push(next.value);
+                      continue;
+                    }
+                    controller.enqueue(next.value);
+                    return;
+                  }
+                  if (
+                    observation &&
+                    (held.length ||
+                      next.value.type === "tool-input-end" ||
+                      next.value.type === "tool-call")
+                  ) {
+                    if (!failed) held.push(next.value);
+                    continue;
+                  }
+                  controller.enqueue(next.value);
                   return;
                 }
-                if (next.value.type === "finish") {
-                  await settleCall(db, call.id, usageOf(next.value.usage));
-                  ended = true;
-                }
-                controller.enqueue(next.value);
               } catch (e) {
+                abortObservation();
                 await settleCall(db, call.id, null);
                 controller.error(e);
               }
             },
             async cancel(reason) {
+              abortObservation();
               await reader.cancel(reason);
               if (!ended) await settleCall(db, call.id, null);
             },
           });
           return { ...result, stream };
         } catch (e) {
+          abortObservation();
           const status = (e as any)?.statusCode;
           await settleCall(
             db,
             call.id,
-            [400, 401, 403, 404, 422, 429].includes(status)
+            [400, 401, 403, 404, 413, 422, 429].includes(status)
               ? { input: 0, output: 0 }
               : null,
             "failed",
@@ -177,7 +280,11 @@ export async function meteredModel(
           // provider/network failures need translation. Never forward provider
           // bodies, request headers or real model IDs to a user.
           if (e instanceof AppError) throw e;
-          fail(status === 429 ? 429 : 502, modelConnectionError(e));
+          fail(
+            [413, 429].includes(status) ? status : 502,
+            modelConnectionError(e),
+            modelConnectionReason(e),
+          );
         }
       };
     },
