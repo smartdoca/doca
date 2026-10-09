@@ -1,0 +1,87 @@
+{
+  "method": "PostCSS + css-select stylesheet cascade inspection; no browser execution",
+  "priorBugReproduced": {
+    "value": "var(--library-bg)",
+    "selector": ".file-glyph.library",
+    "rank": [
+      0,
+      0,
+      2,
+      0,
+      1
+    ]
+  },
+  "checks": [
+    {
+      "classes": "file-glyph ",
+      "background": "transparent",
+      "winningSelector": ".file-glyph"
+    },
+    {
+      "classes": "file-glyph ",
+      "background": "transparent",
+      "winningSelector": ".file-glyph"
+    },
+    {
+      "classes": "file-glyph ",
+      "background": "transparent",
+      "winningSelector": ".file-glyph"
+    },
+    {
+      "classes": "file-glyph ",
+      "background": "transparent",
+      "winningSelector": ".file-glyph"
+    },
+    {
+      "classes": "file-glyph library",
+      "background": "transparent",
+      "winningSelector": ".file-glyph.library"
+    },
+    {
+      "classes": "file-glyph library",
+      "background": "transparent",
+      "winningSelector": ".file-glyph.library"
+    },
+    {
+      "classes": "file-glyph file",
+      "background": "transparent",
+      "winningSelector": ".file-glyph.file"
+    },
+    {
+      "applicationClasses": "file-glyph rich_text",
+      "background": "transparent",
+      "winningSelector": ".file-glyph"
+    },
+    {
+      "applicationClasses": "file-glyph spreadsheet",
+      "background": "transparent",
+      "winningSelector": ".file-glyph"
+    },
+    {
+      "applicationClasses": "file-glyph presentation",
+      "background": "transparent",
+      "winningSelector": ".file-glyph"
+    },
+    {
+      "applicationClasses": "file-glyph markdown",
+      "background": "transparent",
+      "winningSelector": ".file-glyph"
+    },
+    {
+      "applicationClasses": "file-glyph canvas",
+      "background": "transparent",
+      "winningSelector": ".file-glyph"
+    },
+    {
+      "applicationClasses": "file-glyph library",
+      "background": "transparent",
+      "winningSelector": ".file-glyph"
+    },
+    {
+      "applicationClasses": "file-glyph library compact",
+      "background": "transparent",
+      "winningSelector": ".sidebar .document-tree .tree-row.selected .file-glyph"
+    }
+  ],
+  "result": "passed"
+}

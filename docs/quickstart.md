@@ -2,16 +2,16 @@
 
 [中文](quickstart.zh-CN.md)
 
-This guide installs Doca 0.1.10 on one server with the published Docker image, SQLite, and local file storage. You need Git, Docker Engine, the Docker Compose plugin, and a domain pointing at the server. A reverse proxy on that server can serve HTTPS or trusted internal HTTP. You do not need Node.js or pnpm to run the image.
+This guide installs Doca 0.1.14 on one server with the published Docker image, SQLite, and local file storage. You need Git, Docker Engine, the Docker Compose plugin, and a domain pointing at the server. A reverse proxy on that server can serve HTTPS or trusted internal HTTP. You do not need Node.js or pnpm to run the image.
 
-This is a fresh installation. Existing deployments must read the [release requirements](releases/0.1.10.md) first: this release rejects older database baselines and provides no automatic migration. Preserve existing databases, files, and configuration.
+This is a fresh installation. Existing deployments must read the [release requirements](releases/0.1.14.md) first: this release rejects older database baselines and provides no automatic migration. Preserve existing databases, files, and configuration.
 
 ## 1. Clone the repository
 
 Use the checkout matching the image so Compose and the administrator scripts match the release:
 
 ```sh
-git clone --branch v0.1.10 --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch v0.1.14 --depth 1 https://github.com/smartdoca/doca.git
 cd doca
 ```
 
@@ -21,13 +21,22 @@ cd doca
 cp docker.env.example .env
 ```
 
-Edit `.env`, replacing the example domain with your own HTTP(S) origin:
+For a fresh installation, generate a credential master key first:
+
+```sh
+openssl rand -hex 32
+```
+
+The output is 32 random bytes encoded as 64 hexadecimal characters. Edit `.env`, replacing the example domain with your own HTTP(S) origin and `DOCA_CREDENTIAL_MASTER_KEY` with the generated value:
 
 ```dotenv
 DOCA_ORIGIN=https://doca.example.com
+DOCA_CREDENTIAL_MASTER_KEY=7a52d29ab6db9a08292b9585d0dc5551f4156c2d02953b4262611bc1ad82f9ab
 DOCA_FILE_STORE_ID=local
 DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root":"/data/storage"}}}'
 ```
+
+`DOCA_CREDENTIAL_MASTER_KEY` is required at startup even without plugins; a missing, empty or malformed value rejects startup. The example files contain a public, correctly formatted sample; replace it with your own key for a fresh installation. Back it up securely and separately, and use the same value across replicas and restarts. Existing deployments must retain their original key; do not regenerate it for an upgrade. A replacement key is rejected by the database fingerprint check; existing ciphertext is not automatically converted. See [managed credentials](plugin-credentials.md).
 
 Use only the origin, without a subpath, query, or fragment. A root trailing slash is normalized. Keep `/data/storage` inside the container's persistent volume. `docker.env.example` is for Docker; `.env.example` is for [source development](development.md).
 
@@ -47,7 +56,7 @@ Caddy terminates TLS and forwards HTTP and WebSocket traffic. DNS must point to 
 docker compose pull
 ```
 
-Compose uses `docker.io/smartdoca/doca:0.1.10`. This step downloads the prebuilt image; it does not build the source checkout.
+Compose uses `docker.io/smartdoca/doca:0.1.14`. This step downloads the prebuilt image; it does not build the source checkout.
 
 ## 4. Start Doca
 
@@ -59,7 +68,7 @@ docker compose ps
 Wait for the container to become healthy. The health response is:
 
 ```json
-{"status":"ok","version":"0.1.10"}
+{"status":"ok","version":"0.1.14"}
 ```
 
 If startup fails, inspect `docker compose logs --tail=100 doca`. The Compose port is bound to `127.0.0.1`; browser access uses the configured HTTP(S) origin through the proxy.

@@ -89,6 +89,11 @@ it("uses the configured SearXNG endpoint and website constraints only after chec
     limit: 8,
   });
 });
+it("passes omitted current-protocol filters through to search", async () => {
+  search.mockResolvedValue({ sources: [], query: "TCP" });
+  await searchBookWebSources(db, owner, bookId, { query: "TCP" });
+  expect(search.mock.calls[0]![4]).toMatchObject({ sites: [], language: undefined, limit: 8 });
+});
 it("verifies actual body text and reports invalid, empty, inaccessible and oversized pages independently", async () => {
   const readWeb = vi.fn(async (url: string) => {
     if (url.includes("empty")) return { title: "Empty", text: "  " };

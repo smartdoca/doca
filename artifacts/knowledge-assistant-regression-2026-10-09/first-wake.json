@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-10",
+  "jobId": "1e654f39-79a9-4785-a729-25eaf95167ec",
+  "status": "completed",
+  "wakes": 2,
+  "runs": [
+    {
+      "id": "8a37bed6-41cd-48ec-a604-6b841d1bc79f",
+      "status": "failed",
+      "error": "QA simulated model failure"
+    },
+    {
+      "id": "28310151-2b38-40f1-b752-86497371ca19",
+      "status": "published",
+      "error": ""
+    }
+  ],
+  "note": "Successful initial live continuation and manual-publication run. It revealed business error text being mislabelled as a failed tool call and an unresolved repair task; both were corrected before the final acceptance rerun."
+}

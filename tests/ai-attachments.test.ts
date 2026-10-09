@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { deflateSync } from "node:zlib";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -269,6 +269,85 @@ it("preserves original downloads, sends normalized images to vision models and r
   const denied = await send(sid, [id]);
   expect(denied.statusCode, denied.body).toBe(400);
   expect(denied.body).toContain("图片理解");
+});
+it("reuses unchanged PNG bytes for AI reading and never removes the original when extraction races", async () => {
+  const { prepareFileRecognition } =
+    await import("../apps/server/src/services/ai/file-recognition.js");
+  const { processFileExtract, waitForFileExtracts } =
+    await import("../apps/server/src/services/ai/file-extract.js");
+  const runtime = { ...storageRuntime(), root };
+  const png = await sharp({
+    create: { width: 200, height: 300, channels: 3, background: "#8ba4c5" },
+  })
+    .png()
+    .toBuffer();
+  const uploaded = await upload("image.png", png);
+  expect(uploaded.statusCode, uploaded.body).toBe(201);
+  const id = uploaded.json().id;
+  await waitForFileExtracts(db);
+  const original = await db
+    .selectFrom("assets")
+    .selectAll()
+    .where("id", "=", id)
+    .executeTakeFirstOrThrow();
+  const reference = await db
+    .selectFrom("file_derivatives")
+    .selectAll()
+    .where("source_id", "=", id)
+    .where("kind", "=", "extract-image")
+    .executeTakeFirstOrThrow();
+  expect(reference.object_key).toBe(original.object_key);
+  expect(reference.size).toBe(png.length);
+  expect(
+    (await readdir(root, { recursive: true })).filter(path => path.endsWith(".png")),
+  ).toEqual([]);
+  const prepared = await prepareFileRecognition(db, { objectId: id, storage: runtime });
+  expect(prepared.warning).toBe("");
+  expect(prepared.images).toHaveLength(1);
+  expect(prepared.images[0]!.data).toEqual(png);
+  // Both attempts lose the existing recipe registration; shared bytes must survive.
+  await db
+    .updateTable("file_extracts")
+    .set({ status: "pending", result: "{}" })
+    .where("storage_object_id", "=", id)
+    .execute();
+  await Promise.all([
+    processFileExtract(db, id, runtime),
+    processFileExtract(db, id, runtime),
+  ]);
+  expect(
+    (await app.inject({ url: `/api/v1/assets/${id}/content`, headers: a })).rawPayload,
+  ).toEqual(png);
+  expect(
+    await db.selectFrom("file_derivatives").select("id")
+      .where("source_id", "=", id).where("kind", "=", "extract-image").execute(),
+  ).toHaveLength(1);
+});
+it("retains a separate resized reading image when the original PNG exceeds the reading dimensions", async () => {
+  const { prepareFileRecognition } =
+    await import("../apps/server/src/services/ai/file-recognition.js");
+  const png = await sharp({
+    create: { width: 2400, height: 1200, channels: 3, background: "#8ba4c5" },
+  })
+    .png()
+    .toBuffer();
+  const uploaded = await upload("large.png", png);
+  expect(uploaded.statusCode, uploaded.body).toBe(201);
+  const id = uploaded.json().id;
+  const prepared = await prepareFileRecognition(db, {
+    objectId: id,
+    storage: { ...storageRuntime(), root },
+  });
+  expect(prepared.warning).toBe("");
+  expect(prepared.images).toHaveLength(1);
+  expect(await sharp(prepared.images[0]!.data).metadata())
+    .toMatchObject({ format: "png", width: 2000, height: 1000 });
+  expect(
+    (await app.inject({ url: `/api/v1/assets/${id}/content`, headers: a })).rawPayload,
+  ).toEqual(png);
+  expect(
+    (await readdir(root, { recursive: true })).filter(path => path.endsWith(".png")),
+  ).toHaveLength(1);
 });
 it("uses a configured media model to caption images for text-only chat models", async () => {
   const png = await sharp({

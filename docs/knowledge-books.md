@@ -24,6 +24,10 @@ Daily and weekly schedules use UTC periods. Automatic publication is an explicit
 
 ## Source groups and web discovery
 
+**Run pipeline** has a left execution list with status, triggering person or schedule, start time and duration. Select a run to see its frozen workflow; click a node to open its logs, error and human tasks in the right drawer. Logs contain actual source, batch, model-request/output-count and retry facts. Older unrecorded logs are not reconstructed. Status refreshes while running, and waiting time is included in total duration.
+
+When an assistant starts or retries a run, it retains the original task while the worker executes. Background completion or a human decision wakes the same task, after current permission checks. It can explain an outstanding approval and wait for the decision; it does not approve for the user merely because a worker notification arrived. Installed plugins can use the same [public continuation service](plugin-ai-continuations.md).
+
 One source card can bind multiple documents, libraries, files, folders, web pages or provider configurations, including mixed types. Only `{version: 1, items: [...]}` is accepted; every binding has a stable `id`. A group has at most 50 bindings, with no duplicates or nesting. Old single-input configurations are rejected without converting historical data. The contributor needs original access to every binding.
 
 The web picker accepts bulk URLs and searches through the configured service, including SearXNG, with optional website constraints. Search cards help discover sources; snippets are not evidence. Adding a URL verifies the actual body, selected fragment and size. Saving an active group fetches again on the server; a failed URL does not cause a partial save. Pausing retains configuration without a network check, while reactivation verifies again. Private addresses, embedded credentials, missing fragments and unreadable pages are rejected.
@@ -80,7 +84,7 @@ Commands are `configuration.save`, `configuration.patch`, `workflow.node.patch`,
 
 Old library curation and Q&A robots are removed: no curation conversations, workers, settings, instructions, entries or publication projection. Native documents, source subscriptions, indexing and search remain.
 
-Fresh databases use `doca-2026-10-08-knowledge-books-v2` and create knowledge-book tables without old curation tables or resource curation columns. Existing baselines are rejected before schema changes. There is no old-format adapter, migration, conversion or data reset. Existing databases and retired file bindings are retained; retired bindings remain inaccessible. To roll back, stop this version and reopen the untouched old database with its matching old application. An existing database must not be deleted to start this version; use a separate empty database for an isolated trial.
+The current database baseline is `doca-2026-10-09-history-storage-v1`. Knowledge-book tables remain; retired curation tables and fields stay disabled. Normal startup rejects earlier baselines and performs no automatic conversion. Only the exact preceding baseline supports the explicit offline history-storage upgrade in the [deployment guide](deployment.md#upgrade-from-0113). Retired file bindings remain stored and inaccessible; the retired curation protocol is not restored. Never delete an existing database to start the new host.
 
 A failed or cancelled run can be retried. A retry preserves the prior run and only reuses complete node outputs after checking the exact frozen configuration, source registrations, feedback, and complete current source inventories. Source failures and added/removed/changed blocks prevent reuse. Human gates and their descendants are evaluated again. Each reused node records its original run in the security audit and provenance. Every vendor call revalidates contributor grants, including extraction batches and format repairs.
 

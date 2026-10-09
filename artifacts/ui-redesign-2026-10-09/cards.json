@@ -1,0 +1,194 @@
+{
+  "project": "Doca · 找回自己的样子",
+  "lang": "zh",
+  "round": "风格卡片",
+  "brief": "文档与知识工作台的整体改版：比较配色、字体、控件和密度，建立属于 Doca 的视觉语言。",
+  "content": {
+    "title": "从上次停下的地方继续。",
+    "body": "文档、知识库与 AI，放在同一张工作台上。",
+    "number": "10.09",
+    "number_label": "星期五 · 今日工作台",
+    "primary": "开始创作",
+    "secondary": "打开知识库",
+    "tags": [
+      "最近访问",
+      "待我处理"
+    ],
+    "input_label": "搜索",
+    "input_value": "查找文档、知识库与文件"
+  },
+  "cards": [
+    {
+      "id": "reading-room",
+      "name": "墨绿书房",
+      "concept": "像打开一间自己的书房：暖白承托内容，墨绿只标记入口与主动作。",
+      "traits": [
+        "暖白与墨绿",
+        "宋体标题 / 黑体正文",
+        "10px 圆角",
+        "宽松密度",
+        "顶栏与内容网格"
+      ],
+      "colors": {
+        "bg": "#F2F2EB",
+        "surface": "#FCFCF8",
+        "text": "#273B33",
+        "muted": "#636E63",
+        "accent": "#244B40",
+        "accent_text": "#FFFFFF",
+        "line": "#D9DED4",
+        "warn": "#A27435"
+      },
+      "fonts": {
+        "display": "\"Songti SC\", serif",
+        "body": "\"PingFang SC\", sans-serif",
+        "number": "Georgia, serif"
+      },
+      "display_weight": 600,
+      "number_weight": 400,
+      "radius": 10,
+      "border": "none",
+      "shadow": "none",
+      "density": "airy",
+      "layout": "topbar-cards",
+      "texture": "none"
+    },
+    {
+      "id": "graphite-archive",
+      "name": "石墨档案",
+      "concept": "像排好索引的档案柜：黑白建立层级，紧凑列表帮助快速找到资料。",
+      "traits": [
+        "黑白灰为主",
+        "无衬线粗标题",
+        "2px 方角",
+        "紧凑密度",
+        "侧栏与索引列表"
+      ],
+      "colors": {
+        "bg": "#F3F4F3",
+        "surface": "#FFFFFF",
+        "text": "#25282A",
+        "muted": "#686D6E",
+        "accent": "#25282A",
+        "accent_text": "#FFFFFF",
+        "line": "#DDE0DD",
+        "warn": "#AB6139"
+      },
+      "fonts": {
+        "display": "\"Helvetica Neue\", \"PingFang SC\", sans-serif",
+        "body": "\"PingFang SC\", sans-serif",
+        "number": "Menlo, monospace"
+      },
+      "display_weight": 700,
+      "number_weight": 500,
+      "radius": 2,
+      "border": "hairline",
+      "shadow": "none",
+      "density": "compact",
+      "layout": "sidebar-table"
+    },
+    {
+      "id": "night-desk",
+      "name": "夜航工作台",
+      "concept": "像夜间点亮的工作桌：炭灰压低背景，铜色把创作动作从内容里提出来。",
+      "traits": [
+        "炭灰深色",
+        "铜色动作",
+        "6px 圆角",
+        "紧凑密度",
+        "列表与详情并排"
+      ],
+      "colors": {
+        "bg": "#20272A",
+        "surface": "#2C3539",
+        "text": "#EEF1EB",
+        "muted": "#A4B0AB",
+        "accent": "#DEA77F",
+        "accent_text": "#20272A",
+        "line": "#4B585A",
+        "warn": "#EDBE6E"
+      },
+      "fonts": {
+        "display": "\"Avenir Next\", \"PingFang SC\", sans-serif",
+        "body": "\"PingFang SC\", sans-serif",
+        "number": "Menlo, monospace"
+      },
+      "display_weight": 600,
+      "number_weight": 400,
+      "radius": 6,
+      "border": "hairline",
+      "shadow": "none",
+      "density": "compact",
+      "layout": "queue-detail"
+    },
+    {
+      "id": "celadon-studio",
+      "name": "青瓷创作台",
+      "concept": "像一张清透的创作桌：青白底色、青瓷绿和柔软控件，让内容容易亲近。",
+      "traits": [
+        "青白底色",
+        "青瓷绿强调",
+        "18px 圆角",
+        "常规密度",
+        "顶栏与卡片网格"
+      ],
+      "colors": {
+        "bg": "#EDF5F3",
+        "surface": "#FFFFFF",
+        "text": "#213E3B",
+        "muted": "#58716B",
+        "accent": "#16716C",
+        "accent_text": "#FFFFFF",
+        "line": "#D3E3DE",
+        "warn": "#A56B28"
+      },
+      "fonts": {
+        "display": "\"Avenir Next\", \"PingFang SC\", sans-serif",
+        "body": "\"Helvetica Neue\", \"PingFang SC\", sans-serif",
+        "number": "\"Avenir Next\", sans-serif"
+      },
+      "display_weight": 500,
+      "number_weight": 600,
+      "radius": 18,
+      "border": "none",
+      "shadow": "soft",
+      "density": "regular",
+      "layout": "topbar-cards"
+    },
+    {
+      "id": "cinnabar-index",
+      "name": "朱砂目录",
+      "concept": "像一本认真编排的出版物：朱砂划出重点，用目录、页签和细线组织知识。",
+      "traits": [
+        "米白与朱砂",
+        "宋体大标题",
+        "无圆角",
+        "细线分区",
+        "标题与内容分栏"
+      ],
+      "colors": {
+        "bg": "#F6F2EB",
+        "surface": "#FFFCF7",
+        "text": "#352D27",
+        "muted": "#7C6C60",
+        "accent": "#A33E30",
+        "accent_text": "#FFFFFF",
+        "line": "#DED3C6",
+        "warn": "#8F6C1D"
+      },
+      "fonts": {
+        "display": "\"Songti SC\", serif",
+        "body": "\"PingFang SC\", sans-serif",
+        "number": "\"Times New Roman\", serif"
+      },
+      "display_weight": 700,
+      "number_weight": 400,
+      "radius": 0,
+      "border": "hairline",
+      "shadow": "none",
+      "density": "regular",
+      "layout": "editorial",
+      "texture": "none"
+    }
+  ]
+}

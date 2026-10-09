@@ -1,0 +1,80 @@
+{
+  "candidates": 5,
+  "identical_dom": true,
+  "identical_layout_css": true,
+  "dom_sha256": "827eb1873082b3a5b1cc06fbce6ae74accfbea02f17e1dc9630d6da093322edb",
+  "layout_css_sha256": "bf4ae63b4cd5904ca024ed01a600a9a6610e40d9ba280b81c3d826c62cb47004",
+  "contrast": [
+    {
+      "candidate": "reading-room",
+      "ratios": {
+        "text/bg": 10.61,
+        "text/surface": 11.6,
+        "muted/bg": 5.59,
+        "muted/surface": 6.11,
+        "muted/sidebar": 5.13,
+        "muted/selected": 4.75,
+        "accent/selected": 7.36,
+        "accent/ai-bg": 7.36,
+        "accent-text/accent": 9.74
+      }
+    },
+    {
+      "candidate": "graphite-archive",
+      "ratios": {
+        "text/bg": 13.45,
+        "text/surface": 14.83,
+        "muted/bg": 5.7,
+        "muted/surface": 6.28,
+        "muted/sidebar": 5.16,
+        "muted/selected": 4.74,
+        "accent/selected": 11.19,
+        "accent/ai-bg": 11.19,
+        "accent-text/accent": 14.83
+      }
+    },
+    {
+      "candidate": "night-desk",
+      "ratios": {
+        "text/bg": 13.3,
+        "text/surface": 10.99,
+        "muted/bg": 6.77,
+        "muted/surface": 5.6,
+        "muted/sidebar": 6.13,
+        "muted/selected": 4.97,
+        "accent/selected": 5.27,
+        "accent/ai-bg": 5.27,
+        "accent-text/accent": 7.18
+      }
+    },
+    {
+      "candidate": "celadon-studio",
+      "ratios": {
+        "text/bg": 10.43,
+        "text/surface": 11.56,
+        "muted/bg": 5.43,
+        "muted/surface": 6.02,
+        "muted/sidebar": 5.06,
+        "muted/selected": 4.76,
+        "accent/selected": 4.6,
+        "accent/ai-bg": 4.6,
+        "accent-text/accent": 5.81
+      }
+    },
+    {
+      "candidate": "cinnabar-index",
+      "ratios": {
+        "text/bg": 12.09,
+        "text/surface": 13.19,
+        "muted/bg": 5.47,
+        "muted/surface": 5.97,
+        "muted/sidebar": 5.05,
+        "muted/selected": 4.74,
+        "accent/selected": 4.95,
+        "accent/ai-bg": 4.95,
+        "accent-text/accent": 6.38
+      }
+    }
+  ],
+  "visual_verification": "not verified: browser file URL policy blocked access"
+}

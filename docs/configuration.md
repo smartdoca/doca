@@ -11,6 +11,7 @@ Choose `docker.env.example` for Compose and `.env.example` for source developmen
 | `DOCA_ORIGIN` | Must be explicitly set as an HTTP(S) origin | `https://doca.example.com` |
 | `DOCA_FILE_STORE_ID` | Must be nonempty; must identify a store in the JSON | `local` |
 | `DOCA_FILE_STORES_JSON` | Must be nonempty; valid version 1 configuration with physical backend | See below |
+| `DOCA_CREDENTIAL_MASTER_KEY` | Required at every startup; exactly 64 hexadecimal characters (32 bytes) | Generate with `openssl rand -hex 32` |
 
 ```dotenv
 DOCA_ORIGIN=https://doca.example.com
@@ -18,7 +19,7 @@ DOCA_FILE_STORE_ID=local
 DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root":"/data/storage"}}}'
 ```
 
-For a new single-server installation, **only the public origin needs changing in the Docker example**; the other two required values are already supplied. PostgreSQL, Redis, model keys, SSO credentials, and a plugin credential master key are unnecessary for core startup. Optional features need their own configuration.
+For a new single-server installation, **change the public origin and replace the public example credential key** with the output of `openssl rand -hex 32`; the required file-store values are already supplied. PostgreSQL, Redis, model keys, and SSO credentials are conditional. Existing deployments must keep their original master key.
 
 Use an HTTP(S) origin without credentials, subpaths, query, or fragment. A root trailing slash is normalized. Production accepts both HTTP and HTTPS. The proxy preserves the configured `Host`; a request addressed only to `127.0.0.1` fails the Host check. See [health checks](deployment.md#start).
 
@@ -26,9 +27,9 @@ Use an HTTP(S) origin without credentials, subpaths, query, or fragment. A root 
 
 | Entry point | Origin | Database / files | Credential master key |
 | --- | --- | --- | --- |
-| Repository Compose | Required in `.env` | SQLite `/data/doca.db`; file ID/JSON required in `.env`; `doca_data` mounted at `/data` | Empty is valid for core startup |
-| Published image without Compose | Must supply an HTTP(S) origin | Image explicitly supplies SQLite and local storage defaults under `/data`; mount persistent `/data` yourself | Optional until a plugin requires credentials |
-| Source development | `http://127.0.0.1:39130` | SQLite `./data/v1/doca.db`; file ID/JSON required, supplied by `.env.example` | Optional |
+| Repository Compose | Required in `.env` | SQLite `/data/doca.db`; file ID/JSON required in `.env`; `doca_data` mounted at `/data` | Required; use the persistent deployment key |
+| Published image without Compose | Must supply an HTTP(S) origin | Image explicitly supplies SQLite and local storage defaults under `/data`; mount persistent `/data` yourself | Required; use the persistent deployment key |
+| Source development | `http://127.0.0.1:39130` | SQLite `./data/v1/doca.db`; file ID/JSON required, supplied by `.env.example` | Required; replace the public example key |
 
 The source file-store parser has no implicit default; the image defaults are explicit Dockerfile environment values. Local storage requires a writable persistent root. S3 requires `bucket`, `region`, boolean `forcePathStyle`, and explicit `credentials:{accessKeyId,secretAccessKey,sessionToken?}`. An optional endpoint must be an HTTP(S) root origin without credentials, a subpath, query, or fragment. Explicit HTTP endpoints support trusted internal object storage such as RustFS; the operator controls network access, and site, asset and CDN origins also accept HTTP(S). AWS shell credentials do not replace these JSON fields. See [file storage](storage.md) for a RustFS configuration example.
 
@@ -44,7 +45,6 @@ Store IDs and physical locations must remain available after objects are written
 | `DOCA_REDIS_URL` | Required for cross-instance events, presence, and rate limits; unset uses process-local implementations |
 | `DOCA_REDIS_PREFIX`, `DOCA_INSTANCE_ID` | Prefix defaults to `doca`; instance ID defaults to a random process ID |
 | `DOCA_TRUST_PROXY` | Comma-separated trusted proxy IPs/CIDRs; **no proxy is trusted by default**, including loopback |
-| `DOCA_CREDENTIAL_MASTER_KEY` | Required only for plugins that require `storage.credentials.v1`; exactly 64 hexadecimal characters (32 bytes) |
 | `DOCA_PLUGINS_DIR` | Writable installation/cache directory; Compose defaults to `/data/plugins` |
 | `DOCA_PDF_CHROMIUM` | Optional Chromium executable for rich-text/Markdown PDF export; otherwise install the matching Playwright browser. The sandbox stays enabled |
 | `DOCA_PLUGIN_STORE_URL` | HTTP(S) origin; default `https://store.smartdoca.cc` |
@@ -55,7 +55,7 @@ Store IDs and physical locations must remain available after objects are written
 
 Image request limits are fixed when the server starts. For example, set `DOCA_AI_IMAGE_MAX_ATTEMPTS_PER_PAGE=10` in the source or Compose `.env` and restart the server or recreate the container. All replicas must use the same limit. Retrying, resuming, changing prompts or re-registering a batch does not clear accumulated attempts. Pending or uncertain submitted requests count; reference exports and local recomposition do not. Existing images, request records and usage remain untouched. Lowering the limit rejects further paid requests, including reuse of a paid-attempt receipt whose ordinal now exceeds the limit; it never skips or converts those records. Batch version 3 and paid-attempt version 1 remain unchanged; older batch formats are still rejected without migration.
 
-Without a master key, core services start and the credential service is absent; a plugin declaring it as a required injection cannot activate. A supplied malformed key fails startup. Generate one once with `openssl rand -hex 32`, back it up separately, and use the same key on every replica/restart. See [managed credentials](plugin-credentials.md).
+A missing, empty or malformed master key rejects startup, including deployments without plugins. The runtime has no default key. The public example value in the example files must be replaced for a fresh installation. Generate one once with `openssl rand -hex 32`, back it up separately, and use the same key on every replica/restart. See [managed credentials](plugin-credentials.md).
 
 Webhook delivery always uses a separate database. SQLite creates `webhooks.db` beside the main database. PostgreSQL defaults to `<main_database>_webhooks`; a missing database triggers a creation attempt. If the account lacks database-creation privileges, pre-create that dedicated database and grant access, or set `DOCA_WEBHOOK_DATABASE_URL` to an accessible dedicated database. The AI store uses `ai.db` in Compose and the `doca_ai` schema in the main PostgreSQL database; PostgreSQL permissions must allow its initialization. These stores need backups even when no external AI model is configured.
 

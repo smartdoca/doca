@@ -33,7 +33,7 @@ Credential operations and plugin business transactions commit separately. If sav
 
 ## Deployment environment
 
-`DOCA_CREDENTIAL_MASTER_KEY` must be 32 random bytes encoded as 64 hexadecimal characters; generate it with `openssl rand -hex 32`. Set it once, retain it across restarts, and back it up separately. Invalid configuration rejects startup. The database persists a key fingerprint; a mismatched key rejects startup without re-encrypting data. Removing the final plugin does not remove this key identity. Without a key the host does not provide the service; plugins requiring it fail to start, while optional injection returns undefined. Every process sharing the database uses the same key.
+`DOCA_CREDENTIAL_MASTER_KEY` must be 32 random bytes encoded as 64 hexadecimal characters; generate it with `openssl rand -hex 32`. Set it once, retain it across restarts, and back it up separately. The key is required for every host startup, even without plugins; missing, empty or malformed configuration rejects startup. The example files contain a public sample value for illustration only; replace it for a fresh installation, and retain the original key for an existing deployment. The database persists a key fingerprint; a mismatched key rejects startup without re-encrypting data. Removing the final plugin does not remove this key identity. Every process sharing the database uses the same key.
 
 Operators select database and file storage: SQLite/local files for one instance; configure shared database and cloud storage for multiple instances. The plugin API does not select deployment topology. Compose forwards database, pool, Webhook database, Redis, and instance settings; see [docker.env.example](../docker.env.example).
 

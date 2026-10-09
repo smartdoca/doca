@@ -30,7 +30,7 @@ Subpackage developers and Doca host developers maintain this contract together: 
 
 Read the new package's integration documentation and compare exported APIs/schema with the currently installed build. Build/pack and install the actual updated artifact; when versions are reused, use a new hash-qualified filename and lockfile entry to avoid stale caches. Keep the previous artifact and a rollback route. Do not modify upstream source just to force host compatibility without task authorization.
 
-Adapt host bindings, codec validation and exact current-schema negotiation together. This project accepts only the current empty-database/document baseline; schema changes replace that baseline and do not add migration paths. Declare upstream gaps explicitly rather than silently approximating them.
+Adapt host bindings, codec validation and exact current-schema negotiation together. The normal host accepts only the exact current baseline and never automatically migrates data or adds codec adapters. The user-agreed history-storage change provides explicit offline upgrade/rollback commands for its immediately preceding host database baseline only; it does not authorize editor-schema conversion or upgrades from other baselines. Declare upstream gaps explicitly rather than silently approximating them.
 
 ## Verification
 

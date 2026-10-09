@@ -8,6 +8,7 @@
 .settings-shell > .settings-shell-header {
   height: 56px;
   min-height: 56px;
+  padding-inline: 16px;
 }
 .topbar .document-name-line {
   gap: 6px;

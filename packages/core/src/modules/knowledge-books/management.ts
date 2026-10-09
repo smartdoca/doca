@@ -1,3 +1,4 @@
+import { appendBookRunLog } from "./run-logs.js";
 import {
   recordFeedbackOrigin,
   type BookFeedbackMethod,
@@ -426,6 +427,7 @@ export async function queueBookRun(
         updated_at: now,
       })
       .execute();
+    await appendBookRunLog(tx, { id: runId, book_id: id, actor_id: actor.id }, null, { code: "run_queued" });
     await audit(tx, actor, id, "knowledge_book.run_queued");
     return { id: runId, status: "queued" as const };
   });

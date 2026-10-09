@@ -99,6 +99,7 @@ export function scopeInstalledPlugin(
           "permissions.v1",
           "policies.v1",
           "ai.v1",
+          "ai.continuations.v1",
           "search.v1",
           "knowledge.sources.v1",
         ].includes(token.id)
@@ -128,6 +129,14 @@ export function scopeInstalledPlugin(
               return context.effect(() => method.apply(target, args));
             }
             if (token.id === "notifications.v1") owned(args[0], true);
+            if (token.id === "ai.continuations.v1") {
+              if (property === "registerSource") {
+                owned(args[0].pluginId, true);
+                owned(args[0].id);
+                return context.effect(() => method.apply(target, args));
+              }
+              owned(args[0], true);
+            }
             if (token.id === "http.v1" && property === "callbackUrl")
               owned(args[0], true);
             if (token.id === "http.v1" && property === "register") {

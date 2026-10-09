@@ -9,7 +9,7 @@ export function AIChoiceCard({
 }: {
   question: { title: string; options: string[] };
   disabled: boolean;
-  answer: (value: string) => Promise<void>;
+  answer: (value: string) => void | Promise<void>;
 }) {
 const { t } = useI18n();
 

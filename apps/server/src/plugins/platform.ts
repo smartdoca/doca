@@ -92,6 +92,7 @@ export async function providePlatform(
     services.activities.clear();
     services.directories.clear();
     services.permissions.clear();
+    services.continuations.clear();
     services.policies.clear();
     services.skills.clear();
   });

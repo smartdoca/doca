@@ -1,6 +1,7 @@
 import type { AIProgress } from "@core/modules/ai/progress.js";
 import type { DeliveryReview } from "./delivery.js";
 import type { ImageBatch } from "./image-batch.js";
+import type { AIContinuationState } from "./continuations.js";
 export type AICheckpoint = {
   modelId: string;
   messages: any[];
@@ -10,6 +11,7 @@ export type AICheckpoint = {
   feedback?: DeliveryReview;
   plan?: AIProgress["plan"];
   imageBatch?: ImageBatch;
+  continuations?: AIContinuationState;
 };
 // Only complete assistant/tool exchanges are resumable. Never persist partial JSON
 // as executable input, and never repeat an outstanding external operation automatically.

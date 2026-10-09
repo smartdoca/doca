@@ -1,0 +1,48 @@
+{
+  "preserved_dom": true,
+  "preserved_layout_css": true,
+  "candidate_count": 1,
+  "contrast": [
+    {
+      "pair": "右侧正文",
+      "contrast": 15.52
+    },
+    {
+      "pair": "右侧辅助文字",
+      "contrast": 5.57
+    },
+    {
+      "pair": "右侧辅助文字灰底",
+      "contrast": 5.02
+    },
+    {
+      "pair": "AI 面板文字",
+      "contrast": 14.24
+    },
+    {
+      "pair": "侧栏文字",
+      "contrast": 16.75
+    },
+    {
+      "pair": "侧栏辅助文字",
+      "contrast": 9.21
+    },
+    {
+      "pair": "搜索框文字",
+      "contrast": 8.21
+    },
+    {
+      "pair": "侧栏选中项",
+      "contrast": 12.63
+    },
+    {
+      "pair": "创作按钮",
+      "contrast": 15.22
+    },
+    {
+      "pair": "创作按钮图标",
+      "contrast": 15.52
+    }
+  ],
+  "visual_evidence": "静态 SVG 效果稿已查看；未验证浏览器 HTML 渲染"
+}

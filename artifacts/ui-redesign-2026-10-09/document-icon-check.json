@@ -1,0 +1,20 @@
+{
+  "page_structure_and_layout": "unchanged outside the requested SVG glyphs",
+  "application_changes": [
+    "apps/web/src/features/documents/document-icons.css",
+    "apps/web/src/features/documents/document-tree.css",
+    "apps/web/src/features/workspace/home.css"
+  ],
+  "icon_tests": {
+    "file": "tests/document-icons.test.ts",
+    "passed": 12
+  },
+  "typecheck": {
+    "result": "blocked",
+    "file": "packages/db/src/history-schema.ts",
+    "line": 64,
+    "error": "Transaction<any> is not assignable to DB",
+    "changed_by_this_task": false
+  },
+  "visual_evidence": "已查看整页静态效果稿与放大的六种图标；未验证应用内实际渲染"
+}

@@ -134,7 +134,7 @@ assert.equal(info.origin, "http://127.0.0.1:39351");
       }),
     );
     await page.getByRole("button", { name: "发送", exact: true }).click();
-    await page.getByText("Injected send failure", { exact: true }).waitFor();
+    await page.getByText("Injected send failure", { exact: true }).first().waitFor();
     await page.reload();
     await input.waitFor();
     await expectText("草稿 A：妈妈讲故事，保留书页构图");
@@ -189,24 +189,19 @@ assert.equal(info.origin, "http://127.0.0.1:39351");
         buffer: Buffer.from(`VIEW_${i + 1}`),
       })),
     );
-    await page.waitForFunction(() => {
-      const raw = Object.entries(localStorage).find(
-        ([key]) =>
-          key.includes("doca.ai.composer") &&
-          JSON.parse(localStorage.getItem(key)).segments.some((segment) =>
-            segment.value?.includes("草稿 B"),
-          ),
-      )?.[1];
-      return raw && JSON.parse(raw).attachments.length === 12;
-    });
+    await page.getByText("view-12.txt", {exact:true}).waitFor();
+    await page.evaluate(id => { location.hash = "/ai?session=" + id; }, info.sessions[0]);
+    await expectText("");
+    await page.evaluate(id => { location.hash = "/ai?session=" + id; }, info.sessions[1]);
+    await expectText("草稿 B：稍后继续");
+    await page.getByText("view-12.txt", {exact:true}).waitFor();
+    console.log("PASS selected local files stay in memory across session switching");
     await page.reload();
     await input.waitFor();
     await expectText("草稿 B：稍后继续");
-    assert.ok(
-      (await page.locator(".ai-upload-list").textContent()).includes("view-12"),
-    );
+    assert.equal(await page.getByText("view-12.txt", {exact:true}).count(), 0);
     console.log(
-      "PASS local multi-file upload exceeds eight attachments and survives reload",
+      "PASS reload retains text while local files are never uploaded before sending",
     );
     await page.getByRole("button", {name:"上传文件或图片",exact:true}).click();
     const chooseFolder = page.waitForEvent("filechooser");

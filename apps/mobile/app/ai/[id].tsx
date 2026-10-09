@@ -84,7 +84,7 @@ type JobEvent = {
   };
 };
 
-const activeStatus = new Set(["queued", "running", "awaiting_approval"]);
+const activeStatus = new Set(["queued", "running", "awaiting_approval", "awaiting_dependency"]);
 const doneStatus = new Set(["completed", "failed", "cancelled", "interrupted"]);
 
 const maxFiles = 8;
@@ -303,7 +303,7 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
             traced,
           ),
         );
-        setTyping(!buffers.current.get(data.id));
+        setTyping(data.status !== "awaiting_dependency" && !buffers.current.get(data.id));
       } else if (patch?.events || patch?.approvals) {
         setMessages((current) =>
           merge(
@@ -380,7 +380,7 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
     setMessages(merge(toMessages(detail.data.messages), buffers.current, new Set(Object.keys(nextTraces))));
     if (liveJobs.length) {
       running.current = true;
-      setTyping(liveJobs.some((job) => !buffers.current.get(job.id)));
+      setTyping(liveJobs.some((job) => job.status !== "awaiting_dependency" && !buffers.current.get(job.id)));
       startStream();
     }
   }, [detail.data, rememberTraces, startStream]);
@@ -705,7 +705,7 @@ export function Conversation({ sessionId, heading }: { sessionId?: string; headi
           </View>
         )}
         renderFooter={() =>
-          typing ? <Text style={styles.thinking}>正在思考…</Text> : null
+          typing ? <Text style={styles.thinking}>正在思考…</Text> : jobs.some(job => job.status === "awaiting_dependency") ? <Text style={styles.thinking}>{t("ai.progress.phase.waitingBackground")}</Text> : null
         }
         renderChatFooter={() => (
           <View>

@@ -2,6 +2,12 @@
 
 Doca's public plugin SDK. Plugins declare service requirements and own business models and authorization. All persistence uses public host-managed services; installed packages must declare `doca.storage: "host"` and never select local/remote backends or storage paths. Managed SQL/private objects are exported in 0.1.7, managed credentials in source 0.1.8; temporary workspaces are not exported; see the [storage contract](../../docs/plugin-horizontal-scaling.md). They must not import host source paths or use private runtime bridges.
 
+## Background task continuation (0.1.10)
+
+`@smartdoca/plugin-sdk/ai` exports `aiContinuationsServiceToken` (`ai.continuations.v1`) for installed server plugins. Register an installation-owned source that reads durable, currently authorized task snapshots; call `wait(pluginId, toolContext, {sourceId, operationId})` from a registered AI tool and `wake(pluginId, {sourceId, operationId})` after committing a worker result. The host retains the original assistant task and resumes it after background completion or a human decision. Repeated notifications are deduplicated; cancellation, current identity, source ownership and permissions are checked again before resuming.
+
+Snapshots require `version: 1`, `state`, `revision`, `summary` and optional JSON `result`. States are `running`, `waiting_input`, `completed`, `failed`, `cancelled`. Declare this service as required and use `sdkRange: "^0.1.10"` on Doca 0.1.14 or later. There is no adapter or automatic conversion of historical tasks. See the [contract, integration example and rollback limits](../../docs/plugin-ai-continuations.md).
+
 ## Public capabilities added in 0.1.6 (source)
 
 `PluginWebHost.ai.open({prompt, context, documentIds, attachmentFileIds, sessionId, modelId, autoSend})` opens the personal assistant on Web and in the native App container. It pre-fills an editable draft unless `autoSend: true` explicitly submits a host job. All resource/session/model authorization and execution policies use the existing host flows. See the [launch contract and examples](../../docs/plugin-assistant.md). This source addition does not imply npm publication or an updated native App.

@@ -10,7 +10,7 @@ export function scrollDocumentBoundary(
   edge: DocumentScrollEdge,
   behavior: ScrollBehavior = "smooth",
 ) {
-  const outer = root.querySelector<HTMLElement>(":scope > .main-scroll");
+  const outer = root.querySelector<HTMLElement>(":scope > .plugin-content-layout > .main-scroll");
   if (!outer) return;
   // Markdown has nested scrolling. Move both visible columns to the same end,
   // including CodeMirror's scroller. The outer viewport stays above discussion.

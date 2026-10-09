@@ -37,6 +37,7 @@ import { EmojiPicker } from "@web/shared/components/emoji-picker.js";
 import { DocumentLinkControl } from "@web/features/documents/document-link-control.js";
 import { FileSourceDialog, FolderFilePicker } from "@web/features/files/files.js";
 import { fileUrl, type FileItem } from "@web/shared/api.js";
+import { documentUploadProblem } from "./document-upload.js";
 
 export function EditorToolbar({
   handle,
@@ -652,6 +653,8 @@ export function EditorToolbar({
           const selected = e.target.files?.[0];
           e.target.value = "";
           if (!selected || !handle || disabled) return;
+          const problem = documentUploadProblem(selected);
+          if (problem) { setError(tr(problem.key, problem.values)); return; }
           void (
             fileKind === "media"
               ? handle.commands.uploadMedia(selected)
@@ -662,6 +665,8 @@ export function EditorToolbar({
       {error && <Feedback message={error} tone="error" />}
       {folderPicker && <FolderFilePicker initialSource={folderPicker === "materials" ? "materials" : "folders"} close={() => setFolderPicker(false)} select={async (item: FileItem) => {
         if (!handle || disabled) return;
+        const problem = documentUploadProblem(item);
+        if (problem) throw new Error(tr(problem.key, problem.values));
         const response = await fetch(fileUrl(item.id));
         if (!response.ok) throw new Error("文件读取失败");
         const selected = new File([await response.blob()], item.name, { type: item.mime });

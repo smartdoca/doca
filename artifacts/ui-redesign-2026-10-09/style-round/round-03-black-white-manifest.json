@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "lang": "zh",
+  "project": "Doca · 左黑右白",
+  "brief": "保留现有布局：左侧黑色导航，右侧白色工作区；只看这一个方向。",
+  "round": "左黑右白样张",
+  "candidates": [
+    {
+      "id": "black-white",
+      "name": "黑白工作台",
+      "concept": "黑色导航把工具收在左边，白色内容区承托阅读与工作。",
+      "typography": "原有字号与密度，系统无衬线字体，26px 问候标题",
+      "palette": [
+        "#151515",
+        "#FFFFFF",
+        "#242424",
+        "#F5F5F5"
+      ],
+      "traits": [
+        "保留现有布局",
+        "黑色左侧导航",
+        "白色内容区",
+        "灰阶图标与状态"
+      ],
+      "kind": "html",
+      "source": "fixed-black-white.html"
+    }
+  ]
+}

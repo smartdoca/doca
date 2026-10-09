@@ -1,0 +1,190 @@
+/* Quiet navigation chrome; document-type glyphs carry their own color. */
+@media (min-width: 1201px) {
+  .app-shell:not(.public-view) {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+}
+.sidebar .sidebar-tree-heading {
+  margin: 24px 8px 8px;
+  color: var(--text-secondary, #646a73);
+}
+.sidebar .sidebar-tree-heading > button:first-child {
+  font-size: 13px;
+  font-weight: 600;
+}
+.sidebar .sidebar-tree-heading > button.tree-organize {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 11px;
+}
+.sidebar .document-tree {
+  padding: 0 0 20px;
+  scrollbar-width: thin;
+  scrollbar-color: #c5c9cf transparent;
+}
+.sidebar .document-tree .tree-row {
+  min-height: 32px;
+  margin: 1px 0;
+  padding-right: 6px;
+  border-radius: 7px;
+}
+.sidebar .document-tree .tree-row:hover {
+  background: #e9ebed;
+}
+.sidebar .document-tree .tree-row:has(.tree-more[aria-expanded="true"]) {
+  background: #e3e5e8;
+}
+.sidebar .document-tree .tree-row.selected,
+.sidebar .document-tree .tree-row.selected:has(.tree-more[aria-expanded="true"]) {
+  background: #dce4fa;
+}
+.sidebar .document-tree .tree-row .tree-link {
+  min-height: 32px;
+  gap: 6px;
+  padding: 5px 2px;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--text, #1f2329);
+}
+.sidebar .document-tree .tree-row .file-glyph {
+  width: 20px;
+  height: 22px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--glyph-ink);
+}
+.sidebar .document-tree .tree-row .file-glyph > svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.8;
+  color: inherit;
+}
+/* Keep icon dimensions and label weight stable when switching the active row. */
+.sidebar .document-tree .tree-row.selected .tree-link {
+  color: #245bdb;
+}
+.sidebar .document-tree .tree-row.inaccessible .tree-link {
+  color: var(--text-muted, #9aa0a8);
+  cursor: not-allowed;
+}
+.sidebar .document-tree .tree-row.inaccessible .file-glyph {
+  color: var(--text-muted, #9aa0a8);
+  opacity: 0.7;
+}
+.sidebar .document-tree .tree-row.selected .file-glyph {
+  background: transparent;
+  color: var(--glyph-ink);
+}
+.sidebar .document-tree .tree-toggle,
+.sidebar .document-tree .tree-spacer {
+  width: 20px;
+  min-width: 20px;
+  flex: 0 0 20px;
+}
+.sidebar .document-tree .tree-toggle {
+  height: 28px;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+}
+.sidebar .document-tree .tree-toggle > svg {
+  color: var(--text-muted, #8f959e);
+}
+/* Hidden actions don't consume scarce label space; visible actions sit at right. */
+.sidebar .document-tree .tree-row .hover-add,
+.sidebar .document-tree .tree-row .tree-more {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  min-width: 26px;
+  height: 28px;
+  min-height: 28px;
+  padding: 4px;
+  border: 0;
+  border-radius: 5px;
+  opacity: 0;
+  pointer-events: none;
+  background: transparent;
+  color: var(--text-secondary, #646a73);
+}
+.sidebar .document-tree .tree-row:has(.tree-more) .hover-add {
+  right: 30px;
+}
+.sidebar
+  .document-tree
+  .tree-row:is(
+    :hover,
+    :focus-within,
+    .selected,
+    :has(.tree-more[aria-expanded="true"])
+  )
+  .tree-link {
+  padding-right: 28px;
+}
+.sidebar
+  .document-tree
+  .tree-row:is(
+    :hover,
+    :focus-within,
+    .selected,
+    :has(.tree-more[aria-expanded="true"])
+  ):has(.hover-add):has(.tree-more)
+  .tree-link {
+  padding-right: 54px;
+}
+.sidebar
+  .document-tree
+  .tree-row:is(
+    :hover,
+    :focus-within,
+    .selected,
+    :has(.tree-more[aria-expanded="true"])
+  )
+  :is(.hover-add, .tree-more) {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sidebar .document-tree .tree-row :is(.hover-add, .tree-more) > svg {
+  width: 17px;
+  height: 17px;
+  color: inherit;
+}
+.sidebar .document-tree .tree-row :is(.hover-add, .tree-more):hover {
+  background: #d6d9de;
+}
+.sidebar .document-tree .tree-link:focus-visible,
+.sidebar .document-tree .tree-toggle:focus-visible,
+.sidebar .document-tree .tree-more:focus-visible,
+.sidebar .document-tree .hover-add:focus-visible {
+  outline: 2px solid var(--brand, #3370ff);
+  outline-offset: -2px;
+}
+.sidebar .document-tree .tree-row.drop-inside {
+  background: #e7efff;
+  box-shadow: inset 0 0 0 2px #3370ff;
+}
+@media (hover: none) {
+  .sidebar .document-tree .tree-row .tree-link {
+    padding-right: 28px;
+  }
+  .sidebar .document-tree .tree-row:has(.hover-add):has(.tree-more) .tree-link {
+    padding-right: 54px;
+  }
+  .sidebar .document-tree .tree-row :is(.hover-add, .tree-more) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+:root[data-density="compact"] .sidebar .document-tree .tree-row,
+:root[data-density="compact"] .sidebar .document-tree .tree-link {
+  min-height: 30px;
+}
+:root[data-density="compact"] .sidebar .document-tree .tree-link {
+  padding-block: 3px;
+  font-size: 13px;
+}

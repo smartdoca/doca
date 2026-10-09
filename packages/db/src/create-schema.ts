@@ -2,6 +2,7 @@ import { currentSchemaTables } from "./introspection.js";
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { createKnowledgeBookSchema } from "./knowledge-books-schema.js";
+import { createHistorySchema, HISTORY_SCHEMA_BASELINE, PRE_HISTORY_SCHEMA_BASELINE, HISTORY_ROLLBACK_BASELINE, validateHistorySchema } from "./history-schema.js";
 
 const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS "plugin_webview_auth" ("id" varchar(64) primary key,"kind" varchar(16) not null,"plugin_id" varchar(100) not null,"parent_session" varchar(64) not null,"expires_at" varchar(32) not null);`,
@@ -297,7 +298,7 @@ async function createKnowledgeSchema(db: Kysely<any>) {
     await sql.raw(statement).execute(db);
 }
 
-export const CURRENT_SCHEMA_BASELINE = "doca-2026-10-08-knowledge-books-v2";
+export const CURRENT_SCHEMA_BASELINE = HISTORY_SCHEMA_BASELINE;
 
 async function createSystemSchema(db: Kysely<any>) {
   await sql
@@ -320,12 +321,15 @@ export async function validateSchema(db: Kysely<any>) {
     throw new Error(
       "Database is not a current Doca baseline; create a new database",
     );
-  const row = await db
+  const baselines = await db
     .selectFrom("schema_baseline")
     .select("id")
-    .where("id", "=", CURRENT_SCHEMA_BASELINE)
-    .executeTakeFirst();
-  if (!row)
+    .execute();
+  if (baselines.length === 1 && baselines[0]?.id === PRE_HISTORY_SCHEMA_BASELINE)
+    throw new Error("Database baseline requires explicit offline history:upgrade --apply; no data was changed");
+  if (baselines.length === 1 && baselines[0]?.id === HISTORY_ROLLBACK_BASELINE)
+    throw new Error("Database baseline has an interrupted history rollback; finish history:rollback with a new manifest before starting the host");
+  if (baselines.length !== 1 || baselines[0]?.id !== CURRENT_SCHEMA_BASELINE)
     throw new Error(
       "Database baseline is not supported; create a new database",
     );
@@ -386,6 +390,7 @@ export async function validateSchema(db: Kysely<any>) {
         "Current database storage structure is incomplete or unsupported; restore a complete database",
       );
   }
+  await validateHistorySchema(db);
 }
 
 export async function createSchema(db: Kysely<any>) {
@@ -402,6 +407,7 @@ export async function createSchema(db: Kysely<any>) {
   await createSearchSchema(db);
   await createKnowledgeSchema(db);
   await createKnowledgeBookSchema(db);
+  await createHistorySchema(db);
   await createMobileSchema(db);
   await seedSystemRows(db);
   await createSystemSchema(db);

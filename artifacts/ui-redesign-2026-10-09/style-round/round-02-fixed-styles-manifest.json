@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "lang": "zh",
+  "project": "Doca · 保留布局，重做视觉",
+  "brief": "左侧导航、顶部工具区、最近访问列表、右侧 AI 与待办保持现有布局。五个方向只比较配色、字体、圆角和表面处理。",
+  "round": "同布局视觉风格",
+  "candidates": [
+    {
+      "id": "current-home",
+      "name": "当前首页",
+      "baseline": true,
+      "concept": "2026-10-09 线上工作台：首页、左侧导航、最近访问与右侧 AI / 待办。",
+      "typography": "系统无衬线字体，26px 工作台标题，14px 列表与导航",
+      "palette": [
+        "#3370FF",
+        "#F5F6F7",
+        "#FFFFFF"
+      ],
+      "traits": [
+        "浅灰常驻侧栏",
+        "蓝紫色强调",
+        "边框面板与列表"
+      ],
+      "kind": "image",
+      "source": "baseline-home.jpg"
+    },
+    {
+      "id": "reading-room",
+      "name": "墨绿书房",
+      "concept": "像打开一间自己的书房：暖白承托内容，墨绿只标记入口与主动作。",
+      "typography": "标题 \"Songti SC\", serif · 正文 \"PingFang SC\", sans-serif · 字号与现状一致",
+      "palette": [
+        "#F2F2EB",
+        "#FCFCF8",
+        "#273B33",
+        "#244B40"
+      ],
+      "traits": [
+        "保留现有布局",
+        "相同控件位置与密度",
+        "暖白与墨绿",
+        "宋体标题 / 黑体正文",
+        "10px 圆角"
+      ],
+      "kind": "html",
+      "source": "fixed-reading-room.html"
+    },
+    {
+      "id": "graphite-archive",
+      "name": "石墨档案",
+      "concept": "像排好索引的档案柜：黑白建立层级，紧凑列表帮助快速找到资料。",
+      "typography": "标题 \"Helvetica Neue\", \"PingFang SC\", sans-serif · 正文 \"PingFang SC\", sans-serif · 字号与现状一致",
+      "palette": [
+        "#F3F4F3",
+        "#FFFFFF",
+        "#25282A",
+        "#25282A"
+      ],
+      "traits": [
+        "保留现有布局",
+        "相同控件位置与密度",
+        "黑白灰为主",
+        "无衬线粗标题",
+        "2px 方角"
+      ],
+      "kind": "html",
+      "source": "fixed-graphite-archive.html"
+    },
+    {
+      "id": "night-desk",
+      "name": "夜航工作台",
+      "concept": "像夜间点亮的工作桌：炭灰压低背景，铜色把创作动作从内容里提出来。",
+      "typography": "标题 \"Avenir Next\", \"PingFang SC\", sans-serif · 正文 \"PingFang SC\", sans-serif · 字号与现状一致",
+      "palette": [
+        "#20272A",
+        "#2C3539",
+        "#EEF1EB",
+        "#DEA77F"
+      ],
+      "traits": [
+        "保留现有布局",
+        "相同控件位置与密度",
+        "炭灰深色",
+        "铜色动作",
+        "6px 圆角"
+      ],
+      "kind": "html",
+      "source": "fixed-night-desk.html"
+    },
+    {
+      "id": "celadon-studio",
+      "name": "青瓷创作台",
+      "concept": "像一张清透的创作桌：青白底色、青瓷绿和柔软控件，让内容容易亲近。",
+      "typography": "标题 \"Avenir Next\", \"PingFang SC\", sans-serif · 正文 \"Helvetica Neue\", \"PingFang SC\", sans-serif · 字号与现状一致",
+      "palette": [
+        "#EDF5F3",
+        "#FFFFFF",
+        "#213E3B",
+        "#16716C"
+      ],
+      "traits": [
+        "保留现有布局",
+        "相同控件位置与密度",
+        "青白底色",
+        "青瓷绿强调",
+        "18px 圆角"
+      ],
+      "kind": "html",
+      "source": "fixed-celadon-studio.html"
+    },
+    {
+      "id": "cinnabar-index",
+      "name": "朱砂目录",
+      "concept": "像一本认真编排的出版物：朱砂划出重点，用目录、页签和细线组织知识。",
+      "typography": "标题 \"Songti SC\", serif · 正文 \"PingFang SC\", sans-serif · 字号与现状一致",
+      "palette": [
+        "#F6F2EB",
+        "#FFFCF7",
+        "#352D27",
+        "#A33E30"
+      ],
+      "traits": [
+        "保留现有布局",
+        "相同控件位置与密度",
+        "米白与朱砂",
+        "宋体大标题",
+        "无圆角"
+      ],
+      "kind": "html",
+      "source": "fixed-cinnabar-index.html"
+    }
+  ]
+}

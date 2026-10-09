@@ -50,6 +50,58 @@ DOCA_FILE_STORES_JSON='{"version":1,"stores":{"cloud":{"provider":"s3","bucket":
 
 未使用 CDN 时，宿主代理私有云文件，不向浏览器返回存储秘密。其他 CDN 签名协议需要新增适配器，不提供永久公开 URL 降级。密钥轮换需保留被引用的存储 ID 及其字节访问能力；轮换不是数据迁移。
 
+## 图片的浏览器缓存与文件 CDN
+
+文档正文、评论中的普通图片，以及由宿主代理的头像、封面，通过稳定的 `/api/v1/assets/:id/content` 地址缓存。成功的内联图片响应（包括缩略图）返回：
+
+```http
+Cache-Control: private, max-age=3600, must-revalidate
+Vary: Cookie, Authorization
+ETag: W/"对象及变体的标识摘要"
+```
+
+浏览器可以在一小时内复用本机缓存；过期后发送 `If-None-Match`，宿主先核对当前权限，再对相同对象返回 `304`，不再传图片字节。原图和缩略图具有不同 ETag。对象 key 不可变，替换图片需要上传新资产。账号切换后 Cookie/Authorization 变化会选择另一份缓存；缓存有效期内不会再次核对撤权，已下载字节无法撤回。浏览器可能因空间不足、用户清理、强制刷新或“Disable cache”提前丢弃缓存。这里使用 HTTP 缓存，不额外建立 IndexedDB 或 Service Worker 副本。`no-cache` 表示重新验证，`no-store` 表示不保存，区别见 [MDN 缓存指南](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching)。
+
+AI 对话附件、`download=1`、回收站预览及错误响应仍使用 `no-store`，不应用上述缓存策略。即使带有效 ETag，未获授权的请求也不能获得 `304`。文档正文图片具有 resourceId，当前始终由宿主代理；开启 S3 文件 CDN 不会把这些图片自动改成公开地址。
+
+文件 CDN 的签名跳转保持 `no-store`，避免浏览器重复使用过期的 60 秒签名。CDN 最终文件响应的 header 必须配置在文件 CDN 或 S3 源站；Doca 跳转响应上的 header 不会传给最终响应。新上传的 S3 对象元数据当前为 `Cache-Control: private, max-age=60`；已有对象的元数据不会由本次修复批量改写。
+
+CloudFront 中，对受保护文件的 behavior 使用私有 S3 origin/OAC 和可信密钥组。沿用 60 秒签名限制，在 **Response headers policy → Custom headers** 中设置 `Cache-Control: private, max-age=60, must-revalidate` 并启用 **Override**，为新旧对象统一最终浏览器响应。不要给整站或 `/api/*` 套用公开长期缓存。未单独规划边缘缓存时，使用 **CachingDisabled**；定制策略的 Minimum TTL 必须是 0。AWS 指出，正数 Minimum TTL 可以覆盖源站的 `private/no-store`。Response headers policy 控制浏览器响应，不控制边缘 TTL；两者要分别设置。见 [响应头策略](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/modifying-response-headers.html)、[缓存策略 TTL](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cache-key-understand-cache-policy.html)和[签名 URL](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-signed-urls.html)。
+
+签名 URL 的查询参数变化后，浏览器会将其作为不同地址，设置 header 不能保证跨签名复用本机缓存。稳定的文档图片接口没有这个问题。文件 CDN 的边缘命中率与浏览器缓存命中率也不是同一个指标。
+
+验收时关闭 DevTools 的 **Disable cache**，连续打开同一文档：一小时内图片应显示 memory/disk cache；手动请求条件读取应为 `304`，没有图片响应体。再测试退出账号、撤权、缩略图、下载和回收站预览。CDN 跳转需同时检查跳转响应与最终响应：
+
+```sh
+# 只检查响应头。使用有权限的会话；不要把 Cookie 或签名贴到公共日志。
+curl -I -H 'Cookie: doca_session=<会话>' https://doca.example.com/api/v1/assets/<资产ID>/content
+curl -I -H 'Cookie: doca_session=<会话>' -H 'If-None-Match: W/"<首次响应的摘要>"' https://doca.example.com/api/v1/assets/<资产ID>/content
+curl -I 'https://files.example.com/<对象key>?<有效签名参数>'
+```
+
+JS/CSS 静态 CDN 的一年缓存配置见[部署：静态资源](deployment.zh-CN.md#静态资源)，不要将文件 CDN 的私有短期策略套给带内容哈希的公开构建文件。
+
+## 历史快照存储与显式升级
+
+最近 20 个完整业务快照保存在数据库，旧快照每凑满 10 个只保留其中最新 1 个到配置的文件存储，S3 模式下为云存储。每个长期保留点是独立 gzip JSON 文件，原样保存 checkpoint 和独立恢复信息，并在数据库记录一个小索引。只在上传与读回 SHA-256 校验成功后，事务性地登记索引、清理这一组完整数据库记录；另外九个快照按已确认规则抽稀，不再提供回滚。未满十个或存储故障时保留数据库原件。列表统一合并两个来源，不显示存储类型、对象 key 或签名地址。
+
+协作 checkpoint、未覆盖增量与附件不参与抽稀。回收站保留历史，显式永久删除文档后才排队清理归档文件；文件清理延迟一小时并复核无有效引用。归档不重新解码、补全或转换旧 recovery_json。缺少恢复信息或不支持的恢复版本继续拒绝预览。文件只接受 envelope v1，并验证文件哈希、解压上限及索引一致性。正文提交不等待转存，后台持久任务失败后会重试。
+
+数据库新基线为 `doca-2026-10-09-history-storage-v1`；正常启动不兼容读取旧基线。升级只接受上一基线 `doca-2026-10-08-knowledge-books-v2`。先停止全部宿主实例，备份数据库、文件存储及配置，再运行：
+
+```sh
+pnpm history:upgrade                 # 显示要求，不修改数据
+pnpm history:upgrade --apply         # 显式增加结构、更新基线、排队转存；不立即抽稀
+```
+
+不要用重建数据库代替升级。升级事务失败时原数据库保持不变。回退到上一宿主前，停止全部实例并导回已经保留的文件快照：
+
+```sh
+pnpm history:rollback --apply --manifest /backup/history-cloud-references.json
+```
+
+清单路径必须是新文件，权限为 0600。回退先保存云文件引用清单，再逐条验证导回保留点，最后恢复上一基线；云文件继续保留。中断状态使用专门基线标记，宿主拒绝启动，避免部分导回的保留点被再次抽稀；修复存储问题后，用新的清单路径重跑回退命令。不能恢复已抽稀的九个版本；需要这些版本时还原抽稀前的完整数据库备份。用户在快照列表中的回滚仍沿用当前 epoch 与权限/expectedSeq 校验，富文本和 Markdown 支持恢复，其余格式仍仅预览。
+
 ## 校验与权限
 
 - 头像/封面最大5MB，识别PNG、JPEG、WebP、GIF真实文件头并解码；限制2500万像素，移除元数据，转WebP。头像裁为方形(最大512)，封面最大1600宽；GIF仅取首帧。

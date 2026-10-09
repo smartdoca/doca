@@ -1,3 +1,4 @@
+import { continuationJobStatus } from "../services/ai/continuations.js";
 import { sessionResourceHistory } from "@core/modules/ai/session-resources.js";
 import { defaultOfficialSkills } from "@core/modules/ai/skills.js";
 import { checkAttachments } from "../services/ai/attachments.js";
@@ -859,7 +860,7 @@ export async function registerAI(
       const safe = [];
       const activeJobs = await db
         .selectFrom("ai_jobs")
-        .select(["session_id", "status"])
+        .select(["session_id", "status", "result"])
         .where("user_id", "=", actor.id)
         .where("status", "in", ["queued", "running", "awaiting_approval"])
         .execute();
@@ -919,7 +920,7 @@ export async function registerAI(
             running: runningSessions.has(row.id),
             awaitingApproval: activeJobs.some(
               (job) =>
-                job.session_id === row.id && job.status === "awaiting_approval",
+                job.session_id === row.id && continuationJobStatus(job) === "awaiting_approval",
             ),
             executionFailed: (() => {
               const job = latestJobBySession.get(row.id);
@@ -1103,6 +1104,7 @@ export async function registerAI(
           : null,
         jobs: jobs.map(({ result, ...job }) => ({
           ...job,
+          status: continuationJobStatus({ ...job, result }),
           progress: result ? JSON.parse(result).progress : undefined,
         })),
         operations: operations.map((o) => ({
@@ -1185,6 +1187,7 @@ export async function registerAI(
             if (!closed)
               send("job", {
                 ...job,
+                status: continuationJobStatus({ ...job, result }),
                 progress: progress
                   ? progressPatch(old?.progress, progress)
                   : undefined,
@@ -1496,7 +1499,7 @@ export async function registerAI(
         return row;
       });
       void runner.pump().catch(() => {});
-      return { id: job.id, status: job.status };
+      return { id: job.id, status: continuationJobStatus(job) };
     },
   );
   api.post<{ Params: { id: string } }>(
@@ -1586,7 +1589,7 @@ export async function registerAI(
         return { ...current, status };
       });
       if (job.status === "queued") void runner.pump().catch(() => {});
-      return { id: job.id, status: job.status };
+      return { id: job.id, status: continuationJobStatus(job) };
     },
   );
   api.post<{ Params: { id: string } }>(

@@ -13,7 +13,7 @@
   margin-bottom: 26px;
 }
 .workspace-welcome p {
-  color: var(--muted, #7b8190);
+  color: var(--text-secondary);
   font-size: 13px;
   margin: 0 0 10px;
 }
@@ -23,7 +23,7 @@
   font-weight: 650;
 }
 .workspace-welcome span {
-  color: var(--muted, #7b8190);
+  color: var(--text-secondary);
   font-size: 14px;
 }
 .workspace-columns {
@@ -33,8 +33,8 @@
   align-items: start;
 }
 .workspace-panel {
-  background: var(--panel, #fff);
-  border: 1px solid var(--border, #e8eaf0);
+  background: #fff;
+  border: 1px solid var(--line-soft);
   border-radius: 12px;
   overflow: hidden;
   padding: 20px;
@@ -55,7 +55,7 @@
   align-items: center;
   gap: 12px;
   padding: 15px 0;
-  border-bottom: 1px solid var(--border, #eef0f4);
+  border-bottom: 1px solid var(--line-soft);
 }
 .workspace-recent > div > svg {
   color: #8b91a1;
@@ -81,17 +81,17 @@
   flex-wrap: wrap;
   gap: 6px 10px;
   margin-top: 5px;
-  color: var(--muted, #858b99);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 .workspace-ai {
   display: block;
   position: relative;
-  background: linear-gradient(125deg, #eff0ff, #f7f5ff);
-  border: 1px solid #e3e2fa;
+  background: var(--assistant-surface);
+  border: 1px solid var(--assistant-line);
   border-radius: 12px;
   padding: 22px;
-  color: #6255bd;
+  color: var(--assistant-text);
   text-decoration: none;
   margin-bottom: 20px;
 }
@@ -116,7 +116,7 @@
   margin: 22px 0 10px;
 }
 .workspace-todos h3 span {
-  color: #898d9c;
+  color: var(--text-secondary);
   font-weight: 400;
 }
 .workspace-todos a {
@@ -200,8 +200,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.workspace-glyph-assistant { background: #7f6fff; }
-.workspace-glyph-folder { background: #cc8500; }
-.workspace-glyph-file { background: #6084a8; }
+.workspace-glyph-assistant { --glyph-ink: #7762bf; }
+.workspace-glyph-folder { --glyph-ink: #ab7a21; }
+.workspace-glyph-file { --glyph-ink: #6084a8; }
 
-.workspace-glyph-plugin { background: #6084a8; }
+.workspace-glyph-plugin { --glyph-ink: #6084a8; }

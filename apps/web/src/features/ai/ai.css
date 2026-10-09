@@ -389,6 +389,10 @@ body.ai-panel-resizing {
   cursor: pointer;
   padding: 0 2px;
 }
+.ai-message-send-header { display: flex; align-items: center; gap: 8px; }
+.ai-message-send-state { color: var(--text-secondary); font-size: 12px; }
+.ai-message-send-state[data-delivery="failed"] { color: var(--danger, #b42318); }
+.ai-message-send-error { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; }
 .ai-folder-preview-trigger { display: inline-flex; align-items: center; gap: 5px; }
 .ai-sent-targets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .ai-sent-target { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border: 1px solid #d8e3f4; border-radius: 8px; background: #eef4ff; color: #2b4c7e; cursor: pointer; }

@@ -43,6 +43,8 @@ PDF、Office、文本归为 document。大小是独立处理条件，不进入�
 
 当前处理器生成不放大的 480×480 范围 WebP 缩略图，处理版本为 `thumbnail-v1`，原文件不被覆盖。`file_derivatives` 按源对象、用途和处理版本唯一登记。重复任务复用结果；租约重叠时以数据库登记获胜者为准，清理未被选中的输出。
 
+AI 解析的 PNG 阅读图与原文件字节完全相同时，阅读图记录直接引用原对象，避免额外存储一份相同 PNG；需要旋转、缩放或重新编码时仍独立保存阅读图。并发解析清理只处理本次新写入的内容，不删除复用的原图。现有解析记录和云端对象不转换、不清理。
+
 - 文件管理：`GET /api/v1/files/items/:id/content?variant=thumbnail`
 - 资产：`GET /api/v1/assets/:id/content?variant=thumbnail`
 
@@ -52,7 +54,7 @@ PDF、Office、文本归为 document。大小是独立处理条件，不进入�
 
 ## AI 会话虚拟文件夹
 
-新增 AI 附件和生成图片在 `file_items.metadata.aiSessionFolder` 记录会话归属，实际父级仍是 `system / ai`，不创建实体文件夹或移动物理内容。新增附件在首次发送前记录 `{ sessionId: null, title: null }`，发送消息时与任务入队在同一事务内绑定会话；生成图片直接从当前任务取得会话。文件夹 ID 为 `ai-session:<会话 UUID>`，名称读取会话的当前 title，按会话 ID 区分同名会话。文件夹和文件沿用 AI 目录只读、可复制出去的规则。
+新增 AI 附件和生成图片在 `file_items.metadata.aiSessionFolder` 记录会话归属，实际父级仍是 `system / ai`，不创建实体文件夹或移动物理内容。网页选择本地图片、文件时不上传，点击发送后才创建会话并上传、解析附件。附件在消息接收前记录 `{ sessionId: null, title: null }`，发送消息时与任务入队在同一事务内绑定会话；生成图片直接从当前任务取得会话。文件夹 ID 为 `ai-session:<会话 UUID>`，名称读取会话的当前 title，按会话 ID 区分同名会话。文件夹和文件沿用 AI 目录只读、可复制出去的规则。
 
 该规则只处理带新字段的文件。既有文件不补字段、不搬动、不根据历史任务或旧 `metadata.sessionId` 推断归属；旧文件及未发送的新附件继续平铺在 AI 助手目录。现有目录别名解析和旧 sessionId 查询不变，也不引入数据迁移。回退展示逻辑可恢复平铺，文件内容和原有父级不变。
 

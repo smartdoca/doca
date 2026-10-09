@@ -1,5 +1,7 @@
+import { pluginServices } from "@core/shared/plugin-services.js";
 import { createUserDirectory } from "@core/modules/discovery/users.js";
 import { HOST_VERSION } from "./version.js";
+import { createHistoryWorker } from "../jobs/history-worker.js";
 import { sessionDurations } from "./session-policy.js";
 import { imagePageAttemptLimit } from "../services/ai/image-attempt-policy.js";
 import { pluginMobileActor } from "../plugins/mobile-session.js";
@@ -336,7 +338,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
               ? 409
               : 500;
     if (status === 500) req.log.error({ err: error }, "Request failed");
-    reply.code(status).send({
+    reply.header("Cache-Control", "no-store").removeHeader("ETag").code(status).send({
       message:
         error instanceof AppError
           ? systemErrorText(error)
@@ -357,6 +359,23 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     return a;
   };
   const runtime = await registerRuntimeSettings(api, db, admin, options);
+  const historyWorker = createHistoryWorker(db, runtime.storage);
+  let historyProcessing: Promise<unknown> | undefined;
+  let historyTimer: ReturnType<typeof setInterval> | undefined;
+  api.addHook("onReady", async () => {
+    historyTimer = setInterval(() => {
+      if (historyProcessing) return;
+      historyProcessing = historyWorker.pump()
+        .catch(error => api.log.error({ err: error }, "History storage maintenance failed"))
+        .finally(() => { historyProcessing = undefined; });
+    }, 1000);
+    historyTimer.unref();
+  });
+  api.addHook("preClose", async () => {
+    if (historyTimer) clearInterval(historyTimer);
+    await historyProcessing;
+    historyWorker.dispose();
+  });
   registerRegistrationReviews(api, db, { admin });
   registerTickets(api, db, {
     origin,
@@ -491,7 +510,10 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   });
   // Fastify routes are immutable after mounting, so the host is intentionally
   // disposed only from application close (or startup rollback below).
-  api.addHook("preClose", async () => pluginComposition.host.dispose());
+  api.addHook("preClose", async () => {
+    pluginServices(db).continuationsReady = false;
+    await pluginComposition.host.dispose();
+  });
   const search = pluginComposition.search;
   registerProfiles(api, db, authenticated);
   registerAssets(api, db, authenticated, actor, admin, runtime.storage, limit);

@@ -15,8 +15,10 @@ it("executes public plugin tools with authenticated context, schema and lifecycl
   const host = new AIContributionHost<AIContributionExecutionContext>();
   let service!: AIServiceV1;
   provideAI({ provide(token: {id: string}, value: AIServiceV1) { if (token.id === aiServiceToken.id) service = value; } } as PluginLifecycleContext, db, host);
+  let expectedAdmin = true;
   const dispose = service.registerTool({ id: "example.tool.echo", description: "Echo", inputSchema: { type: "object", properties: { value: { type: "string" } }, required: ["value"] }, async execute(input, context) {
     expect(context.principal.id).toBe(actor.id);
+    expect(context.principal.admin).toBe(expectedAdmin);
     expect(context.jobId).toBe("job");
     expect(context).not.toHaveProperty("db");
     return { value: input.value!, user: context.principal.id };
@@ -24,6 +26,9 @@ it("executes public plugin tools with authenticated context, schema and lifecycl
   expect(host.tools.get("example.tool.echo")?.inputSchema).toHaveProperty("required", ["value"]);
   const execute = async () => host.createToolPipeline({ db, actor: { ...actor, admin: 1 }, jobId: "job", sessionId: "session" }).execute({ sessionId: "session", turnId: "turn", call: createToolCall({ sessionId: "session", turnId: "turn", toolId: "example.tool.echo", ordinal: 0, input: {value: "hello"} }), signal: new AbortController().signal });
   expect((await execute()).outcome).toMatchObject({ status: "success", value: { value: "hello", user: actor.id } });
+  expectedAdmin = false;
+  await db.updateTable("users").set({ admin: 0 }).where("id", "=", actor.id).execute();
+  expect((await execute()).outcome.status).toBe("success");
   await db.updateTable("users").set({ status: "disabled" }).where("id", "=", actor.id).execute();
   expect((await execute()).outcome.status).toBe("error");
   dispose();

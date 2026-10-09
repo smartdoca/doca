@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-10",
+  "cause": "普通文档附件上限为20MiB，用户的5GB视频超过上限；原流程先插入占位，再由上传回调拒绝文件，具体原因没有显示。",
+  "changes": [
+    "粘贴、拖入和固定工具栏在创建上传占位前检查文件大小，超限显示文件名和20MB上限。",
+    "普通文档文件拖入使用当前SDK原生uploadMedia命令，保存稳定资产ID。",
+    "上传异常显示原始服务端原因，视频播放异常显示浏览器网络/解码/格式原因；提示固定在文档可视区并可关闭。",
+    "首页、管理页和个人设置页右侧留白统一为16px；通知弹层定位到实际入口，打开/关闭与缩放不移动按钮。"
+  ],
+  "boundaries": {
+    "slate": "0.4.13",
+    "storedFormatChanged": false,
+    "migrationAdded": false,
+    "uploadLimitRaised": false,
+    "userDocumentsEdited": false,
+    "existingFailedPlaceholders": "保留；本次只阻止新超限文件创建占位，不自动删除或转换旧节点。",
+    "existingSdkCompatibility": "当前SDK内部已有uploadVideo到uploadAttachment的回退；本次仍提供独立已导出的uploadVideo回调，未改该回退或引入旧SDK适配。"
+  },
+  "verification": {
+    "typecheck": "passed",
+    "targetedTests": {
+      "files": 3,
+      "tests": 12,
+      "result": "passed"
+    },
+    "sizeBoundary": "5GB文件元信息被拒绝并显示20MB原因；精确20MiB仍通过前置校验。实际浏览器超限文件为21MiB。",
+    "browserRuns": [
+      {
+        "run": 3,
+        "result": "passed",
+        "checks": 7,
+        "report": "run-3-report.json"
+      },
+      {
+        "run": 4,
+        "result": "passed",
+        "checks": 7,
+        "report": "run-4-report.json"
+      },
+      {
+        "run": 5,
+        "result": "passed",
+        "checks": 7,
+        "report": "run-5-report.json"
+      }
+    ],
+    "developmentEnvironment": "一次语言目录热更新打断了开发页面上下文；重新运行的第三轮完整通过60秒静置、选择、缩放、滚动和只读检查。",
+    "existingConsoleWarning": "测试期间首页最近资源列表记录了React重复资源键警告；头像/通知定位和视频回归断言均通过，未修改该列表逻辑。"
+  },
+  "visualReview": {
+    "scope": "局部修复，沿用现有设计；主Agent自检，无独立评审。",
+    "screenshots": "run-*-*.png",
+    "zoomEvidence": "run-*-header-200.png（局部200%）",
+    "animationChanges": "未新增动效；验证现有菜单打开/关闭后的几何位置。",
+    "copyRemoved": "无"
+  },
+  "reproduction": [
+    "DOCA_QA_ISOLATED=1 pnpm exec tsx scripts/qa-media-header-server.mts",
+    "DOCA_QA_ISOLATED=1 DOCA_QA_RUN=1 node scripts/qa-media-header-ui.cjs",
+    "第三轮增加DOCA_QA_IDLE_SECONDS=60"
+  ]
+}

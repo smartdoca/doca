@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+<title>Doca 左黑右白工作台 · 静态效果稿</title>
+<desc>采用现有工作台布局，左侧 254 像素黑色导航，右侧白色内容区。</desc>
+<rect x="0" y="0" width="1440" height="900" rx="0" fill="#FFFFFF"/>
+<rect x="0" y="0" width="254" height="900" rx="0" fill="#151515"/>
+<rect x="16" y="12" width="28" height="28" rx="6" fill="#F5F5F5"/>
+<g transform="translate(21 17) scale(0.75)" fill="none" stroke="#151515" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14m0-14C9 4 5 4 2 5v15c3-1 7-1 10 1m0-14c3-3 7-3 10-2v15c-3-1-7-1-10 1"/></g>
+<text x="52" y="32" fill="#F5F5F5" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="16" font-weight="650">Doca</text>
+<g transform="translate(220 17) scale(0.6666666666666666)" fill="none" stroke="#B8B8B8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></g>
+<rect x="12" y="52" width="230" height="38" rx="6" fill="#202020" stroke="#343434" stroke-width="1"/>
+<g transform="translate(22 62) scale(0.7083333333333334)" fill="none" stroke="#B8B8B8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="7.5"/><path d="m16 16 5 5"/></g>
+<text x="47" y="77" fill="#B8B8B8" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="400">搜索</text>
+<text x="207" y="76" fill="#B8B8B8" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="10" font-weight="400">⌘ K</text>
+<rect x="10" y="106" width="234" height="40" rx="6" fill="#F2F2F2"/>
+<rect x="22" y="115" width="22" height="22" rx="6" fill="#242424"/>
+<g transform="translate(26 119) scale(0.5833333333333334)" fill="none" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></g>
+<text x="54" y="132" fill="#1C1C1C" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="15" font-weight="600">创作</text>
+<rect x="10" y="156" width="234" height="40" rx="6" fill="#202020" stroke="#343434" stroke-width="1"/>
+<g transform="translate(22 167) scale(0.75)" fill="none" stroke="#F5F5F5" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3H8m1 0v5l-3 4v3h12v-3l-3-4V3m-3 12v7"/></g>
+<text x="50" y="182" fill="#F5F5F5" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="15" font-weight="600">置顶</text>
+<rect x="10" y="210" width="234" height="40" rx="6" fill="#2D2D2D"/>
+<g transform="translate(22 221) scale(0.75)" fill="none" stroke="#F5F5F5" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-8h6v8"/></g>
+<text x="50" y="236" fill="#F5F5F5" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="15" font-weight="600">首页</text>
+<g transform="translate(22 265) scale(0.75)" fill="none" stroke="#F5F5F5" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7zM20 2v4m-2-2h4"/></g>
+<text x="50" y="280" fill="#F5F5F5" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="15" font-weight="600">AI 助手</text>
+<g transform="translate(22 309) scale(0.75)" fill="none" stroke="#B8B8B8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h6"/></g>
+<text x="50" y="324" fill="#B8B8B8" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="15" font-weight="500">文档</text>
+<g transform="translate(22 353) scale(0.75)" fill="none" stroke="#B8B8B8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14m0-14C9 4 5 4 2 5v15c3-1 7-1 10 1m0-14c3-3 7-3 10-2v15c-3-1-7-1-10 1"/></g>
+<text x="50" y="368" fill="#B8B8B8" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="15" font-weight="500">知识库</text>
+<g transform="translate(22 397) scale(0.75)" fill="none" stroke="#B8B8B8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14m0-14C9 4 5 4 2 5v15c3-1 7-1 10 1m0-14c3-3 7-3 10-2v15c-3-1-7-1-10 1"/></g>
+<text x="50" y="412" fill="#B8B8B8" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="15" font-weight="500">知识册</text>
+<g transform="translate(22 441) scale(0.75)" fill="none" stroke="#B8B8B8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18"/></g>
+<text x="50" y="456" fill="#B8B8B8" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="15" font-weight="500">文件夹</text>
+<g transform="translate(22 485) scale(0.75)" fill="none" stroke="#B8B8B8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.9"/><circle cx="9" cy="7" r="4"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/></g>
+<text x="50" y="500" fill="#B8B8B8" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="15" font-weight="500">共享文件夹</text>
+<g transform="translate(22 529) scale(0.75)" fill="none" stroke="#B8B8B8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="7.5"/><path d="m16 16 5 5"/></g>
+<text x="50" y="544" fill="#B8B8B8" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="15" font-weight="500">公共资源</text>
+<path d="M10 566H244" stroke="#343434"/>
+<g transform="translate(22 586) scale(0.75)" fill="none" stroke="#B8B8B8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></g>
+<text x="50" y="601" fill="#B8B8B8" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="15" font-weight="500">回收站</text>
+<g transform="translate(1259 18) scale(0.8333333333333334)" fill="none" stroke="#242424" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="18" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 11h6m-6 5h6"/></g>
+<g transform="translate(1297 18) scale(0.8333333333333334)" fill="none" stroke="#242424" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-11 9a2 2 0 0 0 4 0"/></g>
+<text x="1335" y="34" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="400">中文</text>
+<circle cx="1407" cy="28" r="17" fill="#F3F3F3"/>
+<text x="1400" y="34" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="600">我</text>
+<text x="290" y="104" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="13" font-weight="400">10月9日星期五</text>
+<text x="290" y="145" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="26" font-weight="650">你好，管理员</text>
+<text x="290" y="178" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="400">从上次停下的地方继续。</text>
+<g transform="translate(1376 126) scale(0.75)" fill="none" stroke="#686868" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a9 9 0 0 1 15-6l3 3m0-5v5h-5M21 14A9 9 0 0 1 6 20l-3-3m0 5v-5h5"/></g>
+<rect x="290" y="209" width="790" height="659" rx="8" fill="#FFFFFF" stroke="#E7E7E7" stroke-width="1"/>
+<g transform="translate(310 232) scale(0.75)" fill="none" stroke="#242424" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g>
+<text x="337" y="249" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="16" font-weight="600">最近访问</text>
+<text x="310" y="298" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="600">全部</text>
+<rect x="310" y="313" width="28" height="3" rx="1" fill="#242424"/>
+<text x="366" y="298" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="400">文档</text>
+<text x="422" y="298" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="400">知识库</text>
+<text x="492" y="298" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="400">文件夹</text>
+<text x="562" y="298" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="400">文件</text>
+<path d="M310 316H1060" stroke="#E9E9E9"/>
+<rect x="310" y="337" width="30" height="32" rx="6" fill="#F1F1F1"/>
+<g transform="translate(315 343) scale(0.8333333333333334)" fill="none" stroke="#343434" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h6"/></g>
+<text x="352" y="351" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="500">调研</text>
+<text x="352" y="375" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">文档</text>
+<text x="386" y="375" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">8 分钟前</text>
+<g transform="translate(1038 346) scale(0.6666666666666666)" fill="none" stroke="#686868" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></g>
+<path d="M310 391H1060" stroke="#E9E9E9"/>
+<rect x="310" y="412" width="30" height="32" rx="6" fill="#F1F1F1"/>
+<g transform="translate(315 418) scale(0.8333333333333334)" fill="none" stroke="#343434" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h6"/></g>
+<text x="352" y="426" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="500">新的需求</text>
+<text x="352" y="450" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">文档</text>
+<text x="386" y="450" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">8 分钟前</text>
+<g transform="translate(1038 421) scale(0.6666666666666666)" fill="none" stroke="#686868" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></g>
+<path d="M310 466H1060" stroke="#E9E9E9"/>
+<rect x="310" y="487" width="30" height="32" rx="6" fill="#F1F1F1"/>
+<g transform="translate(315 493) scale(0.8333333333333334)" fill="none" stroke="#343434" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h6"/></g>
+<text x="352" y="501" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="500">问题记录</text>
+<text x="352" y="525" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">文档</text>
+<text x="386" y="525" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">8 分钟前</text>
+<g transform="translate(1038 496) scale(0.6666666666666666)" fill="none" stroke="#686868" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></g>
+<path d="M310 541H1060" stroke="#E9E9E9"/>
+<rect x="310" y="562" width="30" height="32" rx="6" fill="#F1F1F1"/>
+<g transform="translate(315 568) scale(0.8333333333333334)" fill="none" stroke="#343434" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h6"/></g>
+<text x="352" y="576" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="500">千问与火山引擎产品对比分析</text>
+<text x="352" y="600" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">文档</text>
+<text x="386" y="600" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">2 小时前</text>
+<g transform="translate(1038 571) scale(0.6666666666666666)" fill="none" stroke="#686868" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></g>
+<path d="M310 616H1060" stroke="#E9E9E9"/>
+<rect x="310" y="637" width="30" height="32" rx="6" fill="#F1F1F1"/>
+<g transform="translate(315 643) scale(0.8333333333333334)" fill="none" stroke="#343434" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14m0-14C9 4 5 4 2 5v15c3-1 7-1 10 1m0-14c3-3 7-3 10-2v15c-3-1-7-1-10 1"/></g>
+<text x="352" y="651" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="500">我的</text>
+<text x="352" y="675" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">知识库</text>
+<text x="398" y="675" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">5 小时前</text>
+<g transform="translate(1038 646) scale(0.6666666666666666)" fill="none" stroke="#686868" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></g>
+<path d="M310 691H1060" stroke="#E9E9E9"/>
+<rect x="310" y="712" width="30" height="32" rx="6" fill="#F1F1F1"/>
+<g transform="translate(315 718) scale(0.8333333333333334)" fill="none" stroke="#343434" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14m0-14C9 4 5 4 2 5v15c3-1 7-1 10 1m0-14c3-3 7-3 10-2v15c-3-1-7-1-10 1"/></g>
+<text x="352" y="726" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="500">计算机网络详解</text>
+<text x="352" y="750" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">知识库</text>
+<text x="398" y="750" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">今天 15:04</text>
+<g transform="translate(1038 721) scale(0.6666666666666666)" fill="none" stroke="#686868" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></g>
+<path d="M310 766H1060" stroke="#E9E9E9"/>
+<rect x="310" y="787" width="30" height="32" rx="6" fill="#F1F1F1"/>
+<g transform="translate(315 793) scale(0.8333333333333334)" fill="none" stroke="#343434" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h6"/></g>
+<text x="352" y="801" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="14" font-weight="500">image.png</text>
+<text x="352" y="825" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">文件</text>
+<text x="386" y="825" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="12" font-weight="400">今天 14:12</text>
+<g transform="translate(1038 796) scale(0.6666666666666666)" fill="none" stroke="#686868" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></g>
+<path d="M310 841H1060" stroke="#E9E9E9"/>
+<rect x="1104" y="209" width="300" height="173" rx="8" fill="#F5F5F5" stroke="#E7E7E7" stroke-width="1"/>
+<g transform="translate(1126 231) scale(1.0)" fill="none" stroke="#242424" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7zM20 2v4m-2-2h4"/></g>
+<g transform="translate(1364 233) scale(0.8333333333333334)" fill="none" stroke="#242424" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></g>
+<text x="1126" y="287" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="18" font-weight="650">AI 助手</text>
+<text x="1126" y="321" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="13" font-weight="400">查找资料、梳理思路，让 AI 帮你继续</text>
+<text x="1126" y="343" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="13" font-weight="400">推进工作。</text>
+<rect x="1104" y="402" width="300" height="244" rx="8" fill="#FFFFFF" stroke="#E7E7E7" stroke-width="1"/>
+<g transform="translate(1124 425) scale(0.75)" fill="none" stroke="#242424" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m3 5 2 2 3-3m3 2h10M3 12h4m4 0h10M3 18h4m4 0h10"/></g>
+<text x="1151" y="442" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="16" font-weight="600">待我处理</text>
+<text x="1124" y="490" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="13" font-weight="600">待处理工单</text>
+<text x="1377" y="490" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="13" font-weight="400">0</text>
+<text x="1124" y="522" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="13" font-weight="400">暂无待处理事项</text>
+<text x="1124" y="570" fill="#242424" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="13" font-weight="600">人工待办</text>
+<text x="1377" y="570" fill="#686868" font-family="PingFang SC,Arial Unicode MS,sans-serif" font-size="13" font-weight="400">1</text>
+<g transform="translate(1368 602) scale(0.6666666666666666)" fill="none" stroke="#242424" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></g>
+</svg>

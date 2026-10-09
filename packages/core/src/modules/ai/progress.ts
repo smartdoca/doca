@@ -25,6 +25,7 @@ export type AIProgressPhase =
   | "waiting_choice"
   | "waiting_access"
   | "waiting_requirements"
+  | "waiting_dependency"
   | "plan_ready"
   | "thinking"
   | "answering"
@@ -37,6 +38,8 @@ export type AIProgressData = Record<string, string | number>;
 export type AIProgressEventCode =
   | "checkpoint_resumed"
   | "retry_resumed"
+  | "continuation_waiting"
+  | "continuation_resumed"
   | "image_saved"
   | "folder_available"
   | "file_available"

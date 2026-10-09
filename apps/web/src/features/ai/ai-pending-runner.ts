@@ -22,7 +22,7 @@ export async function sendPendingItem(
 ) {
   const modelId = item.modelId || fallbackModel;
   if (!modelId) throw new Error("没有可用的模型");
-  const id = crypto.randomUUID();
+  const id = item.id;
   await api(`/ai/sessions/${sessionId}/messages`, "POST", {
     id,
     text: item.text,

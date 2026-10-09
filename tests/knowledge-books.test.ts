@@ -5,6 +5,7 @@ import { openTestDatabase } from "./database.js";
 import type { DB } from "@db/index.js";
 import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
+import { homeOverview } from "@core/modules/workspace/home.js";
 import {
   bookConfigurationSchema,
   defaultBookConfiguration,
@@ -700,6 +701,16 @@ it("preserves public read-only book results while private evidence still prevent
     (await readPublishedKnowledgeBook(db, bookId)).publishedRelease?.artifact,
   ).toBeNull();
 });
+it("gives unnamed repair tasks a visible home link that opens the exact task", async () => {
+  await manual();
+  const queued = await queueBookRun(db, owner, bookId);
+  await executeBookRun(db, queued.id, runtime(() => { throw new Error("Isolated model failure"); }));
+  const tasks = await listBookHumanTasks(db, owner, { bookId, runId: queued.id, status: "pending" });
+  const overview = await homeOverview(db, owner);
+  const item = overview.todos.find((group) => group.kind === "knowledge-books")!.items.find((item) => item.id === tasks.items[0]!.id)!;
+  expect(item.title).toBe("Network protocols");
+  expect(item.href).toBe(`#/knowledge-books/${bookId}?task=${tasks.items[0]!.id}&run=${queued.id}`);
+});
 it("turns an interrupted lease into queryable node repair tasks without changing prior outputs", async () => {
   const { recoverBookRuns } =
     await import("@core/modules/knowledge-books/recovery.js");
@@ -1154,4 +1165,62 @@ it("regenerates rejected facts and pages after acceptance fails and supplies the
     (await readKnowledgeBook(db, owner, bookId)).publishedRelease?.artifact
       ?.pages.length,
   ).toBeGreaterThan(0);
+});
+
+it("stores a visible run lifecycle and model progress without copying model text into audit logs", async () => {
+  await manual();
+  const model = runtime(), generate = model.generate;
+  model.generate = async (stage, input, signal, report) => {
+    await report?.({ code: "model_request", value: 1, total: 3 });
+    const result = await generate(stage, input, signal);
+    await report?.({ code: "model_output", value: 120 });
+    return result;
+  };
+  const finished = await run(model);
+  const saved = await readBookRun(db, owner, bookId, finished.id);
+  expect(saved.logs.map(entry => entry.code)).toEqual(expect.arrayContaining(["run_started", "node_started", "source_loading", "source_loaded", "model_request", "model_output", "node_completed", "run_published"]));
+  expect(saved.logs.filter(entry => entry.code === "model_request")).toHaveLength(4);
+  expect(saved.logs.find(entry => entry.code === "model_output" && entry.nodeType === "extract")).toMatchObject({ value: 120, nodeType: "extract" });
+  const audit = await db.selectFrom("audit_events").select("action").where("resource_id", "=", bookId).execute();
+  expect(audit.every(entry => entry.action.length <= 64)).toBe(true);
+  expect(JSON.stringify(audit)).not.toContain("negative caching");
+  expect(finished.status).toBe("published");
+});
+it("keeps recorded failure diagnostics after a model failure and does not fabricate logs for an unstarted run", async () => {
+  await manual();
+  const queued = await queueBookRun(db, owner, bookId);
+  expect((await readBookRun(db, owner, bookId, queued.id)).logs.map(entry => entry.code)).toEqual(["run_queued"]);
+  const model = runtime();
+  model.generate = async () => { throw new Error("isolated model failure"); };
+  await executeBookRun(db, queued.id, model);
+  const failed = await readBookRun(db, owner, bookId, queued.id);
+  expect(failed.status).toBe("failed");
+  expect(failed.logs.map(entry => entry.code)).toEqual(expect.arrayContaining(["node_failed", "run_failed"]));
+  expect(failed.nodes.find(node => node.status === "failed")?.error).toContain("isolated model failure");
+});
+
+it("keeps the actual trigger person and first start time when a different editor approves publication", async () => {
+  await manual(); await share("editor");
+  const config = (await readKnowledgeBook(db, owner, bookId)).configuration;
+  config.autoPublish = false;
+  await saveBookConfiguration(db, owner, bookId, 2, config);
+  const first = await run();
+  expect(first.status).toBe("awaiting_publication");
+  const startedAt = first.started_at;
+  const task = (await listBookHumanTasks(db, collaborator, { bookId, runId: first.id, kind: "publication", status: "pending" })).items[0]!;
+  await resolveBookHumanTask(db, collaborator, task.id, { expectedRevision: task.revision, decision: "approve", note: "Reviewed" });
+  await executeBookRun(db, first.id, runtime());
+  const detail = await readBookRun(db, owner, bookId, first.id);
+  expect(detail.startedAt).toBe(startedAt);
+  expect(detail.trigger).toMatchObject({ kind: "user", actorId: owner.id, actorName: "Book owner" });
+  const list = await readKnowledgeBook(db, owner, bookId);
+  expect(list.runs.find(item => item.id === first.id)).toMatchObject({ started_at: startedAt, trigger: { actorId: owner.id } });
+});
+it("identifies scheduled triggers from recorded queue facts and never invents a historical trigger", async () => {
+  await manual();
+  const scheduled = await queueBookRun(db, owner, bookId, "daily:2026-10-10");
+  expect((await readBookRun(db, owner, bookId, scheduled.id)).trigger).toMatchObject({ kind: "schedule", schedule: "daily", actorId: owner.id });
+  const prior = await queueBookRun(db, owner, bookId);
+  await db.deleteFrom("audit_events").where("action", "=", `kb1:${prior.id}:-:rq:-:-`).execute();
+  expect((await readBookRun(db, owner, bookId, prior.id)).trigger).toBeNull();
 });

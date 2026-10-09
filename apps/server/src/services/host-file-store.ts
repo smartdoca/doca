@@ -76,7 +76,8 @@ export function createHostFileStore(runtime: StorageRuntime) {
           region: c.region,
           endpoint: c.endpoint,
           forcePathStyle: c.forcePathStyle,
-          credentials: c.credentials,
+          // The SDK adds credential metadata; keep deployment configuration immutable.
+          credentials: { ...c.credentials },
           requestHandler: { connectionTimeout: 5000, requestTimeout: 30000 },
         });
         try {

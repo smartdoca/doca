@@ -1,5 +1,6 @@
 import { readRetryOrigin, readNodeReuse } from "./retry.js";
 import { readFeedbackOrigin } from "./feedback-origin.js";
+import { appendBookRunLog, type BookRunReporter } from "./run-logs.js";
 import { randomUUID } from "node:crypto";
 import type { DB, Schema } from "@db/index.js";
 import { transact } from "@db/transactions.js";
@@ -39,6 +40,7 @@ export interface BookRuntime extends BookSourceRuntime {
     stage: "extract" | "synthesize" | "organize" | "acceptance",
     input: Record<string, unknown>,
     signal: AbortSignal,
+    report?: BookRunReporter,
   ): Promise<unknown>;
 }
 type NodeOutput = {
@@ -379,6 +381,7 @@ async function publishRun(
         created_at: now,
       })
       .execute();
+    await appendBookRunLog(tx, run, null, { code: "run_published", value: artifact.pages.length });
     return { id, revision };
   });
 }
@@ -404,7 +407,7 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
     .set({
       status: "running",
       lease_id: lease,
-      started_at: now,
+      started_at: run.started_at ?? now,
       heartbeat_at: now,
       updated_at: now,
     })
@@ -437,6 +440,7 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
   heartbeat.unref();
   let activeNode: string | undefined;
   try {
+    await appendBookRunLog(db, run, null, { code: "run_started" });
     const configuration = bookConfigurationSchema.parse(
       JSON.parse(run.configuration),
     );
@@ -595,6 +599,12 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
     async function executeNode(
       node: BookConfiguration["workflow"]["nodes"][number],
     ) {
+      const nodeIndex = configuration.workflow.nodes.indexOf(node);
+      const report: BookRunReporter = async event => {
+        signal.throwIfAborted();
+        await assertCurrent(db, run, lease);
+        await appendBookRunLog(db, run, nodeIndex, event);
+      };
       try {
         await assertCurrent(db, run, lease);
         const upstream = configuration.workflow.edges
@@ -625,6 +635,7 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
             completed_at: null,
           })
           .execute();
+        await report({ code: "node_started" });
         if (node.type === "sources") {
           const selected = node.parameters.sourceIds.length
             ? snapshot.sources.filter((source) =>
@@ -639,9 +650,13 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
             fail(409, "Workflow selects a missing or inactive source");
           output.evidence = [];
           for (const source of selected) {
+            const ordinal = selected.indexOf(source) + 1;
+            await report({ code: "source_loading", value: ordinal, total: selected.length });
             if (!sourceCache.has(source.id))
               sourceCache.set(source.id, readBookSource(db, source, runtime));
-            output.evidence.push(...(await sourceCache.get(source.id)!));
+            const evidence = await sourceCache.get(source.id)!;
+            output.evidence.push(...evidence);
+            await report({ code: "source_loaded", value: evidence.length, total: ordinal });
           }
         } else if (node.type === "feedback") {
           output.evidence = [];
@@ -705,6 +720,7 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
             .where("status", "=", "running")
             .where("lease_id", "=", lease)
             .execute();
+          await appendBookRunLog(db, run, nodeIndex, { code: "waiting_input" });
           return;
         } else if (node.type === "publish") {
           if (!output.pages.length)
@@ -812,6 +828,7 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
               .where("status", "=", "running")
               .where("lease_id", "=", lease)
               .execute();
+            await appendBookRunLog(db, run, nodeIndex, { code: "waiting_publication" });
             await db
               .updateTable("knowledge_book_node_runs")
               .set({
@@ -940,6 +957,7 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
               maxDocumentDepth: configuration.maxDocumentDepth,
             },
             signal,
+            report,
           );
           if (node.type === "extract") {
             const parsed = claimOutputSchema.parse(result);
@@ -1007,6 +1025,7 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
           .where("run_id", "=", id)
           .where("node_id", "=", node.id)
           .execute();
+        await appendBookRunLog(db, run, nodeIndex, { code: "node_completed", value: output.pages.length, total: output.claims.length });
         outputs.set(node.id, output);
         pending.delete(node.id);
       } catch (error) {
@@ -1029,6 +1048,9 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
           .where("run_id", "=", id)
           .where("node_id", "=", node.id)
           .execute();
+        await appendBookRunLog(db, run, nodeIndex, {
+          code: coordinator.signal.aborted ? "node_cancelled" : "node_failed",
+        });
         throw tagged;
       }
     }
@@ -1139,6 +1161,7 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
           updated_at: bookNow(),
         })
         .execute();
+    if (Number(failed.numUpdatedRows)) await appendBookRunLog(db, run, null, { code: "run_failed" });
   } finally {
     clearInterval(heartbeat);
   }

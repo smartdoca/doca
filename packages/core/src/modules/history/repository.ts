@@ -2,6 +2,7 @@ import { requireCapability } from "../access/operation-policy.js";
 import type { DB, Schema } from "../../../../db/src/index.js";
 import { transact } from "../../../../db/src/transactions.js";
 import { fail } from "../../shared/errors.js";
+import { queueHistoryRetention } from "./archive.js";
 export type RecoveryMetadata = {
   origin?: "ai";
   version: 1;
@@ -61,7 +62,7 @@ export async function recordVersion(
       .insertInto("document_versions")
       .values({ ...row, recovery_json: JSON.stringify(metadata) })
       .execute();
-
+    await queueHistoryRetention(db, row.resource_id);
   });
 }
 export function recoveryMetadata(

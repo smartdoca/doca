@@ -1,0 +1,209 @@
+{
+  "before": {
+    "brand": "#3370ff",
+    "panes": [
+      {
+        "className": "sidebar",
+        "height": 720,
+        "width": 260,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "className": "topbar workspace-topbar",
+        "height": 56,
+        "width": 1020,
+        "x": 260,
+        "y": 0
+      },
+      {
+        "className": "workspace-home",
+        "height": 899.7421875,
+        "width": 1020,
+        "x": 260,
+        "y": 56
+      },
+      {
+        "className": "workspace-columns",
+        "height": 680.1484375,
+        "width": 948,
+        "x": 296,
+        "y": 211.59375
+      },
+      {
+        "className": "workspace-panel",
+        "height": 680.1484375,
+        "width": 624,
+        "x": 296,
+        "y": 211.59375
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 327.5859375
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 405.1796875
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 482.7734375
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 560.3671875
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 637.9609375
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 715.5546875
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 793.1484375
+      },
+      {
+        "className": "workspace-ai",
+        "height": 171.3828125,
+        "width": 300,
+        "x": 944,
+        "y": 211.59375
+      },
+      {
+        "className": "workspace-panel workspace-todos",
+        "height": 233.484375,
+        "width": 300,
+        "x": 944,
+        "y": 402.9765625
+      }
+    ]
+  },
+  "after": {
+    "brand": "#465fce",
+    "panes": [
+      {
+        "className": "sidebar",
+        "height": 720,
+        "width": 260,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "className": "topbar workspace-topbar",
+        "height": 56,
+        "width": 1020,
+        "x": 260,
+        "y": 0
+      },
+      {
+        "className": "workspace-home",
+        "height": 899.7421875,
+        "width": 1020,
+        "x": 260,
+        "y": 56
+      },
+      {
+        "className": "workspace-columns",
+        "height": 680.1484375,
+        "width": 948,
+        "x": 296,
+        "y": 211.59375
+      },
+      {
+        "className": "workspace-panel",
+        "height": 680.1484375,
+        "width": 624,
+        "x": 296,
+        "y": 211.59375
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 327.5859375
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 405.1796875
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 482.7734375
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 560.3671875
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 637.9609375
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 715.5546875
+      },
+      {
+        "className": "",
+        "height": 77.59375,
+        "width": 582,
+        "x": 317,
+        "y": 793.1484375
+      },
+      {
+        "className": "workspace-ai",
+        "height": 171.3828125,
+        "width": 300,
+        "x": 944,
+        "y": 211.59375
+      },
+      {
+        "className": "workspace-panel workspace-todos",
+        "height": 233.484375,
+        "width": 300,
+        "x": 944,
+        "y": 402.9765625
+      }
+    ]
+  },
+  "geometryChanges": []
+}

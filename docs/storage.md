@@ -50,6 +50,57 @@ Optional `cdn:{domain,keyPairId,privateKey}` uses the CloudFront signed-URL prot
 
 Without a CDN, the host proxies private cloud files. Storage secrets are never returned to the browser. A different CDN signing protocol requires an adapter; no permanent public-URL fallback is provided. Keep every referenced store ID configured and preserve access to its bytes during credential rotations. Rotation is not a data migration.
 
+## Browser image caching and the file CDN
+
+Ordinary document/comment images and host-proxied avatars/covers use the stable `/api/v1/assets/:id/content` URL. Successful inline image responses, including thumbnails, send:
+
+```http
+Cache-Control: private, max-age=3600, must-revalidate
+Vary: Cookie, Authorization
+ETag: W/"object-and-variant-identity-digest"
+```
+
+The browser can reuse its local copy for an hour. Once stale, `If-None-Match` revalidates it: the host checks current access before returning `304` without image bytes. Originals and thumbnails have distinct ETags. Object keys are immutable; replacing an image requires a new asset. Cookie/Authorization changes select a separate cached response when switching accounts. Revocation is not rechecked during freshness; downloaded bytes cannot be recalled. Browsers can evict entries, and force reload/DevTools **Disable cache** can bypass them. This uses HTTP caching without an additional IndexedDB or Service Worker copy. See [MDN HTTP caching](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching) for revalidation versus `no-store`.
+
+AI attachments, `download=1`, trash previews and errors remain `no-store`. An unauthorized request cannot obtain `304` with a known ETag. Document images have a resourceId and currently stay behind the host proxy even when an S3 file CDN is configured.
+
+Signed file-CDN redirects stay `no-store` so the browser does not reuse an expired 60-second signature. Final file-response headers belong on the CDN or S3 origin; redirect headers do not carry over. New S3 objects currently use `Cache-Control: private, max-age=60`; this change does not rewrite existing objects.
+
+For a CloudFront private-file behavior, preserve the private S3 origin/OAC, trusted key group and 60-second signing window. Set **Response headers policy → Custom headers** to `Cache-Control: private, max-age=60, must-revalidate` with **Override** to standardize browser responses for existing and new objects. Use **CachingDisabled** unless edge caching has been separately planned; a custom policy must have Minimum TTL 0. A positive minimum can override origin `private/no-store`. Response headers policies affect browser-facing responses, independently of edge TTL. See AWS documentation for [response headers policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/modifying-response-headers.html), [cache-policy TTLs](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cache-key-understand-cache-policy.html) and [signed URLs](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-signed-urls.html). Never apply public long-lived caching to the site or `/api/*`.
+
+Changing signature query parameters creates a different browser URL; adding headers alone does not ensure reuse across signatures. Stable document image URLs avoid this limitation. Edge-cache hits and browser-cache hits are separate measurements.
+
+For acceptance, turn off DevTools **Disable cache**, revisit a document and inspect memory/disk cache hits. Verify conditional reads return bodyless `304`, then check logout, permission denial, thumbnails, download and trash preview. Inspect the final CDN response as well as the redirect. Keep cookies and signed URLs out of public logs:
+
+```sh
+curl -I -H 'Cookie: doca_session=<session>' https://doca.example.com/api/v1/assets/<asset-id>/content
+curl -I -H 'Cookie: doca_session=<session>' -H 'If-None-Match: W/"<first-response-digest>"' https://doca.example.com/api/v1/assets/<asset-id>/content
+curl -I 'https://files.example.com/<object-key>?<valid-signature-parameters>'
+```
+
+Hashed public JS/CSS need the separate one-year policy in [deployment: static assets](deployment.md#static-assets).
+
+## History storage and offline upgrade
+
+The database keeps the latest 20 full business snapshots. Each complete group of ten older snapshots retains its newest point in the configured file store (cloud storage when S3 is configured). A point is one gzip JSON file preserving its checkpoint and independent recovery metadata, with one small database index. Only immutable upload and SHA-256 readback success permit an atomic index commit and removal of the ten database rows; the other nine points are deliberately sampled away and cannot be restored. Incomplete groups and storage failures retain database originals. One ordinary paginated list merges both sources without exposing storage types, object keys or signed URLs.
+
+Live checkpoints, uncovered collaboration increments and attachments are not sampled. Trash preserves history; explicit permanent resource deletion queues archive reclamation after an hour and a reference recheck. No old recovery_json is decoded into a new schema or filled from the current baseline. Missing recovery metadata and unknown recovery versions still reject previews. Files require envelope v1, a matching hash, bounded decompression and index agreement. Background durable jobs retry failures without blocking content commits.
+
+The new database baseline is `doca-2026-10-09-history-storage-v1`; normal startup does not read old baselines. Upgrade accepts only `doca-2026-10-08-knowledge-books-v2`. Stop every host, back up the database, file store and configuration, then run:
+
+```sh
+pnpm history:upgrade                 # Show requirements; no mutation
+pnpm history:upgrade --apply         # Add structure, update baseline and queue work; no immediate sampling
+```
+
+Do not rebuild the database instead of upgrading. A failed upgrade transaction preserves the original database. Before returning to the previous host, stop every instance and import retained file-backed points:
+
+```sh
+pnpm history:rollback --apply --manifest /backup/history-cloud-references.json
+```
+
+The manifest must be a new file and is written with mode 0600. Rollback saves cloud references, validates and imports retained points, then returns to the previous baseline; cloud files remain preserved. An interrupted rollback uses a dedicated marker that rejects host startup, preventing imported points from being sampled again. Fix the storage issue and rerun rollback with a new manifest path. Sampled-away points require a complete pre-sampling database backup. User-facing restore still applies the current epoch, permissions and expectedSeq checks; rich text and Markdown restore, while other formats remain preview-only.
+
 ## Checks and permissions
 
 - Avatars and covers are at most 5 MB. PNG, JPEG, WebP, and GIF are recognized from the file header and decoded. The limit is 25 million pixels. Metadata is removed and the image is stored as WebP. Avatars are cropped square, at most 512 px. Covers are at most 1600 px wide. A GIF keeps the first frame.

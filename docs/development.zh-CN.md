@@ -17,6 +17,8 @@ pnpm dev
 
 启动前复制 `.env.example`，文件存储变量为必填；示例的存储 root 为 Docker 使用的 `/data/storage`，源码运行前须改为本机可写的绝对路径。本地 origin 和 SQLite 路径按示例使用，不提交凭证。
 
+`DOCA_CREDENTIAL_MASTER_KEY` 同样必填，即使开发时没有安装插件。首次使用空数据库时，用 `openssl rand -hex 32` 的输出替换公开示例值。重启保留同一个密钥，并单独备份；已有数据库必须继续使用原密钥。
+
 ## 源码环境的 PDF 渲染
 
 富文本和 Markdown 的 PDF 导出使用启用沙箱的 Chromium。安装依赖后安装匹配的浏览器：

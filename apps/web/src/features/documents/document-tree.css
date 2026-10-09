@@ -1,4 +1,4 @@
-/* Quiet navigation chrome; document lists and creation menus keep their badges. */
+/* Quiet navigation chrome; document-type glyphs carry their own color. */
 @media (min-width: 1201px) {
   .app-shell:not(.public-view) {
     grid-template-columns: 260px minmax(0, 1fr);
@@ -32,14 +32,14 @@
   border-radius: 7px;
 }
 .sidebar .document-tree .tree-row:hover {
-  background: #e9ebed;
+  background: var(--hover);
 }
 .sidebar .document-tree .tree-row:has(.tree-more[aria-expanded="true"]) {
-  background: #e3e5e8;
+  background: var(--selected);
 }
 .sidebar .document-tree .tree-row.selected,
 .sidebar .document-tree .tree-row.selected:has(.tree-more[aria-expanded="true"]) {
-  background: #dce4fa;
+  background: var(--selected);
 }
 .sidebar .document-tree .tree-row .tree-link {
   min-height: 32px;
@@ -54,7 +54,7 @@
   height: 22px;
   border-radius: 0;
   background: transparent;
-  color: var(--text-secondary, #646a73);
+  color: var(--glyph-ink);
 }
 .sidebar .document-tree .tree-row .file-glyph > svg {
   width: 19px;
@@ -64,7 +64,7 @@
 }
 /* Keep icon dimensions and label weight stable when switching the active row. */
 .sidebar .document-tree .tree-row.selected .tree-link {
-  color: #245bdb;
+  color: var(--selected-text);
 }
 .sidebar .document-tree .tree-row.inaccessible .tree-link {
   color: var(--text-muted, #9aa0a8);
@@ -75,14 +75,8 @@
   opacity: 0.7;
 }
 .sidebar .document-tree .tree-row.selected .file-glyph {
-  border-radius: 4px;
-  background: #3370ff;
-  color: #fff;
-}
-.sidebar .document-tree .tree-row.selected .file-glyph > svg {
-  width: 15px;
-  height: 15px;
-  stroke-width: 2;
+  background: transparent;
+  color: var(--glyph-ink);
 }
 .sidebar .document-tree .tree-toggle,
 .sidebar .document-tree .tree-spacer {

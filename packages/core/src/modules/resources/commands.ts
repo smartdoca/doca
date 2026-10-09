@@ -16,6 +16,7 @@ import { Doc, encodeStateAsUpdate } from "@smartdoca/slate/yjs";
 import { sql, type Transaction } from "kysely";
 import type { DB, Resource, Schema } from "../../../../db/src/index.js";
 import { fail } from "../../shared/errors.js";
+import { purgeHistoryArchives, queueHistoryRetention } from "../history/archive.js";
 import {
   canRemoveResource,
   label,
@@ -91,6 +92,7 @@ async function erasePurgedResources(ctx: Context, actor: Actor, ids: string[]) {
   }
   for (let offset = 0; offset < ids.length; offset += 200) {
     const batch = ids.slice(offset, offset + 200);
+    await purgeHistoryArchives(ctx.tx, batch);
     await ctx.tx
       .updateTable("audit_events")
       .set({ resource_id: null })
@@ -852,6 +854,7 @@ export function createResourceCommands(
             .execute();
         }
         await event(ctx, r, restore ? "resource.restored" : "resource.trashed");
+        if (restore) for (const item of descendants(ctx, r)) await queueHistoryRetention(ctx.tx, item.id);
         return { ok: true };
       });
     },

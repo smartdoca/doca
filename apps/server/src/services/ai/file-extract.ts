@@ -223,8 +223,13 @@ export async function processFileExtract(
       }
       const recipe = `v${PARSER_VERSION}-img-${index++}`;
       const id = randomUUID();
-      const key = derivativeKey(object.id, object.mime, recipe, `${id}.png`);
-      await storage.put(config, key, png, "image/png", part.filename);
+      // An unchanged PNG needs a reading reference, not another physical copy.
+      const reuseOriginal = object.mime === "image/png" && png.equals(body);
+      const key = reuseOriginal
+        ? object.object_key
+        : derivativeKey(object.id, object.mime, recipe, `${id}.png`);
+      if (!reuseOriginal)
+        await storage.put(config, key, png, "image/png", part.filename);
       let retained = false;
       try {
         const inserted = await db
@@ -252,7 +257,8 @@ export async function processFileExtract(
           filename: part.filename,
         });
       } finally {
-        if (!retained) await storage.remove(config, key).catch(() => {});
+        if (!retained && !reuseOriginal)
+          await storage.remove(config, key).catch(() => {});
       }
     }
     await markExtract(

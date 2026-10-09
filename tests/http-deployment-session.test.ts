@@ -7,6 +7,14 @@ import { openTestDatabase } from "./database.js";
 
 afterEach(() => vi.unstubAllEnvs());
 
+it.each([undefined, "", "short", "z".repeat(64)])(
+  "rejects missing or malformed credential keys before opening a database: %s",
+  (value) => {
+    vi.stubEnv("DOCA_CREDENTIAL_MASTER_KEY", value);
+    expect(() => config()).toThrow("DOCA_CREDENTIAL_MASTER_KEY");
+  },
+);
+
 it("accepts HTTP site and asset origins in production", () => {
   vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("DOCA_ORIGIN", "http://doca.internal:39120");

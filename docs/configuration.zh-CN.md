@@ -11,6 +11,7 @@ Compose 使用 `docker.env.example`，源码开发使用 `.env.example`，复制
 | `DOCA_ORIGIN` | 必须显式填写 HTTP(S) 来源 | `https://doca.example.com` |
 | `DOCA_FILE_STORE_ID` | 非空，且必须对应 JSON 中的存储项 | `local` |
 | `DOCA_FILE_STORES_JSON` | 非空，合法的 version 1 物理存储配置 | 见下方 |
+| `DOCA_CREDENTIAL_MASTER_KEY` | 每次启动必填；严格 64 个十六进制字符（32 字节） | 用 `openssl rand -hex 32` 生成 |
 
 ```dotenv
 DOCA_ORIGIN=https://doca.example.com
@@ -18,7 +19,7 @@ DOCA_FILE_STORE_ID=local
 DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root":"/data/storage"}}}'
 ```
 
-首次单机安装时，**Docker 示例中只需要修改公网来源地址**，另外两项必填值已经提供。核心启动不需要 PostgreSQL、Redis、模型密钥、SSO 凭据或插件凭证主密钥；启用相应功能时再配置。
+首次单机安装时，**修改公网来源地址，并用 `openssl rand -hex 32` 的输出替换公开的示例凭证密钥**；必填存储值已经提供。PostgreSQL、Redis、模型密钥和 SSO 凭据按需配置。已有部署必须保留原凭证主密钥。
 
 来源必须为 HTTP(S) origin，不能带账号密码、子路径、查询参数或片段；根路径末尾斜杠会被规范化。生产环境同时支持 HTTP 和 HTTPS。代理须保留配置的 `Host`，只按 `127.0.0.1` 地址访问会被 Host 校验拒绝，见[健康检查](deployment.zh-CN.md#启动)。
 
@@ -26,9 +27,9 @@ DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root"
 
 | 启动方式 | 来源地址 | 数据库与文件 | 凭证主密钥 |
 | --- | --- | --- | --- |
-| 仓库 Compose | `.env` 必填 | SQLite `/data/doca.db`；文件 ID/JSON 在 `.env` 必填；`doca_data` 挂载到 `/data` | 空值可以启动核心 |
-| 单独运行发布镜像 | 须提供 HTTP(S) 来源 | 镜像显式提供 `/data` 下的 SQLite 与本地存储默认值；自行挂载持久 `/data` | 需要凭证的插件才必填 |
-| 源码开发 | `http://127.0.0.1:39130` | SQLite `./data/v1/doca.db`；文件 ID/JSON 必填，`.env.example` 已提供 | 可选 |
+| 仓库 Compose | `.env` 必填 | SQLite `/data/doca.db`；文件 ID/JSON 在 `.env` 必填；`doca_data` 挂载到 `/data` | 必填，使用持久部署密钥 |
+| 单独运行发布镜像 | 须提供 HTTP(S) 来源 | 镜像显式提供 `/data` 下的 SQLite 与本地存储默认值；自行挂载持久 `/data` | 必填，使用持久部署密钥 |
+| 源码开发 | `http://127.0.0.1:39130` | SQLite `./data/v1/doca.db`；文件 ID/JSON 必填，`.env.example` 已提供 | 必填，替换公开示例值 |
 
 源码存储解析器没有隐式默认值，镜像的默认值来自 Dockerfile 的显式环境配置。本地存储根目录必须可写且持久化。S3 必填 `bucket`、`region`、布尔值 `forcePathStyle` 和显式 `credentials:{accessKeyId,secretAccessKey,sessionToken?}`；可选 endpoint 必须为 HTTP(S) 根来源，不带账号密码、子路径、查询参数或片段。显式 HTTP 端点支持 RustFS 等可信内网对象存储，网络访问由部署者控制，站点、静态资源和 CDN 地址也支持 HTTP(S)。AWS shell 环境凭据不能代替这些 JSON 字段，RustFS 配置示例见[文件存储](storage.zh-CN.md)。
 
@@ -44,7 +45,6 @@ DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root"
 | `DOCA_REDIS_URL` | 跨实例事件、在线状态、限流需要；空值使用进程内实现 |
 | `DOCA_REDIS_PREFIX`、`DOCA_INSTANCE_ID` | 前缀默认 `doca`；实例 ID 默认每进程随机生成 |
 | `DOCA_TRUST_PROXY` | 逗号分隔的可信代理 IP/CIDR；**默认不信任任何代理，回环地址也不例外** |
-| `DOCA_CREDENTIAL_MASTER_KEY` | 仅要求 `storage.credentials.v1` 的插件必填；严格 64 位十六进制（32 字节） |
 | `DOCA_PLUGINS_DIR` | 可写的安装与缓存目录；Compose 默认 `/data/plugins` |
 | `DOCA_PDF_CHROMIUM` | 富文本/Markdown PDF 导出的可选 Chromium 路径；不设置时须安装匹配的 Playwright 浏览器，沙箱保持启用 |
 | `DOCA_PLUGIN_STORE_URL` | HTTP(S) 来源，默认 `https://store.smartdoca.cc` |
@@ -55,7 +55,7 @@ DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root"
 
 图片请求上限在服务启动时固定。例如在源码或 Compose 的 `.env` 设置 `DOCA_AI_IMAGE_MAX_ATTEMPTS_PER_PAGE=10`，重启服务或重建容器后生效；所有副本须使用相同上限。重试、续跑、修改提示词或重新登记批次都不会清零累计次数，已提交但结果或费用待核对的请求也计数，原样导出和本地重合成不计数。原图片、请求记录与费用事实保持不变。降低上限后，后续付费请求以及序号超过新上限的付费回执复用会明确拒绝，不跳过、转换或删除原记录。批次 version 3 和 paid-attempt version 1 保持不变；旧批次格式仍拒绝，不迁移。
 
-没有主密钥时核心可以启动，凭证服务不注册，声明为必需注入的插件无法启用。填写格式错误的密钥会导致启动失败。用 `openssl rand -hex 32` 生成一次并独立备份，各实例和重启必须使用同一密钥，见[托管凭证](plugin-credentials.zh-CN.md)。
+缺失、空值或格式错误的主密钥均拒绝启动，即使没有安装插件也一样。运行时没有默认密钥；首次安装必须替换 example 中公开的示例值。用 `openssl rand -hex 32` 生成一次并独立备份，各实例和重启必须使用同一密钥，见[托管凭证](plugin-credentials.zh-CN.md)。
 
 Webhook 投递始终使用独立数据库。SQLite 在主库旁创建 `webhooks.db`。PostgreSQL 默认使用 `<主库名>_webhooks`，缺少该库时尝试创建；账号没有建库权限时，须预建独立库并授权，或设置 `DOCA_WEBHOOK_DATABASE_URL` 指向有权限的独立库。AI 存储在 Compose 中使用 `ai.db`，PostgreSQL 使用主库的 `doca_ai` schema，账号须有初始化权限。即使未配置外部模型，这些存储也需备份。
 

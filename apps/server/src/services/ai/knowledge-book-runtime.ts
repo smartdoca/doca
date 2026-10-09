@@ -1,4 +1,5 @@
 import { validateBookModelAccess } from "@core/modules/knowledge-books/model-access.js";
+import type { BookRunReporter } from "@core/modules/knowledge-books/run-logs.js";
 import { z } from "zod";
 import { AppError } from "@core/shared/errors.js";
 import type { DB } from "@db/index.js";
@@ -73,9 +74,9 @@ const stageInstructions = {
   extract:
     "Extract factual claims from all supplied source topics. Do not omit a topic because it does not match another branch. Address relevant priorReviews about missing coverage, using only the current supplied passages.  Every claim must select citationIds from the supplied numbered passages. Select enough passages to support the complete assertion, including conditions. Never invent a citationId or copy/modify quotation text. The host resolves selected IDs into exact original quotations. Preserve units, time, conditions, exceptions and conflicting alternatives. Comment and question feedback describe problems or requests, not factual evidence. Corrections and supplements are candidate assertions, evaluated using the configured instructions and weights. Use unique short IDs. Return claims and a concise evidence-based reason for each claim.",
   synthesize:
-    "Organize the supplied claims into detailed, coherent Markdown pages. First-level classification and all lower levels follow the goal and node instructions. Group related paragraphs under meaningful Markdown ## and ### section headings inside paragraph.markdown; avoid a separate heading for every paragraph and do not repeat the page title as a body heading. Every paragraph must cite existing claim IDs and explain its adoption briefly. Preserve conditions, distinguish conflicting claims, identify uncertainties, and explain examples and practical implications supported by the claims. Do not invent facts from acceptance examples. Use unique short page IDs and unique paragraph IDs within each page. The host assigns globally scoped paragraph IDs.",
+    "Organize the supplied claims into detailed, coherent Markdown pages. First-level classification and all lower levels follow the goal and node instructions. Group related paragraphs under meaningful Markdown ## and ### section headings inside paragraph.markdown; avoid a separate heading for every paragraph and do not repeat the page title as a body heading. Every paragraph must cite existing claim IDs in paragraph.claimIds and explain its adoption briefly. Keep temporary claim/citation IDs and bracketed citation markers out of paragraph.markdown; the host renders evidence associations separately. Preserve conditions, distinguish conflicting claims, identify uncertainties, and explain examples and practical implications supported by the claims. Do not invent facts from acceptance examples. Use unique short page IDs and unique paragraph IDs within each page. The host assigns globally scoped paragraph IDs.",
   organize:
-    "Organize existing candidate pages into a coherent Markdown document tree following the configured goal, classification and depth. Preserve substantive detail and supported examples. Keep or improve meaningful Markdown ## and ### section headings inside paragraph.markdown, grouping related paragraphs rather than mechanically titling each paragraph. Do not repeat the page title as a body heading. Each paragraph must cite supplied claim IDs. Consolidate duplicates without losing conditions, mechanisms, troubleshooting details or uncertainties. Return the complete pages, not a summary or a patch.",
+    "Organize existing candidate pages into a coherent Markdown document tree following the configured goal, classification and depth. Preserve substantive detail and supported examples. Keep or improve meaningful Markdown ## and ### section headings inside paragraph.markdown, grouping related paragraphs rather than mechanically titling each paragraph. Do not repeat the page title as a body heading. Each paragraph must cite supplied claim IDs in paragraph.claimIds. Keep temporary claim/citation IDs and bracketed citation markers out of paragraph.markdown; the host renders evidence associations separately. Consolidate duplicates without losing conditions, mechanisms, troubleshooting details or uncertainties. Return the complete pages, not a summary or a patch.",
   acceptance:
     "Evaluate only the selected branch criteria using the supplied source scope and pages. The book goal is global context; do not invent additional branch requirements or require every branch to repeat all global categories. Use priorReviews as earlier diagnostic feedback, verify it against current evidence rather than blindly adopting it. Independently evaluate every configured acceptance criterion against the generated pages, claims and original evidence. Check actual coverage and depth, factual support, contradictory statements and applicable conditions. Do not believe adoption reasons or earlier nodes' self-assessments. Return exactly one check for every criterion ID, with passed and concise supporting reason. Missing evidence or missing required detail means failure.",
 } as const;
@@ -91,6 +92,7 @@ export function knowledgeBookRuntime(
     stage: Parameters<BookRuntime["generate"]>[0],
     input: Record<string, unknown>,
     signal: AbortSignal,
+    report?: BookRunReporter,
   ): Promise<unknown> {
     const selected = modelId;
     if (!selected) fail(503, "Configure a knowledge book model before running");
@@ -252,6 +254,7 @@ export function knowledgeBookRuntime(
     for (let attempt = 0; attempt < 3; attempt++) {
       signal.throwIfAborted();
       await validateBookModelAccess(db, userId, runId, evidence);
+      await report?.({ code: "model_request", value: attempt + 1, total: 3 });
       const response = await model.doStream({
         prompt,
         providerOptions: {
@@ -268,6 +271,7 @@ export function knowledgeBookRuntime(
       });
       let rawText = "",
         finishReason: string | undefined;
+      let lastOutputLog = Date.now();
       const reader = response.stream.getReader();
       try {
         for (;;) {
@@ -279,6 +283,10 @@ export function knowledgeBookRuntime(
           else if (part.type === "error") throw part.error;
           if (rawText.length > 500000)
             fail(413, "Workflow node output exceeds limits; split the node");
+          if (rawText.length && Date.now() - lastOutputLog >= 5000) {
+            await report?.({ code: "model_output", value: rawText.length });
+            lastOutputLog = Date.now();
+          }
         }
       } catch (error) {
         await reader.cancel(error).catch(() => {});
@@ -286,6 +294,7 @@ export function knowledgeBookRuntime(
       } finally {
         reader.releaseLock();
       }
+      await report?.({ code: "model_output", value: rawText.length });
       if (!finishReason)
         fail(502, "Workflow stream ended without a completion receipt");
       if (finishReason !== "stop")
@@ -362,6 +371,7 @@ export function knowledgeBookRuntime(
         }
         return result;
       } catch (error) {
+        await report?.({ code: error instanceof SyntaxError ? "model_invalid_json" : error instanceof z.ZodError ? "model_invalid_schema" : "model_invalid_evidence", value: attempt + 1 });
         const diagnostic =
           error instanceof z.ZodError
             ? error.issues.map((issue) => ({
@@ -382,6 +392,7 @@ export function knowledgeBookRuntime(
         );
         if (attempt === 2)
           fail(502, "Workflow node did not produce valid structured output");
+        await report?.({ code: "model_retry", value: attempt + 1, total: 3 });
         prompt.push(
           { role: "assistant", content: [{ type: "text", text }] },
           {
@@ -505,7 +516,7 @@ export function knowledgeBookRuntime(
       }
       throw new Error("Web source retry did not return");
     },
-    async generate(stage, input, signal) {
+    async generate(stage, input, signal, report) {
       if (stage === "extract") {
         const chunks: any[][] = [];
         let chunk: any[] = [],
@@ -526,6 +537,7 @@ export function knowledgeBookRuntime(
         if (chunks.length > 1) {
           const claims: any[] = [];
           for (let index = 0; index < chunks.length; index++) {
+            await report?.({ code: "batch_started", value: index + 1, total: chunks.length });
             const result = claimOutputSchema.parse(
               await generateModel(
                 stage,
@@ -537,6 +549,7 @@ export function knowledgeBookRuntime(
                   instructions: `${input.instructions}\nOnly process this supplied batch ${index + 1}/${chunks.length}; later nodes combine batches. Do not invent missing topics.`,
                 },
                 signal,
+                report,
               ),
             );
             claims.push(
@@ -545,11 +558,12 @@ export function knowledgeBookRuntime(
                 id: `batch_${index}_${bookHash(claim.id).slice(0, 20)}`,
               })),
             );
+            await report?.({ code: "batch_completed", value: index + 1, total: chunks.length });
           }
           return claimOutputSchema.parse({ claims });
         }
       }
-      return generateModel(stage, input, signal);
+      return generateModel(stage, input, signal, report);
     },
   };
 }

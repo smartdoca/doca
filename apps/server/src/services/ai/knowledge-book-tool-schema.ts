@@ -49,6 +49,7 @@ export const bookAssistantActionSchema = z.discriminatedUnion("action", [
       runId: z.string().uuid(),
     })
     .strict(),
+  z.object({ action: z.literal("wait"), bookId: z.string().uuid(), runId: z.string().uuid() }).strict(),
   z
     .object({
       action: z.literal("release"),
@@ -133,6 +134,7 @@ export const bookAssistantInputSchema = z
       "search_sources",
       "check_web_sources",
       "run",
+      "wait",
       "release",
       "source",
       "candidate_page",
@@ -226,9 +228,9 @@ export const bookAssistantInputSchema = z
     status: z
       .enum(["pending", "resolved", "cancelled", "superseded"])
       .optional(),
-    taskId: z.string().uuid().optional(),
-    expectedRevision: z.number().int().min(1).optional(),
-    decision: z.enum(["approve", "reject", "retry"]).optional(),
-    note: z.string().max(20000).optional(),
+    taskId: z.string().uuid().optional().describe("Required for resolve_task; use the actual human_tasks item.id."),
+    expectedRevision: z.number().int().min(1).optional().describe("REQUIRED for resolve_task: copy the selected human_tasks item.revision into this ROOT field. Never omit it or put it under command."),
+    decision: z.enum(["approve", "reject", "retry"]).optional().describe("Required for resolve_task. Technical repair uses retry; human review/publication approval requires the user's explicit decision."),
+    note: z.string().max(20000).optional().describe("Required for resolve_task; provide a string, including an empty string if no note is needed."),
   })
   .strict();
