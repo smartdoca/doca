@@ -5,143 +5,142 @@
 <h1 align="center">Doca</h1>
 
 <p align="center">
-  <b>Your documents. Your knowledge. Your workspace.</b><br>
-  Open-source document management, a knowledge base, and real-time collaborative editing<br>
-  for individuals and small teams. Self-hosted, with a personal AI assistant.
+  <b>把知识留在触手可及的地方。</b><br>
+  面向个人和小团队的开源文档管理与知识库系统，支持多人协同编辑。<br>
+  文档、表格、幻灯片、画布与个人 AI 助手，在一个可以私有化部署的工作台里。
 </p>
 
 <p align="center">
-  <a href="https://github.com/smartdoca/doca/releases"><img src="https://img.shields.io/github/v/release/smartdoca/doca?style=flat-square&amp;color=3370ff" alt="Latest release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3370ff?style=flat-square" alt="License: MIT"></a>
-  <a href="#quick-start-with-docker"><img src="https://img.shields.io/badge/deploy-Docker-2496ed?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Deploy with Docker"></a>
-  <img src="https://img.shields.io/badge/editors-5_formats-6750a4?style=flat-square" alt="Five document formats">
+  <a href="https://github.com/smartdoca/doca/releases"><img src="https://img.shields.io/github/v/release/smartdoca/doca?style=flat-square&amp;label=%E7%89%88%E6%9C%AC&amp;color=3370ff" alt="最新发行版"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-3370ff?style=flat-square" alt="MIT 开源许可证"></a>
+  <a href="#docker-快速开始"><img src="https://img.shields.io/badge/%E9%83%A8%E7%BD%B2-Docker-2496ed?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="通过 Docker 部署"></a>
+  <img src="https://img.shields.io/badge/%E6%96%87%E6%A1%A3%E6%A0%BC%E5%BC%8F-5%E7%A7%8D-6750a4?style=flat-square" alt="五种文档格式">
 </p>
 
 <p align="center">
-  <a href="https://d.smartdoca.cc"><b>Try the live demo →</b></a> &nbsp;·&nbsp;
-  <a href="https://smartdoca.github.io/doca/#/en/">Documentation</a> &nbsp;·&nbsp;
-  <a href="https://store.smartdoca.cc">Plugin marketplace</a> &nbsp;·&nbsp;
-  <a href="#quick-start-with-docker">Self-host Doca</a>
+  <a href="https://d.smartdoca.cc"><b>在线体验 →</b></a> &nbsp;·&nbsp;
+  <a href="https://smartdoca.github.io/doca/#/zh-cn/">详细文档</a> &nbsp;·&nbsp;
+  <a href="https://store.smartdoca.cc">插件商城</a> &nbsp;·&nbsp;
+  <a href="#docker-快速开始">部署自己的 Doca</a>
 </p>
 
-<p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
+<p align="center">简体中文 · <a href="README.en.md">English</a></p>
 
-**中文简介：** Doca 是面向个人和小团队的开源文档管理与知识库系统，支持多人协同编辑、在线文档、Markdown、在线表格、幻灯片、无限画布和 AI 助手，可通过 Docker 私有化部署。
+Doca 把**在线文档、Markdown、在线表格、幻灯片、无限画布、知识管理和团队协作**放在一起。记录个人想法，沉淀团队知识，也可以连接自己的 AI 模型辅助工作。
 
-![Doca workspace with recent documents, a team knowledge library, and the AI assistant entry](docs/images/workspace.jpg)
+![Doca 工作台：最近访问的文档、团队知识库与 AI 助手入口](docs/images/workspace.jpg)
 
-<p align="center"><sub>Pick up where you left off. Documents, team knowledge, and your AI assistant in one workspace.</sub></p>
+<p align="center"><sub>从上次停下的地方继续。文档、团队知识与 AI 助手，都在同一个工作台。</sub></p>
 
 > [!NOTE]
-> The [live demo](https://d.smartdoca.cc) is for exploration. Demo data is cleared from time to time; please do not store important data there.
+> [在线演示](https://d.smartdoca.cc)用于体验，数据会不定期清理，请不要存放重要数据。
 
-## Make room for your next idea
+## 从一个想法，开始一起创作
 
-| Write and collaborate | Build a shared memory | Make it your own |
+| 写下来，一起完善 | 让知识成为团队记忆 | 建立自己的工作空间 |
 | --- | --- | --- |
-| Draft a proposal, track a budget, or sketch a plan. Invite collaborators and discuss details in comments. | Organize documents into knowledge libraries. Build knowledge books with source evidence, workflows, and human review. | Deploy on your own server. Connect your AI models and extend the workspace with business plugins. |
+| 写项目方案、记录会议、管理预算、梳理流程。邀请伙伴协同编辑，用评论讨论细节。 | 用知识库目录组织文档，用知识册连接来源、编排和人工审阅，让结论有据可查。 | 部署到自己的服务器，连接自己的 AI 模型，再通过业务插件扩展工作台。 |
 
-## See Doca in action
+## 看看 Doca 能做什么
 
-### Documents that bring the team together
+### 在文档里，把团队连接起来
 
-Rich text for plans and meeting notes, with a library tree, formatting tools, permissions, and document history close at hand.
+用富文本写方案与会议纪要。知识库目录、格式工具、权限和文档历史就在手边。
 
-![Doca rich text editor displaying a team collaboration guide beside the knowledge library tree](docs/images/rich-text.jpg)
+![Doca 在线文档编辑器：团队协作指南与知识库目录](docs/images/rich-text.jpg)
 
-### Five formats, one workspace
+### 五种文档格式，一个工作台
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/markdown.jpg" alt="Doca Markdown editor with a team development note"><br><b>Markdown</b> — notes, code, and structured writing.</td>
-    <td width="50%"><img src="docs/images/spreadsheet.jpg" alt="Doca spreadsheet editor with a formatted project budget"><br><b>Spreadsheets</b> — budgets, data, and project tracking.</td>
+    <td width="50%"><img src="docs/images/markdown.jpg" alt="Doca Markdown 编辑器中的研发笔记"><br><b>Markdown</b>：写笔记、贴代码、整理结构化内容。</td>
+    <td width="50%"><img src="docs/images/spreadsheet.jpg" alt="Doca 在线表格编辑器中的项目预算"><br><b>在线表格</b>：管理预算、数据与项目进度。</td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/slides.jpg" alt="Doca presentation editor displaying a product introduction"><br><b>Slides</b> — present ideas and project updates.</td>
-    <td width="50%"><img src="docs/images/canvas.jpg" alt="Doca canvas editor showing a project roadmap"><br><b>Canvas</b> — map out a process on an infinite board.</td>
+    <td width="50%"><img src="docs/images/slides.jpg" alt="Doca 幻灯片编辑器中的产品介绍"><br><b>幻灯片</b>：表达想法，展示方案与阶段成果。</td>
+    <td width="50%"><img src="docs/images/canvas.jpg" alt="Doca 无限画布中的项目路线规划"><br><b>无限画布</b>：把流程、结构与思路放到画板上。</td>
   </tr>
 </table>
 
-<p align="center"><sub>Actual Doca UI, captured with sample content in an isolated local deployment.</sub></p>
+<p align="center"><sub>以上为 Doca 真实系统截图，使用隔离本地部署中的示例内容。</sub></p>
 
-## What you can do
+## 主要功能
 
-| Capability | What it brings to your workspace |
+| 能力 | 可以用来做什么 |
 | --- | --- |
-| **Online documents and collaboration** | Rich text, Markdown, spreadsheets, slides, and canvas; realtime collaboration, comments, and history. |
-| **Knowledge management** | Knowledge libraries with document trees, plus shared knowledge books with workflows, source evidence, and human review. |
-| **Personal AI assistant** | Work with authorized documents and files, read PDF/Office attachments, generate or edit images, and prepare browser drafts. Requires configured models and services. |
-| **Files and sharing** | Personal files, shared folders, invitations, permission controls, share links, search, notifications, and trash. Local or S3-compatible file storage. |
-| **Accounts and languages** | Password, OIDC, Google, GitHub, WeChat QR, and QQ sign-in; Chinese and English interfaces. External login requires service configuration. |
-| **Self-hosting and extensions** | Docker deployment; SQLite for one server, or shared PostgreSQL, Redis, and file storage for multiple replicas. Business plugins use the public `@smartdoca/plugin-sdk`. |
+| **在线文档与协同编辑** | 富文本、Markdown、表格、幻灯片和画布，支持实时协同、评论与历史记录。 |
+| **知识管理** | 带文档目录的知识库，以及支持编排、来源溯源和人工审阅的多人共建知识册。 |
+| **个人 AI 助手** | 围绕有权限访问的文档与文件工作，读取 PDF/Office 附件，生成与编辑图片，准备浏览器草稿。需要配置可用的模型和服务。 |
+| **文件与分享** | 个人文件、共享文件夹、邀请、权限、分享链接、搜索、通知和回收站。支持本地或兼容 S3 的文件存储。 |
+| **账号与语言** | 密码、OIDC、Google、GitHub、微信扫码和 QQ 登录，中英文界面。外部登录需配置对应服务。 |
+| **私有化部署与扩展** | Docker 部署，单机 SQLite，多副本共享 PostgreSQL、Redis 和文件存储。业务插件通过公开 `@smartdoca/plugin-sdk` 扩展。 |
 
-One deployment has one account system. The default image installs no quick-notes, mail, calendar, membership, or moderation plugins. Templates and materials need a separately installed provider. See [capabilities and limits](https://smartdoca.github.io/doca/#/en/getting-started/features).
+一次部署只有一套账号系统。默认镜像不安装随手记、邮箱、日历、会员或内容审核插件。模板和素材需要单独安装提供者，详见[功能与边界](https://smartdoca.github.io/doca/#/zh-cn/getting-started/features)。
 
-## Useful links
+## 常用地址
 
-| Destination | Address |
+| 入口 | 地址 |
 | --- | --- |
-| **Live demo** | [d.smartdoca.cc](https://d.smartdoca.cc) |
-| **Documentation** | [smartdoca.github.io/doca](https://smartdoca.github.io/doca/#/en/) |
-| **Plugin marketplace** | [store.smartdoca.cc](https://store.smartdoca.cc) |
-| **Source code** | [github.com/smartdoca/doca](https://github.com/smartdoca/doca) |
-| **Releases** | [Download and release notes](https://github.com/smartdoca/doca/releases) |
-| **Feedback** | [Report an issue or request a feature](https://github.com/smartdoca/doca/issues) |
+| **在线体验** | [d.smartdoca.cc](https://d.smartdoca.cc) |
+| **详细文档** | [smartdoca.github.io/doca](https://smartdoca.github.io/doca/#/zh-cn/) |
+| **插件商城** | [store.smartdoca.cc](https://store.smartdoca.cc) |
+| **项目源码** | [github.com/smartdoca/doca](https://github.com/smartdoca/doca) |
+| **发行版本** | [下载与发行说明](https://github.com/smartdoca/doca/releases) |
+| **问题反馈** | [提交问题或功能建议](https://github.com/smartdoca/doca/issues) |
 
-## Quick start with Docker
+## Docker 快速开始
 
-Requires Git, Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. This installs the published 0.1.13 image into a fresh database. Existing installations must read the [release requirements](https://smartdoca.github.io/doca/#/en/releases/0.1.13) and preserve their data before changing versions.
+需要 Git、Docker Engine、Docker Compose，以及通过反向代理访问的 HTTP(S) 地址。本流程在新空数据库中安装已发布的 0.1.13 镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.13)并保留原数据。
 
 ```sh
-# 1. Clone the matching release
+# 1. 拉取对应发行版代码
 git clone --branch v0.1.13 --depth 1 https://github.com/smartdoca/doca.git
 cd doca
 
-# 2. Configure the environment
+# 2. 配置环境变量
 cp docker.env.example .env
-# Edit .env: set DOCA_ORIGIN to your HTTP(S) origin.
-# Keep the example local file-store configuration for a single server.
+# 编辑 .env，将 DOCA_ORIGIN 改成自己的 HTTP(S) 来源。
+# 单机部署保留示例中的本地文件存储配置。
 
-# 3. Pull the image
+# 3. 拉取镜像
 docker compose pull
 
-# 4. Start and check health
+# 4. 启动并检查健康状态
 docker compose up -d
 docker compose ps
-# Wait for healthy before initializing the administrator
+# 等待状态显示 healthy，再初始化管理员
 
-# 5. Initialize the administrator login and password
+# 5. 初始化管理员账号和密码
 bash scripts/bootstrap-admin.sh
 ```
 
-The password must be at least 12 characters. There is no default account. Compose binds to `127.0.0.1:39120`; configure an HTTP(S) reverse proxy before browser access. SQLite, files, plugins, and the AI database persist in `doca_data`.
+密码至少 12 位，没有默认账号。Compose 绑定 `127.0.0.1:39120`，浏览器访问前需要配置 HTTP(S) 反向代理。SQLite、文件、插件和 AI 数据库保存在 `doca_data` 卷。
 
-The [complete quick start](https://smartdoca.github.io/doca/#/en/getting-started/quickstart) includes `.env`, the reverse proxy, health checks, administrator recovery, and data preservation.
+[完整快速开始](https://smartdoca.github.io/doca/#/zh-cn/getting-started/quickstart)包含 `.env`、反向代理、健康检查、管理员恢复和数据保留说明。
 
-## Development
+## 源码开发
 
-Node.js 22.12 or newer and pnpm 11.25.0:
+需要 Node.js 22.12 或更新版本，以及 pnpm 11.25.0：
 
 ```sh
 pnpm install --frozen-lockfile
 cp .env.example .env
-# Set the storage root in .env to an absolute writable local directory.
 pnpm dev
 ```
 
-Open `http://127.0.0.1:39130`. Initialize the administrator with `bash scripts/bootstrap-admin-local.sh`. `pnpm check` runs TypeScript, tests, and the Web build. See [development](https://smartdoca.github.io/doca/#/en/development/development).
+打开 `http://127.0.0.1:39130`，通过 `bash scripts/bootstrap-admin-local.sh` 初始化管理员。`pnpm check` 执行 TypeScript 检查、测试和 Web 构建。详见[开发环境](https://smartdoca.github.io/doca/#/zh-cn/development/development)。
 
-## Documentation
+## 文档
 
-- [User guide](https://smartdoca.github.io/doca/#/en/getting-started/user-guide)
-- [Deployment and configuration](https://smartdoca.github.io/doca/#/en/operations/deployment)
-- [Plugin development](https://smartdoca.github.io/doca/#/en/plugins/plugin-development)
-- [HTTP API](https://smartdoca.github.io/doca/#/en/reference/api); the running application also provides `/api/openapi.json`.
-- [Release notes](https://smartdoca.github.io/doca/#/en/releases/0.1.13)
-- [Documentation source](docs/README.md)
+- [使用指南](https://smartdoca.github.io/doca/#/zh-cn/getting-started/user-guide)
+- [部署与配置](https://smartdoca.github.io/doca/#/zh-cn/operations/deployment)
+- [插件开发](https://smartdoca.github.io/doca/#/zh-cn/plugins/plugin-development)
+- [HTTP API](https://smartdoca.github.io/doca/#/zh-cn/reference/api)，运行中的应用还提供 `/api/openapi.json`。
+- [发行记录](https://smartdoca.github.io/doca/#/zh-cn/releases/0.1.13)
+- [文档源码](docs/README.zh-CN.md)
 
-For a documentation preview, run `pnpm docs:dev` and open `http://127.0.0.1:39140/#/en/`. `pnpm docs:check` verifies bilingual coverage and local links. GitHub Pages setup is in [documentation maintenance](docs/documentation.md).
+预览文档时，执行 `pnpm docs:dev` 并打开 `http://127.0.0.1:39140/#/zh-cn/`。`pnpm docs:check` 校验双语覆盖和本地链接。GitHub Pages 设置见[文档维护](docs/documentation.zh-CN.md)。
 
-## License
+## 许可证
 
-[MIT](LICENSE). The separately published rich text, spreadsheet, Markdown, canvas, and slides editors use the same license.
+[MIT](LICENSE)。单独发布的富文本、表格、Markdown、画布和幻灯片编辑器采用同一许可证。

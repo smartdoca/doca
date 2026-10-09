@@ -21,6 +21,10 @@ These settings are applied on GitHub separately from the files in this repositor
   `yjs`, `react`, `typescript`, `docker`.
 
 Keep the description bilingual so both Chinese and English searches can match.
+Chinese is the primary audience: `README.md` is the Chinese repository homepage,
+and `README.en.md` is the secondary English version linked near the top. Primary
+demo, documentation, marketplace, feature, and deployment links use Chinese copy
+and the Chinese documentation routes on the default homepage.
 Use topics describing shipped capabilities and actual technologies. GitHub allows
 at most 20 topics; topic names use lowercase letters, numbers, and hyphens.
 See [Classifying your repository with topics](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/classifying-your-repository-with-topics).
