@@ -169,8 +169,9 @@
     "build": "passed",
     "diffCheck": "passed",
     "sdkIndependentConsumer": "passed",
-    "docsPagesPerLanguage": 51,
-    "fullTests": "passed with maxWorkers=4; initial unconstrained run had one timeout, isolated retry passed"
+    "docsPagesPerLanguage": 52,
+    "fullTests": "passed with maxWorkers=4; initial unconstrained run had one timeout, isolated retry passed",
+    "historicalUnmarkedAndUnreadableResults": "unchanged; new explicit waiting markers only"
   },
   "faultInjection": {
     "runId": "1797cd3b-7f85-4189-a998-c089e67360bc",

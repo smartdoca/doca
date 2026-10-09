@@ -9,6 +9,7 @@ import {
   refreshContinuations,
   wakeAIContinuations,
   readContinuationSnapshot,
+  continuationJobStatus,
 } from "@server/services/ai/continuations.js";
 import {
   aiServiceToken,
@@ -253,7 +254,19 @@ it("reads current administrator status rather than a stored principal snapshot",
   await readContinuationSnapshot(db, { ...actor, admin: 1 }, input);
 });
 it("does not adapt historical jobs, cancel results, or malformed versioned tickets", async () => {
-  const historical = await job(undefined, randomUUID(), "completed");
+  const historical = await job(undefined);
+  const unreadable = await job(undefined);
+  const unmarked = await job(undefined);
+  await db
+    .updateTable("ai_jobs")
+    .set({ result: "{broken" })
+    .where("id", "=", unreadable)
+    .execute();
+  await db
+    .updateTable("ai_jobs")
+    .set({ result: "null" })
+    .where("id", "=", unmarked)
+    .execute();
   const cancelled = await job(await ticket());
   await db
     .updateTable("ai_jobs")
@@ -263,7 +276,21 @@ it("does not adapt historical jobs, cancel results, or malformed versioned ticke
   const invalid = await job({ version: 0, waits: [] });
   const before = (await readJob(invalid)).result;
   await wakeAIContinuations(db);
-  expect((await readJob(historical)).status).toBe("completed");
+  expect((await readJob(historical)).status).toBe("awaiting_approval");
+  expect(await readJob(unreadable)).toMatchObject({
+    status: "awaiting_approval",
+    result: "{broken",
+  });
+  expect(await readJob(unmarked)).toMatchObject({
+    status: "awaiting_approval",
+    result: "null",
+  });
+  expect(continuationJobStatus(await readJob(unreadable))).toBe(
+    "awaiting_approval",
+  );
+  expect(continuationJobStatus(await readJob(unmarked))).toBe(
+    "awaiting_approval",
+  );
   expect((await readJob(cancelled)).status).toBe("cancelled");
   expect(await readJob(invalid)).toMatchObject({
     status: "failed",
@@ -419,11 +446,24 @@ it("commits a book run action with its durable receipt and replays it without cr
 });
 
 it("preserves an in-flight wait when the host starts shutdown during source authorization", async () => {
-  const id = await job(await ticket()), before = (await readJob(id)).result;
-  pluginServices(db).continuations.set(input.sourceId, { id: input.sourceId, pluginId: "example.worker", async read() {
-    pluginServices(db).continuationsReady = false;
-    return { version: 1, state: "completed", revision: "2", summary: "Saved before shutdown" };
-  } });
+  const id = await job(await ticket()),
+    before = (await readJob(id)).result;
+  pluginServices(db).continuations.set(input.sourceId, {
+    id: input.sourceId,
+    pluginId: "example.worker",
+    async read() {
+      pluginServices(db).continuationsReady = false;
+      return {
+        version: 1,
+        state: "completed",
+        revision: "2",
+        summary: "Saved before shutdown",
+      };
+    },
+  });
   expect(await wakeAIContinuations(db)).toEqual({ woken: 0 });
-  expect(await readJob(id)).toMatchObject({ status: "awaiting_approval", result: before });
+  expect(await readJob(id)).toMatchObject({
+    status: "awaiting_approval",
+    result: before,
+  });
 });
