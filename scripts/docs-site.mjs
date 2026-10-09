@@ -56,7 +56,7 @@ for (const path of sourcePages.keys()) {
   documents.set(path, { markdown, tree, headings: headingIds(tree) });
 }
 const publishedRoutes = new Set(pages.flatMap(page => languages.map(lang => route(page, lang))));
-for (const [name, lang] of [["README.md", "en"], ["README.zh-CN.md", "zh-cn"]]) {
+for (const [name, lang] of [["README.md", "zh-cn"], ["README.en.md", "en"]]) {
   const markdown = await readFile(resolve(root, name), "utf8");
   const entrance = `https://smartdoca.github.io/doca/#/${lang}/`;
   if (!markdown.includes(`](${entrance})`)) problems.push(`${name} is missing its ${lang} documentation entrance`);
