@@ -334,6 +334,36 @@ export interface Schema extends KnowledgeBookTables {
     author_id: string;
     created_at: string;
   };
+  document_version_archives: {
+    id: string;
+    resource_id: string;
+    seq: number;
+    title: string;
+    author_id: string;
+    created_at: string;
+    is_ai: number;
+    store_id: string;
+    object_key: string;
+    size: number;
+    sha256: string;
+    archive_version: number;
+    archived_at: string;
+  };
+  document_history_archive_operations: {
+    resource_id: string;
+    snapshot_id: string;
+    store_id: string;
+    object_key: string;
+    size: number;
+    sha256: string;
+    batch_json: string;
+    created_at: string;
+  };
+  document_history_garbage: {
+    store_id: string;
+    object_key: string;
+    created_at: string;
+  };
   visit_events: {
     id: string;
     resource_id: string;

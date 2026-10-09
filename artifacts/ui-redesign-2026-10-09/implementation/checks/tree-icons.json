@@ -1,0 +1,32 @@
+{
+  "icons": [
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "iconWidth": 19
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "iconWidth": 19
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "iconWidth": 19
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "iconWidth": 19
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "iconWidth": 19
+    }
+  ],
+  "selected": [
+    {
+      "background": "rgb(237, 241, 248)",
+      "glyphBackground": "rgba(0, 0, 0, 0)",
+      "iconWidth": 19,
+      "text": "调研"
+    }
+  ]
+}

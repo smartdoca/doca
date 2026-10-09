@@ -1,6 +1,6 @@
 {
   "name": "doca",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -14,6 +14,8 @@
     "start": "tsx apps/server/src/main.ts",
     "bootstrap": "tsx apps/server/src/bootstrap/admin.ts",
     "admin:reset-password": "tsx apps/server/src/bootstrap/reset-admin-password.ts",
+    "history:upgrade": "tsx apps/server/src/bootstrap/history-storage.ts upgrade",
+    "history:rollback": "tsx apps/server/src/bootstrap/history-storage.ts rollback",
     "build": "vite build --config apps/web/vite.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

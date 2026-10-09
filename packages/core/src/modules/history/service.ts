@@ -27,6 +27,7 @@ import { DocaYjsDocument as YjsDocument } from "../documents/codecs/rich-runtime
 import { restoreSurface } from "../documents/codecs/surfaces.js";
 import { type Actor } from "../identity/passwords.js";
 import { recordVersion, recoveryMetadata } from "./repository.js";
+import { readHistorySnapshot } from "./archive.js";
 export function createHistory(db: DB) {
   async function access(
     tx: DB | Transaction<Schema>,
@@ -42,49 +43,82 @@ export function createHistory(db: DB) {
     });
   }
   return {
-    async versions(
-      actor: Actor | null,
-      id: string,
-      cursor?: string,
-    ) {
-      const resource = await access(db, actor, id, "read_history");
-      let query = db
-        .selectFrom("document_versions as v")
-        .innerJoin("users as u", "u.id", "v.author_id")
-        .select([
-          "v.id",
-          "v.seq",
-          "v.title",
-          "v.created_at",
-          "v.author_id",
-          "v.recovery_json",
-          "u.display_name",
-        ])
-        .where("v.resource_id", "=", id);
-      const fingerprint = cursorFingerprint({ kind: "versions", id });
-      if (cursor) {
-        const c = decodePageCursor(cursor, fingerprint);
-        query = query.where(
-          sql<boolean>`(v.created_at < ${c.value} or (v.created_at = ${c.value} and v.id < ${c.id}))`,
+    async versions(actor: Actor | null, id: string, cursor?: string) {
+      return locked(async (tx) => {
+        await access(tx, actor, id, "read_history");
+        let query = tx
+          .selectFrom("document_versions as v")
+          .innerJoin("users as u", "u.id", "v.author_id")
+          .select([
+            "v.id",
+            "v.seq",
+            "v.title",
+            "v.created_at",
+            "v.author_id",
+            "v.recovery_json",
+            "u.display_name",
+          ])
+          .where("v.resource_id", "=", id);
+        let archiveQuery = tx
+          .selectFrom("document_version_archives as a")
+          .innerJoin("users as u", "u.id", "a.author_id")
+          .select([
+            "a.id",
+            "a.seq",
+            "a.title",
+            "a.created_at",
+            "a.author_id",
+            "a.is_ai",
+            "u.display_name",
+          ])
+          .where("a.resource_id", "=", id);
+        const fingerprint = cursorFingerprint({ kind: "versions", id });
+        if (cursor) {
+          const c = decodePageCursor(cursor, fingerprint);
+          query = query.where(
+            sql<boolean>`(v.created_at < ${c.value} or (v.created_at = ${c.value} and v.id < ${c.id}))`,
+          );
+          archiveQuery = archiveQuery.where(
+            sql<boolean>`(a.created_at < ${c.value} or (a.created_at = ${c.value} and a.id < ${c.id}))`,
+          );
+        }
+        const recent = await query
+          .orderBy("v.created_at", "desc")
+          .orderBy("v.id", "desc")
+          .limit(101)
+          .execute();
+        const archived = await archiveQuery
+          .orderBy("a.created_at", "desc")
+          .orderBy("a.id", "desc")
+          .limit(101)
+          .execute();
+        const rows = [
+          ...recent.map(({ recovery_json, ...row }) => ({
+            ...row,
+            is_ai: !!recovery_json && JSON.parse(recovery_json).origin === "ai",
+          })),
+          ...archived.map((row) => ({ ...row, is_ai: !!row.is_ai })),
+        ].sort((a, b) =>
+          a.created_at === b.created_at
+            ? a.id < b.id
+              ? 1
+              : a.id > b.id
+                ? -1
+                : 0
+            : a.created_at < b.created_at
+              ? 1
+              : -1,
         );
-      }
-      const rows = await query
-        .orderBy("v.created_at", "desc")
-        .orderBy("v.id", "desc")
-        .limit(101)
-        .execute();
-      const items = rows.slice(0, 100);
-      const last = items.at(-1);
-      return {
-        items: items.map(({ recovery_json, ...row }) => ({
-          ...row,
-          is_ai: !!recovery_json && JSON.parse(recovery_json).origin === "ai",
-        })),
-        nextCursor:
-          rows.length > 100 && last
-            ? encodePageCursor(fingerprint, last.created_at, last.id)
-            : null,
-      };
+        const items = rows.slice(0, 100);
+        const last = items.at(-1);
+        return {
+          items,
+          nextCursor:
+            rows.length > 100 && last
+              ? encodePageCursor(fingerprint, last.created_at, last.id)
+              : null,
+        };
+      });
     },
     async snapshot(actor: Actor, id: string) {
       return locked(async (tx) => {
@@ -136,12 +170,7 @@ export function createHistory(db: DB) {
     },
     async version(actor: Actor | null, id: string, versionId: string) {
       const resource = await access(db, actor, id, "read_history");
-      const row = await db
-        .selectFrom("document_versions")
-        .selectAll()
-        .where("resource_id", "=", id)
-        .where("id", "=", versionId)
-        .executeTakeFirst();
+      const row = await readHistorySnapshot(db, id, versionId);
       if (!row) fail(404, "版本不存在");
       const metadata = recoveryMetadata(row);
       if (metadata.format !== resource.format)

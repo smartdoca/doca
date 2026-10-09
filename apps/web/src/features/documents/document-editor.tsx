@@ -35,10 +35,12 @@ const PresentationDocument = lazy(() => import("@web/features/documents/presenta
 const MarkdownDocument = lazy(() => import("@web/features/documents/markdown-editor.js"));
 import { createPortal } from "react-dom";
 import { Editor, Element, Node, Range, Transforms } from "slate";
+import { ReactEditor } from "slate-react";
 import {
   RichTextEditor,
   type RichTextEditorHandle,
   type ResourceConfig,
+  type ResourceUploadState,
   type DocumentHeading,
 } from "@smartdoca/slate";
 import {
@@ -48,7 +50,7 @@ import {
   encodeStateAsUpdate,
   createYjsAdapter,
 } from "@smartdoca/slate/yjs";
-import { MessageSquare, PanelRightClose } from "lucide-react";
+import { MessageSquare, PanelRightClose, X } from "lucide-react";
 import {
   api,
   assetUrl,
@@ -75,7 +77,9 @@ import {
 import type { CommentBody } from "@core/modules/interactions/community.js";
 import "@smartdoca/slate/style.css";
 import "@web/features/documents/editor.css";
+import "@web/features/documents/document-page-width.css";
 import { EditorToolbar } from "@web/features/documents/editor-toolbar.js";
+import { documentUploadProblem } from "./document-upload.js";
 import { OutlineDrawer } from "@web/features/documents/outline-drawer.js";
 import { DocumentOutline } from "@web/features/documents/document-outline.js";
 import { documentPageLayout } from "@web/features/documents/document-page-layout.js";
@@ -95,12 +99,14 @@ export function DocumentEditor({
   changed,
   targetComment,
   loadMoreComments,
+  discussion,
 }: {
   detail: Detail;
   user: User | null;
   changed: () => void;
   targetComment?: string | null;
   loadMoreComments?: () => Promise<void>;
+  discussion?: React.ReactNode;
 }) {
   const r = detail.resource;
   if (r.format === "presentation")
@@ -118,16 +124,19 @@ export function DocumentEditor({
     );
   if (r.format === "markdown")
     return (
-      <Suspense fallback={<p className="empty">正在加载 Markdown…</p>}>
-        <MarkdownDocument
-          key={`${r.id}:${user?.id ?? "anonymous"}`}
-          detail={detail}
-          user={user}
-          changed={changed}
-          targetComment={targetComment}
-          loadMoreComments={loadMoreComments}
-        />
-      </Suspense>
+      <>
+        <Suspense fallback={<p className="empty">正在加载 Markdown…</p>}>
+          <MarkdownDocument
+            key={`${r.id}:${user?.id ?? "anonymous"}`}
+            detail={detail}
+            user={user}
+            changed={changed}
+            targetComment={targetComment}
+            loadMoreComments={loadMoreComments}
+          />
+        </Suspense>
+        {discussion}
+      </>
     );
   if (r.format === "spreadsheet")
     return (
@@ -170,6 +179,7 @@ export function DocumentEditor({
       changed={changed}
       targetComment={targetComment}
       loadMoreComments={loadMoreComments}
+      discussion={discussion}
     />
   );
 }
@@ -179,12 +189,14 @@ function RichDocument({
   changed,
   targetComment,
   loadMoreComments,
+  discussion,
 }: {
   detail: Detail;
   user: User | null;
   changed: () => void;
   targetComment?: string | null;
   loadMoreComments?: () => Promise<void>;
+  discussion?: React.ReactNode;
 }) {
   const id = detail.resource.id;
   const { locale, t } = useI18n();
@@ -199,6 +211,10 @@ function RichDocument({
     return { doc, runtime: new YjsDocument(doc) };
   }, [id]);
   const handle = useRef<RichTextEditorHandle | null>(null);
+  const [uploadStates, setUploadStates] = useState<readonly ResourceUploadState[]>([]);
+  const [dismissedUploadErrors, setDismissedUploadErrors] = useState<ReadonlySet<string>>(new Set());
+  const [mediaCommandError, setMediaCommandError] = useState("");
+  const [playbackError, setPlaybackError] = useState<{ name: string; code: number; src: string } | null>(null);
   const [toolbarHandle, setToolbarHandle] =
     useState<RichTextEditorHandle | null>(null);
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
@@ -858,6 +874,30 @@ function RichDocument({
           )}
         </div>
       )}
+      {(uploadStates.some((upload) => upload.status === "error" && !dismissedUploadErrors.has(upload.blockId)) || mediaCommandError || playbackError) && <div className="document-media-errors">
+      <button className="icon document-media-errors-close" aria-label={t("dialog.close")} onClick={() => {
+        setDismissedUploadErrors(new Set(uploadStates.map((upload) => upload.blockId)));
+        setMediaCommandError("");
+        setPlaybackError(null);
+      }}><X size={16} /></button>
+      {uploadStates.filter((upload) => upload.status === "error" && !dismissedUploadErrors.has(upload.blockId)).map((upload) => (
+        <div className="document-media-error" role="alert" key={upload.blockId}>
+          {t("editor.uploadFailed", {
+            name: upload.file.name,
+            reason: upload.error instanceof Error ? upload.error.message : t("editor.uploadFailedUnknown"),
+          })}
+        </div>
+      ))}
+      {mediaCommandError && <div className="document-media-error" role="alert">{mediaCommandError}</div>}
+      {playbackError && (
+        <div className="document-media-error" role="alert">
+          {t("editor.videoPlaybackFailed", {
+            name: playbackError.name,
+            reason: t(playbackError.code === 2 ? "editor.videoNetworkError" : playbackError.code === 3 ? "editor.videoDecodeError" : "editor.videoUnsupported"),
+          })}
+        </div>
+      )}
+      </div>}
       {(blocked || (ready && !connected)) && (
         <div className="subtle small">
           {blocked
@@ -928,7 +968,53 @@ function RichDocument({
           className="editor-content"
           style={{ maxWidth: mobileEditor ? "none" : pageLayout.paper || "none" }}
           ref={contentHost}
+          onDragOverCapture={(event) => {
+            if (editable && (event.target as HTMLElement).closest("[data-slate-editor]") && event.dataTransfer.types.includes("Files")) {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+            }
+          }}
+          onDropCapture={(event) => {
+            const editorHandle = handle.current;
+            const files = Array.from(event.dataTransfer.files);
+            if (!editable || rank < 3 || presenting || !editorHandle || !files.length || !(event.target as HTMLElement).closest("[data-slate-editor]")) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const problem = files.map(documentUploadProblem).find(Boolean);
+            if (problem) { setMediaCommandError(t(problem.key, problem.values)); return; }
+            // Use the native upload command at the drop location; it owns placeholders and the live insertion range.
+            try {
+              Transforms.select(editorHandle.editor, ReactEditor.findEventRange(editorHandle.editor, event));
+              editorHandle.commands.focus();
+              setMediaCommandError("");
+              for (const file of files) void editorHandle.commands.uploadMedia(file).catch((error: Error) => setMediaCommandError(error.message));
+            } catch (error) {
+              setMediaCommandError((error as Error).message);
+            }
+          }}
+          onErrorCapture={(event) => {
+            if (event.target instanceof HTMLVideoElement && event.target.error && event.target.error.code !== 1) setPlaybackError({
+              name: event.target.getAttribute("aria-label") || t("editor.video"),
+              code: event.target.error.code,
+              src: event.target.currentSrc || event.target.src,
+            });
+          }}
+          onLoadedDataCapture={(event) => {
+            if (event.target instanceof HTMLVideoElement) {
+              const src = event.target.currentSrc || event.target.src;
+              setPlaybackError((current) => current?.src === src ? null : current);
+            }
+          }}
           onPasteCapture={(e) => {
+            if (editable && (e.target as HTMLElement).closest("[data-slate-editor]") && e.clipboardData.files.length) {
+              const problem = Array.from(e.clipboardData.files).map(documentUploadProblem).find(Boolean);
+              if (problem) {
+                e.preventDefault();
+                e.stopPropagation();
+                setMediaCommandError(t(problem.key, problem.values));
+              } else setMediaCommandError("");
+              return;
+            }
             if (
               !editable ||
               rank < 3 ||
@@ -1002,6 +1088,7 @@ function RichDocument({
                   collaboration={adapter}
                   resources={resources}
                   onAttachmentPreview={attachmentPreview.onRichAttachmentPreview}
+                  onUploadStateChange={setUploadStates}
                   mode={editable ? "edit" : "readonly"}
                   onReady={editorReady}
                   onOutlineChange={outlineChanged}
@@ -1052,6 +1139,7 @@ function RichDocument({
               editable={connected && editable}
             />
           )}
+          {discussion}
         </div>
         {commentsOpen && (
           <aside className={`content-comments ${compact ? "document-comments-drawer" : ""}`} aria-label={compact ? t("comment.drawer") : t("comment.region")}>

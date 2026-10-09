@@ -19,6 +19,7 @@ Links use `#/s/{token}` for signed-in preview and acceptance. The global link sw
 ## History and restore
 
 - The document menu provides history, snapshot previews, and manual snapshots. History normally requires editor permission; enabling reader history allows access according to resource reading permission.
+- Recent recovery points remain detailed; long-term history retains one point per ten older snapshots. The same list and preview/restore actions serve every retained point, without exposing its storage location. Sampling deliberately removes the other nine points; see [storage operations](storage.md#history-storage-and-offline-upgrade).
 - Restorable rich-text and Markdown snapshots offer restore to managers or owners. `expectedSeq` checks current content. Refresh after a conflict so an old preview cannot overwrite newer edits.
 - Spreadsheets, slides, and canvas have snapshots and readonly previews. They currently return `canRestore: false` and show no restore action.
 - Business history and collaboration checkpoints are persisted separately. Restore uses the snapshot's format, lineage, and assets; missing history is never replaced with current content.

@@ -23,7 +23,7 @@ export class CredentialCryptoError extends Error {
   constructor(readonly code: CredentialCryptoErrorCode) {
     super(
       {
-        "missing-key": `${CREDENTIAL_MASTER_KEY_ENV} is required for credential storage`,
+        "missing-key": `${CREDENTIAL_MASTER_KEY_ENV} is required; generate it with openssl rand -hex 32`,
         "invalid-key": `${CREDENTIAL_MASTER_KEY_ENV} must contain exactly 64 hexadecimal characters`,
         "invalid-credential": "Invalid credential value or identity",
         "invalid-record": "Invalid encrypted credential record",

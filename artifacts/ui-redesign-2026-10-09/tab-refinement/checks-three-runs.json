@@ -1,0 +1,62 @@
+[
+  {
+    "round": 1,
+    "passed": true,
+    "selectedStyle": {
+      "background": "rgba(0, 0, 0, 0)",
+      "centered": true,
+      "hover": true,
+      "pillBackground": "rgb(237, 241, 248)",
+      "pillHeight": "28px",
+      "pillRadius": "4px",
+      "text": "与我协作"
+    },
+    "focusStyle": {
+      "background": "rgba(0, 0, 0, 0)",
+      "buttonOutline": "3px",
+      "pillOutline": "2px",
+      "pillOutlineColor": "rgb(70, 95, 206)",
+      "text": "我的收藏"
+    }
+  },
+  {
+    "round": 2,
+    "passed": true,
+    "selectedStyle": {
+      "background": "rgba(0, 0, 0, 0)",
+      "centered": true,
+      "hover": true,
+      "pillBackground": "rgb(237, 241, 248)",
+      "pillHeight": "28px",
+      "pillRadius": "4px",
+      "text": "与我协作"
+    },
+    "focusStyle": {
+      "background": "rgba(0, 0, 0, 0)",
+      "buttonOutline": "3px",
+      "pillOutline": "2px",
+      "pillOutlineColor": "rgb(70, 95, 206)",
+      "text": "我的收藏"
+    }
+  },
+  {
+    "round": 3,
+    "passed": true,
+    "selectedStyle": {
+      "background": "rgba(0, 0, 0, 0)",
+      "centered": true,
+      "hover": true,
+      "pillBackground": "rgb(237, 241, 248)",
+      "pillHeight": "28px",
+      "pillRadius": "4px",
+      "text": "与我协作"
+    },
+    "focusStyle": {
+      "background": "rgba(0, 0, 0, 0)",
+      "buttonOutline": "3px",
+      "pillOutline": "2px",
+      "pillOutlineColor": "rgb(70, 95, 206)",
+      "text": "我的收藏"
+    }
+  }
+]

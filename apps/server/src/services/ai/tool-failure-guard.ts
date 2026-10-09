@@ -21,3 +21,8 @@ export function createToolFailureGuard(limit = 3) {
     return count >= limit;
   };
 }
+
+/** A successful business read can contain a task error string; that is not a failed tool call. */
+export function toolResultFailed(type: string, isError: unknown, result: unknown) {
+  return type === "tool-error" || isError === true || (!!result && typeof result === "object" && "error" in result && result.error === true);
+}

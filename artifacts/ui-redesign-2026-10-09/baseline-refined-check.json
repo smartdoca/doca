@@ -1,0 +1,35 @@
+{
+  "preserved_dom": true,
+  "preserved_layout_css": true,
+  "contrast": [
+    {
+      "pair": "正文",
+      "contrast": 14.37
+    },
+    {
+      "pair": "辅助文字",
+      "contrast": 4.98
+    },
+    {
+      "pair": "导航辅助文字",
+      "contrast": 4.61
+    },
+    {
+      "pair": "导航选中项",
+      "contrast": 10.32
+    },
+    {
+      "pair": "页签选中项",
+      "contrast": 9.11
+    },
+    {
+      "pair": "主动作",
+      "contrast": 5.54
+    },
+    {
+      "pair": "AI 面板",
+      "contrast": 5.52
+    }
+  ],
+  "visual_evidence": "静态 SVG / PNG 效果稿，非浏览器截图；HTML 未实机验证"
+}

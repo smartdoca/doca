@@ -166,11 +166,14 @@ export async function readKnowledgeBook(db: DB, actor: Actor, id: string) {
       "error",
       "created_at",
       "updated_at",
+      "started_at",
+      "trigger_key",
     ])
     .where("book_id", "=", id)
     .orderBy("created_at", "desc")
     .limit(100)
     .execute();
+  const triggers = await readBookRunTriggers(db, id, runs);
   const configuration = bookConfigurationSchema.parse(
     JSON.parse(book.configuration),
   );
@@ -209,7 +212,7 @@ export async function readKnowledgeBook(db: DB, actor: Actor, id: string) {
     canManage: rank >= 4,
     sources,
     feedback,
-    runs,
+    runs: runs.map(({ trigger_key, ...run }) => ({ ...run, trigger: triggers.get(run.id) ?? null })),
     releases,
     publishedRelease: book.published_release_id
       ? await readBookRelease(db, actor, id, book.published_release_id)
@@ -259,7 +262,11 @@ export async function readBookRun(
     configuration: JSON.parse(row.configuration),
     error: row.error,
     createdAt: row.created_at,
+    startedAt: row.started_at,
+    trigger: (await readBookRunTriggers(db, bookId, [row])).get(row.id) ?? null,
     updatedAt: row.updated_at,
+    heartbeatAt: row.heartbeat_at,
+    logs: visible ? await readBookRunLogs(db, bookId, id, JSON.parse(row.configuration)) : [],
     artifact,
     restricted: !visible,
     nodes: nodes.map((node) => ({
@@ -302,3 +309,4 @@ export async function readPublishedKnowledgeBook(db: DB, id: string) {
     publishedRelease,
   };
 }
+import { readBookRunLogs, readBookRunTriggers } from "./run-logs.js";

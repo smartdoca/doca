@@ -15,6 +15,8 @@ import { createApp } from "../apps/server/src/app/create-app.js";
 import { completionResponse } from "./ai-mock.js";
 import { readAIDocument } from "@core/workflows/ai-documents.js";
 import { defaultOfficialSkills } from "@core/modules/ai/skills.js";
+import { createKnowledgeBook } from "@core/modules/knowledge-books/management.js";
+import { readKnowledgeBook } from "@core/modules/knowledge-books/reads.js";
 
 let db: DB, owner: Actor;
 beforeEach(async () => {
@@ -183,6 +185,7 @@ async function runJob(
     text,
     modelId: "test",
     scope: docId ? "document" : "all",
+    currentResourceId: docId ?? undefined,
     references: docId ? [{ resourceId: docId }] : [],
     ...(docId ? {} : { skipApprovals: { create: true } }),
   });
@@ -217,6 +220,35 @@ async function setup(fetcher: typeof fetch) {
   ).split(";")[0]!;
   return { app, cookie, doc };
 }
+
+it("uses the current knowledge book context and saves a source on the first call", async () => {
+  const book = await createKnowledgeBook(db, owner, "隔离网络知识册");
+  const script: Script = ({ toolMessages, prompt, body }) => {
+    if (!toolMessages.length) {
+      expect(prompt).toContain(`当前知识册上下文：{\"id\":\"${book.id}\"`);
+      expect(prompt).not.toContain("当前知识库上下文：");
+      const tool = body.tools.find((item: any) => item.function.name === "knowledge_book");
+      expect(tool.function.description).toContain("command.operation");
+      return { name: "knowledge_book", args: { action: "read", bookId: book.id } };
+    }
+    if (toolMessages.length === 1) return { name: "knowledge_book", args: {
+      action: "command", bookId: book.id, command: {
+        operation: "source.save", expectedRevision: 0, title: "TCP 原始资料", status: "active",
+        configuration: { version: 1, items: [{ id: "tcp", kind: "manual", markdown: "TCP 提供可靠有序字节流。" }] },
+      },
+    } };
+    return { text: "当前知识册来源已保存。" };
+  };
+  const { app, cookie } = await setup(scriptedAI(script, () => ({ text: "验收完成。" })));
+  try {
+    const job = await runJob(app, cookie, book.id, "给本册补充这段 TCP 来源");
+    expect(job.status, job.error).toBe("completed");
+    expect(job.progress.events.filter((event: any) => event.kind === "tool" && event.status === "error")).toEqual([]);
+    const saved = await readKnowledgeBook(db, owner, book.id);
+    expect(saved.sources).toHaveLength(1);
+    expect(saved.sources[0]!.configuration?.items[0]).toMatchObject({ id: "tcp", kind: "manual" });
+  } finally { await app.close(); }
+});
 
 it("appended markdown link syntax is saved as a real link element and passes review", async () => {
   const script: Script = ({ toolMessages, prompt }) => {

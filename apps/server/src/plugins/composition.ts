@@ -1,3 +1,4 @@
+import { pluginServices } from "@core/shared/plugin-services.js";
 import { registerKnowledgeBooks } from "../routes/knowledge-books.js";
 import { createHostFileStore } from "../services/host-file-store.js";
 import { createCredentialCipher } from "../services/credential-cipher.js";
@@ -92,18 +93,14 @@ const aiManifest = {
   ],
 } as const;
 
-function runtimePlugin(
-  runtime: ServerRuntimeService,
-  credentialsAvailable: boolean,
-) {
+function runtimePlugin(runtime: ServerRuntimeService) {
   return definePlugin({
     manifest: runtimeManifest,
     async discover(context) {
       context.provide(serverRuntimeToken, runtime);
       context.provide(pluginDatabaseToken, Object.freeze({}) as never);
       context.provide(pluginObjectStorageToken, Object.freeze({}) as never);
-      if (credentialsAvailable)
-        context.provide(pluginCredentialToken, Object.freeze({}) as never);
+      context.provide(pluginCredentialToken, Object.freeze({}) as never);
       await providePlatform(context, runtime);
     },
   });
@@ -374,20 +371,17 @@ export async function composeServerPlugins(
   runtime: ServerRuntimeService,
 ): Promise<ServerPluginComposition> {
   const host = new PluginHost();
-  const masterKey = process.env.DOCA_CREDENTIAL_MASTER_KEY;
-  const credentialCipher = masterKey
-    ? createCredentialCipher(masterKey)
-    : undefined;
-  runtime.api.addHook("onClose", async () => credentialCipher?.dispose());
+  pluginServices(runtime.db).continuationsReady = false;
+  const credentialCipher = createCredentialCipher();
+  runtime.api.addHook("onClose", async () => credentialCipher.dispose());
   try {
-    if (credentialCipher)
-      await verifyCredentialKey(runtime.db, credentialCipher);
+    await verifyCredentialKey(runtime.db, credentialCipher);
     const files = createServerFilesCapability(
       runtime.db,
       runtime.runtime.storage,
     );
     const plugins: DocaPlugin[] = [
-      runtimePlugin(runtime, !!credentialCipher),
+      runtimePlugin(runtime),
       searchPlugin(),
       documentsPlugin(runtime, files),
       aiPlugin(files),
@@ -458,6 +452,7 @@ export async function composeServerPlugins(
       await host.dispose();
       throw error;
     }
+    pluginServices(runtime.db).continuationsReady = true;
     registerPluginManagement(runtime.api, runtime.db, runtime.admin, manager);
     const iconPluginIds = new Set(
       (await manager.inventory()).plugins
@@ -498,10 +493,11 @@ export async function composeServerPlugins(
       .require();
     return { host, search, plugins: descriptors };
   } catch (error) {
+    pluginServices(runtime.db).continuationsReady = false;
     try {
       await host.dispose();
     } finally {
-      credentialCipher?.dispose();
+      credentialCipher.dispose();
     }
     throw error;
   }

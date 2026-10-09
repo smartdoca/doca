@@ -568,6 +568,27 @@ export function registerAssets(
         req.query.download !== "1"
       )
         return reply.redirect(cdn);
+      // Immutable object keys identify the original and each generated variant.
+      // Vary separates a browser's anonymous, cookie and bearer sessions.
+      if (
+        /^image\/(png|jpeg|gif|webp|avif|svg\+xml)$/.test(selected.mime) &&
+        asset.purpose !== "ai_attachment" &&
+        !req.query.trashPreview &&
+        req.query.download !== "1"
+      ) {
+        const etag = `W/"${createHash("sha256")
+          .update(JSON.stringify([selected.profile_id, selected.object_key, selected.size, selected.mime]))
+          .digest("hex")}"`;
+        reply
+          .header("Cache-Control", "private, max-age=3600, must-revalidate")
+          .header("Vary", "Cookie, Authorization")
+          .header("ETag", etag);
+        // Authorization above always precedes conditional responses.
+        const matches = req.headers["if-none-match"]?.split(",").some((value) =>
+          value.trim() === "*" || value.trim().replace(/^W\//, "") === etag.slice(2),
+        );
+        if (matches) return reply.code(304).send();
+      }
       reply
         .header(
           "Content-Disposition",

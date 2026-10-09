@@ -1,0 +1,222 @@
+{
+  "date": "2026-10-09",
+  "environment": "isolated temporary SQLite, users, documents, storage and AI memory",
+  "model": "doubao-seed-2.1-lite",
+  "changes": [
+    "Declare native table block fields and required IDs to the model; keep normalization and atomic persistence checks unchanged.",
+    "Align optional search filters with the declared current tool contract, without invented site/language defaults.",
+    "Pass the current authorized knowledge book into assistant context and distinguish it from a knowledge library.",
+    "Consume handoff drafts in the side panel and protect them from automatic chat restoration.",
+    "Offer existing book titles and a create option outside a book context.",
+    "Open exact human tasks from home links and provide an assistant repair handoff.",
+    "Refresh run and human-task details and show timestamps and stored failure reasons.",
+    "Generic public plugin continuation with durable explicit waits, permission checks, duplicate-notice handling and restart recovery.",
+    "Pipeline run list with actual trigger, start, elapsed time and status; node-only log drawer.",
+    "Durable idempotent run action receipts and repair-task resolution."
+  ],
+  "liveJobs": [
+    {
+      "jobId": "c1a8e69c-4fb9-47c3-9e9a-ddee91d4b458",
+      "status": "completed",
+      "phase": "completed",
+      "error": "",
+      "calls": [
+        {
+          "name": "knowledge_book",
+          "status": "success"
+        },
+        {
+          "name": "knowledge_book",
+          "status": "success"
+        },
+        {
+          "name": "knowledge_book",
+          "status": "success"
+        }
+      ],
+      "failedCalls": 0
+    },
+    {
+      "jobId": "48cc845c-e696-4b21-91fb-0fab9d49af06",
+      "status": "completed",
+      "phase": "completed",
+      "error": "",
+      "calls": [
+        {
+          "name": "document_create",
+          "status": "success"
+        },
+        {
+          "name": "document_read",
+          "status": "success"
+        },
+        {
+          "name": "rich_text_edit",
+          "status": "success"
+        },
+        {
+          "name": "document_read",
+          "status": "success"
+        },
+        {
+          "name": "rich_text_edit",
+          "status": "success"
+        },
+        {
+          "name": "document_read",
+          "status": "success"
+        }
+      ],
+      "failedCalls": 0
+    },
+    {
+      "jobId": "823b7f2f-7662-489f-b901-f595e712628f",
+      "status": "completed",
+      "phase": "completed",
+      "error": "",
+      "calls": [
+        {
+          "name": "document_read",
+          "status": "success"
+        },
+        {
+          "name": "rich_text_edit",
+          "status": "success"
+        },
+        {
+          "name": "document_read",
+          "status": "success"
+        }
+      ],
+      "failedCalls": 0
+    },
+    {
+      "jobId": "d284a9f7-c889-4c81-89d4-885495a6d165",
+      "status": "completed",
+      "phase": "waiting_choice",
+      "error": "",
+      "calls": [
+        {
+          "name": "knowledge_book",
+          "status": "success"
+        },
+        {
+          "name": "ask_user",
+          "status": "success"
+        }
+      ],
+      "failedCalls": 0,
+      "questions": [
+        {
+          "id": "e2a775f3-1813-4751-ae55-ea231abdda4e",
+          "title": "请选择要完善的知识册，或新建一个知识册",
+          "options": [
+            "QA 网络协议知识册",
+            "QA 另一册（选择测试）",
+            "新建一个知识册"
+          ]
+        }
+      ]
+    }
+  ],
+  "liveRuns": [
+    {
+      "id": "1797cd3b-7f85-4189-a998-c089e67360bc",
+      "status": "failed",
+      "error": "QA simulated model failure"
+    },
+    {
+      "id": "aa6ea9f4-2380-43e6-b6ca-96d7234ae988",
+      "status": "published",
+      "error": ""
+    }
+  ],
+  "humanTasks": [
+    {
+      "id": "c01d20fb-f768-4f12-a016-db3c76c165a9",
+      "run_id": "1797cd3b-7f85-4189-a998-c089e67360bc",
+      "kind": "repair",
+      "status": "pending"
+    },
+    {
+      "id": "9f06d75e-0311-4107-a8ff-6695e31ca6f3",
+      "run_id": "aa6ea9f4-2380-43e6-b6ca-96d7234ae988",
+      "kind": "publication",
+      "status": "resolved"
+    }
+  ],
+  "pending": [],
+  "compatibilityAudit": {
+    "untouchedExistingPaths": [
+      "packages/core/src/modules/ai/edit-normalize.ts (existing argument normalization)",
+      "packages/core/src/modules/ai/config.ts (existing image-setting defaults)"
+    ],
+    "schemaMigrations": 0,
+    "userDataResets": 0,
+    "historicalConversion": 0
+  },
+  "screenshots": [
+    "published-book.png",
+    "native-table-edit.png",
+    "pipeline-node-drawer.png",
+    "pipeline-success.png"
+  ],
+  "verification": {
+    "testFiles": 264,
+    "testsPassed": 2587,
+    "testsSkipped": 3,
+    "typecheck": "passed",
+    "build": "passed",
+    "diffCheck": "passed",
+    "sdkIndependentConsumer": "passed",
+    "docsPagesPerLanguage": 51,
+    "fullTests": "passed with maxWorkers=4; initial unconstrained run had one timeout, isolated retry passed"
+  },
+  "faultInjection": {
+    "runId": "1797cd3b-7f85-4189-a998-c089e67360bc",
+    "purpose": "Intentional synthetic model failure used to verify that repair tasks open and display the stored error; this is not a failed live-model acceptance run."
+  },
+  "updatedAt": "2026-10-09T17:48:29.046Z",
+  "finalPipeline": {
+    "jobId": "b4b5af57-94f9-4343-8bc2-4a25c163e340",
+    "status": "completed",
+    "automaticResumptions": 2,
+    "restartWhileWaiting": true,
+    "userMessagesAddedAfterInitialRequest": 0,
+    "runCount": 2,
+    "runs": [
+      {
+        "id": "850401d6-7bc5-4a48-be31-362f52a87890",
+        "status": "failed",
+        "error": "QA simulated model failure",
+        "started_at": "2026-10-09T16:35:42.255Z",
+        "updated_at": "2026-10-09T16:35:42.262Z"
+      },
+      {
+        "id": "f4eee3b0-749e-4000-8a07-d803d6b11c7a",
+        "status": "published",
+        "error": "",
+        "started_at": "2026-10-09T16:37:01.474Z",
+        "updated_at": "2026-10-09T17:37:56.625Z"
+      }
+    ],
+    "humanTasks": [
+      {
+        "id": "7d62bd51-ce3e-4914-8f96-1b565b22b2b9",
+        "run_id": "850401d6-7bc5-4a48-be31-362f52a87890",
+        "kind": "repair",
+        "status": "resolved"
+      },
+      {
+        "id": "d3cec5eb-de10-4ffe-a611-09e69b9ae1ba",
+        "run_id": "f4eee3b0-749e-4000-8a07-d803d6b11c7a",
+        "kind": "publication",
+        "status": "resolved"
+      }
+    ],
+    "failedToolCalls": 1,
+    "toolFailureNote": "One missing expectedRevision was corrected by the live model. Guidance/examples were strengthened afterward; generic state and restart guards also received subsequent unit verification.",
+    "faultInjection": "First run deliberately throws QA simulated model failure to create a repair task; subsequent pipeline uses the configured real model.",
+    "limitations": "Latest frontend verified live. Final backend guard refinements verified with isolated runner tests; the live fixture retained its earlier imported backend module through restart."
+  }
+}

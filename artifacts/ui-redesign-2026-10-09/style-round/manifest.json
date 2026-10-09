@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "lang": "zh",
+  "project": "Doca · 现有风格精修",
+  "brief": "保留布局与现有风格；文档图标去掉外部大色块，只在图标自身形状内带浅色底。",
+  "round": "现有风格精修样张",
+  "candidates": [
+    {
+      "id": "baseline-refined",
+      "name": "现有风格 · 轻量精修",
+      "concept": "延续现有页面的轻快感与清晰层次，让细节成为 Doca 的识别。",
+      "typography": "保留系统黑体、字号和密度；26px 问候标题、14px 列表",
+      "palette": [
+        "#FFFFFF",
+        "#F5F6F8",
+        "#465FCE",
+        "#8270C9"
+      ],
+      "traits": [
+        "保持现有布局",
+        "白底导航选中态",
+        "柔和页签选择",
+        "图标自身带底色，无外部色块"
+      ],
+      "kind": "html",
+      "source": "fixed-baseline-refined.html"
+    }
+  ]
+}

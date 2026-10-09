@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import type { DatabaseConfig } from "@db/index.js";
 import { webhookDatabaseConfig } from "@db/webhook-database.js";
 import { sessionDurations } from "../app/session-policy.js";
+import { createCredentialCipher } from "../services/credential-cipher.js";
 export function assetBase(value: string | undefined) {
   const raw = value?.trim();
   if (!raw) return undefined;
@@ -26,6 +27,8 @@ export function assetBase(value: string | undefined) {
 }
 
 export function config() {
+  // Validate before opening databases, including one-off administrator commands.
+  createCredentialCipher().dispose();
   sessionDurations();
   const origin = new URL(process.env.DOCA_ORIGIN ?? "http://127.0.0.1:39130");
   if (

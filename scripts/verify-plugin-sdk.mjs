@@ -54,6 +54,10 @@ import { createPluginElementPayload, pluginElementState, type PluginElementContr
 import { templatesServiceToken, materialsServiceToken, type TemplateProvider, type MaterialProvider, type MaterialsServiceV2, type MaterialCollectionResult } from '@smartdoca/plugin-sdk/creation-resources';
 import { documentReadServiceToken, librariesServiceToken } from '@smartdoca/plugin-sdk/documents';
 import { createPluginPlatformClient, createPluginAssistantClient, validateAssistantOpenInput, type PluginAssistantOpenInput, type PluginAssistantOpenResult, type NavigationSlot, type ExtensionSlot, type WebPluginBundle, type PluginWebHost, type PluginTemplatePickerProps, type PluginMaterialPickerProps } from '@smartdoca/plugin-sdk/web';
+import { aiContinuationsServiceToken, type AIContinuationsServiceV1, type PluginAIToolContext, type AIContinuationSnapshot } from '@smartdoca/plugin-sdk/ai';
+if (aiContinuationsServiceToken.id !== 'ai.continuations.v1') throw Error('public continuation token');
+const verifyContinuationTypes = async (service: AIContinuationsServiceV1, context: PluginAIToolContext) => { const snapshot: AIContinuationSnapshot = {version:1,state:'completed',revision:'2',summary:'Saved',result:{id:'result'}}; const cleanup = service.registerSource({id:'example.consumer.jobs',pluginId:'example.consumer',async read(){return snapshot;}}); const receipt = await service.wait('example.consumer',context,{sourceId:'example.consumer.jobs',operationId:'stable-job'}); const json: import('@smartdoca/plugin-contracts').JsonValue = receipt; void json; await service.wake('example.consumer',{sourceId:'example.consumer.jobs',operationId:'stable-job'}); cleanup(); };
+void verifyContinuationTypes;
 import { usersServiceToken, type DirectorySource } from '@smartdoca/plugin-sdk/platform';
 import { WebPluginRegistry, navigationSlots, extensionSlots } from '@smartdoca/web-plugin-registry';
 const ids = [documentReadServiceToken.id, librariesServiceToken.id, usersServiceToken.id];

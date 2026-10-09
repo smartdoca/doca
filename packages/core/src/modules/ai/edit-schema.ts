@@ -410,6 +410,10 @@ const presentationWireFields = {
   action: z.string().min(1).max(20).optional(),
 };
 
+// Publish the native shape without moving execution checks ahead of the existing
+// normalization boundary. validateEditOperations remains the authoritative check.
+const { $schema: _nativeBlockSchema, ...nativeBlockParameters } = block.toJSONSchema();
+const nativeBlockWire = z.any().meta(nativeBlockParameters);
 const richTextWireFields = {
   type: wireOperation.shape.type.describe(
     "每种命令只传该命令允许的字段。insertBlock 只用 type、block、parentId、afterId，不能带 blockId；insertTable 只用 type、rows、columns、parentId、afterId，不能带 table、tableId、cells。",
@@ -417,7 +421,7 @@ const richTextWireFields = {
   blockId: wireOperation.shape.blockId.describe(
     "已有文字或块的 ID，仅 text、link、formatText、setBlock、moveBlock、deleteBlock 使用。insertBlock 新节点的 ID 放在 block.id，不能传本字段。",
   ),
-  block: wireOperation.shape.block.describe(
+  block: nativeBlockWire.optional().describe(
     'insertBlock 的原生节点对象，例如 {id:"新唯一ID",type:"paragraph",title:"h2",children:[{text:"章节标题"}]}，不能传 JSON 字符串。',
   ),
   parentId: optionalId.describe("结构命令的已读取父容器 ID，可省略"),
@@ -426,7 +430,7 @@ const richTextWireFields = {
   columns: count.optional().describe("insertTable 列数，顶层正整数"),
   tableId: optionalId.describe("已有表格命令的表 ID，必须从 document_read 获取；insertTable 不允许此字段"),
   cellId: optionalId.describe("setCellContent 的真实单元格 ID，取 outline 的 cells[].id"),
-  children: z.array(z.any()).optional().describe("setCellContent 的原生块数组；insertBlock 的 children 应放在 block 内"),
+  children: z.array(nativeBlockWire).optional().describe('setCellContent 的原生块数组，每个块必填新唯一 id、type、children。例如 [{id:"新唯一ID",type:"paragraph",children:[{text:"内容"}]}]。不要把 required 等 JSON Schema 字段放进节点；insertBlock 的 children 应放在 block 内。'),
   index: index.optional(),
   deleteCount: index.optional(),
   length: count.optional(),

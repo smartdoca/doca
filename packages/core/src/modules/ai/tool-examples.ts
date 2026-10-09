@@ -16,6 +16,18 @@ const editBase = {
 };
 
 export const TOOL_EXAMPLES: Record<string, Record<string, unknown>[]> = {
+  knowledge_book: [
+    { action: "list", offset: 0 },
+    { action: "read", bookId: SAMPLE.doc },
+    { action: "command", bookId: SAMPLE.doc, command: {
+      operation: "source.save", expectedRevision: 0, title: "网络协议资料", status: "active",
+      configuration: { version: 1, items: [{ id: "tcp-rfc", kind: "url", url: "https://www.rfc-editor.org/rfc/rfc9293.html" }] },
+    } },
+    { action: "command", bookId: SAMPLE.doc, command: { operation: "run.start" } },
+    { action: "human_tasks", bookId: SAMPLE.doc, status: "pending", offset: 0 },
+    { action: "resolve_task", bookId: SAMPLE.doc, taskId: SAMPLE.note, expectedRevision: 1, decision: "retry", note: "临时模型失败，按当前配置重试；revision 必须替换为 human_tasks 返回值。" },
+    { action: "wait", bookId: SAMPLE.doc, runId: SAMPLE.note },
+  ],
   load_skill: [{ id: "writing" }, { id: "spreadsheet" }],
   web_fetch: [
     { url: "https://example.com/page", offset: 0, limit: 12000 },

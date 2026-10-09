@@ -7,6 +7,10 @@ import { recentActivity, recordActivity } from "@core/modules/workspace/activity
 import { homeOverview } from "@core/modules/workspace/home.js";
 import { collectPublicResource } from "@core/modules/discovery/catalog.js";
 import { distributionDefaults } from "@core/modules/deployment/policies.js";
+import {
+  createKnowledgeBook,
+  listKnowledgeBooks,
+} from "@core/modules/knowledge-books/management.js";
 
 let db: DB;
 const owner = { id: randomUUID(), display_name: "Owner", admin: 0 },
@@ -121,6 +125,96 @@ it("does not put globally public libraries into the personal catalogue", async (
   expect(
     (await c.list(reader, { scope: "shared", kind: "library" })).items,
   ).toEqual([]);
+});
+
+it("keeps knowledge books out of library tabs and the home library count", async () => {
+  const content = createContent(db);
+  const library = await content.create(owner, {
+    kind: "library",
+    format: "markdown",
+    title: "Team library",
+  });
+  const book = await createKnowledgeBook(db, owner, "Team book");
+  for (const resource of [library, book]) {
+    const row = await db
+      .selectFrom("resources")
+      .select("authz_revision")
+      .where("id", "=", resource.id)
+      .executeTakeFirstOrThrow();
+    await content.member(owner, resource.id, reader.id, {
+      revision: row.authz_revision!,
+      role: "reader",
+      includeDescendants: true,
+    });
+    for (const actor of [owner, reader]) {
+      await db
+        .insertInto("reactions")
+        .values({
+          resource_id: resource.id,
+          user_id: actor.id,
+          kind: "favorite",
+          created_at: new Date().toISOString(),
+        })
+        .execute();
+      await collectPublicResource(db, actor, "library", resource.id, true);
+    }
+  }
+  for (const actor of [owner, reader]) {
+    for (const scope of [
+      "libraries",
+      "all",
+      "favorites",
+      "collected",
+      actor === owner ? "owned" : "shared",
+    ]) {
+      const page = await content.list(actor, { scope, kind: "library" });
+      expect(page.items.map((item) => item.id), scope).toEqual([library.id]);
+      expect(page.total, scope).toBe(1);
+    }
+    const libraries = await content.list(actor, { scope: "libraries" });
+    expect(libraries.items.map((item) => item.id)).toEqual([library.id]);
+    expect(libraries.total).toBe(1);
+    expect((await homeOverview(db, actor)).libraries).toBe(1);
+    expect((await listKnowledgeBooks(db, actor)).map((item) => item.id)).toEqual([
+      book.id,
+    ]);
+    expect((await content.detail(actor, book.id)).resource.knowledgeBook).toBe(
+      true,
+    );
+  }
+});
+
+it("counts and paginates libraries after excluding knowledge books", async () => {
+  const content = createContent(db);
+  await createKnowledgeBook(db, owner, "Generated book");
+  const libraryIds: string[] = [];
+  for (let index = 0; index < 101; index++) {
+    const library = await content.create(owner, {
+      kind: "library",
+      format: "markdown",
+      title: `Library ${index}`,
+    });
+    libraryIds.push(library.id);
+  }
+  const query = {
+    scope: "libraries",
+    kind: "library",
+    sort: "created_at",
+    order: "asc",
+  };
+  const first = await content.list(owner, query);
+  expect(first.total).toBe(101);
+  expect(first.items).toHaveLength(100);
+  expect(first.nextCursor).toBeTruthy();
+  const second = await content.list(owner, {
+    ...query,
+    cursor: first.nextCursor!,
+  });
+  expect(second.items).toHaveLength(1);
+  expect(second.nextCursor).toBeNull();
+  expect([...first.items, ...second.items].map((item) => item.id).sort()).toEqual(
+    libraryIds.sort(),
+  );
 });
 
 

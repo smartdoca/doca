@@ -42,6 +42,8 @@ import type {
   BookSourceBinding,
   BookWorkflow,
 } from "@core/modules/knowledge-books/protocol.js";
+import { BookRunList, type BookRunSummary } from "./book-run-list.js";
+import { BookRunPipeline, type BookPipelineRun } from "./book-run-pipeline.js";
 import { systemErrorMessage } from "@doca/i18n";
 import {
   bookSourceInputSchema,
@@ -148,7 +150,7 @@ type Release = {
   artifact: BookArtifact | null;
   restricted: boolean;
 };
-type Run = { id: string; status: string; created_at: string; error: string };
+type Run = BookRunSummary;
 type Book = {
   detail: Detail;
   revision: number;
@@ -193,7 +195,7 @@ function useBookError() {
 }
 function useBookText() {
   const { t } = useI18n();
-  return (key: string) => t(`books.${key}` as MessageKey);
+  return (key: string, data?: Parameters<typeof t>[1]) => t(`books.${key}` as MessageKey, data);
 }
 const failure = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -333,7 +335,8 @@ function KnowledgeBookList({ tasks }: { tasks: boolean }) {
 function KnowledgeBookPage({ id }: { id: string }) {
   const { t } = useI18n();
   const [viewMode, setViewMode] = useState<"reading" | "review">("reading");
-  const [activeTab, setActiveTab] = useState("result"),
+  const [taskLink, setTaskLink] = useState(() => new URLSearchParams(location.hash.split("?")[1] ?? ""));
+  const [activeTab, setActiveTab] = useState(() => taskLink.has("task") ? "tasks" : taskLink.has("run") ? "runs" : "result"),
     [targetParagraph, setTargetParagraph] = useState<string | null>(null);
   const bt = useBookText(),
     be = useBookError(),
@@ -343,6 +346,16 @@ function KnowledgeBookPage({ id }: { id: string }) {
     [dirty, setDirty] = useState(false);
   const draftRevision = useRef(0),
     dirtyRef = useRef(false);
+  useEffect(() => {
+    const changed = () => {
+      const link = new URLSearchParams(location.hash.split("?")[1] ?? "");
+      setTaskLink(link);
+      if (link.has("task")) setActiveTab("tasks");
+      else if (link.has("run")) setActiveTab("runs");
+    };
+    window.addEventListener("hashchange", changed);
+    return () => window.removeEventListener("hashchange", changed);
+  }, []);
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [permissions, setPermissions] = useState(false),
@@ -356,18 +369,7 @@ function KnowledgeBookPage({ id }: { id: string }) {
     }>({ pageId: null, paragraphId: null });
   const [sourceQuery, setSourceQuery] = useState(""),
     [nodeId, setNodeId] = useState<string>(),
-    [run, setRun] = useState<{
-      id: string;
-      status: string;
-      restricted: boolean;
-      artifact: BookArtifact | null;
-      nodes: Array<{
-        nodeId: string;
-        type: string;
-        status: string;
-        error: string;
-      }>;
-    } | null>(null);
+    [run, setRun] = useState<BookPipelineRun | null>(null);
   const load = useCallback(
     async (reset = true) => {
       let value: Book;
@@ -426,11 +428,42 @@ function KnowledgeBookPage({ id }: { id: string }) {
     }, 10000);
     return () => clearInterval(timer);
   }, [load]);
-  const command = async (value: unknown) => {
+  useEffect(() => {
+    if (!run) return;
+    let active = true, refreshing = false;
+    const refreshRun = () => {
+      if (refreshing) return;
+      refreshing = true;
+      void api<NonNullable<typeof run>>(`/knowledge-books/${id}/runs/${run.id}`)
+        .then(value => {
+          if (!active) return;
+          setRun(value);
+          setBook(current => current ? { ...current, runs: current.runs.map(item => item.id === value.id ? { ...item, status: value.status, updated_at: value.updatedAt, started_at: value.startedAt, trigger: value.trigger } : item) } : current);
+        })
+        .catch(e => { if (active) setError(failure(e)); })
+        .finally(() => { refreshing = false; });
+    };
+    const timer = setInterval(refreshRun, 3000);
+    return () => { active = false; clearInterval(timer); };
+  }, [id, run?.id]);
+  const openRun = useCallback(async (runId: string) => {
+    const value = await api<BookPipelineRun>(`/knowledge-books/${id}/runs/${runId}`);
+    setRun(value);
+    setActiveTab("runs");
+  }, [id]);
+  useEffect(() => {
+    if (taskLink.has("task")) return;
+    const linkedRun = taskLink.get("run");
+    if (linkedRun) void openRun(linkedRun).catch(e => setError(failure(e)));
+  }, [openRun, taskLink]);
+  useEffect(() => {
+    if (activeTab === "runs" && !run && book?.runs[0]) void openRun(book.runs[0].id).catch(e => setError(failure(e)));
+  }, [activeTab, book?.runs[0]?.id, run?.id, openRun]);
+  const command = async <T,>(value: unknown) => {
     setBusy(true);
     setError("");
     try {
-      const result = await api(
+      const result = await api<T>(
         `/knowledge-books/${id}/commands`,
         "POST",
         value,
@@ -596,7 +629,7 @@ function KnowledgeBookPage({ id }: { id: string }) {
               disabled={!book.canEdit || busy || dirty}
               type="primary"
               onClick={() =>
-                void command({ operation: "run.start" }).catch(() => {})
+                void command<{ id: string }>({ operation: "run.start" }).then(result => openRun(result.id)).catch(e => setError(failure(e)))
               }
             >
               {bt("run")}
@@ -1166,58 +1199,22 @@ function KnowledgeBookPage({ id }: { id: string }) {
             key: "tasks",
             label: bt("humanTasks"),
             children: (
-              <BookHumanTasks bookId={id} changed={() => load(false)} />
+              <BookHumanTasks bookId={id} taskId={taskLink.get("task") ?? undefined} runId={taskLink.get("run") ?? undefined} changed={async nextRunId => { await load(false); if (nextRunId) await openRun(nextRunId); }} />
             ),
           },
           {
             key: "runs",
             label: bt("runs"),
-            children: (
-              <div className="book-cards">
-                {book.runs.map((item) => (
-                  <Card
-                    key={item.id}
-                    title={new Date(item.created_at).toLocaleString()}
-                    extra={<Tag>{bt(`status.${item.status}`)}</Tag>}
-                  >
-                    <p>{be(item.error)}</p>
-                    <Space>
-                      <Button
-                        disabled={!book.canEdit}
-                        onClick={() =>
-                          void api<typeof run>(
-                            `/knowledge-books/${id}/runs/${item.id}`,
-                          )
-                            .then(setRun)
-                            .catch((e) => setError(failure(e)))
-                        }
-                      >
-                        {bt("inspect")}
-                      </Button>
-                      {book.canEdit &&
-                        [
-                          "queued",
-                          "running",
-                          "awaiting_input",
-                          "awaiting_publication",
-                        ].includes(item.status) && (
-                          <Button
-                            danger
-                            onClick={() =>
-                              void command({
-                                operation: "run.cancel",
-                                runId: item.id,
-                              }).catch(() => {})
-                            }
-                          >
-                            {bt("cancelRun")}
-                          </Button>
-                        )}
-                    </Space>
-                  </Card>
-                ))}
+            children: <div className="book-run-view">
+              <BookRunList runs={book.runs} selected={run?.id} choose={value => void openRun(value).catch(e => setError(failure(e)))} />
+              <div className="book-run-main">
+              {run ? <BookRunPipeline key={run.id} run={run} canEdit={book.canEdit}
+                cancel={() => void command({ operation: "run.cancel", runId: run.id }).then(() => openRun(run.id)).catch(() => {})}
+                repair={() => { ai?.addDocument(book.detail.resource); ai?.setComposerDraft(bt("pipelineRepairPrompt", { bookId: id, runId: run.id })); ai?.setOpen(true); }}
+                humanTasks={nodeId => <BookHumanTasks bookId={id} runId={run.id} nodeId={nodeId} changed={async nextRunId => { await load(false); await openRun(nextRunId ?? run.id); }} />}
+              /> : <Empty description={bt("pipelineNoRuns")} />}
               </div>
-            ),
+            </div>,
           },
           {
             key: "provenance",
@@ -1434,50 +1431,7 @@ function KnowledgeBookPage({ id }: { id: string }) {
           </Form>
         )}
       </Drawer>
-      <Drawer
-        open={!!run}
-        title={bt("runDetails")}
-        onClose={() => setRun(null)}
-        width="85%"
-      >
-        {run && (
-          <>
-            <Tag>{bt(`status.${run.status}`)}</Tag>
-            {run.restricted && (
-              <Alert type="warning" message={bt("restricted")} />
-            )}
-            <div className="book-cards">
-              {run.nodes.map((node) => (
-                <Card key={node.nodeId} title={node.nodeId}>
-                  <Tag>{bt(`node.${node.type}`)}</Tag>
-                  <Tag>{bt(`status.${node.status}`)}</Tag>
-                  <p>{be(node.error)}</p>
-                </Card>
-              ))}
-            </div>
-            {run.artifact && (
-              <>
-                {run.artifact.checks.map((check) => (
-                  <Alert
-                    key={check.criterionId}
-                    type={check.passed ? "success" : "error"}
-                    message={check.criterionId}
-                    description={check.reason}
-                  />
-                ))}
-                {run.artifact.pages.map((p) => (
-                  <section key={p.id}>
-                    <h2>{[...p.path, p.title].join(" / ")}</h2>
-                    <Preview
-                      value={p.paragraphs.map((q) => q.markdown).join("\n\n")}
-                    />
-                  </section>
-                ))}
-              </>
-            )}
-          </>
-        )}
-      </Drawer>
+
     </div>
   );
 }
@@ -2414,13 +2368,21 @@ function BookFeedbackDialog({
 }
 export function BookHumanTasks({
   bookId,
+  taskId,
+  runId,
+  nodeId,
   changed,
 }: {
   bookId?: string;
-  changed?: () => Promise<unknown>;
+  taskId?: string;
+  runId?: string;
+  nodeId?: string;
+  changed?: (nextRunId?: string) => Promise<unknown>;
 }) {
   const bt = useBookText(),
-    be = useBookError();
+    be = useBookError(),
+    ai = useAI();
+  const openedLink = useRef<string | undefined>(undefined);
   const [taskQuery, setTaskQuery] = useState(""),
     [status, setStatus] = useState("pending"),
     [kind, setKind] = useState("all"),
@@ -2433,11 +2395,16 @@ export function BookHumanTasks({
     [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     const value = await api<{ items: HumanTask[]; nextOffset: number | null }>(
-      `/knowledge-books/human-tasks?status=${status}&offset=${offset}&query=${encodeURIComponent(taskQuery)}${bookId ? `&bookId=${bookId}` : ""}${kind === "all" ? "" : `&kind=${kind}`}`,
+      `/knowledge-books/human-tasks?status=${status}&offset=${offset}&query=${encodeURIComponent(taskQuery)}${bookId ? `&bookId=${bookId}` : ""}${runId && (!taskId || openedLink.current !== taskId) ? `&runId=${encodeURIComponent(runId)}` : ""}${nodeId ? `&nodeId=${encodeURIComponent(nodeId)}` : ""}${kind === "all" ? "" : `&kind=${kind}`}`,
     );
     setItems(value.items);
     setNext(value.nextOffset);
-  }, [bookId, status, offset, kind, taskQuery]);
+    setTask((current) => current ? value.items.find((item) => item.id === current.id) ?? null : null);
+    if (taskId && openedLink.current !== taskId) {
+      const selected = value.items.find((item) => item.id === taskId);
+      if (selected) { setTask(selected); setNote(""); openedLink.current = taskId; }
+    }
+  }, [bookId, status, offset, kind, taskQuery, taskId, runId, nodeId]);
   useEffect(() => {
     void load().catch((e) => setError(failure(e)));
     const timer = setInterval(
@@ -2450,13 +2417,13 @@ export function BookHumanTasks({
     if (!task) return;
     setBusy(true);
     try {
-      await api(`/knowledge-books/human-tasks/${task.id}/resolve`, "POST", {
+      const resolved = await api<{ id?: string }>(`/knowledge-books/human-tasks/${task.id}/resolve`, "POST", {
         expectedRevision: task.revision,
         decision,
         note,
       });
       await load();
-      await changed?.();
+      await changed?.(resolved.id);
       setTask(null);
     } catch (e) {
       setError(failure(e));
@@ -2559,6 +2526,18 @@ export function BookHumanTasks({
               <Alert type="warning" message={bt("restricted")} />
             )}
             {task.error && <Alert type="error" message={be(task.error)} />}
+            <Button
+              icon={<Sparkles size={15} />}
+              disabled={!ai?.userId}
+              onClick={() => {
+                void api<Detail>(`/resources/${task.book_id}`).then((detail) => {
+                  ai?.addDocument(detail.resource);
+                  ai?.setComposerDraft(bt("repairPrompt", { bookId: task.book_id, taskId: task.id, runId: task.run_id }));
+                  ai?.setOpen(true);
+                  setTask(null);
+                }).catch((e) => setError(failure(e)));
+              }}
+            >{bt("tryCase")}</Button>
             {task.instructions && (
               <Alert
                 type="info"

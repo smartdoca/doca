@@ -56,6 +56,7 @@ export function derivativeKey(
     .replace(/original$/, `${recipe}/${filename}`);
 }
 export function validateObjectKey(key: string) {
+  if (new RegExp(`^host/document-history/${uuidPattern}/${uuidPattern}/[a-f0-9]{64}\\.json\\.gz$`).test(key)) return;
   if (/^host\/plugin-releases\/[a-f0-9]{64}\.zip$/.test(key)) return;
   if (
     new RegExp(

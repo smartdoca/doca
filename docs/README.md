@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-Doca is a document and knowledge workspace for individuals and small teams. This documentation covers the 0.1.13 release and clearly identified package contracts and implementation limits.
+Doca is a document and knowledge workspace for individuals and small teams. This documentation covers the 0.1.14 release and clearly identified package contracts and implementation limits.
 
 [Live demo](https://d.smartdoca.cc) · [Plugin marketplace](https://store.smartdoca.cc)
 
@@ -30,6 +30,6 @@ Doca is a document and knowledge workspace for individuals and small teams. This
 
 ## Reference and project records
 
-[HTTP API](api.md) · [Database](database.md) · [Plugin SDK contract](plugin-sdk-contract.md) · [Plugin storage contract](plugin-horizontal-scaling.md) · [Collaboration contract](collaboration-sdk-contract.md) · [File exchange](editor-file-exchange-contract.md) · [Release 0.1.13](releases/0.1.13.md) · [Documentation maintenance](documentation.md) · [Research and acceptance records](research.md)
+[HTTP API](api.md) · [Database](database.md) · [Plugin SDK contract](plugin-sdk-contract.md) · [Plugin storage contract](plugin-horizontal-scaling.md) · [Collaboration contract](collaboration-sdk-contract.md) · [File exchange](editor-file-exchange-contract.md) · [Release 0.1.14](releases/0.1.14.md) · [Documentation maintenance](documentation.md) · [Research and acceptance records](research.md)
 
 The running application provides `/api/openapi.json`. Proposed capabilities are labeled in the relevant contract; a design record does not establish that an API is exported. Research records retain their original language and date.

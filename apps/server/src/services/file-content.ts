@@ -25,11 +25,17 @@ export async function sendFileContent(
     )
     .type(activeContent ? "application/octet-stream" : file.mime);
   let range: { start: number; end: number } | undefined;
-  // No validators are advertised; If-Range conservatively requests the full body.
+  const invalidRange = () => reply
+    .header("Cache-Control", "no-store")
+    .removeHeader("ETag")
+    .code(416)
+    .header("Content-Range", `bytes */${size}`)
+    .send();
+  // If-Range conservatively requests the full body, including for weak image ETags.
   if (req.headers.range && !req.headers["if-range"]) {
     const match = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
     if (!match || !(match[1] || match[2]))
-      return reply.code(416).header("Content-Range", `bytes */${size}`).send();
+      return invalidRange();
     const start = match[1]
       ? Number(match[1])
       : Math.max(0, size - Number(match[2]));
@@ -41,7 +47,7 @@ export async function sendFileContent(
       start > end ||
       start >= size
     )
-      return reply.code(416).header("Content-Range", `bytes */${size}`).send();
+      return invalidRange();
     range = { start, end };
     reply.code(206).header("Content-Range", `bytes ${start}-${end}/${size}`);
   }

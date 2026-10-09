@@ -69,13 +69,17 @@ body,
   gap: 10px;
   padding: 11px 14px;
   border-radius: 5px;
-  color: #646a73;
+  color: var(--text-secondary);
   text-decoration: none;
 }
-.sidebar nav > a:hover,
+.sidebar nav > a:hover {
+  background: var(--hover);
+  color: var(--text);
+}
 .sidebar nav > a.active {
-  background: #dee5fb;
-  color: #3370ff;
+  background: #fff;
+  color: var(--selected-text);
+  box-shadow: inset 0 0 0 1px var(--line), 0 1px 3px #26304b05;
 }
 .sidebar .brand {
   min-width: 0;
@@ -646,7 +650,11 @@ body,
   white-space: nowrap;
 }
 .document-table .table-location.in-library {
-  color: #168c77;
+  color: #7762bf;
+}
+.document-table .table-location.in-library > svg.lucide-book-open > path:last-child {
+  fill: currentColor;
+  fill-opacity: 0.12;
 }
 .document-table .table-location.personal {
   color: #4e69b7;

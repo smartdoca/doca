@@ -35,6 +35,7 @@ export function decodeSystemError(value: string): SystemErrorReason | undefined 
 type Translator = (key: MessageKey, values?: MessageValues) => string;
 
 const reasonKeys = {
+  history_snapshot_unavailable: "record.snapshot.unavailable",
   book_invalid:"books.error.book_invalid",
   book_forbidden:"books.error.book_forbidden",
   book_not_found:"books.error.book_not_found",
@@ -44,6 +45,8 @@ const reasonKeys = {
   book_model_output:"books.error.book_model_output",
   book_model_unavailable:"books.error.book_model_unavailable",
   book_failed:"books.error.book_failed",
+  ai_continuation_invalid: "ai.error.continuationInvalid",
+  ai_continuation_unavailable: "ai.error.continuationUnavailable",
 
   image_revision_batch_upgrade_required:"ai.error.image_revision_batch_upgrade_required",
   image_revision_base_stale:"ai.error.image_revision_base_stale",

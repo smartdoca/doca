@@ -2,16 +2,16 @@
 
 [English](quickstart.md)
 
-本指南使用已发布的 Docker 镜像，在一台服务器上安装 Doca 0.1.10，数据库采用 SQLite，文件存储采用本地目录。需要 Git、Docker Engine、Docker Compose 插件，以及指向服务器的域名。同机反向代理可以提供 HTTPS，可信内网也支持 HTTP。运行镜像不需要安装 Node.js 或 pnpm。
+本指南使用已发布的 Docker 镜像，在一台服务器上安装 Doca 0.1.14，数据库采用 SQLite，文件存储采用本地目录。需要 Git、Docker Engine、Docker Compose 插件，以及指向服务器的域名。同机反向代理可以提供 HTTPS，可信内网也支持 HTTP。运行镜像不需要安装 Node.js 或 pnpm。
 
-这是全新安装流程。已有部署请先阅读[发行要求](releases/0.1.10.zh-CN.md)：本版拒绝旧数据库基线，不提供自动迁移。保留已有数据库、文件和配置。
+这是全新安装流程。已有部署请先阅读[发行要求](releases/0.1.14.zh-CN.md)：本版拒绝旧数据库基线，不提供自动迁移。保留已有数据库、文件和配置。
 
 ## 1. 拉取代码
 
 检出与镜像一致的版本，确保 Compose 和管理员脚本与发行版本匹配：
 
 ```sh
-git clone --branch v0.1.10 --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch v0.1.14 --depth 1 https://github.com/smartdoca/doca.git
 cd doca
 ```
 
@@ -21,13 +21,22 @@ cd doca
 cp docker.env.example .env
 ```
 
-编辑 `.env`，把示例域名改成自己的 HTTP(S) 站点地址：
+首次安装时，先生成凭证主密钥：
+
+```sh
+openssl rand -hex 32
+```
+
+输出是随机 32 字节编码成的 64 个十六进制字符。编辑 `.env`，把示例域名改成自己的 HTTP(S) 站点地址，并把 `DOCA_CREDENTIAL_MASTER_KEY` 替换为刚生成的值：
 
 ```dotenv
 DOCA_ORIGIN=https://doca.example.com
+DOCA_CREDENTIAL_MASTER_KEY=7a52d29ab6db9a08292b9585d0dc5551f4156c2d02953b4262611bc1ad82f9ab
 DOCA_FILE_STORE_ID=local
 DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root":"/data/storage"}}}'
 ```
+
+`DOCA_CREDENTIAL_MASTER_KEY` 是启动必填配置，即使没有安装插件也必须填写；缺失、空值或格式错误会拒绝启动。example 中提供了符合格式的公开示例值，首次部署必须换成自己的密钥。设置后单独安全备份，所有副本和重启使用同一个值。已有部署保留原密钥；不要为了升级重新生成，替换密钥会被数据库指纹校验拒绝，原有密文不会自动转换。见[托管凭证](plugin-credentials.zh-CN.md)。
 
 站点地址不要带子路径、查询参数或片段；根路径末尾斜杠会被规范化。保留容器持久卷中的 `/data/storage` 路径。`docker.env.example` 用于 Docker 部署；`.env.example` 用于[源码开发](development.zh-CN.md)。
 
@@ -47,7 +56,7 @@ Caddy 终止 TLS，并转发 HTTP 和 WebSocket。域名解析需指向这台服
 docker compose pull
 ```
 
-Compose 使用 `docker.io/smartdoca/doca:0.1.10`。这一步下载已构建镜像，不构建检出的源码。
+Compose 使用 `docker.io/smartdoca/doca:0.1.14`。这一步下载已构建镜像，不构建检出的源码。
 
 ## 4. 启动
 
@@ -59,7 +68,7 @@ docker compose ps
 等待容器健康，健康检查应返回：
 
 ```json
-{"status":"ok","version":"0.1.10"}
+{"status":"ok","version":"0.1.14"}
 ```
 
 启动失败时，用 `docker compose logs --tail=100 doca` 查看日志。Compose 端口绑定在 `127.0.0.1`，浏览器通过反向代理访问配置的 HTTP(S) 地址。

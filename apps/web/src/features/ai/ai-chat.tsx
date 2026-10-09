@@ -19,6 +19,7 @@ import { FolderDeliveryCard } from "@web/features/ai/ai-folder-card.js";
 import { AIFolderPreview } from "./ai-folder-preview.js";
 import { notifyAISessionFilesChanged } from "./ai-file-events.js";
 import { uploadErrorMessage } from "./ai-upload-errors.js";
+import { prepareSendFiles, type SendFile, type SendFileProgress } from "./ai-send-files.js";
 import { systemErrorMessage } from "@web/shared/system-errors.js";
 import type { AIUploadLimits } from "@core/modules/ai/upload-policy.js";
 import {
@@ -33,7 +34,7 @@ import {
   readPageState,
   writePageState,
 } from "@web/features/page-state/client.js";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import {
   applyProgressPatch,
   type AIProgress,
@@ -88,7 +89,6 @@ import {
 } from "lucide-react";
 import {
   api,
-  uploadFile,
   assetUrl,
   fileUrl,
   type FileItem,
@@ -421,6 +421,9 @@ type Conversation = {
     attachments?: ChatFile[];
     explorer?: ExplorerTarget[];
     references?: AIReference[];
+    delivery?: "sending" | "queued" | "failed";
+    deliveryError?: string;
+    localFiles?: (SendFile & { status?: SendFileProgress["status"]; percent?: number })[];
   }[];
   jobs: {
     id: string;
@@ -438,6 +441,21 @@ type Conversation = {
   }[];
   hasMore: boolean;
   contextTokens?: number | null;
+};
+type ClientMessage = Conversation["messages"][number] & {
+  userId: string;
+  sessionId: string | null;
+  draftKey: string | null;
+};
+type OutgoingMessage = {
+  item: PendingSendItem;
+  userId: string;
+  sessionId: string | null;
+  draftKey: string | null;
+  files: SendFile[];
+  queued: boolean;
+  beforeSend: () => Promise<void>;
+  composerText: string;
 };
 function SessionStatusBadges({ session }: { session: Session }) {
   const { t, locale } = useI18n();
@@ -650,15 +668,18 @@ export function AIChat({ full = false }: { full?: boolean }) {
   } | null>(null);
   const filesRef = useRef<Attachment<ChatFile>[]>([]);
   const localUploads = useRef(
-    new Map<string, { controller: AbortController; preview?: string }>(),
+    new Map<string, SendFile>(),
   );
+  const localDraftFiles = useRef(new Map<string, Attachment<ChatFile>[]>());
+  const activeDraftKey = useRef<string | null>(null);
+  const sendControllers = useRef(new Map<string, AbortController>());
   useEffect(() => {
     const uploads = localUploads.current;
     return () => {
       for (const upload of uploads.values()) {
-        upload.controller.abort();
         if (upload.preview) URL.revokeObjectURL(upload.preview);
       }
+      for (const controller of sendControllers.current.values()) controller.abort();
       uploads.clear();
     };
   }, []);
@@ -732,16 +753,14 @@ export function AIChat({ full = false }: { full?: boolean }) {
     anchorComposerTrailingLine(senderRef.current);
   };
   const replaceFiles = (value: Attachment<ChatFile>[]) => {
-    const retained = new Set(value.map((file) => file.uid));
-    for (const [uid, upload] of localUploads.current) {
-      if (retained.has(uid)) continue;
-      upload.controller.abort();
-      if (upload.preview) URL.revokeObjectURL(upload.preview);
-      localUploads.current.delete(uid);
-    }
     filesRef.current = value;
     setFiles(value);
     requestId.current = null;
+  };
+  const releaseLocalFile = (uid: string) => {
+    const file = localUploads.current.get(uid);
+    if (file?.preview) URL.revokeObjectURL(file.preview);
+    localUploads.current.delete(uid);
   };
   const pendingExtractKey = files
     .filter((f) => f.response?.extractStatus === "pending")
@@ -783,7 +802,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       window.clearInterval(timer);
     };
   }, [pendingExtractKey]);
-  const upload = async (file: File) => {
+  const upload = (file: File) => {
     if (busy) return;
     if (
       !allowsAttachments([
@@ -795,61 +814,26 @@ export function AIChat({ full = false }: { full?: boolean }) {
       return;
     }
     const uid = crypto.randomUUID();
-    const controller = new AbortController();
     const image =
       file.type.startsWith("image/") ||
       /\.(png|jpe?g|webp|gif)$/i.test(file.name);
     const preview = image ? URL.createObjectURL(file) : undefined;
-    localUploads.current.set(uid, { controller, preview });
+    localUploads.current.set(uid, {
+      uid, local: file, preview, filename: file.name,
+      mime: file.type || "application/octet-stream", size: file.size,
+    });
     replaceFiles([
       ...filesRef.current,
       {
         uid,
         name: file.name,
         size: file.size,
-        status: "uploading",
-        percent: 0,
-        description: t("common.uploading"),
+        status: "done",
+        description: t("chat.localFileReady"),
         thumbUrl: preview,
         cardType: image ? "image" : "file",
       },
     ]);
-    try {
-      const uploaded = await uploadFile(
-        file,
-        "ai_attachment",
-        undefined,
-        controller.signal,
-        ({ percent }) => {
-          if (controller.signal.aborted) return;
-          replaceFiles(
-            filesRef.current.map((f) =>
-              f.uid === uid ? { ...f, percent } : f,
-            ),
-          );
-        },
-      );
-      if (controller.signal.aborted) return;
-      replaceFiles(
-        filesRef.current.map((f) =>
-          f.uid === uid ? composerFile(asChatFile(uploaded), uid) : f,
-        ),
-      );
-      if (preview) URL.revokeObjectURL(preview);
-      localUploads.current.delete(uid);
-    } catch (e) {
-      if (controller.signal.aborted) return;
-      const message =
-        e instanceof Error ? uploadErrorMessage(e, t) : t("chat.uploadFailed");
-      replaceFiles(
-        filesRef.current.map((f) =>
-          f.uid === uid
-            ? { ...f, status: "error", description: message }
-            : f,
-        ),
-      );
-      ai.setError(message);
-    }
   };
   const chooseStoredFile = async (
     file: Pick<FileItem, "id" | "name" | "size">,
@@ -1075,14 +1059,9 @@ export function AIChat({ full = false }: { full?: boolean }) {
     [selected, setSelected] = useState<string[]>([]),
     [skillIds, setSkillIds] = useState<string[]>([]),
     [personalSkills, setPersonalSkills] = useState<any[]>([]),
-    [optimistic, setOptimistic] = useState<{
-      id: string;
-      text: string;
-      createdAt: string;
-      references?: AIReference[];
-      attachments?: ChatFile[];
-      explorer?: ExplorerTarget[];
-    } | null>(null);
+    [optimistic, setOptimistic] = useState<ClientMessage[]>([]);
+  const outgoing = useRef(new Map<string, OutgoingMessage>());
+  const newSessionRequests = useRef(new Map<string, Promise<Session>>());
   const requestId = useRef<string | null>(null);
   const allowsAttachments = (sizes: number[]) => {
     const limits = options?.uploadLimits;
@@ -1128,6 +1107,11 @@ export function AIChat({ full = false }: { full?: boolean }) {
     }
   };
   useLayoutEffect(() => {
+    const previousKey = activeDraftKey.current;
+    if (previousKey && previousKey !== draftKey)
+      localDraftFiles.current.set(previousKey,
+        filesRef.current.filter(file => localUploads.current.has(file.uid)));
+    activeDraftKey.current = draftKey;
     restoringDraft.current = true;
     skipReferenceInsert.current = true;
     clearComposer();
@@ -1191,6 +1175,14 @@ export function AIChat({ full = false }: { full?: boolean }) {
         ),
       );
     } else ai.setReferences([]);
+    if (draftKey) {
+      const local = (localDraftFiles.current.get(draftKey) ?? []).map(file => {
+        const staged = localUploads.current.get(file.uid);
+        return staged?.uploaded ? composerFile(asChatFile(staged.uploaded), file.uid) : file;
+      });
+      replaceFiles([...new Map([...local, ...filesRef.current]
+        .map(file => [file.response?.id ?? file.uid, file])).values()]);
+    }
     queueMicrotask(() => {
       restoringDraft.current = false;
       skipReferenceInsert.current = false;
@@ -1379,10 +1371,11 @@ export function AIChat({ full = false }: { full?: boolean }) {
     olderJobs: Conversation["jobs"];
     olderOperations: Conversation["operations"];
     optimistic: typeof optimistic;
+    pending: typeof pending;
     renderQuestions: number;
     focusedQuestionId: string | null;
     locale: typeof locale;
-    surface: "full" | "library" | "folder" | "document";
+    surface: "full" | "book" | "library" | "folder" | "document";
     fileContextKey: string;
     items: BubbleItemType[];
   } | null>(null);
@@ -1460,12 +1453,12 @@ export function AIChat({ full = false }: { full?: boolean }) {
       }
   }, [ai.references]);
   useEffect(() => {
-    if (!full || !ai.composerDraft) return;
+    if ((!full && !ai.open) || ai.restoring || !senderRef.current || !ai.composerDraft) return;
     replaceComposerText(ai.composerDraft);
     setHasDraft(!!ai.composerDraft.trim());
     senderRef.current?.focus();
     ai.setComposerDraft(null);
-  }, [ai.composerDraft, full]);
+  }, [ai.composerDraft, full, ai.open, ai.restoring, ai.sessionId]);
   useEffect(() => {
     if (!full || !launchDraft) return;
     replaceComposerText(launchDraft.text);
@@ -1484,7 +1477,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
     consumeAssistantDraft(launchDraft);
   }, [full, launchDraft]);
   useEffect(() => {
-    setOptimistic(null);
     setOlder([]);
     setOlderJobs([]);
     setOlderOperations([]);
@@ -1538,9 +1530,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
             applyLivePageState(job.progress);
             if (!freshJob(job)) continue;
           }
-          setOptimistic((old) =>
-            old && data.messages.some((m) => m.id === old.id) ? null : old,
-          );
+          setOptimistic(items => items.filter(item =>
+            item.sessionId !== sessionId || !data.messages.some(message => message.id === item.id)));
         })
         .catch((e) => {
           if (active) {
@@ -1648,6 +1639,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
   const stopTasks = () => {
     const inflight = submitting.current ? requestId.current : null;
     if (inflight) haltJobId.current = inflight;
+    for (const controller of sendControllers.current.values()) controller.abort();
     persistPending([]);
     const ids = [
       ...new Set([
@@ -1718,20 +1710,12 @@ export function AIChat({ full = false }: { full?: boolean }) {
     const text = (choice ?? composerValue()).trim();
     const attachments = doneFiles();
     const targets = explorerFiles();
-    if (!text && !attachments.length && !folderTargets.length) return null;
-    if (files.some((f) => f.status !== "done")) {
-      ai.setError(
-        files.some((f) => f.status === "uploading" && f.response)
-          ? t("chat.waitParsing")
-          : t("chat.waitUpload"),
-      );
-      return null;
-    }
+    if (!text && !filesRef.current.length && !folderTargets.length) return null;
     return {
       id: crypto.randomUUID(),
       text:
         text ||
-        (attachments.length
+        (filesRef.current.length
           ? t("chat.analyzeAttachments")
           : t("chat.processFolders")),
       attachments,
@@ -1778,69 +1762,48 @@ export function AIChat({ full = false }: { full?: boolean }) {
       });
     });
   };
-  const enqueueComposer = (choice?: string) => {
-    const item = snapshotComposer(choice);
-    if (!item) return;
-    persistPending([...pending, item]);
-    replaceFiles([]);
-    setFolderTargets([]);
-    clearComposer();
-    ai.setReferences([]);
-    pinToLatest();
-  };
-  const send = async (choice?: string) => {
-    if (ai.restoring) return;
-    const attachments = doneFiles();
-    const targets = explorerFiles();
-    const prompt =
-      (choice ?? composerValue()).trim() ||
-      (attachments.length ? t("chat.analyzeAttachments") : "") ||
-      (folderTargets.length ? t("chat.processFolders") : "");
-    if (
-      !prompt ||
-      !model ||
-      busy ||
-      !!folderImport ||
-      submitting.current ||
-      files.some((f) => f.status !== "done")
-    ) {
-      if (folderImport) ai.setError(t("chat.waitFolder"));
-      else if (files.some((f) => f.status !== "done"))
-        ai.setError(
-          files.some((f) => f.status === "uploading" && f.response)
-            ? t("chat.waitParsing")
-            : t("chat.waitUpload"),
-        );
-      return;
-    }
-    const refs = ai.references;
-    const sendingDraftKey = draftKey;
-    const sendingUserId = ai.userId;
-    const sendingDraft =
-      draftRecord.current?.key === draftKey ? draftRecord.current.value : null;
-    const id = (requestId.current ??= crypto.randomUUID());
+  const submitOutgoing = async (snapshot: OutgoingMessage) => {
+    const { item, userId: sendingUserId, draftKey: sendingDraftKey } = snapshot;
+    const id = item.id;
+    if (sendControllers.current.has(id)) return;
+    const controller = new AbortController();
+    sendControllers.current.set(id, controller);
+    requestId.current = id;
     submitting.current = true;
     setBusy(true);
     ai.setError("");
-    setOptimistic({
-      id,
-      text: prompt,
-      createdAt: new Date().toISOString(),
-      references: refs,
-      attachments,
-      explorer: targets,
-    });
-    pinToLatest();
+    setOptimistic(messages => messages.map(message => message.id === id
+      ? { ...message, delivery: "sending", deliveryError: undefined } : message));
     try {
-      await ai.beforeSend();
-      let sid = ai.sessionId;
+      // Give the newly inserted bubble a frame before document flushing or uploads.
+      await new Promise<void>(resolve => {
+        const timer = setTimeout(resolve, 100);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          clearTimeout(timer);
+          resolve();
+        }));
+      });
+      controller.signal.throwIfAborted();
+      let sid = snapshot.sessionId;
       if (!sid) {
-        const s = await api<Session>("/ai/sessions", "POST", {
-          modelId: model,
-          resourceIds: ai.resource ? [ai.resource.id] : [],
-        });
+        const key = `${sendingUserId}:${sendingDraftKey}`;
+        let creation = newSessionRequests.current.get(key);
+        if (!creation) {
+          creation = api<Session>("/ai/sessions", "POST", {
+            modelId: item.modelId,
+            resourceIds: item.currentResourceId ? [item.currentResourceId] : [],
+          });
+          newSessionRequests.current.set(key, creation);
+        }
+        let s: Session;
+        try { s = await creation; }
+        finally { newSessionRequests.current.delete(key); }
         sid = s.id;
+        snapshot.sessionId = sid;
         sendingSession.current = sid;
+        setOptimistic(messages => messages.map(message => message.id === id
+          ? { ...message, sessionId: sid } : message));
+        const sendingDraft = draftRecord.current?.key === sendingDraftKey ? draftRecord.current.value : null;
         if (sendingDraft && sendingUserId && sendingDraftKey) {
           const nextKey = composerDraftKey(sendingUserId, sid);
           writeComposerDraft(nextKey, sendingDraft);
@@ -1849,39 +1812,59 @@ export function AIChat({ full = false }: { full?: boolean }) {
             draftRecord.current = { key: nextKey, value: sendingDraft };
         }
         if (currentDraftKey.current === sendingDraftKey) {
+          localDraftFiles.current.set(composerDraftKey(sendingUserId, sid),
+            filesRef.current.filter(file => localUploads.current.has(file.uid)));
           if (sendingUserId) setPending(adoptDraftQueue(sendingUserId, sid));
           ai.setSessionId(sid);
         }
       }
-      await api(`/ai/sessions/${sid}/messages`, "POST", {
-        id,
-        text: prompt,
-        attachments: attachments.map((f) => f.id),
-        ...(targets.length ? { files: targets } : {}),
-        modelId: model,
-        scope: "all",
-        currentResourceId: ai.resource?.id,
-        currentFolder: ai.fileContext
-          ? { type: ai.fileContext.type, id: ai.fileContext.id }
-          : undefined,
-        references: refs,
-        skillIds,
-        webSearch: webSearch && !!options?.webSearchAvailable,
-        skipApprovals,
-      });
+      await snapshot.beforeSend();
+      const attachments = await prepareSendFiles(snapshot.files, controller.signal, progress => {
+          setOptimistic(messages => messages.map(message => message.id === id
+            ? { ...message, localFiles: message.localFiles?.map(file => file.uid === progress.uid
+              ? { ...file, ...progress } : file) } : message));
+        });
+      controller.signal.throwIfAborted();
+      item.attachments = attachments;
+      setOptimistic(messages => messages.map(message => message.id === id
+        ? { ...message, attachments, localFiles: undefined } : message));
+      if (currentAI.current.userId === sendingUserId &&
+        (currentDraftKey.current === sendingDraftKey || currentAI.current.sessionId === sid)) {
+        replaceFiles(filesRef.current.map(file => {
+          const prepared = snapshot.files.find(entry => entry.uid === file.uid)?.uploaded;
+          return prepared ? composerFile(asChatFile(prepared), file.uid) : file;
+        }));
+        requestId.current = id;
+      }
+      if (snapshot.queued) {
+        writePendingQueue(sendingUserId, sid, [...loadPendingQueue(sendingUserId, sid), item]);
+        setOptimistic(messages => messages.filter(message => message.id !== id));
+      } else {
+        await api(`/ai/sessions/${sid}/messages`, "POST", {
+          ...item, attachments: attachments.map(file => file.id),
+        });
+        setOptimistic(messages => messages.map(message => message.id === id
+          ? { ...message, delivery: undefined } : message));
+      }
       if (haltJobId.current === id) {
         haltJobId.current = null;
         await api(`/ai/jobs/${id}/cancel`, "POST");
       }
       notifyAISessionFilesChanged({ sessionId: sid });
+      outgoing.current.delete(id);
+      for (const file of snapshot.files) releaseLocalFile(file.uid);
+      if (sendingDraftKey) localDraftFiles.current.delete(sendingDraftKey);
+      localDraftFiles.current.delete(composerDraftKey(sendingUserId, sid));
       requestId.current = null;
-      if (sendingUserId)
+      const currentScope = currentAI.current.userId === sendingUserId && currentAI.current.sessionId === sid;
+      const unchanged = currentScope && composerValue() === snapshot.composerText &&
+        filesRef.current.every(file => snapshot.files.some(selected => selected.uid === file.uid)) &&
+        JSON.stringify(currentAI.current.references) === JSON.stringify(item.references);
+      if (!currentScope || unchanged) {
         localStorage.removeItem(composerDraftKey(sendingUserId, sid));
-      if (sendingDraftKey) localStorage.removeItem(sendingDraftKey);
-      if (
-        currentAI.current.userId === sendingUserId &&
-        currentAI.current.sessionId === sid
-      ) {
+        if (sendingDraftKey) localStorage.removeItem(sendingDraftKey);
+      }
+      if (unchanged) {
         replaceFiles([]);
         setFolderTargets([]);
         clearComposer();
@@ -1893,19 +1876,56 @@ export function AIChat({ full = false }: { full?: boolean }) {
       }
       void refresh();
     } catch (e) {
-      ai.setError((e as Error).message);
+      const message = controller.signal.aborted ? t("chat.sendCancelled") : uploadErrorMessage(e, t);
+      setOptimistic(messages => messages.map(entry => entry.id === id
+        ? { ...entry, delivery: "failed", deliveryError: message } : entry));
+      ai.setError(message);
     } finally {
       if (haltJobId.current === id) haltJobId.current = null;
-      submitting.current = false;
-      setBusy(false);
+      sendControllers.current.delete(id);
+      submitting.current = sendControllers.current.size > 0;
+      setBusy(submitting.current);
     }
   };
+  const startSend = (choice?: string, queued = false) => {
+    if (ai.restoring || !ai.userId || !model || folderImport) return;
+    const item = snapshotComposer(choice);
+    if (!item) return;
+    if ([...outgoing.current.values()].some(message => sendControllers.current.has(message.item.id) &&
+      (message.draftKey === draftKey || message.sessionId === ai.sessionId) && message.composerText === composerValue() &&
+      message.files.map(file => file.uid).join() === filesRef.current.map(file => file.uid).join())) return;
+    const selected = filesRef.current.flatMap<SendFile>(file => {
+      const staged = localUploads.current.get(file.uid);
+      if (staged) return [staged];
+      return file.response ? [{ uid: file.uid, filename: file.response.filename,
+        mime: file.response.mime, size: file.response.size, uploaded: file.response }] : [];
+    });
+    const snapshot: OutgoingMessage = {
+      item: { ...item, webSearch: webSearch && !!options?.webSearchAvailable },
+      files: selected, userId: ai.userId, sessionId: ai.sessionId,
+      draftKey, queued, beforeSend: ai.beforeSend, composerText: composerValue(),
+    };
+    outgoing.current.set(item.id, snapshot);
+    flushSync(() => setOptimistic(messages => [...messages, {
+      id: item.id, role: "user", text: item.text, createdAt: item.createdAt,
+      references: item.references, explorer: item.files, delivery: "sending",
+      localFiles: selected.map(file => ({ ...file,
+        status: file.uploaded?.extractStatus === "ready" ? "ready" : "uploading" })),
+      userId: ai.userId!, sessionId: ai.sessionId, draftKey,
+    }]));
+    pinToLatest();
+    return submitOutgoing(snapshot);
+  };
+  const enqueueComposer = (choice?: string) => startSend(choice, true);
+  const send = async (choice?: string) => { await startSend(choice); };
   if (!ai.userId) return <div className="empty">{t("chat.signIn")}</div>;
   const visibleMessages: Conversation["messages"] = [
     ...new Map(
       [
         ...older,
-        ...(optimistic ? [{ ...optimistic, role: "user" }] : []),
+        ...pending.map(item => ({ ...item, role: "user", explorer: item.files, delivery: "queued" as const })),
+        ...optimistic.filter(message => message.userId === ai.userId &&
+          (message.sessionId ? message.sessionId === ai.sessionId : message.draftKey === draftKey)),
         ...(conversation?.messages ?? []),
       ].map((m) => [m.id, m]),
     ).values(),
@@ -2009,13 +2029,20 @@ export function AIChat({ full = false }: { full?: boolean }) {
   };
   const surface = full
     ? "full"
+    : ai.resource?.knowledgeBook
+      ? "book"
     : ai.resource?.kind === "library"
       ? "library"
       : ai.fileContext
         ? "folder"
         : "document";
   const suggestions =
-    surface === "library"
+    surface === "book"
+      ? [
+          { key: "book-sources", icon: <FolderOpen size={18} />, label: t("books.case.sources.title"), description: t("books.case.sources.prompt") },
+          { key: "book-review", icon: <Search size={18} />, label: t("books.humanTasks"), description: t("books.assistantPrompt") },
+        ]
+    : surface === "library"
       ? [
           {
             key: "knowledge-build",
@@ -2104,22 +2131,38 @@ export function AIChat({ full = false }: { full?: boolean }) {
         m.role === "user" ? { root: { paddingInlineStart: 0 } } : undefined,
       header:
         m.role === "user" ? (
-          m.createdAt ? (
-            <time className="ai-message-time" dateTime={m.createdAt}>
+          <div className="ai-message-send-header">
+            {m.createdAt && <time className="ai-message-time" dateTime={m.createdAt}>
               {new Date(m.createdAt).toLocaleString(htmlLang(locale), {
                 month: "2-digit",
                 day: "2-digit",
                 hour: "2-digit",
                 minute: "2-digit",
               })}
-            </time>
-          ) : undefined
+            </time>}
+            {m.delivery && <span role="status" data-delivery={m.delivery} className="ai-message-send-state">
+              {t(m.delivery === "failed" ? "chat.sendFailed" : m.delivery === "queued" ? "chat.sendQueued" : "chat.sending")}
+            </span>}
+          </div>
         ) : (
           t("nav.assistant")
         ),
       streaming: !!m.streaming,
       content: (
         <>
+          {!!m.localFiles?.length && <FileCard.List
+            className="ai-message-attachments" removable={false} overflow="wrap" size="small"
+            items={m.localFiles.map(file => ({
+              key: file.uid, name: file.filename, byte: file.size,
+              type: file.mime.startsWith("image/") ? "image" : "file",
+              src: file.mime.startsWith("image/") ? file.uploaded ? assetUrl(file.uploaded.id) : file.preview : undefined,
+              loading: file.status === "uploading" || file.status === "parsing",
+              description: file.status === "parsing" ? t("chat.preparingFiles")
+                : file.status === "error" ? t("chat.uploadFailed")
+                : file.status === "ready" ? t("chat.attachments")
+                : `${t("common.uploading")}${file.percent == null ? "" : ` ${Math.round(file.percent)}%`}`,
+            }))}
+          />}
           {!!m.explorer?.length && (
             <div className="ai-sent-targets">
               {m.explorer.map((item) => (
@@ -2225,6 +2268,13 @@ export function AIChat({ full = false }: { full?: boolean }) {
             </span>
           )}
           <WebSources sources={m.sources ?? []} />
+          {m.delivery === "failed" && <div className="ai-message-send-error" role="alert">
+            <span>{m.deliveryError}</span>
+            <Button size="small" onClick={() => {
+              const snapshot = outgoing.current.get(m.id);
+              if (snapshot) void submitOutgoing(snapshot);
+            }}>{t("chat.retrySend")}</Button>
+          </div>}
         </>
       ),
       footer:
@@ -2340,13 +2390,14 @@ export function AIChat({ full = false }: { full?: boolean }) {
                   cancelled: t("chat.stopped"),
                   interrupted: t("chat.interrupted"),
                   awaiting_approval: t("chat.waitApproval"),
+                  awaiting_dependency: aiPhaseLabel(j.progress, t),
                 } as Record<string, string>
               )[j.status] ?? j.status,
             status: (["queued", "running"].includes(j.status)
               ? "loading"
               : j.status === "failed"
                 ? "error"
-                : ["cancelled", "interrupted", "awaiting_approval"].includes(
+                : ["cancelled", "interrupted", "awaiting_approval", "awaiting_dependency"].includes(
                       j.status,
                     )
                   ? "abort"
@@ -2373,7 +2424,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
               >
                 {t("chat.retry")}
               </Button>
-            ) : ["queued", "running", "awaiting_approval"].includes(
+            ) : ["queued", "running", "awaiting_approval", "awaiting_dependency"].includes(
               j.status,
             ) ? (
               <Button
@@ -2397,6 +2448,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
     threadCache.current.olderJobs === olderJobs &&
     threadCache.current.olderOperations === olderOperations &&
     threadCache.current.optimistic === optimistic &&
+    threadCache.current.pending === pending &&
     threadCache.current.renderQuestions === renderQuestions &&
     threadCache.current.focusedQuestionId === focusedQuestionId &&
     threadCache.current.locale === locale &&
@@ -2907,7 +2959,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
         },
       );
   if (!reuseThread) {
-    if (!visibleMessages.length && !optimistic)
+    if (!visibleMessages.length)
       bubbleItems.push({
         key: "welcome",
         role: "welcome",
@@ -2922,6 +2974,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
             title={
               surface === "full"
                 ? t("chat.welcome")
+                : surface === "book"
+                  ? t("books.assistantWelcome")
                 : surface === "library"
                   ? t("knowledge.assistantWelcome")
                   : surface === "folder"
@@ -2933,6 +2987,8 @@ export function AIChat({ full = false }: { full?: boolean }) {
             description={
               surface === "full"
                 ? t("chat.welcomeHelp")
+                : surface === "book"
+                  ? t("books.assistantHelp")
                 : surface === "library"
                   ? t("knowledge.assistantHelp")
                   : surface === "folder"
@@ -2955,6 +3011,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       olderJobs,
       olderOperations,
       optimistic,
+      pending,
       renderQuestions,
       focusedQuestionId,
       locale,
@@ -3548,6 +3605,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
                         return false;
                       }}
                       onRemove={(file) => {
+                        releaseLocalFile(file.uid);
                         replaceFiles(
                           filesRef.current.filter((f) => f.uid !== file.uid),
                         );
@@ -3721,15 +3779,12 @@ export function AIChat({ full = false }: { full?: boolean }) {
                         tabIndex={replying ? -1 : undefined}
                         aria-label={t("common.send")}
                         title={
-                          files.some((f) => f.status !== "done")
-                            ? t("chat.waitParsing")
-                            : replying
+                          replying
                               ? t("chat.queueEnter")
                               : t("common.send")
                         }
                         disabled={
                           !!folderImport ||
-                          files.some((f) => f.status !== "done") ||
                           !options?.models.some((m) => m.id === model) ||
                           !options?.enabled
                         }

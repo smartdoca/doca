@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>夜航工作台</title><style>
+:root{--bg:#20272A;--surface:#2C3539;--text:#EEF1EB;--muted:#A4B0AB;--accent:#DEA77F;--on:#20272A;--line:#4B585A;--warn:#EDBE6E;
+--r:6px;--border:1px solid #4B585A;--shadow:none;--gap:12px;--py:6px;--px:12px;--display:"Avenir Next", "PingFang SC", sans-serif;--body:"PingFang SC", sans-serif;--num:Menlo, monospace}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.6 var(--body);padding:44px 56px;display:flex;flex-direction:column;gap:calc(var(--gap)*1.6)}
+.top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:14px}
+.brand{font:600 20px/1 var(--display)}
+.top small,.k{font-size:12px;color:var(--muted);letter-spacing:.02em}
+.k{display:block;margin-bottom:calc(var(--gap)*.7)}
+.row{display:grid;grid-template-columns:1.15fr 1fr;gap:56px}
+h1{font:600 37px/1.2 var(--display);letter-spacing:-.01em;text-wrap:balance}
+.body{color:var(--muted);margin-top:8px;max-width:30em;text-wrap:pretty}
+.num{font:400 57px/1.05 var(--num);font-variant-numeric:tabular-nums;margin-top:calc(var(--gap)*1.2)}
+.num+small{color:var(--muted);font-size:13px}
+.sws{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.sw span{display:block;aspect-ratio:1;border-radius:var(--r);border:1px solid rgba(0,0,0,.08)}
+.sw b{display:block;font-weight:500;font-size:12px;margin-top:6px}.sw em{font-style:normal;font-size:11px;color:var(--muted);font-family:Menlo,monospace}
+.fonts{list-style:none;padding:0;margin-top:calc(var(--gap)*1.1);font-size:13px;color:var(--muted)}.fonts b{display:inline-block;width:3.5em;color:var(--text);font-weight:500}
+.controls{display:flex;align-items:center;gap:var(--gap);flex-wrap:wrap;border-top:1px solid var(--line);padding-top:calc(var(--gap)*1.2)}
+.btn{font:500 14px/1 var(--body);padding:var(--py) var(--px);border-radius:var(--r);border:var(--border);background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+.btn.primary{background:var(--accent);color:var(--on);border-color:var(--accent)}
+.tag{font-size:12px;padding:3px 10px;border-radius:calc(var(--r) + 4px);background:color-mix(in srgb,var(--accent) 14%,var(--surface));color:var(--accent)}
+.tag.warn{background:color-mix(in srgb,var(--warn) 14%,var(--surface));color:var(--warn)}
+.field{margin-left:auto;display:flex;gap:10px;align-items:center;min-width:260px;padding:var(--py) 12px;border-radius:var(--r);border:var(--border);background:var(--surface);box-shadow:var(--shadow)}
+.field small{color:var(--muted);font-size:12px}
+.bottom{display:grid;grid-template-columns:1.15fr 1fr;gap:56px;border-top:1px solid var(--line);padding-top:calc(var(--gap)*1.2);flex:1}
+.frame{height:230px;border-radius:var(--r);border:var(--border);background:var(--surface);box-shadow:var(--shadow);padding:14px;overflow:hidden}
+.sk{height:100%;display:flex;flex-direction:column;gap:8px} .sk i{display:block;background:color-mix(in srgb,var(--text) 10%,transparent);border-radius:calc(var(--r)/2)}
+.sk .nav,.sk .bar{height:10px;flex:none} .sk .cta{height:14px;width:22%;background:var(--accent);flex:none}
+.sk-sidebar{flex-direction:row} .sk-sidebar .side{width:18%;background:color-mix(in srgb,var(--text) 82%,transparent)} .sk-sidebar .main{flex:1;display:flex;flex-direction:column;gap:8px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;height:40px} .stats .stat:first-child{background:color-mix(in srgb,var(--accent) 35%,transparent)}
+.rows{display:flex;flex-direction:column;gap:6px;flex:1} .rows .rw{display:block;height:auto;flex:1;background:color-mix(in srgb,var(--text) 6%,transparent)}
+.sk-topbar .grid{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:8px} .sk-topbar .tile:first-child{background:color-mix(in srgb,var(--accent) 30%,transparent)}
+.sk-queue{flex-direction:row} .sk-queue .list{width:38%;display:flex;flex-direction:column;gap:6px} .sk-queue .item{flex:1} .sk-queue .item.on{background:color-mix(in srgb,var(--accent) 35%,transparent)}
+.sk-queue .detail{flex:1;display:flex;flex-direction:column;gap:8px} .sk-queue .head{height:22px} .sk-queue .line{height:8px}
+.sk-center{align-items:center} .sk-center .nav{width:100%} .sk-center .h1{height:22px;width:60%} .sk-center .h2{height:10px;width:40%} .sk-center .shot{flex:1;width:78%;display:flex;flex-direction:column;gap:8px;padding:10px;background:color-mix(in srgb,var(--text) 6%,transparent)} .sk-center .line{height:8px}
+.sk-split .cols{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:12px} .sk-split .txt{display:flex;flex-direction:column;gap:8px;justify-content:center} .sk-split .h1{height:22px} .sk-split .h2{height:12px;width:70%} .sk-split .p{height:7px;width:85%} .sk-split .art{background:color-mix(in srgb,var(--accent) 30%,transparent)}
+.sk-edit .mega{height:34px} .sk-edit .mega.short{width:62%} .sk-edit .cols3{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:8px 14px;align-content:start} .sk-edit .p{height:7px}
+.sk-full{background:color-mix(in srgb,var(--accent) 70%,var(--text));border-radius:calc(var(--r)/2);padding:14px;justify-content:center} .sk-full i{background:color-mix(in srgb,var(--on) 55%,transparent)} .sk-full .nav{margin-bottom:auto;opacity:.6} .sk-full .h1{height:24px;width:62%} .sk-full .h2{height:10px;width:40%} .sk-full .cta{background:var(--on);margin-bottom:auto}
+.style h2{font:600 24px/1.3 var(--display)} .style p{color:var(--muted);margin-top:6px}
+.traits{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px} .traits span{font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+</style></head><body>
+<header class="top"><span class="brand">Doca · 找回自己的样子</span><small>C · 夜航工作台</small></header>
+<section class="row"><div><span class="k">字体与数字</span><h1>从上次停下的地方继续。</h1><p class="body">文档、知识库与 AI，放在同一张工作台上。</p><div class="num">10.09</div><small>星期五 · 今日工作台</small></div>
+<div><span class="k">配色与用途</span><div class="sws"><div class="sw"><span style="background:#20272A"></span><b>底色</b><em>#20272A</em></div><div class="sw"><span style="background:#2C3539"></span><b>表面</b><em>#2C3539</em></div><div class="sw"><span style="background:#EEF1EB"></span><b>文字</b><em>#EEF1EB</em></div><div class="sw"><span style="background:#DEA77F"></span><b>强调</b><em>#DEA77F</em></div><div class="sw"><span style="background:#4B585A"></span><b>线</b><em>#4B585A</em></div><div class="sw"><span style="background:#EDBE6E"></span><b>提醒</b><em>#EDBE6E</em></div></div><ul class="fonts"><li><b>标题</b>Avenir Next</li><li><b>正文</b>PingFang SC</li><li><b>数字</b>Menlo</li></ul></div></section>
+<section class="controls"><span class="k" style="margin:0 8px 0 0">控件</span><button class="btn primary">开始创作</button><button class="btn">打开知识库</button><span class="tag">最近访问</span><span class="tag warn">待我处理</span><label class="field"><small>搜索</small><span>查找文档、知识库与文件</span></label></section>
+<section class="bottom"><div><span class="k">版式示意 · 左列表右详情</span><div class="frame"><div class="sk sk-queue"><div class="list"><i class="item on"></i><i class="item"></i><i class="item"></i><i class="item"></i><i class="item"></i></div><div class="detail"><i class="head"></i><i class="line"></i><i class="line"></i><i class="line"></i><i class="line"></i><i class="cta"></i></div></div></div></div>
+<div class="style"><span class="k">风格</span><h2>夜航工作台</h2><p>像夜间点亮的工作桌：炭灰压低背景，铜色把创作动作从内容里提出来。</p><div class="traits"><span>炭灰深色</span><span>铜色动作</span><span>6px 圆角</span><span>紧凑密度</span><span>列表与详情并排</span></div></div></section>
+</body></html>

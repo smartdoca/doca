@@ -111,6 +111,7 @@ it("uses short wire aliases, validates exact quotes and maps them back to persis
   );
 });
 it("processes every extraction batch and keeps duplicate model claim IDs separate", async () => {
+  const reports: any[] = [];
   fixture.stream.mockImplementation(async (options) => {
     const data = JSON.parse(options.prompt[1].content[0].text),
       item = data.evidence[0];
@@ -140,7 +141,9 @@ it("processes every extraction batch and keeps duplicate model claim IDs separat
       evidence("second", "DNS " + "b".repeat(3600)),
     ]),
     new AbortController().signal,
+    async event => { reports.push(event); },
   );
+  expect(reports.filter(event => event.code === "batch_completed").map(event => event.value)).toEqual([1, 2]);
   expect(fixture.stream).toHaveBeenCalledTimes(2);
   expect(result.claims).toHaveLength(2);
   expect(new Set(result.claims.map((c: any) => c.id)).size).toBe(2);
@@ -304,4 +307,18 @@ it("reads a complete old RFC heading section without including the following sec
   ).readWeb("https://example.test/spec.html#section-2.7.1");
   expect(result.text).toContain("low-order 24 bits");
   expect(result.text).not.toContain("Next section should not be read");
+});
+
+it("reports batches, output size and corrective retries while keeping raw model content out of logs", async () => {
+  let attempt = 0;
+  fixture.stream.mockImplementation(async () => {
+    attempt++;
+    if (attempt === 1) return response("invalid-json-content");
+    return response(JSON.stringify({ claims: [{ id: "tcp", statement: "TCP is a byte stream.", citationIds: ["e0q0"], reason: "Exact definition", confidence: 1 }] }));
+  });
+  const reports: any[] = [];
+  await knowledgeBookRuntime({} as DB, "user", "run", "model").generate("extract", input([evidence("source", "TCP is a byte stream.")]), new AbortController().signal, async event => { reports.push(event); });
+  expect(reports.map(event => event.code)).toEqual(expect.arrayContaining(["model_request", "model_output", "model_invalid_json", "model_retry"]));
+  expect(reports.filter(event => event.code === "model_request").map(event => event.value)).toEqual([1, 2]);
+  expect(JSON.stringify(reports)).not.toContain("invalid-json-content");
 });

@@ -163,6 +163,11 @@
         "启动 AI 助手"
       ],
       [
+        "plugin-ai-continuations",
+        "Background task continuation",
+        "后台任务与 AI 唤醒"
+      ],
+      [
         "plugin-native",
         "Native cache and attachments",
         "原生缓存与附件"
@@ -241,6 +246,11 @@
     "en": "Releases",
     "zh": "发行记录",
     "pages": [
+      [
+        "releases/0.1.14",
+        "0.1.14",
+        "0.1.14"
+      ],
       [
         "releases/0.1.13",
         "0.1.13",

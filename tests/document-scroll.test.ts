@@ -10,8 +10,10 @@ it.each(["top", "bottom"] as const)("moves visible Markdown columns and the oute
   const pane = (visible = true) => ({ scrollTop: 120, scrollHeight: 2400, clientHeight: 600, getBoundingClientRect: () => ({ width: visible ? 400 : 0, height: visible ? 600 : 0 }) });
   const source = pane(), preview = pane(), hidden = pane(false);
   const outer = { scrollHeight: 1100, clientHeight: 700, querySelector: (selector: string) => selector === ".markdown-sdk-container" ? {} : null, querySelectorAll: () => [source, preview, hidden], scrollTo: vi.fn() };
-  const root = { querySelector: () => outer } as unknown as HTMLElement;
+  const querySelector = vi.fn((selector: string) => selector === ":scope > .plugin-content-layout > .main-scroll" ? outer : null);
+  const root = { querySelector } as unknown as HTMLElement;
   scrollDocumentBoundary(root, edge, "instant");
+  expect(querySelector).toHaveBeenCalledWith(":scope > .plugin-content-layout > .main-scroll");
   expect(source.scrollTop).toBe(edge === "top" ? 0 : 1800);
   expect(preview.scrollTop).toBe(source.scrollTop);
   expect(hidden.scrollTop).toBe(120);

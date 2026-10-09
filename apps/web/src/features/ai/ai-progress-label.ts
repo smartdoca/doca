@@ -22,6 +22,7 @@ const phaseKeys = {
   waiting_choice: "ai.progress.phase.waitingChoice",
   waiting_access: "ai.progress.phase.waitingAccess",
   waiting_requirements: "ai.progress.phase.waitingRequirements",
+  waiting_dependency: "ai.progress.phase.waitingDependency",
   plan_ready: "ai.progress.phase.planReady",
   thinking: "ai.progress.phase.thinking",
   answering: "ai.progress.phase.answering",
@@ -34,6 +35,8 @@ const eventKeys = {
   rich_text_fallback: "ai.progress.event.richTextFallback",
   checkpoint_resumed: "ai.progress.event.checkpointResumed",
   retry_resumed: "ai.progress.event.retryResumed",
+  continuation_waiting: "ai.progress.event.continuationWaiting",
+  continuation_resumed: "ai.progress.event.continuationResumed",
   image_saved: "ai.progress.event.imageSaved",
   folder_available: "ai.progress.event.folderAvailable",
   file_available: "ai.progress.event.fileAvailable",
@@ -182,7 +185,7 @@ export function aiPhaseLabel(
   if (progress.phase === "using_tool")
     return aiToolLabel(String(progress.phaseData?.toolName ?? "unknown"), t);
   const key = labelKey(phaseKeys, progress.phase);
-  return key ? t(key) : t("chat.processing");
+  return key ? t(key, progress.phaseData) : t("chat.processing");
 }
 
 export function aiEventLabel(event: AIProgressEvent, t: Translator) {

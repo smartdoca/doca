@@ -108,7 +108,7 @@ That route is `/api/v1/plugins/example.attachments/folders`. Identity comes from
 | plugin-sdk/platform | policiesServiceToken      | Admission before create, store, share, transfer, and AI calls           |
 | plugin-sdk/platform | eventsServiceToken        | Read the durable event stream, including `ai.usage.recorded`            |
 | plugin-sdk/platform | notificationsServiceToken | Publish and withdraw notifications idempotently                         |
-| plugin-sdk/ai       | aiServiceToken            | Register AI tools with a JSON Schema and skill manuals                  |
+| plugin-sdk/ai       | aiServiceToken / aiContinuationsServiceToken | Register AI tools with a JSON Schema and skill manuals                  |
 | plugin-sdk/content  | contentServiceToken       | Unified inventory, read, resolve, optional search and knowledge sources |
 | plugin-sdk/platform | activityServiceToken      | Plugin-owned recent visits, host aggregation and authorization          |
 | plugin-sdk/search   | searchServiceToken        | Projection, rebuild and authorized index queries                        |
@@ -116,6 +116,8 @@ That route is `/api/v1/plugins/example.attachments/folders`. Identity comes from
 A registration id starts with the plugin id and a dot. The route namespace equals the plugin id. These registrations follow the plugin lifecycle and are released if the plugin stops or fails to start. Timers and connections you create yourself still use `context.effect` or `effectAsync`. Stopping does not delete persisted data.
 
 A directory source returns relationships that are currently valid. The host applies the administrator's all, related, or none policy and filters to valid users. A source error does not widen visibility. Searchable does not mean readable. Sources use `schemaVersion: 1`, paged `related`, and a current-fact `verify`. The plugin maintains its own relationship index. Paging, timeouts, and candidate rechecks are in the [mail handoff](plugin-mail-handoff.md).
+
+For a background business job, SDK source 0.1.10 exposes `aiContinuationsServiceToken` for registerSource/wait/wake. Declare a required injection and `sdkRange: "^0.1.10"`; implement live business authorization and stable operation IDs, then notify after committing the result. The host resumes the original assistant task after completion or a new human decision. See [the complete contract and example](plugin-ai-continuations.md).
 
 Register an AI tool with `aiServiceToken.registerTool`: id, description, inputSchema, and execute. execute receives the authenticated user, sessionId, turnId, jobId, callId, and signal. It cannot bypass file permissions. `registerSkill` takes id, name, description, content, and formats. The manual enters the host skill library. A business tool checks its own resource permissions and stores a stable operation id in the plugin database so a retry does not repeat a side effect. callId correlates a call. Do not assume a new call reuses an old callId. Creating a file or folder passes a stable `idempotencyKey`. An upload also passes the `contentIdentity` returned by `uploads.complete`. Read a durable receipt with `files.receipts.get`. pending can be retried. Different parameters are 409. A deleted result cannot be rebuilt by replaying. The full protocol is section 7.1 of the [SDK contract](plugin-sdk-contract.md).
 
@@ -214,7 +216,7 @@ Use the same Web bundle on Web and in the scoped mobile WebView. `PluginWebHost`
 - Android save returns completed/canceled. iOS save and system sharing may report presented, which does not prove a user completed the action. Account switching or page disposal cancels outstanding requests.
 - Mail account binding belongs on Web. Native OAuth is outside this delivery.
 
-The current SDK source package version is 0.1.9; this does not confirm npm publication. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
+The current SDK source package version is 0.1.10; this does not confirm npm publication. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
 
 ## Distribution and navigation
 

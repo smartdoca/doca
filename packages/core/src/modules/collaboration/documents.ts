@@ -22,6 +22,7 @@ import {
 } from "../documents/media.js";
 import { indexDocumentReferences } from "../documents/references.js";
 import { recordVersion } from "../history/repository.js";
+import { readHistorySnapshot } from "../history/archive.js";
 import type { Actor } from "../identity/passwords.js";
 import {
   documentMentions,
@@ -242,12 +243,7 @@ export function createDocuments(db: DB) {
             if (!actor || rank < 4) fail(403, "需要管理权限才能回滚文档");
             if (seq !== input.expectedSeq)
               fail(409, "文档在预览后已变化，请重新查看历史版本再回滚");
-            const snapshot = await tx
-              .selectFrom("document_versions")
-              .selectAll()
-              .where("resource_id", "=", id)
-              .where("id", "=", input.restoreVersion)
-              .executeTakeFirst();
+            const snapshot = await readHistorySnapshot(tx, id, input.restoreVersion);
             if (!snapshot) fail(404, "历史版本不存在");
             const oldDoc = new Doc(),
               oldRuntime = new YjsDocument(oldDoc),

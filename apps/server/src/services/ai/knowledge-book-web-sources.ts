@@ -13,8 +13,8 @@ import { searchWeb, normalizeWebSites } from "./web-search.js";
 export const bookWebSearchSchema = z
   .object({
     query: z.string().trim().min(1).max(200),
-    sites: z.string().max(300),
-    language: z.enum(["zh", "en"]),
+    sites: z.string().max(300).optional(),
+    language: z.enum(["zh", "en"]).optional(),
   })
   .strict();
 export async function searchBookWebSources(

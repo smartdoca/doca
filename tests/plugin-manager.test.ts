@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile, readFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer } from "node:http";
 import { zipSync, strToU8 } from "fflate";
 import { openTestDatabase } from "./database.js";
 import { PluginManager } from "@server/plugins/manager.js";
@@ -10,6 +11,9 @@ import { digest, unpack, archiveFileIndex } from "@server/plugins/archive.js";
 import { createApp } from "@server/app/create-app.js";
 import { createUser } from "@core/modules/identity/passwords.js";
 import type { DB } from "@db/index.js";
+import { storageRuntime } from "@server/adapters/storage.js";
+import { createHostFileStore } from "@server/services/host-file-store.js";
+import { configuredFileStore } from "@server/services/file-store-config.js";
 
 const dirs: string[] = [],
   dbs: DB[] = [];
@@ -72,6 +76,133 @@ function bundle(
     { mtime: new Date("2020-01-01T00:00:00Z") },
   );
 }
+it("installs and restores S3 plugin archives with frozen deployment credentials through the real SDK", async () => {
+  const objects = new Map<string, Buffer>();
+  const requests: {
+    method: string;
+    path: string;
+    authorization: string;
+    sessionToken: string;
+    ifNoneMatch?: string;
+  }[] = [];
+  const server = createServer(async (request, response) => {
+    const path = request.url!.split("?")[0]!;
+    requests.push({
+      method: request.method!,
+      path,
+      authorization: request.headers.authorization ?? "",
+      sessionToken: String(request.headers["x-amz-security-token"] ?? ""),
+      ifNoneMatch: request.headers["if-none-match"],
+    });
+    if (request.method === "PUT") {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      if (objects.has(path)) response.statusCode = 412;
+      else objects.set(path, Buffer.concat(chunks));
+      response.end();
+    } else if (request.method === "GET" && objects.has(path)) {
+      const bytes = objects.get(path)!;
+      response.setHeader("Content-Length", bytes.length);
+      response.end(bytes);
+    } else {
+      response.statusCode = 404;
+      response.end();
+    }
+  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const address = server.address();
+    if (!address || typeof address === "string")
+      throw new Error("Missing test endpoint port");
+    const runtime = storageRuntime({
+      DOCA_FILE_STORE_ID: "cloud",
+      DOCA_FILE_STORES_JSON: JSON.stringify({
+        version: 1,
+        stores: {
+          cloud: {
+            provider: "s3",
+            bucket: "doca-test",
+            region: "us-east-1",
+            endpoint: `http://127.0.0.1:${address.port}`,
+            forcePathStyle: true,
+            credentials: {
+              accessKeyId: "isolated-test-access",
+              secretAccessKey: "isolated-test-secret",
+              sessionToken: "isolated-test-session",
+            },
+          },
+        },
+      }),
+    });
+    const config = configuredFileStore(runtime.configuration, "cloud");
+    if (config.provider !== "s3") throw new Error("Expected S3 fixture");
+    const credentials = { ...config.credentials };
+    expect(Object.isFrozen(config.credentials)).toBe(true);
+    const files = createHostFileStore(runtime);
+    const db = await database();
+    const first = new PluginManager(
+      await directory(),
+      [],
+      db,
+      undefined,
+      files,
+    );
+    const bytes = bundle();
+    const hash = digest(bytes);
+    const key = `host/plugin-releases/${hash}.zip`;
+    expect((await first.install(bytes, "local")).restartRequired).toBe(true);
+    expect(objects.get(`/doca-test/${key}`)).toEqual(Buffer.from(bytes));
+    expect(
+      await db
+        .selectFrom("plugin_archives")
+        .selectAll()
+        .executeTakeFirstOrThrow(),
+    ).toMatchObject({ store_id: "cloud", object_key: key, sha256: hash });
+    expect(
+      await files.putImmutable(key, bytes, "application/zip"),
+    ).toMatchObject({
+      existed: true,
+      sha256: hash,
+    });
+    const restarted = new PluginManager(
+      await directory(),
+      [],
+      db,
+      undefined,
+      files,
+    );
+    expect((await restarted.prepare())[0]!.manifest.id).toBe("example.demo");
+    await restarted.confirm();
+    expect((await restarted.inventory()).plugins[0]!.runningVersion).toBe(
+      "1.0.0",
+    );
+    expect(requests.map((request) => request.method)).toEqual([
+      "PUT",
+      "GET",
+      "PUT",
+      "GET",
+      "GET",
+    ]);
+    for (const request of requests) {
+      expect(request.path).toBe(`/doca-test/${key}`);
+      expect(request.authorization).toContain(
+        "Credential=isolated-test-access/",
+      );
+      expect(request.sessionToken).toBe("isolated-test-session");
+      if (request.method === "PUT") expect(request.ifNoneMatch).toBe("*");
+    }
+    expect(objects.size).toBe(1);
+    expect(config.credentials).toEqual(credentials);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+      server.closeAllConnections();
+    });
+  }
+});
 it.each(["local", "npm", "store"] as const)(
   "rejects undeclared storage through %s installation without saving the plugin or running its factory",
   async (source) => {

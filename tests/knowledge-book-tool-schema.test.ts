@@ -43,3 +43,10 @@ it("declares actual root and nested command objects and rejects encoded strings 
     }).success,
   ).toBe(false);
 });
+
+it("executes the declared optional search filters without inventing a language or site", () => {
+  const input = { action: "search_sources", bookId: randomUUID(), query: "TCP" };
+  expect(bookAssistantInputSchema.safeParse(input).success).toBe(true);
+  expect(bookAssistantActionSchema.parse(input)).toEqual(input);
+  expect(bookAssistantActionSchema.safeParse({ ...input, sites: 1 }).success).toBe(false);
+});

@@ -53,7 +53,7 @@ async function fixture(optional = false) {
     return {manifest:${JSON.stringify(manifest)}, injections:{${optional ? "optional" : "required"}:[token]},
       async initialize(ctx) {
         const service=ctx.injectOptional(token);
-        if (${optional}) { if(service || ctx.has(token)) throw Error('Absent key exposed a fake service'); return; }
+        if(!service || !ctx.has(token)) throw Error('Credential service unavailable');
         credential=await ctx.child().inject(token).create({value:'synthetic-runtime-secret'});
       },
       async dispose(ctx) {
@@ -71,24 +71,47 @@ async function fixture(optional = false) {
   };
 }
 
-it("rejects a required credential service without a master key and leaves no plaintext", async () => {
-  vi.stubEnv("DOCA_CREDENTIAL_MASTER_KEY", undefined);
+it.each([false, true])(
+  "rejects startup without a master key even with optional injection: %s",
+  async (optional) => {
+    vi.stubEnv("DOCA_CREDENTIAL_MASTER_KEY", undefined);
+    const { db, options } = await fixture(optional);
+    await expect(createApp(db, options)).rejects.toMatchObject({
+      code: "missing-key",
+    });
+    expect(
+      await db.selectFrom("plugin_credentials").selectAll().execute(),
+    ).toEqual([]);
+    expect(
+      await db.selectFrom("plugin_credential_keys").selectAll().execute(),
+    ).toEqual([]);
+  },
+);
+it("requires a master key even when no business plugins are installed", async () => {
+  vi.stubEnv("DOCA_CREDENTIAL_MASTER_KEY", "");
   const { db, options } = await fixture();
-  await expect(createApp(db, options)).rejects.toThrow(
-    "requires service storage.credentials.v1",
-  );
-  expect(
-    await db.selectFrom("plugin_credentials").selectAll().execute(),
-  ).toEqual([]);
-});
-it("permits optional credential injection without creating a key or fake service", async () => {
-  vi.stubEnv("DOCA_CREDENTIAL_MASTER_KEY", undefined);
-  const { db, options } = await fixture(true);
-  const app = await createApp(db, options);
-  await app.close();
+  const empty = join(options.pluginDirectory, "empty");
+  await mkdir(empty);
+  await expect(
+    createApp(db, { ...options, pluginDirectory: empty }),
+  ).rejects.toMatchObject({ code: "missing-key" });
   expect(
     await db.selectFrom("plugin_credential_keys").selectAll().execute(),
   ).toEqual([]);
+});
+it("provides the credential service to plugins declaring optional injection", async () => {
+  const { db, options } = await fixture(true);
+  const app = await createApp(db, options);
+  try {
+    const stored = await db
+      .selectFrom("plugin_credentials")
+      .selectAll()
+      .executeTakeFirstOrThrow();
+    expect(stored.sealed).not.toContain("synthetic-runtime-secret");
+    expect(stored.revision).toBe(1);
+  } finally {
+    await app.close();
+  }
 });
 it("keeps the cipher alive through plugin dispose and rejects a different key on restart", async () => {
   vi.stubEnv("DOCA_CREDENTIAL_MASTER_KEY", randomBytes(32).toString("hex"));

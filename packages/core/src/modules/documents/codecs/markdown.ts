@@ -9,6 +9,7 @@ import { enqueueProjection } from "../../automation/jobs.js";
 import { enqueueKnowledge } from "../../knowledge/service.js";
 import { b64, unb64 } from "../../collaboration/documents.js";
 import { recordVersion } from "../../history/repository.js";
+import { readHistorySnapshot } from "../../history/archive.js";
 import type { Actor } from "../../identity/passwords.js";
 import { detachUnreferencedDocumentFiles, textMediaIds } from "../media.js";
 import { indexDocumentReferences } from "../references.js";
@@ -256,12 +257,7 @@ export async function exchangeMarkdown(
     if (input.restoreVersion) {
       if (!actor || rank < 4) fail(403, "需要管理权限才能回滚文档");
       if (input.expectedSeq !== seq) fail(409, "文档已变化，请重新预览后回滚");
-      const row = await tx
-        .selectFrom("document_versions")
-        .selectAll()
-        .where("resource_id", "=", id)
-        .where("id", "=", input.restoreVersion)
-        .executeTakeFirst();
+      const row = await readHistorySnapshot(tx, id, input.restoreVersion);
       if (!row) fail(404, "历史版本不存在");
       const previous = new Y.Doc(),
         candidate = new Y.Doc();

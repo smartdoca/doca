@@ -21,6 +21,9 @@ export async function homeOverview(db: DB, actor: Actor) {
     .selectFrom("resources as r")
     .select((eb) => eb.fn.countAll().as("n"))
     .where("r.kind", "=", "library")
+    .where(
+      sql<boolean>`not exists(select 1 from knowledge_books book where book.id = r.id)`,
+    )
     .where(accessibleQuery(sql.ref("r.id"), actor))
     .where(
       entryQuery(
@@ -49,7 +52,7 @@ export async function homeOverview(db: DB, actor: Actor) {
     })(),
     (async () => {
       const page = await listBookHumanTasks(db, actor, {status:"pending"});
-      return {kind:"knowledge-books", more:page.nextOffset !== null, items:page.items.map(task=>({id:task.id,title:task.title,updatedAt:task.updated_at,href:`#/knowledge-books/${task.book_id}`}))};
+      return {kind:"knowledge-books", more:page.nextOffset !== null, items:page.items.map(task=>({id:task.id,title:task.title || task.book_title,updatedAt:task.updated_at,href:`#/knowledge-books/${task.book_id}?task=${task.id}&run=${task.run_id}`}))};
     })(),
   ]);
   return {

@@ -91,7 +91,7 @@ export function AIProvider({
     }),
     [references, setReferences] = useState<AIReference[]>([]),
     [fileContext, setFileContext] = useState<AIFileContext | null>(null),
-    [composerDraft, setComposerDraft] = useState<string | null>(null),
+    [composerDraft, setComposerDraftState] = useState<string | null>(null),
     [error, setError] = useState("");
   const [pendingStoredFiles, setPendingStoredFiles] = useState<FileItem[]>([]);
   const [restoring, setRestoring] = useState(false);
@@ -165,8 +165,15 @@ export function AIProvider({
       : undefined);
   const previous = useRef<string | undefined>(undefined);
   const sessionSeen = useRef<string | null>(null);
+  const setComposerDraft = (value: string | null) => {
+    // An explicit handoff must not be erased by restoring a different chat.
+    if (value !== null && userId && activeResourceId)
+      resumeAttempt.current = `${userId}:${activeResourceId}`;
+    setComposerDraftState(value);
+  };
   useEffect(() => {
     setReferences([]);
+    setComposerDraftState(null);
     setPendingReference(null);
     setPendingStoredFiles([]);
     seenOperations.current.clear();
@@ -187,7 +194,7 @@ export function AIProvider({
     previous.current = activeResourceId;
   }, [hash, activeResourceId]);
   useEffect(() => {
-    if (!open || !userId || !activeResourceId || sessionId) return;
+    if (!open || !userId || !activeResourceId || sessionId || composerDraft !== null) return;
     const key = `${userId}:${activeResourceId}`;
     if (resumeAttempt.current === key) return;
     resumeAttempt.current = key;
@@ -210,7 +217,7 @@ export function AIProvider({
       active = false;
       setRestoring(false);
     };
-  }, [open, userId, activeResourceId, sessionId]);
+  }, [open, userId, activeResourceId, sessionId, composerDraft]);
   const add = (provided?: unknown) => {
     if (!userId || !resource) return;
     try {
@@ -306,7 +313,7 @@ export function AIProvider({
         setReferences,
         add,
         addDocument: (document) => {
-          if (!userId || document.kind !== "document") return;
+          if (!userId || (document.kind !== "document" && !document.knowledgeBook)) return;
           setReferences((prev) =>
             [
               ...prev.filter((r) => r.resourceId !== document.id || !!r.anchor),
@@ -321,6 +328,7 @@ export function AIProvider({
           const route = hash.replace(/^#/, "").split("?")[0] ?? "";
           if (
             !resource &&
+            !route.startsWith("/knowledge-books/") &&
             route !== "/files" &&
             !route.startsWith("/shared-files/")
           )

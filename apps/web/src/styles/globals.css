@@ -900,10 +900,8 @@ small {
   pointer-events: none;
 }
 .notification-panel {
-  position: absolute;
-  right: 0;
-  top: 40px;
-  width: min(560px, calc(100vw - 96px));
+  position: fixed;
+  width: min(560px, calc(100vw - 24px));
   box-sizing: border-box;
   max-height: 70vh;
   overflow: auto;
@@ -1155,7 +1153,6 @@ small {
     padding: 20px;
   }
   .notification-panel {
-    width: min(560px, calc(100vw - 90px));
     padding: 10px;
   }
   .notification-panel .notification-row {

@@ -2,9 +2,9 @@
 
 [中文](database.zh-CN.md)
 
-The current baseline is `doca-2026-10-08-knowledge-books-v2`. [create-schema.ts](../packages/db/src/create-schema.ts) defines tables, indexes, foreign keys, and checks; [schema.ts](../packages/db/src/schema.ts) defines Kysely types; [connection.ts](../packages/db/src/connection.ts) opens connections; [transactions.ts](../packages/db/src/transactions.ts) manages transactions and conflict retries.
+The current baseline is `doca-2026-10-09-history-storage-v1`. [create-schema.ts](../packages/db/src/create-schema.ts) defines tables, indexes, foreign keys, and checks; [schema.ts](../packages/db/src/schema.ts) defines Kysely types; [connection.ts](../packages/db/src/connection.ts) opens connections; [transactions.ts](../packages/db/src/transactions.ts) manages transactions and conflict retries.
 
-Empty databases are initialized with the current schema. Startup validates the baseline and required storage/credential shapes. Old baselines are rejected; this release does not migrate or convert them. Preserve existing data/deployments and follow [release requirements](releases/0.1.10.md). The existing document_templates table is retained without CRUD or automatic registration as a resource provider; see [templates and materials](creation-resources.md). These are current implementation facts, not a new migration plan.
+Empty databases are initialized with the current schema. Startup validates the baseline and required storage/credential shapes and rejects earlier baselines without automatic migration. Only the exact preceding baseline supports the explicit offline history-storage upgrade in the [release requirements](releases/0.1.14.md); preserve data, files and configuration. The existing document_templates table is retained without CRUD or automatic registration as a resource provider; see [templates and materials](creation-resources.md). These are current implementation facts, not a new migration plan.
 
 ## Connections, initialization, and backup
 

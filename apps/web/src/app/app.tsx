@@ -46,7 +46,7 @@ import { Select } from "@web/shared/components/select.js";
 import { realtime } from "@web/features/documents/realtime.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
 import { setCurrentUserId } from "@web/shared/components/user-mention.js";
-import React, { lazy, Suspense, useEffect, useState, useRef, useMemo } from "react";
+import React, { lazy, Suspense, useEffect, useLayoutEffect, useState, useRef, useMemo } from "react";
 import { BookOpen, Sparkles, Plus, Search, Clock, Users, Trash2, Settings, Bell, MoreHorizontal, ShieldCheck, ThumbsUp, LogOut, FolderOpen, ArrowLeft, Home, PanelLeft, LockKeyhole, UserRound, BookOpenCheck, Network, MessageSquare } from "lucide-react";
 import {
   api,
@@ -325,6 +325,24 @@ function WorkspaceApp() {
   const librarySystemPage = libraryView === "system" && canManageLibrary;
 
   const currentDetail = detail?.resource.id === resourceId ? detail : null;
+  const bookContextId = /^#\/knowledge-books\/([0-9a-f-]{36})(?:\?|$)/i.exec(hash)?.[1];
+  const [bookContext, setBookContext] = useState<{ userId: string; resource: Resource }>();
+  useEffect(() => {
+    const contextUserId = bootstrap?.user?.id;
+    setBookContext((current) => current?.resource.id === bookContextId && current?.userId === contextUserId ? current : undefined);
+    if (!bookContextId || !contextUserId) return;
+    const controller = new AbortController();
+    void api<Detail>(`/resources/${bookContextId}`, "GET", undefined, controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted && value.resource.knowledgeBook)
+          setBookContext({ userId: contextUserId, resource: value.resource });
+      })
+      .catch(() => { if (!controller.signal.aborted) setBookContext(undefined); });
+    return () => controller.abort();
+  }, [bookContextId, bootstrap?.user?.id, refresh]);
+  const assistantResource = bookContextId
+    ? bookContext?.resource.id === bookContextId && bookContext?.userId === bootstrap?.user?.id ? bookContext.resource : undefined
+    : currentDetail?.resource;
   const sharedPersonalView = !!(
     bootstrap?.user &&
     currentDetail?.resource.kind === "document" &&
@@ -929,7 +947,7 @@ function WorkspaceApp() {
     );
   return (
     <DocumentModeContext.Provider value={documentMode}>
-    <AIProvider userId={user?.id} resource={detail?.resource} hash={hash} onResourcesChanged={() => setRefresh((n) => n + 1)}>
+    <AIProvider userId={user?.id} resource={assistantResource} hash={hash} onResourcesChanged={() => setRefresh((n) => n + 1)}>
     <div
       className={`app-shell ${mobileShell ? "mobile-editor-shell" : ""} ${(!user && !currentLibraryId) || sharedPersonalView ? "public-view" : ""} ${personalDocumentPage ? "personal-document-view" : ""} ${resourceId ? "document-view" : ""} ${["spreadsheet", "canvas", "presentation"].includes(detail?.resource.format ?? "") ? "spreadsheet-view surface-view" : ""} ${navigationOpen ? "navigation-expanded" : ""} ${navigationCollapsed ? "navigation-collapsed" : ""}`}
     >
@@ -1307,6 +1325,24 @@ function WorkspaceApp() {
                       loadMoreComments={loadMoreComments}
                       user={user}
                       changed={() => setRefresh((n) => n + 1)}
+                      discussion={!["spreadsheet", "canvas", "presentation"].includes(detail.resource.format) && (
+                        <Comments
+                          key={detail.resource.id}
+                          targetComment={targetComment}
+                          loadMoreComments={loadMoreComments}
+                          detail={{
+                            ...detail,
+                            comments: detail.comments.filter(
+                              (c) => !c.anchor && !detail.comments.some(
+                                (root) => root.anchor && root.id === c.parent_id,
+                              ),
+                            ),
+                          }}
+                          user={user}
+                          act={act}
+                          busy={busy}
+                        />
+                      )}
                     />
                   </Suspense>
                 )}
@@ -1315,29 +1351,6 @@ function WorkspaceApp() {
                   <PluginSlot slot="document.status" scope="document" resource={detail.resource} />
                   <PluginSlot slot="resource.details" scope="document" resource={detail.resource} />
                 </>}
-                {detail.resource.kind === "document" &&
-                  !["spreadsheet", "canvas", "presentation"].includes(
-                    detail.resource.format,
-                  ) && (
-                    <Comments
-                      key={detail.resource.id}
-                      targetComment={targetComment}
-                      loadMoreComments={loadMoreComments}
-                      detail={{
-                        ...detail,
-                        comments: detail.comments.filter(
-                          (c) =>
-                            !c.anchor &&
-                            !detail.comments.some(
-                              (root) => root.anchor && root.id === c.parent_id,
-                            ),
-                        ),
-                      }}
-                      user={user}
-                      act={act}
-                      busy={busy}
-                    />
-                  )}
               </>
             ) : (
               <AccessGate key={resourceId} id={resourceId} user={!!user} />
@@ -1712,6 +1725,8 @@ function Comments({
 function Notifications() {
   const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const [position, setPosition] = useState({ top: 56, right: 16, maxHeight: 560 });
   const [open, setOpen] = useState(false),
     [data, setData] = useState<{
       items: {
@@ -1737,10 +1752,53 @@ function Notifications() {
   async function load() {
     setData(await api("/notifications"));
   }
-  useEffect(()=>{const action=(event:Event)=>{if((event as CustomEvent).detail==="doca.notifications"){setOpen(true);void load().catch(e=>setError(e.message))}};window.addEventListener("doca-navigation-action",action);return()=>window.removeEventListener("doca-navigation-action",action)},[]);
+  useEffect(() => {
+    const action = (event: Event) => {
+      if ((event as CustomEvent).detail !== "doca.notifications") return;
+      triggerRef.current = document.activeElement?.closest<HTMLElement>('[data-entry-id="doca.notifications"]')
+        ?? panelRef.current?.closest(".global-header-tools")?.querySelector<HTMLElement>('[data-entry-id="doca.notifications"]')
+        ?? null;
+      setOpen((current) => !current);
+      void load().catch((e) => setError(e.message));
+    };
+    const close = () => setOpen(false);
+    window.addEventListener("doca-navigation-action", action);
+    window.addEventListener("hashchange", close);
+    return () => {
+      window.removeEventListener("doca-navigation-action", action);
+      window.removeEventListener("hashchange", close);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const trigger = triggerRef.current;
+      if (!trigger?.isConnected) { setOpen(false); return; }
+      const rect = trigger.getBoundingClientRect();
+      const panel = panelRef.current?.querySelector<HTMLElement>(".notification-panel");
+      const width = panel?.offsetWidth ?? Math.min(560, innerWidth - 24);
+      const top = rect.bottom + 8;
+      setPosition({
+        top,
+        right: Math.max(12, Math.min(innerWidth - rect.right, innerWidth - width - 12)),
+        maxHeight: Math.max(80, Math.min(innerHeight * 0.7, innerHeight - top - 12)),
+      });
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    const header = triggerRef.current?.closest(".global-header-tools");
+    if (header) observer.observe(header);
+    window.addEventListener("resize", place);
+    document.addEventListener("scroll", place, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", place);
+      document.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
   useEffect(() => {
     const dismiss = (e: Event) => {
-      if (!panelRef.current?.contains(e.target as Node)) setOpen(false);
+      if (!panelRef.current?.contains(e.target as Node) && !triggerRef.current?.contains(e.target as Node)) setOpen(false);
     };
     const escape = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -1771,6 +1829,7 @@ function Notifications() {
         title={t("shell.notifications")}
         aria-label={`${t("shell.notifications")} ${t("shell.unread", { count: data.unread })}`}
         onClick={() => {
+          triggerRef.current = panelRef.current?.querySelector("button") ?? null;
           setOpen(!open);
           void load().catch((e) => setError(e.message));
         }}
@@ -1783,7 +1842,7 @@ function Notifications() {
         )}
       </button>
       {open && (
-        <section className="notification-panel">
+        <section className="notification-panel" style={position}>
           <header className="notification-heading">
             <h3>{t("shell.notifications")}</h3>
             <button

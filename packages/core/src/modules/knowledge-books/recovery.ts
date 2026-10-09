@@ -4,6 +4,7 @@ import { transact } from "@db/transactions.js";
 import { AppError, systemErrorText } from "../../shared/errors.js";
 import { bookConfigurationSchema } from "./protocol.js";
 import { bookNow } from "./management.js";
+import { appendBookRunLog } from "./run-logs.js";
 
 /** Preserve interrupted outputs and make the interrupted node visible to human operators. */
 export async function recoverBookRuns(db: DB, cutoff: string) {
@@ -29,6 +30,7 @@ export async function recoverBookRuns(db: DB, cutoff: string) {
         .where("heartbeat_at", "<", cutoff)
         .executeTakeFirst();
       if (!Number(changed.numUpdatedRows)) return;
+      await appendBookRunLog(tx, run, null, { code: "worker_recovered" });
       const nodes = await tx
         .selectFrom("knowledge_book_node_runs")
         .select("node_id")

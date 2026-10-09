@@ -1,6 +1,7 @@
 .configured-navigation>div,.configured-navigation details{display:flex;gap:6px;flex-direction:column}
 .configured-navigation a{display:flex;align-items:center;gap:8px;color:inherit;text-decoration:none;border-radius:6px;padding:9px 12px;font-size:13px}
-.configured-navigation a:hover,.configured-navigation a.active{background:rgba(100,100,180,.09)}
+.configured-navigation a:hover{background:var(--hover)}
+.configured-navigation a.active{background:var(--selected)}
 .nav-web-top>div,.nav-web-topRight>div,.nav-web-home>div{flex-direction:row;flex-wrap:wrap}
 .nav-web-right{position:fixed;right:10px;top:150px;z-index:20;background:var(--surface,#fff);border:1px solid var(--border,#ddd);border-radius:8px;max-width:150px}
 .navigation-more{position:relative;padding:8px;font-size:13px}
@@ -40,7 +41,7 @@
 .navigation-more-left[open] .navigation-more-chevron{transform:rotate(180deg)}
 .navigation-more-left>.navigation-more-panel{left:0;right:auto;min-width:200px}
 .navigation-more-left .plugin-slot-display-both>button{justify-content:flex-start;text-align:left;padding:9px 12px;font-size:13px}
-.global-header-tools>.notifications{width:0!important;min-width:0!important;height:0!important;margin-left:-10px!important}
+.global-header-tools>.notifications{display:contents}
 .global-header-tools .nav-web-topRight>div{gap:10px}
 .global-header-tools .nav-web-topRight a[data-display="icon"] svg{width:20px;height:20px}
 .sidebar .navigation-more{padding:0}
@@ -48,10 +49,12 @@
 .sidebar .navigation-more>summary{display:flex;align-items:center;gap:8px;list-style:none}
 .sidebar .navigation-more>summary::-webkit-details-marker{display:none}
 .sidebar .configured-navigation a svg{flex-shrink:0}
+.sidebar .nav-web-left a{color:var(--text-secondary)}
+.sidebar .nav-web-left a.active{background:#fff;color:var(--selected-text);font-weight:600;box-shadow:inset 0 0 0 1px var(--line),0 1px 3px #26304b05}
 .sidebar .nav-web-left a[data-entry-id="doca.trash"]{margin-top:8px;padding-top:19px;border-top:1px solid var(--line,#dee0e3);border-radius:0}
-.sidebar .nav-web-left a[data-entry-id="doca.ai"]{color:#7859b8;font-weight:600}
-.sidebar .nav-web-left a[data-entry-id="doca.ai"]:hover{background:#eee8f8}
-.sidebar .nav-web-left a[data-entry-id="doca.ai"].active{color:#6944ad;background:#e8def7}
+.sidebar .nav-web-left a[data-entry-id="doca.ai"]{color:var(--assistant-text);font-weight:600}
+.sidebar .nav-web-left a[data-entry-id="doca.ai"]:hover{background:var(--assistant-surface)}
+.sidebar .nav-web-left a[data-entry-id="doca.ai"].active{color:var(--assistant-text);background:#fff}
 @media(max-width:1200px){
   .app-shell:not(.navigation-expanded)>.sidebar .configured-navigation:not(.nav-web-leftMore) a>span,
   .app-shell:not(.navigation-expanded)>.sidebar .navigation-more>summary>span{display:none}

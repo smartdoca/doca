@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { documentFormats } from "../packages/core/src/modules/ai/edit-schema.js";
+import { documentFormats, editToolSchema, validateEditOperations } from "../packages/core/src/modules/ai/edit-schema.js";
 import {
   TOOL_EXAMPLES,
   withCallExamples,
@@ -25,6 +25,7 @@ const required = [
   "ask_user",
   "task_plan",
   "knowledge_search",
+  "knowledge_book",
   "document_exists",
   "file_browse",
   "file_search",
@@ -51,6 +52,17 @@ it("gives every tool complete first-call examples in the description small model
       expect(description).toContain(JSON.stringify(example));
     }
   }
+});
+
+it("declares required native block identities to the model before table editing", () => {
+  const schema = editToolSchema("rich_text").toJSONSchema() as any;
+  const children = schema.properties.operations.items.properties.children;
+  expect(children.items.required).toEqual(expect.arrayContaining(["id", "type", "children"]));
+  const input = editToolCallExamples("rich_text").find((example: any) => example.operations[0].type === "setCellContent") as any;
+  expect(editToolSchema("rich_text").safeParse(input).success).toBe(true);
+  const missingId = structuredClone(input);
+  delete missingId.operations[0].children[0].id;
+  expect(() => validateEditOperations("rich_text", missingId.operations)).toThrow(/children.0.id/);
 });
 
 it("covers the fields that usually fail on the first edit/file/image call", () => {

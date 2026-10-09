@@ -236,6 +236,11 @@ async function queryResourcePageUnchecked(
         : query.where("r.deleted_at", "is", null);
     if (input.kind)
       query = query.where("r.kind", "=", input.kind as "document" | "library");
+    // Knowledge books share library permissions but have their own catalogue.
+    if (input.kind === "library" || input.scope === "libraries")
+      query = query.where(
+        sql<boolean>`not exists(select 1 from knowledge_books book where book.id = r.id)`,
+      );
     if (input.format) query = query.where("r.format", "=", input.format as any);
     if (input.location)
       query = query

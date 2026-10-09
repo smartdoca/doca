@@ -17,6 +17,8 @@ Open http://127.0.0.1:39130. The API listens on 39120 and the dev server proxies
 
 Copy `.env.example` before starting: file-store variables are required. Its storage root is `/data/storage` for Docker; set that root to an absolute writable directory on your machine before running from source. Keep the local origin and SQLite path, and never commit secrets.
 
+`DOCA_CREDENTIAL_MASTER_KEY` is also required, including development without plugins. For a fresh database, replace the public example value with `openssl rand -hex 32` output. Retain the same key across restarts and back it up separately; an existing database must keep its original key.
+
 ## PDF rendering for source development
 
 Rich-text and Markdown PDF export use sandboxed Chromium. Install the matching browser after dependencies:

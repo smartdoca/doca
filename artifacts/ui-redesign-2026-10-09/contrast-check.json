@@ -1,0 +1,106 @@
+{
+  "minimum": 4.5,
+  "checks": [
+    {
+      "card": "reading-room",
+      "pair": "text/bg",
+      "ratio": 10.61
+    },
+    {
+      "card": "reading-room",
+      "pair": "muted/bg",
+      "ratio": 4.74
+    },
+    {
+      "card": "reading-room",
+      "pair": "text/surface",
+      "ratio": 11.6
+    },
+    {
+      "card": "reading-room",
+      "pair": "accent_text/accent",
+      "ratio": 9.74
+    },
+    {
+      "card": "graphite-archive",
+      "pair": "text/bg",
+      "ratio": 13.45
+    },
+    {
+      "card": "graphite-archive",
+      "pair": "muted/bg",
+      "ratio": 4.76
+    },
+    {
+      "card": "graphite-archive",
+      "pair": "text/surface",
+      "ratio": 14.83
+    },
+    {
+      "card": "graphite-archive",
+      "pair": "accent_text/accent",
+      "ratio": 14.83
+    },
+    {
+      "card": "night-desk",
+      "pair": "text/bg",
+      "ratio": 13.3
+    },
+    {
+      "card": "night-desk",
+      "pair": "muted/bg",
+      "ratio": 6.77
+    },
+    {
+      "card": "night-desk",
+      "pair": "text/surface",
+      "ratio": 10.99
+    },
+    {
+      "card": "night-desk",
+      "pair": "accent_text/accent",
+      "ratio": 7.18
+    },
+    {
+      "card": "celadon-studio",
+      "pair": "text/bg",
+      "ratio": 10.43
+    },
+    {
+      "card": "celadon-studio",
+      "pair": "muted/bg",
+      "ratio": 4.75
+    },
+    {
+      "card": "celadon-studio",
+      "pair": "text/surface",
+      "ratio": 11.56
+    },
+    {
+      "card": "celadon-studio",
+      "pair": "accent_text/accent",
+      "ratio": 5.81
+    },
+    {
+      "card": "cinnabar-index",
+      "pair": "text/bg",
+      "ratio": 12.09
+    },
+    {
+      "card": "cinnabar-index",
+      "pair": "muted/bg",
+      "ratio": 4.51
+    },
+    {
+      "card": "cinnabar-index",
+      "pair": "text/surface",
+      "ratio": 13.19
+    },
+    {
+      "card": "cinnabar-index",
+      "pair": "accent_text/accent",
+      "ratio": 6.38
+    }
+  ],
+  "result": "passed"
+}

@@ -2,7 +2,7 @@
 
 [中文](deployment.zh-CN.md)
 
-One server can run the published image `docker.io/smartdoca/doca:0.1.13`. A single container uses SQLite and does not need PostgreSQL or Redis. Use those only when you run more than one application replica. See [single instance and horizontal scaling](horizontal-scaling.md).
+One server can run the published image `docker.io/smartdoca/doca:0.1.14`. A single container uses SQLite and does not need PostgreSQL or Redis. Use those only when you run more than one application replica. See [single instance and horizontal scaling](horizontal-scaling.md).
 
 ## Requirements
 
@@ -26,7 +26,7 @@ Edit `.env` before the first start.
 
 File storage also requires `DOCA_FILE_STORE_ID` and `DOCA_FILE_STORES_JSON`, as provided by `docker.env.example`. Backend paths and credentials are read from the environment; the administration page is read-only. See [file storage](storage.md).
 
-0.1.13 uses the new `doca-2026-10-08-knowledge-books-v2` database baseline. Databases from 0.1.12 and earlier are rejected before schema changes; no automatic migration, conversion, or reset is provided. Preserve the original deployment, databases, files, and configuration. Use a separate empty database and separate storage. Roll back with the previous code and unchanged old database while retaining new data. See the [release requirements](releases/0.1.13.md).
+0.1.14 uses database baseline `doca-2026-10-09-history-storage-v1`. Normal startup rejects earlier baselines and never upgrades automatically. The exact 0.1.13 baseline `doca-2026-10-08-knowledge-books-v2` supports the explicit offline upgrade below; other baselines are rejected. Preserve databases, files, configuration and the credential master key; see the [release requirements](releases/0.1.14.md).
 
 `DOCA_ORIGIN` is the origin users type in the browser. HTTP and HTTPS are accepted, including in production. Use only the origin without a subpath, query, or fragment; a root trailing slash is normalized.
 
@@ -34,16 +34,30 @@ File storage also requires `DOCA_FILE_STORE_ID` and `DOCA_FILE_STORES_JSON`, as 
 DOCA_ORIGIN=https://docs.example.com
 ```
 
-The Docker example already supplies the required file-store values. For a fresh single server, change the origin and retain those values; PostgreSQL, Redis, and the plugin credential key are conditional. See [configuration](configuration.md) for defaults, S3 fields, and separate Webhook/AI stores.
+The Docker example already supplies the required file-store values. For a fresh single server, change the origin, generate a key with `openssl rand -hex 32`, and replace the public sample `DOCA_CREDENTIAL_MASTER_KEY`. The key is required even without plugins; existing deployments must keep their original key. Retain the file-store values; PostgreSQL and Redis are conditional. See [configuration](configuration.md) for defaults, S3 fields, and separate Webhook/AI stores.
 
 ## Start
+
+### Upgrade from 0.1.13
+
+Stop every Doca instance and back up databases (including SQLite WAL), file storage and configuration. Keep the original `DOCA_CREDENTIAL_MASTER_KEY`. Check out `v0.1.14`, pull the image and run one offline maintenance container with the existing deployment environment:
+
+```sh
+docker compose stop
+docker compose pull
+docker compose run --rm --no-deps doca node --import tsx apps/server/src/bootstrap/history-storage.ts upgrade --apply
+```
+
+Only `doca-2026-10-08-knowledge-books-v2` is accepted; the command never creates or resets the database. The transaction adds history archive tables and tasks while preserving all original snapshot bytes. After the new host starts, the latest 20 full snapshots remain in the database. For each group of 10 older snapshots, only the newest is retained in file storage; the other nine are removed after write/read verification and cannot be restored from the application. Storage failure retains the entire original group. History is displayed as one list; incomplete groups remain in the database. See [history storage and rollback](storage.md#history-storage-and-offline-upgrade).
+
+Before rollback, stop all instances and use this release's maintenance command with a new manifest path to restore retained points and the preceding baseline; then run the previous host. File bytes remain preserved. Sampled-away history requires the pre-upgrade backup. Never point the old image directly at the newer database.
 
 ```sh
 docker compose pull
 docker compose up -d
 ```
 
-`docker compose up -d` pulls `docker.io/smartdoca/doca:0.1.13`. Add `--build` only when you want an image built from this checkout.
+`docker compose up -d` pulls `docker.io/smartdoca/doca:0.1.14`. Add `--build` only when you want an image built from this checkout.
 
 Check the container:
 
@@ -54,7 +68,7 @@ curl -fsS -H 'Host: docs.example.com' http://127.0.0.1:39120/health
 
 Replace `docs.example.com` with the host in your configured origin, including its port if nonstandard. The built-in container probe already supplies this Host; wait for `docker compose ps` to show `healthy`. A bare loopback curl is rejected with 421.
 
-A healthy process returns `{"status":"ok","version":"0.1.13"}`.
+A healthy process returns `{"status":"ok","version":"0.1.14"}`.
 
 Document rendering also needs its deployment checks: this checkout adds LibreOffice and sandboxed Chromium, while optional SAM requires a separate trusted Linux runtime. See [Docker document renderers](docker-rendering.md) for component availability, the included Chromium seccomp policy and the explicit SAM mount. A healthy server alone does not verify those tools.
 
@@ -124,4 +138,26 @@ The container keeps its own `/assets` files. Fonts and images referenced from st
 
 `index.html` is sent with `Cache-Control: no-cache`, so a new visit after a release fetches the new page. Hashed files under `/assets/` are sent with `Cache-Control: public, max-age=31536000, immutable`. Their names change when the content changes, so a year-long cache does not keep an old script after the new HTML is loaded. A CDN in front of `DOCA_ASSET_BASE` needs the same long cache on those hashed files.
 
-0.1.13 uses the new `doca-2026-10-08-knowledge-books-v2` database baseline. Databases from 0.1.12 and earlier are rejected before schema changes; no automatic migration, conversion, or reset is provided. Preserve the original deployment, databases, files, and configuration. Use a separate empty database and separate storage. Roll back with the previous code and unchanged old database while retaining new data. See the [release requirements](releases/0.1.13.md).
+### Configure static-CDN response headers
+
+`DOCA_ASSET_BASE` changes URLs; it does not configure the CDN. Set uploaded S3 build objects to `Cache-Control: public, max-age=31536000, immutable` and preserve Content-Type (`text/javascript` for JS, `text/css` for CSS). To cover existing objects without changing metadata, attach a CloudFront **Response headers policy** only to the static `*/assets/*` behavior: add that Cache-Control under **Custom headers** with **Override**. Cross-origin ES modules also require `Access-Control-Allow-Origin: https://doca.example.com`; these public build files can use `*` without credentials. Do not attach this policy to HTML, APIs or private files.
+
+Set the static hashed-file **Cache policy** separately: Minimum TTL 0, Default/Maximum TTL 31536000 seconds. A response headers policy changes browser headers, not edge TTL; see [AWS response headers policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/modifying-response-headers.html). Publish new filenames and retain older releases for later chunk loads in already-open pages.
+
+A static Nginx CDN can serve a release directory as follows, with standard `mime.types` loaded by the server:
+
+```nginx
+location /doca/0.1.14/assets/ {
+    alias /srv/doca/0.1.14/assets/;
+    add_header Cache-Control "public, max-age=31536000, immutable";
+    add_header Access-Control-Allow-Origin "https://doca.example.com";
+}
+```
+
+When proxying Doca `/assets/`, hide the existing origin header with `proxy_hide_header Cache-Control;` before adding its replacement. The example omits `always` so missing files do not receive a year-long 404 cache. Check the final CDN response:
+
+```sh
+curl -I https://cdn.example.com/doca/0.1.14/assets/<actual-hashed-JS-filename>.js
+```
+
+Verify Cache-Control, Content-Type and CORS. HTML stays on Doca with revalidation. For document images and protected files, use [storage: browser image caching and the file CDN](storage.md#browser-image-caching-and-the-file-cdn).

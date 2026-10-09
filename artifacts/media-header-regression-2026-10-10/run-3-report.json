@@ -1,0 +1,206 @@
+{
+  "checks": [
+    "home/admin/account/preferences controls align at two widths; opening, closing and resize preserve anchors",
+    "paste/drop use video nodes, play successfully, converge in a second tab and preserve asset URLs after reload",
+    "oversized paste/drop show the 20MB limit without uploading or creating broken placeholders",
+    "upload failures show the original server reason and filename",
+    "invalid video playback shows the browser format failure and keeps original-file download",
+    "selection/resize/scroll and 60s idle emit no content updates",
+    "readonly paste/drop emit no uploads/content updates"
+  ],
+  "headerResults": [
+    {
+      "width": 1440,
+      "route": "home",
+      "boxes": [
+        {
+          "x": 1286,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        },
+        {
+          "x": 1334,
+          "y": 11,
+          "w": 42,
+          "h": 34
+        },
+        {
+          "x": 1390,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "route": "admin",
+      "boxes": [
+        {
+          "x": 1286,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        },
+        {
+          "x": 1334,
+          "y": 11,
+          "w": 42,
+          "h": 34
+        },
+        {
+          "x": 1390,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "route": "account",
+      "boxes": [
+        {
+          "x": 1286,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        },
+        {
+          "x": 1334,
+          "y": 11,
+          "w": 42,
+          "h": 34
+        },
+        {
+          "x": 1390,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "route": "preferences",
+      "boxes": [
+        {
+          "x": 1286,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        },
+        {
+          "x": 1334,
+          "y": 11,
+          "w": 42,
+          "h": 34
+        },
+        {
+          "x": 1390,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        }
+      ]
+    },
+    {
+      "width": 1100,
+      "route": "home",
+      "boxes": [
+        {
+          "x": 946,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        },
+        {
+          "x": 994,
+          "y": 11,
+          "w": 42,
+          "h": 34
+        },
+        {
+          "x": 1050,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        }
+      ]
+    },
+    {
+      "width": 1100,
+      "route": "admin",
+      "boxes": [
+        {
+          "x": 946,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        },
+        {
+          "x": 994,
+          "y": 11,
+          "w": 42,
+          "h": 34
+        },
+        {
+          "x": 1050,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        }
+      ]
+    },
+    {
+      "width": 1100,
+      "route": "account",
+      "boxes": [
+        {
+          "x": 946,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        },
+        {
+          "x": 994,
+          "y": 11,
+          "w": 42,
+          "h": 34
+        },
+        {
+          "x": 1050,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        }
+      ]
+    },
+    {
+      "width": 1100,
+      "route": "preferences",
+      "boxes": [
+        {
+          "x": 946,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        },
+        {
+          "x": 994,
+          "y": 11,
+          "w": 42,
+          "h": 34
+        },
+        {
+          "x": 1050,
+          "y": 11,
+          "w": 34,
+          "h": 34
+        }
+      ]
+    }
+  ],
+  "pageErrors": []
+}

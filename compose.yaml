@@ -1,14 +1,14 @@
 # Production-oriented single-host deployment.
 # Put the browser-facing HTTP(S) DOCA_ORIGIN in .env.
 # Use a reverse proxy for HTTPS or internal HTTP; forward to 127.0.0.1:39120.
-# The published image is docker.io/smartdoca/doca:0.1.13.
+# The published image is docker.io/smartdoca/doca:0.1.14.
 # `docker compose up -d` pulls that tag. Add `--build` to build from this checkout.
 services:
   doca:
     build:
       context: .
       dockerfile: Dockerfile
-    image: docker.io/smartdoca/doca:0.1.13
+    image: docker.io/smartdoca/doca:0.1.14
     pull_policy: always
     restart: unless-stopped
     init: true
@@ -40,7 +40,7 @@ services:
       # Local roots must refer to writable persistent mounts, such as /data/storage.
       # Development .env paths (./data/...) resolve under the image's /app directory.
       DOCA_FILE_STORES_JSON: "${DOCA_FILE_STORES_JSON:?Set file storage environment configuration}"
-      DOCA_CREDENTIAL_MASTER_KEY: "${DOCA_CREDENTIAL_MASTER_KEY:-}"
+      DOCA_CREDENTIAL_MASTER_KEY: "${DOCA_CREDENTIAL_MASTER_KEY:?Generate a persistent key with openssl rand -hex 32 and set it in .env}"
       DOCA_DATA_DIR: /data
       DOCA_PLUGINS_DIR: "${DOCA_PLUGINS_DIR:-/data/plugins}"
       DOCA_PLUGIN_NPM_REGISTRY: ${DOCA_PLUGIN_NPM_REGISTRY:-https://registry.npmjs.org}

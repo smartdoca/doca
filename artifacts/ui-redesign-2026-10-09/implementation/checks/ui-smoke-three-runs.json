@@ -1,0 +1,50 @@
+[
+  {
+    "round": 1,
+    "passed": true,
+    "listStyle": {
+      "allTransparent": true,
+      "bookColor": "rgb(119, 98, 191)",
+      "bookTransparent": true,
+      "locationColor": "rgb(119, 98, 191)",
+      "overflow": false,
+      "rowCount": 1
+    },
+    "menuStyle": {
+      "allTransparent": true,
+      "icons": 6
+    }
+  },
+  {
+    "round": 2,
+    "passed": true,
+    "listStyle": {
+      "allTransparent": true,
+      "bookColor": "rgb(119, 98, 191)",
+      "bookTransparent": true,
+      "locationColor": "rgb(119, 98, 191)",
+      "overflow": false,
+      "rowCount": 1
+    },
+    "menuStyle": {
+      "allTransparent": true,
+      "icons": 6
+    }
+  },
+  {
+    "round": 3,
+    "passed": true,
+    "listStyle": {
+      "allTransparent": true,
+      "bookColor": "rgb(119, 98, 191)",
+      "bookTransparent": true,
+      "locationColor": "rgb(119, 98, 191)",
+      "overflow": false,
+      "rowCount": 1
+    },
+    "menuStyle": {
+      "allTransparent": true,
+      "icons": 6
+    }
+  }
+]

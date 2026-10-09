@@ -1,0 +1,147 @@
+[
+  {
+    "text": "最近访问",
+    "before": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": 43,
+      "text": "最近访问",
+      "width": 52,
+      "x": 292,
+      "y": 190.59375
+    },
+    "after": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": 43,
+      "hover": false,
+      "pill": {
+        "background": "rgba(0, 0, 0, 0)",
+        "height": "28px",
+        "left": "-8px",
+        "radius": "4px",
+        "right": "-8px",
+        "top": "21.5px"
+      },
+      "text": "最近访问",
+      "width": 52,
+      "x": 292,
+      "y": 190.59375
+    },
+    "unchanged": true
+  },
+  {
+    "text": "归我所有",
+    "before": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": 43,
+      "text": "归我所有",
+      "width": 52,
+      "x": 372,
+      "y": 190.59375
+    },
+    "after": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": 43,
+      "hover": false,
+      "pill": {
+        "background": "rgba(0, 0, 0, 0)",
+        "height": "28px",
+        "left": "-8px",
+        "radius": "4px",
+        "right": "-8px",
+        "top": "21.5px"
+      },
+      "text": "归我所有",
+      "width": 52,
+      "x": 372,
+      "y": 190.59375
+    },
+    "unchanged": true
+  },
+  {
+    "text": "与我协作",
+    "before": {
+      "background": "rgb(242, 243, 245)",
+      "height": 43,
+      "text": "与我协作",
+      "width": 52,
+      "x": 452,
+      "y": 190.59375
+    },
+    "after": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": 43,
+      "hover": true,
+      "pill": {
+        "background": "rgb(237, 241, 248)",
+        "height": "28px",
+        "left": "-8px",
+        "radius": "4px",
+        "right": "-8px",
+        "top": "21.5px"
+      },
+      "text": "与我协作",
+      "width": 52,
+      "x": 452,
+      "y": 190.59375
+    },
+    "unchanged": true
+  },
+  {
+    "text": "我的收藏",
+    "before": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": 43,
+      "text": "我的收藏",
+      "width": 52,
+      "x": 532,
+      "y": 190.59375
+    },
+    "after": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": 43,
+      "hover": false,
+      "pill": {
+        "background": "rgba(0, 0, 0, 0)",
+        "height": "28px",
+        "left": "-8px",
+        "radius": "4px",
+        "right": "-8px",
+        "top": "21.5px"
+      },
+      "text": "我的收藏",
+      "width": 52,
+      "x": 532,
+      "y": 190.59375
+    },
+    "unchanged": true
+  },
+  {
+    "text": "我的收录",
+    "before": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": 43,
+      "text": "我的收录",
+      "width": 52,
+      "x": 612,
+      "y": 190.59375
+    },
+    "after": {
+      "background": "rgba(0, 0, 0, 0)",
+      "height": 43,
+      "hover": false,
+      "pill": {
+        "background": "rgba(0, 0, 0, 0)",
+        "height": "28px",
+        "left": "-8px",
+        "radius": "4px",
+        "right": "-8px",
+        "top": "21.5px"
+      },
+      "text": "我的收录",
+      "width": 52,
+      "x": 612,
+      "y": 190.59375
+    },
+    "unchanged": true
+  }
+]

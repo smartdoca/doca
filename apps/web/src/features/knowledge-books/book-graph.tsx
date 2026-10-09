@@ -70,7 +70,9 @@ export function BookGraph({
   changed,
   selected,
   added,
+  execution,
 }: {
+  execution?: { states: Readonly<Record<string, string>>; summaries: Readonly<Record<string, string>>; selectedId?: string };
   workflow?: BookWorkflow;
   provenance?: { nodes: ProvenanceNode[]; edges: ProvenanceEdge[] };
   editable?: boolean;
@@ -161,7 +163,7 @@ export function BookGraph({
     canvas.on("edge:removed", update);
     canvas.on("scale", ({ sx }) => setZoom(Math.round(sx * 100)));
     canvas.on("node:click", ({ node }) => {
-      if (!isProvenance) {
+      if (!isProvenance && !execution) {
         const previous = selectedId.current
           ? canvas.getCellById(selectedId.current)
           : null;
@@ -178,7 +180,7 @@ export function BookGraph({
       graph.current = null;
       canvas.dispose();
     };
-  }, [editable, isProvenance]);
+  }, [editable, isProvenance, !!execution]);
 
   useEffect(() => {
     const canvas = graph.current;
@@ -238,11 +240,14 @@ export function BookGraph({
                 },
               },
             };
+          const state = execution?.states[node.id];
+          const stateColor = state === "completed" ? "#19926a" : state === "failed" ? "#d43838" : state === "running" ? "#2563eb" : state === "awaiting_input" || state === "awaiting_publication" ? "#b67c0d" : "#8491a6";
           const style = nodeAppearance[node.type];
           const summary =
+            execution?.summaries[node.id] ||
             plainLabel(node.parameters.instructions) ||
             t(`books.nodeHint.${node.type}`);
-          const scope =
+          const scope = execution ? t(state === "pending" ? "books.pipelinePending" : `books.status.${state}` as Parameters<typeof t>[0]) :
             node.type === "sources"
               ? node.parameters.sourceIds.length
                 ? t("books.graphSourceCount", {
@@ -281,9 +286,10 @@ export function BookGraph({
             })),
             attrs: {
               body: {
+                ...(execution ? { role: "button", tabindex: 0, "aria-label": t("books.pipelineNodeLogs", { node: label, state: scope }) } : {}),
                 rx: 12,
                 ry: 12,
-                stroke: selectedId.current === node.id ? "#5588f5" : "#c4d4ef",
+                stroke: execution?.selectedId === node.id || selectedId.current === node.id ? "#5588f5" : execution ? stateColor : "#c4d4ef",
                 strokeWidth: 1.5,
                 fill: "#fff",
               },
@@ -293,7 +299,7 @@ export function BookGraph({
                 width: 30,
                 height: 30,
                 rx: 8,
-                fill: style.fill,
+                fill: execution ? `${stateColor}12` : style.fill,
                 stroke: "none",
               },
               icon: {
@@ -301,12 +307,12 @@ export function BookGraph({
                 refY: 0,
                 x: 27,
                 y: 27,
-                text: style.icon,
+                text: execution ? state === "completed" ? "✓" : state === "failed" ? "!" : state === "running" ? "▶" : state?.startsWith("awaiting") ? "Ⅱ" : "·" : style.icon,
                 textAnchor: "middle",
                 textVerticalAnchor: "middle",
                 fontSize: 12,
                 fontWeight: 700,
-                fill: style.color,
+                fill: execution ? stateColor : style.color,
               },
               title: {
                 refX: 0,
@@ -344,7 +350,7 @@ export function BookGraph({
                 textAnchor: "start",
                 textVerticalAnchor: "middle",
                 fontSize: 10,
-                fill: style.color,
+                fill: execution ? stateColor : style.color,
                 textWrap: { width: 184, height: 14, ellipsis: true },
               },
             },
@@ -390,10 +396,11 @@ export function BookGraph({
           id: `edge-${index}`,
           source: workflow ? { cell: edge.source, port: "out" } : edge.source,
           target: workflow ? { cell: edge.target, port: "in" } : edge.target,
-          connector: { name: "smooth", args: { direction: "H" } },
+          connector: { name: "rounded" },
+          ...(execution ? { router: { name: "manhattan", args: { padding: 16 } } } : { connector: { name: "smooth", args: { direction: "H" } } }),
           attrs: {
             line: {
-              stroke: "#6d97ef",
+              stroke: execution ? execution.states[edge.source] === "completed" ? "#73bca3" : "#cbd4e1" : "#6d97ef",
               strokeWidth: workflow ? 2 : 1.5,
               targetMarker: { name: "classic", width: 8, height: 7 },
             },
@@ -409,16 +416,16 @@ export function BookGraph({
       canvas.zoomToFit({
         padding: 32,
         maxScale: 1,
-        minScale: workflow ? 0.75 : 0.08,
+        minScale: execution ? 0.08 : workflow ? 0.75 : 0.08,
       });
-      if (workflow) {
+      if (workflow && !execution) {
         const bounds = canvas.getContentBBox();
         const scale = canvas.zoom();
         canvas.translate(24 - bounds.x * scale, 24 - bounds.y * scale);
       }
       fitted.current = true;
     }
-  }, [workflow, provenance, editable, t]);
+  }, [workflow, provenance, editable, t, execution]);
 
   function add(type: BookNodeType) {
     const rect = host.current?.getBoundingClientRect(),
@@ -439,7 +446,7 @@ export function BookGraph({
           <div className="book-graph-title">
             <Workflow size={16} />
             <strong>
-              {t(workflow ? "books.workflow" : "books.provenance")}
+              {t(execution ? "books.pipeline" : workflow ? "books.workflow" : "books.provenance")}
             </strong>
             {workflow && (
               <span>
@@ -592,8 +599,13 @@ export function BookGraph({
           )}
           <div
             ref={host}
+            onKeyDown={event => {
+              if (!execution || !["Enter", " "].includes(event.key)) return;
+              const id = (event.target as Element).closest("[data-cell-id]")?.getAttribute("data-cell-id");
+              if (id && workflow?.nodes.some(node => node.id === id)) { event.preventDefault(); callbacks.current.selected?.(id); }
+            }}
             className="book-graph-canvas"
-            aria-label={t(workflow ? "books.workflow" : "books.provenance")}
+            aria-label={t(execution ? "books.pipeline" : workflow ? "books.workflow" : "books.provenance")}
           />
           <div className="book-graph-hint">
             <MousePointer2 size={13} />
@@ -601,7 +613,7 @@ export function BookGraph({
               workflow
                 ? editable
                   ? "books.graphHelp"
-                  : "books.workflowGraphHelp"
+                  : execution ? "books.pipelineGraphHelp" : "books.workflowGraphHelp"
                 : "books.provenanceHelp",
             )}
           </div>
