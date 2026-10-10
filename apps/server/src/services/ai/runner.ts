@@ -4020,7 +4020,7 @@ export function createAIRunner(
       ...(input.skillIds.includes("knowledge") || /知识册|knowledge\s*books?/i.test(input.text) || hasBookContext ? {
       knowledge_book: createTool({
         id: "knowledge_book",
-        ...withCallExamples("knowledge_book", "已有当前知识册上下文时直接用其 ID；未指定时先 list，再用 ask_user 展示已有册标题和新建选项，不向用户索要 UUID。所有写操作必须 action=command，具体命令放 command.operation，不能把 source.save 等放 action。管理知识册的目标、来源、编排图、权重、验收项、人工反馈及人工待办。与人工页面使用同一权限和 revision 协议。先 read 再修改；查找网页用 search_sources（query、sites、language），check_web_sources 验证实际网页后再绑定，source.save 保存时也会复验；configuration.patch 使用 changes 修改目标/模型/验收项等字段，workflow.node.patch 使用 nodeId、changes.parameters/sourceIds/权重等修改一个节点，均带 expectedRevision；workflow.node.add 通过 node、inputs、outputs 添加节点，run.retry 重试失败或取消运行并复验复用节点；成果只能由编排发布，纠错用 feedback.save。新增来源或反馈时省略 command.id，并用 expectedRevision=0；编辑时 command.id 是那条来源或反馈的 ID，绝不能填知识册 bookId。运行排队、重试或批准发布后宿主自动登记后台等待，结束或需要人工决定时会自动续跑，无需重复轮询或让用户再问。需要等待已有运行时用 action=wait、bookId、runId。已有 repair 待办时，技术重试优先 resolve_task decision=retry，正式记录待办处理；run.retry 用于没有待办或用户指定的运行。不能把未处理待办说成已经关闭或让用户忽略。等待自动续跑已经登记，不要求用户再发消息通知；人工验收发布仍由用户在业务待办处理。运行排队后用 run 查看状态，candidate_page 分页检查节点候选成果，source 按 bindingId 分页读人工材料绑定。source.save 的 configuration 必须使用 {version:1,items:[{id:稳定绑定标识,kind:document,resourceId:文档ID},{id:另一标识,kind:url,url:网址}]}，最多50个，可混合document/library/file/folder/url/manual/content，content需要sourceId和config，manual需要markdown。修改来源必须保留未修改绑定的id，read中人工材料正文被省略，先用source读取完整材料再修改，禁止用null覆盖。read/run/release 返回目录清单；用 page 分页读正文与证据，find 定位待纠正段落。"),
+        ...withCallExamples("knowledge_book", "已有当前知识册上下文时直接用其 ID；未指定时先 list，再用 ask_user 展示已有册标题和新建选项，不向用户索要 UUID。所有写操作必须 action=command，具体命令放 command.operation，不能把 source.save 等放 action。管理知识册的目标、来源、编排图、权重、验收项、人工反馈及人工待办。与人工页面使用同一权限和 revision 协议。先 read 再修改；查找网页用 search_sources（query、sites、language），check_web_sources 验证实际网页后再绑定，source.save 保存时也会复验；configuration.patch 使用 changes 修改目标/模型/验收项等字段，workflow.node.patch 使用 nodeId、changes.parameters/sourceIds/权重等修改一个节点，均带 expectedRevision；workflow.node.add 通过 node、inputs、outputs 添加节点，run.resume 使用当前运行冻结的配置从失败节点继续，保持同一流水线ID并复验已完成节点；run.retry 按当前配置新建重试运行；成果只能由编排发布，纠错用 feedback.save。新增来源或反馈时省略 command.id，并用 expectedRevision=0；编辑时 command.id 是那条来源或反馈的 ID，绝不能填知识册 bookId。运行排队、重试或批准发布后宿主自动登记后台等待，结束或需要人工决定时会自动续跑，无需重复轮询或让用户再问。需要等待已有运行时用 action=wait、bookId、runId。当前流水线的技术修复优先使用 command.operation=run.resume，不要用 run.start 新建流水线。用户明确要求按当前配置新建重试时才用 resolve_task decision=retry 或 run.retry。不能把未处理待办说成已经关闭或让用户忽略。等待自动续跑已经登记，不要求用户再发消息通知；人工验收发布仍由用户在业务待办处理。运行排队后用 run 查看状态，candidate_page 分页检查节点候选成果，source 按 bindingId 分页读人工材料绑定。source.save 的 configuration 必须使用 {version:1,items:[{id:稳定绑定标识,kind:document,resourceId:文档ID},{id:另一标识,kind:url,url:网址}]}，最多50个，可混合document/library/file/folder/url/manual/content，content需要sourceId和config，manual需要markdown。修改来源必须保留未修改绑定的id，read中人工材料正文被省略，先用source读取完整材料再修改，禁止用null覆盖。read/run/release 返回目录清单；用 page 分页读正文与证据，find 定位待纠正段落。"),
         inputSchema: bookAssistantInputSchema,
         execute: async rawArgs => {
           const args = bookAssistantActionSchema.parse(rawArgs);
@@ -4033,13 +4033,13 @@ export function createAIRunner(
             case "search_sources": return searchBookWebSources(db,actor,args.bookId,{query:args.query,sites:args.sites,language:args.language});
             case "check_web_sources": return checkBookWebSources(db,actor,args.bookId,{urls:args.urls},knowledgeBookRuntime(db,actor.id,"source-validation","",options.storage));
             case "command": {
-              const result = ["run.start", "run.retry", "run.publish"].includes(args.command.operation)
+              const result = ["run.start", "run.retry", "run.resume", "run.publish"].includes(args.command.operation)
                 ? await persistBookRunAction(db, actor, args.bookId, { id: operationId(rootJobId, args), jobId: job.id, digest: digest(args) },
                     (tx, current) => args.command.operation === "run.start"
                       ? queueBookRun(tx, current, args.bookId, operationId(rootJobId, args))
                       : executeBookCommand(tx, current, args.bookId, args.command, "assistant", knowledgeBookRuntime(db, actor.id, "source-validation", "", options.storage)))
                 : await executeBookCommand(db, actor, args.bookId, args.command, "assistant", knowledgeBookRuntime(db, actor.id, "source-validation", "", options.storage));
-              if (["run.start", "run.retry", "run.publish"].includes(args.command.operation)) {
+              if (["run.start", "run.retry", "run.resume", "run.publish"].includes(args.command.operation)) {
                 const runId = "id" in result ? String(result.id) : "runId" in args.command ? args.command.runId : undefined;
                 if (runId) return { ...result, continuation: await requestContinuation!(bookContinuationInput(args.bookId, runId)) };
               }

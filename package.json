@@ -62,7 +62,7 @@
     "@smartdoca/plugin-contracts": "workspace:*",
     "@smartdoca/plugin-sdk": "workspace:*",
     "@smartdoca/search-host": "workspace:*",
-    "@smartdoca/sheet": "0.2.0-rc.18",
+    "@smartdoca/sheet": "0.2.0-rc.19",
     "@smartdoca/slate": "0.4.13",
     "@smartdoca/slides": "0.3.0-alpha.2",
     "antd": "^6.6.3",

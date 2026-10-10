@@ -8,11 +8,21 @@ import { createKnowledgeBook } from "@core/modules/knowledge-books/management.js
 import { aiDefaults } from "@core/modules/ai/config.js";
 import { fail, AppError } from "@core/shared/errors.js";
 import { registerKnowledgeBooks } from "../apps/server/src/routes/knowledge-books.js";
+import { knowledgeBookRuntime } from "../apps/server/src/services/ai/knowledge-book-runtime.js";
+import { readBookSource } from "@core/modules/knowledge-books/sources.js";
 import {
   searchBookWebSources,
   checkBookWebSources,
 } from "../apps/server/src/services/ai/knowledge-book-web-sources.js";
 const search = vi.hoisted(() => vi.fn());
+const reader = vi.hoisted(() => ({ page: vi.fn(), validate: vi.fn() }));
+vi.mock("../apps/server/src/services/ai/web-fetch.js", async (original) => ({
+  ...(await original<
+    typeof import("../apps/server/src/services/ai/web-fetch.js")
+  >()),
+  fetchWebPage: reader.page,
+  validatePublicWebSourceUrl: reader.validate,
+}));
 vi.mock("../apps/server/src/services/ai/web-search.js", async (original) => ({
   ...(await original<
     typeof import("../apps/server/src/services/ai/web-search.js")
@@ -22,6 +32,9 @@ vi.mock("../apps/server/src/services/ai/web-search.js", async (original) => ({
 let db: DB, owner: Actor, stranger: Actor, bookId: string;
 beforeEach(async () => {
   search.mockReset();
+  reader.page.mockReset();
+  reader.validate.mockReset();
+  reader.validate.mockResolvedValue(undefined);
   db = await openTestDatabase({ driver: "sqlite", path: ":memory:" });
   owner = {
     ...(await createUser(
@@ -92,8 +105,82 @@ it("uses the configured SearXNG endpoint and website constraints only after chec
 it("passes omitted current-protocol filters through to search", async () => {
   search.mockResolvedValue({ sources: [], query: "TCP" });
   await searchBookWebSources(db, owner, bookId, { query: "TCP" });
-  expect(search.mock.calls[0]![4]).toMatchObject({ sites: [], language: undefined, limit: 8 });
+  expect(search.mock.calls[0]![4]).toMatchObject({
+    sites: [],
+    language: undefined,
+    limit: 8,
+  });
 });
+
+it("uses the AI-configured reader for HTTP validation, saving and source ingestion", async () => {
+  const webFetch = {
+    provider: "firecrawl",
+    baseUrl: "http://firecrawl:3002",
+    apiKey: "reader-secret",
+  };
+  await db
+    .updateTable("account_settings")
+    .set({
+      config: JSON.stringify({ ...aiDefaults, webFetch }),
+    })
+    .where("id", "=", "ai")
+    .execute();
+  reader.page.mockResolvedValue({
+    title: "TCP",
+    text: "TCP is a byte stream.",
+    truncated: false,
+  });
+  const url = "https://example.com/tcp";
+  const runtime = knowledgeBookRuntime(db, owner.id, "source-validation", "");
+  await expect(
+    checkBookWebSources(db, stranger, bookId, { urls: [url] }, runtime),
+  ).rejects.toMatchObject({ status: 404 });
+  expect(reader.page).not.toHaveBeenCalled();
+  expect(reader.validate).not.toHaveBeenCalled();
+
+  const api = Fastify();
+  registerKnowledgeBooks(api, db, () => owner);
+  try {
+    const checked = await api.inject({
+      method: "POST",
+      url: `/api/v1/knowledge-books/${bookId}/source-web-check`,
+      payload: { urls: [url] },
+    });
+    expect(checked.statusCode).toBe(200);
+    expect(checked.json().items[0]).toMatchObject({
+      valid: true,
+      preview: "TCP is a byte stream.",
+    });
+    expect(checked.body).not.toContain("reader-secret");
+    const saved = await api.inject({
+      method: "POST",
+      url: `/api/v1/knowledge-books/${bookId}/commands`,
+      payload: {
+        operation: "source.save",
+        expectedRevision: 0,
+        title: "Web sources",
+        status: "active",
+        configuration: { version: 1, items: [{ id: "tcp", kind: "url", url }] },
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    const source = await db
+      .selectFrom("knowledge_book_sources")
+      .selectAll()
+      .where("id", "=", saved.json().id)
+      .executeTakeFirstOrThrow();
+    const evidence = await readBookSource(db, source, runtime);
+    expect(evidence.map((item) => item.text).join("\n")).toContain(
+      "TCP is a byte stream.",
+    );
+    expect(reader.page).toHaveBeenCalledTimes(3);
+    for (const call of reader.page.mock.calls)
+      expect(call).toEqual([url, expect.any(AbortSignal), {}, webFetch]);
+  } finally {
+    await api.close();
+  }
+});
+
 it("verifies actual body text and reports invalid, empty, inaccessible and oversized pages independently", async () => {
   const readWeb = vi.fn(async (url: string) => {
     if (url.includes("empty")) return { title: "Empty", text: "  " };

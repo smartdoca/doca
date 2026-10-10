@@ -557,9 +557,13 @@ export function validateRichNode(
     "children",
     ...(fields[node.type] ?? []),
   ]);
+  const unknownProperties = Object.keys(node).filter((k) => !allowed.has(k));
+  const diagramStyleHint = node.type === "flowchart"
+    ? "；配色写在 nodes 中：fillColor=填充、color=边框、textColor=文字，连线颜色写在 edges[].color，不在图块顶层写 style/color/backgroundColor"
+    : "";
   assert(
-    Object.keys(node).every((k) => allowed.has(k)),
-    `${node.type} 包含未知属性，请遵循原生元素格式`,
+    !unknownProperties.length,
+    `${node.type} 包含未知属性 ${unknownProperties.join("、")}，请遵循原生元素格式${diagramStyleHint}`,
   );
   assert(
     Array.isArray(node.children) && node.children.length,
@@ -616,15 +620,23 @@ export function validateRichNode(
       nodeIds.add(n.id);
     }
     const edgeIds = new Set<string>();
+    const endpoint = (target: unknown, point: unknown) => {
+      if (typeof target !== "string") return false;
+      if (target) return nodeIds.has(target);
+      if (!point || typeof point !== "object" || Array.isArray(point)) return false;
+      const position = point as { x?: unknown; y?: unknown };
+      return typeof position.x === "number" && Number.isFinite(position.x) &&
+        typeof position.y === "number" && Number.isFinite(position.y);
+    };
     for (const e of node.edges) {
       assert(
         e &&
           typeof e.id === "string" &&
           e.id &&
           !edgeIds.has(e.id) &&
-          nodeIds.has(e.source) &&
-          nodeIds.has(e.target),
-        "流程图连线必须使用唯一 id，并连接现有节点",
+          endpoint(e.source, e.sourcePoint) &&
+          endpoint(e.target, e.targetPoint),
+        "流程图连线必须使用唯一 id，端点连接现有节点或提供 sourcePoint/targetPoint 数值坐标",
       );
       assert(
         e.lineType === undefined ||

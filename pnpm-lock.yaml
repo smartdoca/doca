@@ -61,7 +61,7 @@ overrides:
 
 patchedDependencies:
   '@mastra/memory@1.29.0': 60d56858970164a4f0b90b5f380282484f93fef17d89ee36db8a8a4d2ceb02ab
-  '@smartdoca/markdown@0.4.3': 07d0a7d5f48f88dccfae081fee637e1f882a78eb84a629157e9347a620363488
+  '@smartdoca/markdown@0.4.3': ef72ffab67d6316303352f1f55effff258b20adbababfc9e4857ea222fefe81a
   '@smartdoca/slate@0.4.13': 9524bc2f432ac385217164e95fc7021301fe7fc711240fed4809281ce3d55cd6
 
 importers:
@@ -166,7 +166,7 @@ importers:
         version: link:packages/knowledge-capability
       '@smartdoca/markdown':
         specifier: 0.4.3
-        version: 0.4.3(patch_hash=07d0a7d5f48f88dccfae081fee637e1f882a78eb84a629157e9347a620363488)(@babel/runtime@8.0.5)(@codemirror/autocomplete@6.20.3)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.2)(@codemirror/theme-one-dark@6.1.3)(@types/react@19.2.18)(codemirror@6.0.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)(yjs@13.6.32)
+        version: 0.4.3(patch_hash=ef72ffab67d6316303352f1f55effff258b20adbababfc9e4857ea222fefe81a)(@babel/runtime@8.0.5)(@codemirror/autocomplete@6.20.3)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.2)(@codemirror/theme-one-dark@6.1.3)(@types/react@19.2.18)(codemirror@6.0.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)(yjs@13.6.32)
       '@smartdoca/plugin-contracts':
         specifier: workspace:*
         version: link:packages/plugin-contracts
@@ -177,8 +177,8 @@ importers:
         specifier: workspace:*
         version: link:packages/search-host
       '@smartdoca/sheet':
-        specifier: 0.2.0-rc.18
-        version: 0.2.0-rc.18(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: 0.2.0-rc.19
+        version: 0.2.0-rc.19(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@smartdoca/slate':
         specifier: 0.4.13
         version: 0.4.13(patch_hash=9524bc2f432ac385217164e95fc7021301fe7fc711240fed4809281ce3d55cd6)(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1)
@@ -3765,8 +3765,8 @@ packages:
       react-dom: '>=18.2.0'
       yjs: 13.6.32
 
-  '@smartdoca/sheet@0.2.0-rc.18':
-    resolution: {integrity: sha512-NeAPZFzAca7BQzFPuU/EOVL3lM+411lOW5HGw5Uv5cuFgrwOf2E1V8BzfPFgES2bUiEZgO7EHE8MPTUcV+3SsQ==}
+  '@smartdoca/sheet@0.2.0-rc.19':
+    resolution: {integrity: sha512-N67eR3jT4CJ7T2Fyb+rFAVfDnFtfKcyMeIkvFP0D5tDo2C8SX1xiZFpFPpjO1G1PhrCHkOHHXdUXoHX9S0q9zA==}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
@@ -13486,7 +13486,7 @@ snapshots:
       - '@leafer-ui/draw'
       - '@leafer-ui/interface'
 
-  '@smartdoca/markdown@0.4.3(patch_hash=07d0a7d5f48f88dccfae081fee637e1f882a78eb84a629157e9347a620363488)(@babel/runtime@8.0.5)(@codemirror/autocomplete@6.20.3)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.2)(@codemirror/theme-one-dark@6.1.3)(@types/react@19.2.18)(codemirror@6.0.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)(yjs@13.6.32)':
+  '@smartdoca/markdown@0.4.3(patch_hash=ef72ffab67d6316303352f1f55effff258b20adbababfc9e4857ea222fefe81a)(@babel/runtime@8.0.5)(@codemirror/autocomplete@6.20.3)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.2)(@codemirror/theme-one-dark@6.1.3)(@types/react@19.2.18)(codemirror@6.0.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)(yjs@13.6.32)':
     dependencies:
       '@codemirror/commands': 6.11.0
       '@codemirror/lang-markdown': 6.5.2
@@ -13531,7 +13531,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@smartdoca/sheet@0.2.0-rc.18(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@smartdoca/sheet@0.2.0-rc.19(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@antv/g2': 5.4.8
       '@univerjs/core': 0.25.1(react@19.2.8)(rxjs@7.8.2)

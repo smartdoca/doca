@@ -54,7 +54,6 @@ import { MessageSquare, PanelRightClose, X } from "lucide-react";
 import {
   api,
   assetUrl,
-  uploadFile,
   roleRank,
   type Detail,
   type User,
@@ -79,7 +78,7 @@ import "@smartdoca/slate/style.css";
 import "@web/features/documents/editor.css";
 import "@web/features/documents/document-page-width.css";
 import { EditorToolbar } from "@web/features/documents/editor-toolbar.js";
-import { documentUploadProblem } from "./document-upload.js";
+import { documentUploadProblem, uploadDocumentResource } from "./document-upload.js";
 import { OutlineDrawer } from "@web/features/documents/outline-drawer.js";
 import { DocumentOutline } from "@web/features/documents/document-outline.js";
 import { documentPageLayout } from "@web/features/documents/document-page-layout.js";
@@ -587,16 +586,7 @@ function RichDocument({
     const upload: NonNullable<ResourceConfig["uploadImage"]> = async (
       file,
       context,
-    ) => {
-      const asset = await uploadFile(file, "attachment", id, context.signal);
-      context.onProgress(1);
-      return {
-        path: asset.id,
-        name: asset.filename,
-        size: asset.size,
-        mimeType: asset.mime,
-      };
-    };
+    ) => uploadDocumentResource(file, context, id);
     return {
       uploadImage: upload,
       uploadVideo: upload,

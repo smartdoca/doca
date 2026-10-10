@@ -117,7 +117,7 @@ export const bookAssistantActionSchema = z.discriminatedUnion("action", [
       bookId: z.string().uuid(),
       taskId: z.string().uuid(),
       expectedRevision: z.number().int().min(1),
-      decision: z.enum(["approve", "reject", "retry"]),
+      decision: z.enum(["approve", "reject", "retry", "resume"]),
       note: z.string().max(20000),
     })
     .strict(),
@@ -150,6 +150,7 @@ export const bookAssistantInputSchema = z
         operation: z.enum([
           "workflow.node.add",
           "run.retry",
+          "run.resume",
           "feedback.withdraw",
           "source.remove",
           "configuration.patch",
@@ -230,7 +231,7 @@ export const bookAssistantInputSchema = z
       .optional(),
     taskId: z.string().uuid().optional().describe("Required for resolve_task; use the actual human_tasks item.id."),
     expectedRevision: z.number().int().min(1).optional().describe("REQUIRED for resolve_task: copy the selected human_tasks item.revision into this ROOT field. Never omit it or put it under command."),
-    decision: z.enum(["approve", "reject", "retry"]).optional().describe("Required for resolve_task. Technical repair uses retry; human review/publication approval requires the user's explicit decision."),
+    decision: z.enum(["approve", "reject", "retry", "resume"]).optional().describe("Required for resolve_task. Technical repair continues the same frozen pipeline with resume. Retry starts a new pipeline under the current configuration. Human review/publication approval requires the user's explicit decision."),
     note: z.string().max(20000).optional().describe("Required for resolve_task; provide a string, including an empty string if no note is needed."),
   })
   .strict();

@@ -2,6 +2,8 @@ import { expect, it, vi } from "vitest";
 import {
   fetchWebPage,
   fetchWebFile,
+  fetchWebSourceHTML,
+  validatePublicWebSourceUrl,
   extractWebText,
   isPublicAddress,
   publicWebUrl,
@@ -16,6 +18,148 @@ import {
 } from "@core/modules/ai/config.js";
 import { openTestDatabase } from "./database.js";
 const publicDns = async () => [{ address: "93.184.216.34", family: 4 }];
+
+it("validates public source addresses before delegating to an external reader", async () => {
+  await expect(
+    validatePublicWebSourceUrl("https://example.com", undefined, publicDns),
+  ).resolves.toBeUndefined();
+  for (const url of [
+    "http://127.0.0.1/private",
+    "http://[::1]/private",
+    "https://user:secret@example.com",
+  ]) {
+    await expect(
+      validatePublicWebSourceUrl(url, undefined, publicDns),
+    ).rejects.toMatchObject({ status: 400 });
+  }
+  for (const addresses of [
+    [],
+    [{ address: "10.0.0.1", family: 4 }],
+    [...(await publicDns()), { address: "10.0.0.1", family: 4 }],
+  ]) {
+    await expect(
+      validatePublicWebSourceUrl(
+        "https://example.com",
+        undefined,
+        async () => addresses,
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+  }
+  const resolve = vi.fn(publicDns);
+  await expect(
+    validatePublicWebSourceUrl(
+      "https://example.com",
+      AbortSignal.abort(new Error("Cancelled")),
+      resolve,
+    ),
+  ).rejects.toThrow("Cancelled");
+  expect(resolve).not.toHaveBeenCalled();
+});
+
+it("reads section HTML through the built-in reader when it is selected", async () => {
+  const html = '<main><section id="chosen">Section content</section></main>';
+  const result = await fetchWebSourceHTML(
+    "https://example.com/article#chosen",
+    undefined,
+    {
+      resolve: publicDns,
+      request: async () => page(html),
+    },
+    { provider: "builtin" },
+  );
+  expect(result).toEqual({ url: "https://example.com/article", html });
+  await expect(
+    fetchWebSourceHTML(
+      "https://example.com/article#chosen",
+      undefined,
+      {
+        resolve: publicDns,
+        request: async () =>
+          page("body", 200, { "content-type": "text/plain" }),
+      },
+      { provider: "builtin" },
+    ),
+  ).rejects.toMatchObject({ status: 400 });
+});
+
+it("requests complete HTML from the configured Firecrawl service for section links", async () => {
+  const html = '<main><section id="chosen">Section content</section></main>';
+  const scrape = vi.fn(async () => ({ rawHtml: html }));
+  const firecrawlFactory = vi.fn(() => ({ scrape }));
+  const request = vi.fn<PageTransport>();
+  const result = await fetchWebSourceHTML(
+    "https://example.com/article#chosen",
+    undefined,
+    { firecrawlFactory: firecrawlFactory as any, request },
+    {
+      provider: "firecrawl",
+      baseUrl: "http://firecrawl:3002",
+      apiKey: "secret",
+    },
+  );
+  expect(firecrawlFactory).toHaveBeenCalledWith(
+    expect.objectContaining({
+      apiUrl: "http://firecrawl:3002",
+      apiKey: "secret",
+    }),
+  );
+  expect(scrape).toHaveBeenCalledWith("https://example.com/article", {
+    formats: ["rawHtml"],
+    onlyMainContent: false,
+    timeout: 60000,
+  });
+  expect(result).toEqual({ url: "https://example.com/article", html });
+  expect(request).not.toHaveBeenCalled();
+});
+
+it("requests HTML from the configured Jina Reader without losing anchor IDs", async () => {
+  const html = '<section id="chosen">Section content</section>';
+  const fetcher = vi.fn<typeof fetch>(async (url, init) => {
+    expect(String(url)).toBe(
+      "https://reader.example/https://example.com/article",
+    );
+    expect(new Headers(init?.headers).get("x-respond-with")).toBe("html");
+    expect(new Headers(init?.headers).get("authorization")).toBe(
+      "Bearer secret",
+    );
+    return new Response(html);
+  });
+  const result = await fetchWebSourceHTML(
+    "https://example.com/article#chosen",
+    undefined,
+    { fetcher },
+    { provider: "jina", baseUrl: "https://reader.example", apiKey: "secret" },
+  );
+  expect(result.html).toBe(html);
+});
+
+it("rejects readers without HTML support and incomplete HTML responses without a direct fallback", async () => {
+  const fetcher = vi.fn<typeof fetch>();
+  const request = vi.fn<PageTransport>();
+  const firecrawlFactory = vi.fn(() => ({
+    scrape: vi.fn(async () => ({ markdown: "# Page" })),
+  }));
+  await expect(
+    fetchWebSourceHTML(
+      "https://example.com/article#chosen",
+      undefined,
+      { fetcher, request, firecrawlFactory: firecrawlFactory as any },
+      { provider: "tavily" },
+    ),
+  ).rejects.toMatchObject({ status: 422 });
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(firecrawlFactory).not.toHaveBeenCalled();
+  await expect(
+    fetchWebSourceHTML(
+      "https://example.com/article#chosen",
+      undefined,
+      { request, firecrawlFactory: firecrawlFactory as any },
+      { provider: "firecrawl" },
+    ),
+  ).rejects.toMatchObject({ status: 502 });
+  expect(request).not.toHaveBeenCalled();
+});
+
 it.each([429, 500, 502, 503, 504])(
   "privately identifies temporary file HTTP %s failures without changing public errors",
   async (status) => {

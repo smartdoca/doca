@@ -4,7 +4,6 @@ import {
   useEffect,
   useRef,
   type ReactNode,
-  type CSSProperties,
 } from "react";
 import { Alert, Button, Collapse, Tag, Drawer } from "antd";
 import {
@@ -25,7 +24,7 @@ import type {
 } from "@core/modules/knowledge-books/run-logs.js";
 import { systemErrorMessage, type MessageKey } from "@doca/i18n";
 import { useI18n } from "@web/shared/i18n.js";
-import { BookGraph } from "./book-graph.js";
+import { BookGraph } from "./book-graph-view.js";
 import MarkdownPreview from "@web/features/documents/markdown-preview.js";
 
 export type BookPipelineRun = {
@@ -41,7 +40,7 @@ export type BookPipelineRun = {
   configuration: BookConfiguration;
   logs: BookRunLog[];
   restricted: boolean;
-  artifact: BookArtifact | null;
+  artifact: Pick<BookArtifact, "pages" | "checks"> | null;
   nodes: Array<{
     nodeId: string;
     type: string;
@@ -122,18 +121,23 @@ export function BookRunPipeline({
   canEdit,
   cancel,
   repair,
+  retry,
+  busy,
   humanTasks,
 }: {
   run: BookPipelineRun;
   canEdit: boolean;
   cancel: () => void;
   repair: () => void;
+  retry: () => void;
+  busy: boolean;
   humanTasks: (nodeId: string) => ReactNode;
 }) {
   const { t } = useI18n(),
     [selected, select] = useState<string>();
   const host = useRef<HTMLElement>(null),
     [width, setWidth] = useState(0);
+  useEffect(() => select(undefined), [run.id]);
   useEffect(() => {
     if (!host.current) return;
     const observer = new ResizeObserver((entries) =>
@@ -165,6 +169,7 @@ export function BookRunPipeline({
       total: entry.total ?? "",
     });
   const execution = {
+    viewId: run.id,
     selectedId: selected,
     states: Object.fromEntries(
       workflow.nodes.map((node) => [
@@ -178,10 +183,14 @@ export function BookRunPipeline({
         const fact = facts.get(node.id);
         return [
           node.id,
-          fact?.reusedFromRunId
+          !fact
+            ? bt("pipelineNotStarted")
+            : fact.reusedFromRunId
             ? bt("pipelineReused")
             : fact?.status === "completed" && last?.code.startsWith("waiting")
               ? label("completed")
+              : fact.status === "completed" && last?.code === "node_completed"
+                ? bt("pipelineOutputCounts", { pages: last.value ?? 0, claims: last.total ?? 0 })
               : last
                 ? logLabel(last)
                 : fact
@@ -207,11 +216,6 @@ export function BookRunPipeline({
     <section
       ref={host}
       className="book-run-pipeline"
-      style={
-        {
-          "--run-canvas-height": `${Math.min(850, Math.max(320, ...workflow.nodes.map((node) => node.position.y + 164)))}px`,
-        } as CSSProperties
-      }
       aria-label={bt("pipeline")}
     >
       <header className="book-run-heading">
@@ -241,7 +245,10 @@ export function BookRunPipeline({
               </Button>
             )}
           {canEdit && run.status === "failed" && (
-            <Button onClick={repair}>{bt("assistantRepair")}</Button>
+            <>
+              <Button type="primary" loading={busy} onClick={retry}>{bt("resumeRun")}</Button>
+              <Button onClick={repair}>{bt("assistantRepair")}</Button>
+            </>
           )}
         </div>
       </header>
@@ -249,13 +256,12 @@ export function BookRunPipeline({
         <Alert
           type="error"
           showIcon
-          message={systemErrorMessage(run.error, t)}
+          title={systemErrorMessage(run.error, t)}
         />
       )}
-      {run.restricted && <Alert type="warning" message={bt("restricted")} />}
+      {run.restricted && <Alert type="warning" title={bt("restricted")} />}
       {!!width && (
         <BookGraph
-          key={columns}
           workflow={workflow}
           execution={execution}
           selected={select}
@@ -293,7 +299,7 @@ export function BookRunPipeline({
             <Alert
               type="error"
               showIcon
-              message={systemErrorMessage(fact.error, t)}
+              title={systemErrorMessage(fact.error, t)}
             />
           )}
           <div
@@ -340,7 +346,7 @@ export function BookRunPipeline({
                     <Alert
                       key={check.criterionId}
                       type={check.passed ? "success" : "error"}
-                      message={check.criterionId}
+                      title={check.criterionId}
                       description={check.reason}
                     />
                   ))}

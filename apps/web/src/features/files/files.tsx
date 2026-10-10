@@ -36,12 +36,12 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent, } from "react";
+import { lazy, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent, } from "react";
 import { htmlLang } from "@doca/i18n";
 import { useI18n } from "@web/shared/i18n.js";
 import { createPortal } from "react-dom";
-import { OpenFileViewerPreview } from "./open-file-viewer-preview.js";
-import "@open-file-viewer/core/style.css";
+import { LazyContent } from "@web/shared/components/lazy-content.js";
+const OpenFileViewerPreview = lazy(() => import("./open-file-viewer-preview.js").then((module) => ({ default: module.OpenFileViewerPreview })));
 import {
   api,
   fileUrl,
@@ -253,7 +253,7 @@ export function FileGlyph({
 }
 
 function Preview({ file }: { file: FileItem }) {
-  return <OpenFileViewerPreview file={file} />;
+  return <LazyContent><OpenFileViewerPreview file={file} /></LazyContent>;
 }
 
 function PreviewPanel({

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SPREADSHEET_MENU_PATHS } from "@smartdoca/sheet";
 import type {
   SpreadsheetCellRenderer,
   SpreadsheetEditorHandle,
   SpreadsheetCommentAnchor,
   SpreadsheetCellRange,
+  SpreadsheetMenuExtension,
 } from "@smartdoca/sheet";
 import {
   isPluginElementPayload,
@@ -34,13 +35,9 @@ export function useSheetPluginElements(
   editable: boolean,
 ) {
   const { locale, t } = useI18n();
-  usePluginElements("spreadsheet");
+  const providers = usePluginElements("spreadsheet");
   const registryRevision = webPluginRegistry.elements.snapshot();
   const [session, setSession] = useState<ElementDialogSession | null>(null);
-  const [slot, setSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    setSlot(document.getElementById("editor-toolbar-slot"));
-  }, [documentId]);
   useEffect(() => {
     if (!editable) setSession(null);
   }, [editable]);
@@ -201,7 +198,7 @@ export function useSheetPluginElements(
       viewRefresh.cancel();
     };
   }, [handle, locale, registryRevision, abort, viewRefresh]);
-  const open = () => {
+  const open = useCallback(() => {
     if (!handle || !editable || handle.getFormatState().editing) return;
     const selection = handle.getSelection();
     if (
@@ -291,26 +288,29 @@ export function useSheetPluginElements(
             }
           : undefined,
     });
-  };
+  }, [handle, editable, abort, t]);
+  const menus = useMemo<SpreadsheetMenuExtension[]>(
+    () => [
+      {
+        id: "doca-plugin-elements",
+        title: t("editor.element.insert"),
+        ariaLabel: t("editor.element.insert"),
+        path: SPREADSHEET_MENU_PATHS.toolbarEnd,
+        order: 997,
+        icon: <PackagePlus size={18} />,
+        requiresEditPermission: true,
+        visible: editable && providers.length > 0,
+        enabled: () => !!handle && !handle.getFormatState().editing,
+        action: open,
+      },
+    ],
+    [editable, providers.length, handle, open, t],
+  );
   return {
     renderers,
+    menus,
     ui: (
       <>
-        {slot &&
-          handle &&
-          editable &&
-          createPortal(
-            <button
-              type="button"
-              title={t("editor.element.insert")}
-              aria-label={t("editor.element.insert")}
-              onClick={open}
-            >
-              <PackagePlus size={17} />
-              {t("editor.element.insert")}
-            </button>,
-            slot,
-          )}
         {session && editable && (
           <PluginElementDialog
             documentId={documentId}

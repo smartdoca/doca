@@ -1,0 +1,75 @@
+{
+  "version": "0.1.17",
+  "sourceCommit": "25c36027089d9d8196b6b9f9fd2487321b6baef0",
+  "releaseCommit": "02ae3a9c852362fcef6144fb291adffc27cd59b4",
+  "sameSourceTree": true,
+  "imageDigest": "sha256:30435fa9ef2fa84bfdb9af041a9aef9ebad3d9d65f71aa4bbb697cd83cb6d007",
+  "platforms": [
+    "linux/amd64",
+    "linux/arm64"
+  ],
+  "containerSmoke": [
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "version": "0.1.17",
+      "database": "PostgreSQL",
+      "privateUpload": true,
+      "bigintType": "string",
+      "pngDimensions": [
+        32,
+        24
+      ],
+      "originalMetadataPreserved": true,
+      "damagedFileRejected": true,
+      "failedExtractionRetried": true
+    },
+    {
+      "platform": "linux",
+      "arch": "arm64",
+      "version": "0.1.17",
+      "database": "PostgreSQL",
+      "privateUpload": true,
+      "bigintType": "string",
+      "pngDimensions": [
+        32,
+        24
+      ],
+      "originalMetadataPreserved": true,
+      "damagedFileRejected": true,
+      "failedExtractionRetried": true
+    }
+  ],
+  "tests": {
+    "files": 265,
+    "passed": 2589,
+    "environmentSkipped": 3,
+    "maxWorkers": 4,
+    "postgresAttachmentsPassed": 21,
+    "expandedPostgresPassed": 100,
+    "expandedPostgresBlocked": 19,
+    "blockingCause": "Existing assets.purpose varchar(16) rejects ai_image_candidate (18 characters); schema/offline upgrade not implemented without agreement"
+  },
+  "typecheck": true,
+  "webBuild": true,
+  "bilingualDocumentationPages": 54,
+  "browserCases": [
+    "clear-before-session-response",
+    "clear-before-upload-response",
+    "preserve-next-draft-after-response",
+    "restore-empty-composer-on-failure",
+    "preserve-new-draft-on-failure",
+    "stable-request-id-on-retry",
+    "preserve-new-draft-on-retry",
+    "png-vision-dispatch"
+  ],
+  "pluginSDK": "0.1.10",
+  "sdkExportsChanged": false,
+  "userDocumentsOrProductionDatabaseModified": false,
+  "assetCount": 437,
+  "platformAssetsIdentical": true,
+  "githubReleaseWebAssetsIdentical": true,
+  "githubReleaseArchiveSHA256": "222026e4816401af928541e09c62f5ccfb64eab25bf177e382c4650a753bdfb4",
+  "latestDigest": "sha256:30435fa9ef2fa84bfdb9af041a9aef9ebad3d9d65f71aa4bbb697cd83cb6d007",
+  "sdkTreeUnchangedFromPreviousRelease": true
+}

@@ -10,7 +10,7 @@ Host 0.1.11 integrates five editors. Use actual installed exports; target interf
 | --- | --- | --- |
 | Rich text | @smartdoca/slate 0.4.13 | document-editor.tsx |
 | Markdown | @smartdoca/markdown 0.4.3 | markdown-editor.tsx |
-| Spreadsheet | @smartdoca/sheet 0.2.0-rc.18 | spreadsheet-editor.tsx |
+| Spreadsheet | @smartdoca/sheet 0.2.0-rc.19 | spreadsheet-editor.tsx |
 | Canvas | @smartdoca/canvas 0.4.2 | canvas-editor.tsx |
 | Slides | @smartdoca/slides 0.3.0-alpha.2 | presentation-editor.tsx |
 
@@ -47,3 +47,11 @@ Installed providers contribute templates, materials, and document elements, with
 ## Verification scope
 
 Check installed README, exports, and schema before upgrades. Use isolated documents for real file roundtrips, readonly guards, authorized assets, two-page sync, receipts, and reload. A cell-edit test does not establish convergence for every spreadsheet operation; a successful build does not establish device acceptance. Early integration/acceptance records remain in [research](research.md).
+
+## Rich-text diagram and upload integration — 2026-10-10
+
+The host toolbar inserts flowcharts and mind maps through the installed 0.4.13 `commands.insertBlock` API with complete native elements. It does not use `toggleBlock` to convert a paragraph into an incomplete diagram. Whole-block comments and AI references share the current block-anchor contract; native diagram labels do not gain user-mention support.
+
+The upload adapter forwards real asset-transfer bytes to `UploadContext.onProgress` as a fraction, keeping progress below 1 until the asset service succeeds. Image, video and attachment commands keep their native placeholders, cancellation, retry and undo lifecycle.
+
+AI diagram edits read the complete block rather than reconstructing it from outline labels. Node fill/border/text colors use `fillColor`/`color`/`textColor`; edge color/width use `color`/`thickness`. A free endpoint uses the SDK's empty source/target ID plus `sourcePoint`/`targetPoint`; an unknown nonempty ID is rejected. Updating nodes, edges or mindData invalidates the generated SVG and its derived bounds in the same native content transaction. Width-only changes retain that preview. No stored-format adapter, automatic conversion, compatibility plan or migration is introduced. Existing historical readers are unchanged.

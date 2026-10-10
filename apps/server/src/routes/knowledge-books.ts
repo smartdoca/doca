@@ -16,6 +16,7 @@ import {
   readKnowledgeBook,
   readBookRelease,
   readBookRun,
+  readBookPipeline,
 } from "@core/modules/knowledge-books/reads.js";
 import { recoverBookRuns } from "@core/modules/knowledge-books/recovery.js";
 import { executeBookRun } from "@core/modules/knowledge-books/engine.js";
@@ -160,7 +161,7 @@ export function registerKnowledgeBooks(
     Params: { id: string };
     Body: {
       expectedRevision: number;
-      decision: "approve" | "reject" | "retry";
+      decision: "approve" | "reject" | "retry" | "resume";
       note: string;
     };
   }>(
@@ -175,6 +176,7 @@ export function registerKnowledgeBooks(
               Type.Literal("approve"),
               Type.Literal("reject"),
               Type.Literal("retry"),
+              Type.Literal("resume"),
             ]),
             note: Type.String({ maxLength: 20000 }),
           },
@@ -303,6 +305,11 @@ export function registerKnowledgeBooks(
         request.params.id,
         request.params.targetId,
       ),
+  );
+  api.get<{ Params: { id: string; targetId: string } }>(
+    "/api/v1/knowledge-books/:id/runs/:targetId/pipeline",
+    { schema: { params: scoped } },
+    (request) => readBookPipeline(db, auth(request), request.params.id, request.params.targetId),
   );
   let stopped = false,
     processing: Promise<void> | null = null,

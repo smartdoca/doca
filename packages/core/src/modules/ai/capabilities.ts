@@ -74,7 +74,7 @@ function compactEditingGuide(format: string, skillId?: string) {
   const ops = commands[format as keyof typeof commands] ?? [];
   const extra =
     format === "rich_text"
-      ? "删除块用 {type:\"deleteBlock\",blockId}，不要用 remove。替换文字用 text，deleteCount 用读取到的 textLength（UTF-16，一个汉字算 1），不能猜。改表格文字用 setCellContent，cellId 用 cells[].id；局部修改才用 text，blockId 用该格 paragraphId。原生图用 insertBlock type:\"flowchart\" 或 mindmap，不要编造 node/graphic。单元格图片用 setCellContent，children 直接是 {type:\"image\",path:\"资产ID\",children:[{text:\"\"}]}，不要套 paragraph，不要写 assetId。"
+      ? "删除块用 {type:\"deleteBlock\",blockId}，不要用 remove。替换文字用 text，deleteCount 用读取到的 textLength（UTF-16，一个汉字算 1），不能猜。改表格文字用 setCellContent，cellId 用 cells[].id；局部修改才用 text，blockId 用该格 paragraphId。原生图用 insertBlock type:\"flowchart\" 或 mindmap，不要编造 node/graphic。改图先按 blockId 读取完整块，不能用 outline.nodes 的短预览重建。流程图 setBlock properties.nodes 保留节点 ID/坐标/尺寸，节点填充=fillColor、边框=color、文字=textColor；连线用 properties.edges 的 color/thickness，保留端点/端口/vertices。图块顶层不接受 color/backgroundColor/style，图内不能用 formatText 或画板 fill/stroke。思维导图改完整 properties.mindData，节点 color/style；保留层级/ID/direction。不要手写 previewSvg/previewVersion。单元格图片用 setCellContent，children 直接是 {type:\"image\",path:\"资产ID\",children:[{text:\"\"}]}，不要套 paragraph，不要写 assetId。"
       : format === "spreadsheet"
         ? "cells 必须带 sheetId。用 sheetOrder[0]；写 Sheet1 也会解析。常量只写 v，公式只写 f，不要写 f:null。"
         : format === "presentation"

@@ -1,4 +1,5 @@
 import { prepareRunReuse, retryBookRun } from "./retry.js";
+import { resumeBookRun } from "./resume.js";
 import { transact } from "@db/transactions.js";
 import type { BookSourceRuntime } from "./sources.js";
 import type { BookFeedbackMethod } from "./feedback-origin.js";
@@ -32,6 +33,9 @@ export const bookCommandSchema = z.discriminatedUnion("operation", [
       inputs: z.array(bookNodeSchema.shape.id).max(40),
       outputs: z.array(bookNodeSchema.shape.id).max(40),
     })
+    .strict(),
+  z
+    .object({ operation: z.literal("run.resume"), runId: z.string().uuid() })
     .strict(),
   z
     .object({ operation: z.literal("run.retry"), runId: z.string().uuid() })
@@ -127,6 +131,7 @@ export async function executeBookCommand(
 ) {
   const command = bookCommandSchema.parse(raw);
   switch (command.operation) {
+    case "run.resume": return resumeBookRun(db, actor, id, command.runId, runtime);
     case "run.retry": {
       await bookAccess(db, actor, id, 3);
       const prior = await db

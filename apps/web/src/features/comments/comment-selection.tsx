@@ -49,7 +49,7 @@ export function SelectionCommentAction({
   const [toolbar, setToolbar] = useState<HTMLElement | null>(null),
     [rect, setRect] = useState<{ left: number; top: number } | null>(null);
   const picked = useRef<HTMLElement | null>(null);
-  const mediaSelector = ".sk-image, .sk-video, .sk-attachment";
+  const mediaSelector = ".sk-image, .sk-video, .sk-attachment, .sk-diagram-figure";
   const selectMedia = (el: HTMLElement) => {
     const editor = handle.current?.editor;
     if (!editor) return;
@@ -74,7 +74,7 @@ export function SelectionCommentAction({
         picked.current && h.contains(picked.current) ? picked.current : null;
       const media =
         h.querySelector<HTMLElement>(
-          ".sk-image.is-selected, .sk-video.is-selected, .sk-attachment.is-selected",
+          ".sk-image.is-selected, .sk-video.is-selected, .sk-attachment.is-selected, .sk-diagram-figure.is-selected",
         ) ?? held;
       if (media) {
         const r = media.getBoundingClientRect();
@@ -188,7 +188,7 @@ export function SelectionCommentAction({
   ) : null;
   const mediaSelected = Boolean(
     host.current?.querySelector(
-      ".sk-image.is-selected, .sk-video.is-selected, .sk-attachment.is-selected",
+      ".sk-image.is-selected, .sk-video.is-selected, .sk-attachment.is-selected, .sk-diagram-figure.is-selected",
     ) ||
       (picked.current && host.current?.contains(picked.current)),
   );

@@ -524,7 +524,8 @@ export async function editAIDocument(
         ).epoch_id;
         schemaVersion = 3;
         const vector = Y.encodeStateVector(l.doc);
-        for (const op of operations) {
+        for (const operation of operations) {
+          let op = operation;
           if (op.type === "setBlock") {
             const find = (nodes: any[]): any => {
               for (const node of nodes) {
@@ -535,6 +536,20 @@ export async function editAIDocument(
             };
             const existing = find(l.runtime.getValue());
             if (!existing) fail(400, "文字块不存在");
+            // Native previews are derived from diagram data. Keeping one after
+            // an AI edit makes the package render the old SVG over the new model.
+            if (
+              (existing.type === "flowchart" && ("nodes" in op.properties || "edges" in op.properties)) ||
+              (existing.type === "mindmap" && "mindData" in op.properties)
+            ) {
+              op = {
+                ...op,
+                unset: [...new Set([
+                  ...(op.unset ?? []),
+                  "previewSvg", "previewVersion", "contentWidth", "contentHeight", "aspectRatio",
+                ])],
+              };
+            }
             const next = { ...existing, ...op.properties };
             for (const key of op.unset ?? []) delete next[key];
             validateRichNode(next);

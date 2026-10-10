@@ -4,6 +4,7 @@ import { bookFeedbackInputSchema } from "./protocol.js";
 import { bookAccess, bookInputSnapshot } from "./management.js";
 import { validateBookSource, canReadBookFeedback } from "./sources.js";
 import { bookFail as fail } from "./errors.js";
+import { isFrozenBookResume } from "./resume.js";
 
 /** Revalidate the run and contributor grants before every vendor call, including batches and repairs. */
 export async function validateBookModelAccess(
@@ -29,8 +30,8 @@ export async function validateBookModelAccess(
   const { book } = await bookAccess(db, actor, run.book_id, 3),
     snapshot = await bookInputSnapshot(db, run.book_id);
   if (
-    book.revision !== run.configuration_revision ||
-    book.configuration !== run.configuration ||
+    ((book.revision !== run.configuration_revision ||
+    book.configuration !== run.configuration) && !await isFrozenBookResume(db, run.id)) ||
     snapshot.hash !== run.input_hash
   )
     fail(409, "Workflow inputs changed; run again");

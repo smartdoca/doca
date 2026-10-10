@@ -86,3 +86,11 @@ All five host formats use the shared transport/ACK lifecycle and implement conte
 ## Attachment preview increment — 2026-10-04
 
 Host 0.1.11 installs `@smartdoca/slate` 0.4.13 and `@smartdoca/sheet` 0.2.0-rc.18. Both export `onAttachmentPreview`: rich text receives `AttachmentElement` with a stable asset path and metadata; spreadsheet receives `SpreadsheetAttachmentPreviewEvent` with `node.refId/label` and the current cell location. Stable host callbacks open the existing `DocumentFilePreview` through permission-checked asset endpoints, including readonly/history/trash views. Rich text's edit-mode first click selects, subsequent click or preview button previews; readonly previews on the first click. Spreadsheet previews native inline attachment-label clicks. Existing whole-cell objects are still rendered through their current API. Preview remains view state: no codec, schema, epoch, checkpoint, outbox, migration or stored-data change. Do not reintroduce DOM/selection-based attachment lookup or store resolved preview URLs in document nodes.
+
+## Rich-text diagram and upload integration — 2026-10-10
+
+The host toolbar inserts flowcharts and mind maps through the installed 0.4.13 `commands.insertBlock` API with complete native elements. It does not use `toggleBlock` to convert a paragraph into an incomplete diagram. Whole-block comments and AI references share the current block-anchor contract; native diagram labels do not gain user-mention support.
+
+The upload adapter forwards real asset-transfer bytes to `UploadContext.onProgress` as a fraction, keeping progress below 1 until the asset service succeeds. Image, video and attachment commands keep their native placeholders, cancellation, retry and undo lifecycle.
+
+AI diagram edits read the complete block rather than reconstructing it from outline labels. Node fill/border/text colors use `fillColor`/`color`/`textColor`; edge color/width use `color`/`thickness`. A free endpoint uses the SDK's empty source/target ID plus `sourcePoint`/`targetPoint`; an unknown nonempty ID is rejected. Updating nodes, edges or mindData invalidates the generated SVG and its derived bounds in the same native content transaction. Width-only changes retain that preview. No stored-format adapter, automatic conversion, compatibility plan or migration is introduced. Existing historical readers are unchanged.

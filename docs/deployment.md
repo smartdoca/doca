@@ -118,6 +118,10 @@ This does not create an account and it is not available over HTTP. If the databa
 
 The HTML page and the API stay on `DOCA_ORIGIN`. `DOCA_ASSET_BASE` changes only `/assets/...` URLs inside that HTML.
 
+The server negotiates Brotli (`br`), gzip, or original bytes using `Accept-Encoding` and sends `Vary: Accept-Encoding`. URLs and built files stay unchanged, including existing build directories. HTML asset URLs are rewritten before compression. The server uses a bounded 32 MiB per-process cache of encoded public static resources; it does not add compressed copies to the image or compress private API/file responses through this route. Proxies/CDNs must preserve encoding negotiation and `Vary`, or handle compression themselves. This affects browser transfers; Docker uses its own image-layer compression and cache.
+
+The built `/cad/` worker files and WASM use the same encoding negotiation and retain `no-cache` because their names are not hashed. Paths outside the declared CAD assets remain unavailable.
+
 Leave it unset to serve JavaScript, CSS, and the other built files from the container at `/assets`. When you set it, use an HTTP(S) prefix with no userinfo, query, hash, or trailing slash:
 
 ```text

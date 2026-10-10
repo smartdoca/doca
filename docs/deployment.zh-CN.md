@@ -118,6 +118,10 @@ bash scripts/reset-admin-password.sh
 
 HTML 页面和接口留在 `DOCA_ORIGIN`。`DOCA_ASSET_BASE` 只改写这份 HTML 里的 `/assets/...` 地址。
 
+服务端根据 `Accept-Encoding` 协商 Brotli（`br`）、gzip 或原始字节，并返回 `Vary: Accept-Encoding`。资源 URL 和构建文件不变，已有构建目录也可使用；HTML 中的资源前缀先改写、再压缩。每个进程最多缓存 32 MiB 已编码的公开静态资源，不向镜像添加额外压缩副本，也不通过此路由压缩私有 API 或文件响应。反向代理/CDN 须保留编码协商和 `Vary`，或自行处理压缩。这项优化影响浏览器传输；Docker 使用自己的镜像层压缩和缓存。
+
+构建出的 `/cad/` worker 和 WASM 同样支持编码协商；由于文件名不带哈希，继续使用 `no-cache`。声明以外的 CAD 路径不开放。
+
 留空时，JavaScript、CSS 和其他构建文件由容器从 `/assets` 提供。填写时使用没有账号信息、查询参数、哈希或末尾斜杠的 HTTP(S) 前缀：
 
 ```text

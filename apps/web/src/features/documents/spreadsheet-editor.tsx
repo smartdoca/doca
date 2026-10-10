@@ -126,6 +126,7 @@ export default function SheetDocument({
   const elements = useSheetPluginElements(id, handle, editable);
   const menus = useMemo<SpreadsheetMenuExtension[]>(
     () => [
+      ...elements.menus,
       { id: "doca-ai", title: "引用给 AI", ariaLabel: "引用给 AI", path: "ribbon.others.others", order: 998, icon: <AtSign size={18} />, requiresEditPermission: false, enabled: context => !!context.selection && !!aiRef.current?.userId, action: () => aiRef.current?.add() },
       {
         id: "doca-region-comment",
@@ -141,7 +142,7 @@ export default function SheetDocument({
         action: () => createComment.current(),
       },
     ],
-    [rank, sync.connected, sync.blocked],
+    [elements.menus, rank, sync.connected, sync.blocked],
   );
   const publish = useCallback(
     (selection: SpreadsheetCellSelection | null) => {

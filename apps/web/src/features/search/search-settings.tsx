@@ -158,11 +158,7 @@ export function SearchSettings() {
         enqueue: t("searchAdmin.enqueue"),
         waiting: t("searchAdmin.waiting"),
       }[data.reconciliation.phase];
-  const syncError =
-    data.syncDiagnostic ||
-    data.embedding?.notice ||
-    data.lastError ||
-    data.reconciliation.lastError;
+  const syncError = data.lastError || data.reconciliation.lastError;
   return (
     <div className="search-settings-layout">
       <section
@@ -376,7 +372,10 @@ export function SearchSettings() {
               </div>
             )}
             {data.embedding &&
-              (data.embedding.error || data.embedding.taskUid !== null) && (
+              (data.syncDiagnostic ||
+                data.embedding.notice ||
+                data.embedding.error ||
+                data.embedding.taskUid !== null) && (
                 <details className="search-sync-diagnostics">
                   <summary>{t("searchAdmin.diagnostics")}</summary>
                   <p>
@@ -406,6 +405,9 @@ export function SearchSettings() {
                     </p>
                   )}
                   {data.embedding.error && <pre>{data.embedding.error}</pre>}
+                  {(data.syncDiagnostic || data.embedding.notice) && (
+                    <p>{data.syncDiagnostic || data.embedding.notice}</p>
+                  )}
                 </details>
               )}
           </div>

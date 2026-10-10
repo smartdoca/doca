@@ -72,7 +72,7 @@ export function BookGraph({
   added,
   execution,
 }: {
-  execution?: { states: Readonly<Record<string, string>>; summaries: Readonly<Record<string, string>>; selectedId?: string };
+  execution?: { viewId: string; states: Readonly<Record<string, string>>; summaries: Readonly<Record<string, string>>; selectedId?: string };
   workflow?: BookWorkflow;
   provenance?: { nodes: ProvenanceNode[]; edges: ProvenanceEdge[] };
   editable?: boolean;
@@ -88,6 +88,8 @@ export function BookGraph({
   const syncing = useRef(false),
     fitted = useRef(false),
     selectedId = useRef<string | null>(null);
+  const rendered = useRef(new Map<string, string>());
+  const viewedExecution = useRef<string | undefined>(undefined);
   const [expanded, setExpanded] = useState(false),
     [zoom, setZoom] = useState(100),
     [paletteVisible, setPaletteVisible] = useState(true),
@@ -141,6 +143,8 @@ export function BookGraph({
     });
     graph.current = canvas;
     fitted.current = false;
+    viewedExecution.current = undefined;
+    rendered.current.clear();
     const update = () => {
       const current = callbacks.current.workflow;
       if (syncing.current || !editable || !current) return;
@@ -202,7 +206,7 @@ export function BookGraph({
     const rows = new Map<number, number>();
     syncing.current = true;
     try {
-      canvas.fromJSON({
+      const model = {
         nodes: nodes.map((node): Node.Metadata => {
           const depth = layers.get(node.id) ?? 0,
             row = rows.get(depth) ?? 0;
@@ -243,6 +247,9 @@ export function BookGraph({
           const state = execution?.states[node.id];
           const stateColor = state === "completed" ? "#19926a" : state === "failed" ? "#d43838" : state === "running" ? "#2563eb" : state === "awaiting_input" || state === "awaiting_publication" ? "#b67c0d" : "#8491a6";
           const style = nodeAppearance[node.type];
+          // Keep the full editable workflow visible at entry. At overview scale,
+          // show readable titles; zooming in restores the rule and scope details.
+          const condensed = editable && zoom < 65;
           const summary =
             execution?.summaries[node.id] ||
             plainLabel(node.parameters.instructions) ||
@@ -294,6 +301,7 @@ export function BookGraph({
                 fill: "#fff",
               },
               iconBody: {
+                opacity: condensed ? 0 : 1,
                 x: 12,
                 y: 12,
                 width: 30,
@@ -303,6 +311,7 @@ export function BookGraph({
                 stroke: "none",
               },
               icon: {
+                opacity: condensed ? 0 : 1,
                 refX: 0,
                 refY: 0,
                 x: 27,
@@ -317,17 +326,18 @@ export function BookGraph({
               title: {
                 refX: 0,
                 refY: 0,
-                x: 51,
-                y: 27,
+                x: condensed ? 105 : 51,
+                y: condensed ? 60 : 27,
                 text: label,
-                textAnchor: "start",
+                textAnchor: condensed ? "middle" : "start",
                 textVerticalAnchor: "middle",
-                fontSize: 13,
+                fontSize: condensed ? Math.min(64, 13 / (zoom / 100)) : 13,
                 fontWeight: 600,
                 fill: "#20304a",
-                textWrap: { width: 147, height: 20, ellipsis: true },
+                textWrap: { width: condensed ? 185 : 147, height: condensed ? 100 : 20, ellipsis: true },
               },
               summary: {
+                opacity: condensed ? 0 : 1,
                 refX: 0,
                 refY: 0,
                 x: 13,
@@ -340,8 +350,9 @@ export function BookGraph({
                 fill: "#758198",
                 textWrap: { width: 184, height: 31, ellipsis: true },
               },
-              divider: { d: "M 13 95 L 197 95", stroke: "#edf0f6" },
+              divider: { d: "M 13 95 L 197 95", stroke: "#edf0f6", opacity: condensed ? 0 : 1 },
               scope: {
+                opacity: condensed ? 0 : 1,
                 refX: 0,
                 refY: 0,
                 x: 13,
@@ -392,8 +403,8 @@ export function BookGraph({
             },
           };
         }),
-        edges: edges.map((edge, index) => ({
-          id: `edge-${index}`,
+        edges: edges.map((edge) => ({
+          id: `edge:${encodeURIComponent(edge.source)}:${encodeURIComponent(edge.target)}:${"relation" in edge ? edge.relation : "workflow"}`,
           source: workflow ? { cell: edge.source, port: "out" } : edge.source,
           target: workflow ? { cell: edge.target, port: "in" } : edge.target,
           connector: { name: "rounded" },
@@ -406,26 +417,70 @@ export function BookGraph({
             },
           },
           zIndex: 0,
+          ...("count" in edge && Number(edge.count) > 1
+            ? { labels: [{ attrs: { label: { text: `×${edge.count}`, fill: "#64748b", fontSize: 11 } } }] }
+            : {}),
         })),
+      };
+      // Polling changes node state, not the canvas or its viewport. Keep existing
+      // X6 cells and touch only metadata which actually changed.
+      const wanted = new Set([...model.nodes, ...model.edges].map(cell => cell.id));
+      canvas.batchUpdate(() => {
+        for (const cell of canvas.getCells()) {
+          if (!wanted.has(cell.id)) {
+            canvas.removeCell(cell);
+            rendered.current.delete(cell.id);
+          }
+        }
+        for (const metadata of model.nodes) {
+          const signature = JSON.stringify(metadata);
+          if (rendered.current.get(metadata.id!) === signature) continue;
+          const cell = canvas.getCellById(metadata.id!);
+          if (cell?.isNode()) {
+            cell.setAttrs(metadata.attrs);
+            if (metadata.x !== undefined && metadata.y !== undefined)
+              cell.position(metadata.x, metadata.y);
+            if (metadata.label !== undefined) cell.setProp("label", metadata.label);
+            if (metadata.ports && JSON.stringify(cell.getProp("ports")) !== JSON.stringify(metadata.ports)) cell.setProp("ports", metadata.ports);
+          } else canvas.addNode(metadata);
+          rendered.current.set(metadata.id!, signature);
+        }
+        for (const metadata of model.edges) {
+          const signature = JSON.stringify(metadata);
+          if (rendered.current.get(metadata.id) === signature) continue;
+          const cell = canvas.getCellById(metadata.id);
+          if (cell?.isEdge()) {
+            cell.setAttrs(metadata.attrs);
+            cell.setLabels(metadata.labels ?? []);
+          }
+          else canvas.addEdge(metadata);
+          rendered.current.set(metadata.id, signature);
+        }
       });
     } finally {
       syncing.current = false;
     }
     // Redrawing edited rules or positions must preserve the reader's current view.
-    if (!fitted.current) {
+    const narrow = (host.current?.clientWidth ?? 0) < 420;
+    if (!fitted.current || (narrow && execution?.viewId !== viewedExecution.current)) {
       canvas.zoomToFit({
         padding: 32,
         maxScale: 1,
-        minScale: execution ? 0.08 : workflow ? 0.75 : 0.08,
+        minScale: narrow ? 1 : execution ? 0.65 : 0.08,
       });
-      if (workflow && !execution) {
-        const bounds = canvas.getContentBBox();
+      if (narrow) {
+        const failed = narrow && execution
+          ? workflow?.nodes.find(node => execution.states[node.id] === "failed")
+          : undefined;
+        const bounds = failed ? canvas.getCellById(failed.id)!.getBBox() : canvas.getContentArea();
         const scale = canvas.zoom();
-        canvas.translate(24 - bounds.x * scale, 24 - bounds.y * scale);
+        const left = failed ? ((host.current?.clientWidth ?? 0) - bounds.width * scale) / 2 : 24;
+        canvas.translate(left - bounds.x * scale, 24 - bounds.y * scale);
       }
       fitted.current = true;
     }
-  }, [workflow, provenance, editable, t, execution]);
+    viewedExecution.current = execution?.viewId;
+  }, [workflow, provenance, editable, t, execution, zoom]);
 
   function add(type: BookNodeType) {
     const rect = host.current?.getBoundingClientRect(),
@@ -439,7 +494,7 @@ export function BookGraph({
   }
   return (
     <section
-      className={`book-graph${expanded ? " book-graph-expanded" : ""}${workflow ? " book-workflow-graph" : ""}`}
+      className={`book-graph${expanded ? " book-graph-expanded" : ""}${workflow ? " book-workflow-graph" : ""}${execution ? " book-execution-graph" : ""}`}
     >
       {toolbarVisible && (
         <div className="book-graph-toolbar">
@@ -609,13 +664,14 @@ export function BookGraph({
           />
           <div className="book-graph-hint">
             <MousePointer2 size={13} />
-            {t(
+            <span className="book-graph-help-desktop">{t(
               workflow
                 ? editable
                   ? "books.graphHelp"
                   : execution ? "books.pipelineGraphHelp" : "books.workflowGraphHelp"
                 : "books.provenanceHelp",
-            )}
+            )}</span>
+            <span className="book-graph-help-touch">{t("books.touchGraphHelp")}</span>
           </div>
         </div>
       </div>

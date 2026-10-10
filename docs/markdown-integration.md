@@ -7,7 +7,7 @@
 ## 安装产物
 
 - 来源：`/Users/zhangsiwen/dev/exmd`，`exmd-collaborative-editor@0.2.0`。
-- 本地产物：`vendor/exmd-collaborative-editor-0.2.0-6d85aba8.tgz`。
+- 当时的安装产物：`exmd-collaborative-editor-0.2.0-6d85aba8.tgz`（临时安装包，仓库不保留；当前依赖见根 `package.json`）。
 - npm tarball SHA-1：`6d85aba81511645f1a6954a1275c4b0cffc5fbc5`。
 - 实际构建后运行包内 contract + idle 测试：10 项通过，包含真实等待 60 秒的空闲测试。
 - 按 `doca-collaboration`、`doca-editor-integration` 的职责边界验收；源码测试通过不等于浏览器接入通过。

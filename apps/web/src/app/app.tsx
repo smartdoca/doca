@@ -1,18 +1,17 @@
-import { KnowledgeBooksPage } from "@web/features/knowledge-books/knowledge-books.js";
 import { PluginSlot } from "@web/plugins/extensions.js";
 import { extensionViews } from "@web/plugins/extension-ui.js";
 import { MobilePluginPage } from "@web/plugins/mobile-page.js";
 import { NavigationArea, MoreNavigation, LeftNavigation, navigateToDefaultHome, useNavigationLayout } from "@web/plugins/navigation.js";
 import { isAdminNavigationPath } from "@smartdoca/web-plugin-registry";
 import { WorkspaceHome } from "@web/features/workspace/home.js";
-import { DiscoveryPage } from "@web/features/discovery/discovery.js";
 
 import { pluginRouteScope } from "./plugin-route-scope.js";
 
 import type { MessageKey } from "@doca/i18n";
 import { AIProvider } from "@web/features/ai/ai-context.js";
 import { useI18n } from "@web/shared/i18n.js";
-import { AIChat, AIDocumentLayout } from "@web/features/ai/ai-chat.js";
+import { AIDocumentLayout } from "@web/features/ai/ai-document-layout.js";
+import { LazyContent } from "@web/shared/components/lazy-content.js";
 import "@web/features/account/account-menu.css";
 import { AccountMenu } from "@web/features/account/account-menu.js";
 import { LocaleSwitch } from "@web/features/account/locale-switch.js";
@@ -64,7 +63,6 @@ import {
   TransferDialog,
   MoveDialog,
 } from "@web/features/documents/dialogs.js";
-import { Admin } from "@web/features/admin/admin.js";
 import { AuthCompletion, ExternalLoginOptions } from "@web/features/auth/authentication.js";
 import { DocumentTree } from "@web/features/documents/tree.js";
 import { Dashboard, GlobalSearch } from "@web/features/workspace/dashboard.js";
@@ -101,6 +99,10 @@ import "@web/features/documents/document-tree.css";
 import { DocumentModeContext, DocumentModeSwitch, useDocumentModeState } from "@web/features/documents/document-mode.js";
 import "@web/features/workspace/navigation-collapse.css";
 import { useDesktopNavigation, useNavigationCollapse } from "@web/features/workspace/navigation-collapse.js";
+const Admin = lazy(() => import("@web/features/admin/admin.js").then((module) => ({ default: module.Admin })));
+const KnowledgeBooksPage = lazy(() => import("@web/features/knowledge-books/knowledge-books.js").then((module) => ({ default: module.KnowledgeBooksPage })));
+const DiscoveryPage = lazy(() => import("@web/features/discovery/discovery.js").then((module) => ({ default: module.DiscoveryPage })));
+const AIChat = lazy(() => import("@web/features/ai/ai-chat.js").then((module) => ({ default: module.AIChat })));
 const DocumentEditor = lazy(() =>
   import("@web/features/documents/document-editor.js").then((m) => ({ default: m.DocumentEditor })),
 );
@@ -860,7 +862,7 @@ function WorkspaceApp() {
         {error && <Feedback message={error} tone="error" />}
         {adminPage ? (
           user.admin ? (
-            <Admin activePluginIds={activePluginIds} />
+            <LazyContent><Admin activePluginIds={activePluginIds} /></LazyContent>
           ) : (
             <section className="empty">
               {t("shell.adminOnly")}<a href="#/home">{t("shell.homeLink")}</a>
@@ -1009,13 +1011,6 @@ function WorkspaceApp() {
               >
                 <Settings size={18} />
                 {t("nav.librarySettings")}
-              </a>
-              <a
-                className={librarySystemPage ? "active" : ""}
-                href={librarySystemUrl(currentLibraryId)}
-              >
-                <BookOpenCheck size={18} />
-                {t("nav.librarySystem")}
               </a>
 
             </nav>
@@ -1294,11 +1289,11 @@ function WorkspaceApp() {
           ) : !resourceId && scope === "home" && user ? (
             <><NavigationArea slot="web.home"/><WorkspaceHome name={user.display_name} /></>
           ) : !resourceId && (scope === "discover" || scope === "collected") && user ? (
-            <DiscoveryPage key={scope + hash} collected={scope === "collected"} />
+            <LazyContent><DiscoveryPage key={scope + hash} collected={scope === "collected"} /></LazyContent>
           ) : !resourceId && scope === "knowledge-books" && (user || /^#\/knowledge-books\/[0-9a-f-]{36}/i.test(hash)) ? (
-            <KnowledgeBooksPage id={hash.replace(/^#\/knowledge-books\/?/, "").split("?")[0] || undefined} />
+            <LazyContent><KnowledgeBooksPage id={hash.replace(/^#\/knowledge-books\/?/, "").split("?")[0] || undefined} /></LazyContent>
           ) : !resourceId && scope === "ai" ? (
-            <AIChat full />
+            <LazyContent><AIChat full /></LazyContent>
           ) : ticketsPage ? (
             <Tickets ticketId={ticketId} />
           ) : resourceId ? (

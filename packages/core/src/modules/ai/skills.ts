@@ -44,7 +44,9 @@ Markdown：
 - 分栏：{type:"insertColumnsLayout",count:2或3或4,afterId}，读取真实分栏容器ID后插入内容。
 - 原生流程图【支持且可编辑】：使用 insertBlock 创建 type:"flowchart" 的块。不是 type:"node" 或 type:"graphic" 命令，也不需要生图模型。示例：{type:"insertBlock",afterId:"已有段落ID",block:{id:"新图ID",type:"flowchart",width:600,children:[{text:""}],nodes:[{id:"start",label:"开始",shape:"terminator",x:40,y:40,width:120,height:56},{id:"review",label:"评审",shape:"process",x:240,y:40,width:120,height:56}],edges:[{id:"edge-1",source:"start",target:"review",arrow:"end",lineType:"smoothstep"}]}}。shape 支持 process、decision、terminator、database、document、data、subprocess、actor、use-case、class、note 等；边用 source/target 指向 nodes 中的 ID。
 - 分批扩展或修改同一流程图：先读取该块，使用 {type:"setBlock",blockId:"图ID",properties:{nodes:[保留原节点并添加或修改],edges:[保留原边并添加或修改]}}；不要每批新建一幅图，不删除不相关节点，不猜不存在的 node/graphic 命令。让节点和文字不重叠，边连接正确。不要编造 previewSvg。
+- 流程图配色/样式：先 document_read(resourceId,blockId:"图块ID") 并按 nextOffset 读完完整块；outline.nodes 仅含 ID/label，不能据此重建 nodes。节点保留 id/label/shape/x/y/width/height/parentId 等已有属性，在 nodes 中修改 fillColor（填充）、color（边框）、textColor（文字）、borderWidth、fontSize、lineStyle（solid/dashed/dotted）、opacity。连线在 edges 中修改 color、thickness、fontSize、lineStyle、lineType、arrow，保留 source/target、sourcePort/targetPort、sourcePoint/targetPoint、vertices。自由端点使用 sourcePoint/targetPoint:{x,y}；不能把非空的未知节点 ID 当成自由端点。只改节点颜色时 properties 只带完整 nodes 数组，不必重写 edges。不要在图块顶层写 color/backgroundColor/style，也不要用画板的 fill/stroke 或 formatText 来改图内文字。图数据修改会使宿主清除旧的生成预览缓存，不能手写 previewSvg/previewVersion。
 - 原生思维导图：{type:"insertBlock",afterId,block:{id:"新图ID",type:"mindmap",children:[{text:""}],mindData:{nodeData:{id:"root",topic:"主题",children:[{id:"child-1",topic:"分支"}]},direction:1}}}。更新用 setBlock 的 properties.mindData，保留现有节点 ID。
+- 思维导图样式：读取完整 mindData 后只改目标节点的 color 和 style（rounded/pill/square/solid），保留 topic、children、expanded、side、x/y 及 direction。不能套用流程图 nodes/edges 或画板属性。
 
 - 图片/附件/内部链接使用平台已授权资产或资源的稳定ID，不把临时URL、密钥或外部脚本写进正文。没有可用上传/生成工具时不要声称已经创建图片。`,
   },
@@ -202,8 +204,10 @@ export function relevantSkillFormats(
     formats.add("spreadsheet");
   if (/(?:ppt|幻灯片|演示文稿|presentation)/i.test(text))
     formats.add("presentation");
-  if (/(?:画布|画板|流程图|思维导图|\bcanvas\b)/i.test(text))
+  if (/(?:画布|画板|\bcanvas\b)/i.test(text))
     formats.add("canvas");
+  if (/(?:流程图|思维导图|\bflowchart\b|\bmind\s*map\b)/i.test(text))
+    formats.add("rich_text");
   const fileExport =
     /(?:保存为|导出为?|下载为?).{0,12}(?:word|docx|pdf|excel|xlsx|markdown|\.md)|(?:word|pdf|excel|markdown)文件/i.test(
       text,

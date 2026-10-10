@@ -17,12 +17,12 @@ export function nodeReuseAuditId(runId: string, nodeId: string) {
 }
 export async function readNodeReuse(db: DB, runId: string, nodeIds: string[]) {
   const reuse = new Map<string, string>();
+  if (!nodeIds.length) return reuse;
+  const records = await db.selectFrom("audit_events").select(["id", "action"])
+    .where("id", "in", nodeIds.map(nodeId => nodeReuseAuditId(runId, nodeId))).execute();
+  const byId = new Map(records.map(record => [record.id, record]));
   for (const nodeId of nodeIds) {
-    const record = await db
-      .selectFrom("audit_events")
-      .select("action")
-      .where("id", "=", nodeReuseAuditId(runId, nodeId))
-      .executeTakeFirst();
+    const record = byId.get(nodeReuseAuditId(runId, nodeId));
     if (record) {
       if (!record.action.startsWith("knowledge_book.reuse:"))
         fail(409, "Node reuse audit record is invalid");

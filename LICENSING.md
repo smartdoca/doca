@@ -20,10 +20,8 @@ editor packages. Each released npm artifact must:
 - include the build scripts and dependency lock needed to produce the artifact;
 - preserve all notices and license obligations of third-party components.
 
-The historical archives under `vendor/` are development and recovery inputs.
-They are not the long-term public distribution channel. Active editor
-dependencies are published to npm from their public tagged sources, and Doca
-consumes those registry versions.
+Active editor dependencies are published to npm from their public tagged
+sources, and Doca consumes those registry versions.
 
 ## Third-party software and assets
 

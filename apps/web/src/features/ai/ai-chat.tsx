@@ -56,8 +56,6 @@ import {
   useState,
   useSyncExternalStore,
   type DragEvent as ReactDragEvent,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -144,13 +142,6 @@ import type {
 import type { AIReference } from "@core/workflows/ai-documents.js";
 import type { Attachment, AttachmentsRef } from "@ant-design/x/es/attachments";
 import { useAI } from "@web/features/ai/ai-context.js";
-import {
-  PANEL_WIDTH_MIN,
-  clampPanelWidth,
-  panelWidthMax,
-  readPanelWidth,
-  writePanelWidth,
-} from "@web/features/ai/ai-side-open.js";
 import { AIUserSettings } from "@web/features/ai/ai-user-settings.js";
 import {
   AIReferenceTag,
@@ -189,7 +180,6 @@ import {
   writeSessionListCache,
 } from "@web/features/ai/ai-local-cache.js";
 import "@web/features/ai/ai.css";
-import { DocumentScrollButtons } from "@web/features/documents/document-scroll-buttons.js";
 const AIAnswer = lazy(() => import("@web/features/ai/ai-markdown.js"));
 
 function jobFolderDeliveries(job: {
@@ -456,6 +446,8 @@ type OutgoingMessage = {
   queued: boolean;
   beforeSend: () => Promise<void>;
   composerText: string;
+  composerDraft: ComposerDraft;
+  composerFiles: Attachment<ChatFile>[];
 };
 function SessionStatusBadges({ session }: { session: Session }) {
   const { t, locale } = useI18n();
@@ -476,143 +468,6 @@ function SessionStatusBadges({ session }: { session: Session }) {
         </span>
       )}
     </>
-  );
-}
-function usePanelWidth() {
-  const viewport = () =>
-    typeof window === "undefined" ? 1280 : window.innerWidth;
-  const [width, setWidth] = useState(() => readPanelWidth(viewport()));
-  const widthRef = useRef(width);
-  const dragging = useRef(false);
-  if (!dragging.current) widthRef.current = width;
-  useEffect(() => {
-    const fit = () => {
-      const next = clampPanelWidth(widthRef.current, window.innerWidth);
-      widthRef.current = next;
-      setWidth(next);
-    };
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
-  }, []);
-  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const handle = event.currentTarget;
-    const panel = handle.parentElement;
-    handle.setPointerCapture(event.pointerId);
-    dragging.current = true;
-    panel?.classList.add("is-resizing");
-    document.body.classList.add("ai-panel-resizing");
-    const startX = event.clientX;
-    const startWidth = widthRef.current;
-    const apply = (clientX: number) => {
-      const next = clampPanelWidth(
-        startWidth + startX - clientX,
-        window.innerWidth,
-      );
-      widthRef.current = next;
-      if (panel instanceof HTMLElement) panel.style.width = `${next}px`;
-      return next;
-    };
-    const move = (e: PointerEvent) => {
-      apply(e.clientX);
-    };
-    const finish = (e: PointerEvent) => {
-      const next = apply(e.clientX);
-      writePanelWidth(next, window.innerWidth);
-      dragging.current = false;
-      setWidth(next);
-      panel?.classList.remove("is-resizing");
-      document.body.classList.remove("ai-panel-resizing");
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", finish);
-      handle.removeEventListener("pointercancel", finish);
-    };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", finish);
-    handle.addEventListener("pointercancel", finish);
-  };
-  const nudge = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    const step =
-      event.key === "ArrowLeft" ? 24 : event.key === "ArrowRight" ? -24 : 0;
-    if (!step) return;
-    event.preventDefault();
-    const next = writePanelWidth(
-      widthRef.current + (event.shiftKey ? step * 4 : step),
-      window.innerWidth,
-    );
-    widthRef.current = next;
-    setWidth(next);
-  };
-  return {
-    width: dragging.current ? widthRef.current : width,
-    startResize,
-    nudge,
-  };
-}
-
-export function AIDocumentLayout({
-  children,
-  disabled = false,
-  format,
-  surface,
-}: {
-  children: ReactNode;
-  disabled?: boolean;
-  format?: string;
-  surface?: "document" | "files" | "knowledge";
-}) {
-  const { t, locale } = useI18n();
-
-  const ai = useAI();
-  const panel = usePanelWidth();
-  const filesSurface = surface === "files";
-  const enabled =
-    !disabled &&
-    !!ai?.userId &&
-    (surface === "knowledge" || filesSurface ||
-      (!!ai.resource &&
-        (ai.resource.kind === "document" || ai.resource.kind === "library")));
-  return (
-    <div
-      className={`ai-document-layout ${enabled && ai?.open ? "ai-document-open" : ""}`}
-    >
-      <div className="ai-document-main">
-        {children}
-        {(format === "rich_text" || format === "markdown") && (
-          <DocumentScrollButtons />
-        )}
-      </div>
-      {enabled && ai?.open && (
-        <aside className="ai-document-panel" style={{ width: panel.width }}>
-          <div
-            className="ai-panel-resizer"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label={t("chat.resize")}
-            aria-valuemin={PANEL_WIDTH_MIN}
-            aria-valuenow={panel.width}
-            aria-valuemax={panelWidthMax(
-              typeof window === "undefined" ? 1280 : window.innerWidth,
-            )}
-            tabIndex={0}
-            onPointerDown={panel.startResize}
-            onKeyDown={panel.nudge}
-          />
-          <AIChat />
-        </aside>
-      )}
-      {enabled && !ai?.open && !filesSurface && (
-        <button
-          className="ai-document-trigger"
-          title={t("chat.writing")}
-          aria-label={t("chat.writing")}
-          aria-expanded={ai?.open}
-          onClick={() => ai?.setOpen(!ai.open)}
-        >
-          <Sparkles size={22} />
-        </button>
-      )}
-    </div>
   );
 }
 export function AIChat({ full = false }: { full?: boolean }) {
@@ -1074,6 +929,24 @@ export function AIChat({ full = false }: { full?: boolean }) {
         sizes.reduce((sum, size) => sum + size, 0) <= limits.maxTotalBytes)
     );
   };
+  const captureComposerDraft = (
+    slots = senderRef.current?.getValue().slotConfig ?? [],
+  ): ComposerDraft => ({
+    version: 1,
+    segments: slots.flatMap<ComposerDraft["segments"][number]>((slot) => {
+      if (slot.type === "text")
+        return [{ type: "text" as const, value: String(slot.value ?? "") }];
+      const reference = referenceSlots.current.get(slot.key!);
+      return reference ? [{ type: "reference" as const, reference }] : [];
+    }),
+    attachments: filesRef.current.flatMap((file) =>
+      file.response ? [asChatFile(file.response)] : [],
+    ),
+    folders: folderTargetsRef.current.filter(
+      (folder): folder is ExplorerTarget & { kind: "folder" } =>
+        folder.kind === "folder",
+    ),
+  });
   const persistComposer = (
     slots = senderRef.current?.getValue().slotConfig ?? [],
   ) => {
@@ -1083,28 +956,54 @@ export function AIChat({ full = false }: { full?: boolean }) {
       draftRecord.current?.key !== draftKey
     )
       return;
-    const value: ComposerDraft = {
-      version: 1,
-      segments: slots.flatMap<ComposerDraft["segments"][number]>((slot) => {
-        if (slot.type === "text")
-          return [{ type: "text" as const, value: String(slot.value ?? "") }];
-        const reference = referenceSlots.current.get(slot.key!);
-        return reference ? [{ type: "reference" as const, reference }] : [];
-      }),
-      attachments: filesRef.current.flatMap((file) =>
-        file.response ? [asChatFile(file.response)] : [],
-      ),
-      folders: folderTargetsRef.current.filter(
-        (folder): folder is ExplorerTarget & { kind: "folder" } =>
-          folder.kind === "folder",
-      ),
-    };
+    const value = captureComposerDraft(slots);
     draftRecord.current = { key: draftKey, value };
     try {
       writeComposerDraft(draftKey, value);
     } catch {
       ai.setError(t("chat.draftSaveFailed"));
     }
+  };
+  const insertComposerDraft = (
+    saved: ComposerDraft,
+    attachments = saved.attachments.map((file) => composerFile(asChatFile(file))),
+  ) => {
+    const slots: SlotConfigType[] = saved.segments.map((segment) => {
+      if (segment.type === "text") return { type: "text", value: segment.value };
+      const r = segment.reference,
+        key = `ref-${crypto.randomUUID()}`,
+        label = referenceLabel(r);
+      referenceSlots.current.set(key, r);
+      return {
+        type: "tag",
+        key,
+        props: {
+          label: (
+            <AIReferenceTag
+              reference={r}
+              reveal={() => currentAI.current.reveal(r)}
+            />
+          ),
+          value: label,
+        },
+        formatResult: () => `@【${label}】`,
+      };
+    });
+    senderRef.current?.insert(slots, "end");
+    anchorComposerTrailingLine(senderRef.current);
+    replaceFiles(attachments);
+    folderTargetsRef.current = saved.folders;
+    setFolderTargets(saved.folders);
+    ai.setReferences(
+      saved.segments.flatMap((segment) =>
+        segment.type === "reference" ? [segment.reference] : [],
+      ),
+    );
+    setHasDraft(
+      saved.segments.some(
+        (segment) => segment.type === "reference" || !!segment.value.trim(),
+      ),
+    );
   };
   useLayoutEffect(() => {
     const previousKey = activeDraftKey.current;
@@ -1136,44 +1035,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       }
     } else draftRecord.current = null;
     if (saved) {
-      const slots: SlotConfigType[] = saved.segments.map((segment) => {
-        if (segment.type === "text")
-          return { type: "text", value: segment.value };
-        const r = segment.reference,
-          key = `ref-${crypto.randomUUID()}`,
-          label = referenceLabel(r);
-        referenceSlots.current.set(key, r);
-        return {
-          type: "tag",
-          key,
-          props: {
-            label: (
-              <AIReferenceTag
-                reference={r}
-                reveal={() => currentAI.current.reveal(r)}
-              />
-            ),
-            value: label,
-          },
-          formatResult: () => `@【${label}】`,
-        };
-      });
-      senderRef.current?.insert(slots, "end");
-      anchorComposerTrailingLine(senderRef.current);
-      replaceFiles(
-        saved.attachments.map((file) => composerFile(asChatFile(file))),
-      );
-      setFolderTargets(saved.folders);
-      ai.setReferences(
-        saved.segments.flatMap((segment) =>
-          segment.type === "reference" ? [segment.reference] : [],
-        ),
-      );
-      setHasDraft(
-        saved.segments.some(
-          (segment) => segment.type === "reference" || !!segment.value.trim(),
-        ),
-      );
+      insertComposerDraft(saved);
     } else ai.setReferences([]);
     if (draftKey) {
       const local = (localDraftFiles.current.get(draftKey) ?? []).map(file => {
@@ -1762,10 +1624,93 @@ export function AIChat({ full = false }: { full?: boolean }) {
       });
     });
   };
+  const isOutgoingScope = (snapshot: OutgoingMessage) =>
+    currentAI.current.userId === snapshot.userId &&
+    (currentDraftKey.current === snapshot.draftKey ||
+      (!!snapshot.sessionId &&
+        currentAI.current.sessionId === snapshot.sessionId));
+  const consumeOutgoingComposer = (snapshot: OutgoingMessage) => {
+    if (
+      !isOutgoingScope(snapshot) ||
+      composerValue() !== snapshot.composerText ||
+      filesRef.current.length !== snapshot.files.length ||
+      !filesRef.current.every((file) =>
+        snapshot.files.some((selected) => selected.uid === file.uid),
+      ) ||
+      JSON.stringify(currentAI.current.references) !==
+        JSON.stringify(snapshot.item.references) ||
+      JSON.stringify(folderTargetsRef.current) !==
+        JSON.stringify(snapshot.composerDraft.folders)
+    )
+      return;
+    skipReferenceInsert.current = true;
+    replaceFiles([]);
+    folderTargetsRef.current = [];
+    setFolderTargets([]);
+    clearComposer();
+    ai.setReferences([]);
+    const key = currentDraftKey.current;
+    if (key) {
+      localDraftFiles.current.delete(key);
+      const value: ComposerDraft = {
+        version: 1,
+        segments: [],
+        attachments: [],
+        folders: [],
+      };
+      draftRecord.current = { key, value };
+      try {
+        writeComposerDraft(key, value);
+      } catch {
+        ai.setError(t("chat.draftSaveFailed"));
+      }
+    }
+    queueMicrotask(() => {
+      skipReferenceInsert.current = false;
+    });
+  };
+  const restoreOutgoingComposer = (snapshot: OutgoingMessage) => {
+    if (
+      !isOutgoingScope(snapshot) ||
+      restoringDraft.current ||
+      composerValue() ||
+      filesRef.current.length ||
+      folderTargetsRef.current.length ||
+      currentAI.current.references.length
+    )
+      return;
+    restoringDraft.current = true;
+    skipReferenceInsert.current = true;
+    clearComposer();
+    insertComposerDraft(
+      snapshot.composerDraft,
+      snapshot.composerFiles.map((file) => {
+        const prepared = snapshot.files.find(
+          (entry) => entry.uid === file.uid,
+        )?.uploaded;
+        return prepared ? composerFile(asChatFile(prepared), file.uid) : file;
+      }),
+    );
+    restoringDraft.current = false;
+    const key = currentDraftKey.current;
+    if (key) {
+      const value = captureComposerDraft();
+      draftRecord.current = { key, value };
+      try {
+        writeComposerDraft(key, value);
+      } catch {
+        ai.setError(t("chat.draftSaveFailed"));
+      }
+    }
+    queueMicrotask(() => {
+      skipReferenceInsert.current = false;
+    });
+  };
   const submitOutgoing = async (snapshot: OutgoingMessage) => {
     const { item, userId: sendingUserId, draftKey: sendingDraftKey } = snapshot;
     const id = item.id;
     if (sendControllers.current.has(id)) return;
+    flushSync(() => consumeOutgoingComposer(snapshot));
     const controller = new AbortController();
     sendControllers.current.set(id, controller);
     requestId.current = id;
@@ -1828,14 +1773,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
       item.attachments = attachments;
       setOptimistic(messages => messages.map(message => message.id === id
         ? { ...message, attachments, localFiles: undefined } : message));
-      if (currentAI.current.userId === sendingUserId &&
-        (currentDraftKey.current === sendingDraftKey || currentAI.current.sessionId === sid)) {
-        replaceFiles(filesRef.current.map(file => {
-          const prepared = snapshot.files.find(entry => entry.uid === file.uid)?.uploaded;
-          return prepared ? composerFile(asChatFile(prepared), file.uid) : file;
-        }));
-        requestId.current = id;
-      }
       if (snapshot.queued) {
         writePendingQueue(sendingUserId, sid, [...loadPendingQueue(sendingUserId, sid), item]);
         setOptimistic(messages => messages.filter(message => message.id !== id));
@@ -1852,34 +1789,20 @@ export function AIChat({ full = false }: { full?: boolean }) {
       }
       notifyAISessionFilesChanged({ sessionId: sid });
       outgoing.current.delete(id);
-      for (const file of snapshot.files) releaseLocalFile(file.uid);
-      if (sendingDraftKey) localDraftFiles.current.delete(sendingDraftKey);
-      localDraftFiles.current.delete(composerDraftKey(sendingUserId, sid));
-      requestId.current = null;
-      const currentScope = currentAI.current.userId === sendingUserId && currentAI.current.sessionId === sid;
-      const unchanged = currentScope && composerValue() === snapshot.composerText &&
-        filesRef.current.every(file => snapshot.files.some(selected => selected.uid === file.uid)) &&
-        JSON.stringify(currentAI.current.references) === JSON.stringify(item.references);
-      if (!currentScope || unchanged) {
-        localStorage.removeItem(composerDraftKey(sendingUserId, sid));
-        if (sendingDraftKey) localStorage.removeItem(sendingDraftKey);
+      for (const file of snapshot.files) {
+        const needed = filesRef.current.some(draft => draft.uid === file.uid) ||
+          [...localDraftFiles.current.values()].some(drafts => drafts.some(draft => draft.uid === file.uid)) ||
+          [...outgoing.current.values()].some(message => message.files.some(other => other.uid === file.uid));
+        if (!needed) releaseLocalFile(file.uid);
       }
-      if (unchanged) {
-        replaceFiles([]);
-        setFolderTargets([]);
-        clearComposer();
-        ai.setReferences([]);
-        draftRecord.current = {
-          key: composerDraftKey(sendingUserId!, sid),
-          value: { version: 1, segments: [], attachments: [], folders: [] },
-        };
-      }
+      if (requestId.current === id) requestId.current = null;
       void refresh();
     } catch (e) {
       const message = controller.signal.aborted ? t("chat.sendCancelled") : uploadErrorMessage(e, t);
       setOptimistic(messages => messages.map(entry => entry.id === id
         ? { ...entry, delivery: "failed", deliveryError: message } : entry));
       ai.setError(message);
+      flushSync(() => restoreOutgoingComposer(snapshot));
     } finally {
       if (haltJobId.current === id) haltJobId.current = null;
       sendControllers.current.delete(id);
@@ -1904,6 +1827,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       item: { ...item, webSearch: webSearch && !!options?.webSearchAvailable },
       files: selected, userId: ai.userId, sessionId: ai.sessionId,
       draftKey, queued, beforeSend: ai.beforeSend, composerText: composerValue(),
+      composerDraft: captureComposerDraft(), composerFiles: [...filesRef.current],
     };
     outgoing.current.set(item.id, snapshot);
     flushSync(() => setOptimistic(messages => [...messages, {

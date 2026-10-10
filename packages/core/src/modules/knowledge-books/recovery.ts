@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { sql } from "kysely";
 import type { DB } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import { AppError, systemErrorText } from "../../shared/errors.js";
@@ -18,7 +19,7 @@ export async function recoverBookRuns(db: DB, cutoff: string) {
     await transact(db, async (tx) => {
       const now = bookNow(),
         error = systemErrorText(
-          new AppError(503, "Run worker stopped; start a new run", {
+          new AppError(503, "Run worker stopped; continue this pipeline", {
             code: "book_failed",
           }),
         );
@@ -72,6 +73,9 @@ export async function recoverBookRuns(db: DB, cutoff: string) {
             created_at: now,
             updated_at: now,
           })
+          .onConflict(conflict => conflict.columns(["run_id", "node_id", "kind"]).doUpdateSet({
+            status: "pending", revision: sql`knowledge_book_human_tasks.revision + 1`, updated_at: now,
+          }))
           .execute();
     });
 }

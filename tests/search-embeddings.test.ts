@@ -15,6 +15,8 @@ let db: DB, actor: Actor, app: Awaited<ReturnType<typeof setup>>;
 let remote: Record<string, any>,
   remoteStatus: string,
   broken: boolean,
+  brokenSemantic: boolean,
+  brokenEmbedderRead: boolean,
   ambiguous: boolean;
 let searchService: Awaited<ReturnType<typeof registerSearch>>;
 let hits: { id: string; [key: string]: unknown }[];
@@ -67,6 +69,7 @@ async function setup() {
             }
             return Response.json({ taskUid: 42 });
           }
+          if (brokenEmbedderRead) return new Response("down", { status: 503 });
           return Response.json(remote);
         }
         if (path.startsWith("/tasks/"))
@@ -74,6 +77,11 @@ async function setup() {
             status: remoteStatus,
             error: { message: "model-private-key", code: "bad_api_key" },
           });
+        if (path.endsWith("/search") && value?.hybrid && brokenSemantic)
+          return Response.json(
+            { message: "AccountQuotaExceeded" },
+            { status: 429 },
+          );
         if (path.endsWith("/search"))
           return Response.json({
             hits: hits.map((h) => ({ _rankingScore: 0.8, ...h })),
@@ -181,6 +189,8 @@ beforeEach(async () => {
   hits = [];
   remoteStatus = "processing";
   broken = false;
+  brokenSemantic = false;
+  brokenEmbedderRead = false;
   ambiguous = false;
   calls = [];
   app = await setup();
@@ -206,6 +216,61 @@ const remove = (overrides: Record<string, unknown> = {}) =>
   });
 const writes = () =>
   calls.filter((c) => c.method === "PATCH" && c.path.endsWith("/embedders"));
+
+it.each(["query", "settings"])(
+  "keeps Meilisearch keyword search available when vector %s fails",
+  async (failure) => {
+    const document = await createContent(db).create(actor, {
+      kind: "document",
+      format: "markdown",
+      title: "关键词可用",
+    });
+    hits = [{ id: document.id }];
+    await save();
+    remoteStatus = "succeeded";
+    await get(root + "/status");
+    brokenSemantic = failure === "query";
+    brokenEmbedderRead = failure === "settings";
+    calls = [];
+    const result = await get("/test-search?q=关键词&mode=auto");
+    expect(result.statusCode, result.body).toBe(200);
+    expect(result.json()).toMatchObject({
+      engine: "meilisearch", mode: "keyword", total: 1,
+    });
+    expect(result.json().items[0].id).toBe(document.id);
+    expect(result.json().notice).toContain("关键词搜索");
+    const searches = calls.filter((call) => call.path.endsWith("/search"));
+    expect(searches).toHaveLength(failure === "query" ? 2 : 1);
+    expect(searches.at(-1)?.body.hybrid).toBeUndefined();
+    expect(writes()).toHaveLength(0);
+    expect((await get("/test-search?q=关键词&mode=ai")).statusCode).toBe(503);
+  },
+);
+
+it("queries the active keyword index during a rebuild", async () => {
+  const document = await createContent(db).create(actor, {
+    kind: "document",
+    format: "markdown",
+    title: "关键词可用",
+  });
+  hits = [{ id: document.id }];
+  await app.inject({
+    method: "POST", url: "/api/v1/admin/search/reindex", headers,
+  });
+  try {
+    expect((await get("/api/v1/admin/search")).json().indexing).toBe(true);
+    const result = await get("/test-search?q=关键词&mode=keyword");
+    expect(result.statusCode, result.body).toBe(200);
+    expect(result.json()).toMatchObject({
+      engine: "meilisearch", mode: "keyword", total: 1,
+    });
+    expect(
+      calls.filter((call) => call.path.endsWith("/search")).at(-1)?.body.hybrid,
+    ).toBeUndefined();
+  } finally {
+    remoteStatus = "succeeded";
+  }
+});
 
 it("searches physical file content once while scoping location aliases before retrieval", async () => {
   const profile = await db

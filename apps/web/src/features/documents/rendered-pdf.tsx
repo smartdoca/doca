@@ -152,8 +152,8 @@ export async function capturePdfView(source: HTMLElement, signal?: AbortSignal, 
   const cjk = await loadPdfFontBytes(source.textContent ?? "").catch(() => { throw Error("pdf_font_read_failed"); });
   let fonts = await embeddedFonts(signal);
   if (cjk) {
-    const font = await dataUrl(new Blob([new Uint8Array(cjk)], { type: "font/ttf" }));
-    fonts += `@font-face{font-family:DocaPDFCJK;src:url("${font}")}`;
+    const font = await dataUrl(new Blob([new Uint8Array(cjk)], { type: "font/woff2" }));
+    fonts += `@font-face{font-family:DocaPDFCJK;src:url("${font}") format("woff2")}`;
     for (const element of [clone, ...Array.from(clone.querySelectorAll<HTMLElement>("[style]"))]) {
       if (element.style?.fontFamily) element.style.fontFamily += ", DocaPDFCJK";
     }

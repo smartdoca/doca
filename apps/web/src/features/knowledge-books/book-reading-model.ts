@@ -68,7 +68,6 @@ export function bookReadingModel(page: BookPage) {
     .map((paragraph) => paragraph.markdown)
     .join("\n\n");
   const headings: BookOutlineEntry[] = [];
-  const paragraphs: BookOutlineEntry[] = [];
   const starts: { paragraphId: string; offset: number; line: number }[] = [];
   let startLine = 1;
   let startOffset = 0;
@@ -78,22 +77,6 @@ export function bookReadingModel(page: BookPage) {
       offset: startOffset,
       line: startLine,
     });
-    const tree = fromMarkdown(paragraph.markdown);
-    const localLine = tree.children[0]?.position?.start.line ?? 1;
-    const summary = tree.children
-      .map(text)
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (summary)
-      paragraphs.push({
-        id: `book-reading-${page.id}-paragraph-${paragraph.id}`,
-        label: summary.length > 52 ? `${summary.slice(0, 52)}…` : summary,
-        depth: 2,
-        line: startLine + localLine - 1,
-        localLine,
-        paragraphId: paragraph.id,
-      });
     startLine += paragraph.markdown.split("\n").length + 1;
     startOffset += paragraph.markdown.length + 2;
   }
@@ -115,7 +98,7 @@ export function bookReadingModel(page: BookPage) {
   visit(fromMarkdown(markdown));
   return {
     markdown,
-    outline: headings.length ? headings : paragraphs,
+    outline: headings,
     headings: headings.length > 0,
   };
 }
