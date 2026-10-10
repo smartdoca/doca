@@ -1,0 +1,16 @@
+{
+  "version": "0.1.18",
+  "package": "@smartdoca/sheet@0.2.0-rc.19",
+  "dataScope": "Isolated in-memory database/workbook; no user documents",
+  "checks": [
+    "Chinese Data validation toolbar opens native rule panel",
+    "Chinese Insert -> Dropdown list opens dedicated options dialog",
+    "Read mode removes editing actions and disables worksheet add",
+    "English Data validation label uses published npm package",
+    "Returning Read -> Edit immediately enables data validation and worksheet add",
+    "Repeated mode changes preserve workbook and selection",
+    "No persistent format or schema changes"
+  ],
+  "screenshot": "sheet-host-dropdown.png",
+  "developmentNote": "Fast Refresh produced one React synchronous-unmount warning before the full reload; this was excluded from runtime acceptance."
+}

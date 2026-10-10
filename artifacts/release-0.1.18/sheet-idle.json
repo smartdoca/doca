@@ -1,0 +1,9 @@
+{
+  "room": "6da5d14d-d40a-4a56-8abe-79b36659e1a9",
+  "dataScope": "Isolated in-memory QA document",
+  "idleSeconds": 61,
+  "initialSeq": 0,
+  "finalSeq": 0,
+  "contentBroadcasts": 0,
+  "epochUnchanged": true
+}
