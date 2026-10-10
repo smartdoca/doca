@@ -2,7 +2,7 @@
 
 [English](deployment.md)
 
-一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.1.16`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
+一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.1.17`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
 
 ## 条件
 
@@ -57,7 +57,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker compose up -d` 会拉取 `docker.io/smartdoca/doca:0.1.16`。只有要从当前检出构建镜像时才加 `--build`。
+`docker compose up -d` 会拉取 `docker.io/smartdoca/doca:0.1.17`。只有要从当前检出构建镜像时才加 `--build`。
 
 检查容器：
 
@@ -68,7 +68,7 @@ curl -fsS -H 'Host: docs.example.com' http://127.0.0.1:39120/health
 
 将 `docs.example.com` 替换为配置来源的主机名，非标准端口也需带上。镜像内置探针已经携带正确 Host，等待 `docker compose ps` 显示 `healthy`。直接以回环地址 curl 会返回 421。
 
-健康的进程返回 `{"status":"ok","version":"0.1.16"}`。
+健康的进程返回 `{"status":"ok","version":"0.1.17"}`。
 
 文档渲染还需实际部署检查：当前检出新增 LibreOffice 和启用沙箱的 Chromium，可选 SAM 另需可信 Linux 运行环境。组件边界、内置 Chromium seccomp 策略和显式 SAM 挂载见 [Docker 文档渲染器](docker-rendering.zh-CN.md)，服务健康不代表这些工具已经可用。
 
