@@ -123,7 +123,7 @@ export async function verifySavedBatchArtifact(
   if (
     !object ||
     object.sha256 !== sha(base!.data) ||
-    object.size !== base!.data.length ||
+    Number(object.size) !== base!.data.length ||
     object.mime !== base!.mime
   )
     fail(409, "成品存储内容已经改变");

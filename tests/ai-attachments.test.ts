@@ -297,7 +297,7 @@ it("reuses unchanged PNG bytes for AI reading and never removes the original whe
     .where("kind", "=", "extract-image")
     .executeTakeFirstOrThrow();
   expect(reference.object_key).toBe(original.object_key);
-  expect(reference.size).toBe(png.length);
+  expect(Number(reference.size)).toBe(png.length);
   expect(
     (await readdir(root, { recursive: true })).filter(path => path.endsWith(".png")),
   ).toEqual([]);

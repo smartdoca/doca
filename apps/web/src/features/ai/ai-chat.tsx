@@ -456,6 +456,8 @@ type OutgoingMessage = {
   queued: boolean;
   beforeSend: () => Promise<void>;
   composerText: string;
+  composerDraft: ComposerDraft;
+  composerFiles: Attachment<ChatFile>[];
 };
 function SessionStatusBadges({ session }: { session: Session }) {
   const { t, locale } = useI18n();
@@ -1074,6 +1076,24 @@ export function AIChat({ full = false }: { full?: boolean }) {
         sizes.reduce((sum, size) => sum + size, 0) <= limits.maxTotalBytes)
     );
   };
+  const captureComposerDraft = (
+    slots = senderRef.current?.getValue().slotConfig ?? [],
+  ): ComposerDraft => ({
+    version: 1,
+    segments: slots.flatMap<ComposerDraft["segments"][number]>((slot) => {
+      if (slot.type === "text")
+        return [{ type: "text" as const, value: String(slot.value ?? "") }];
+      const reference = referenceSlots.current.get(slot.key!);
+      return reference ? [{ type: "reference" as const, reference }] : [];
+    }),
+    attachments: filesRef.current.flatMap((file) =>
+      file.response ? [asChatFile(file.response)] : [],
+    ),
+    folders: folderTargetsRef.current.filter(
+      (folder): folder is ExplorerTarget & { kind: "folder" } =>
+        folder.kind === "folder",
+    ),
+  });
   const persistComposer = (
     slots = senderRef.current?.getValue().slotConfig ?? [],
   ) => {
@@ -1083,28 +1103,54 @@ export function AIChat({ full = false }: { full?: boolean }) {
       draftRecord.current?.key !== draftKey
     )
       return;
-    const value: ComposerDraft = {
-      version: 1,
-      segments: slots.flatMap<ComposerDraft["segments"][number]>((slot) => {
-        if (slot.type === "text")
-          return [{ type: "text" as const, value: String(slot.value ?? "") }];
-        const reference = referenceSlots.current.get(slot.key!);
-        return reference ? [{ type: "reference" as const, reference }] : [];
-      }),
-      attachments: filesRef.current.flatMap((file) =>
-        file.response ? [asChatFile(file.response)] : [],
-      ),
-      folders: folderTargetsRef.current.filter(
-        (folder): folder is ExplorerTarget & { kind: "folder" } =>
-          folder.kind === "folder",
-      ),
-    };
+    const value = captureComposerDraft(slots);
     draftRecord.current = { key: draftKey, value };
     try {
       writeComposerDraft(draftKey, value);
     } catch {
       ai.setError(t("chat.draftSaveFailed"));
     }
+  };
+  const insertComposerDraft = (
+    saved: ComposerDraft,
+    attachments = saved.attachments.map((file) => composerFile(asChatFile(file))),
+  ) => {
+    const slots: SlotConfigType[] = saved.segments.map((segment) => {
+      if (segment.type === "text") return { type: "text", value: segment.value };
+      const r = segment.reference,
+        key = `ref-${crypto.randomUUID()}`,
+        label = referenceLabel(r);
+      referenceSlots.current.set(key, r);
+      return {
+        type: "tag",
+        key,
+        props: {
+          label: (
+            <AIReferenceTag
+              reference={r}
+              reveal={() => currentAI.current.reveal(r)}
+            />
+          ),
+          value: label,
+        },
+        formatResult: () => `@【${label}】`,
+      };
+    });
+    senderRef.current?.insert(slots, "end");
+    anchorComposerTrailingLine(senderRef.current);
+    replaceFiles(attachments);
+    folderTargetsRef.current = saved.folders;
+    setFolderTargets(saved.folders);
+    ai.setReferences(
+      saved.segments.flatMap((segment) =>
+        segment.type === "reference" ? [segment.reference] : [],
+      ),
+    );
+    setHasDraft(
+      saved.segments.some(
+        (segment) => segment.type === "reference" || !!segment.value.trim(),
+      ),
+    );
   };
   useLayoutEffect(() => {
     const previousKey = activeDraftKey.current;
@@ -1136,44 +1182,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       }
     } else draftRecord.current = null;
     if (saved) {
-      const slots: SlotConfigType[] = saved.segments.map((segment) => {
-        if (segment.type === "text")
-          return { type: "text", value: segment.value };
-        const r = segment.reference,
-          key = `ref-${crypto.randomUUID()}`,
-          label = referenceLabel(r);
-        referenceSlots.current.set(key, r);
-        return {
-          type: "tag",
-          key,
-          props: {
-            label: (
-              <AIReferenceTag
-                reference={r}
-                reveal={() => currentAI.current.reveal(r)}
-              />
-            ),
-            value: label,
-          },
-          formatResult: () => `@【${label}】`,
-        };
-      });
-      senderRef.current?.insert(slots, "end");
-      anchorComposerTrailingLine(senderRef.current);
-      replaceFiles(
-        saved.attachments.map((file) => composerFile(asChatFile(file))),
-      );
-      setFolderTargets(saved.folders);
-      ai.setReferences(
-        saved.segments.flatMap((segment) =>
-          segment.type === "reference" ? [segment.reference] : [],
-        ),
-      );
-      setHasDraft(
-        saved.segments.some(
-          (segment) => segment.type === "reference" || !!segment.value.trim(),
-        ),
-      );
+      insertComposerDraft(saved);
     } else ai.setReferences([]);
     if (draftKey) {
       const local = (localDraftFiles.current.get(draftKey) ?? []).map(file => {
@@ -1762,10 +1771,93 @@ export function AIChat({ full = false }: { full?: boolean }) {
       });
     });
   };
+  const isOutgoingScope = (snapshot: OutgoingMessage) =>
+    currentAI.current.userId === snapshot.userId &&
+    (currentDraftKey.current === snapshot.draftKey ||
+      (!!snapshot.sessionId &&
+        currentAI.current.sessionId === snapshot.sessionId));
+  const consumeOutgoingComposer = (snapshot: OutgoingMessage) => {
+    if (
+      !isOutgoingScope(snapshot) ||
+      composerValue() !== snapshot.composerText ||
+      filesRef.current.length !== snapshot.files.length ||
+      !filesRef.current.every((file) =>
+        snapshot.files.some((selected) => selected.uid === file.uid),
+      ) ||
+      JSON.stringify(currentAI.current.references) !==
+        JSON.stringify(snapshot.item.references) ||
+      JSON.stringify(folderTargetsRef.current) !==
+        JSON.stringify(snapshot.composerDraft.folders)
+    )
+      return;
+    skipReferenceInsert.current = true;
+    replaceFiles([]);
+    folderTargetsRef.current = [];
+    setFolderTargets([]);
+    clearComposer();
+    ai.setReferences([]);
+    const key = currentDraftKey.current;
+    if (key) {
+      localDraftFiles.current.delete(key);
+      const value: ComposerDraft = {
+        version: 1,
+        segments: [],
+        attachments: [],
+        folders: [],
+      };
+      draftRecord.current = { key, value };
+      try {
+        writeComposerDraft(key, value);
+      } catch {
+        ai.setError(t("chat.draftSaveFailed"));
+      }
+    }
+    queueMicrotask(() => {
+      skipReferenceInsert.current = false;
+    });
+  };
+  const restoreOutgoingComposer = (snapshot: OutgoingMessage) => {
+    if (
+      !isOutgoingScope(snapshot) ||
+      restoringDraft.current ||
+      composerValue() ||
+      filesRef.current.length ||
+      folderTargetsRef.current.length ||
+      currentAI.current.references.length
+    )
+      return;
+    restoringDraft.current = true;
+    skipReferenceInsert.current = true;
+    clearComposer();
+    insertComposerDraft(
+      snapshot.composerDraft,
+      snapshot.composerFiles.map((file) => {
+        const prepared = snapshot.files.find(
+          (entry) => entry.uid === file.uid,
+        )?.uploaded;
+        return prepared ? composerFile(asChatFile(prepared), file.uid) : file;
+      }),
+    );
+    restoringDraft.current = false;
+    const key = currentDraftKey.current;
+    if (key) {
+      const value = captureComposerDraft();
+      draftRecord.current = { key, value };
+      try {
+        writeComposerDraft(key, value);
+      } catch {
+        ai.setError(t("chat.draftSaveFailed"));
+      }
+    }
+    queueMicrotask(() => {
+      skipReferenceInsert.current = false;
+    });
+  };
   const submitOutgoing = async (snapshot: OutgoingMessage) => {
     const { item, userId: sendingUserId, draftKey: sendingDraftKey } = snapshot;
     const id = item.id;
     if (sendControllers.current.has(id)) return;
+    flushSync(() => consumeOutgoingComposer(snapshot));
     const controller = new AbortController();
     sendControllers.current.set(id, controller);
     requestId.current = id;
@@ -1828,14 +1920,6 @@ export function AIChat({ full = false }: { full?: boolean }) {
       item.attachments = attachments;
       setOptimistic(messages => messages.map(message => message.id === id
         ? { ...message, attachments, localFiles: undefined } : message));
-      if (currentAI.current.userId === sendingUserId &&
-        (currentDraftKey.current === sendingDraftKey || currentAI.current.sessionId === sid)) {
-        replaceFiles(filesRef.current.map(file => {
-          const prepared = snapshot.files.find(entry => entry.uid === file.uid)?.uploaded;
-          return prepared ? composerFile(asChatFile(prepared), file.uid) : file;
-        }));
-        requestId.current = id;
-      }
       if (snapshot.queued) {
         writePendingQueue(sendingUserId, sid, [...loadPendingQueue(sendingUserId, sid), item]);
         setOptimistic(messages => messages.filter(message => message.id !== id));
@@ -1852,34 +1936,20 @@ export function AIChat({ full = false }: { full?: boolean }) {
       }
       notifyAISessionFilesChanged({ sessionId: sid });
       outgoing.current.delete(id);
-      for (const file of snapshot.files) releaseLocalFile(file.uid);
-      if (sendingDraftKey) localDraftFiles.current.delete(sendingDraftKey);
-      localDraftFiles.current.delete(composerDraftKey(sendingUserId, sid));
-      requestId.current = null;
-      const currentScope = currentAI.current.userId === sendingUserId && currentAI.current.sessionId === sid;
-      const unchanged = currentScope && composerValue() === snapshot.composerText &&
-        filesRef.current.every(file => snapshot.files.some(selected => selected.uid === file.uid)) &&
-        JSON.stringify(currentAI.current.references) === JSON.stringify(item.references);
-      if (!currentScope || unchanged) {
-        localStorage.removeItem(composerDraftKey(sendingUserId, sid));
-        if (sendingDraftKey) localStorage.removeItem(sendingDraftKey);
+      for (const file of snapshot.files) {
+        const needed = filesRef.current.some(draft => draft.uid === file.uid) ||
+          [...localDraftFiles.current.values()].some(drafts => drafts.some(draft => draft.uid === file.uid)) ||
+          [...outgoing.current.values()].some(message => message.files.some(other => other.uid === file.uid));
+        if (!needed) releaseLocalFile(file.uid);
       }
-      if (unchanged) {
-        replaceFiles([]);
-        setFolderTargets([]);
-        clearComposer();
-        ai.setReferences([]);
-        draftRecord.current = {
-          key: composerDraftKey(sendingUserId!, sid),
-          value: { version: 1, segments: [], attachments: [], folders: [] },
-        };
-      }
+      if (requestId.current === id) requestId.current = null;
       void refresh();
     } catch (e) {
       const message = controller.signal.aborted ? t("chat.sendCancelled") : uploadErrorMessage(e, t);
       setOptimistic(messages => messages.map(entry => entry.id === id
         ? { ...entry, delivery: "failed", deliveryError: message } : entry));
       ai.setError(message);
+      flushSync(() => restoreOutgoingComposer(snapshot));
     } finally {
       if (haltJobId.current === id) haltJobId.current = null;
       sendControllers.current.delete(id);
@@ -1904,6 +1974,7 @@ export function AIChat({ full = false }: { full?: boolean }) {
       item: { ...item, webSearch: webSearch && !!options?.webSearchAvailable },
       files: selected, userId: ai.userId, sessionId: ai.sessionId,
       draftKey, queued, beforeSend: ai.beforeSend, composerText: composerValue(),
+      composerDraft: captureComposerDraft(), composerFiles: [...filesRef.current],
     };
     outgoing.current.set(item.id, snapshot);
     flushSync(() => setOptimistic(messages => [...messages, {

@@ -471,12 +471,14 @@ export async function analyzeImageScene(
       .selectAll()
       .where("id", "=", object.profile_id)
       .executeTakeFirstOrThrow();
+    const size = Number(object.size);
+    if (!Number.isSafeInteger(size) || size < 0) changed();
     const bytes = await createStorage(runtime).read(
       storageConfigForProfile(runtime, profile),
       object.object_key,
-      object.size,
+      size,
     );
-    if (bytes.length !== object.size || hash(bytes) !== manifest.sha256)
+    if (bytes.length !== size || hash(bytes) !== manifest.sha256)
       changed();
     const extract = await loadFileExtract(db, object.id),
       parts = extract?.parts.filter((part) => part.type === "image");

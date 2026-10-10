@@ -1475,7 +1475,7 @@ async function readImageMaskSegmentInternal(
       object.profile_id !== pointer.profileId ||
       object.object_key !== pointer.objectKey ||
       object.sha256 !== pointer.sha256 ||
-      object.size !== pointer.size ||
+      Number(object.size) !== pointer.size ||
       object.mime !== pointer.mime
     )
       fail(409, "分割存储对象事实与回执不一致");
