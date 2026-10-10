@@ -53,3 +53,7 @@
 工具栏通过已安装 0.4.13 的 `commands.insertBlock` 插入完整流程图和思维导图元素，不用 `toggleBlock` 把段落变成缺少图数据的块。图块评论和 AI 引用使用现有整块锚点，不在图内标签里增加用户提及。上传适配器将实际已传输字节转成 `UploadContext.onProgress` 的 0–1 比例；服务端成功前不显示完成，保留原生占位、取消、重试和撤销流程。
 
 AI 修改先读完整图块，不能从大纲标签重建。节点填充、边框、文字颜色分别用 `fillColor`、`color`、`textColor`；连线颜色、粗细用 `color`、`thickness`。自由端点按当前 SDK 使用空 source/target ID 与 `sourcePoint`/`targetPoint` 数值坐标，非空未知 ID 仍拒绝。修改 nodes、edges 或 mindData 时，在同一原生事务中使生成的 SVG 及派生边界失效；仅改显示宽度保留预览。不增加旧格式适配、自动转换或迁移，既有历史读取代码保持原样。
+
+## 已发布表格包对接 — 2026-10-10
+
+宿主 0.1.18 锁定 npm 制品 `@smartdoca/sheet` 0.2.0-rc.19。工具栏「数据验证」与「插入 → 下拉列表」分别使用各自入口。公开声明及 Yjs/model/XLSX 入口与 rc.18 字节一致；宿主继续使用已导出的菜单扩展、资源、稳定锚点和协作 API。插件元素插入通过原生菜单扩展接入 `SPREADSHEET_MENU_PATHS.toolbarEnd`。这次仅对接界面与制品，不改变 codec、schema、epoch、outbox，不转换持久化数据或新增兼容行为。已有历史读取与显式宿主基线维护命令保持原规则。包与宿主回归使用隔离工作簿和文档，构建成功不代表全部表格操作已完成协作验收。
