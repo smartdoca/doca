@@ -122,12 +122,6 @@
 .book-cards.book-criteria-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
 }
-.book-node-summary {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
 .book-assistant-case {
   min-height: 210px;
 }
@@ -835,6 +829,7 @@
 .book-palette-node {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 10px;
   width: 100%;
   text-align: left;

@@ -901,31 +901,6 @@ function KnowledgeBookPage({ id }: { id: string }) {
                   </Button>
                   {dirty && <Tag color="orange">{bt("unsaved")}</Tag>}
                 </Space>
-                <div className="book-cards">
-                  {draft.workflow.nodes.map((node) => (
-                    <Card
-                      size="small"
-                      key={node.id}
-                      title={node.label || bt(`node.${node.type}`)}
-                    >
-                      <p className="book-node-summary">
-                        {node.parameters.instructions || bt("noInstructions")}
-                      </p>
-                      {node.type === "human_review" && (
-                        <Tag color="gold">{bt("humanTasks")}</Tag>
-                      )}
-                      <div className="book-card-actions">
-                        <Button
-                          type="text"
-                          size="small"
-                          onClick={() => setNodeId(node.id)}
-                        >
-                          {book.canEdit ? bt("edit") : bt("inspect")}
-                        </Button>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
               </>
             ),
           },

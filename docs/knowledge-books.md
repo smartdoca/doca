@@ -36,6 +36,8 @@ The same public `content.v1` provider serves native library subscriptions and kn
 
 The workflow palette groups current node types into sources and feedback, AI knowledge processing, and review and publication. Click to add a node, configure its rules and connect its inputs. Cards show type, rule summaries and source/criterion scope. The dotted canvas supports curved links, panning, zoom, fit and expansion; moving or editing preserves the viewport. Escape collapses an expanded canvas. Canvas tools are left aligned; hide the node palette separately or hide the full toolbar and restore it with the compact canvas button. Publication remains unique and saving validates the complete workflow.
 
+Click a node on the canvas to edit its settings; duplicate editor cards no longer appear below the graph. Icons, names and descriptions in the left node palette align to the left. Save after making changes.
+
 ## Human intervention
 
 All review nodes, publication approvals and failed nodes appear in **Human tasks**, both across books and within a book. Query by task type and status, view the actual candidate content and checks, and approve, reject or retry. Revision checks prevent duplicate resolutions. A stale task cannot approve changed inputs. Retry creates a new run from current configuration. Resolved decisions retain the actor, note and timestamp.
