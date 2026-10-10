@@ -213,12 +213,15 @@ export async function readReferenceImages(
       .selectAll()
       .where("id", "=", row.profile_id)
       .executeTakeFirstOrThrow();
+    const size = Number(row.size);
+    if (!Number.isSafeInteger(size) || size < 0)
+      fail(409, "参考图片内容已改变，请重新上传");
     const data = await storage.read(
       storageConfigForProfile(runtime, profile),
       row.object_key,
-      row.size,
+      size,
     );
-    if (data.length !== row.size) fail(409, "参考图片内容已改变，请重新上传");
+    if (data.length !== size) fail(409, "参考图片内容已改变，请重新上传");
     try {
       const image = sharp(data, { limitInputPixels: 25000000 });
       const metadata = await image.metadata();

@@ -30,6 +30,7 @@ export type FileExtract = {
 
 export const PARSER_VERSION = 4;
 const activeByDatabase = new WeakMap<DB, Set<Promise<void>>>();
+const extractingByDatabase = new WeakMap<DB, Map<string, Promise<void>>>();
 
 function profileConfig(
   runtime: StorageRuntime,
@@ -193,8 +194,13 @@ export async function processFileExtract(
       .executeTakeFirstOrThrow();
     const config = profileConfig(runtime, profile);
     const storage = createStorage(runtime);
-    const body = await storage.read(config, object.object_key, object.size);
-    if (body.length !== object.size) fail(409, "file_content_size_changed");
+    // PostgreSQL returns bigint columns as decimal strings; compare byte counts
+    // as exact safe integers without changing the stored object metadata.
+    const size = Number(object.size);
+    if (!Number.isSafeInteger(size) || size < 0)
+      fail(409, "file_content_size_changed");
+    const body = await storage.read(config, object.object_key, size);
+    if (body.length !== size) fail(409, "file_content_size_changed");
     const filename = item?.name || object.object_key;
     const raw = object.mime.startsWith("image/")
       ? [
@@ -283,6 +289,11 @@ export function beginFileExtract(
   objectId: string,
   runtime: StorageRuntime = storageRuntime(),
 ) {
+  const extracting =
+    extractingByDatabase.get(db) ?? new Map<string, Promise<void>>();
+  extractingByDatabase.set(db, extracting);
+  const running = extracting.get(objectId);
+  if (running) return running;
   const active = activeByDatabase.get(db) ?? new Set<Promise<void>>();
   activeByDatabase.set(db, active);
   const task = (async () => {
@@ -305,8 +316,10 @@ export function beginFileExtract(
     .catch(() => undefined)
     .finally(() => {
       active.delete(task);
+      if (extracting.get(objectId) === task) extracting.delete(objectId);
     });
   active.add(task);
+  extracting.set(objectId, task);
   return task;
 }
 
@@ -321,15 +334,22 @@ export async function waitFileExtract(
   runtime: StorageRuntime = storageRuntime(),
   timeout = 20000,
 ): Promise<FileExtract> {
-  beginFileExtract(db, objectId, runtime);
+  let settled = false;
+  void beginFileExtract(db, objectId, runtime).then(() => {
+    settled = true;
+  });
   const start = Date.now();
   while (Date.now() - start < timeout) {
     const row = await loadFileExtract(db, objectId);
-    if (row && row.status !== "pending") return row;
+    // A retry must wait for this attempt, rather than immediately returning the
+    // previous failed cache while the worker is acquiring its lease.
+    if (row?.status === "ready" || (row?.status === "failed" && settled))
+      return row;
     await new Promise((resolve) => setTimeout(resolve, 120));
   }
+  const row = await loadFileExtract(db, objectId);
   return (
-    (await loadFileExtract(db, objectId)) ?? {
+    (row?.status === "ready" || settled ? row : null) ?? {
       status: "pending",
       parts: [],
       markdown: "",
