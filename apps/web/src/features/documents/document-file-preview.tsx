@@ -1,11 +1,10 @@
 import { useI18n } from "@web/shared/i18n.js";
 import { createPortal } from "react-dom";
+import { lazy } from "react";
+import { LazyContent } from "@web/shared/components/lazy-content.js";
 import { Download, X } from "lucide-react";
-import {
-  OpenFileViewerPreview,
-  type PreviewSource,
-} from "@web/features/files/open-file-viewer-preview.js";
-import "@open-file-viewer/core/style.css";
+import type { PreviewSource } from "@web/features/files/open-file-viewer-preview.js";
+const OpenFileViewerPreview = lazy(() => import("@web/features/files/open-file-viewer-preview.js").then((module) => ({ default: module.OpenFileViewerPreview })));
 import "@web/features/documents/document-file-preview.css";
 
 export type { PreviewSource };
@@ -93,7 +92,7 @@ const { t } = useI18n();
           </div>
         </header>
         <div className="document-file-preview-body">
-          <OpenFileViewerPreview file={file} />
+          <LazyContent><OpenFileViewerPreview file={file} /></LazyContent>
         </div>
       </section>
     </div>,

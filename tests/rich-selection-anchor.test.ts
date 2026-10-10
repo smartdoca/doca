@@ -302,3 +302,37 @@ it("anchors a selected image or file without a text range", () => {
     doc.destroy();
   }
 });
+
+it("captures native diagrams for comments and AI references through edit, restore and deletion without writes", () => {
+  const doc = new Doc(), runtime = new DocaYjsDocument(doc), editor = createEditor();
+  editor.isVoid = (node) => ["flowchart", "mindmap"].includes(String(node.type));
+  runtime.initialize([
+    { id: "flow", type: "flowchart", nodes: [{ id: "s", label: "开始", x: 0, y: 0 }, { id: "e", label: "交付", x: 200, y: 0 }], edges: [{ id: "edge", source: "s", target: "e" }], children: [{ text: "" }] },
+    { id: "mind", type: "mindmap", mindData: { nodeData: { id: "root", topic: "项目计划" } }, children: [{ text: "" }] },
+  ]);
+  editor.children = runtime.getValue();
+  let writes = 0;
+  doc.on("update", () => writes++);
+  const collapsed = (index: number) => ({ anchor: { path: [index, 0], offset: 0 }, focus: { path: [index, 0], offset: 0 } });
+  const restoredDoc = new Doc(), restored = new DocaYjsDocument(restoredDoc);
+  try {
+    const flow = captureRichSelection(editor, runtime, collapsed(0), "epoch");
+    const mind = captureRichSelection(editor, runtime, collapsed(1), "epoch");
+    expect(flow).toMatchObject({ kind: "block", blockId: "flow", quote: "开始 → 交付", epochId: "epoch" });
+    expect(mind.quote).toBe("项目计划");
+    expect(canonicalRichAnchor(runtime, { ...flow, quote: "forged" }).quote).toBe("开始 → 交付");
+    expect(captureRichSelection(editor, runtime, { anchor: collapsed(0).anchor, focus: collapsed(1).focus }).segments?.map((p) => p.blockId)).toEqual(["flow", "mind"]);
+    expect(writes).toBe(0);
+    restored.restore(encodeStateAsUpdate(doc));
+    expect(resolveRichAnchor(restored, flow)).toEqual(resolveRichAnchor(runtime, flow));
+    expect(resolveRichAnchor(restored, mind)).toHaveLength(1);
+    const nodes = (restored.getValue()[0] as any).nodes;
+    restored.execute({ type: "setBlock", blockId: "flow", properties: { nodes: nodes.map((n: any) => ({ ...n, fillColor: "#dbeafe" })) } });
+    expect(resolveRichAnchor(restored, flow)).toHaveLength(1);
+    restored.execute({ type: "deleteBlock", blockId: "flow" });
+    expect(resolveRichAnchor(restored, flow)).toEqual([]);
+    expect(resolveRichAnchor(restored, mind)).toHaveLength(1);
+  } finally {
+    restored.destroy(); restoredDoc.destroy(); runtime.destroy(); doc.destroy();
+  }
+});

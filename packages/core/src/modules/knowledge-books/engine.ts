@@ -1,7 +1,9 @@
 import { readRetryOrigin, readNodeReuse } from "./retry.js";
+import { isFrozenBookResume } from "./resume.js";
 import { readFeedbackOrigin } from "./feedback-origin.js";
 import { appendBookRunLog, type BookRunReporter } from "./run-logs.js";
 import { randomUUID } from "node:crypto";
+import { sql } from "kysely";
 import type { DB, Schema } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import { bookFail as fail } from "./errors.js";
@@ -307,8 +309,8 @@ async function assertCurrent(
   const actor = await actorFor(db, run),
     { book } = await bookAccess(db, actor, run.book_id, 3);
   if (
-    book.revision !== run.configuration_revision ||
-    book.configuration !== run.configuration
+    (book.revision !== run.configuration_revision ||
+    book.configuration !== run.configuration) && !await isFrozenBookResume(db, run.id)
   )
     fail(409, "Workflow configuration changed; run again");
   if ((await bookInputSnapshot(db, run.book_id)).hash !== run.input_hash)
@@ -339,7 +341,7 @@ async function publishRun(
       .updateTable("knowledge_books")
       .set({ published_release_id: id, updated_at: now })
       .where("id", "=", run.book_id)
-      .where("revision", "=", run.configuration_revision)
+      .where("revision", "=", book.revision)
       .where(
         "published_release_id",
         book.published_release_id === null ? "is" : "=",
@@ -490,11 +492,11 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
       return;
     }
     const priorRunId = await readRetryOrigin(db, id);
-    const rejectedReviews = priorRunId
+    const rejectedReviews = priorRunId || resumeNodes
       ? await db
           .selectFrom("knowledge_book_node_runs")
           .select(["node_id", "output"])
-          .where("run_id", "=", priorRunId)
+          .where("run_id", "=", priorRunId ?? id)
           .where("type", "=", "acceptance")
           .where("status", "=", "failed")
           .execute()
@@ -634,6 +636,9 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
             started_at: bookNow(),
             completed_at: null,
           })
+          .onConflict(conflict => conflict.columns(["run_id", "node_id"]).doUpdateSet({
+            status: "running", error: "", started_at: bookNow(), completed_at: null,
+          }).where("knowledge_book_node_runs.status", "in", ["failed", "cancelled"]))
           .execute();
         await report({ code: "node_started" });
         if (node.type === "sources") {
@@ -698,6 +703,9 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
               created_at: bookNow(),
               updated_at: bookNow(),
             })
+            .onConflict(conflict => conflict.columns(["run_id", "node_id", "kind"]).doUpdateSet({
+              status: "pending", revision: sql`knowledge_book_human_tasks.revision + 1`, updated_at: bookNow(),
+            }))
             .execute();
           await db
             .updateTable("knowledge_book_node_runs")
@@ -815,6 +823,9 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
                 created_at: bookNow(),
                 updated_at: bookNow(),
               })
+              .onConflict(conflict => conflict.columns(["run_id", "node_id", "kind"]).doUpdateSet({
+                status: "pending", revision: sql`knowledge_book_human_tasks.revision + 1`, updated_at: bookNow(),
+              }))
               .execute();
             await db
               .updateTable("knowledge_book_runs")
@@ -1160,6 +1171,9 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
           created_at: bookNow(),
           updated_at: bookNow(),
         })
+        .onConflict(conflict => conflict.columns(["run_id", "node_id", "kind"]).doUpdateSet({
+          status: "pending", revision: sql`knowledge_book_human_tasks.revision + 1`, updated_at: bookNow(),
+        }))
         .execute();
     if (Number(failed.numUpdatedRows)) await appendBookRunLog(db, run, null, { code: "run_failed" });
   } finally {

@@ -51,10 +51,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Local pack output is disposable; vendor contains required file: dependencies.
+# Local pack output is disposable.
 *.tgz
 *.zip
-!/vendor/*.tgz
 
 # Local agent rule. The same rule lives in the user Cursor rules directory.
 .cursor/rules/no-forward-compatibility.mdc

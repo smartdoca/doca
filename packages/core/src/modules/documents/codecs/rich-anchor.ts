@@ -16,7 +16,7 @@ export type ResolvedRichAnchor = {
   kind?: "block";
 };
 type Runtime = Pick<YjsDocument, "createCommentAnchor" | "resolveCommentAnchor" | "getValue">;
-const MEDIA_TYPES = new Set(["image", "video", "attachment"]);
+export const RICH_BLOCK_ANCHOR_TYPES = new Set(["image", "video", "attachment", "flowchart", "mindmap"]);
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 const decode = (value: string) => Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
 
@@ -43,8 +43,16 @@ export function findContentBlock(value: unknown, blockId: string) {
   return walk(value);
 }
 
-function mediaQuote(node: Record<string, unknown>) {
+export function richBlockQuote(node: Record<string, unknown>) {
   const type = String(node.type ?? "");
+  if (type === "flowchart") {
+    const nodes = Array.isArray(node.nodes) ? node.nodes : [];
+    return (nodes.map((n) => textOf(n?.label)).filter(Boolean).join(" → ") || "流程图").slice(0, 200);
+  }
+  if (type === "mindmap") {
+    const data = node.mindData as { nodeData?: { topic?: unknown } } | undefined;
+    return (textOf(data?.nodeData?.topic) || "思维导图").slice(0, 200);
+  }
   const label =
     type === "attachment"
       ? textOf(node.name) || "附件"
@@ -101,7 +109,7 @@ export function resolveRichAnchor(runtime: Runtime, value: unknown): ResolvedRic
   return richAnchorParts(value).flatMap((part) => {
     if (part.kind === "block") {
       const node = findContentBlock(runtime.getValue(), part.blockId);
-      if (!node || !MEDIA_TYPES.has(String(node.type))) return [];
+      if (!node || !RICH_BLOCK_ANCHOR_TYPES.has(String(node.type))) return [];
       return [{ blockId: part.blockId, start: 0, end: 0, orphaned: false, kind: "block" as const }];
     }
     const resolved = runtime.resolveCommentAnchor({
@@ -116,7 +124,7 @@ export function resolveRichAnchor(runtime: Runtime, value: unknown): ResolvedRic
 export function quotedRichAnchor(runtime: Runtime, part: ResolvedRichAnchor) {
   if (part.kind === "block") {
     const node = findContentBlock(runtime.getValue(), part.blockId);
-    return node ? mediaQuote(node) : "";
+    return node ? richBlockQuote(node) : "";
   }
   return runtime.createCommentAnchor(part.blockId, part.start, part.end).quote;
 }
@@ -131,7 +139,7 @@ export function canonicalRichAnchor(runtime: Runtime, value: unknown): RichAncho
       if (part.kind === "block") {
         const node = findContentBlock(runtime.getValue(), part.blockId);
         if (!node) throw Error("选区已变化，请重新选择");
-        return { kind: "block" as const, blockId: part.blockId, quote: mediaQuote(node), start: "", end: "" };
+        return { kind: "block" as const, blockId: part.blockId, quote: richBlockQuote(node), start: "", end: "" };
       }
       return encodeRichAnchorPart(runtime.createCommentAnchor(part.blockId, part.start, part.end));
     }),

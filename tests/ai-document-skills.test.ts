@@ -11,6 +11,8 @@ it.each([
   ["创建预算表格", "spreadsheet"],
   ["制作三页PPT", "presentation"],
   ["创建项目画布", "canvas"],
+  ["流程图样式优化一下，加一些颜色", "writing"],
+  ["修改富文本中的思维导图配色", "writing"],
 ])(
   "provides the full enabled document manual before executing %s",
   (text, id) => {

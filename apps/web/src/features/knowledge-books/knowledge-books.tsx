@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import {
-  BookOpenCheck,
+  NotebookTabs,
   ChevronRight,
   ShieldCheck,
   Sparkles,
@@ -31,6 +31,7 @@ import {
   Tabs,
   Tag,
   Tree,
+  Spin,
 } from "antd";
 import type { DataNode } from "antd/es/tree";
 import type { MessageKey } from "@doca/i18n";
@@ -55,10 +56,11 @@ import { api, type Detail } from "@web/shared/api.js";
 import { useI18n } from "@web/shared/i18n.js";
 import MarkdownPreview from "@web/features/documents/markdown-preview.js";
 import { PermissionDialog } from "@web/features/documents/dialogs.js";
-import { BookGraph } from "./book-graph.js";
+import { BookGraph } from "./book-graph-view.js";
 import { BookReader } from "./book-reader.js";
 import { BookWebSources } from "./book-web-sources.js";
 import { bookPageTree, type BookPageNode } from "./book-reading-model.js";
+import { aggregateBookProvenance } from "./book-provenance-model.js";
 import "./knowledge-books.css";
 
 function Preview({ value }: { value: string }) {
@@ -91,7 +93,7 @@ function BookHeader({
       <>
         {createPortal(
           <div className="book-topbar-title">
-            <BookOpenCheck size={20} />
+            <NotebookTabs size={20} />
             {title ? (
               <>
                 <a href="#/knowledge-books">{bt("title")}</a>
@@ -195,7 +197,7 @@ function useBookError() {
 }
 function useBookText() {
   const { t } = useI18n();
-  return (key: string, data?: Parameters<typeof t>[1]) => t(`books.${key}` as MessageKey, data);
+  return useCallback((key: string, data?: Parameters<typeof t>[1]) => t(`books.${key}` as MessageKey, data), [t]);
 }
 const failure = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -251,7 +253,7 @@ function KnowledgeBookList({ tasks }: { tasks: boolean }) {
         }
       />
       <p className="book-lead">{tasks ? bt("humanTasks") : bt("lead")}</p>
-      {error && <Alert type="error" showIcon message={error} />}
+      {error && <Alert type="error" showIcon title={error} />}
       {tasks ? (
         <BookHumanTasks />
       ) : (
@@ -370,6 +372,9 @@ function KnowledgeBookPage({ id }: { id: string }) {
   const [sourceQuery, setSourceQuery] = useState(""),
     [nodeId, setNodeId] = useState<string>(),
     [run, setRun] = useState<BookPipelineRun | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string>();
+  const runCache = useRef(new Map<string, BookPipelineRun>());
+  const runRequest = useRef(0);
   const load = useCallback(
     async (reset = true) => {
       let value: Book;
@@ -429,15 +434,17 @@ function KnowledgeBookPage({ id }: { id: string }) {
     return () => clearInterval(timer);
   }, [load]);
   useEffect(() => {
-    if (!run) return;
+    if (!run || activeTab !== "runs") return;
     let active = true, refreshing = false;
+    const request = runRequest.current;
     const refreshRun = () => {
-      if (refreshing) return;
+      if (refreshing || document.visibilityState === "hidden") return;
       refreshing = true;
-      void api<NonNullable<typeof run>>(`/knowledge-books/${id}/runs/${run.id}`)
+      void api<NonNullable<typeof run>>(`/knowledge-books/${id}/runs/${run.id}/pipeline`)
         .then(value => {
-          if (!active) return;
-          setRun(value);
+          if (!active || request !== runRequest.current || value.id !== selectedRunId) return;
+          runCache.current.set(value.id, value);
+          setRun(current => current?.id === value.id && JSON.stringify(current) === JSON.stringify(value) ? current : value);
           setBook(current => current ? { ...current, runs: current.runs.map(item => item.id === value.id ? { ...item, status: value.status, updated_at: value.updatedAt, started_at: value.startedAt, trigger: value.trigger } : item) } : current);
         })
         .catch(e => { if (active) setError(failure(e)); })
@@ -445,11 +452,25 @@ function KnowledgeBookPage({ id }: { id: string }) {
     };
     const timer = setInterval(refreshRun, 3000);
     return () => { active = false; clearInterval(timer); };
-  }, [id, run?.id]);
+  }, [id, run?.id, run?.status, activeTab, selectedRunId]);
   const openRun = useCallback(async (runId: string) => {
-    const value = await api<BookPipelineRun>(`/knowledge-books/${id}/runs/${runId}`);
-    setRun(value);
+    const request = ++runRequest.current;
+    setSelectedRunId(runId);
+    setRun(runCache.current.get(runId) ?? null);
     setActiveTab("runs");
+    try {
+      const value = await api<BookPipelineRun>(`/knowledge-books/${id}/runs/${runId}/pipeline`);
+      if (request !== runRequest.current) return;
+      runCache.current.delete(runId);
+      runCache.current.set(runId, value);
+      if (runCache.current.size > 8) runCache.current.delete(runCache.current.keys().next().value!);
+      setRun(value);
+    } catch (error) {
+      if (request !== runRequest.current) return;
+      runCache.current.delete(runId);
+      setRun(null);
+      throw error;
+    }
   }, [id]);
   useEffect(() => {
     if (taskLink.has("task")) return;
@@ -457,8 +478,8 @@ function KnowledgeBookPage({ id }: { id: string }) {
     if (linkedRun) void openRun(linkedRun).catch(e => setError(failure(e)));
   }, [openRun, taskLink]);
   useEffect(() => {
-    if (activeTab === "runs" && !run && book?.runs[0]) void openRun(book.runs[0].id).catch(e => setError(failure(e)));
-  }, [activeTab, book?.runs[0]?.id, run?.id, openRun]);
+    if (activeTab === "runs" && !selectedRunId && book?.runs[0]) void openRun(book.runs[0].id).catch(e => setError(failure(e)));
+  }, [activeTab, book?.runs[0]?.id, selectedRunId, openRun]);
   const command = async <T,>(value: unknown) => {
     setBusy(true);
     setError("");
@@ -492,7 +513,7 @@ function KnowledgeBookPage({ id }: { id: string }) {
   if (!book || !draft)
     return (
       <div className="knowledge-books-page">
-        {error ? <Alert type="error" message={error} /> : bt("loading")}
+        {error ? <Alert type="error" title={error} /> : bt("loading")}
       </div>
     );
   const page =
@@ -589,7 +610,7 @@ function KnowledgeBookPage({ id }: { id: string }) {
     </>
   );
   return (
-    <div className="knowledge-books-page">
+    <div className={`knowledge-books-page book-active-${activeTab}`}>
       <BookHeader
         title={book.detail.resource.title}
         actions={
@@ -641,7 +662,7 @@ function KnowledgeBookPage({ id }: { id: string }) {
         <Alert
           type="error"
           showIcon
-          message={error}
+          title={error}
           closable
           onClose={() => setError("")}
         />
@@ -690,7 +711,7 @@ function KnowledgeBookPage({ id }: { id: string }) {
                   />
                 </Space>
                 {release?.restricted ? (
-                  <Alert type="warning" message={bt("restricted")} />
+                  <Alert type="warning" title={bt("restricted")} />
                 ) : release?.artifact ? (
                   <div className="book-result">
                     <aside>
@@ -796,12 +817,15 @@ function KnowledgeBookPage({ id }: { id: string }) {
             label: bt("workflow"),
             children: (
               <>
-                <Form layout="vertical">
+                <Collapse className="book-workflow-settings" items={[{
+                  key: "settings",
+                  label: <span className="book-workflow-settings-title"><strong>{bt("workflowSettings")}</strong><span>{draft.goal}</span></span>,
+                  children: <Form layout="vertical">
                   <Form.Item label={bt("goal")}>
                     <Input.TextArea
                       aria-label={bt("goal")}
                       value={draft.goal}
-                      rows={5}
+                      rows={3}
                       disabled={!book.canEdit}
                       onChange={(e) =>
                         change({ ...draft, goal: e.target.value })
@@ -849,7 +873,8 @@ function KnowledgeBookPage({ id }: { id: string }) {
                       />
                     </Form.Item>
                   </Space>
-                </Form>
+                </Form>,
+                }]} />
                 <BookGraph
                   workflow={draft.workflow}
                   editable={book.canEdit}
@@ -1181,13 +1206,14 @@ function KnowledgeBookPage({ id }: { id: string }) {
             key: "runs",
             label: bt("runs"),
             children: <div className="book-run-view">
-              <BookRunList runs={book.runs} selected={run?.id} choose={value => void openRun(value).catch(e => setError(failure(e)))} />
+              <BookRunList runs={book.runs} selected={selectedRunId} choose={value => void openRun(value).catch(e => setError(failure(e)))} />
               <div className="book-run-main">
-              {run ? <BookRunPipeline key={run.id} run={run} canEdit={book.canEdit}
+              {run ? <BookRunPipeline run={run} canEdit={book.canEdit} busy={busy}
+                retry={() => void command<{ id: string }>({ operation: "run.resume", runId: run.id }).then(result => { runCache.current.delete(run.id); return openRun(result.id); }).catch(() => {})}
                 cancel={() => void command({ operation: "run.cancel", runId: run.id }).then(() => openRun(run.id)).catch(() => {})}
                 repair={() => { ai?.addDocument(book.detail.resource); ai?.setComposerDraft(bt("pipelineRepairPrompt", { bookId: id, runId: run.id })); ai?.setOpen(true); }}
                 humanTasks={nodeId => <BookHumanTasks bookId={id} runId={run.id} nodeId={nodeId} changed={async nextRunId => { await load(false); await openRun(nextRunId ?? run.id); }} />}
-              /> : <Empty description={bt("pipelineNoRuns")} />}
+              /> : selectedRunId ? <div className="book-run-loading" role="status"><Spin /><span>{t("common.loading")}</span></div> : <Empty description={bt("pipelineNoRuns")} />}
               </div>
             </div>,
           },
@@ -1236,7 +1262,7 @@ function KnowledgeBookPage({ id }: { id: string }) {
         open={!!editNode}
         title={editNode?.label || (editNode && bt(`node.${editNode.type}`))}
         onClose={() => setNodeId(undefined)}
-        width={480}
+        size={480}
       >
         {editNode && (
           <Form layout="vertical">
@@ -1470,7 +1496,7 @@ function BookAssistantCases({ resource }: { resource: Detail["resource"] }) {
         </Button>
       </div>
       <p className="book-section-note">{bt("myAssistantCasesHelp")}</p>
-      {error && <Alert type="error" message={error} />}
+      {error && <Alert type="error" title={error} />}
       <div className="book-cards">
         {sessions.map((session) => (
           <Card key={session.id} size="small" title={session.title}>
@@ -1512,7 +1538,7 @@ function AcceptanceCheckList({
         <Alert
           key={criterionId}
           type={results.every((check) => check.passed) ? "success" : "error"}
-          message={
+          title={
             criteria.find((criterion) => criterion.id === criterionId)
               ?.description || criterionId
           }
@@ -1629,7 +1655,7 @@ function PublishedBookView({ book }: { book: Book }) {
         }
       />
       {release?.restricted ? (
-        <Alert type="warning" message={bt("restricted")} />
+        <Alert type="warning" title={bt("restricted")} />
       ) : artifact ? (
         <Tabs
           className="book-tabs"
@@ -1803,7 +1829,7 @@ export function BookSourceDialog({
         }
       }}
     >
-      {error && <Alert type="error" message={error} />}
+      {error && <Alert type="error" title={error} />}
       <Form layout="vertical" component="div">
         <Form.Item label={bt("name")} required>
           <Input
@@ -2129,7 +2155,7 @@ function BookSourceBindingPicker({
   return (
     <section className="book-binding-picker">
       <strong>{bt(value ? "editBinding" : "addBindings")}</strong>
-      {error && <Alert type="error" message={error} />}
+      {error && <Alert type="error" title={error} />}
       <Form.Item label={bt("sourceKind")}>
         <Select
           aria-label={bt("sourceKind")}
@@ -2306,7 +2332,7 @@ function BookFeedbackDialog({
       }}
     >
       <Form layout="vertical">
-        {error && <Alert type="error" message={error} />}
+        {error && <Alert type="error" title={error} />}
         <Form.Item label={bt("feedbackKind")}>
           <Select
             value={kind}
@@ -2448,7 +2474,7 @@ export function BookHumanTasks({
           {bt("refresh")}
         </Button>
       </Space>
-      {error && <Alert type="error" message={error} />}
+      {error && <Alert type="error" title={error} />}
       <div className="book-cards">
         {items.map((item) => (
           <Card
@@ -2492,15 +2518,15 @@ export function BookHumanTasks({
         open={!!task}
         title={task?.title || (task && bt(`task.${task.kind}`))}
         onClose={() => setTask(null)}
-        width="75%"
+        size="75%"
       >
         {task && (
           <>
-            {task.stale && <Alert type="warning" message={bt("staleTask")} />}
+            {task.stale && <Alert type="warning" title={bt("staleTask")} />}
             {!task.readable && (
-              <Alert type="warning" message={bt("restricted")} />
+              <Alert type="warning" title={bt("restricted")} />
             )}
-            {task.error && <Alert type="error" message={be(task.error)} />}
+            {task.error && <Alert type="error" title={be(task.error)} />}
             <Button
               icon={<Sparkles size={15} />}
               disabled={!ai?.userId}
@@ -2516,7 +2542,7 @@ export function BookHumanTasks({
             {task.instructions && (
               <Alert
                 type="info"
-                message={bt("instructions")}
+                title={bt("instructions")}
                 description={task.instructions}
               />
             )}
@@ -2570,8 +2596,8 @@ export function BookHumanTasks({
                   >
                     {bt("reject")}
                   </Button>
-                  <Button disabled={busy} onClick={() => void resolve("retry")}>
-                    {bt("retry")}
+                  <Button disabled={busy} onClick={() => void resolve(task.kind === "repair" ? "resume" : "retry")}>
+                    {bt(task.kind === "repair" ? "resumeRun" : "retry")}
                   </Button>
                 </Space>
               </>
@@ -2595,7 +2621,9 @@ function ProvenanceView({ artifact }: { artifact: BookArtifact }) {
       artifact.pages[0] ? `page:${artifact.pages[0].id}` : "all",
     ),
     [includeExecution, setIncludeExecution] = useState(false),
-    [selected, setSelected] = useState<string>();
+    [selected, setSelected] = useState<string>(),
+    [grouped, setGrouped] = useState(true),
+    [memberLimit, setMemberLimit] = useState(30);
   const graph = useMemo(() => {
     const nodeKinds = new Map(
       artifact.provenance.nodes.map((node) => [node.id, node.kind]),
@@ -2613,14 +2641,19 @@ function ProvenanceView({ artifact }: { artifact: BookArtifact }) {
     const keep = new Set([pageId]);
     if (!nodes.some((node) => node.id === pageId))
       return { nodes: [], edges: [] };
-    for (let i = 0; i < nodes.length; i++) {
-      let changed = false;
-      for (const edge of edges)
-        if (keep.has(edge.target) && !keep.has(edge.source)) {
-          keep.add(edge.source);
-          changed = true;
-        }
-      if (!changed) break;
+    const parents = new Map<string, string[]>();
+    for (const edge of edges) {
+      const incoming = parents.get(edge.target) ?? [];
+      incoming.push(edge.source);
+      parents.set(edge.target, incoming);
+    }
+    const queue = [pageId];
+    for (let index = 0; index < queue.length; index++) {
+      for (const parent of parents.get(queue[index]!) ?? []) {
+        if (keep.has(parent)) continue;
+        keep.add(parent);
+        queue.push(parent);
+      }
     }
     return {
       nodes: nodes.filter((node) => keep.has(node.id)),
@@ -2629,14 +2662,17 @@ function ProvenanceView({ artifact }: { artifact: BookArtifact }) {
       ),
     };
   }, [artifact, pageId, includeExecution]);
-  const node = artifact.provenance.nodes.find((n) => n.id === selected);
+  const aggregated = useMemo(() => aggregateBookProvenance(graph, (kind, count) => bt("provenanceGroup", { kind: bt(`provenance.${kind}`), count })), [graph, bt]);
+  const displayed = grouped ? aggregated : graph;
+  const node = displayed.nodes.find((n) => n.id === selected);
+  const members = selected && grouped ? aggregated.members.get(selected) : undefined;
   return (
-    <>
+    <div className="book-provenance-view">
+      <div className="book-provenance-controls">
       <Select
         showSearch
         optionFilterProp="label"
         value={pageId}
-        style={{ minWidth: 260 }}
         options={[
           { value: "all", label: bt("wholeGraph") },
           ...artifact.pages.map((p) => ({
@@ -2655,11 +2691,14 @@ function ProvenanceView({ artifact }: { artifact: BookArtifact }) {
           setSelected(undefined);
         }}
       />
-      <Space style={{ marginLeft: 16 }}>
-        <Switch checked={includeExecution} onChange={setIncludeExecution} />
+      <Space>
+        <Switch aria-label={bt("includeExecution")} checked={includeExecution} onChange={setIncludeExecution} />
         <span>{bt("includeExecution")}</span>
       </Space>
-      <BookGraph provenance={graph} selected={setSelected} />
+      <Space><Switch aria-label={bt("groupProvenance")} checked={grouped} onChange={value => { setGrouped(value); setSelected(undefined); }} /><span>{bt("groupProvenance")}</span></Space>
+      <span className="subtle">{bt("provenanceGraphSize", { nodes: displayed.nodes.length, edges: displayed.edges.length })}</span>
+      </div>
+      <BookGraph provenance={displayed} selected={value => { setSelected(value); setMemberLimit(30); }} />
       <Drawer
         title={
           node?.kind === "paragraph"
@@ -2668,11 +2707,19 @@ function ProvenanceView({ artifact }: { artifact: BookArtifact }) {
         }
         open={!!node}
         onClose={() => setSelected(undefined)}
-        width={520}
+        size={520}
       >
         {node && (
           <>
             <Tag>{bt(`provenance.${node.kind}`)}</Tag>
+            {members && <>
+              <p>{bt("provenanceGroupHelp", { count: members.length })}</p>
+              {members.slice(0, memberLimit).map(member => <section className="book-provenance-member" key={member.id}>
+                <Preview value={member.label} />
+                <details><summary>{bt("decision")}</summary><pre className="book-prewrap">{JSON.stringify(member.detail, null, 2)}</pre></details>
+              </section>)}
+              {memberLimit < members.length && <Button onClick={() => setMemberLimit(value => value + 30)}>{bt("loadMore")}</Button>}
+            </>}
             {node.kind === "paragraph" && <Preview value={node.label} />}
             {Object.entries(node.detail).map(([key, value]) => (
               <section key={key}>
@@ -2690,7 +2737,7 @@ function ProvenanceView({ artifact }: { artifact: BookArtifact }) {
           </>
         )}
       </Drawer>
-    </>
+    </div>
   );
 }
 function ProviderConfiguration({
@@ -2726,7 +2773,7 @@ function ProviderConfiguration({
       (f.type === "array" && f.items?.type === "string"),
   );
   if (!supported)
-    return <Alert type="warning" message={t("content.configUnsupported")} />;
+    return <Alert type="warning" title={t("content.configUnsupported")} />;
   const set = (key: string, next: unknown) =>
     changed({ ...value, [key]: next });
   return (
@@ -2845,7 +2892,7 @@ function FileSourcePicker({
           </Button>
         ))}
       </Space>
-      {error && <Alert type="error" message={error} />}
+      {error && <Alert type="error" title={error} />}
       <div className="book-cards">
         {items.folders
           .filter((f) => f.type === "folder" || f.id === "shared")

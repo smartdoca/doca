@@ -80,38 +80,12 @@ it("parses the complete reading Markdown so code fences spanning stored paragrap
   );
 });
 
-it("offers accurately numbered paragraph excerpts for valid articles without headings and leaves the artifact untouched", () => {
-  const input = page(
-    "plain",
-    [],
-    [
-      "First *paragraph*.\n\nA continuation.",
-      "\n\nSecond paragraph with `code`.",
-    ],
-  );
+it("does not turn plain paragraphs into a heading directory and leaves the artifact untouched", () => {
+  const input = page("plain", [], ["First *paragraph*.", "Second paragraph with `code`."]);
   const snapshot = JSON.stringify(input);
   const model = bookReadingModel(input);
   expect(model.headings).toBe(false);
-  expect(
-    model.outline.map(({ label, line, localLine, paragraphId }) => ({
-      label,
-      line,
-      localLine,
-      paragraphId,
-    })),
-  ).toEqual([
-    {
-      label: "First paragraph. A continuation.",
-      line: 1,
-      localLine: 1,
-      paragraphId: "plain-p0",
-    },
-    {
-      label: "Second paragraph with code.",
-      line: 7,
-      localLine: 3,
-      paragraphId: "plain-p1",
-    },
-  ]);
+  expect(model.outline).toEqual([]);
+  expect(model.markdown).toContain("Second paragraph");
   expect(JSON.stringify(input)).toBe(snapshot);
 });

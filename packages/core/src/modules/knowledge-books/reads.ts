@@ -12,6 +12,7 @@ import {
   bookConfigurationSchema,
   bookFeedbackInputSchema,
   type BookArtifact,
+  type Evidence,
 } from "./protocol.js";
 import {
   canReadBookFeedback,
@@ -27,8 +28,13 @@ export async function readableBookArtifact(
   artifact: BookArtifact,
 ) {
   await bookAccess(db, actor, bookId);
-  for (const evidence of artifact.evidence)
+  const checked = new Set<string>();
+  for (const evidence of artifact.evidence) {
+    const key = JSON.stringify([evidence.reference, evidence.sourceId, evidence.sourceVersion, evidence.contentRef]);
+    if (checked.has(key)) continue;
     if (!(await canReadBookEvidence(db, actor, evidence))) return null;
+    checked.add(key);
+  }
   return artifact;
 }
 export async function readBookRelease(
@@ -224,6 +230,7 @@ export async function readBookRun(
   actor: Actor,
   bookId: string,
   id: string,
+  view: "detail" | "pipeline" = "detail",
 ) {
   await bookAccess(db, actor, bookId, 3);
   const row = await db
@@ -249,11 +256,17 @@ export async function readBookRun(
     nodes.map((node) => node.node_id),
   );
   let visible = true;
+  // Permissions depend on the original reference/version, not on each excerpt.
+  // Cache within this request only: revocations are checked on every refresh.
+  const permissions = new Map<string, boolean>();
   for (const node of nodes) {
     if (!node.output) continue;
     const output = JSON.parse(node.output);
-    for (const evidence of output.evidence ?? [])
-      if (!(await canReadBookEvidence(db, actor, evidence))) visible = false;
+    for (const evidence of (output.evidence ?? []) as Evidence[]) {
+      const key = JSON.stringify([evidence.reference, evidence.sourceId, evidence.sourceVersion, evidence.contentRef]);
+      if (!permissions.has(key)) permissions.set(key, await canReadBookEvidence(db, actor, evidence));
+      if (!permissions.get(key)) visible = false;
+    }
   }
   return {
     id: row.id,
@@ -277,10 +290,18 @@ export async function readBookRun(
       startedAt: node.started_at,
       completedAt: node.completed_at,
       error: node.error,
-      inputRefs: JSON.parse(node.input_refs),
-      output: visible && node.output ? JSON.parse(node.output) : null,
+      ...(view === "detail" ? {
+        inputRefs: JSON.parse(node.input_refs),
+        output: visible && node.output ? JSON.parse(node.output) : null,
+      } : {}),
     })),
   };
+}
+
+/** Small authorized payload for the canvas; full evidence stays in detail reads. */
+export async function readBookPipeline(db: DB, actor: Actor, bookId: string, id: string) {
+  const run = await readBookRun(db, actor, bookId, id, "pipeline");
+  return { ...run, artifact: run.artifact ? { pages: run.artifact.pages, checks: run.artifact.checks } : null };
 }
 
 export async function readPublishedKnowledgeBook(db: DB, id: string) {

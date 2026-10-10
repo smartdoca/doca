@@ -1,5 +1,7 @@
 import { prepareRunReuse, retryBookRun } from "./retry.js";
+import { isFrozenBookResume, resumeBookRun } from "./resume.js";
 import { randomUUID } from "node:crypto";
+import { securityAudit } from "../identity/accounts.js";
 import { sql } from "kysely";
 import type { DB } from "@db/index.js";
 import { transact } from "@db/transactions.js";
@@ -100,7 +102,7 @@ export async function listBookHumanTasks(
       instructions: definition.parameters.instructions,
       resolution: row.resolution ? JSON.parse(row.resolution) : null,
       stale:
-        book.revision !== run.configuration_revision ||
+        (book.revision !== run.configuration_revision && !await isFrozenBookResume(db, row.run_id)) ||
         inputSnapshot.hash !== run.input_hash,
       readable,
       output: readable ? output : null,
@@ -118,7 +120,7 @@ export async function resolveBookHumanTask(
   id: string,
   input: {
     expectedRevision: number;
-    decision: "approve" | "reject" | "retry";
+    decision: "approve" | "reject" | "retry" | "resume";
     note: string;
   },
   runtime?: BookSourceRuntime,
@@ -130,6 +132,10 @@ export async function resolveBookHumanTask(
     .executeTakeFirst();
   if (!task) fail(404, "Human intervention task not found");
   await bookAccess(db, actor, task.book_id, 3);
+  if (input.decision === "resume") {
+    if (task.kind !== "repair") fail(409, "Only a repair task can resume a failed pipeline");
+    return resumeBookRun(db, actor, task.book_id, task.run_id, runtime, { id, expectedRevision: input.expectedRevision, note: input.note });
+  }
   const node = await db
     .selectFrom("knowledge_book_node_runs")
     .select("output")
@@ -164,7 +170,7 @@ export async function resolveBookHumanTask(
       .executeTakeFirstOrThrow();
     if (input.decision === "approve") {
       if (
-        book.revision !== run.configuration_revision ||
+        (book.revision !== run.configuration_revision && !await isFrozenBookResume(tx, run.id)) ||
         (await bookInputSnapshot(tx, task.book_id)).hash !== run.input_hash
       )
         fail(
@@ -224,6 +230,9 @@ export async function resolveBookHumanTask(
       note: input.note,
       actorId: actor.id,
       createdAt: bookNow(),
+    });
+    if (current.resolution) await securityAudit(tx, actor.id, actor.id, "knowledge_book.task_resolution_retained", {
+      bookId: task.book_id, runId: task.run_id, taskId: task.id, resolution: current.resolution,
     });
     const changed = await tx
       .updateTable("knowledge_book_human_tasks")

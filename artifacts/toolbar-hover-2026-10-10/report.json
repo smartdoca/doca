@@ -1,0 +1,41 @@
+{
+  "checked": [
+    "撤销",
+    "重做",
+    "段落样式",
+    "字体",
+    "字号",
+    "文字颜色",
+    "背景色",
+    "加粗",
+    "斜体",
+    "下划线",
+    "删除线",
+    "行内代码",
+    "清除格式",
+    "左对齐",
+    "居中",
+    "右对齐",
+    "超链接",
+    "表情",
+    "代码块",
+    "公式",
+    "引用",
+    "分割线",
+    "卡片",
+    "流程图",
+    "思维导图",
+    "图片 / 视频",
+    "附件",
+    "插入表格",
+    "插入分列",
+    "更多文字工具"
+  ],
+  "checks": [
+    "Hovering all toolbar icons leaves document content unchanged",
+    "Tooltip hover and click preserve the text selection and apply formatting",
+    "Dropdown menus still open and close after tooltip wrapping",
+    "Narrow layout overflow icons and menu dismissal work with tooltips"
+  ],
+  "pageErrors": []
+}

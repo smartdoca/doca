@@ -1,6 +1,6 @@
 import { useI18n } from "@web/shared/i18n.js";
 import { useAI } from "@web/features/ai/ai-context.js";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DocumentDownload, downloadResult } from "@web/features/documents/file-transfer.js";
 import { spreadsheetXlsxOptions } from "@web/features/documents/spreadsheet-xlsx.js";
@@ -123,9 +123,18 @@ export default function SheetDocument({
   const ai = useAI();
   const aiRef = useRef(ai); aiRef.current = ai;
   const session = sync.binding?.value;
+  const [, refreshSessionPermissions] = useState(0);
+  useLayoutEffect(() => {
+    if (!session) return;
+    session.setReadOnly(!editable);
+    // The package samples session.capabilities during render. Publish the
+    // current host permission before painting its toolbar after a mode change.
+    refreshSessionPermissions((revision) => revision + 1);
+  }, [session, editable]);
   const elements = useSheetPluginElements(id, handle, editable);
   const menus = useMemo<SpreadsheetMenuExtension[]>(
     () => [
+      ...elements.menus,
       { id: "doca-ai", title: "引用给 AI", ariaLabel: "引用给 AI", path: "ribbon.others.others", order: 998, icon: <AtSign size={18} />, requiresEditPermission: false, enabled: context => !!context.selection && !!aiRef.current?.userId, action: () => aiRef.current?.add() },
       {
         id: "doca-region-comment",
@@ -141,7 +150,7 @@ export default function SheetDocument({
         action: () => createComment.current(),
       },
     ],
-    [rank, sync.connected, sync.blocked],
+    [elements.menus, rank, sync.connected, sync.blocked],
   );
   const publish = useCallback(
     (selection: SpreadsheetCellSelection | null) => {

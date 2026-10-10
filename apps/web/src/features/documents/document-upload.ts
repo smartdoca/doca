@@ -1,5 +1,32 @@
-import { MAX_ASSET_UPLOAD_BYTES } from "@web/shared/api.js";
+import { MAX_ASSET_UPLOAD_BYTES, uploadFile } from "@web/shared/api.js";
 import type { MessageValues } from "@doca/i18n";
+import type { UploadContext, UploadResult } from "@smartdoca/slate";
+
+export async function uploadDocumentResource(
+  file: File,
+  context: UploadContext,
+  resourceId: string,
+): Promise<UploadResult> {
+  const asset = await uploadFile(
+    file,
+    "attachment",
+    resourceId,
+    context.signal,
+    (progress) => {
+      // Completion follows the server response, after storage and ACL checks.
+      context.onProgress(
+        progress.total ? Math.min(0.99, progress.loaded / progress.total) : 0,
+      );
+    },
+  );
+  context.onProgress(1);
+  return {
+    path: asset.id,
+    name: asset.filename,
+    size: asset.size,
+    mimeType: asset.mime,
+  };
+}
 
 /** Reject invalid new files before the SDK creates a persisted upload placeholder. */
 export function documentUploadProblem(file: { name: string; size: number }): {

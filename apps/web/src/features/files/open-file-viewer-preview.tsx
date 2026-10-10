@@ -6,6 +6,7 @@ import { fileUrl } from "@web/shared/api.js";
 import { isDwgFile } from "./dwg-file.js";
 import { DwgFilePreview } from "./dwg-preview.js";
 import "@smartdoca/markdown/style.css";
+import "@open-file-viewer/core/style.css";
 import "@web/features/documents/markdown.css";
 
 export type PreviewSource = {

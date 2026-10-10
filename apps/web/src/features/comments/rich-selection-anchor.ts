@@ -4,27 +4,16 @@ import {
   combineRichAnchors,
   encodeRichAnchorPart,
   type RichAnchorPart,
+  RICH_BLOCK_ANCHOR_TYPES,
+  richBlockQuote,
 } from "@core/modules/documents/codecs/rich-anchor.js";
 
-const MEDIA = new Set(["image", "video", "attachment"]);
-
-function textOf(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function mediaPart(block: Element): RichAnchorPart {
+function blockPart(block: Element): RichAnchorPart {
   const record = block as unknown as Record<string, unknown>;
-  const type = String(block.type);
-  const quote =
-    type === "attachment"
-      ? textOf(record.name) || "附件"
-      : type === "video"
-        ? textOf(record.name) || textOf(record.alt) || "视频"
-        : textOf(record.caption) || textOf(record.alt) || textOf(record.name) || "图片";
-  return { kind: "block", blockId: String(block.id), quote: quote.slice(0, 200), start: "", end: "" };
+  return { kind: "block", blockId: String(block.id), quote: richBlockQuote(record), start: "", end: "" };
 }
 
-/** One anchor per selected text block or media block, in document order. */
+/** One anchor per selected text or atomic block, in document order. */
 export function captureRichSelection(editor: Editor, runtime: YjsDocument, selection: Range, epochId?: string) {
   const parts: RichAnchorPart[] = [];
   for (const [block, path] of Editor.nodes(editor, {
@@ -32,18 +21,18 @@ export function captureRichSelection(editor: Editor, runtime: YjsDocument, selec
     voids: true,
     match: (n) =>
       Element.isElement(n) &&
-      (MEDIA.has(String(n.type)) ||
+      (RICH_BLOCK_ANCHOR_TYPES.has(String(n.type)) ||
         (Editor.isBlock(editor, n) && !Editor.hasBlocks(editor, n) && !Editor.isVoid(editor, n))),
   })) {
     if (!Element.isElement(block) || !block.id) continue;
-    if (MEDIA.has(String(block.type))) {
+    if (RICH_BLOCK_ANCHOR_TYPES.has(String(block.type))) {
       const inside =
         Path.equals(selection.anchor.path, path) ||
         Path.isAncestor(path, selection.anchor.path);
       const selected = Range.isCollapsed(selection)
         ? Editor.void(editor, { at: selection })?.[0] === block || inside
         : Boolean(Range.intersection(selection, Editor.range(editor, path)));
-      if (selected) parts.push(mediaPart(block));
+      if (selected) parts.push(blockPart(block));
       continue;
     }
     if (Range.isCollapsed(selection) || Editor.isVoid(editor, block)) continue;

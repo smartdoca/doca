@@ -1,0 +1,38 @@
+{
+  "package": "@smartdoca/sheet",
+  "version": "0.2.0-rc.19",
+  "sourceRepository": "https://github.com/smartdoca/sheet",
+  "pullRequest": "https://github.com/smartdoca/sheet/pull/4",
+  "checks": [
+    "Chinese toolbar label: 数据验证; insert-menu label: 下拉列表",
+    "Insert menu opens dedicated dropdown options dialog",
+    "Validation toolbar opens native general validation rule panel",
+    "English toolbar label: Data validation; insert-menu label: Dropdown list",
+    "Readonly disables both validation and insert actions",
+    "Browser console contains no errors",
+    "Doca typecheck passed",
+    "Package build passed",
+    "Package tests: 133 passed, 1 existing skipped performance test",
+    "Public declarations and Yjs/model/XLSX bundles byte-identical to rc.18",
+    "Installed npm rc.19 module entries match published build",
+    "Doca post-upgrade typecheck passed",
+    "Doca spreadsheet regression: 5 files / 23 tests passed"
+  ],
+  "screenshots": [
+    "insert-menu.png",
+    "dropdown-dialog.png",
+    "data-validation-panel.png",
+    "readonly.png",
+    "published-package.png"
+  ],
+  "dataScope": "Standalone isolated workbook; no user documents or databases",
+  "release": {
+    "github": "https://github.com/smartdoca/sheet/releases/tag/v0.2.0-rc.19",
+    "npm": "https://www.npmjs.com/package/@smartdoca/sheet/v/0.2.0-rc.19",
+    "npmTag": "latest",
+    "sha1": "28ac3b4bd5fd002f5de1ea4e832d6b3631ba93c2",
+    "sourceCommit": "5d478b251e0d6fffb04201de8d46721cefa84408",
+    "publishMethod": "authenticated local npm publish of built and verified tarball",
+    "ciLimitation": "GitHub Actions builds successfully but npm publish lacks authentication (ENEEDAUTH)"
+  }
+}

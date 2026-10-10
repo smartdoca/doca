@@ -1,0 +1,12 @@
+[
+  {
+    "file": "page.png",
+    "state": null,
+    "size": "1280x900",
+    "zoom": 1,
+    "issues": [
+      "控制台错误：Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.",
+      "加载错误：Failed to load resource: the server responded with a status of 404 (Not Found) http://127.0.0.1:39141/favicon.ico"
+    ]
+  }
+]

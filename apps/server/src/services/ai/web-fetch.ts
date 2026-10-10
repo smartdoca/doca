@@ -266,6 +266,100 @@ type FirecrawlFactory = (options: {
   maxRetries?: number;
 }) => FirecrawlClient;
 
+async function publicWebAddresses(
+  url: URL,
+  signal: AbortSignal,
+  resolve: ((host: string) => Promise<Address[]>) | undefined,
+  intranetMessage: string,
+) {
+  signal.throwIfAborted();
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  let cancelLookup: (() => void) | undefined;
+  let addresses: Address[];
+  try {
+    addresses = ipaddr.isValid(host)
+      ? [
+          {
+            address: host,
+            family: ipaddr.parse(host).kind() === "ipv4" ? 4 : 6,
+          },
+        ]
+      : await Promise.race([
+          (resolve ?? ((host) => lookup(host, { all: true })))(host),
+          new Promise<never>((_, reject) => {
+            const onAbort = () => reject(signal.reason);
+            cancelLookup = () => signal.removeEventListener("abort", onAbort);
+            signal.addEventListener("abort", onAbort, { once: true });
+            if (signal.aborted) onAbort();
+          }),
+        ]);
+  } finally {
+    cancelLookup?.();
+  }
+  // VPN fake-IP DNS uses the benchmark range. Resolve the same public hostname
+  // over a fixed HTTPS DNS endpoint, then validate the real result.
+  // Literal IPs and ordinary private DNS records never take this path.
+  if (
+    !resolve &&
+    !ipaddr.isValid(host) &&
+    addresses.some(
+      (a) =>
+        ipaddr.parse(a.address).kind() === "ipv4" &&
+        ipaddr.parse(a.address).match(ipaddr.parseCIDR("198.18.0.0/15")),
+    )
+  ) {
+    const response = await fetch(
+      "https://cloudflare-dns.com/dns-query?" +
+        new URLSearchParams({ name: host, type: "A" }),
+      {
+        headers: { Accept: "application/dns-json" },
+        redirect: "error",
+        signal,
+      },
+    );
+    if (!response.ok || !response.body) throw new Error("DNS unavailable");
+    const parts: Uint8Array[] = [];
+    let size = 0;
+    for await (const part of response.body as any) {
+      size += part.byteLength;
+      if (size > 65536) throw new Error("DNS response too large");
+      parts.push(part);
+    }
+    const answer = JSON.parse(Buffer.concat(parts).toString());
+    addresses = (answer.Answer ?? [])
+      .filter((a: any) => a.type === 1)
+      .map((a: any) => ({ address: a.data, family: 4 }));
+  }
+  signal.throwIfAborted();
+  if (!addresses.length || addresses.some((a) => !isPublicAddress(a.address)))
+    fail(400, intranetMessage);
+  return addresses;
+}
+
+/** Knowledge sources remain public even when a configured reader fetches them. */
+export async function validatePublicWebSourceUrl(
+  value: string,
+  signal?: AbortSignal,
+  resolve?: (host: string) => Promise<Address[]>,
+) {
+  const abort = AbortSignal.any([
+    AbortSignal.timeout(20000),
+    ...(signal ? [signal] : []),
+  ]);
+  try {
+    await publicWebAddresses(
+      publicWebUrl(value),
+      abort,
+      resolve,
+      "Web sources must use a public address",
+    );
+  } catch (error) {
+    signal?.throwIfAborted();
+    if (error instanceof AppError) throw error;
+    fail(502, "Web source address lookup failed or timed out");
+  }
+}
+
 async function fetchPublicResponse(
   value: string,
   signal: AbortSignal | undefined,
@@ -291,71 +385,12 @@ async function fetchPublicResponse(
   try {
     for (let redirect = 0; redirect <= 4; redirect++) {
       abort.throwIfAborted();
-      const host = url.hostname.replace(/^\[|\]$/g, "");
-      let cancelLookup: (() => void) | undefined;
-      let addresses: Address[];
-      try {
-        addresses = ipaddr.isValid(host)
-          ? [
-              {
-                address: host,
-                family: ipaddr.parse(host).kind() === "ipv4" ? 4 : 6,
-              },
-            ]
-          : await Promise.race([
-              (dependencies.resolve ?? ((host) => lookup(host, { all: true })))(
-                host,
-              ),
-              new Promise<never>((_, reject) => {
-                const onAbort = () => reject(abort.reason);
-                cancelLookup = () =>
-                  abort.removeEventListener("abort", onAbort);
-                abort.addEventListener("abort", onAbort, { once: true });
-                if (abort.aborted) onAbort();
-              }),
-            ]);
-      } finally {
-        cancelLookup?.();
-      }
-      // VPN fake-IP DNS uses the benchmark range. Resolve the same public hostname
-      // over a fixed HTTPS DNS endpoint, then pin and validate the real result.
-      // Literal IPs and ordinary private DNS records never take this path.
-      if (
-        !dependencies.resolve &&
-        !ipaddr.isValid(host) &&
-        addresses.some(
-          (a) =>
-            ipaddr.parse(a.address).kind() === "ipv4" &&
-            ipaddr.parse(a.address).match(ipaddr.parseCIDR("198.18.0.0/15")),
-        )
-      ) {
-        const response = await fetch(
-          "https://cloudflare-dns.com/dns-query?" +
-            new URLSearchParams({ name: host, type: "A" }),
-          {
-            headers: { Accept: "application/dns-json" },
-            redirect: "error",
-            signal: abort,
-          },
-        );
-        if (!response.ok || !response.body) throw new Error("DNS unavailable");
-        const parts: Uint8Array[] = [];
-        let size = 0;
-        for await (const part of response.body as any) {
-          size += part.byteLength;
-          if (size > 65536) throw new Error("DNS response too large");
-          parts.push(part);
-        }
-        const answer = JSON.parse(Buffer.concat(parts).toString());
-        addresses = (answer.Answer ?? [])
-          .filter((a: any) => a.type === 1)
-          .map((a: any) => ({ address: a.data, family: 4 }));
-      }
-      if (
-        !addresses.length ||
-        addresses.some((a) => !isPublicAddress(a.address))
-      )
-        fail(400, options.intranetMessage);
+      const addresses = await publicWebAddresses(
+        url,
+        abort,
+        dependencies.resolve,
+        options.intranetMessage,
+      );
       const res = await (dependencies.request ?? options.defaultRequest)(
         url,
         addresses[0]!,
@@ -541,14 +576,39 @@ function markdownPage(markdown: string, sourceUrl: string, title?: string) {
   };
 }
 
+function externalPage(
+  content: string,
+  sourceUrl: string,
+  title: string | undefined,
+  format: "markdown" | "html",
+): ReturnType<typeof markdownPage> & { html?: string } {
+  if (format === "markdown") return markdownPage(content, sourceUrl, title);
+  if (!content.trim()) fail(502, "Web reader did not return HTML");
+  if (Buffer.byteLength(content) > webFileLimit)
+    fail(413, "Web source HTML is too large");
+  return {
+    ...extractWebText(content, sourceUrl),
+    html: content,
+    url: sourceUrl,
+    truncated: false,
+    retrievedAt: new Date().toISOString(),
+  };
+}
+
 async function fetchExternalWebPage(
   value: string,
   signal: AbortSignal | undefined,
   config: WebFetchConfig,
   fetcher: typeof fetch = fetch,
   firecrawlFactory: FirecrawlFactory = (options) => new Firecrawl(options),
+  format: "markdown" | "html" = "markdown",
 ) {
   const sourceUrl = publicWebUrl(value).href;
+  if (format === "html" && config.provider === "tavily")
+    fail(
+      422,
+      "Tavily cannot read exact web source sections; configure Firecrawl or Jina, or select a whole-page URL",
+    );
   const abort = AbortSignal.any([
     AbortSignal.timeout(60000),
     ...(signal ? [signal] : []),
@@ -561,7 +621,8 @@ async function fetchExternalWebPage(
     init = {
       method: "GET",
       headers: {
-        Accept: "text/markdown",
+        Accept: format === "html" ? "text/plain" : "text/markdown",
+        ...(format === "html" ? { "X-Respond-With": "html" } : {}),
         ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
         "X-Engine": "browser",
         "X-Timeout": "60",
@@ -576,7 +637,11 @@ async function fetchExternalWebPage(
           apiUrl: firecrawlApiUrl(config.baseUrl),
           timeoutMs: 60000,
           maxRetries: 2,
-        }).scrape(sourceUrl, { formats: ["markdown"], timeout: 60000 }),
+        }).scrape(sourceUrl, {
+          formats: format === "html" ? ["rawHtml"] : ["markdown"],
+          ...(format === "html" ? { onlyMainContent: false } : {}),
+          timeout: 60000,
+        }),
         new Promise<never>((_, reject) => {
           const onAbort = () => reject(abort.reason);
           cancelWait = () => abort.removeEventListener("abort", onAbort);
@@ -585,10 +650,13 @@ async function fetchExternalWebPage(
         }),
       ]);
       abort.throwIfAborted();
-      return markdownPage(
-        String((result as any).markdown ?? ""),
+      return externalPage(
+        String(
+          format === "html" ? (result.rawHtml ?? "") : (result.markdown ?? ""),
+        ),
         sourceUrl,
-        (result as any).metadata?.title,
+        result.metadata?.title,
+        format,
       );
     } catch (error) {
       signal?.throwIfAborted();
@@ -641,7 +709,8 @@ async function fetchExternalWebPage(
           : `网页读取服务暂不可用（HTTP ${response.status}）`,
       );
     }
-    if (config.provider === "jina") return markdownPage(raw, sourceUrl);
+    if (config.provider === "jina")
+      return externalPage(raw, sourceUrl, undefined, format);
     let body: any;
     try {
       body = JSON.parse(raw);
@@ -658,6 +727,32 @@ async function fetchExternalWebPage(
     if (error instanceof AppError) throw error;
     fail(502, "网页读取服务连接失败或超时，请检查配置后重试");
   }
+}
+
+/** Keep anchor IDs for exact source selection instead of guessing from Markdown. */
+export async function fetchWebSourceHTML(
+  value: string,
+  signal?: AbortSignal,
+  dependencies: Parameters<typeof fetchWebPage>[2] = {},
+  config?: WebFetchConfig,
+) {
+  if (config?.provider && config.provider !== "builtin") {
+    const page = await fetchExternalWebPage(
+      value,
+      signal,
+      config,
+      dependencies.fetcher,
+      dependencies.firecrawlFactory,
+      "html",
+    );
+    if (!("html" in page) || typeof page.html !== "string")
+      fail(502, "Web reader did not return HTML");
+    return { url: page.url, html: page.html };
+  }
+  const file = await fetchWebFile(value, signal, dependencies);
+  if (!/html/i.test(file.mime))
+    fail(400, "A section URL requires an HTML page");
+  return { url: file.url, html: file.body.toString("utf8") };
 }
 
 export async function fetchWebPage(

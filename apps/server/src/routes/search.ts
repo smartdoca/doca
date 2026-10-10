@@ -766,17 +766,19 @@ export async function registerSearch(
             ? "未启用 AI 搜索，已使用关键词搜索"
             : undefined,
         );
-      if (indexing)
-        return fallback(
-          query.mode === "ai"
-            ? "搜索索引更新中，请稍后重试 AI 搜索"
-            : "搜索索引更新中，暂用基础搜索",
-        );
+      if (indexing && query.mode === "ai")
+        return fallback("搜索索引更新中，请稍后重试 AI 搜索");
       try {
-        const embedder =
-          query.mode === "ai" || query.mode === "auto"
-            ? await embeddings.queryEmbedder()
-            : undefined;
+        let embedder: string | undefined;
+        let semanticFailed = false;
+        if (query.mode === "ai" || query.mode === "auto") {
+          try {
+            embedder = await embeddings.queryEmbedder();
+          } catch (error) {
+            if (query.mode === "ai") throw error;
+            semanticFailed = true;
+          }
+        }
         const fromFiles =
           intent.requireEvidence || intent.focus === "mixed"
             ? await documentIdsForFileTopic(actor, intent, scoped)
@@ -831,21 +833,28 @@ export async function registerSearch(
           };
         const retrievalQuery = intent.topic || query.q;
         type Summary = Awaited<ReturnType<typeof searchSummaries>>[number];
-        const result = await searchHost.query<Summary>({
-          query: retrievalQuery,
-          context: {
-            kind: "documents",
-            actor,
-            scoped,
-            candidateIds: candidates,
-            retrievalQuery,
-            highlight: highlight ?? "",
-            semantic: !!embedder,
-            minScore: c.ai_min_score,
-          },
-          sources: [documentSearchSource],
-          limit: candidates.length,
-        });
+        const retrieve = (semantic: boolean) =>
+          searchHost.query<Summary>({
+            query: retrievalQuery,
+            context: {
+              kind: "documents",
+              actor,
+              scoped,
+              candidateIds: candidates,
+              retrievalQuery,
+              highlight: highlight ?? "",
+              semantic,
+              minScore: c.ai_min_score,
+            },
+            sources: [documentSearchSource],
+            limit: candidates.length,
+          });
+        let result = await retrieve(!!embedder);
+        if (result.failures.length && embedder && query.mode === "auto") {
+          embedder = undefined;
+          semanticFailed = true;
+          result = await retrieve(false);
+        }
         if (result.failures.length)
           throw new AggregateError(
             result.failures.map((failure) => failure.error),
@@ -919,7 +928,11 @@ export async function registerSearch(
           engine: "meilisearch",
           mode: embedder ? "ai" : "keyword",
           ...(query.mode === "auto" && !embedder
-            ? { notice: "向量模型尚未生效，已使用关键词搜索" }
+            ? {
+                notice: semanticFailed
+                  ? "向量服务暂不可用，已使用关键词搜索"
+                  : "向量模型尚未生效，已使用关键词搜索",
+              }
             : {}),
         };
       } catch {

@@ -2022,6 +2022,38 @@ it("writes editable rich-text flowcharts and mind maps through supported native 
   );
 });
 
+it("styles native diagrams with free endpoints and invalidates derived previews while preserving identities", async () => {
+  const r = await createContent(db).create(owner, { title: "图块样式回归", kind: "document", format: "rich_text" });
+  let before = await readAIDocument(db, { actor: owner }, r.id);
+  const flowId = randomUUID(), mindId = randomUUID();
+  const preview = { previewSvg: '<svg xmlns="http://www.w3.org/2000/svg"><text>before</text></svg>', previewVersion: 1, contentWidth: 600, contentHeight: 300, aspectRatio: 2 };
+  const nodes = [{ id: "s", label: "开始", shape: "terminator", x: 20, y: 30, width: 120, height: 56 }];
+  const edges = [{ id: "free", source: "s", sourcePort: "right", target: "", targetPoint: { x: 250, y: 58 }, vertices: [{ x: 200, y: 58 }], color: "#64748b" }];
+  await editAIDocument(db, { actor: owner }, r.id, { seq: before.seq, epochId: before.epochId! }, [
+    { type: "insertBlock", block: { id: flowId, type: "flowchart", width: 600, nodes, edges, ...preview, children: [{ text: "" }] } },
+    { type: "insertBlock", block: { id: mindId, type: "mindmap", mindData: { direction: 2, nodeData: { id: "root", topic: "计划", children: [{ id: "child", topic: "验收" }] } }, ...preview, children: [{ text: "" }] } },
+  ], randomUUID());
+  before = await readAIDocument(db, { actor: owner }, r.id);
+  await editAIDocument(db, { actor: owner }, r.id, { seq: before.seq, epochId: before.epochId! }, [
+    { type: "setBlock", blockId: flowId, properties: { nodes: nodes.map((n) => ({ ...n, fillColor: "#dbeafe", color: "#2563eb", textColor: "#1e3a8a" })) } },
+    { type: "setBlock", blockId: mindId, properties: { mindData: { direction: 2, nodeData: { id: "root", topic: "计划", children: [{ id: "child", topic: "验收", color: "#2563eb", style: "rounded" }] } } } },
+  ], randomUUID());
+  const restored = await previewAIDocument(db, owner, r.id);
+  const flow = (restored.value as any[]).find((n) => n.id === flowId), mind = (restored.value as any[]).find((n) => n.id === mindId);
+  expect(flow.nodes[0]).toEqual({ ...nodes[0], fillColor: "#dbeafe", color: "#2563eb", textColor: "#1e3a8a" });
+  expect(flow.edges).toEqual(edges);
+  expect(flow.width).toBe(600);
+  for (const key of Object.keys(preview)) {
+    expect(flow[key]).toBeUndefined(); expect(mind[key]).toBeUndefined();
+  }
+  expect(mind.mindData.nodeData.children[0]).toMatchObject({ id: "child", topic: "验收", color: "#2563eb" });
+  const latest = await readAIDocument(db, { actor: owner }, r.id);
+  for (const properties of [{ color: "#ffffff" }, { edges: [{ ...edges[0], source: "unknown", sourcePoint: { x: 0, y: 0 } }] }]) {
+    await expect(editAIDocument(db, { actor: owner }, r.id, { seq: latest.seq, epochId: latest.epochId! }, [{ type: "setBlock", blockId: flowId, properties }], randomUUID())).rejects.toThrow();
+  }
+  expect((await readAIDocument(db, { actor: owner }, r.id)).seq).toBe(latest.seq);
+});
+
 it("requests session document scope, waits for approval, and preserves the grant across turns", async () => {
   const c = await configured();
   await saveAIConfig(db, { ...c }, 1);

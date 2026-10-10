@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { uploadFile } from "@web/shared/api.js";
+import { uploadDocumentResource } from "@web/features/documents/document-upload.js";
 
 const file = (index: number) =>
   new File([`Attachment ${index}`], `资料-${index}.json`, {
@@ -205,4 +206,26 @@ it("queues progress-enabled uploads too and reports progress and HTTP failures",
   expect(
     results.slice(1).every((result) => result.status === "fulfilled"),
   ).toBe(true);
+});
+
+it("passes incremental transfer progress to the rich editor and completes only after the server accepts the asset", async () => {
+  let xhr: any;
+  vi.stubGlobal("XMLHttpRequest", class {
+    upload: { onprogress?: (event: unknown) => void } = {};
+    status = 201;
+    responseText = JSON.stringify({ id: "asset", filename: "photo.png", size: 100, mime: "image/png" });
+    constructor() { xhr = this; }
+    open() {}
+    setRequestHeader() {}
+    getResponseHeader() { return null; }
+    send() {}
+  });
+  const onProgress = vi.fn(), controller = new AbortController();
+  const upload = uploadDocumentResource(file(0), { kind: "image", signal: controller.signal, onProgress }, "resource");
+  await vi.waitFor(() => expect(xhr).toBeDefined());
+  for (const loaded of [25, 50, 100]) xhr.upload.onprogress({ loaded, total: 100, lengthComputable: true });
+  expect(onProgress.mock.calls.map(([progress]) => progress)).toEqual([0.25, 0.5, 0.99]);
+  xhr.onload();
+  expect(await upload).toEqual({ path: "asset", name: "photo.png", size: 100, mimeType: "image/png" });
+  expect(onProgress).toHaveBeenLastCalledWith(1);
 });

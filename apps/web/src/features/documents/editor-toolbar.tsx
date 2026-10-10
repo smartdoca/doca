@@ -1,5 +1,6 @@
 import { Feedback } from "@web/shared/components/feedback.js";
 import { useI18n } from "@web/shared/i18n.js";
+import { Tooltip } from "antd";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { RichTextEditorHandle, BlockType } from "@smartdoca/slate";
 import { FONT_FAMILIES } from "@smartdoca/slate";
@@ -31,6 +32,8 @@ import {
   Minus,
   Quote,
   Sigma,
+  Workflow,
+  Network,
 } from "lucide-react";
 import { visibleToolbarCount } from "@web/shared/utils/toolbar-layout.js";
 import { EmojiPicker } from "@web/shared/components/emoji-picker.js";
@@ -167,7 +170,6 @@ export function EditorToolbar({
       type="button"
       key={t.name}
       disabled={disabled}
-      title={t.name}
       aria-label={t.name}
       aria-pressed={"active" in t ? t.active : undefined}
       onMouseDown={(e) =>
@@ -498,6 +500,35 @@ export function EditorToolbar({
           }),
       },
       {
+        name: tr("toolbar.flowchart"),
+        icon: Workflow,
+        action: (h: RichTextEditorHandle) => h.commands.insertBlock({
+          id: crypto.randomUUID(), type: "flowchart", width: 600,
+          nodes: [
+            { id: "start", label: tr("toolbar.diagramStart"), shape: "terminator", x: 30, y: 60, width: 120, height: 56 },
+            { id: "step", label: tr("toolbar.diagramStep"), shape: "process", x: 220, y: 60, width: 120, height: 56 },
+            { id: "end", label: tr("toolbar.diagramEnd"), shape: "terminator", x: 410, y: 60, width: 120, height: 56 },
+          ],
+          edges: [{ id: "start-step", source: "start", target: "step", arrow: "end" }, { id: "step-end", source: "step", target: "end", arrow: "end" }],
+          children: [{ text: "" }],
+        }),
+      },
+      {
+        name: tr("toolbar.mindmap"),
+        icon: Network,
+        action: (h: RichTextEditorHandle) => h.commands.insertBlock({
+          id: crypto.randomUUID(), type: "mindmap", width: 600,
+          mindData: { direction: 2, nodeData: {
+            id: crypto.randomUUID(), topic: tr("toolbar.diagramTopic"), expanded: true,
+            children: [
+              { id: crypto.randomUUID(), topic: tr("toolbar.diagramBranchOne") },
+              { id: crypto.randomUUID(), topic: tr("toolbar.diagramBranchTwo") },
+            ],
+          } },
+          children: [{ text: "" }],
+        }),
+      },
+      {
         name: tr("toolbar.media"),
         icon: ImagePlus,
         action: () => {
@@ -596,6 +627,8 @@ export function EditorToolbar({
     tr("toolbar.link"),
     tr("toolbar.quote"),
     tr("toolbar.media"),
+    tr("toolbar.flowchart"),
+    tr("toolbar.mindmap"),
     tr("toolbar.divider"),
     tr("editor.element.insert"),
   ]);
@@ -618,25 +651,44 @@ export function EditorToolbar({
     >
       <div className="editor-toolbar-buttons" ref={host}>
         {toolbarItems.slice(0, count).map((item) => (
-          <div
-            className="toolbar-item"
+          <Tooltip
             key={item.key}
-            style={{ width: item.width }}
+            title={item.key.endsWith("分隔") ? undefined : item.key}
+            placement="top"
+            mouseEnterDelay={0.3}
+            mouseLeaveDelay={0}
           >
-            {item.node}
-          </div>
+            <div className="toolbar-item" style={{ width: item.width }}>
+              {item.node}
+            </div>
+          </Tooltip>
         ))}
         {overflow.length > 0 && (
           <details className="menu toolbar-overflow">
-            <summary aria-label={tr("toolbar.more")}>
-              <MoreHorizontal size={17} />
-            </summary>
+            <Tooltip
+              title={tr("toolbar.more")}
+              placement="top"
+              mouseEnterDelay={0.3}
+              mouseLeaveDelay={0}
+            >
+              <summary aria-label={tr("toolbar.more")}>
+                <MoreHorizontal size={17} />
+              </summary>
+            </Tooltip>
             <div className="toolbar-overflow-panel">
               {overflow.map((item) => (
-                <div className="toolbar-overflow-item" key={item.key}>
-                  {item.node}
-                  <span>{item.key}</span>
-                </div>
+                <Tooltip
+                  key={item.key}
+                  title={item.key}
+                  placement="left"
+                  mouseEnterDelay={0.3}
+                  mouseLeaveDelay={0}
+                >
+                  <div className="toolbar-overflow-item">
+                    {item.node}
+                    <span>{item.key}</span>
+                  </div>
+                </Tooltip>
               ))}
             </div>
           </details>

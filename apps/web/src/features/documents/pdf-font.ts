@@ -1,5 +1,5 @@
 const cjkFontUrl = new URL(
-  "./assets/NotoSansSC-Regular.ttf",
+  "./assets/NotoSansSC-Regular.woff2",
   import.meta.url,
 );
 const cjkCharacters = /[\u2e80-\u2fff\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u;

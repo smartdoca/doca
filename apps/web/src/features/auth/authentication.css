@@ -67,8 +67,7 @@
   font-weight: 700;
 }
 .provider-icon.google {
-  color: #4285f4;
-  background: #edf3ff;
+  background: #fff;
 }
 .provider-icon.github {
   color: #24292f;
@@ -84,6 +83,18 @@
 .provider-icon.oidc {
   color: #5b5bd6;
   background: #f0efff;
+}
+.provider-icon.oauth2 {
+  color: #3654b8;
+  background: #edf2ff;
+}
+.provider-icon > svg,
+.provider-icon > img {
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  object-fit: contain;
 }
 .auth-security-note {
   display: flex;

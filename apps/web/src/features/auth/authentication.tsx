@@ -15,7 +15,6 @@ import { Feedback, type FeedbackTone } from "@web/shared/components/feedback.js"
 import { BackLink } from "@web/shared/components/back-link.js";
 import { useEffect, useState } from "react";
 import {
-  CodeXml,
   Globe,
   KeyRound,
   Link2,
@@ -27,6 +26,7 @@ import { api } from "@web/shared/api.js";
 import { Select } from "@web/shared/components/select.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
 import { ServiceCredentials } from "@web/features/admin/service-credentials.js";
+import { ProviderIcon } from "@web/features/auth/provider-icon.js";
 import "@web/features/auth/authentication.css";
 
 type Provider = {
@@ -51,25 +51,6 @@ type Policy = {
   providers: Provider[];
 };
 
-function ProviderIcon({ type }: { type: string }) {
-  return (
-    <span className={`provider-icon ${type}`}>
-      {type === "github" ? (
-        <CodeXml size={20} />
-      ) : type === "oidc" ? (
-        <ShieldCheck size={20} />
-      ) : type === "google" ? (
-        "G"
-      ) : type === "wechat" ? (
-        "W"
-      ) : type === "qq" ? (
-        "Q"
-      ) : (
-        <Globe size={20} />
-      )}
-    </span>
-  );
-}
 export function AuthenticationSettings({
   saved,
 }: {
