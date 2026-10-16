@@ -1,0 +1,9 @@
+{
+  "status": "published",
+  "matches": true,
+  "artifactHash": "3a970e9f3d3b87f67c38e318d396a9784f88c6c01867621cbc830285eb529ebd",
+  "artifactVersion": 1,
+  "failedChecksRetained": true,
+  "manualDecisionInProvenance": true,
+  "isolatedDatabase": true
+}

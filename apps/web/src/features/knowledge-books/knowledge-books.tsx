@@ -186,6 +186,7 @@ type HumanTask = {
   revision: number;
   stale: boolean;
   readable: boolean;
+  canAcceptFailure: boolean;
   output: {
     pages?: BookArtifact["pages"];
     checks?: BookArtifact["checks"];
@@ -2584,6 +2585,7 @@ export function BookHumanTasks({
               <Alert type="warning" title={bt("restricted")} />
             )}
             {task.error && <Alert type="error" title={be(task.error)} />}
+            {task.canAcceptFailure && <Alert type="warning" title={bt("acceptFailureWarning")} />}
             <Button
               icon={<Sparkles size={15} />}
               disabled={!ai?.userId}
@@ -2640,11 +2642,22 @@ export function BookHumanTasks({
                     type="primary"
                     loading={busy}
                     disabled={
-                      task.stale || !task.readable || task.kind === "repair"
+                      task.stale || !task.readable ||
+                      (task.kind === "repair" && (!task.canAcceptFailure || !note.trim()))
                     }
-                    onClick={() => void resolve("approve")}
+                    onClick={() => {
+                      if (task.canAcceptFailure)
+                        Modal.confirm({
+                          title: bt("acceptFailureConfirm"),
+                          content: bt("acceptFailureWarning"),
+                          okText: bt("acceptFailure"),
+                          cancelText: bt("cancel"),
+                          onOk: () => resolve("approve"),
+                        });
+                      else void resolve("approve");
+                    }}
                   >
-                    {bt("approve")}
+                    {bt(task.canAcceptFailure ? "acceptFailure" : "approve")}
                   </Button>
                   <Button
                     danger

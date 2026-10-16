@@ -15,6 +15,7 @@ import type { DB, Schema } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import { bookFail as fail } from "./errors.js";
 import { AppError, systemErrorText } from "../../shared/errors.js";
+import { acceptedBookFailures, assertBookPublicationAcceptance } from "./acceptance-overrides.js";
 import {
   bookAccess,
   bookInputSnapshot,
@@ -333,6 +334,7 @@ async function publishRun(
   runtime: BookRuntime,
 ) {
   await assertCurrent(db, run, lease);
+  await assertBookPublicationAcceptance(db, run, artifact);
   await validateBookEvidence(db, run.book_id, artifact.evidence, runtime);
   const id = randomUUID();
   const prepared = await prepareBookPayload(
@@ -362,6 +364,7 @@ async function publishRun(
     return await transact(db, async (tx) => {
       await lockBookPayload(tx, run.book_id);
       const { actor, book } = await assertCurrent(tx, run, lease);
+      await assertBookPublicationAcceptance(tx, run, artifact);
       const nodeMarker = await installBookPayload(tx, nodePrepared);
       await tx
         .updateTable("knowledge_book_node_runs")
@@ -592,6 +595,11 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
           }),
         );
         pending.delete(node.node_id);
+      }
+    if (resumeNodes)
+      for (const [nodeId, output] of await acceptedBookFailures(db, run)) {
+        outputs.set(nodeId, output);
+        pending.delete(nodeId);
       }
     async function persistNode(
       nodeId: string,
@@ -869,23 +877,7 @@ export async function executeBookRun(db: DB, id: string, runtime: BookRuntime) {
             output.claims,
             configuration.maxDocumentDepth,
           );
-          if (
-            configuration.criteria.some(
-              (criterion) =>
-                !output.checks.some(
-                  (check) => check.criterionId === criterion.id,
-                ) ||
-                (criterion.required &&
-                  output.checks.some(
-                    (check) =>
-                      check.criterionId === criterion.id && !check.passed,
-                  )),
-            )
-          )
-            fail(
-              422,
-              "Publication is missing successful required acceptance checks",
-            );
+          await assertBookPublicationAcceptance(db, run, output);
           const compact = compactOutput(output);
           const artifact: BookArtifact = {
             version: 1,

@@ -12,6 +12,7 @@ import {
 } from "./management.js";
 import { bookConfigurationSchema, type Evidence } from "./protocol.js";
 import { bookFail as fail } from "./errors.js";
+import { acceptedBookFailures } from "./acceptance-overrides.js";
 import {
   canReadBookEvidence,
   readBookSource,
@@ -133,6 +134,7 @@ export async function resumeBookRun(
   // A negative quality check needs corrected content. Rebuild the closest
   // content stage, keeping extraction and unrelated branches completed.
   const restart = new Set<string>();
+  const accepted = await acceptedBookFailures(db, run);
   const definitions = new Map(
     configuration.workflow.nodes.map((node) => [node.id, node]),
   );
@@ -140,6 +142,7 @@ export async function resumeBookRun(
     (node) =>
       node.status === "failed" && node.type === "acceptance" && node.output,
   )) {
+    if (accepted.has(node.node_id)) continue;
     const output = await readBookPayload<any>(db, node.output);
     if (
       !Array.isArray(output.checks) ||

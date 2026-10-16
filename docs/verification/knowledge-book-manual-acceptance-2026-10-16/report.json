@@ -1,0 +1,49 @@
+{
+  "status": "published",
+  "errorCleared": true,
+  "failedChecksRetained": true,
+  "publicationTaskResolved": true,
+  "pageCount": 1,
+  "artifactVersion": 1,
+  "fixtureOnly": true,
+  "typecheck": "passed",
+  "docsPages": 69,
+  "webBuild": "passed",
+  "postgres17": 58,
+  "postgres18": 58,
+  "realModelControls": {
+    "strictSourceMissingSupport": "rejected",
+    "explicitBackgroundPermission": "passed",
+    "wrongArithmeticWithPermission": "rejected"
+  },
+  "oldVersionRead": {
+    "releasedVersion": "0.1.27",
+    "artifactV1Readable": true,
+    "negativeChecksRetained": true,
+    "manualDecisionReadable": true
+  },
+  "coldReadback": {
+    "status": "published",
+    "matches": true,
+    "artifactHash": "3a970e9f3d3b87f67c38e318d396a9784f88c6c01867621cbc830285eb529ebd",
+    "artifactVersion": 1,
+    "failedChecksRetained": true,
+    "manualDecisionInProvenance": true,
+    "isolatedDatabase": true
+  },
+  "wholeBookRegeneration": false,
+  "productionDocumentsModified": false,
+  "publication": "prepublication verification on isolated local fixtures",
+  "fullSuite": {
+    "passedFiles": 280,
+    "skippedFiles": 2,
+    "passedTests": 2898,
+    "skippedTests": 8
+  },
+  "focusedTests": 156,
+  "sdkPlainObjectErrorControls": {
+    "authenticationCalls": 1,
+    "temporaryServiceCalls": 3,
+    "secretsNotForwarded": true
+  }
+}

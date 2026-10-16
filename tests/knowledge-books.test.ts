@@ -209,6 +209,200 @@ async function run(model = runtime()) {
     .where("id", "=", queued.id)
     .executeTakeFirstOrThrow();
 }
+
+async function failedAcceptance() {
+  await manual();
+  const failed = await run(
+    runtime((stage, input, result) =>
+      stage === "acceptance"
+        ? {
+            checks: input.criteria.map((c: any) => ({
+              criterionId: c.id,
+              passed: false,
+              reason: "Known protocol error",
+            })),
+          }
+        : result,
+    ),
+  );
+  const task = (
+    await listBookHumanTasks(db, owner, {
+      bookId,
+      runId: failed.id,
+      status: "pending",
+    })
+  ).items[0]!;
+  expect(task.canAcceptFailure).toBe(true);
+  expect(decodeSystemError(failed.error)?.code).toBe("book_acceptance");
+  expect(failed.error).not.toContain("[object Object]");
+  return { failed, task };
+}
+
+it("publishes an explicitly accepted candidate without rewriting its failed checks or rerunning generation", async () => {
+  const { failed, task } = await failedAcceptance();
+  const before = await readBookRun(db, owner, bookId, failed.id);
+  await expect(
+    resolveBookHumanTask(db, owner, task.id, {
+      expectedRevision: task.revision,
+      decision: "approve",
+      note: " ",
+    }),
+  ).rejects.toMatchObject({ status: 400 });
+  await resolveBookHumanTask(db, owner, task.id, {
+    expectedRevision: task.revision,
+    decision: "approve",
+    note: "Accept the known protocol error for this draft",
+  });
+  let calls = 0;
+  await executeBookRun(
+    db,
+    failed.id,
+    runtime((_stage, _input, result) => {
+      calls++;
+      return result;
+    }),
+  );
+  const after = await readBookRun(db, owner, bookId, failed.id);
+  expect(after.status).toBe("published");
+  expect(after.error).toBe("");
+  expect(calls).toBe(0);
+  expect(after.artifact!.checks).toEqual([
+    { criterionId: "grounded", passed: false, reason: "Known protocol error" },
+  ]);
+  expect(after.artifact!.pages).toEqual(
+    before.nodes.find((n) => n.type === "acceptance")!.output!.pages,
+  );
+  expect(after.nodes.find((n) => n.type === "acceptance")!.status).toBe(
+    "failed",
+  );
+  expect(
+    after.artifact!.provenance.nodes.some(
+      (n) => n.kind === "decision" && !!n.detail.acceptanceOverride,
+    ),
+  ).toBe(true);
+  const audit = await db
+    .selectFrom("security_audit")
+    .select("details")
+    .where("action", "=", "knowledge_book.acceptance_failure_accepted")
+    .executeTakeFirstOrThrow();
+  expect(JSON.parse(audit.details).checks[0].passed).toBe(false);
+  await expect(
+    resolveBookHumanTask(db, owner, task.id, {
+      expectedRevision: task.revision,
+      decision: "approve",
+      note: "Duplicate",
+    }),
+  ).rejects.toMatchObject({ status: 409 });
+});
+
+it.each(["configuration", "permission", "decision", "source"])(
+  "invalidates manual acceptance after a %s change",
+  async (change) => {
+    const { failed, task } = await failedAcceptance();
+    await resolveBookHumanTask(db, owner, task.id, {
+      expectedRevision: task.revision,
+      decision: "approve",
+      note: "Accept known issues",
+    });
+    if (change === "configuration") {
+      const book = await readKnowledgeBook(db, owner, bookId);
+      await saveBookConfiguration(db, owner, bookId, book.revision, {
+        ...book.configuration!,
+        goal: "Changed goal",
+      });
+    } else if (change === "permission") {
+      await db
+        .updateTable("users")
+        .set({ status: "disabled" })
+        .where("id", "=", owner.id)
+        .execute();
+    } else if (change === "source") {
+      await manual("Changed source input after manual acceptance");
+    } else {
+      const stored = await db
+        .selectFrom("knowledge_book_human_tasks")
+        .select("resolution")
+        .where("id", "=", task.id)
+        .executeTakeFirstOrThrow();
+      const resolution = JSON.parse(stored.resolution);
+      resolution.acceptanceOverride.outputHash = "0".repeat(64);
+      await db
+        .updateTable("knowledge_book_human_tasks")
+        .set({ resolution: JSON.stringify(resolution) })
+        .where("id", "=", task.id)
+        .execute();
+    }
+    await executeBookRun(db, failed.id, runtime());
+    const row = await db
+      .selectFrom("knowledge_book_runs")
+      .select("status")
+      .where("id", "=", failed.id)
+      .executeTakeFirstOrThrow();
+    expect(row.status).toBe("failed");
+    expect(
+      await db
+        .selectFrom("knowledge_book_releases")
+        .select("id")
+        .where("run_id", "=", failed.id)
+        .execute(),
+    ).toEqual([]);
+  },
+);
+
+it("keeps technical repair tasks ineligible for manual acceptance", async () => {
+  await manual();
+  const failed = await run(
+    runtime((stage, _input, result) => {
+      if (stage === "acceptance") throw new Error("Transport disconnected");
+      return result;
+    }),
+  );
+  const task = (
+    await listBookHumanTasks(db, owner, {
+      bookId,
+      runId: failed.id,
+      status: "pending",
+    })
+  ).items[0]!;
+  expect(task.canAcceptFailure).toBe(false);
+  await expect(
+    resolveBookHumanTask(db, owner, task.id, {
+      expectedRevision: task.revision,
+      decision: "approve",
+      note: "Accept draft",
+    }),
+  ).rejects.toMatchObject({ status: 409 });
+});
+
+it("retains a valid manual decision when the queued continuation is cancelled and resumed", async () => {
+  const { failed, task } = await failedAcceptance();
+  await resolveBookHumanTask(db, owner, task.id, {
+    expectedRevision: task.revision,
+    decision: "approve",
+    note: "Accept known issues",
+  });
+  await executeBookCommand(db, owner, bookId, {
+    operation: "run.cancel",
+    runId: failed.id,
+  });
+  await executeBookCommand(db, owner, bookId, {
+    operation: "run.resume",
+    runId: failed.id,
+  });
+  let calls = 0;
+  await executeBookRun(
+    db,
+    failed.id,
+    runtime((_stage, _input, output) => {
+      calls++;
+      return output;
+    }),
+  );
+  expect((await readBookRun(db, owner, bookId, failed.id)).status).toBe(
+    "published",
+  );
+  expect(calls).toBe(0);
+});
 it("pauses at a human review node, resumes without repeating completed model nodes, and records the decision", async () => {
   await manual();
   await share("editor");

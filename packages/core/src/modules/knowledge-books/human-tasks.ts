@@ -13,6 +13,10 @@ import { bookFail as fail } from "./errors.js";
 import { bookAccess, bookInputSnapshot, bookNow } from "./management.js";
 import { type BookSourceRuntime, canReadBookEvidence } from "./sources.js";
 import { bookConfigurationSchema, type Evidence } from "./protocol.js";
+import {
+  bookAcceptanceDecision,
+  canAcceptBookFailure,
+} from "./acceptance-overrides.js";
 
 export async function listBookHumanTasks(
   db: DB,
@@ -82,7 +86,7 @@ export async function listBookHumanTasks(
     const inputSnapshot = await bookInputSnapshot(db, row.book_id);
     const node = await db
       .selectFrom("knowledge_book_node_runs")
-      .select(["output", "error"])
+      .select(["output", "error", "status"])
       .where("run_id", "=", row.run_id)
       .where("node_id", "=", row.node_id)
       .executeTakeFirst();
@@ -102,6 +106,10 @@ export async function listBookHumanTasks(
       definition = configuration.workflow.nodes.find(
         (node) => node.id === row.node_id,
       )!;
+    const stale =
+      (book.revision !== run.configuration_revision &&
+        !(await isFrozenBookResume(db, row.run_id))) ||
+      inputSnapshot.hash !== run.input_hash;
     await bookAccess(db, actor, row.book_id, 3);
     items.push({
       ...row,
@@ -110,13 +118,18 @@ export async function listBookHumanTasks(
       criteria: configuration.criteria,
       instructions: definition.parameters.instructions,
       resolution: row.resolution ? JSON.parse(row.resolution) : null,
-      stale:
-        (book.revision !== run.configuration_revision &&
-          !(await isFrozenBookResume(db, row.run_id))) ||
-        inputSnapshot.hash !== run.input_hash,
+      stale,
       readable,
       output: readable ? output : null,
       error: node?.error || run.error,
+      canAcceptFailure:
+        row.status === "pending" &&
+        !stale &&
+        row.kind === "repair" &&
+        run.status === "failed" &&
+        node?.status === "failed" &&
+        readable &&
+        canAcceptBookFailure(configuration, row.node_id, node.error, output),
     });
   }
   return {
@@ -189,6 +202,7 @@ export async function resolveBookHumanTask(
       .selectAll()
       .where("id", "=", task.run_id)
       .executeTakeFirstOrThrow();
+    let acceptanceOverride;
     if (input.decision === "approve") {
       if (
         (book.revision !== run.configuration_revision &&
@@ -231,6 +245,64 @@ export async function resolveBookHumanTask(
           .where("id", "=", task.run_id)
           .where("status", "=", "awaiting_publication")
           .execute();
+      } else if (task.kind === "repair" && run.status === "failed") {
+        const candidate = await tx
+          .selectFrom("knowledge_book_node_runs")
+          .selectAll()
+          .where("run_id", "=", run.id)
+          .where("node_id", "=", task.node_id)
+          .executeTakeFirstOrThrow();
+        const output = candidate.output
+          ? await readBookPayload<any>(tx, candidate.output)
+          : null;
+        if (
+          candidate.status !== "failed" ||
+          !canAcceptBookFailure(
+            bookConfigurationSchema.parse(JSON.parse(run.configuration)),
+            task.node_id,
+            candidate.error,
+            output,
+          )
+        )
+          fail(
+            409,
+            "Only a completed negative acceptance review can be accepted manually",
+          );
+        if (!input.note.trim())
+          fail(400, "Describe the known acceptance failures you are accepting");
+        acceptanceOverride = bookAcceptanceDecision(
+          run,
+          book,
+          task.node_id,
+          output,
+        );
+        const updated = await tx
+          .updateTable("knowledge_book_runs")
+          .set({
+            status: "queued_resume",
+            actor_id: actor.id,
+            error: "",
+            updated_at: bookNow(),
+          })
+          .where("id", "=", run.id)
+          .where("status", "=", "failed")
+          .executeTakeFirst();
+        if (!Number(updated.numUpdatedRows))
+          fail(409, "Run changed before manual acceptance");
+        await securityAudit(
+          tx,
+          actor.id,
+          actor.id,
+          "knowledge_book.acceptance_failure_accepted",
+          {
+            bookId: task.book_id,
+            runId: run.id,
+            taskId: task.id,
+            acceptanceOverride,
+            checks: output.checks,
+            note: input.note,
+          },
+        );
       } else fail(409, "This task cannot be approved in its current state");
     } else {
       await tx
@@ -252,6 +324,7 @@ export async function resolveBookHumanTask(
       note: input.note,
       actorId: actor.id,
       createdAt: bookNow(),
+      ...(acceptanceOverride ? { acceptanceOverride } : {}),
     });
     if (current.resolution)
       await securityAudit(

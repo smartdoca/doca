@@ -1,0 +1,56 @@
+[
+  {
+    "sample": {
+      "id": "strict-background",
+      "allowance": false,
+      "wrong": false
+    },
+    "description": "每条事实必须有当前提供的 Manual 来源明确支持，不能使用来源以外的背景知识。",
+    "markdown": "作为补充的行业通用背景知识（并非引述本次来源）：TCP 首部的源端口与目的端口字段各为 16 位。",
+    "result": {
+      "checks": [
+        {
+          "criterionId": "grounded",
+          "passed": false,
+          "reason": "paragraph_59136b1614f2ea6524d8c400af066c7a: 作为补充的行业通用背景知识（并非引述本次来源）：TCP 首部的源端口与目的端口字段各为 16 位 — The paragraph states a TCP header fact (source/destination port fields each 16 bits) as supplementary background outside the provided sources. The supplied Manual evidence only describes IPv6 Neighbor Cache entries and contains no statement about TCP port-field widths."
+        }
+      ]
+    }
+  },
+  {
+    "sample": {
+      "id": "permitted-background",
+      "allowance": true,
+      "wrong": false
+    },
+    "description": "允许准确的行业通用知识和合理推导超出 Manual 来源，不要求每条背景知识都能在提供的来源中找到；但不能伪造来源归属，不能有错误算术或协议矛盾。",
+    "markdown": "作为补充的行业通用背景知识（并非引述本次来源）：TCP 首部的源端口与目的端口字段各为 16 位。",
+    "result": {
+      "checks": [
+        {
+          "criterionId": "grounded",
+          "passed": true,
+          "reason": "The assertion is accurate industry knowledge: TCP header Source Port and Destination Port are both 16-bit fields. The prose explicitly disclaims attribution to the supplied Manual source, so there is no fabricated source attribution, no arithmetic error, and no protocol contradiction."
+        }
+      ]
+    }
+  },
+  {
+    "sample": {
+      "id": "permitted-wrong-arithmetic",
+      "allowance": true,
+      "wrong": true
+    },
+    "description": "允许准确的行业通用知识和合理推导超出 Manual 来源，不要求每条背景知识都能在提供的来源中找到；但不能伪造来源归属，不能有错误算术或协议矛盾。",
+    "markdown": "8 字节等于 8 比特。",
+    "result": {
+      "checks": [
+        {
+          "criterionId": "grounded",
+          "passed": false,
+          "reason": "paragraph_59136b1614f2ea6524d8c400af066c7a: 8 字节等于 8 比特 — “8 字节等于 8 比特”是错误算术：1 字节 = 8 比特，因此 8 字节 = 64 比特。该断言属于行业通用单位换算错误，违反 grounded 中“不能有错误算术”的要求。"
+        }
+      ]
+    }
+  }
+]

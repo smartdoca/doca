@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { DB } from "@db/index.js";
-import { AppError } from "@core/shared/errors.js";
+import { AppError, systemErrorReason } from "@core/shared/errors.js";
 import { knowledgeBookRuntime } from "../apps/server/src/services/ai/knowledge-book-runtime.js";
 const fixture = vi.hoisted(() => ({
   stream: vi.fn(),
@@ -136,6 +136,118 @@ beforeEach(() => {
   fixture.access.mockResolvedValue(undefined);
 });
 
+it.each([
+  { goal: "Tutorial", allowance: false, wrong: false },
+  { goal: "Tutorial", allowance: true, wrong: false },
+  { goal: "Tutorial", allowance: true, wrong: true },
+  { goal: "20000字", allowance: false, wrong: false },
+  { goal: "20000字", allowance: true, wrong: false },
+  { goal: "20000字", allowance: true, wrong: true },
+])(
+  "preserves criterion policy through $goal inspection (allowance=$allowance, wrong=$wrong)",
+  async ({ goal, allowance, wrong }) => {
+    const description = allowance
+      ? "Allow accurate established industry knowledge beyond Manual sources. Reject wrong arithmetic and protocol contradictions."
+      : "Every factual assertion must be supported by supplied Manual sources.";
+    const criteria = [{ id: "grounded", required: true, description }];
+    const claims = Array.from({ length: 42 }, (_, i) => ({
+      id: `c${i}`,
+      statement: "Ethernet",
+      evidenceIds: ["source"],
+      evidenceQuotes: [{ evidenceId: "source", quote: "Ethernet" }],
+      reason: "Source",
+      confidence: 1,
+    }));
+    const pages = [0, 1].map((i) => ({
+      id: `page${i}`,
+      title: `Chapter ${i}`,
+      path: [],
+      paragraphs: [
+        {
+          id: `paragraph${i}`,
+          markdown: wrong
+            ? "2 + 2 = 5."
+            : "An accurate background fact absent from the Manual.",
+          claimIds: claims.slice(i * 21, i * 21 + 21).map((c) => c.id),
+          reason: "Background",
+        },
+      ],
+    }));
+    const scopes = new Set<string>();
+    const passed = allowance && !wrong;
+    fixture.stream.mockImplementation(async (options) => {
+      const system = options.prompt[0].content;
+      expect(system).toContain(
+        "criterion IDs are opaque identifiers, not built-in policies",
+      );
+      expect(system).toContain(
+        "absence from those sources alone does not violate that criterion",
+      );
+      expect(system).toContain(
+        "when a criterion requires source support, require that support",
+      );
+      expect(system).not.toContain(
+        "Missing evidence or missing required detail means failure.",
+      );
+      expect(system).not.toContain(
+        "New external protocol or implementation facts remain unsupported.",
+      );
+      const data = JSON.parse(options.prompt[1].content[0].text);
+      scopes.add(data.acceptanceScope);
+      const original = data.originalCriteria ?? data.criteria;
+      expect(original).toEqual(criteria);
+      if (data.acceptanceScope === "plan")
+        return response(
+          JSON.stringify({
+            rules: [
+              {
+                criterionId: "grounded",
+                localChecks: [description],
+                globalChecks: [description],
+              },
+            ],
+          }),
+        );
+      if (data.acceptanceScope === "trace")
+        return tracedAcceptance(
+          data,
+          passed,
+          wrong ? "Wrong arithmetic" : "Configured evidence policy",
+        );
+      return response(
+        JSON.stringify({
+          checks: [
+            {
+              criterionId: "grounded",
+              passed,
+              reason: wrong ? "Wrong arithmetic" : "Configured evidence policy",
+            },
+          ],
+        }),
+      );
+    });
+    const result: any = await knowledgeBookRuntime(
+      {} as DB,
+      "user",
+      "run",
+      "model",
+    ).generate(
+      "acceptance",
+      {
+        ...input([evidence("source", "Ethernet")]),
+        goal,
+        claims,
+        pages,
+        criteria,
+      },
+      new AbortController().signal,
+    );
+    expect(scopes.has("plan")).toBe(true);
+    expect(scopes.has(goal === "20000字" ? "trace" : "batch")).toBe(true);
+    expect(result.checks[0].passed).toBe(passed);
+  },
+);
+
 it.each(["doubao-seed-2.1-lite", "doubao-seed-2-1-lite-260915"])(
   "requests native thinking for substantive inspection on %s without storing reasoning",
   async (modelName) => {
@@ -173,6 +285,56 @@ it.each(["doubao-seed-2.1-lite", "doubao-seed-2-1-lite-260915"])(
         },
       ],
     });
+  },
+);
+
+it.each([
+  { statusCode: 401, calls: 1 },
+  { statusCode: 503, calls: 3 },
+])(
+  "classifies plain stream error objects safely ($statusCode)",
+  async ({ statusCode, calls }) => {
+    fixture.stream.mockImplementation(async () => ({
+      stream: new ReadableStream({
+        start(controller) {
+          controller.enqueue({ type: "text-delta", delta: '{"checks":[' });
+          controller.enqueue({
+            type: "error",
+            error: {
+              statusCode,
+              message: "provider-secret-response",
+              requestHeaders: { authorization: "private-key" },
+            },
+          });
+          controller.close();
+        },
+      }),
+    }));
+    const error = await knowledgeBookRuntime({} as DB, "user", "run", "model")
+      .generate(
+        "acceptance",
+        {
+          ...input([]),
+          criteria: [
+            { id: "grounded", required: true, description: "Factual accuracy" },
+          ],
+        },
+        new AbortController().signal,
+      )
+      .then(
+        () => {
+          throw Error("Expected failure");
+        },
+        (error) => error,
+      );
+    expect(error).toBeInstanceOf(AppError);
+    expect(systemErrorReason(error)?.code).toBe(
+      statusCode === 401 ? "model_auth_failed" : "model_provider_unavailable",
+    );
+    expect(error.message).not.toMatch(
+      /object Object|provider-secret-response|private-key/,
+    );
+    expect(fixture.stream).toHaveBeenCalledTimes(calls);
   },
 );
 

@@ -231,7 +231,7 @@ export const bookAssistantInputSchema = z
       .optional(),
     taskId: z.string().uuid().optional().describe("Required for resolve_task; use the actual human_tasks item.id."),
     expectedRevision: z.number().int().min(1).optional().describe("REQUIRED for resolve_task: copy the selected human_tasks item.revision into this ROOT field. Never omit it or put it under command."),
-    decision: z.enum(["approve", "reject", "retry", "resume"]).optional().describe("Required for resolve_task. Technical repair continues the same frozen pipeline with resume. Retry starts a new pipeline under the current configuration. Human review/publication approval requires the user's explicit decision."),
+    decision: z.enum(["approve", "reject", "retry", "resume"]).optional().describe("Required for resolve_task. Technical repair continues the same frozen pipeline with resume. Retry starts a new pipeline under the current configuration. approve requires the user's explicit decision. It applies to review/awaiting_input, publication/awaiting_publication, or a negative acceptance repair task whose human_tasks item.canAcceptFailure is true. For that repair task, explain the failed checks and require a nonempty note describing the user's acceptance of known issues; failed results remain unchanged and the audited approval binds the exact candidate/configuration. Technical failures cannot be approved. Never claim owner status or the UI can bypass an ineligible task."),
     note: z.string().max(20000).optional().describe("Required for resolve_task; provide a string, including an empty string if no note is needed."),
   })
   .strict();
