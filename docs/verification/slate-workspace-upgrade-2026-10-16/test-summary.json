@@ -1,7 +1,7 @@
 {
   "hostVersion": "0.1.29",
   "slateVersion": "0.4.20",
-  "status": "full-suite-in-progress",
+  "status": "passed",
   "typecheck": "passed",
   "focusedTests": 68,
   "postgres": {
@@ -47,5 +47,20 @@
     ],
     "errors": [],
     "idleSeconds": 60
+  },
+  "fullSuite": {
+    "passed": 2899,
+    "skipped": 8,
+    "passedFiles": 280,
+    "skippedFiles": 2
+  },
+  "documentation": {
+    "bilingualPages": 70,
+    "check": "passed",
+    "build": "passed"
+  },
+  "productionBuild": {
+    "linux/arm64": "passed",
+    "linux/amd64": "passed"
   }
 }
