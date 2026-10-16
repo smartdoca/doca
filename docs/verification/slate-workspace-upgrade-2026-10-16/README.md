@@ -1,0 +1,11 @@
+# Slate workspace upgrade verification — 2026-10-16
+
+Doca 0.1.29 upgrades the actual npm artifact `@smartdoca/slate` 0.4.18 → 0.4.20. All documents, users and databases used here are synthetic and isolated. The user approved native display defaults, explicit-save-only writes and no migration or old-style adapter; see the [integration contract](../../editor-integration.md#mind-map-workspace-upgrade--2026-10-16).
+
+[The artifact audit](package-audit.json) records tarball SHA-256 hashes, unchanged exports/dependencies and byte-identical codec/Yjs/headless/conversion runtimes. The DOCX patch has the same content/hash and is rebound to 0.4.20. Existing history readers and normalization helpers are unchanged. No SQL structure, schema 3, epoch, checkpoint or pending-message conversion is introduced.
+
+Reproduce host regressions with `pnpm exec vitest run tests/editor-package-upgrade.test.ts tests/editor-sessions.test.ts tests/document-pdf.test.ts tests/document-pdf-access.test.ts`. New mind-map fields are exercised through duplicate durable ACK, remote replay without echo, undo/redo and checkpoint restoration. Browser acceptance uses `pnpm exec tsx scripts/qa-slate-workspace-upgrade.mts`; released retained-data verification uses `pnpm exec tsx scripts/verify-slate-workspace-upgrade.ts sqlite` with the actual published 0.1.28 image. The optional PostgreSQL mode requires a dedicated `DOCA_TEST_POSTGRES` test server and creates/drops only an owned random database.
+
+Final outcomes are recorded in `test-summary.json` and `browser.json`. The browser checks old preview regeneration, open/close without writes, new settings/styles/topics, unsaved-close confirmation, same-user peer synchronization, reload, SVG export, readonly guards and a 60-second idle window. Build success and these scenarios do not establish every drag gesture, clipboard operation, external application or native-device behavior. SVG export is a view projection, not a portable editable mind-map file.
+
+The release attachment includes per-architecture startup, asset compression, administrator initialization/recovery, source hashes and registry layer/configuration verification. Public workspace SDKs are unchanged; no npm publication is required.

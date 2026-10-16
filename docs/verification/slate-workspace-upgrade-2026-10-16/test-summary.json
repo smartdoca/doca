@@ -1,0 +1,51 @@
+{
+  "hostVersion": "0.1.29",
+  "slateVersion": "0.4.20",
+  "status": "full-suite-in-progress",
+  "typecheck": "passed",
+  "focusedTests": 68,
+  "postgres": {
+    "17": 62,
+    "18": 62
+  },
+  "released0128RetainedData": [
+    "sqlite",
+    "postgres17",
+    "postgres18"
+  ],
+  "browser": {
+    "result": "passed",
+    "checks": [
+      "old version-5 preview regenerates in view state; selection, second-click preview and workspace open/close preserve original checkpoint and zero commits",
+      "native settings, typography, old IDs and new topics save through durable ACK; unsaved close confirmation retains the draft",
+      "same-account peer receives new mind-map fields without echo; reload preserves the complete saved model",
+      "SVG export, readonly preview, selection, resize and 60-second idle produce zero writes or console errors"
+    ],
+    "errors": [],
+    "idleSeconds": 60
+  },
+  "bothArchitectureImageSmoke": "passed",
+  "sourceHashesVerified": 416,
+  "identicalWebAssets": 470,
+  "noPublicSdkChanges": true,
+  "limits": [
+    "No user documents edited.",
+    "No assertion of every native mind-map gesture, external application or native-device behavior."
+  ],
+  "harnessCorrections": [
+    "Initial browser checks were corrected to avoid requiring a hidden clean-state label and to match native accessible button names; the final browser run passed."
+  ],
+  "otherEditorBrowser": {
+    "result": "passed",
+    "checks": [
+      "native rotation persists through host ACK and reaches a same-user peer without echo",
+      "reload retains rotation; native paper expands and Meta+S commits focused drafts",
+      "host-authorized image selects first, previews second and resets selection after an outside click",
+      "native select-all remains responsive in edit/readonly mode and keeps worksheet content unchanged",
+      "new 19.8/79.2 dimensions and edited cells survive host reload",
+      "60 seconds of idle, selection and resize produces zero rich-text/spreadsheet writes or peer echo"
+    ],
+    "errors": [],
+    "idleSeconds": 60
+  }
+}

@@ -8,7 +8,7 @@
 
 | 格式 | 当前安装包 | 宿主入口 |
 | --- | --- | --- |
-| 富文本 | @smartdoca/slate 0.4.18 | document-editor.tsx |
+| 富文本 | @smartdoca/slate 0.4.20 | document-editor.tsx |
 | Markdown | @smartdoca/markdown 0.4.3 | markdown-editor.tsx |
 | 表格 | @smartdoca/sheet 0.2.3 | spreadsheet-editor.tsx |
 | 画布 | @smartdoca/canvas 0.4.3 | canvas-editor.tsx |
@@ -89,3 +89,11 @@ Canvas 0.4.3 还包含用户已明确同意的视图规则：0.8 到 3 的数值
 用户已明确同意新版 19.8／79.2 默认尺寸和图形行为。新建宿主文档、CRDT 追加工作表（含历史追加表）及虚拟恢复表采用行高 19.8／列宽 79.2 像素。不可变 baseline 原字段及其缺省状态保留，显式行列尺寸保留；不转换 baseline、seed、checkpoint、epoch、序号、待确认消息身份及单元格数据。打开旧图不改写原字段，缺省画布设置仅影响原生视图，明确保存图示才写入新版图形字段／设置。预览重绘仅更新视图。富文本 schema 3、表格 schema 6 和持久 ACK／outbox 语义不变；已有历史读取器及规范化器保留，不重新设计。
 
 回退保留原依赖、lockfile、补丁和部署。旧编辑器可能显示不同默认尺寸／样式或忽略新增字段，不新增历史流程图兼容承诺。恢复时保留后续写入；恢复旧备份会丢失升级后编辑。包含真实已发布 0.1.26 数据库的隔离验证见 `docs/verification/editor-package-upgrade-2026-10-16/`。
+
+## 思维导图工作区升级 — 2026-10-16
+
+宿主 0.1.29 锁定实际 npm 制品 `@smartdoca/slate` 0.4.20，包含 0.4.19 的图形／媒体交互修复。公开入口、依赖和宿主组件／handle 声明不变；codec、Yjs、headless、conversion 运行时代码与 0.4.18 字节相同，原 DOCX 补丁内容不变并绑定到 0.4.20。AI 指导保留完整原生思维导图，包括 `structure`、`theme`、`background`、节点 `fontSize`／`bold` 和 `style:"underline"`。
+
+用户已明确同意新版原生思维导图默认显示作用于已有文档。打开旧图或重新生成版本 6 预览只改变视图，不回写原节点、checkpoint、epoch 或待确认更新身份。工作区打开后不保存关闭不产生内容提交；明确保存才通过现有 Slate/Yjs outbox 与落库 ACK 提交原生草稿和预览。不迁移、不补写历史字段、不新增旧样式适配；现有历史读取及规范化辅助逻辑保留原路径，不重新设计。schema 3 与精确协议检查不变，没有 SQL 变更。
+
+保留 0.1.28 部署、原包制品、版本锁定、补丁和 lockfile 供回退。旧编辑器可能忽略新样式／设置或显示不同默认值。恢复时保留后续写入；恢复升级前备份会丢失其后的编辑。测试只使用隔离的合成文档／数据库；范围及限制见 `docs/verification/slate-workspace-upgrade-2026-10-16/`。

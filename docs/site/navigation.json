@@ -267,6 +267,11 @@
     "zh": "发行记录",
     "pages": [
       [
+        "releases/0.1.29",
+        "0.1.29 release notes",
+        "0.1.29 发行记录"
+      ],
+      [
         "releases/0.1.28",
         "0.1.28 release notes",
         "0.1.28 发行记录"

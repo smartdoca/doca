@@ -1,0 +1,80 @@
+{
+  "oldVersion": "0.4.18",
+  "newVersion": "0.4.20",
+  "repositoryCommit": "fc40642c323086a4ed916f0271024b678f856e51",
+  "stableContracts": [
+    "exports",
+    "dependencies",
+    "peerDependencies"
+  ],
+  "unchangedFiles": {
+    "dist/codec.js": {
+      "oldSha256": "ee322155901c2c6e8c20055c5b3b97be53c56ad697cadc23face455dad870d00",
+      "newSha256": "ee322155901c2c6e8c20055c5b3b97be53c56ad697cadc23face455dad870d00"
+    },
+    "dist/codec.cjs": {
+      "oldSha256": "be7ea7056973b3c89c908d45e99e3caf358829f2d6c5aced5fea98880f71c420",
+      "newSha256": "be7ea7056973b3c89c908d45e99e3caf358829f2d6c5aced5fea98880f71c420"
+    },
+    "dist/yjs.js": {
+      "oldSha256": "e0111a9035c4046f5d57786332042007648a047c716cc08f985e736f258aa2ed",
+      "newSha256": "e0111a9035c4046f5d57786332042007648a047c716cc08f985e736f258aa2ed"
+    },
+    "dist/yjs.cjs": {
+      "oldSha256": "49731e6aa6df74ec9bcb59618630305098bba438ccf98e1438219d2bc2b6c355",
+      "newSha256": "49731e6aa6df74ec9bcb59618630305098bba438ccf98e1438219d2bc2b6c355"
+    },
+    "dist/headless.js": {
+      "oldSha256": "bfb051fad9ba2e99c2aeacd502a6ee23a14b7f492e7fb8889d504696d634aa84",
+      "newSha256": "bfb051fad9ba2e99c2aeacd502a6ee23a14b7f492e7fb8889d504696d634aa84"
+    },
+    "dist/headless.cjs": {
+      "oldSha256": "d78e85c26226a10c156c31364f8eff5b35fb20bb0a549a100e6203503751e1ed",
+      "newSha256": "d78e85c26226a10c156c31364f8eff5b35fb20bb0a549a100e6203503751e1ed"
+    },
+    "dist/conversion.js": {
+      "oldSha256": "1aa0d719e674407af6b659fb560ffe4c024196da461c44d1b5699473c2e69916",
+      "newSha256": "1aa0d719e674407af6b659fb560ffe4c024196da461c44d1b5699473c2e69916"
+    },
+    "dist/conversion.cjs": {
+      "oldSha256": "6a17d1eba4c9d7afca7647fe330ae62c7f41678d50544efb7d86b9994bc99ff0",
+      "newSha256": "6a17d1eba4c9d7afca7647fe330ae62c7f41678d50544efb7d86b9994bc99ff0"
+    },
+    "dist/index.d.ts": {
+      "oldSha256": "3af3538916522115a5b1511dc49fc6ee10f46886f3087fddd43348cbfcc5dd8d",
+      "newSha256": "3af3538916522115a5b1511dc49fc6ee10f46886f3087fddd43348cbfcc5dd8d"
+    },
+    "dist/api.d.ts": {
+      "oldSha256": "b6c0e9a9dcc898dbeca948877ee8b216fe4b11b89e1aa110de092450f25202a2",
+      "newSha256": "b6c0e9a9dcc898dbeca948877ee8b216fe4b11b89e1aa110de092450f25202a2"
+    },
+    "dist/RichTextEditor.d.ts": {
+      "oldSha256": "4054ddffe539e6aebdbf9c80f3be220e972260d8b578f271c37e5ccbbe7c8ccb",
+      "newSha256": "4054ddffe539e6aebdbf9c80f3be220e972260d8b578f271c37e5ccbbe7c8ccb"
+    }
+  },
+  "tarballSha256": {
+    "0.4.18": "3f896a7e02c5d03299e8cb6b035f2216d9f133ac2b8f11a69da1043c4ff348bc",
+    "0.4.20": "d6d8d646e5e02301983ac2999af28d4f75f43bb9ae2c1edc85b5dca14b55eee0"
+  },
+  "changedDeclarations": [
+    "dist/types.d.ts",
+    "dist/mindmap.d.ts",
+    "dist/mindmapGraph.d.ts",
+    "dist/diagramPorts.d.ts",
+    "dist/components/MindMapWorkspace.d.ts",
+    "dist/components/DiagramBlock.d.ts"
+  ],
+  "upstreamReleases": [
+    "https://github.com/smartdoca/slate/releases/tag/v0.4.19",
+    "https://github.com/smartdoca/slate/releases/tag/v0.4.20"
+  ],
+  "registryIntegrity": {
+    "0.4.18": "sha512-uJflgYI96gxWTmCCeWZVaJCHYwxQEULBilQ3FyQZlKsySBhDaFjsgblobQCQcjQoGrBMYJXy3+V02VRsv5rmjw==",
+    "0.4.20": "sha512-fHI7XUjponyLGYBtLKFiRH1khHyntJbn3ZGwXL2MLJuBJ2jmv/C00FTaAlYFGhCusfFa/o8+H5R2an7YI+6lSw=="
+  },
+  "docxPatch": {
+    "unchanged": true,
+    "sha256": "9524bc2f432ac385217164e95fc7021301fe7fc711240fed4809281ce3d55cd6"
+  }
+}

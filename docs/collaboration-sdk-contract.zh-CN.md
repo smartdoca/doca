@@ -190,3 +190,11 @@ Canvas 0.4.3 还包含用户已明确同意的视图规则：0.8 到 3 的数值
 ## 表格超链接补丁 — 2026-10-15
 
 宿主 0.1.25 锁定实际 npm 制品 `@smartdoca/sheet` 0.2.2。与 0.2.1 相比，公开入口、依赖契约和类型声明不变，Yjs／model／XLSX 运行 JavaScript 字节相同（部分 source map 有差异）。超链接弹窗取消后正确恢复原生草稿，原生移除链接命令沿用 inlineLink 能力及只读检查。宿主继续使用稳定编辑器／会话、资源回调、原生操作和持久 ACK 队列。本补丁不改变 schema 6、不可变 baseline、epoch、checkpoint 或待确认更新身份，不增加数据转换或兼容适配；回退保留原依赖锁定及 lockfile。制品审计和隔离验证记录见 `docs/verification/sheet-package-upgrade-2026-10-15/`。
+
+## 思维导图工作区升级 — 2026-10-16
+
+宿主 0.1.29 锁定实际 npm 制品 `@smartdoca/slate` 0.4.20，包含 0.4.19 的图形／媒体交互修复。公开入口、依赖和宿主组件／handle 声明不变；codec、Yjs、headless、conversion 运行时代码与 0.4.18 字节相同，原 DOCX 补丁内容不变并绑定到 0.4.20。AI 指导保留完整原生思维导图，包括 `structure`、`theme`、`background`、节点 `fontSize`／`bold` 和 `style:"underline"`。
+
+用户已明确同意新版原生思维导图默认显示作用于已有文档。打开旧图或重新生成版本 6 预览只改变视图，不回写原节点、checkpoint、epoch 或待确认更新身份。工作区打开后不保存关闭不产生内容提交；明确保存才通过现有 Slate/Yjs outbox 与落库 ACK 提交原生草稿和预览。不迁移、不补写历史字段、不新增旧样式适配；现有历史读取及规范化辅助逻辑保留原路径，不重新设计。schema 3 与精确协议检查不变，没有 SQL 变更。
+
+保留 0.1.28 部署、原包制品、版本锁定、补丁和 lockfile 供回退。旧编辑器可能忽略新样式／设置或显示不同默认值。恢复时保留后续写入；恢复升级前备份会丢失其后的编辑。测试只使用隔离的合成文档／数据库；范围及限制见 `docs/verification/slate-workspace-upgrade-2026-10-16/`。

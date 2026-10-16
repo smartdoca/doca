@@ -167,126 +167,174 @@ it.each([
   ).toThrow();
 });
 
-it("preserves native rotation, arrow and manual route fields through durable ACK, remote replay, undo and checkpoint restore", async () => {
-  const db = await openTestDatabase({ driver: "sqlite", path: ":memory:" });
-  const replicas: {
-    doc: Doc;
-    runtime: DocaYjsDocument;
-    events: Uint8Array[];
-  }[] = [];
-  try {
-    const owner = {
-      ...(await createUser(
-        db,
-        {
-          login: "upgradeqa",
-          displayName: "QA",
-          password: "isolated-upgrade-2026",
-        },
-        { bootstrap: true },
-      )),
-      admin: 1,
-    };
-    const resource = await createContent(db).create(owner, {
-      kind: "document",
-      format: "rich_text",
-      title: "Native diagram upgrade",
-    });
-    const documents = createDocuments(db);
-    const protocol = {
-      codec: "slate-kit",
-      schemaVersion: 3,
-      protocolVersion: 1,
-    };
-    const initial = await documents.exchange(owner, resource.id, protocol);
-    for (let i = 0; i < 2; i++) {
-      const doc = new Doc(),
-        runtime = new DocaYjsDocument(doc),
-        events: Uint8Array[] = [];
-      runtime.restore(unb64(initial.update));
-      runtime.onLocalUpdate((update) => events.push(update));
-      replicas.push({ doc, runtime, events });
-    }
-    const [a, b] = replicas as [
-      (typeof replicas)[number],
-      (typeof replicas)[number],
-    ];
-    const block = diagram();
-    const command = { type: "insertBlock" as const, block };
-    validateEditOperations("rich_text", [command]);
-    const update = a.runtime.execute(command);
-    expect(a.events).toHaveLength(1);
-    const message = {
-      ...protocol,
-      epochId: initial.epochId,
-      messageId: randomUUID(),
-      update: b64(update),
-    };
-    expect((await documents.exchange(owner, resource.id, message)).seq).toBe(1);
-    expect((await documents.exchange(owner, resource.id, message)).seq).toBe(1);
-    b.runtime.applyRemoteUpdate(update);
-    b.runtime.applyRemoteUpdate(update);
-    expect(b.events).toHaveLength(0);
-    expect(b.runtime.getValue()).toEqual(a.runtime.getValue());
-    // Insertion and a later rotation are separate user actions, not one batch.
-    a.runtime.undoManager.stopCapturing();
-    const rotated = {
-      ...block,
-      nodes: block.nodes.map((node) => ({ ...node, angle: 45 })),
-    };
-    const rotation = a.runtime.execute({
-      type: "setBlock",
-      blockId: block.id,
-      properties: { nodes: rotated.nodes },
-    });
-    const rotationMessage = {
-      ...protocol,
-      epochId: initial.epochId,
-      messageId: randomUUID(),
-      update: b64(rotation),
-    };
-    expect(
-      (await documents.exchange(owner, resource.id, rotationMessage)).seq,
-    ).toBe(2);
-    expect(
-      (await documents.exchange(owner, resource.id, rotationMessage)).seq,
-    ).toBe(2);
-    b.runtime.applyRemoteUpdate(rotation);
-    expect(b.runtime.getValue()).toEqual(a.runtime.getValue());
-    expect(b.events).toHaveLength(0);
-    const saved = await restoreDocument(db, resource.id);
+it.each(["flowchart", "mindmap"] as const)(
+  "preserves native %s fields through durable ACK, remote replay, undo and checkpoint restore",
+  async (kind) => {
+    const db = await openTestDatabase({ driver: "sqlite", path: ":memory:" });
+    const replicas: {
+      doc: Doc;
+      runtime: DocaYjsDocument;
+      events: Uint8Array[];
+    }[] = [];
     try {
+      const owner = {
+        ...(await createUser(
+          db,
+          {
+            login: "upgradeqa",
+            displayName: "QA",
+            password: "isolated-upgrade-2026",
+          },
+          { bootstrap: true },
+        )),
+        admin: 1,
+      };
+      const resource = await createContent(db).create(owner, {
+        kind: "document",
+        format: "rich_text",
+        title: "Native diagram upgrade",
+      });
+      const documents = createDocuments(db);
+      const protocol = {
+        codec: "slate-kit",
+        schemaVersion: 3,
+        protocolVersion: 1,
+      };
+      const initial = await documents.exchange(owner, resource.id, protocol);
+      for (let i = 0; i < 2; i++) {
+        const doc = new Doc(),
+          runtime = new DocaYjsDocument(doc),
+          events: Uint8Array[] = [];
+        runtime.restore(unb64(initial.update));
+        runtime.onLocalUpdate((update) => events.push(update));
+        replicas.push({ doc, runtime, events });
+      }
+      const [a, b] = replicas as [
+        (typeof replicas)[number],
+        (typeof replicas)[number],
+      ];
+      const block =
+        kind === "flowchart"
+          ? diagram()
+          : {
+              id: "new-mindmap",
+              type: "mindmap" as const,
+              children: [{ text: "" }],
+              mindData: {
+                direction: 1,
+                structure: "right" as const,
+                theme: "ocean" as const,
+                background: "dots" as const,
+                nodeData: {
+                  id: "root",
+                  topic: "发布计划",
+                  fontSize: 28,
+                  bold: true,
+                  children: [
+                    {
+                      id: "branch",
+                      topic: "验收",
+                      style: "underline" as const,
+                      fontSize: 18,
+                      bold: false,
+                      x: 180,
+                      y: 40,
+                    },
+                  ],
+                },
+              },
+            };
+      const command = { type: "insertBlock" as const, block };
+      validateEditOperations("rich_text", [command]);
+      const update = a.runtime.execute(command);
+      expect(a.events).toHaveLength(1);
+      const message = {
+        ...protocol,
+        epochId: initial.epochId,
+        messageId: randomUUID(),
+        update: b64(update),
+      };
+      expect((await documents.exchange(owner, resource.id, message)).seq).toBe(
+        1,
+      );
+      expect((await documents.exchange(owner, resource.id, message)).seq).toBe(
+        1,
+      );
+      b.runtime.applyRemoteUpdate(update);
+      b.runtime.applyRemoteUpdate(update);
+      expect(b.events).toHaveLength(0);
+      expect(b.runtime.getValue()).toEqual(a.runtime.getValue());
+      // Insertion and a later rotation are separate user actions, not one batch.
+      a.runtime.undoManager.stopCapturing();
+      const properties =
+        block.type === "flowchart"
+          ? { nodes: block.nodes.map((node) => ({ ...node, angle: 45 })) }
+          : {
+              mindData: {
+                ...block.mindData,
+                theme: "forest" as const,
+                nodeData: { ...block.mindData.nodeData, fontSize: 32 },
+              },
+            };
+      const rotated = { ...block, ...properties };
+      const rotation = a.runtime.execute({
+        type: "setBlock",
+        blockId: block.id,
+        properties,
+      });
+      const rotationMessage = {
+        ...protocol,
+        epochId: initial.epochId,
+        messageId: randomUUID(),
+        update: b64(rotation),
+      };
       expect(
-        saved.runtime
+        (await documents.exchange(owner, resource.id, rotationMessage)).seq,
+      ).toBe(2);
+      expect(
+        (await documents.exchange(owner, resource.id, rotationMessage)).seq,
+      ).toBe(2);
+      b.runtime.applyRemoteUpdate(rotation);
+      expect(b.runtime.getValue()).toEqual(a.runtime.getValue());
+      expect(b.events).toHaveLength(0);
+      const saved = await restoreDocument(db, resource.id);
+      try {
+        expect(
+          saved.runtime
+            .getValue()
+            .find((node) => "id" in node && node.id === block.id),
+        ).toEqual(rotated);
+        const restored = new DocaYjsDocument(new Doc());
+        try {
+          restored.restore(encodeStateAsUpdate(saved.doc));
+          expect(restored.getValue()).toEqual(saved.runtime.getValue());
+        } finally {
+          restored.destroy();
+          restored.doc.destroy();
+        }
+      } finally {
+        saved.destroy();
+      }
+      a.runtime.undo();
+      expect(
+        a.runtime
+          .getValue()
+          .find((node) => "id" in node && node.id === block.id),
+      ).toEqual(block);
+      a.runtime.redo();
+      expect(
+        a.runtime
           .getValue()
           .find((node) => "id" in node && node.id === block.id),
       ).toEqual(rotated);
-      const restored = new DocaYjsDocument(new Doc());
-      try {
-        restored.restore(encodeStateAsUpdate(saved.doc));
-        expect(restored.getValue()).toEqual(saved.runtime.getValue());
-      } finally {
-        restored.destroy();
-        restored.doc.destroy();
-      }
+      expect(a.events).toHaveLength(4);
+      expect(b.events).toHaveLength(0);
     } finally {
-      saved.destroy();
+      for (const replica of replicas) {
+        replica.runtime.destroy();
+        replica.doc.destroy();
+      }
+      await db.destroy();
     }
-    a.runtime.undo();
-    expect(
-      a.runtime.getValue().find((node) => "id" in node && node.id === block.id),
-    ).toEqual(block);
-    a.runtime.redo();
-    expect(
-      a.runtime.getValue().find((node) => "id" in node && node.id === block.id),
-    ).toEqual(rotated);
-    expect(a.events).toHaveLength(4);
-    expect(b.events).toHaveLength(0);
-  } finally {
-    for (const replica of replicas) {
-      replica.runtime.destroy();
-      replica.doc.destroy();
-    }
-    await db.destroy();
-  }
-});
+  },
+);

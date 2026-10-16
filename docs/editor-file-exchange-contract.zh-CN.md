@@ -31,7 +31,7 @@
 | 画板 | PNG/JPEG/WebP/SVG 素材 | PNG/SVG | 导入为图片素材；不恢复原生图层，不承诺编辑数据往返 |
 | 演示文稿 | PPTX，最大 30 MB | PPTX | 基础文字、图形、表格和图片；复杂母版/动画可能简化，不支持旧 PPT |
 
-当前安装包：`@smartdoca/slate` 0.4.18、`@smartdoca/sheet` 0.2.3、`@smartdoca/markdown` 0.4.3、`@smartdoca/canvas` 0.4.3、`@smartdoca/slides` 0.3.0-alpha.2。导入分派见 `apps/web/src/features/documents/file-transfer.tsx`，导出见各宿主编辑器适配器。PDF 导入经过识别/转换与素材重新上传，不承诺保留原始页布局。复用版本号时以 hash 命名包并更新 lockfile；独立外部应用和复杂文件仍需逐项验收。
+当前安装包：`@smartdoca/slate` 0.4.20、`@smartdoca/sheet` 0.2.3、`@smartdoca/markdown` 0.4.3、`@smartdoca/canvas` 0.4.3、`@smartdoca/slides` 0.3.0-alpha.2。导入分派见 `apps/web/src/features/documents/file-transfer.tsx`，导出见各宿主编辑器适配器。PDF 导入经过识别/转换与素材重新上传，不承诺保留原始页布局。复用版本号时以 hash 命名包并更新 lockfile；独立外部应用和复杂文件仍需逐项验收。
 
 ## 按在线样式导出 PDF 与可编辑导入
 
@@ -41,7 +41,7 @@
 
 PDF 导入优先生成可编辑内容。已交付 Markdown 解析器继续校验文件、页数、图片限制，并提取素材与警告；宿主 PDF.js 适配补充字号、基础字体、粗斜体、文字颜色、安全链接、按字号识别的标题层级、简单列表、规则列距表格及按页面位置排列的图片。富文本直接使用该本机模型，Markdown 使用其便携序列化结果。素材重新绑定和新文档一次性初始化仍是保存边界。背景色、下划线、矢量图、复杂分栏/表格和公式重建可能简化；扫描页保留为图片，不进行 OCR；原解析器警告继续展示。本次不改变持久化模型、schema、旧格式转换或迁移规则。
 
-`patches/@smartdoca__slate@0.4.18.patch` 在 ESM/CJS 转换入口补充 Word 直接指定的字体、字号、颜色、背景、段落对齐和单元格文本格式，默认标题字号、1.6 行距及 A4 页面与在线样式接近；不解析任意继承样式、复杂分节或保证精确分页。`patches/@smartdoca__markdown@0.4.3.patch` 保留预览生成的数学 span 样式，不改变 Markdown 存储模型或协议。这些是仓库内宿主补丁，不代表上游已发布对应修改。
+`patches/@smartdoca__slate@0.4.20.patch` 在 ESM/CJS 转换入口补充 Word 直接指定的字体、字号、颜色、背景、段落对齐和单元格文本格式，默认标题字号、1.6 行距及 A4 页面与在线样式接近；不解析任意继承样式、复杂分节或保证精确分页。`patches/@smartdoca__markdown@0.4.3.patch` 保留预览生成的数学 span 样式，不改变 Markdown 存储模型或协议。这些是仓库内宿主补丁，不代表上游已发布对应修改。
 
 验收：`tests/document-pdf.test.ts` 覆盖真实 Chromium PDF、可选择中文、本机 PDF 重建、真实 DOCX XML/重导入以及脚本/远端图片阻断；`tests/document-pdf-access.test.ts` 覆盖只读权限、撤销和正文 checkpoint 不变。`node --import tsx scripts/qa-document-pdf.mts` 使用隔离浏览器样本，验证上下文保留、Y.Doc 零更新、图片导出后重导入、Mermaid/公式及三页长表格，视觉产物写入 `.local/document-pdf-qa/`。使用 Poppler 将 PDF 渲染为图片，与在线截图对照；不打开用户文档或生产数据库。
 

@@ -1,0 +1,11 @@
+{
+  "result": "passed",
+  "checks": [
+    "old version-5 preview regenerates in view state; selection, second-click preview and workspace open/close preserve original checkpoint and zero commits",
+    "native settings, typography, old IDs and new topics save through durable ACK; unsaved close confirmation retains the draft",
+    "same-account peer receives new mind-map fields without echo; reload preserves the complete saved model",
+    "SVG export, readonly preview, selection, resize and 60-second idle produce zero writes or console errors"
+  ],
+  "errors": [],
+  "idleSeconds": 60
+}

@@ -1,6 +1,6 @@
 {
   "name": "doca",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -65,7 +65,7 @@
     "@smartdoca/plugin-sdk": "workspace:*",
     "@smartdoca/search-host": "workspace:*",
     "@smartdoca/sheet": "0.2.3",
-    "@smartdoca/slate": "0.4.18",
+    "@smartdoca/slate": "0.4.20",
     "@smartdoca/slides": "0.3.0-alpha.2",
     "antd": "^6.6.3",
     "better-sqlite3": "^13.0.3",
