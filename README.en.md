@@ -51,16 +51,16 @@ Rich text for plans and meeting notes, with a library tree, formatting tools, pe
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/markdown.jpg" alt="Doca Markdown editor with a team development note"><br><b>Markdown</b> — notes, code, and structured writing.</td>
+    <td width="50%"><img src="docs/images/markdown.jpg" alt="Doca Markdown editor with a development note in source and preview split view"><br><b>Markdown</b> — notes, code, and structured writing.</td>
     <td width="50%"><img src="docs/images/spreadsheet.jpg" alt="Doca spreadsheet editor with a formatted project budget"><br><b>Spreadsheets</b> — budgets, data, and project tracking.</td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/slides.jpg" alt="Doca presentation editor displaying a product introduction"><br><b>Slides</b> — present ideas and project updates.</td>
-    <td width="50%"><img src="docs/images/canvas.jpg" alt="Doca canvas editor showing a project roadmap"><br><b>Canvas</b> — map out a process on an infinite board.</td>
+    <td width="50%"><img src="docs/images/canvas.jpg" alt="Doca canvas editor showing a project flowchart, mind map, and action table"><br><b>Canvas</b> — map out a process on an infinite board.</td>
   </tr>
 </table>
 
-<p align="center"><sub>Actual Doca UI, captured with sample content in an isolated local deployment.</sub></p>
+<p align="center"><sub>Five editor screenshots updated on 2026-10-17, captured from Doca 0.1.31 with sample content in an isolated local deployment.</sub></p>
 
 ## What you can do
 

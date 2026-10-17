@@ -53,16 +53,16 @@ Doca 把**在线文档、Markdown、在线表格、幻灯片、无限画布、�
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/markdown.jpg" alt="Doca Markdown 编辑器中的研发笔记"><br><b>Markdown</b>：写笔记、贴代码、整理结构化内容。</td>
+    <td width="50%"><img src="docs/images/markdown.jpg" alt="Doca Markdown 编辑器：研发笔记的源码与预览分屏"><br><b>Markdown</b>：写笔记、贴代码、整理结构化内容。</td>
     <td width="50%"><img src="docs/images/spreadsheet.jpg" alt="Doca 在线表格编辑器中的项目预算"><br><b>在线表格</b>：管理预算、数据与项目进度。</td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/slides.jpg" alt="Doca 幻灯片编辑器中的产品介绍"><br><b>幻灯片</b>：表达想法，展示方案与阶段成果。</td>
-    <td width="50%"><img src="docs/images/canvas.jpg" alt="Doca 无限画布中的项目路线规划"><br><b>无限画布</b>：把流程、结构与思路放到画板上。</td>
+    <td width="50%"><img src="docs/images/canvas.jpg" alt="Doca 无限画布：项目流程图、思维导图与行动表格"><br><b>无限画布</b>：把流程、结构与思路放到画板上。</td>
   </tr>
 </table>
 
-<p align="center"><sub>以上为 Doca 真实系统截图，使用隔离本地部署中的示例内容。</sub></p>
+<p align="center"><sub>五种编辑器截图更新于 2026-10-17，基于 Doca 0.1.31 的真实界面，使用隔离本地部署中的示例内容。</sub></p>
 
 ## 主要功能
 
