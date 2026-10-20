@@ -1,0 +1,118 @@
+.document-image-preview {
+  position: fixed;
+  z-index: 1500;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #1f2329;
+  background: rgba(245, 246, 247, 0.96);
+  backdrop-filter: blur(5px);
+  outline: none;
+  animation: document-image-preview-arrive 0.15s ease-out;
+}
+.document-image-preview-toolbar {
+  position: absolute;
+  z-index: 3;
+  top: 18px;
+  left: 50%;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  max-width: calc(100vw - 24px);
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #dee0e3;
+  border-radius: 9px;
+  box-shadow: 0 8px 28px rgba(31, 35, 41, 0.14);
+  backdrop-filter: blur(10px);
+}
+.document-image-preview-toolbar :is(button, a) {
+  min-width: 34px;
+  height: 32px;
+  padding: 0 8px;
+  display: grid;
+  place-items: center;
+  color: #4e5969;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.document-image-preview-toolbar :is(button, a):hover {
+  color: #245bdb;
+  background: #edf3ff;
+}
+.document-image-preview-toolbar :is(button, a):active {
+  background: #dbe7ff;
+}
+.document-image-preview-toolbar :is(button, a):focus-visible {
+  outline: 2px solid #3370ff;
+  outline-offset: 1px;
+}
+.document-image-preview-toolbar .document-image-preview-scale {
+  min-width: 60px;
+  font-variant-numeric: tabular-nums;
+}
+.document-image-preview-viewport {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 76px 42px 42px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+}
+.document-image-preview-viewport img {
+  max-width: 88vw;
+  max-height: calc(100dvh - 120px);
+  transform-origin: center;
+  user-select: none;
+  background: #fff;
+  border: 1px solid #ebedf0;
+  border-radius: 8px;
+  box-shadow: 0 12px 38px rgba(31, 35, 41, 0.13);
+  cursor: grab;
+}
+.document-image-preview-viewport img:active {
+  cursor: grabbing;
+}
+.document-image-preview-error {
+  position: absolute;
+  bottom: 24px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  color: #a61d24;
+  background: #fff1f0;
+}
+@keyframes document-image-preview-arrive {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (max-width: 480px) {
+  .document-image-preview-toolbar {
+    gap: 0;
+    padding: 4px;
+  }
+  .document-image-preview-toolbar :is(button, a) {
+    min-width: 30px;
+    padding: 0 5px;
+  }
+  .document-image-preview-toolbar .document-image-preview-scale {
+    min-width: 48px;
+  }
+  .document-image-preview-viewport {
+    padding: 76px 12px 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .document-image-preview {
+    animation: none;
+  }
+}
