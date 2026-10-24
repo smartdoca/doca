@@ -2,7 +2,7 @@
 
 [简体中文](deployment-without-github.zh-CN.md)
 
-The business server does not need a source checkout, Git, Node.js, or pnpm. Install Docker Engine, the Docker Compose plugin, Bash, and OpenSSL beforehand, then transfer deployment files, prepare the image, start Doca, and initialize the administrator. This guide installs Doca 0.2.15 on a fresh single server with SQLite and local file storage. Existing installations must review the [release requirements](releases/0.2.15.md) and preserve their databases, files, configuration, and credential master key.
+The business server does not need a source checkout, Git, Node.js, or pnpm. Install Docker Engine, the Docker Compose plugin, Bash, and OpenSSL beforehand, then transfer deployment files, prepare the image, start Doca, and initialize the administrator. This guide installs Doca 0.2.16 on a fresh single server with SQLite and local file storage. Existing installations must review the [release requirements](releases/0.2.16.md) and preserve their databases, files, configuration, and credential master key.
 
 ## 1. Transfer deployment files
 
@@ -12,20 +12,20 @@ Someone with repository access runs this command from the release checkout match
 node scripts/pack-deployment.mjs
 ```
 
-Transfer `doca-deploy-v0.2.15.tar.gz` and its `.sha256` checksum through an enterprise file service, an internal download URL, or removable storage. The packer reads only public deployment files and includes no local `.env`, user data, or container image. The official-tag Release workflow also attaches the bundle and checksum; this workflow change takes effect with a new tag and does not backfill existing Releases.
+Transfer `doca-deploy-v0.2.16.tar.gz` and its `.sha256` checksum through an enterprise file service, an internal download URL, or removable storage. The packer reads only public deployment files and includes no local `.env`, user data, or container image. The official-tag Release workflow also attaches the bundle and checksum; this workflow change takes effect with a new tag and does not backfill existing Releases.
 
 Place both files in the same directory on the business server, verify, and extract:
 
 ```sh
-sha256sum -c doca-deploy-v0.2.15.tar.gz.sha256
-tar -xzf doca-deploy-v0.2.15.tar.gz
-cd doca-deploy-v0.2.15
+sha256sum -c doca-deploy-v0.2.16.tar.gz.sha256
+tar -xzf doca-deploy-v0.2.16.tar.gz
+cd doca-deploy-v0.2.16
 ```
 
-On macOS, use `shasum -a 256 -c doca-deploy-v0.2.15.tar.gz.sha256`. Run subsequent deployment commands from this directory:
+On macOS, use `shasum -a 256 -c doca-deploy-v0.2.16.tar.gz.sha256`. Run subsequent deployment commands from this directory:
 
 ```text
-doca-deploy-v0.2.15/
+doca-deploy-v0.2.16/
   compose.yaml
   docker.env.example
   README.zh-CN.md
@@ -49,7 +49,7 @@ For a text handoff, save this single-server configuration as `compose.yaml` and 
 ```yaml
 services:
   doca:
-    image: docker.io/smartdoca/doca:0.2.15
+    image: docker.io/smartdoca/doca:0.2.16
     pull_policy: missing
     restart: unless-stopped
     init: true
@@ -133,21 +133,21 @@ docker compose pull doca
 The supplier prepares an image archive on a machine with registry access. Confirm the target CPU architecture first. This example uses Linux x86-64 (`linux/amd64`); for ARM64, use `linux/arm64` and label the delivered files accordingly:
 
 ```sh
-docker pull --platform linux/amd64 docker.io/smartdoca/doca:0.2.15
-docker image inspect docker.io/smartdoca/doca:0.2.15 --format '{{.Os}}/{{.Architecture}}'
-docker save -o doca-image-v0.2.15-linux-amd64.tar docker.io/smartdoca/doca:0.2.15
-sha256sum doca-image-v0.2.15-linux-amd64.tar > doca-image-v0.2.15-linux-amd64.tar.sha256
+docker pull --platform linux/amd64 docker.io/smartdoca/doca:0.2.16
+docker image inspect docker.io/smartdoca/doca:0.2.16 --format '{{.Os}}/{{.Architecture}}'
+docker save -o doca-image-v0.2.16-linux-amd64.tar docker.io/smartdoca/doca:0.2.16
+sha256sum doca-image-v0.2.16-linux-amd64.tar > doca-image-v0.2.16-linux-amd64.tar.sha256
 ```
 
 Transfer the image `.tar` and checksum together. From their directory on the business server:
 
 ```sh
-sha256sum -c doca-image-v0.2.15-linux-amd64.tar.sha256
-docker load -i doca-image-v0.2.15-linux-amd64.tar
-docker image inspect docker.io/smartdoca/doca:0.2.15 --format '{{.Os}}/{{.Architecture}}'
+sha256sum -c doca-image-v0.2.16-linux-amd64.tar.sha256
+docker load -i doca-image-v0.2.16-linux-amd64.tar
+docker image inspect docker.io/smartdoca/doca:0.2.16 --format '{{.Os}}/{{.Architecture}}'
 ```
 
-Confirm the loaded tag is `smartdoca/doca:0.2.15` and the architecture matches the target, then return to the deployment directory. An internal registry is another delivery option: the supplier pushes the same release image and the business team changes Compose's `image` to that internal registry address before pulling. Keep the bundle, image, and initialization scripts on the same release.
+Confirm the loaded tag is `smartdoca/doca:0.2.16` and the architecture matches the target, then return to the deployment directory. An internal registry is another delivery option: the supplier pushes the same release image and the business team changes Compose's `image` to that internal registry address before pulling. Keep the bundle, image, and initialization scripts on the same release.
 
 ## 4. Start and initialize the database
 
@@ -167,7 +167,7 @@ Wait for `docker compose ps` to show `healthy`. A manual check must use the Host
 curl -fsS -H 'Host: docs.example.com' http://127.0.0.1:39120/health
 ```
 
-Expect `{"status":"ok","version":"0.2.15"}`. For the internal example, use `Host: doca.internal`. Bare loopback requests fail Host validation. Inspect startup failures with `docker compose logs --tail=100 doca`.
+Expect `{"status":"ok","version":"0.2.16"}`. For the internal example, use `Host: doca.internal`. Bare loopback requests fail Host validation. Inspect startup failures with `docker compose logs --tail=100 doca`.
 
 ## 5. Initialize the administrator
 
@@ -191,4 +191,4 @@ This does not create an account. If the database is locked, run `docker compose 
 
 Use `docker compose restart` for ordinary restarts. Keep the deployment directory and Compose project name so the same `doca_data` volume is used; changing either can accidentally start a separate empty site. Back up all databases and file storage in the persistent volume, plus the protected `.env` and master key. `docker compose down -v` deletes the volume and must not be used for an ordinary restart or upgrade.
 
-Review the [release requirements](releases/0.2.15.md) before upgrading and deliver a matching bundle and image. This guide initializes fresh sites and does not convert existing data. Password login and local document services need no GitHub access; configured external services for AI, external login, plugin installation, or cloud storage must still be reachable. Verify document rendering on the target host separately: application health does not establish that Chromium's sandbox works. See [Docker document rendering](docker-rendering.md).
+Review the [release requirements](releases/0.2.16.md) before upgrading and deliver a matching bundle and image. This guide initializes fresh sites and does not convert existing data. Password login and local document services need no GitHub access; configured external services for AI, external login, plugin installation, or cloud storage must still be reachable. Verify document rendering on the target host separately: application health does not establish that Chromium's sandbox works. See [Docker document rendering](docker-rendering.md).

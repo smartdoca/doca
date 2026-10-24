@@ -313,6 +313,37 @@ for (const tool of ["read", "capture"] as const)
     expect(JSON.parse(job.result).progress?.approvals ?? []).toEqual([]);
   });
 
+it("records attached pages without granting document access, and only titles the first accepted turn", async () => {
+  const sid = await session();
+  const material = await prepareMaterial("PAGE_TITLE_AND_LINK_9341");
+  const input = { id: randomUUID(), modelId: "test", text: "总结当前网页", captureRequestId: material.requestId };
+  const sent = await ai("POST", `/ui/sessions/${sid}/messages`, input);
+  expect(sent.statusCode, sent.body).toBe(200);
+  await settle(input.id);
+  const expectedTitle = "总结当前网页 · 故障排查 (material.example.test)";
+  const conversation = await ai("GET", `/ui/sessions/${sid}`);
+  expect(conversation.json().session.title).toBe(expectedTitle);
+  expect(conversation.json().resources).toEqual([expect.objectContaining({ kind: "webpage", title: "故障排查", href: material.url })]);
+  const ordinary = await request("GET", `/ai/sessions/${sid}`);
+  expect(ordinary.json().resources).toEqual(conversation.json().resources);
+  expect(JSON.parse(conversation.json().session.resource_ids)).not.toContain(material.requestId);
+  const retry = await ai("POST", `/ui/sessions/${sid}/messages`, input);
+  expect(retry.statusCode, retry.body).toBe(200);
+  const another = await prepareMaterial("SAME_PAGE_NEXT_TURN_1093");
+  await settle(await send(sid, another.requestId));
+  const reread = await ai("GET", `/ui/sessions/${sid}`);
+  expect(reread.json().session.title).toBe(expectedTitle);
+  expect(reread.json().resources).toHaveLength(1);
+  expect((await request("GET", "/ai/sessions")).json()).toContainEqual(expect.objectContaining({ id: sid, title: expectedTitle, source: "browser_assistant" }));
+});
+
+it("preserves a manually named browser chat when its first message is submitted", async () => {
+  const sid = await session();
+  await db.updateTable("ai_sessions").set({ title: "My research" }).where("id", "=", sid).execute();
+  await settle(await send(sid));
+  expect((await ai("GET", `/ui/sessions/${sid}`)).json().session.title).toBe("My research");
+});
+
 it("reads newly created browser sessions before any jobs are bound", async () => {
   const id = await session();
   const basic = await ai("GET", `/sessions/${id}`);

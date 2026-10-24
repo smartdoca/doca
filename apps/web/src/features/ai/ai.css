@@ -1536,6 +1536,12 @@ body.ai-panel-resizing {
   border-color: #f1d79b;
   background: #fff7df;
 }
+.ai-session-source {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  color: var(--muted, #8f959e);
+}
 .ai-session-status.failed {
   color: #b64b44;
   border-color: #f0c2bd;

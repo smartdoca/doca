@@ -277,6 +277,11 @@
     "zh": "发行记录",
     "pages": [
       [
+        "releases/0.2.16",
+        "0.2.16 — Browser assistant context",
+        "0.2.16 — 浏览器助手上下文"
+      ],
+      [
         "releases/0.2.15",
         "0.2.15 — Capture destination tree",
         "0.2.15 — 收录位置树"

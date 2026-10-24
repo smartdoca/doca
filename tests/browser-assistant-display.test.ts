@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { browserUserMessageText } from "../apps/server/src/services/browser-assistant-display.js";
+import { browserSessionTitle, browserUserMessageText } from "../apps/server/src/services/browser-assistant-display.js";
 import { captureHash } from "../apps/server/src/services/browser-clipper.js";
 
 const profile = { name: "Research", strategy: "create", ai_instruction: "Keep original links" };
@@ -10,6 +10,14 @@ const job = (text: string, captureRequestId: string | null) => {
   const input = { id: randomUUID(), modelId: "model", text, captureRequestId };
   return { id: input.id, model_id: input.modelId, digest: captureHash(input) };
 };
+
+it("names the first browser turn from its request, page title and hostname within the session title limit", () => {
+  expect(browserSessionTitle("总结\n 当前页面", { title: "故障排查", url: "https://docs.example.test/post?q=private#secret" }))
+    .toBe("总结 当前页面 · 故障排查 (docs.example.test)");
+  expect(browserSessionTitle("Summarize", { title: "", url: "https://example.test/page" })).toBe("Summarize · example.test");
+  expect(browserSessionTitle("A".repeat(200), { title: "B".repeat(200), url: "https://example.test/page" }).length).toBeLessThanOrEqual(100);
+  expect(browserSessionTitle("An explicit message without a page")).toBe("An explicit message without a page");
+});
 
 it.each([false, true])("only removes the digest-proven host suffix while preserving user-written marker text (capture=%s)", capture => {
   const captureId = capture ? randomUUID() : null;

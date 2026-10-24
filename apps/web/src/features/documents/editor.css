@@ -321,14 +321,6 @@
 .editor-columns.with-comments .editor-content > .discussion {
   min-width: var(--document-paper-width, 0px);
 }
-.ai-document-layout:has(.editor-columns.with-comments) > .ai-document-trigger,
-.ai-document-layout:has(.editor-columns.with-comments) .document-scroll-buttons {
-  right: 302px;
-}
-.ai-document-layout:has(.compact-document .editor-columns.with-comments) > .ai-document-trigger,
-.ai-document-layout:has(.compact-document .editor-columns.with-comments) .document-scroll-buttons {
-  right: calc(min(360px, max(240px, 42%)) + 22px);
-}
 .compact-document .content-comments > header {
   top: 0;
   padding-block: 12px;

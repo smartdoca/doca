@@ -378,6 +378,26 @@ try {
       ?.endsWith("/route-three"),
   );
   await send(second, "SPA_CURRENT");
+  const originalSession = await db.selectFrom("ai_sessions").selectAll().executeTakeFirstOrThrow();
+  assert(originalSession.title.includes("第一篇网页") && originalSession.title.includes("127.0.0.1"));
+  assert(originalSession.title.startsWith("总结当前网页"));
+  const sourceBadge = ui.locator('.ai-chat-header .ai-session-source');
+  assert.equal(await sourceBadge.innerText(), "");
+  assert.equal(await sourceBadge.getAttribute("aria-label"), "浏览器助手");
+  assert.equal(await sourceBadge.locator("svg").count(), 1);
+  await ui.getByRole("button", { name: "操作过的资源", exact: true }).click();
+  const resourceLinks = ui.locator(".ai-resource-history a");
+  await resourceLinks.first().waitFor();
+  assert.equal(await resourceLinks.count(), 3);
+  for (const path of ["/one", "/two", "/route-three"]) {
+    const link = ui.locator(`.ai-resource-history a[href="${sourceOrigin + path}"]`);
+    assert.equal(await link.count(), 1);
+    assert.equal(await link.getAttribute("target"), "_blank");
+    assert.equal(await link.getAttribute("rel"), "noopener noreferrer");
+  }
+  await ui.screenshot({ path: join(output, "assistant-page-resources.png"), fullPage: true });
+  await ui.getByRole("button", { name: "操作过的资源", exact: true }).click();
+  await ui.locator(".ai-resource-history").waitFor({ state: "hidden" });
   await ui.screenshot({
     path: join(output, "assistant-current-page.png"),
     fullPage: true,
@@ -407,7 +427,7 @@ try {
   const clickIcon = async () => {
     const icon = find(
       await tree(),
-      (node) => node.nodeName === "BUTTON" && node.attributes?.includes("logo"),
+      (node) => node.nodeName === "BUTTON" && node.attributes?.includes("data-action") && node.attributes.includes("page"),
     );
     assert(icon);
     const { model } = await cdp.send("DOM.getBoxModel", {
@@ -461,16 +481,48 @@ try {
   await second.screenshot({
     path: join(output, "toolbar-signed-in.png"),
   });
+  await second.keyboard.press("Escape");
+  // Reopening after a rule edit must validate the old selection before mounting
+  // chat. The historical session/binding and its three jobs remain unchanged.
+  const originalBinding = await db.selectFrom("browser_clipper_assistant_sessions").selectAll().where("session_id", "=", originalSession.id).executeTakeFirstOrThrow();
+  const { id: profileId, ...profileValues } = profile;
+  const changed = await request("PUT", `/me/browser-clipper/profiles/${profileId}`, { ...profileValues, titleTemplate: "更新后 {title}" });
+  assert.equal(changed.statusCode, 200, changed.body);
+  await ui.reload();
+  await second.bringToFront();
+  await ui.getByText("想收录这个网页吗？", { exact: true }).waitFor();
+  assert.equal(await ui.getByText("会话或引用资料的访问权限已变化，请重新打开会话", { exact: true }).count(), 0);
+  assert.deepEqual(await db.selectFrom("browser_clipper_assistant_sessions").selectAll().where("session_id", "=", originalSession.id).executeTakeFirstOrThrow(), originalBinding);
+  const historical = await request("GET", `/ai/sessions/${originalSession.id}`);
+  assert.equal(historical.statusCode, 200, historical.body);
+  assert.equal(historical.json().session.title, originalSession.title);
+  assert.equal(historical.json().resources.filter((resource: any) => resource.kind === "webpage").length, 3);
+  await send(second, "SPA_CURRENT");
+  const newBinding = await db.selectFrom("browser_clipper_assistant_sessions").selectAll().where("session_id", "!=", originalSession.id).executeTakeFirstOrThrow();
+  assert.equal(newBinding.profile_revision, changed.json().revision);
+  assert.equal(JSON.parse(originalBinding.job_ids).ids.length, 3);
+  await ui.screenshot({ path: join(output, "assistant-after-rule-change.png"), fullPage: true });
+  // Verify the same source icon and external links in the regular Doca UI.
+  const website = await browser.newPage();
+  await website.setViewportSize({ width: 1280, height: 900 });
+  await website.goto(origin + `/#/ai?session=${originalSession.id}`);
+  await website.locator('.ai-session-source[aria-label="浏览器助手"]').first().waitFor();
+  assert.equal(await website.locator('.ai-session-source').first().innerText(), "");
+  await website.getByRole("button", { name: "操作过的资源", exact: true }).click();
+  await website.locator(".ai-resource-history a").first().waitFor();
+  assert.equal(await website.locator(".ai-resource-history a").count(), 3);
+  await website.screenshot({ path: join(output, "website-page-resources.png"), fullPage: true });
+  await website.getByRole("button", { name: "操作过的资源", exact: true }).click();
+  await website.locator(".ai-resource-history").waitFor({ state: "hidden" });
+  await website.screenshot({ path: join(output, "website-session-icon.png"), fullPage: true });
+  await second.bringToFront();
   await worker.evaluate(() => chrome.runtime.reload()).catch(() => {});
   await clickIcon();
-  await clickIcon();
   await waitToolbar("插件已更新");
-  await second.screenshot({
-    path: join(output, "toolbar-extension-updated.png"),
-  });
-  assert.deepEqual(markers, ["PAGE_ONE", "PAGE_TWO", "SPA_CURRENT"]);
+  await second.screenshot({ path: join(output, "toolbar-extension-updated.png") });
+  assert.deepEqual(markers, ["PAGE_ONE", "PAGE_TWO", "SPA_CURRENT", "SPA_CURRENT"]);
   const jobs = await db.selectFrom("ai_jobs").select(["status"]).execute();
-  assert.equal(jobs.length, 3);
+  assert.equal(jobs.length, 4);
   assert(jobs.every((job) => job.status === "completed"));
   assert.equal(
     (
@@ -496,6 +548,10 @@ try {
     quickNoteRemoved: true,
     toolbarSignedIn: true,
     invalidatedToolbarOffersReload: true,
+    ruleChangeStartsCurrentSession: true,
+    originalHistoryRetained: true,
+    webpageResourcesOnBothSurfaces: true,
+    contextualTitleAndSourceIcon: true,
     completedJobs: jobs.length,
   };
   await writeFile(join(output, "report.json"), JSON.stringify(result, null, 2));
