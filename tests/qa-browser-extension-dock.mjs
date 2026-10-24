@@ -313,6 +313,13 @@ try {
     const b = await box(selector);
     await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
   };
+  const layoutReady = () =>
+    page.evaluate(
+      () =>
+        new Promise((done) =>
+          requestAnimationFrame(() => requestAnimationFrame(done)),
+        ),
+    );
   const text = (selector) =>
     shadow(function (s) {
       return this.querySelector(s)?.textContent ?? "";
@@ -604,6 +611,7 @@ try {
   );
   await screenshot("dragged-dock");
   await page.setViewportSize({ width: 390, height: 844 });
+  await layoutReady();
   await click('[data-action="page"]');
   await wait(ruleReady, "narrow capture rule");
   const narrow = await box(".panel");
@@ -621,12 +629,14 @@ try {
   await page.keyboard.press("Escape");
   await click(".close");
   await page.setViewportSize({ width: 1280, height: 900 });
+  await layoutReady();
   const sourceTabId = await worker.evaluate(
     async (url) =>
       (await chrome.tabs.query({})).find((tab) => tab.url === url).id,
     page.url(),
   );
   await worker.evaluate(async (id) => chrome.tabs.setZoom(id, 2), sourceTabId);
+  await layoutReady();
   await click('[data-action="page"]');
   await wait(ruleReady, "zoom capture rule");
   const zoom = await box(".panel"),
@@ -653,6 +663,7 @@ try {
   await page.keyboard.press("Escape");
   await click(".close");
   await worker.evaluate(async (id) => chrome.tabs.setZoom(id, 1), sourceTabId);
+  await layoutReady();
   const settingsOpened = context.waitForEvent("page");
   await click('[data-action="settings"]');
   const settings = await settingsOpened;
