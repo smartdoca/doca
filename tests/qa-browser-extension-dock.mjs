@@ -30,11 +30,20 @@ const profile = {
   strategy: "create",
 };
 const session = {
+  // The assistant stays bound to the default profile, independently of capture rules.
   id: sessionId,
   title: "网页分析",
   model_id: "fixture-model",
   source: "browser_assistant",
   archived: 0,
+};
+const otherProfile = {
+  id: randomUUID(),
+  revision: 2,
+  name: "项目资料",
+  isDefault: false,
+  strategy: "append",
+  destinationTitle: "资料收集",
 };
 const captures = [],
   uploads = [],
@@ -111,7 +120,8 @@ const server = createServer(async (req, res) => {
         user: { id: "fixture-user", name: "验证用户" },
         connection: { assistant_enabled: 1 },
       };
-    else if (path.endsWith("/profiles")) result = { items: [profile] };
+    else if (path.endsWith("/profiles"))
+      result = { items: [profile, otherProfile] };
     else if (path.endsWith("/options"))
       result = {
         enabled: true,
@@ -259,7 +269,7 @@ try {
   page.on("pageerror", (error) => errors.push(error.stack));
   await page.goto(origin + "/read");
   await page.locator("[data-doca-capture-ui]").waitFor();
-  const cdp = await context.newCDPSession(page);
+  let cdp = await context.newCDPSession(page);
   const root = async () => {
     const { root: doc } = await cdp.send("DOM.getDocument", {
       depth: -1,
@@ -303,6 +313,13 @@ try {
     const b = await box(selector);
     await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
   };
+  const layoutReady = () =>
+    page.evaluate(
+      () =>
+        new Promise((done) =>
+          requestAnimationFrame(() => requestAnimationFrame(done)),
+        ),
+    );
   const text = (selector) =>
     shadow(function (s) {
       return this.querySelector(s)?.textContent ?? "";
@@ -321,7 +338,9 @@ try {
         async () =>
           await shadow(function () {
             return [
-              ...this.querySelectorAll(".dock,.panel:not([hidden])"),
+              ...this.querySelectorAll(
+                ".dock,.panel:not([hidden]),.doca-select-menu:not([hidden])",
+              ),
             ].every((node) => Number(getComputedStyle(node).opacity) === 1);
           }),
         "animation completed",
@@ -382,6 +401,40 @@ try {
   await click('[data-action="page"]');
   await wait(ruleReady, "capture rule loaded");
   assert.equal(captures.length, 0, "Opening the bubble never starts capture");
+  assert.equal(
+    await shadow(function () {
+      return this.querySelector("select").hidden;
+    }),
+    true,
+    "Native select stays hidden",
+  );
+  await click('[role="combobox"]');
+  await wait(
+    async () =>
+      await shadow(function () {
+        return !this.querySelector('[role="listbox"]').hidden;
+      }),
+    "Custom dropdown opens",
+  );
+  const menu = await box('[role="listbox"]'),
+    trigger = await box('[role="combobox"]');
+  assert(
+    menu.y >= trigger.y + trigger.height,
+    "Dropdown opens below the trigger when space permits",
+  );
+  await screenshot("capture-dropdown");
+  await page.keyboard.press("Escape");
+  assert.equal(
+    await shadow(function () {
+      return this.querySelector(".panel").hidden;
+    }),
+    false,
+    "Escape closes the dropdown first",
+  );
+  await click('[role="combobox"]');
+  await click('[role="option"]:nth-child(2)');
+  assert((await text('[role="combobox"]')).includes("项目资料"));
+  assert.equal(captures.length, 0);
   await screenshot("capture-rule");
   await motionFrames(".panel", 180, "motion-panel");
   const action = await box(".confirm");
@@ -407,6 +460,11 @@ try {
   );
   await screenshot("motion-press-end");
   assert(captures[0].markdown.includes("归档时保留上下文"));
+  assert.equal(
+    captures[0].profileId,
+    otherProfile.id,
+    "Capture uses the selected custom dropdown rule",
+  );
   assert(
     !captures[0].markdown.includes("收录规则"),
     "Capture excludes extension UI",
@@ -451,7 +509,7 @@ try {
   await page.mouse.down();
   await page.mouse.move(handle.x + 8, handle.y - 200, { steps: 12 });
   await page.mouse.up();
-  const after = await box(".dock");
+  let after = await box(".dock");
   assert(after.y < before.y - 150);
   await wait(
     async () =>
@@ -461,6 +519,98 @@ try {
       )) < 0.4,
     "drag persisted",
   );
+  const initialPreference = await worker.evaluate(
+    async () => (await chrome.storage.local.get("dockPosition")).dockPosition,
+  );
+  await worker.evaluate(() => {
+    globalThis.docaQaOriginalLocalSet = chrome.storage.local.set.bind(
+      chrome.storage.local,
+    );
+    chrome.storage.local.set = async (value) => {
+      if (Object.hasOwn(value, "dockPosition"))
+        throw Error("Injected position storage failure");
+      return globalThis.docaQaOriginalLocalSet(value);
+    };
+  });
+  const failHandle = await box(".handle");
+  await page.mouse.move(failHandle.x + 8, failHandle.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(failHandle.x + 8, failHandle.y + 38, { steps: 6 });
+  await page.mouse.up();
+  await wait(
+    async () => (await text(".status")).includes("位置未能保存"),
+    "Position write failure is visible",
+  );
+  assert.equal(
+    await worker.evaluate(
+      async () => (await chrome.storage.local.get("dockPosition")).dockPosition,
+    ),
+    initialPreference,
+    "Failed writes retain the old cache",
+  );
+  await screenshot("position-save-failure");
+  await worker.evaluate(() => {
+    chrome.storage.local.set = globalThis.docaQaOriginalLocalSet;
+    delete globalThis.docaQaOriginalLocalSet;
+  });
+  await click(".close");
+  after = await box(".dock");
+  const collapseControl = await box('[data-action="collapse"]');
+  const settingsControl = await box('[data-action="settings"]');
+  assert(
+    Math.abs(collapseControl.x - settingsControl.x) < 1 &&
+      Math.abs(collapseControl.width - settingsControl.width) < 1 &&
+      collapseControl.y >= settingsControl.y + settingsControl.height,
+    "Collapse control shares the action column below Settings",
+  );
+  await click('[data-action="collapse"]');
+  await wait(
+    async () => (await box(".dock")).height < 100,
+    "Toolbar collapsed",
+  );
+  assert.equal(
+    await shadow(function () {
+      return this.querySelector(".actions").hidden;
+    }),
+    true,
+  );
+  assert(
+    Math.abs((await box(".dock")).y - after.y) < 2,
+    "Collapsing keeps the dock anchor",
+  );
+  await screenshot("collapsed-dock");
+  const compactHandle = await box(".handle");
+  await page.mouse.move(compactHandle.x + 8, compactHandle.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(compactHandle.x + 8, compactHandle.y + 78, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  await wait(
+    async () =>
+      (await worker.evaluate(
+        async () =>
+          (await chrome.storage.local.get("dockPosition")).dockPosition,
+      )) >
+      initialPreference + 0.05,
+    "Collapsed dragging persists",
+  );
+  after = await box(".dock");
+  await click('[data-action="collapse"]');
+  await wait(
+    async () => (await box(".dock")).height > 150,
+    "Toolbar expanded",
+  );
+  assert.equal(
+    await shadow(function () {
+      return this.querySelector(".actions").hidden;
+    }),
+    false,
+  );
+  assert(
+    Math.abs((await box(".dock")).y - after.y) < 2,
+    "Expanding keeps the moved anchor",
+  );
   await page.reload();
   await page.locator("[data-doca-capture-ui]").waitFor();
   assert(
@@ -469,19 +619,32 @@ try {
   );
   await screenshot("dragged-dock");
   await page.setViewportSize({ width: 390, height: 844 });
+  await layoutReady();
   await click('[data-action="page"]');
   await wait(ruleReady, "narrow capture rule");
   const narrow = await box(".panel");
   assert(narrow.x >= 0 && narrow.x + narrow.width <= 390);
   await screenshot("narrow-capture");
+  await click('[role="combobox"]');
+  const narrowMenu = await box('[role="listbox"]');
+  assert(
+    narrowMenu.x >= 0 &&
+      narrowMenu.x + narrowMenu.width <= 390 &&
+      narrowMenu.y >= 0 &&
+      narrowMenu.y + narrowMenu.height <= 844,
+  );
+  await screenshot("narrow-dropdown");
+  await page.keyboard.press("Escape");
   await click(".close");
   await page.setViewportSize({ width: 1280, height: 900 });
+  await layoutReady();
   const sourceTabId = await worker.evaluate(
     async (url) =>
       (await chrome.tabs.query({})).find((tab) => tab.url === url).id,
     page.url(),
   );
   await worker.evaluate(async (id) => chrome.tabs.setZoom(id, 2), sourceTabId);
+  await layoutReady();
   await click('[data-action="page"]');
   await wait(ruleReady, "zoom capture rule");
   const zoom = await box(".panel"),
@@ -496,8 +659,19 @@ try {
     "200% browser zoom stays in viewport",
   );
   await screenshot("zoom-200");
+  await click('[role="combobox"]');
+  const zoomMenu = await box('[role="listbox"]');
+  assert(
+    zoomMenu.x >= 0 &&
+      zoomMenu.x + zoomMenu.width <= viewport.width &&
+      zoomMenu.y >= 0 &&
+      zoomMenu.y + zoomMenu.height <= viewport.height,
+  );
+  await screenshot("zoom-dropdown-200");
+  await page.keyboard.press("Escape");
   await click(".close");
   await worker.evaluate(async (id) => chrome.tabs.setZoom(id, 1), sourceTabId);
+  await layoutReady();
   const settingsOpened = context.waitForEvent("page");
   await click('[data-action="settings"]');
   const settings = await settingsOpened;
@@ -692,6 +866,59 @@ try {
   }
   assert.deepEqual(errors, []);
   assert.deepEqual(unexpected, []);
+  const cachedPosition = await worker.evaluate(
+    async () => (await chrome.storage.local.get("dockPosition")).dockPosition,
+  );
+  const expectedTop = await page
+    .locator("[data-doca-capture-ui]")
+    .evaluate((node) => node.style.top);
+  const browserOptions = {
+    executablePath: chromium.executablePath(),
+    headless: true,
+    viewport: { width: 1280, height: 900 },
+    args: [
+      `--disable-extensions-except=${extension}`,
+      `--load-extension=${extension}`,
+    ],
+  };
+  await context.close();
+  context = await chromium.launchPersistentContext(
+    join(output, "browser-profile"),
+    browserOptions,
+  );
+  const restarted = await context.newPage();
+  await restarted.goto(origin + "/reopened");
+  await restarted.locator("[data-doca-capture-ui]").waitFor();
+  assert.equal(
+    await restarted
+      .locator("[data-doca-capture-ui]")
+      .evaluate((node) => node.style.top),
+    expectedTop,
+    "Browser restart restores the position before showing the toolbar",
+  );
+  const another = await context.newPage();
+  await another.goto(origin + "/another");
+  await another.locator("[data-doca-capture-ui]").waitFor();
+  assert.equal(
+    await another
+      .locator("[data-doca-capture-ui]")
+      .evaluate((node) => node.style.top),
+    expectedTop,
+    "New pages read the same frontend cache",
+  );
+  cdp = await context.newCDPSession(another);
+  await wait(
+    async () =>
+      await shadow(function () {
+        return (
+          Number(getComputedStyle(this.querySelector(".dock")).opacity) === 1
+        );
+      }),
+    "Restored toolbar entry completed",
+  );
+  await another.screenshot({
+    path: join(output, "position-after-browser-restart.png"),
+  });
   await writeFile(
     join(output, "report.json"),
     JSON.stringify(
@@ -700,6 +927,17 @@ try {
         viewport: [1280, 900],
         narrow: [390, 844],
         zoom: "200%",
+        controls: {
+          customDropdown: true,
+          collapseExpand: true,
+          collapseInActionColumn: true,
+          collapsedDragging: true,
+          cachedPosition,
+          restoredTop: expectedTop,
+          browserRestart: true,
+          newPage: true,
+          failedPositionWriteRetainedCache: true,
+        },
         captures: captures.map(({ mode, requestId }) => ({ mode, requestId })),
         uploads: uploads.map(({ bytes }) => ({
           bytes: bytes.length,

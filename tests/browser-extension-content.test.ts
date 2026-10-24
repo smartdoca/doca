@@ -6,6 +6,10 @@ const source = await readFile(
   new URL("../apps/browser-extension/content.js", import.meta.url),
   "utf8",
 );
+const selectSource = await readFile(
+  new URL("../apps/browser-extension/select.js", import.meta.url),
+  "utf8",
+);
 const flush = async () => {
   for (let i = 0; i < 3; i++)
     await new Promise((resolve) => setImmediate(resolve));
@@ -30,7 +34,14 @@ const connected = (
     profiles,
   },
 });
-async function fixture(replies: any[] = []) {
+async function fixture(
+  replies: any[] = [],
+  preferences: { position: number | null; locale: string } = {
+    position: null,
+    locale: "zh",
+  },
+  failPositionSave = false,
+) {
   const dom = new JSDOM(
     "<title>Article</title><p id='article'>Selected page material</p>",
     { url: "https://source.test/page", runScripts: "outside-only" },
@@ -50,8 +61,13 @@ async function fixture(replies: any[] = []) {
         },
         sendMessage: async (message: any) => {
           calls.push(message);
-          if (message.type === "dockPreferences")
-            return { ok: true, value: { position: null, locale: "zh" } };
+          if (message.type === "dockPreferences") {
+            if (message.operation === "set" && failPositionSave)
+              throw Error("storage unavailable");
+            if (message.operation === "set")
+              preferences.position = message.position;
+            return { ok: true, value: { ...preferences } };
+          }
           const reply = replies.shift();
           if (reply instanceof Error) throw reply;
           return reply ?? { ok: true, value: { opened: true } };
@@ -72,6 +88,7 @@ async function fixture(replies: any[] = []) {
       },
     },
   });
+  dom.window.eval(selectSource);
   dom.window.eval(source);
   await flush();
   const host = dom.window.document.querySelector("[data-doca-capture-ui]")!;
@@ -264,6 +281,111 @@ it("keeps drag adjustments in view and saves their relative position", async () 
     await flush();
     expect(f.calls.at(-1)).toMatchObject({ position: 0 });
     expect(f.host.style.top).toBe("12px");
+  } finally {
+    f.dispose();
+  }
+});
+
+it("uses the shared dropdown, keeps it outside the scrolling panel and confirms the chosen rule", async () => {
+  const f = await fixture([
+    connected([
+      {
+        id: "profile",
+        revision: 1,
+        name: "Research",
+        isDefault: true,
+        strategy: "create",
+      },
+      {
+        id: "other",
+        revision: 2,
+        name: "Other destination",
+        isDefault: false,
+        strategy: "append",
+      },
+    ]),
+    { ok: true, value: { url: "https://doca.test/saved" } },
+  ]);
+  try {
+    await f.click("page");
+    expect(f.get("select").hidden).toBe(true);
+    const trigger = f.get('[role="combobox"]'),
+      menu = f.get('[role="listbox"]');
+    expect(menu.parentNode).toBe(f.shadow);
+    expect(trigger.getAttribute("aria-label")).toBe("收录规则");
+    trigger.click();
+    expect(menu.hidden).toBe(false);
+    menu.children[1].dispatchEvent(
+      new f.dom.window.MouseEvent("pointerdown", {
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(menu.hidden).toBe(false);
+    menu.children[1].click();
+    expect(trigger.textContent).toContain("Other destination");
+    expect(menu.hidden).toBe(true);
+    trigger.click();
+    trigger.dispatchEvent(
+      new f.dom.window.KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(menu.hidden).toBe(true);
+    expect(f.get(".panel").hidden).toBe(false);
+    await f.get(".confirm").onclick({ isTrusted: true });
+    expect(f.calls.find((call) => call.type === "capture")).toMatchObject({
+      profileId: "other",
+      profileRevision: 2,
+    });
+  } finally {
+    f.dispose();
+  }
+});
+
+it("collapses the actions without moving the dock and restores the same position in a new document", async () => {
+  const preferences = { position: 0.3, locale: "zh" };
+  const f = await fixture([connected()], preferences);
+  let savedTop: string;
+  try {
+    expect(f.host.style.visibility).toBe("visible");
+    await f.click("page");
+    f.get('[role="combobox"]').click();
+    const top = f.host.style.top;
+    await f.click("collapse");
+    expect(f.get(".actions").hidden).toBe(true);
+    expect(f.get(".panel").hidden).toBe(true);
+    expect(f.get('[role="listbox"]').hidden).toBe(true);
+    expect(f.get(".collapse").getAttribute("aria-label")).toBe("展开工具条");
+    expect(f.host.style.top).toBe(top);
+    f.get(".handle").onkeydown({ key: "ArrowDown", preventDefault() {} });
+    await flush();
+    savedTop = f.host.style.top;
+    await f.click("collapse");
+    expect(f.get(".actions").hidden).toBe(false);
+    expect(f.host.style.top).toBe(savedTop);
+  } finally {
+    f.dispose();
+  }
+  const reopened = await fixture([], preferences);
+  try {
+    expect(reopened.host.style.top).toBe(savedTop!);
+  } finally {
+    reopened.dispose();
+  }
+});
+
+it("reports a failed position write and preserves the previous cached value", async () => {
+  const preferences = { position: 0.3, locale: "zh" };
+  const f = await fixture([], preferences, true);
+  try {
+    f.get(".handle").onkeydown({ key: "ArrowDown", preventDefault() {} });
+    await flush();
+    expect(f.get(".panel").hidden).toBe(false);
+    expect(f.get(".status").textContent).toContain("位置未能保存");
+    expect(preferences.position).toBe(0.3);
   } finally {
     f.dispose();
   }
