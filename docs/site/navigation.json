@@ -277,6 +277,11 @@
     "zh": "发行记录",
     "pages": [
       [
+        "releases/0.2.15",
+        "0.2.15 — Capture destination tree",
+        "0.2.15 — 收录位置树"
+      ],
+      [
         "releases/0.2.14",
         "0.2.14",
         "0.2.14"

@@ -375,3 +375,10 @@
     flex-basis: 100%;
   }
 }
+
+.clipper-destination-error {
+  margin: 0;
+  color: #b24441;
+  font-size: 13px;
+  line-height: 1.6;
+}

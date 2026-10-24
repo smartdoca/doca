@@ -8,7 +8,7 @@ import { splitTitleIcon } from "@web/shared/utils/resource-title.js";
 import { FileIcon } from "./document-controls.js";
 
 export type MoveDestination = Resource | "__personal__" | null;
-interface DestinationNode extends TreeDataNode {
+export interface DestinationNode extends TreeDataNode {
   resource?: Resource;
   children?: DestinationNode[];
 }
@@ -19,6 +19,24 @@ export function moveDestinationChildren(
   items: Resource[],
   sourceId: string,
   moving: boolean,
+): DestinationNode[] {
+  return destinationChildren(libraryId, items, sourceId, moving, 4);
+}
+
+/** Creating below a document needs edit permission; moving still needs management. */
+export function createDestinationChildren(
+  libraryId: string,
+  items: Resource[],
+): DestinationNode[] {
+  return destinationChildren(libraryId, items, null, false, 3);
+}
+
+function destinationChildren(
+  libraryId: string,
+  items: Resource[],
+  sourceId: string | null,
+  moving: boolean,
+  minimumRole: number,
 ): DestinationNode[] {
   const documents = items.filter(
     (item) =>
@@ -53,7 +71,7 @@ export function moveDestinationChildren(
         title: splitTitleIcon(item.title).text,
         icon: <FileIcon r={item} size="compact" />,
         resource: item,
-        disabled: blocked || roleRank(item.role) < 4,
+        disabled: blocked || roleRank(item.role) < minimumRole,
         isLeaf: !nested.length,
         children: nested,
       };
