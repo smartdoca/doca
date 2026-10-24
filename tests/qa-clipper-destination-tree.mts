@@ -158,20 +158,53 @@ try {
   const dialog = () => page!.getByRole("dialog", { name: "编辑", exact: true });
   const tree = () => dialog().locator(".clipper-destination");
   async function open() {
+    const outline = profile.libraryId
+      ? page!.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return (
+            url.pathname === "/api/v1/resources" &&
+            url.searchParams.get("libraryId") === profile.libraryId &&
+            url.searchParams.get("tree") === "true"
+          );
+        })
+      : null;
     await page!.getByRole("button", { name: "编辑", exact: true }).click();
     await dialog().waitFor();
     await tree().getByRole("tree").waitFor();
+    await tree().getByRole("status").waitFor({ state: "detached" });
+    const response = await outline;
+    if (!response || response.ok())
+      await tree().locator(".ant-tree-node-selected").waitFor();
+    await page!.evaluate(
+      () =>
+        new Promise((done) =>
+          requestAnimationFrame(() => requestAnimationFrame(done)),
+        ),
+    );
   }
   async function scrollToTitle(name: string) {
     const node = tree()
       .locator(".ant-tree-title")
       .getByText(name, { exact: true });
     const holder = tree().locator(".ant-tree-list-holder");
-    await holder.evaluate((element) => {
+    await holder.evaluate(async (element) => {
       element.scrollTop = 0;
+      await new Promise((done) =>
+        requestAnimationFrame(() => requestAnimationFrame(done)),
+      );
     });
     for (let index = 0; index < 80; index++) {
-      if ((await node.count()) && (await node.isVisible())) return node;
+      if (
+        (await node.count()) &&
+        (await node.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const viewport = element
+            .closest(".ant-tree-list-holder")!
+            .getBoundingClientRect();
+          return rect.top >= viewport.top && rect.bottom <= viewport.bottom;
+        }))
+      )
+        return node;
       const moved = await holder.evaluate(async (element) => {
         const previous = element.scrollTop;
         element.scrollTop += 210;
