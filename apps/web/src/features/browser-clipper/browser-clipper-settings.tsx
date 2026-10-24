@@ -14,6 +14,7 @@ import { Feedback } from "@web/shared/components/feedback.js";
 import { Select } from "@web/shared/components/select.js";
 import { Dialog } from "@web/features/documents/dialogs.js";
 import { SettingsTabs } from "@web/features/settings/settings-tabs.js";
+import { ClipperDestinationTree } from "./clipper-destination-tree.js";
 import "./browser-clipper.css";
 
 type Profile = {
@@ -66,6 +67,7 @@ export function BrowserClipperSettings() {
   const [destinations, setDestinations] = useState<Destination[]>([]),
     [cursor, setCursor] = useState<string | null>(null),
     [query, setQuery] = useState("");
+  const [destinationReady, setDestinationReady] = useState(false);
   const [editingConnection, setEditingConnection] = useState<Connection | null>(
     null,
   );
@@ -116,8 +118,8 @@ export function BrowserClipperSettings() {
       setBusy(false);
     }
   }
-  async function search(more = false) {
-    const params = new URLSearchParams({ q: query });
+  async function search(more = false, text = query) {
+    const params = new URLSearchParams({ q: text, kind: "document" });
     if (more && cursor) params.set("cursor", cursor);
     const page = await api<{ items: Destination[]; nextCursor: string | null }>(
       base + "/destinations?" + params,
@@ -137,6 +139,9 @@ export function BrowserClipperSettings() {
       ? (({ destinationTitle: _label, ...fields }) => fields)(profile)
       : null;
     setQuery("");
+    setDestinations([]);
+    setCursor(null);
+    setDestinationReady(false);
     setForm(
       clean ?? {
         name: "",
@@ -150,11 +155,12 @@ export function BrowserClipperSettings() {
         aiInstruction: "",
       },
     );
+    if (profile?.strategy !== "append") return;
     const page = await api<{ items: Destination[]; nextCursor: string | null }>(
-      base + "/destinations",
+      base + "/destinations?kind=document",
     );
     const selected: Destination[] = [];
-    for (const id of [profile?.libraryId, profile?.parentId, profile?.targetId])
+    for (const id of [profile.targetId])
       if (id && !page.items.some((item) => item.id === id)) {
         const item = await api<{
           resource: {
@@ -430,6 +436,7 @@ export function BrowserClipperSettings() {
             className="clipper-form"
             onSubmit={(event) => {
               event.preventDefault();
+              if (form.strategy === "create" && !destinationReady) return;
               void act(async () => {
                 const { id, ...input } = form;
                 await api(
@@ -442,7 +449,6 @@ export function BrowserClipperSettings() {
               });
             }}
           >
-            <Feedback message={error} tone="error" />
             <label>
               {t("clipper.name")}
               <input
@@ -458,48 +464,74 @@ export function BrowserClipperSettings() {
               {t("clipper.strategy")}
               <Select
                 value={form.strategy}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const strategy = event.target.value as Profile["strategy"];
+                  setDestinationReady(false);
+                  setQuery("");
+                  setDestinations([]);
+                  setCursor(null);
                   setForm({
                     ...form,
-                    strategy: event.target.value as Profile["strategy"],
+                    strategy,
                     libraryId: null,
                     parentId: null,
                     targetId: null,
-                  })
-                }
+                  });
+                  if (strategy === "append") void act(() => search(false, ""));
+                }}
               >
                 <option value="create">{t("clipper.create")}</option>
                 <option value="append">{t("clipper.append")}</option>
               </Select>
             </label>
-            <div className="clipper-search">
-              <input
-                aria-label={t("clipper.search")}
-                placeholder={t("clipper.search")}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-              <button type="button" onClick={() => void act(() => search())}>
-                {t("clipper.search")}
-              </button>
-            </div>
             {form.strategy === "create" ? (
+              <ClipperDestinationTree
+                key={form.id ?? "new"}
+                value={form}
+                disabled={busy}
+                onReadyChange={setDestinationReady}
+                onChange={(location) =>
+                  setForm((current) =>
+                    current ? { ...current, ...location } : null,
+                  )
+                }
+              />
+            ) : (
               <>
+                <div className="clipper-search">
+                  <input
+                    aria-label={t("clipper.search")}
+                    placeholder={t("clipper.search")}
+                    value={query}
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      setCursor(null);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void act(() => search())}
+                  >
+                    {t("clipper.search")}
+                  </button>
+                </div>
                 <label>
-                  {t("clipper.library")}
+                  {t("clipper.target")}
                   <Select
-                    value={form.libraryId ?? ""}
+                    value={form.targetId ?? ""}
+                    required
                     onChange={(event) =>
-                      setForm({
-                        ...form,
-                        libraryId: event.target.value || null,
-                        parentId: null,
-                      })
+                      setForm({ ...form, targetId: event.target.value || null })
                     }
                   >
-                    <option value="">{t("clipper.personal")}</option>
+                    <option value="">{t("clipper.chooseDocument")}</option>
                     {destinations
-                      .filter((item) => item.kind === "library")
+                      .filter(
+                        (item) =>
+                          item.kind === "document" &&
+                          ["rich_text", "markdown"].includes(item.format),
+                      )
                       .map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.title}
@@ -507,60 +539,9 @@ export function BrowserClipperSettings() {
                       ))}
                   </Select>
                 </label>
-                {form.libraryId && (
-                  <label>
-                    {t("clipper.parent")}
-                    <Select
-                      value={form.parentId ?? ""}
-                      onChange={(event) =>
-                        setForm({
-                          ...form,
-                          parentId: event.target.value || null,
-                        })
-                      }
-                    >
-                      <option value="">{t("clipper.libraryRoot")}</option>
-                      {destinations
-                        .filter(
-                          (item) =>
-                            item.kind === "document" &&
-                            item.libraryId === form.libraryId,
-                        )
-                        .map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.title}
-                          </option>
-                        ))}
-                    </Select>
-                  </label>
-                )}
               </>
-            ) : (
-              <label>
-                {t("clipper.target")}
-                <Select
-                  value={form.targetId ?? ""}
-                  required
-                  onChange={(event) =>
-                    setForm({ ...form, targetId: event.target.value || null })
-                  }
-                >
-                  <option value="">{t("clipper.chooseDocument")}</option>
-                  {destinations
-                    .filter(
-                      (item) =>
-                        item.kind === "document" &&
-                        ["rich_text", "markdown"].includes(item.format),
-                    )
-                    .map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.title}
-                      </option>
-                    ))}
-                </Select>
-              </label>
             )}
-            {cursor && (
+            {form.strategy === "append" && cursor && (
               <button
                 type="button"
                 className="soft"
@@ -621,7 +602,12 @@ export function BrowserClipperSettings() {
               >
                 {t("clipper.cancel")}
               </button>
-              <button className="primary" disabled={busy}>
+              <button
+                className="primary"
+                disabled={
+                  busy || (form.strategy === "create" && !destinationReady)
+                }
+              >
                 {t("clipper.save")}
               </button>
             </footer>

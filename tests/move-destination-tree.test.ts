@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Resource } from "../apps/web/src/shared/api.js";
-import { moveDestinationChildren } from "../apps/web/src/features/documents/move-destination-tree.js";
+import {
+  createDestinationChildren,
+  moveDestinationChildren,
+} from "../apps/web/src/features/documents/move-destination-tree.js";
 
 function document(id: string, changes: Partial<Resource> = {}): Resource {
   return {
@@ -24,6 +27,29 @@ function document(id: string, changes: Partial<Resource> = {}): Resource {
 }
 
 describe("document move destinations", () => {
+  it("allows editors to create below a document while moving still requires management", () => {
+    const items = [document("editable", { role: "editor" })];
+    expect(createDestinationChildren("library", items)).toMatchObject([
+      { key: "editable", disabled: false },
+    ]);
+    expect(
+      moveDestinationChildren("library", items, "source", true),
+    ).toMatchObject([{ key: "editable", disabled: true }]);
+  });
+
+  it("keeps read-only hierarchy and allows an editable child as a capture destination", () => {
+    const items = [
+      document("read-only", { role: "reader" }),
+      document("child", { parent_id: "read-only", role: "editor" }),
+    ];
+    expect(createDestinationChildren("library", items)).toMatchObject([
+      {
+        key: "read-only",
+        disabled: true,
+        children: [{ key: "child", disabled: false }],
+      },
+    ]);
+  });
   it("keeps nested documents under their library in the sidebar order", () => {
     const sheet = document("sheet", {
       parent_id: "guide",
