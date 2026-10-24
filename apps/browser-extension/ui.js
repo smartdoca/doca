@@ -158,7 +158,13 @@ async function syncAssistant() {
     ...scope,
     operation: "get",
   });
-  const initial = await assistantLoading;
+  let initial;
+  try {
+    initial = await assistantLoading;
+  } catch (error) {
+    if (generation === assistantGeneration) assistantKey = null;
+    throw error;
+  }
   if (generation !== assistantGeneration) return;
   const config = {
     origin: state.origin,

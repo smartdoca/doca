@@ -817,13 +817,25 @@ async function handle(message, sender) {
       else await session.remove("assistant");
     }
     const saved = (await session.get("assistant")).assistant;
+    const matches =
+      saved?.origin === config.origin &&
+      saved?.connectionId === config.connectionId &&
+      saved?.profileId === message.profileId;
+    if (matches && message.operation === "get") {
+      try {
+        // Validate the stored selection against the current rule before mounting
+        // its chat UI. Keep the original session and queued messages intact.
+        await request(`/assistant/sessions/${saved.id}`, "GET", undefined, false, saved);
+      } catch (error) {
+        if (
+          (error.status === 409 && error.message === "clipper_profile_changed") ||
+          (error.status === 404 && error.message === "clipper_session_missing")
+        ) return { sessionId: null };
+        throw error;
+      }
+    }
     return {
-      sessionId:
-        saved?.origin === config.origin &&
-        saved?.connectionId === config.connectionId &&
-        saved?.profileId === message.profileId
-          ? saved.id
-          : null,
+      sessionId: matches ? saved.id : null,
     };
   }
   if (message.type === "assistantPreparePage") {

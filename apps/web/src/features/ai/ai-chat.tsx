@@ -78,6 +78,7 @@ import {
 import {
   Plus,
   PanelRightClose,
+  PanelsTopLeft,
   Maximize2,
   FileText,
   Search,
@@ -479,8 +480,8 @@ function SessionStatusBadges({ session }: { session: Session }) {
 function SessionSourceBadge({ session }: { session: Session }) {
   const { t } = useI18n();
   return session.source === "browser_assistant" ? (
-    <span className="ai-session-status ai-session-source" title={t("chat.source.browserAssistant")}>
-      {t("chat.source.browserAssistant")}
+    <span className="ai-session-status ai-session-source" role="img" aria-label={t("chat.source.browserAssistant")} title={t("chat.source.browserAssistant")}>
+      <PanelsTopLeft size={15} aria-hidden="true" />
     </span>
   ) : null;
 }
@@ -3236,13 +3237,14 @@ export function AIChat({ full = false, browser = false }: { full?: boolean; brow
                     <Button
                       key={`${r.kind}:${r.id}`}
                       type="text"
-                      onClick={() =>
+                      {...(r.kind === "webpage" ? { href: r.href, target: "_blank", rel: "noopener noreferrer" } : {})}
+                      onClick={r.kind === "webpage" ? undefined : () =>
                         r.href
                           ? runtime.navigate(r.href)
                           : openDocument(r.id)
                       }
                     >
-                      <FileText size={15} />
+                      {r.kind === "webpage" ? <Globe size={15} /> : <FileText size={15} />}
                       <span>{r.title}</span>
                     </Button>
                   ))}

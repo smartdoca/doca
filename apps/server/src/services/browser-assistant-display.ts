@@ -1,5 +1,14 @@
 import { captureHash } from "./browser-clipper.js";
 
+export function browserSessionTitle(text: string, page?: { title: string; url: string }) {
+  const compact = (value: string, limit: number) => value.replace(/\s+/g, " ").trim().slice(0, limit);
+  const message = compact(text, page ? 36 : 100);
+  if (!page) return message;
+  const host = new URL(page.url).hostname;
+  const title = compact(page.title, 42);
+  return `${title || host} · ${message}${title && title !== host ? ` (${host})` : ""}`.slice(0, 100);
+}
+
 /** Display only the original, digest-proven browser input; never rewrite memory. */
 export function browserUserMessageText(
   text: string,

@@ -712,6 +712,32 @@ it("isolates shared UI session selection by site, browser connection and profile
     r.handle({ ...message, connectionId: randomUUID() }, ui),
   ).rejects.toThrow("clipper_scope_denied");
 });
+it("checks a saved browser chat before restoring it and preserves stale sessions and pending delivery", async () => {
+  const r = runtime(), id = randomUUID();
+  r.session.assistant = { origin, connectionId, profileId: "profile", id };
+  r.session.assistantDraft = { requestId: randomUUID(), text: "Keep my draft" };
+  const saved = JSON.parse(JSON.stringify(r.session));
+  const ui = { id: "fixture", url: "chrome-extension://fixture/ui.html" };
+  const message = { type: "assistantSession", operation: "get", origin, connectionId, profileId: "profile" };
+  const urls: string[] = [];
+  let status = 200, code = "";
+  r.context.fetch = async (url: string) => {
+    urls.push(url);
+    return { ok: status === 200, status, json: async () => ({ id, message: code }) };
+  };
+  await expect(r.handle(message, ui)).resolves.toEqual({ sessionId: id });
+  expect(urls).toEqual([origin + `/api/v1/browser-clipper/assistant/sessions/${id}`]);
+  for (const failure of [{ status: 409, code: "clipper_profile_changed" }, { status: 404, code: "clipper_session_missing" }]) {
+    status = failure.status; code = failure.code;
+    await expect(r.handle(message, ui)).resolves.toEqual({ sessionId: null });
+    expect(r.session).toEqual(saved);
+  }
+  for (const failure of [{ status: 403, code: "clipper_scope_denied" }, { status: 503, code: "clipper_connection_failed" }]) {
+    status = failure.status; code = failure.code;
+    await expect(r.handle(message, ui)).rejects.toMatchObject({ message: code, status });
+    expect(r.session).toEqual(saved);
+  }
+});
 it("opens the selection's panel with its rule before asynchronous sign-in and keeps its frozen material", async () => {
   const r = runtime(),
     profileId = randomUUID(),
