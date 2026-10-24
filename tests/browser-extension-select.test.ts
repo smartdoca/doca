@@ -76,6 +76,13 @@ it("keeps shadow dropdown clicks open and closes on clicks inside or outside the
   f.key("Enter");
   f.pointer(f.trigger);
   expect(f.menu.hidden).toBe(false);
+  expect(f.menu.parentNode).toBe(f.root);
+  f.pointer(f.menu.children[2]!);
+  expect(f.menu.hidden).toBe(false);
+  (f.menu.children[2] as HTMLElement).click();
+  expect(f.select.value).toBe("c");
+  expect(f.menu.hidden).toBe(true);
+  f.key("Enter");
   f.pointer(f.root.querySelector("#inside")!);
   expect(f.menu.hidden).toBe(true);
   f.key("Enter");

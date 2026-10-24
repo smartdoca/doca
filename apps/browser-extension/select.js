@@ -1,4 +1,4 @@
-// Shared accessible dropdown for extension pages and the isolated selection toolbar.
+// Shared accessible dropdown for extension pages and the isolated page toolbar.
 (() => {
   const instances = new WeakMap();
   function enhance(select) {
@@ -26,7 +26,10 @@
     menu.setAttribute("role", "listbox");
     menu.hidden = true;
     trigger.setAttribute("aria-controls", menu.id);
-    wrapper.append(trigger, menu);
+    wrapper.append(trigger);
+    // A transformed or scrolling confirmation panel must not clip its menu.
+    if (root instanceof ShadowRoot) root.append(menu);
+    else wrapper.append(menu);
     let active = 0,
       options = [],
       open = false;
@@ -76,8 +79,7 @@
           ),
         ) + "px";
       menu.style.top =
-        (!(root instanceof ShadowRoot && rect.top >= height + 8) &&
-        rect.bottom + height + 8 <= innerHeight
+        (rect.bottom + height + 8 <= innerHeight
           ? rect.bottom + 5
           : Math.max(8, rect.top - height - 5)) + "px";
       highlight();
@@ -157,10 +159,12 @@
         event.composedPath().includes(root.host)
       )
         return;
-      if (!wrapper.contains(event.target)) close();
+      if (!wrapper.contains(event.target) && !menu.contains(event.target))
+        close();
     };
     const inside = (event) => {
-      if (!wrapper.contains(event.target)) close();
+      if (!wrapper.contains(event.target) && !menu.contains(event.target))
+        close();
     };
     document.addEventListener("pointerdown", outside, true);
     if (root instanceof ShadowRoot)
