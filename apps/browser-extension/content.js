@@ -95,18 +95,18 @@
   const host = document.createElement("div");
   host.dataset.docaCaptureUi = "true";
   host.style.cssText =
-    "position:fixed;right:18px;top:40%;z-index:2147483646;pointer-events:none;visibility:hidden;";
+    "position:fixed;right:12px;top:40%;z-index:2147483646;pointer-events:none;visibility:hidden;";
   const shadow = host.attachShadow({ mode: "closed" });
   const style = document.createElement("style");
   style.textContent = [
     ":host{all:initial;color-scheme:light;--blue:#3370ff;--text:#263040;--muted:#748096;--line:#e4e9f1;font:14px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif}",
     "*{box-sizing:border-box}[hidden]{display:none!important}button,select,a{font:inherit}button,a,select{pointer-events:auto}button{cursor:pointer}button:disabled,select:disabled{cursor:wait;opacity:.6}",
-    ".dock{position:relative;width:44px;padding:4px;background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 4px 18px #2134521a;pointer-events:auto;transition:width .16s ease-out}:host(.ready) .dock{animation:dock-enter .24s ease-out}.dock.collapsed{width:28px}.actions{animation:dock-actions .16s ease-out}",
-    ".tool,.handle{position:relative;display:grid;place-items:center;width:34px;height:38px;padding:0;border:0;border-radius:8px;color:#64718a;background:transparent;transition:background .16s,color .16s,transform .12s}",
-    ".tool:hover,.tool:focus-visible{background:#edf3ff;color:var(--blue)}.tool:active{transform:scale(.94)}.tool[aria-expanded=true]{background:#edf3ff;color:var(--blue)}.assistant{color:var(--blue)}",
-    ".handle{height:24px;color:#5c6e88;background:#edf1f7;border:1px solid #dde4ee;cursor:grab;touch-action:none;transition:background .16s,width .16s}.handle:hover{color:#405574;background:#e3eaf5}.handle:active{cursor:grabbing}.collapsed .handle{width:18px;height:36px}.dragging .dock{box-shadow:0 8px 28px #21345230}.divider{height:1px;background:#edf0f5;margin:4px 2px}",
+    ".dock{position:relative;width:44px;padding:4px;background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 4px 18px #2134521a;pointer-events:auto}:host(.ready) .dock{animation:dock-enter .24s ease-out}.actions{animation:dock-actions .16s ease-out}",
+    ".tool,.handle,.collapse{position:relative;display:grid;place-items:center;width:34px;height:38px;padding:0;border:0;border-radius:8px;color:#64718a;background:transparent;transition:background .16s,color .16s,transform .12s}",
+    ".tool:hover,.tool:focus-visible,.collapse:hover,.collapse:focus-visible{background:#edf3ff;color:var(--blue)}.tool:active,.collapse:active{transform:scale(.94)}.tool[aria-expanded=true]{background:#edf3ff;color:var(--blue)}.assistant{color:var(--blue)}",
+    ".handle{height:24px;color:#5c6e88;background:#edf1f7;border:1px solid #dde4ee;cursor:grab;touch-action:none;transition:background .16s}.handle:hover{color:#405574;background:#e3eaf5}.handle:active{cursor:grabbing}.dragging .dock{box-shadow:0 8px 28px #21345230}.divider{height:1px;background:#edf0f5;margin:4px 2px}",
     "svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.handle svg{width:18px;height:18px;stroke-width:2.4}",
-    ".collapse{position:absolute;right:-18px;top:50%;display:grid;place-items:center;width:20px;height:36px;padding:0;border:1px solid var(--line);border-radius:0 6px 6px 0;background:#fff;color:#64718a;transform:translateY(-50%);pointer-events:auto}.collapse:hover{color:var(--blue);background:#edf3ff}.collapse svg{width:12px;height:12px}",
+    ".collapse{margin-top:4px;border-top:1px solid #edf0f5;border-radius:0 0 8px 8px}.collapse svg{width:16px;height:16px}",
     ".tip{position:absolute;right:calc(100% + 14px);top:50%;transform:translateY(-50%) translateX(3px);padding:5px 9px;background:#263040;color:#fff;font-size:12px;line-height:1.5;border-radius:6px;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .13s,transform .13s}",
     ".tool:hover .tip,.tool:focus-visible .tip,.handle:focus-visible .tip{opacity:1;visibility:visible;transform:translateY(-50%) translateX(0)}.tool[aria-expanded=true] .tip{visibility:hidden}",
     ".panel{position:fixed;right:68px;width:min(300px,calc(100vw - 84px));max-height:calc(100vh - 24px);overflow:auto;padding:16px;background:#fff;color:var(--text);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px #24365024;pointer-events:auto;animation:panel-enter .18s ease-out;transform-origin:right center}",
@@ -262,7 +262,7 @@
     );
     collapse.setAttribute("aria-expanded", String(!collapsed));
     collapse.replaceChildren(
-      svg([["path", { d: collapsed ? "m14 6-6 6 6 6" : "m10 6 6 6-6 6" }]]),
+      svg([["path", { d: collapsed ? "m6 9 6 6 6-6" : "m6 15 6-6 6 6" }]]),
     );
   }
   function verticalSpace() {

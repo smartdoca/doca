@@ -555,9 +555,17 @@ try {
   });
   await click(".close");
   after = await box(".dock");
+  const collapseControl = await box('[data-action="collapse"]');
+  const settingsControl = await box('[data-action="settings"]');
+  assert(
+    Math.abs(collapseControl.x - settingsControl.x) < 1 &&
+      Math.abs(collapseControl.width - settingsControl.width) < 1 &&
+      collapseControl.y >= settingsControl.y + settingsControl.height,
+    "Collapse control shares the action column below Settings",
+  );
   await click('[data-action="collapse"]');
   await wait(
-    async () => Math.abs((await box(".dock")).width - 28) < 0.1,
+    async () => (await box(".dock")).height < 100,
     "Toolbar collapsed",
   );
   assert.equal(
@@ -590,7 +598,7 @@ try {
   after = await box(".dock");
   await click('[data-action="collapse"]');
   await wait(
-    async () => Math.abs((await box(".dock")).width - 44) < 0.1,
+    async () => (await box(".dock")).height > 150,
     "Toolbar expanded",
   );
   assert.equal(
@@ -922,6 +930,7 @@ try {
         controls: {
           customDropdown: true,
           collapseExpand: true,
+          collapseInActionColumn: true,
           collapsedDragging: true,
           cachedPosition,
           restoredTop: expectedTop,
