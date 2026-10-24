@@ -68,13 +68,26 @@ Rich text for plans and meeting notes, with a library tree, formatting tools, pe
 | --- | --- |
 | **Online documents and collaboration** | Rich text, Markdown, spreadsheets, slides, and canvas; realtime collaboration, comments, and history. |
 | **Knowledge management** | Knowledge libraries with document trees, plus shared knowledge books with workflows, source evidence, and human review. |
-| **Personal AI assistant** | Work with authorized documents and files, read PDF/Office attachments, generate or edit images, and prepare browser drafts. Requires configured models and services. |
+| **Personal AI assistant** | Work with authorized documents and files, read PDF/Office attachments, generate or edit images, and analyze webpage material. Requires configured models and services. |
+| **Browser extension** | Capture pages or selections in Chrome / Edge with text, source links, and images; choose create/append destinations and organize webpages with Doca AI in the sidebar. |
 | **MCP services** | Connect external AI clients such as Codex to authorized Doca tools and SKILLs, using personal services or company integrations acting as a named user. |
 | **Files and sharing** | Personal files, shared folders, invitations, permission controls, share links, search, notifications, and trash. Local or S3-compatible file storage. |
 | **Accounts and languages** | Password, OIDC, Google, GitHub, WeChat QR, and QQ sign-in; Chinese and English interfaces. External login requires service configuration. |
 | **Self-hosting and extensions** | Docker deployment; SQLite for one server, or shared PostgreSQL, Redis, and file storage for multiple replicas. Business plugins use the public `@smartdoca/plugin-sdk`. |
 
 One deployment has one account system. The default image installs no quick-notes, mail, calendar, membership, or moderation plugins. Templates and materials need a separately installed provider. See [capabilities and limits](https://smartdoca.github.io/doca/#/en/getting-started/features).
+
+### Bring web sources into your own knowledge library
+
+Configure a capture profile under Browser assistant in personal settings, download the site-configured extension, and load its unpacked folder in Chrome / Edge. It follows your Doca website sign-in and saves a page or selection to personal documents, a library destination, or an existing document. Installation currently uses the download package; no browser-store release is provided.
+
+The webpage toolbar provides capture, Doca assistant, and settings. Its sidebar summarizes and organizes the active page using the site's models, metering, and approvals, with conversations available in Doca too. Source webpages appear in operated resources, and page-first conversation titles make them easier to find. See [browser assistant setup and usage](docs/browser-assistant.md).
+
+### Connect external AI clients to Doca tools and SKILLs
+
+Doca exposes Streamable HTTP MCP so compatible clients can discover authorized tools, read SKILL manuals, and work with documents and files. Personal services act as their owner; company services support integrations with an explicit target user on every operation. Service grants and resource permissions both apply. Tokens can be reset, disabled, or revoked independently.
+
+Enable MCP in personal settings, create a service, and copy its generated client configuration. Administrators manage company services in the administration area. Tokens are displayed only when created or reset and can be supplied through the client's environment. See [MCP services and client setup](docs/mcp.md).
 
 ## Useful links
 
@@ -89,11 +102,11 @@ One deployment has one account system. The default image installs no quick-notes
 
 ## Quick start with Docker
 
-Requires Git, Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. This installs the published 0.2.16 image into a fresh database. Existing installations must read the [release requirements](https://smartdoca.github.io/doca/#/en/releases/0.2.16) and preserve their data before changing versions.
+Requires Git, Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. This installs the published 0.2.17 image into a fresh database. Existing installations must read the [release requirements](https://smartdoca.github.io/doca/#/en/releases/0.2.17) and preserve their data before changing versions.
 
 ```sh
 # 1. Clone the matching release
-git clone --branch v0.2.16 --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch v0.2.17 --depth 1 https://github.com/smartdoca/doca.git
 cd doca
 
 # 2. Configure the environment
@@ -135,10 +148,11 @@ Open `http://127.0.0.1:39130`. Initialize the administrator with `bash scripts/b
 ## Documentation
 
 - [User guide](https://smartdoca.github.io/doca/#/en/getting-started/user-guide)
+- [Browser assistant](docs/browser-assistant.md) · [MCP services](docs/mcp.md)
 - [Deployment and configuration](https://smartdoca.github.io/doca/#/en/operations/deployment)
 - [Plugin development](https://smartdoca.github.io/doca/#/en/plugins/plugin-development)
 - [HTTP API](https://smartdoca.github.io/doca/#/en/reference/api); the running application also provides `/api/openapi.json`.
-- [Release notes](https://smartdoca.github.io/doca/#/en/releases/0.2.16)
+- [Release notes](https://smartdoca.github.io/doca/#/en/releases/0.2.17)
 - [Documentation source](docs/README.md)
 
 For a documentation preview, run `pnpm docs:dev` and open `http://127.0.0.1:39140/#/en/`. `pnpm docs:check` verifies bilingual coverage and local links. GitHub Pages setup is in [documentation maintenance](docs/documentation.md).

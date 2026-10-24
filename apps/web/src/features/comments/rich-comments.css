@@ -47,7 +47,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px 0;
+  padding: 8px 0;
   min-width: 0;
 }
 .content-comments > header {
@@ -83,7 +83,8 @@
   opacity: 0;
 }
 .comment-message:hover .comment-icon-actions,
-.comment-message:focus-within .comment-icon-actions {
+.comment-message:focus-within .comment-icon-actions,
+.comment-message.is-confirming .comment-icon-actions {
   opacity: 1;
 }
 .comment-icon-actions button,
@@ -103,7 +104,8 @@
 .rich-comment-body p {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  margin: 6px 0;
+  margin: 4px 0;
+  line-height: 1.5;
   font-size: 14px;
   color: #1f2329;
 }
@@ -388,7 +390,14 @@
 }
 .selection-thread .comment-message {
   gap: 8px;
+  padding: 6px 0;
 }
+.rich-comment-body > :last-child { margin-bottom: 0; }
+.resolved-comments-list { max-height: min(65vh, 640px); overflow: auto; }
+.resolved-comment-heading { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
+.resolved-comment-heading > .comment-quote { flex: 1; min-width: 0; }
+.resolved-comment-heading > button { flex: none; }
+.resolved-comments-more { width: 100%; }
 .selection-thread .comment-byline {
   gap: 5px;
 }

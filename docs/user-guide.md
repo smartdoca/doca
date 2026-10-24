@@ -8,7 +8,7 @@ Read [capabilities and limits](features.md) for the default host and independent
 
 Use the creation menu to create rich text, Markdown, spreadsheets, slides, or canvas documents. Personal documents are independent pages. A library provides a table of contents and can contain nested document pages. A new document can use a registered template; [templates and materials](creation-resources.md) describe source selection and search.
 
-Insert images and attachments through the editor. Save status reflects server persistence acknowledgements. A network interruption or unsupported capability should be handled according to the displayed status; it does not establish a durable offline backup. See [collaboration](collaboration.md).
+Insert images and attachments through the editor. Cloud-save status reflects server persistence acknowledgements. Local replicas and unacknowledged updates persist only when browser storage succeeds; this does not promise a complete offline application or an offline cold start. Follow the displayed state when storage fails or a capability is unsupported. See [collaboration](collaboration.md).
 
 The document menu provides sharing, copying, moving, history, and trash actions according to your permission. Copies receive independent IDs. Moves can change inheritance and public exposure; review the destination. [Documents and sharing](document-experience.md) and [permissions](permission-inheritance.md) explain the rules.
 
@@ -24,11 +24,15 @@ Use personal files or shared folders for ordinary files. Downloads pass authoriz
 
 Comments support replies, mentions, resolving, and notifications according to resource access. Temporary collaboration cursors are separate from permanent comment anchors. [Comments and notifications](comments-and-community.md) describe visibility and supported behavior.
 
+Deleting a comment opens a confirmation bubble. The **Resolved comments** icon at the top of the content-comment sidebar lists resolved threads and replies; authors and managers can mark them unresolved.
+
 ## Knowledge and AI
 
 [Knowledge books](knowledge-books.md) turn explicitly authorized sources and human feedback into immutable Markdown document trees. Edit the workflow and acceptance criteria in the page or through your personal AI assistant. Native libraries and subscriptions remain source management tools.
 
 The personal AI assistant can use authorized documents and files. Attached references and session approvals narrow the scope; they do not expand your own permissions. Model and service availability depend on administrator configuration.
+
+Download the Chrome / Edge extension through [Browser assistant](browser-assistant.md) to capture webpages or organize the current page in a sidebar; ordinary capture needs no model. To use Doca document and file tools from an external AI client, enable and configure [MCP services](mcp.md) in personal settings. Connection grants and current resource permissions are checked separately.
 
 ## Account and administration
 

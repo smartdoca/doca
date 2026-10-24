@@ -5,6 +5,7 @@ import { resolveRichAnchor, type RichAnchor } from "@core/modules/documents/code
 import { useDocumentReadOnly } from "@web/features/documents/document-mode.js";
 import { DocumentFind } from "@web/features/documents/document-find.js";
 import { CommentNavigation } from "@web/features/comments/comment-navigation.js";
+import { ResolvedComments } from "@web/features/comments/resolved-comments.js";
 import { useCommentPages } from "@web/features/comments/use-comment-pages.js";
 import { scrollCommentIntoView } from "@web/features/comments/comment-scroll.js";
 import { EditorRecoveryBoundary } from "@web/features/documents/editor-recovery-boundary.js";
@@ -1157,6 +1158,11 @@ function RichDocument({
               <h3>{t("comment.region")}<small>{roots.length}</small>
               </h3>
               <div className="comment-sidebar-actions">
+              <ResolvedComments detail={detail} user={user} rank={rank} changed={changed} loadMore={loadMoreComments}
+                quote={comment => {
+                  try { return JSON.parse(comment.anchor!).quote || t("comment.quoteDeleted"); }
+                  catch { return t("comment.quoteDeleted"); }
+                }} />
               <CommentNavigation
                 ids={roots.map((c) => c.id)}
                 active={activeThread}

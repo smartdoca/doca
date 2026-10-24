@@ -1,6 +1,7 @@
 import { Feedback } from "@web/shared/components/feedback.js";
 import { composeComment } from "@web/features/comments/comment-body.js";
 import { useEffect, useRef, useState } from "react";
+import { Popconfirm } from "antd";
 import {
   ImagePlus,
   Send,
@@ -541,8 +542,15 @@ export function CommentMessage({
   act: (patch: object) => void;
 }) {
   const { t } = useI18n();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   return (
-    <div className="comment-message" data-comment-id={c.id}>
+    <div className={`comment-message${confirmDelete ? " is-confirming" : ""}`} data-comment-id={c.id}
+      onKeyDown={event => {
+        if (event.key === "Escape" && confirmDelete) {
+          event.stopPropagation();
+          setConfirmDelete(false);
+        }
+      }}>
       <UserBadge id={c.author_id} name={c.display_name} avatarOnly />
       <div className="grow">
         <div className="comment-byline">
@@ -573,13 +581,22 @@ export function CommentMessage({
                 )}
                 {(c.author_id === user.id || rank >= 4) && (
                   <>
-                    <button
-                      title={t("comment.delete")}
-                      aria-label={t("comment.delete")}
-                      onClick={() => act({ deleted: true })}
+                    <Popconfirm
+                      open={confirmDelete}
+                      onOpenChange={setConfirmDelete}
+                      title={t("comment.deleteConfirm")}
+                      okText={t("common.delete")}
+                      cancelText={t("common.cancel")}
+                      okButtonProps={{ danger: true }}
+                      onConfirm={() => act({ deleted: true })}
                     >
-                      <Trash2 size={14} />
-                    </button>
+                      <button
+                        title={t("comment.delete")}
+                        aria-label={t("comment.delete")}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </Popconfirm>
                     {!c.parent_id && (
                       <button
                         title={

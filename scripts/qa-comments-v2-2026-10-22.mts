@@ -31,7 +31,7 @@ const editorPackages=['@smartdoca/canvas','@smartdoca/sheet','@smartdoca/slate',
 const digest=async(path:string)=>createHash('sha256').update(await readFile(path)).digest('hex');
 const packageAudit=async()=>{const pins=JSON.parse(await readFile('package.json','utf8')).dependencies;return Object.fromEntries(await Promise.all(editorPackages.map(async name=>{const directory=resolve('node_modules',name),manifest=JSON.parse(await readFile(join(directory,'package.json'),'utf8'));const hash=createHash('sha256');let files=0;const walk=async(relative='')=>{for(const entry of (await readdir(join(directory,relative),{withFileTypes:true})).sort((a,b)=>a.name.localeCompare(b.name))){if(entry.name==='node_modules')continue;const file=join(relative,entry.name);if(entry.isDirectory())await walk(file);else if(entry.isFile()){hash.update(file);hash.update(await readFile(join(directory,file)));files++;}}};await walk();return[name,{version:manifest.version,pin:pins[name],files,sha256:hash.digest('hex')}];})));};
 const packages=await packageAudit();
-const sourceFiles=['apps/web/src/features/comments/rich-comments.tsx','apps/web/src/features/comments/rich-comments.css','apps/web/src/features/comments/region-comments.tsx','apps/web/src/features/comments/comment-layout.tsx','apps/web/src/features/comments/comment-sidebar.tsx','apps/web/src/features/comments/region-comment-interaction.ts','apps/web/src/features/comments/comment-scroll.ts','apps/web/src/features/comments/use-comment-pages.ts','apps/web/src/features/documents/canvas-editor.tsx','apps/web/src/features/documents/surface.css','apps/web/src/features/documents/editor.css','apps/web/src/features/documents/markdown.css','apps/web/src/features/documents/document-page-width.css','apps/web/src/features/documents/document-editor.tsx'];
+const sourceFiles=['apps/web/src/features/comments/resolved-comments.tsx','packages/i18n/src/catalogs/zh.ts','packages/i18n/src/catalogs/en.ts','apps/web/src/features/comments/rich-comments.tsx','apps/web/src/features/comments/rich-comments.css','apps/web/src/features/comments/region-comments.tsx','apps/web/src/features/comments/comment-layout.tsx','apps/web/src/features/comments/comment-sidebar.tsx','apps/web/src/features/comments/region-comment-interaction.ts','apps/web/src/features/comments/comment-scroll.ts','apps/web/src/features/comments/use-comment-pages.ts','apps/web/src/features/documents/canvas-editor.tsx','apps/web/src/features/documents/surface.css','apps/web/src/features/documents/editor.css','apps/web/src/features/documents/markdown.css','apps/web/src/features/documents/document-page-width.css','apps/web/src/features/documents/document-editor.tsx'];
 const sourceAudit=async()=>Object.fromEntries(await Promise.all(sourceFiles.map(async path=>[path,await digest(path)])));
 const sources=await sourceAudit();
 const runtimeFingerprint=await captureRuntimeFingerprint(builtWeb);
@@ -48,6 +48,79 @@ const until=async(fn:()=>Promise<boolean>,label:string)=>{for(let n=0;n<200;n++)
 const body=(text:string)=>({version:1 as const,blocks:[{type:'paragraph' as const,children:[{type:'text' as const,text}]}]});
 const documentState=(id:string)=>db.selectFrom('document_states').select(['seq','checkpoint']).where('resource_id','=',id).executeTakeFirstOrThrow();
 const shot=async(p:Page,name:string)=>p.screenshot({path:join(output,name+'.png'),animations:'disabled'});
+async function verifyThreadControls(p: Page, resourceId: string, rootId: string, format: string) {
+ const panel=p.locator('aside.content-comments');
+ const close=panel.getByRole('button',{name:'关闭输入',exact:true});
+ if(await close.isVisible())await close.click();
+ const thread=panel.locator(`[data-thread-id="${rootId}"]`);
+ const spacing=await thread.evaluate(el=>{
+  const messages=el.querySelectorAll('.comment-message');
+  const body=messages[0]!.querySelector('.rich-comment-body')!.getBoundingClientRect();
+  const next=messages[1]!.querySelector('.comment-byline')!.getBoundingClientRect();
+  return next.top-body.bottom;
+ });
+ assert(spacing>=0&&spacing<=16,JSON.stringify({format,replyGap:spacing}));
+ const reply=await db.selectFrom('comments').selectAll().where('resource_id','=',resourceId).where('parent_id','=',rootId).where('body','=',`Reply 1 ${format}`).executeTakeFirstOrThrow();
+ const message=panel.locator(`[data-comment-id="${reply.id}"]`);
+ await message.hover();
+ await message.getByRole('button',{name:'删除评论',exact:true}).click();
+ const confirmation=p.locator('.ant-popconfirm');
+ await confirmation.getByText('确认删除这条评论？',{exact:true}).waitFor();
+ assert.equal((await db.selectFrom('comments').select('deleted_at').where('id','=',reply.id).executeTakeFirstOrThrow()).deleted_at,null);
+ await until(async()=>confirmation.evaluate(el=>Number(getComputedStyle(el).opacity)>=.99&&
+  !/(?:enter|appear)(?:-|\s|$)/.test(el.className)),'delete confirmation animation completed '+format);
+ await shot(p,format+'-delete-confirmation');
+ await confirmation.getByRole('button',{name:/取\s*消/}).click();
+ await confirmation.waitFor({state:'hidden'});
+ assert.deepEqual(await db.selectFrom('comments').selectAll().where('id','=',reply.id).executeTakeFirstOrThrow(),reply);
+ await message.hover();await message.getByRole('button',{name:'删除评论',exact:true}).click();
+ await confirmation.getByText('确认删除这条评论？',{exact:true}).waitFor();
+ await p.keyboard.press('Escape');await confirmation.waitFor({state:'hidden'});
+ assert(await panel.isVisible(),'Escape cancels the bubble without closing comments');
+ assert.deepEqual(await db.selectFrom('comments').selectAll().where('id','=',reply.id).executeTakeFirstOrThrow(),reply);
+ await message.hover();await message.getByRole('button',{name:'删除评论',exact:true}).click();
+ await confirmation.getByRole('button',{name:/删\s*除/}).click();
+ await until(async()=>!!(await db.selectFrom('comments').select('deleted_at').where('id','=',reply.id).executeTakeFirstOrThrow()).deleted_at,'confirmed deletion '+format);
+ await message.getByText('评论已删除',{exact:true}).waitFor();
+ const rootMessage=panel.locator(`[data-comment-id="${rootId}"]`);
+ await rootMessage.hover();await rootMessage.getByRole('button',{name:'解决评论',exact:true}).click();
+ await thread.waitFor({state:'hidden'});
+ assert.equal((await db.selectFrom('comments').select('resolved').where('id','=',rootId).executeTakeFirstOrThrow()).resolved,1);
+ await panel.getByRole('button',{name:'已解决的评论',exact:true}).click();
+ const dialog=p.getByRole('dialog',{name:'已解决的评论',exact:true});
+ const resolved=dialog.locator(`[data-thread-id="${rootId}"]`);
+ await resolved.getByText('Existing '+format+' thread',{exact:true}).waitFor();
+ await resolved.getByText('Reply 22 '+format,{exact:true}).waitFor({state:'attached'});
+ await until(async()=>dialog.evaluate(el=>{
+  const root=el.closest('.ant-modal-root');
+  return !!root&&Array.from(root.querySelectorAll<HTMLElement>('.ant-modal,.ant-modal-mask')).every(node=>
+   Number(getComputedStyle(node).opacity)>=.99&&!/(?:enter|appear)(?:-|\s|$)/.test(node.className));
+ }),'resolved dialog animation completed '+format);
+ await shot(p,format+'-resolved-history');
+ await p.setViewportSize({width:390,height:1000});
+ const dialogBox=await dialog.boundingBox();
+ assert(dialogBox&&dialogBox.x>=0&&dialogBox.x+dialogBox.width<=390,JSON.stringify({format,dialogBox}));
+ await shot(p,format+'-resolved-history-390');
+ await p.setViewportSize({width:1600,height:1000});
+ let failRestore=true;
+ const path=`**/api/v1/resources/${resourceId}/comments/${rootId}`;
+ await p.route(path,async route=>{
+  if(failRestore&&route.request().method()==='PATCH'&&route.request().postDataJSON().resolved===false){
+   failRestore=false;await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Restore temporarily unavailable'})});
+  }else await route.continue();
+ });
+ await resolved.getByRole('button',{name:'恢复为未解决',exact:true}).click();
+ await p.getByRole('alert').filter({hasText:'Restore temporarily unavailable'}).waitFor();
+ assert.equal((await db.selectFrom('comments').select('resolved').where('id','=',rootId).executeTakeFirstOrThrow()).resolved,1);
+ await resolved.getByRole('button',{name:'恢复为未解决',exact:true}).click();
+ await resolved.waitFor({state:'hidden'});
+ await dialog.getByText('暂无已解决的评论',{exact:true}).waitFor();
+ assert.equal((await db.selectFrom('comments').select('resolved').where('id','=',rootId).executeTakeFirstOrThrow()).resolved,0);
+ await p.unroute(path);
+ await p.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+ await thread.waitFor();
+ await shot(p,format+'-restored-thread');
+}
 try{
  await request('/auth/login',{login:'commentsv2',password:'isolated-comments-v2-2026'},'POST');
  for(const format of (process.env.DOCA_QA_FORMATS??'canvas,spreadsheet,presentation,markdown,rich_text').split(',')){
@@ -130,7 +203,8 @@ try{
    for(const bounds of [aiBounds,scrollBounds])assert(Math.abs(right-bounds.x-bounds.width-22)<=1,JSON.stringify({format,width,bounds,layout}));
   }else assert(aiBounds&&aiBounds.x>=0&&aiBounds.x+aiBounds.width<=geometry.panel.left+1,JSON.stringify({format,width,aiBounds,panel:geometry.panel}));await shot(p,format+'-'+width+'-sidebar');}
   await p.setViewportSize({width:1600,height:1000});await delay(250);const draftBeforeAI=await panel.locator('textarea').inputValue().catch(()=>null);await p.getByRole('button',{name:'AI 辅助创作',exact:true}).click();await p.locator('.ai-document-panel').waitFor();await p.locator('.ai-document-panel .ai-chat').waitFor({timeout:60000});await panel.waitFor();await until(async()=>p.evaluate(()=>{const comments=document.querySelector('aside.content-comments')?.getBoundingClientRect(),ai=document.querySelector('.ai-document-panel')?.getBoundingClientRect();return !!comments&&!!ai&&comments.right<=ai.left+1&&ai.left-comments.right<=24&&comments.left>=0;}),'AI and comments occupy separate columns '+format);if(draftBeforeAI!==null)assert.equal(await panel.locator('textarea').inputValue(),draftBeforeAI,'opening AI preserves comment draft');await shot(p,format+'-ai-and-comments');
-  assert.deepEqual(await documentState(doc.id),baseline);assert.equal(updates.length,0);checks.push({format,result:keyboardVerified?'passed':'partial',keyboardVerified,keyboardWrites:0,commentRows:format==='canvas'?229:23,paginationBeforeDrawer:format==='canvas'});console.log(keyboardVerified?'PASS':'PARTIAL (host-only; known SDK keyboard failure remains)',format);
+  await verifyThreadControls(p,doc.id,root.id,format);
+  assert.deepEqual(await documentState(doc.id),baseline);assert.equal(updates.length,0);checks.push({format,result:keyboardVerified?'passed':'partial',keyboardVerified,keyboardWrites:0,threadControls:true,commentRows:format==='canvas'?229:23,paginationBeforeDrawer:format==='canvas'});console.log(keyboardVerified?'PASS':'PARTIAL (host-only; known SDK keyboard failure remains)',format);
  }
  console.log(`Waiting 61 seconds for ${observed.length} mounted editors: no content writes`);const idleStart=Date.now();await delay(61000);for(const observedPage of observed){assert.deepEqual(await documentState(observedPage.id),observedPage.baseline);assert.equal(observedPage.updates.length,0);assert(await observedPage.nativeIdentity.evaluate((el:any,selector:string)=>el.isConnected&&el===document.querySelector(selector),observedPage.nativeSelector),'editor was remounted');}const idle={milliseconds:Date.now()-idleStart,clients:observed.length,contentWrites:0};const mobileTarget=observed.find(item=>item.nativeSelector==='.cm-editor')??observed[0];await mobileTarget.p.setViewportSize({width:390,height:900});await mobileTarget.p.goto(origin+'/#/m/r/'+mobileTarget.id);await mobileTarget.p.locator('html[data-editor-shell=mobile]').waitFor({state:'attached'});const mobileViewport=await mobileTarget.p.locator('.main-scroll').evaluate(el=>({width:el.getBoundingClientRect().width,viewport:innerWidth}));assert(mobileViewport.width>=mobileViewport.viewport-20,JSON.stringify(mobileViewport));assert.deepEqual(await documentState(mobileTarget.id),mobileTarget.baseline);checks.push({result:'passed',scope:'embedded mobile shell retains full document width while comments are hidden',mobileViewport});assert.deepEqual(await packageAudit(),packages,'installed package files changed during QA');assert.deepEqual(await sourceAudit(),sources,'comment source files changed during QA');
  runtimeFingerprintAfter=await captureRuntimeFingerprint(builtWeb);assert.deepEqual(runtimeFingerprintAfter,runtimeFingerprint,'packages, full Web build or lockfile changed during comments QA');assert.deepEqual(errors,[]);await writeFile(join(output,'results.json'),JSON.stringify({...receiptScope,runtimeFingerprintAfter,checks,errors,errorDetails,idle},null,2));

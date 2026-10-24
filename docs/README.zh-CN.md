@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Doca 是面向个人和小团队的文档与知识工作台。本套文档覆盖 0.1.23 发行版，并注明相关组件契约与实现限制。
+Doca 是面向个人和小团队的文档与知识工作台。本套文档随当前源码维护；安装与升级请对照 [0.2.17 发行说明](releases/0.2.17.zh-CN.md)，组件契约另行注明实现限制。
 
 [Demo 体验](https://d.smartdoca.cc) · [插件商城](https://store.smartdoca.cc)
 
@@ -21,6 +21,8 @@ Doca 是面向个人和小团队的文档与知识工作台。本套文档覆盖
 
 [文档与分享](document-experience.zh-CN.md) · [权限](permission-inheritance.zh-CN.md) · [发现与收录](public-resource-discovery.zh-CN.md) · [评论与通知](comments-and-community.zh-CN.md) · [知识册](knowledge-books.zh-CN.md)
 
+[浏览器助手](browser-assistant.zh-CN.md) · [MCP 服务](mcp.zh-CN.md)
+
 ## 部署运维
 
 [部署说明](deployment.zh-CN.md) · [文件存储](storage.zh-CN.md) · [水平扩展](horizontal-scaling.zh-CN.md) · [身份认证](authentication.zh-CN.md) · [服务凭据](service-credentials.zh-CN.md) · [Webhook](webhooks.zh-CN.md)
@@ -31,6 +33,6 @@ Doca 是面向个人和小团队的文档与知识工作台。本套文档覆盖
 
 ## 技术参考与项目记录
 
-[HTTP API](api.zh-CN.md) · [数据库](database.zh-CN.md) · [插件 SDK 契约](plugin-sdk-contract.zh-CN.md) · [插件存储契约](plugin-horizontal-scaling.zh-CN.md) · [协同契约](collaboration-sdk-contract.zh-CN.md) · [文件交换](editor-file-exchange-contract.zh-CN.md) · [0.1.23 发行说明](releases/0.1.23.zh-CN.md) · [文档维护](documentation.zh-CN.md) · [研发与验收资料](research.zh-CN.md)
+[HTTP API](api.zh-CN.md) · [数据库](database.zh-CN.md) · [插件 SDK 契约](plugin-sdk-contract.zh-CN.md) · [插件存储契约](plugin-horizontal-scaling.zh-CN.md) · [协同契约](collaboration-sdk-contract.zh-CN.md) · [文件交换](editor-file-exchange-contract.zh-CN.md) · [发行说明](releases/0.2.17.zh-CN.md) · [文档维护](documentation.zh-CN.md) · [研发与验收资料](research.zh-CN.md)
 
 运行中的应用提供 `/api/openapi.json`。相关契约会标明拟议能力；设计记录不代表接口已经导出。研发资料保留原始语言和日期。
