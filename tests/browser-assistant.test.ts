@@ -320,7 +320,7 @@ it("records attached pages without granting document access, and only titles the
   const sent = await ai("POST", `/ui/sessions/${sid}/messages`, input);
   expect(sent.statusCode, sent.body).toBe(200);
   await settle(input.id);
-  const expectedTitle = "总结当前网页 · 故障排查 (material.example.test)";
+  const expectedTitle = "故障排查 · 总结当前网页 (material.example.test)";
   const conversation = await ai("GET", `/ui/sessions/${sid}`);
   expect(conversation.json().session.title).toBe(expectedTitle);
   expect(conversation.json().resources).toEqual([expect.objectContaining({ kind: "webpage", title: "故障排查", href: material.url })]);

@@ -380,7 +380,7 @@ try {
   await send(second, "SPA_CURRENT");
   const originalSession = await db.selectFrom("ai_sessions").selectAll().executeTakeFirstOrThrow();
   assert(originalSession.title.includes("第一篇网页") && originalSession.title.includes("127.0.0.1"));
-  assert(originalSession.title.startsWith("总结当前网页"));
+  assert(originalSession.title.startsWith("第一篇网页"));
   const sourceBadge = ui.locator('.ai-chat-header .ai-session-source');
   assert.equal(await sourceBadge.innerText(), "");
   assert.equal(await sourceBadge.getAttribute("aria-label"), "浏览器助手");
@@ -512,7 +512,15 @@ try {
   await website.locator(".ai-resource-history a").first().waitFor();
   assert.equal(await website.locator(".ai-resource-history a").count(), 3);
   await website.screenshot({ path: join(output, "website-page-resources.png"), fullPage: true });
-  await website.getByRole("button", { name: "操作过的资源", exact: true }).click();
+  const [openedSource] = await Promise.all([
+    browser.waitForEvent("page"),
+    website.locator(`.ai-resource-history a[href="${sourceOrigin}/one"]`).click(),
+  ]);
+  await openedSource.waitForLoadState("domcontentloaded");
+  assert.equal(openedSource.url(), sourceOrigin + "/one");
+  await openedSource.close();
+  if (await website.locator(".ai-resource-history").isVisible())
+    await website.getByRole("button", { name: "操作过的资源", exact: true }).click();
   await website.locator(".ai-resource-history").waitFor({ state: "hidden" });
   await website.screenshot({ path: join(output, "website-session-icon.png"), fullPage: true });
   await second.bringToFront();

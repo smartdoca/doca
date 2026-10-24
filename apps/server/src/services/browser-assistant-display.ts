@@ -6,7 +6,7 @@ export function browserSessionTitle(text: string, page?: { title: string; url: s
   if (!page) return message;
   const host = new URL(page.url).hostname;
   const title = compact(page.title, 42);
-  return `${message} · ${title && title !== host ? `${title} (${host})` : host}`.slice(0, 100);
+  return `${title || host} · ${message}${title && title !== host ? ` (${host})` : ""}`.slice(0, 100);
 }
 
 /** Display only the original, digest-proven browser input; never rewrite memory. */

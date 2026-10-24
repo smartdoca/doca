@@ -13,8 +13,8 @@ const job = (text: string, captureRequestId: string | null) => {
 
 it("names the first browser turn from its request, page title and hostname within the session title limit", () => {
   expect(browserSessionTitle("总结\n 当前页面", { title: "故障排查", url: "https://docs.example.test/post?q=private#secret" }))
-    .toBe("总结 当前页面 · 故障排查 (docs.example.test)");
-  expect(browserSessionTitle("Summarize", { title: "", url: "https://example.test/page" })).toBe("Summarize · example.test");
+    .toBe("故障排查 · 总结 当前页面 (docs.example.test)");
+  expect(browserSessionTitle("Summarize", { title: "", url: "https://example.test/page" })).toBe("example.test · Summarize");
   expect(browserSessionTitle("A".repeat(200), { title: "B".repeat(200), url: "https://example.test/page" }).length).toBeLessThanOrEqual(100);
   expect(browserSessionTitle("An explicit message without a page")).toBe("An explicit message without a page");
 });
