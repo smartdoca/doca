@@ -277,6 +277,11 @@
     "zh": "发行记录",
     "pages": [
       [
+        "releases/0.2.17",
+        "0.2.17 — Comments and browser assistant",
+        "0.2.17 — 评论管理与浏览器助手"
+      ],
+      [
         "releases/0.2.16",
         "0.2.16 — Browser assistant context",
         "0.2.16 — 浏览器助手上下文"

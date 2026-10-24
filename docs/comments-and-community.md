@@ -46,6 +46,10 @@ If the original text is deleted, the anchor is invalid, or the root comment is d
 
 Full-document comments and selection comments share the rich composer: @ search, image upload, edit, reply, delete, and resolve. The edit version check remains. A failed submit does not clear the input.
 
+The delete icon first opens a confirmation bubble; canceling sends no deletion request. Replies use compact spacing while preserving authors, timestamps, and mentions.
+
+The comment sidebar in all five editors has a **Resolved comments** icon. Its dialog shows resolved root comments with their replies. Authors and managers can mark a thread unresolved; current permissions and comment versions are checked again. Failures retain the list and show an error. Further pages can be loaded; deleted roots are excluded. Reopening a thread with a valid anchor restores its card and marker.
+
 - `POST /resources/:id/comments` takes `{richBody, parentId, anchor?}`. A reply stays in the root comment's thread.
 - `PATCH /resources/:id/comments/:commentId` takes `{version, richBody?, deleted?, resolved?}`.
 - `POST /assets?purpose=comment_image&resourceId=...&filename=...` uploads bytes, at most 5 MB. The server validates the image and access.

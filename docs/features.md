@@ -2,7 +2,7 @@
 
 [中文](features.zh-CN.md)
 
-This page was checked against current source for host **0.1.10** and plugin SDK **0.1.9** on 2026-10-04. Before installing business plugins, the host provides the core capabilities below. Each independent plugin documents its own features, versions, and acceptance results.
+This page was checked against current source for host **0.2.17** and plugin SDK **0.1.11** on 2026-10-25. Before installing business plugins, the host provides the core capabilities below. Each independent plugin documents its own features, versions, and acceptance results.
 
 ## Core capabilities
 
@@ -17,6 +17,8 @@ This page was checked against current source for host **0.1.10** and plugin SDK 
 | Comments and in-app notifications | Implemented across five formats, including stable spreadsheet row/column anchors | [Comments and notifications](comments-and-community.md) |
 | Document search | Basic database search is available; full-text and vector indexes require Meilisearch and suitable models | [HTTP API](api.md#search) |
 | Personal AI assistant | Sessions, tools, approvals, and raw usage records are implemented; requires available models and credentials | [User guide](user-guide.md) |
+| Browser extension | Unpacked Chrome / Edge installation, page and selection capture, destination profiles, and shared AI sidebar; AI requires site model configuration | [Browser assistant](browser-assistant.md) |
+| MCP services | External clients use authorized tools and SKILLs through personal services or company integrations with an explicit target user; resource permissions still apply | [MCP services](mcp.md) |
 | Knowledge books and source subscriptions | Core: source subscriptions, immutable knowledge books, editable workflows, provenance, and human feedback; old curation and Q&A robots removed | [Knowledge books](knowledge-books.md) |
 | Local accounts and external login | Passwords, contact verification codes, recovery, registration review, OIDC/OAuth, and social adapters are implemented; external services need real credentials | [Authentication](authentication.md) |
 | Webhooks | Asynchronous delivery, retries, and records are implemented; requires a configured receiver | [Webhooks](webhooks.md) |
@@ -31,7 +33,7 @@ This page was checked against current source for host **0.1.10** and plugin SDK 
 
 ## Unavailable or requiring separate verification
 
-- Persistent offline editing queues, a complete desktop offline runtime, Doca as an OIDC provider, SAML are unavailable.
+- Editors have persistent local replicas and unacknowledged-update queues, requiring an available authorized replica and successful browser storage. This is not a complete offline application or an offline cold-start guarantee. Doca as an OIDC provider and SAML are unavailable. See [collaboration](collaboration.md).
 - Plugin temporary workspaces, cluster-wide business-task draining, arbitrary SQL, and distributed cross-service transactions are unavailable. Target SDK contracts do not establish existing exports; see [implementation status](plugin-sdk-contract.md).
 - A native plugin WebView container has a source protocol. iOS/Android builds, device behavior, and independent plugin integration require their own acceptance. Server installation does not download and execute native JavaScript.
 - Real AI, SSO, verification gateways, Webhook, S3/CDN, and other services depend on deployment configuration. Historical release tests each have a defined scope; they do not verify every external service or device.

@@ -205,6 +205,25 @@ it("stores structured comments, canonicalizes mentions, and only notifies recipi
     ),
   ).toHaveLength(1);
 });
+it("lists resolved threads with their replies and reopens only the current authorized root version", async () => {
+  const r = await resource();
+  await grant(r.id);
+  const root = await content.comment(owner, r.id, rich(bob), null);
+  const reply = await content.comment(bob, r.id, rich(owner), root.id);
+  const original = (await content.detail(owner, r.id)).comments;
+  const rootBefore = original.find(c => c.id === root.id)!;
+  const replyBefore = original.find(c => c.id === reply.id)!;
+  await content.updateComment(owner, r.id, root.id, { version: rootBefore.version, resolved: true });
+  const resolved = (await content.detail(owner, r.id)).comments.find(c => c.id === root.id)!;
+  expect(resolved).toMatchObject({ resolved: 1, body_json: rootBefore.body_json, version: rootBefore.version + 1 });
+  await expect(content.updateComment(bob, r.id, root.id, { version: resolved.version, resolved: false })).rejects.toMatchObject({ status: 403 });
+  await expect(content.updateComment(owner, r.id, root.id, { version: rootBefore.version, resolved: false })).rejects.toMatchObject({ status: 409 });
+  await expect(content.updateComment(owner, r.id, reply.id, { version: replyBefore.version, resolved: false })).rejects.toMatchObject({ status: 400 });
+  await content.updateComment(owner, r.id, root.id, { version: resolved.version, resolved: false });
+  const reopened = (await content.detail(owner, r.id)).comments;
+  expect(reopened.find(c => c.id === root.id)).toMatchObject({ resolved: 0, body_json: rootBefore.body_json, version: rootBefore.version + 2 });
+  expect(reopened.find(c => c.id === reply.id)).toEqual(replyBefore);
+});
 it("notifies owner once when mentioned in a comment, deduplicates repeated reactions, and hides revoked notifications", async () => {
   const r = await resource();
   await grant(r.id);

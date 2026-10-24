@@ -70,13 +70,26 @@ Doca 把**在线文档、Markdown、在线表格、幻灯片、无限画布、�
 | --- | --- |
 | **在线文档与协同编辑** | 富文本、Markdown、表格、幻灯片和画布，支持实时协同、评论与历史记录。 |
 | **知识管理** | 带文档目录的知识库，以及支持编排、来源溯源和人工审阅的多人共建知识册。 |
-| **个人 AI 助手** | 围绕有权限访问的文档与文件工作，读取 PDF/Office 附件，生成与编辑图片，准备浏览器草稿。需要配置可用的模型和服务。 |
+| **个人 AI 助手** | 围绕有权限访问的文档与文件工作，读取 PDF/Office 附件，生成与编辑图片，分析网页材料。需要配置可用的模型和服务。 |
+| **浏览器插件** | Chrome / Edge 网页与选区收录，保留正文、来源和图片；配置保存位置与新建/追加规则，并在侧栏调用 Doca AI 整理网页。 |
 | **MCP 服务** | 让 Codex 等外部 AI 使用已授权的 Doca 工具和 SKILL；支持个人服务和管理员代用户集成。 |
 | **文件与分享** | 个人文件、共享文件夹、邀请、权限、分享链接、搜索、通知和回收站。支持本地或兼容 S3 的文件存储。 |
 | **账号与语言** | 密码、OIDC、Google、GitHub、微信扫码和 QQ 登录，中英文界面。外部登录需配置对应服务。 |
 | **私有化部署与扩展** | Docker 部署，单机 SQLite，多副本共享 PostgreSQL、Redis 和文件存储。业务插件通过公开 `@smartdoca/plugin-sdk` 扩展。 |
 
 一次部署只有一套账号系统。默认镜像不安装随手记、邮箱、日历、会员或内容审核插件。模板和素材需要单独安装提供者，详见[功能与边界](https://smartdoca.github.io/doca/#/zh-cn/getting-started/features)。
+
+### 把网页资料带回自己的知识库
+
+在个人设置的「浏览器助手」中配置收录方案，下载本站配置的扩展，在 Chrome / Edge 中加载已解压的文件。插件跟随 Doca 网站登录，可把整页或选区保存到个人文档、知识库目录，或追加到指定文档。当前通过下载包安装，未提供浏览器扩展商店安装。
+
+网页右侧工具条可以收录、打开 Doca 助手和进入设置。侧栏支持总结与整理当前网页，使用站点配置的模型、计量和审批；会话可回到 Doca 继续。来源网页会进入关联资源，浏览器会话以网页名称开头，方便查找。详见[浏览器助手安装与使用](docs/browser-assistant.zh-CN.md)。
+
+### 让外部 AI 使用 Doca 的工具与 SKILL
+
+Doca 提供 Streamable HTTP MCP 服务，让支持 MCP 的客户端发现已授权的工具、读取 SKILL 手册、操作文档与文件。个人服务以本人身份执行；公司服务供系统集成使用，每次操作显式指定目标用户。服务授权和资源权限同时生效，token 可以独立重置、关闭或撤销。
+
+在个人设置中启用 MCP 并创建服务，复制界面生成的接入配置；管理员可在后台管理公司 MCP 服务。token 只在创建或重置时显示，保存在客户端环境变量中即可。详见[MCP 服务与接入](docs/mcp.zh-CN.md)。
 
 ## 常用地址
 
@@ -91,11 +104,11 @@ Doca 把**在线文档、Markdown、在线表格、幻灯片、无限画布、�
 
 ## Docker 快速开始
 
-需要 Git、Docker Engine、Docker Compose，以及通过反向代理访问的 HTTP(S) 地址。本流程在新空数据库中安装已发布的 0.2.16 镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.2.16)并保留原数据。
+需要 Git、Docker Engine、Docker Compose，以及通过反向代理访问的 HTTP(S) 地址。本流程在新空数据库中安装已发布的 0.2.17 镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.2.17)并保留原数据。
 
 ```sh
 # 1. 拉取对应发行版代码
-git clone --branch v0.2.16 --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch v0.2.17 --depth 1 https://github.com/smartdoca/doca.git
 cd doca
 
 # 2. 配置环境变量
@@ -136,10 +149,11 @@ pnpm dev
 ## 文档
 
 - [使用指南](https://smartdoca.github.io/doca/#/zh-cn/getting-started/user-guide)
+- [浏览器助手](docs/browser-assistant.zh-CN.md) · [MCP 服务](docs/mcp.zh-CN.md)
 - [部署与配置](https://smartdoca.github.io/doca/#/zh-cn/operations/deployment)
 - [插件开发](https://smartdoca.github.io/doca/#/zh-cn/plugins/plugin-development)
 - [HTTP API](https://smartdoca.github.io/doca/#/zh-cn/reference/api)，运行中的应用还提供 `/api/openapi.json`。
-- [发行记录](https://smartdoca.github.io/doca/#/zh-cn/releases/0.2.16)
+- [发行记录](https://smartdoca.github.io/doca/#/zh-cn/releases/0.2.17)
 - [文档源码](docs/README.zh-CN.md)
 
 预览文档时，执行 `pnpm docs:dev` 并打开 `http://127.0.0.1:39140/#/zh-cn/`。`pnpm docs:check` 校验双语覆盖和本地链接。GitHub Pages 设置见[文档维护](docs/documentation.zh-CN.md)。

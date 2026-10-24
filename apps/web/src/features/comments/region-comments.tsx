@@ -24,6 +24,7 @@ import { isRegionCommentInteraction } from "@web/features/comments/region-commen
 import { useI18n } from "@web/shared/i18n.js";
 import { useCommentPages } from "./use-comment-pages.js";
 import { CommentSidebar } from "./comment-sidebar.js";
+import { ResolvedComments } from "./resolved-comments.js";
 export type RegionController = {
   flush?(): void | Promise<void>;
   capture(): unknown | null;
@@ -247,7 +248,12 @@ export function RegionComments({
       }
     };
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const target = e.target instanceof Element ? e.target : null;
+      const overlayTarget = target?.closest('.ant-modal-root,.ant-popconfirm');
+      const overlayOpen = Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"],.ant-popconfirm'))
+        .some(overlay => overlay.getClientRects().length > 0);
+      if (!overlayTarget && !overlayOpen) {
         setOpen(false);
         setActive(null);
       }
@@ -351,6 +357,11 @@ export function RegionComments({
               {t("comment.region")} <small>{roots.length}</small>
             </h3>
             <div className="region-comment-header-actions comment-sidebar-actions">
+              <ResolvedComments detail={detail} user={user} rank={rank} changed={changed} loadMore={loadMoreComments}
+                quote={comment => {
+                  try { return controller?.label(JSON.parse(comment.anchor!)) ?? t("comment.quoteDeleted"); }
+                  catch { return t("comment.quoteDeleted"); }
+                }} />
               <CommentNavigation
                 ids={[...roots]
                   .sort((a, b) => {
