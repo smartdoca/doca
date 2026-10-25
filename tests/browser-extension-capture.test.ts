@@ -55,3 +55,16 @@ it("uses the selected range and the browser's current image source rather than c
   expect(value.images[0].url).toBe("https://cdn.example.test/full.png");
   dom.window.close();
 });
+
+it("captures inline SVG with its styles as an image while excluding hidden tracking pixels", () => {
+  const { dom, capture } = document(
+    `<article><h1>Vector figure</h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40"><title>Chart</title><style>.bar{fill:blue}</style><rect class="bar" width="30" height="40"/></svg><img src="/pixel.gif" style="display:none"></article>`,
+  );
+  const result = capture("page");
+  expect(result.images).toHaveLength(1);
+  expect(result.images[0].name).toBe("image.svg");
+  expect(decodeURIComponent(result.images[0].url)).toContain(".bar{fill:blue}");
+  expect(result.markdown).toContain("![Chart](https://clipper.invalid/images/");
+  expect(result.markdown).not.toContain("pixel.gif");
+  dom.window.close();
+});

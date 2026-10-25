@@ -182,6 +182,9 @@
 .editor-columns.with-comments.outline-collapsed {
   grid-template-columns: minmax(0, 1fr) 280px;
 }
+.editor-columns > .content-comments {
+  align-self: stretch;
+}
 .content-comments {
   position: relative;
   min-width: 0;
@@ -298,21 +301,9 @@
   grid-template-columns: minmax(0, 1fr);
 }
 .compact-document .content-comments {
-  position: sticky;
-  right: auto;
-  top: 0;
-  bottom: auto;
-  z-index: 20;
-  width: 100%;
-  height: calc(100dvh - var(--document-panel-top, 120px) - var(--document-panel-bottom, 0px));
-  max-height: none;
-  overflow: auto;
-  overflow-anchor: none;
-  overscroll-behavior: contain;
   padding: 0 16px 16px;
   background: #fff;
   border-left: 1px solid #dee0e3;
-  border-radius: 0;
 }
 .editor-columns.with-comments .editor-content {
   overflow-x: auto;

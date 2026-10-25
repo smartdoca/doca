@@ -4,23 +4,19 @@ import type { RichTextEditorHandle } from "@smartdoca/slate";
 import type { YjsDocument } from "@smartdoca/slate/yjs";
 import { slatePoint } from "@web/features/documents/editor-presence.js";
 import { resolveRichAnchor } from "@core/modules/documents/codecs/rich-anchor.js";
-import { commentRailHeight, placeCommentCards } from "@web/features/comments/comment-position.js";
+import { placeCommentCards } from "@web/features/comments/comment-position.js";
 
 /** Each root thread stays a separate card, aligned to its own live CRDT anchor. */
 export function CommentCards({
   children,
-  compact,
   handle,
   runtime,
 }: {
   children: ReactNode;
-  compact: boolean;
   handle: RefObject<RichTextEditorHandle | null>;
   runtime: YjsDocument;
 }) {
   const rail = useRef<HTMLDivElement>(null);
-  const lastSourceOffset = useRef<number | undefined>(undefined);
-  useEffect(() => { lastSourceOffset.current = undefined; }, [compact, runtime]);
   useEffect(() => {
     let frame = 0;
     function layout() {
@@ -28,12 +24,7 @@ export function CommentCards({
         editor = handle.current?.editor;
       if (!host || !editor) return;
       const cards = Array.from(host.children) as HTMLElement[];
-      const panel = host.closest<HTMLElement>(".content-comments");
-      const source = host.closest<HTMLElement>(".main-scroll");
-      if (!compact && panel) panel.scrollTop = 0;
-      const sourceOffset = compact ? source?.scrollTop ?? 0 : 0;
-      // Convert viewport anchor coordinates into the drawer's source-aligned rail.
-      const drawerOffset = compact ? sourceOffset - (panel?.scrollTop ?? 0) : 0;
+      // Cards and anchors share the document scrollport in every layout.
       const top = host.getBoundingClientRect().top;
       const positions = cards
         .map((card) => {
@@ -45,7 +36,7 @@ export function CommentCards({
             const p = resolveRichAnchor(runtime, a)[0];
             if (p?.kind === "block") {
               const el = document.querySelector(`[data-block-id="${CSS.escape(p.blockId)}"]`);
-              if (el) target = el.getBoundingClientRect().top - top + drawerOffset;
+              if (el) target = el.getBoundingClientRect().top - top;
             } else {
               const point = p && slatePoint(editor, p.blockId, p.start);
               if (point) {
@@ -53,7 +44,7 @@ export function CommentCards({
                   anchor: point,
                   focus: point,
                 });
-                target = (range.getClientRects()[0]?.top ?? top) - top + drawerOffset;
+                target = (range.getClientRects()[0]?.top ?? top) - top;
               }
             }
           } catch {
@@ -77,14 +68,7 @@ export function CommentCards({
         card.style.top = `${y}px`;
         bottom = y + card.offsetHeight + 16;
       }
-      if (compact && panel && source) {
-        const railOffset = top - panel.getBoundingClientRect().top + panel.scrollTop;
-        host.style.height = `${commentRailHeight(bottom, source.scrollHeight - source.clientHeight, panel.clientHeight, railOffset)}px`;
-        // Extend the rail before setting scrollTop, avoiding browser clamping.
-        // Manual drawer scrolling remains possible until the document moves again.
-        if (lastSourceOffset.current !== sourceOffset) panel.scrollTop = sourceOffset;
-        lastSourceOffset.current = sourceOffset;
-      } else host.style.height = `${bottom}px`;
+      host.style.height = `${bottom}px`;
     }
     const schedule = () => {
       cancelAnimationFrame(frame);
@@ -100,16 +84,14 @@ export function CommentCards({
     }
     runtime.doc.on("update", schedule);
     window.addEventListener("resize", schedule);
-    document.addEventListener("scroll", schedule, true);
     schedule();
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
       runtime.doc.off("update", schedule);
       window.removeEventListener("resize", schedule);
-      document.removeEventListener("scroll", schedule, true);
     };
-  }, [children, compact, handle, runtime]);
+  }, [children, handle, runtime]);
   return (
     <div className="comment-cards" ref={rail}>
       {children}

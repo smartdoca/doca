@@ -68,6 +68,8 @@ async function fixture(
               preferences.position = message.position;
             return { ok: true, value: { ...preferences } };
           }
+          if (message.type === "prepareCapture")
+            return { ok: true, value: message.capture };
           const reply = replies.shift();
           if (reply instanceof Error) throw reply;
           return reply ?? { ok: true, value: { opened: true } };
@@ -162,6 +164,9 @@ it("confirms the chosen rule before capturing the page and freezes retry materia
       profileRevision: 1,
       capture: { mode: "page", markdown: "Entire article" },
     });
+    expect(
+      f.calls.filter((call) => call.type === "prepareCapture"),
+    ).toHaveLength(1);
     expect(f.get(".status").textContent).toContain("已保存到 Doca");
     expect(f.get(".status a").href).toBe("https://doca.test/#/r/saved");
   } finally {

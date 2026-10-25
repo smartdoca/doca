@@ -27,7 +27,7 @@
       "dock.updated": "插件已更新，请刷新当前网页",
       "dock.reload": "刷新网页",
       "dock.positionFailed": "位置未能保存，可重试拖动",
-      "dock.images": "正文与图片一起保存，大图自动压缩",
+      "dock.images": "大图自动压缩，SVG 转为图片；无法保存的图片保留占位",
       "dock.create": "新建文档",
       "dock.append": "追加到文档",
       "dock.personal": "个人文档",
@@ -61,7 +61,8 @@
       "dock.updated": "The extension was updated. Reload this page.",
       "dock.reload": "Reload page",
       "dock.positionFailed": "Could not save the position. Drag to retry.",
-      "dock.images": "Text and images saved; large images compressed",
+      "dock.images":
+        "Large images compressed; SVG converted; unavailable images marked",
       "dock.create": "New document",
       "dock.append": "Append to document",
       "dock.personal": "Personal documents",
@@ -77,6 +78,7 @@
     selectedRange = null,
     mode = "page",
     prepared = null,
+    preparedReady = false,
     state = null,
     busy = false,
     panelGeneration = 0,
@@ -450,6 +452,11 @@
     try {
       prepared ||= globalThis.DocaCapture.capture("page");
       snapshot = prepared;
+      if (!preparedReady) {
+        prepared = await send({ type: "prepareCapture", capture: prepared });
+        snapshot = prepared;
+        preparedReady = true;
+      }
       const result = await send({
         type: "capture",
         capture: prepared,
@@ -486,6 +493,7 @@
     rememberSelection();
     mode = name;
     prepared = null;
+    preparedReady = false;
     panel.hidden = false;
     fields.hidden = false;
     confirm.hidden = false;
@@ -668,7 +676,33 @@
         respond({ ok: false, error: "clipper_image_unlisted" });
         return;
       }
-      fetch(image.url, { credentials: "include" })
+      const respondImage = (bytes) => {
+        let binary = "";
+        for (let start = 0; start < bytes.length; start += 8192)
+          binary += String.fromCharCode(...bytes.subarray(start, start + 8192));
+        respond({ ok: true, value: btoa(binary) });
+      };
+      if (message.convertSvg) {
+        // Reuse extension-fetched bytes: page fetch would impose CDN CORS.
+        void (async () => {
+          if (
+            typeof message.source !== "string" ||
+            message.source.length > Math.ceil((32 * 1024 ** 2) / 3) * 4
+          )
+            throw Error("clipper_image_invalid");
+          const bytes = Uint8Array.from(atob(message.source), (char) =>
+            char.charCodeAt(0),
+          );
+          if (!bytes.length || bytes.length > 32 * 1024 ** 2)
+            throw Error("clipper_image_invalid");
+          respondImage(await globalThis.DocaSvgImage.rasterize(bytes));
+        })().catch((error) => respond({ ok: false, error: error.message }));
+        return true;
+      }
+      fetch(image.url, {
+        credentials: "include",
+        signal: AbortSignal.timeout(15000),
+      })
         .then(async (response) => {
           if (!response.ok) throw Error("clipper_image_failed");
           const limit = 64 * 1024 ** 2;
@@ -700,12 +734,7 @@
             bytes.set(chunk, offset);
             offset += chunk.length;
           }
-          let binary = "";
-          for (let start = 0; start < bytes.length; start += 8192)
-            binary += String.fromCharCode(
-              ...bytes.subarray(start, start + 8192),
-            );
-          respond({ ok: true, value: btoa(binary) });
+          respondImage(bytes);
         })
         .catch((error) => respond({ ok: false, error: error.message }));
       return true;

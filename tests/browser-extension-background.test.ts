@@ -6,13 +6,18 @@ import {
   prepareCaptureImage,
   readCaptureImageResponse,
   MAX_IMAGE_SOURCE_BYTES,
+  captureImageInfo,
 } from "../apps/browser-extension/image-processing.js";
+// @ts-expect-error extension catalogs are runtime-only JavaScript.
+import { translate } from "../apps/browser-extension/messages.js";
 const source = (
   await readFile(
     new URL("../apps/browser-extension/background.js", import.meta.url),
     "utf8",
   )
-).replace(/^import \{[\s\S]*?\} from "\.\/image-processing\.js";\n/, "");
+)
+  .replace(/^import \{[\s\S]*?\} from "\.\/image-processing\.js";\n/, "")
+  .replace(/^import \{ translate \} from "\.\/messages\.js";\n/m, "");
 const origin = "https://doca.example.test",
   connectionId = randomUUID();
 const config = {
@@ -43,6 +48,8 @@ function runtime() {
     prepareCaptureImage,
     readCaptureImageResponse,
     MAX_IMAGE_SOURCE_BYTES,
+    captureImageInfo,
+    translate,
     URL,
     crypto: {
       randomUUID,
@@ -50,6 +57,11 @@ function runtime() {
       subtle: webcrypto.subtle,
     },
     TextEncoder,
+    TextDecoder,
+    AbortSignal,
+    Blob,
+    atob,
+    btoa,
     URLSearchParams,
     setTimeout,
     clearTimeout,
@@ -110,6 +122,143 @@ it("opens standalone settings from a trusted top-frame page without requiring lo
   await expect(
     r.handle({ type: "openSettings" }, { ...sender, id: "other" }),
   ).rejects.toThrow("clipper_scope_denied");
+});
+
+it("replaces incompatible images in place with source links, preserving valid images and frozen input", async () => {
+  const r = runtime();
+  const images = ["valid.png", "logo.svg", "bad.avif", "missing.png"].map(
+    (name) => ({ id: randomUUID(), name, url: "https://source.test/" + name }),
+  );
+  const capture = {
+    mode: "page",
+    url: "https://source.test/article",
+    markdown: images
+      .map(
+        (image) =>
+          `![${image.name}](${"https://clipper.invalid/images/" + image.id})`,
+      )
+      .join("\n\n"),
+    images,
+  };
+  const before = JSON.stringify(capture);
+  r.context.bytes = async (image: any) => {
+    if (image.name === "bad.avif") throw Error("clipper_image_invalid");
+    if (image.name === "missing.png") throw Error("clipper_image_failed");
+    const data = new Uint8Array([1, 2, 3]);
+    r.context.cacheImage(image, data, image.name === "logo.svg");
+    return data;
+  };
+  const result = await r.context.prepareCapture(capture, 7);
+  expect(result.images.map((image: any) => image.name)).toEqual([
+    "valid.png",
+    "logo.png",
+  ]);
+  expect(result.markdown).toContain(
+    `![logo.svg](https://clipper.invalid/images/${images[1]!.id})`,
+  );
+  expect(result.markdown).toContain(
+    "[图片未保存：bad.avif（格式不支持或图片内容无效）](https://source.test/bad.avif)",
+  );
+  expect(result.markdown).toContain(
+    "[图片未保存：missing.png（原图无法读取）](https://source.test/missing.png)",
+  );
+  expect(result.markdown).not.toContain(images[2]!.id);
+  expect(JSON.stringify(capture)).toBe(before);
+  r.local.locale = "en";
+  expect((await r.context.prepareCapture(capture, 7)).markdown).toContain(
+    "Image not saved: bad.avif (unsupported format or invalid image)",
+  );
+});
+
+it("keeps escaped image labels safe and does not insert blob/data sources as permanent links", async () => {
+  const r = runtime(),
+    id = randomUUID();
+  r.context.bytes = async () => {
+    throw Error("clipper_image_invalid");
+  };
+  const result = await r.context.prepareCapture(
+    {
+      markdown: `before ![a\\]b](https://clipper.invalid/images/${id}) after`,
+      images: [{ id, name: "bad.svg", url: "data:image/svg+xml,invalid" }],
+    },
+    7,
+  );
+  expect(result.images).toEqual([]);
+  expect(result.markdown).toBe(
+    "before 图片未保存：a\\]b（格式不支持或图片内容无效） after",
+  );
+  expect(result.markdown).not.toContain("data:");
+});
+
+it("does not suppress authorization, quota or extension failures during preflight", async () => {
+  const r = runtime();
+  for (const code of [
+    "clipper_scope_denied",
+    "storage_quota_exceeded",
+    "Extension context invalidated",
+  ]) {
+    r.context.bytes = async () => {
+      throw Error(code);
+    };
+    await expect(
+      r.context.prepareCapture(
+        {
+          markdown: "page",
+          images: [
+            {
+              id: randomUUID(),
+              url: "https://source.test/photo.png",
+              name: "photo.png",
+            },
+          ],
+        },
+        7,
+      ),
+    ).rejects.toThrow(code);
+  }
+});
+
+it("passes already-fetched SVG bytes to the source decoder and reuses the converted PNG", async () => {
+  const r = runtime(),
+    id = randomUUID();
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const image = { id, url: "https://cdn.test/logo.svg", name: "logo.svg" };
+  let reads = 0,
+    decodes = 0;
+  r.context.fetch = async () => {
+    reads++;
+    return new Response(svg);
+  };
+  r.context.chrome.tabs.sendMessage = async (tabId: number, message: any) => {
+    expect(tabId).toBe(7);
+    expect(message).toMatchObject({
+      type: "image",
+      id,
+      url: image.url,
+      convertSvg: true,
+    });
+    expect(atob(message.source)).toBe(svg);
+    return { ok: true, value: png.toString("base64") };
+  };
+  r.context.createImageBitmap = async () => {
+    decodes++;
+    return { close() {} };
+  };
+  const result = await r.context.prepareCapture(
+    {
+      markdown: `![Logo](https://clipper.invalid/images/${id})`,
+      images: [image],
+    },
+    7,
+  );
+  expect(result.images[0].name).toBe("logo.png");
+  expect(Buffer.from(await r.context.bytes(result.images[0], 7))).toEqual(png);
+  expect(reads).toBe(1);
+  expect(decodes).toBe(1);
 });
 
 it("persists only a validated vertical dock position and leaves invalid stored data for review", async () => {
@@ -183,7 +332,7 @@ it("recovers a missing capture receiver after navigation without reloading the p
     },
     {
       target: { tabId: 7, frameIds: [0] },
-      files: ["capture.js", "select.js", "content.js"],
+      files: ["svg-image.js", "capture.js", "select.js", "content.js"],
       injectImmediately: true,
     },
     {
@@ -742,7 +891,11 @@ it("opens the selection's panel with its rule before asynchronous sign-in and ke
   const r = runtime(),
     profileId = randomUUID(),
     calls: string[] = [],
-    capture = { url: "https://source.test/article", markdown: "selected" };
+    capture = {
+      url: "https://source.test/article",
+      markdown: "selected",
+      images: [],
+    };
   r.context.chrome.sidePanel = {
     setOptions: async (options: any) => {
       calls.push("configure");
@@ -765,7 +918,7 @@ it("opens the selection's panel with its rule before asynchronous sign-in and ke
     tabId: number,
     revision: number,
   ) => {
-    expect(value).toBe(capture);
+    expect(value).toEqual(capture);
     expect([id, tabId, revision]).toEqual([profileId, 8, 3]);
     return { capture, profileId };
   };
