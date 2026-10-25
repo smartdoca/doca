@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, it } from "vitest";
+import { importMarkdown } from "@smartdoca/slate/conversion";
 // @ts-expect-error jsdom is a runtime-only fixture dependency in this workspace.
 import { JSDOM } from "jsdom";
 const script = await readFile(
@@ -67,4 +68,43 @@ it("captures inline SVG with its styles as an image while excluding hidden track
   expect(result.markdown).toContain("![Chart](https://clipper.invalid/images/");
   expect(result.markdown).not.toContain("pixel.gif");
   dom.window.close();
+});
+
+it("imports linked sponsor images and inline SVG without conversion warnings or losing their targets", async () => {
+  const { dom, capture } = document(
+    `<article><h1>Linked figures</h1><a href="/publisher"><img src="/logo.png" alt="Publisher"></a><a href="/sponsor"><picture><img src="/sponsor.jpg" alt="Sponsor"></picture></a><a href="/chart"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Chart</title><style>.bar{fill:blue}</style><rect class="bar" width="20" height="20"/></svg></a><a href="/details"><strong>Figure details</strong><img src="/detail.png"></a><p>Article ending.</p></article>`,
+  );
+  try {
+    const result = capture("page");
+    const imported: string[] = [];
+    let markdown = result.markdown;
+    for (const image of result.images)
+      markdown = markdown.replaceAll(
+        "https://clipper.invalid/images/" + image.id,
+        image.id,
+      );
+    const converted = await importMarkdown(markdown, {
+      resources: {
+        signal: new AbortController().signal,
+        async importResource(request) {
+          imported.push(request.path!);
+          return "assets/" + request.path;
+        },
+      },
+    });
+    expect(converted.warnings).toEqual([]);
+    expect(imported).toEqual(
+      result.images.map((image: { id: string }) => image.id),
+    );
+    const model = JSON.stringify(converted.initialValue);
+    expect(model.match(/"type":"image"/g)).toHaveLength(4);
+    for (const target of ["publisher", "sponsor", "chart", "details"])
+      expect(model).toContain("https://web.example.test/" + target);
+    expect(model).toContain("Article ending.");
+    expect(result.markdown).not.toContain("[![");
+    expect(result.markdown).toContain("[Chart](https://web.example.test/chart)");
+    expect(result.markdown).not.toContain(".bar{fill:blue}");
+  } finally {
+    dom.window.close();
+  }
 });
