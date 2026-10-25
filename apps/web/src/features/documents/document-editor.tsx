@@ -247,7 +247,6 @@ function RichDocument({
     [outlineCollapsed, setOutlineCollapsed] = useState(false),
     [commentsChoice, setCommentsChoice] = useState<boolean | null>(null),
     [availableWidth, setAvailableWidth] = useState(0),
-    [panelBounds, setPanelBounds] = useState({ right: 0, top: 120, bottom: 0 }),
     [liveInfo, setLiveInfo] = useState<HTMLElement | null>(null),
     [anchor, setAnchor] = useState<Anchor | null>(null),
     [activeThread, setActiveThread] = useState<string | null>(null),
@@ -318,24 +317,11 @@ function RichDocument({
     setToolbarSlot(document.getElementById("editor-toolbar-slot"));
     const measure = () => {
       const root = shell.current;
-      const source = root?.closest<HTMLElement>(".main-scroll");
-      if (!root || !source) return;
+      if (!root) return;
       setAvailableWidth(root.clientWidth);
-      const rect = source.getBoundingClientRect();
-      const toolbar = document.getElementById("editor-toolbar-slot")?.getBoundingClientRect();
-      const next = {
-        right: Math.max(0, innerWidth - rect.left - source.clientWidth),
-        top: Math.max(rect.top, toolbar?.bottom ?? rect.top),
-        bottom: Math.max(0, innerHeight - rect.bottom),
-      };
-      setPanelBounds((old) => old.right === next.right && old.top === next.top && old.bottom === next.bottom ? old : next);
     };
     const observer = new ResizeObserver(measure);
     if (shell.current) observer.observe(shell.current);
-    const source = shell.current?.closest(".main-scroll");
-    if (source) observer.observe(source);
-    const toolbar = document.getElementById("editor-toolbar-slot");
-    if (toolbar) observer.observe(toolbar);
     window.addEventListener("resize", measure);
     measure();
     return () => { observer.disconnect(); window.removeEventListener("resize", measure); };
@@ -733,7 +719,7 @@ function RichDocument({
     <RichPluginElements documentId={id} handle={toolbarHandle} editable={editable}>{elementInsert => <section
       ref={shell}
       data-page-width={pageWidth}
-      style={{ "--document-panel-right": `${panelBounds.right}px`, "--document-panel-top": `${panelBounds.top}px`, "--document-panel-bottom": `${panelBounds.bottom}px`, "--document-paper-width": `${pageLayout.paper}px` } as React.CSSProperties}
+      style={{ "--document-paper-width": `${pageLayout.paper}px` } as React.CSSProperties}
       className={`document-editor-shell ${compact ? "compact-document" : ""}`}
       onKeyDownCapture={(e) => {
         if ((e.target as HTMLElement).closest(".rich-comment-composer")) return;
@@ -1191,7 +1177,6 @@ function RichDocument({
               <p className="subtle">{t("comment.selectionHint")}</p>
             )}
             <CommentCards
-              compact={compact}
               handle={handle}
               runtime={session.runtime}
             >

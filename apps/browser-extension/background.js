@@ -2,7 +2,28 @@ import {
   prepareCaptureImage,
   readCaptureImageResponse,
   MAX_IMAGE_SOURCE_BYTES,
+  captureImageInfo,
 } from "./image-processing.js";
+import { translate } from "./messages.js";
+
+// Source bytes stay in memory only; frozen tasks retain the existing URL manifest.
+const preparedImages = new Map();
+let preparedImageBytes = 0;
+function cacheImage(image, data, convertedSvg) {
+  const old = preparedImages.get(image.id);
+  if (old) preparedImageBytes -= old.data.length;
+  preparedImages.delete(image.id);
+  while (
+    preparedImageBytes + data.length > 100 * 1024 ** 2 &&
+    preparedImages.size
+  ) {
+    const [id, entry] = preparedImages.entries().next().value;
+    preparedImageBytes -= entry.data.length;
+    preparedImages.delete(id);
+  }
+  preparedImages.set(image.id, { url: image.url, data, convertedSvg });
+  preparedImageBytes += data.length;
+}
 
 const local = chrome.storage.local,
   session = chrome.storage.session;
@@ -519,7 +540,7 @@ async function snapshot(mode = "page", tabId) {
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id, frameIds: [0] },
-        files: ["capture.js", "select.js", "content.js"],
+        files: ["svg-image.js", "capture.js", "select.js", "content.js"],
         injectImmediately: true,
       });
       response = await read();
@@ -528,7 +549,10 @@ async function snapshot(mode = "page", tabId) {
     }
   }
   if (!response?.ok) throw Error(response?.error || "clipper_page_unsupported");
-  return { capture: response.value, tabId: tab.id };
+  return {
+    capture: await prepareCapture(response.value, tab.id),
+    tabId: tab.id,
+  };
 }
 async function begin(capture, profileId, tabId, profileRevision) {
   const config = await connection(),
@@ -572,11 +596,16 @@ async function begin(capture, profileId, tabId, profileRevision) {
   return pending;
 }
 async function bytes(image, tabId) {
+  const cached = preparedImages.get(image.id);
+  if (cached?.url === image.url) return cached.data;
   let data;
+  if (!/^(https?:\/\/|data:image\/|blob:)/i.test(image.url))
+    throw Error("clipper_image_invalid");
   try {
     const response = await fetch(image.url, {
       credentials: "include",
       redirect: "follow",
+      signal: AbortSignal.timeout(15000),
     });
     data = await readCaptureImageResponse(response);
   } catch (error) {
@@ -591,7 +620,93 @@ async function bytes(image, tabId) {
     if (!data.length || data.length > MAX_IMAGE_SOURCE_BYTES)
       throw Error("clipper_image_invalid");
   }
-  return prepareCaptureImage(data);
+  let convertedSvg = false;
+  try {
+    captureImageInfo(data);
+  } catch (error) {
+    convertedSvg = /<(?:[\w.-]+:)?svg[\s/>]/i.test(
+      new TextDecoder().decode(data.subarray(0, 65536)),
+    );
+    if (!convertedSvg) throw error;
+  }
+  if (convertedSvg) {
+    // Stay below Chrome's message size limit, including base64 expansion.
+    if (!tabId || data.length > 32 * 1024 ** 2)
+      throw Error("clipper_image_invalid");
+    let source = "";
+    for (let start = 0; start < data.length; start += 8192)
+      source += String.fromCharCode(...data.subarray(start, start + 8192));
+    const result = await chrome.tabs.sendMessage(tabId, {
+      type: "image",
+      id: image.id,
+      url: image.url,
+      convertSvg: true,
+      source: btoa(source),
+    });
+    if (!result?.ok) throw Error(result?.error || "clipper_image_invalid");
+    data = Uint8Array.from(atob(result.value), (char) => char.charCodeAt(0));
+  }
+  data = await prepareCaptureImage(data);
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(new Blob([data]));
+  } catch {
+    throw Error("clipper_image_invalid");
+  } finally {
+    bitmap?.close();
+  }
+  cacheImage(image, data, convertedSvg);
+  return data;
+}
+async function prepareCapture(capture, tabId) {
+  if (
+    !capture ||
+    typeof capture.markdown !== "string" ||
+    !Array.isArray(capture.images) ||
+    capture.images.length > 100
+  )
+    throw Error("clipper_invalid_input");
+  const locale = (await local.get("locale")).locale || "zh";
+  const failures = new Map(),
+    images = [];
+  const reasons = {
+    clipper_image_invalid: "imageUnsupported",
+    clipper_image_failed: "imageReadFailed",
+    clipper_image_compression_failed: "imageCompressionFailed",
+    clipper_animated_image_too_large: "imageAnimationTooLarge",
+  };
+  for (const image of capture.images) {
+    try {
+      await bytes(image, tabId);
+      images.push(
+        preparedImages.get(image.id)?.convertedSvg
+          ? { ...image, name: image.name.replace(/\.svg$/i, "") + ".png" }
+          : image,
+      );
+    } catch (error) {
+      if (!Object.hasOwn(reasons, error.message)) throw error;
+      failures.set(image.id, { image, reason: reasons[error.message] });
+    }
+  }
+  const markdown = capture.markdown.replace(
+    /!\[((?:\\.|[^\]\\])*)\]\(https:\/\/clipper\.invalid\/images\/([a-f0-9-]{36})\)/g,
+    (marker, alt, id) => {
+      const failure = failures.get(id);
+      if (!failure) return marker;
+      const name =
+        alt ||
+        failure.image.name
+          .replace(/[\\`*_[\]<>]/g, "\\$&")
+          .replace(/\s+/g, " ");
+      const label = translate(locale, "imagePlaceholder")
+        .replace("{name}", name)
+        .replace("{reason}", translate(locale, failure.reason));
+      return /^https?:\/\//i.test(failure.image.url)
+        ? `[${label}](${failure.image.url.replace(/[()<>\s]/g, (char) => encodeURIComponent(char))})`
+        : label;
+    },
+  );
+  return { ...capture, markdown, images };
 }
 async function prepare(pending, requireImages = true) {
   const config = await connection();
@@ -703,6 +818,7 @@ async function handle(message, sender) {
       "state",
       "login",
       "capture",
+      "prepareCapture",
       "openAssistant",
       "openSettings",
       "dockPreferences",
@@ -914,7 +1030,7 @@ async function handle(message, sender) {
     await ensureLogin(true);
     if (message.capture) {
       const pending = await begin(
-        message.capture,
+        await prepareCapture(message.capture, tabId),
         message.profileId,
         tabId,
         message.profileRevision,
@@ -946,6 +1062,14 @@ async function handle(message, sender) {
         message.profileRevision,
       ),
     );
+  }
+  if (message.type === "prepareCapture") {
+    if (
+      !fromPage ||
+      new URL(message.capture.url).origin !== new URL(sender.url).origin
+    )
+      throw Error("clipper_scope_denied");
+    return prepareCapture(message.capture, sender.tab.id);
   }
   if (message.type === "retry") {
     const pending = (await session.get("pending")).pending;

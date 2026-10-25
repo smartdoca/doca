@@ -4,6 +4,7 @@ const files = [
   "manifest.json",
   "background.js",
   "image-processing.js",
+  "svg-image.js",
   "content.js",
   "select.js",
   "login-bridge.js",

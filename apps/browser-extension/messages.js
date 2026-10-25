@@ -1,5 +1,10 @@
 export const messages = {
   zh: {
+    imagePlaceholder: "图片未保存：{name}（{reason}）",
+    imageUnsupported: "格式不支持或图片内容无效",
+    imageReadFailed: "原图无法读取",
+    imageCompressionFailed: "图片转换失败",
+    imageAnimationTooLarge: "动图超出大小上限",
     selectProfile: "选择收录规则",
     extensionSettings: "插件设置",
     back: "返回",
@@ -7,8 +12,9 @@ export const messages = {
     profileSettingsHelp:
       "在 Doca 设置保存位置、追加或新建策略，可配置多套规则。",
     handoff: "交给 AI",
-    imagesHelp: "正文与图片一起保存，大图自动压缩。AI 助手将在浏览器右侧打开。",
-    captureImagePolicy: "图片一起归档 · 大图自动压缩",
+    imagesHelp:
+      "大图自动压缩，SVG 转为图片；无法保存的图片保留占位。AI 助手将在浏览器右侧打开。",
+    captureImagePolicy: "SVG 转为图片 · 无法保存的图片保留占位",
     clipper_image_compression_failed: "图片压缩失败，收录尚未完成，请重试。",
     clipper_animated_image_too_large:
       "动图超过 20 MiB 或 2500 万像素，不会转成静态图，请选择更小的图片。",
@@ -108,6 +114,11 @@ export const messages = {
       "目标文档尚未就绪，请在 Doca 打开一次后重试。",
   },
   en: {
+    imagePlaceholder: "Image not saved: {name} ({reason})",
+    imageUnsupported: "unsupported format or invalid image",
+    imageReadFailed: "source image could not be read",
+    imageCompressionFailed: "image conversion failed",
+    imageAnimationTooLarge: "animation exceeds the size limit",
     selectProfile: "Choose a capture rule",
     extensionSettings: "Extension settings",
     back: "Back",
@@ -116,8 +127,8 @@ export const messages = {
       "Configure destinations and append or create strategies in Doca. Multiple rules are supported.",
     handoff: "Ask AI",
     imagesHelp:
-      "Content and images are saved together; large images are compressed. AI opens in your browser’s sidebar.",
-    captureImagePolicy: "Images included · Large images compressed",
+      "Large images are compressed and SVG is converted. Unavailable images are marked in the document. AI opens in your browser’s sidebar.",
+    captureImagePolicy: "SVG converted · Unavailable images marked",
     clipper_image_compression_failed:
       "Image compression failed. Capture is incomplete; please retry.",
     clipper_animated_image_too_large:

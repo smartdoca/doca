@@ -41,12 +41,20 @@
           "src",
           original.currentSrc || original.src || original.dataset.src || "",
         );
+      if (original) {
+        const style = window.getComputedStyle(original);
+        if (style.display === "none" || style.visibility === "hidden")
+          image.hidden = true;
+      }
     }
     source
       .querySelectorAll(
         "script,style,noscript,template,form,input,textarea,select,button,[data-doca-capture-ui],[hidden],[aria-hidden='true']",
       )
-      .forEach((node) => node.remove());
+      .forEach((node) => {
+        if (node.localName === "style" && node.closest("svg")) return;
+        node.remove();
+      });
     let nodes = 0;
     function walk(node, depth = 0) {
       if (++nodes > 100000 || depth > 60)
@@ -58,16 +66,25 @@
         children = () =>
           [...node.childNodes].map((child) => walk(child, depth + 1)).join("");
       if (tag === "br") return "\n";
+      if (tag === "svg") {
+        const image = document.createElement("img");
+        image.src =
+          "data:image/svg+xml;charset=utf-8," +
+          encodeURIComponent(new XMLSerializer().serializeToString(node));
+        image.alt =
+          node.getAttribute("aria-label") ||
+          node.querySelector("title")?.textContent ||
+          "SVG";
+        return walk(image, depth + 1);
+      }
       if (tag === "img") {
         let url = node.getAttribute("src");
         if (!url) return node.alt ? escape(node.alt) : "";
         try {
           url = new URL(url, document.baseURI).href;
         } catch {
-          throw Error("clipper_image_invalid");
+          url = "invalid:";
         }
-        if (!/^(https?:|data:image\/|blob:)/i.test(url))
-          throw Error("clipper_image_invalid");
         let id = knownImages.get(url);
         if (!id) {
           if (images.length >= 100) throw Error("clipper_too_many_images");
@@ -75,6 +92,7 @@
           knownImages.set(url, id);
           const filename = (() => {
             try {
+              if (/^data:image\/svg\+xml/i.test(url)) return "image.svg";
               return decodeURIComponent(
                 new URL(url).pathname.split("/").pop() || "image",
               )
@@ -150,7 +168,7 @@
           "\n\n"
         );
       }
-      if (["svg", "iframe", "canvas", "video", "audio"].includes(tag)) {
+      if (["iframe", "canvas", "video", "audio"].includes(tag)) {
         const url = safeUrl(node.getAttribute("src") || "");
         return url
           ? `\n\n[${tag}](${url.replace(/[()<>\s]/g, (character) => encodeURIComponent(character))})\n\n`

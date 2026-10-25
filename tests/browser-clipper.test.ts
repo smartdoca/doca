@@ -168,6 +168,56 @@ afterEach(async () => {
   if (root) await rm(root, { recursive: true, force: true });
 });
 
+it("saves readable missing-image placeholders together with converted PNG assets under the existing protocol", async () => {
+  const p = await profile(),
+    c = await connect(),
+    imageId = randomUUID();
+  const png = await sharp({
+    create: { width: 32, height: 20, channels: 4, background: "#3370ff80" },
+  })
+    .png()
+    .toBuffer();
+  const input = capture(
+    p,
+    [
+      {
+        id: imageId,
+        name: "logo.png",
+        url: "https://source.example.test/logo.svg",
+      },
+    ],
+    `## 网页正文\n\n![Logo](${imageMarker(imageId)})\n\n[图片未保存：chart.avif（格式不支持或图片内容无效）](https://source.example.test/chart.avif)\n\n正文仍然保留。`,
+  );
+  const prepared = await external("POST", "/clips", c.token, input);
+  expect(prepared.statusCode, prepared.body).toBe(200);
+  const uploaded = await external(
+    "PUT",
+    `/clips/${input.requestId}/images/${imageId}`,
+    c.token,
+    png,
+    { "content-type": "application/octet-stream" },
+  );
+  expect(uploaded.statusCode, uploaded.body).toBe(200);
+  const committed = await external(
+    "POST",
+    `/clips/${input.requestId}/commit`,
+    c.token,
+    {},
+  );
+  expect(committed.statusCode, committed.body).toBe(200);
+  const document = await readAIDocument(
+    db,
+    { actor: owner },
+    committed.json().resourceId,
+  );
+  const body = JSON.stringify(document.value);
+  expect(body).toContain('"type":"image"');
+  expect(body).toContain("图片未保存：chart.avif");
+  expect(body).toContain("https://source.example.test/chart.avif");
+  expect(body).toContain("正文仍然保留");
+  expect(body).not.toContain("clipper.invalid");
+});
+
 it("archives original image bytes and rich text atomically, with durable retries and no server source fetch", async () => {
   const p = await profile(),
     c = await connect(),
@@ -742,6 +792,7 @@ it("downloads a complete private package without caching secrets or changing the
     "generated/assistant.js",
     "generated/assistant.css",
     "image-processing.js",
+    "svg-image.js",
   ])
     expect(files[name]?.length).toBeGreaterThan(0);
   const manifest = JSON.parse(new TextDecoder().decode(files["manifest.json"]));
