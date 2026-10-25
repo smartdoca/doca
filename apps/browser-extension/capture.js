@@ -116,9 +116,25 @@
       if (tag === "a") {
         const url = safeUrl(node.getAttribute("href") || "");
         const label = children();
-        return url
-          ? `[${label || escape(url)}](${url.replace(/[()<>\s]/g, (character) => encodeURIComponent(character))})`
-          : label;
+        if (!url) return label;
+        const target = url.replace(/[()<>\s]/g, (character) =>
+          encodeURIComponent(character),
+        );
+        // Keep media outside link labels: the document converter cannot parse
+        // nested image/link Markdown. Preserve the image and its target link.
+        const media = node.querySelector("img,svg");
+        if (media) {
+          const textOnly = node.cloneNode(true);
+          textOnly.querySelectorAll("img,svg").forEach((image) => image.remove());
+          const text =
+            textOnly.textContent.trim().replace(/\s+/g, " ") ||
+            node.getAttribute("aria-label") ||
+            media.getAttribute("alt") ||
+            media.querySelector("title")?.textContent ||
+            url;
+          return `\n\n${label.trim()}\n\n[${escape(text)}](${target})\n\n`;
+        }
+        return `[${label || escape(url)}](${target})`;
       }
       if (["strong", "b"].includes(tag)) return `**${children()}**`;
       if (["em", "i"].includes(tag)) return `*${children()}*`;

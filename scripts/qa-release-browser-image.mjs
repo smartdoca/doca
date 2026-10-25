@@ -15,12 +15,14 @@ import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {mkdtemp,rm} from 'node:fs/promises';
 import sharp from 'sharp';
 import {unzipSync} from 'fflate';
+import {JSDOM} from 'jsdom';
 const root=await mkdtemp('/tmp/doca-browser-release-');
 process.env.DOCA_CREDENTIAL_MASTER_KEY=randomBytes(32).toString('hex');
 process.env.DOCA_FILE_STORE_ID='local';
 process.env.DOCA_FILE_STORES_JSON=JSON.stringify({version:1,stores:{local:{provider:'local',root}}});
 const {openDatabase}=await import('./packages/db/src/index.ts');
 const {createUser}=await import('./packages/core/src/modules/identity/passwords.ts');
+const {readAIDocument}=await import('./packages/core/src/workflows/ai-documents.ts');
 const {createApp}=await import('./apps/server/src/app/create-app.ts');
 const {storageRuntime}=await import('./apps/server/src/adapters/storage.ts');
 const db=await openDatabase({driver:'sqlite',path:':memory:'});
@@ -37,7 +39,7 @@ try {
   await signIn();
   const zip=await call('POST','/me/browser-clipper/download',{});assert.equal(zip.statusCode,200,zip.body);
   const files=unzipSync(zip.rawPayload);assert.deepEqual(JSON.parse(new TextDecoder().decode(files['connection.json'])),{version:2,origin});
-  for(const name of ['manifest.json','background.js','login-bridge.js','content.js','ui.html','ui.js','icon.png']) assert(files[name]?.length>0,name);
+  for(const name of ['manifest.json','background.js','login-bridge.js','capture.js','content.js','ui.html','ui.js','icon.png']) assert(files[name]?.length>0,name);
   const verifier=randomBytes(32).toString('hex'),installationId=randomUUID(),challenge=createHash('sha256').update(verifier).digest('hex');
   const authorize=()=>call('POST','/me/browser-clipper/authorize',{version:2,installationId,challenge});
   const loginCode=ok(await authorize());
@@ -45,11 +47,16 @@ try {
   assert(grant.token.startsWith('doca_browser_v2_'));assert(Date.parse(grant.expiresAt)-Date.now()<=600000);
   assert.equal((await call('POST','/browser-clipper/token',{version:2,code:loginCode.code,verifier})).statusCode,401);
   const profile=ok(await call('POST','/me/browser-clipper/profiles',{name:'Release original images',enabled:true,isDefault:true,strategy:'create',libraryId:null,parentId:null,targetId:null,titleTemplate:'{title}',aiInstruction:''}));
-  const requestId=randomUUID(),imageId=randomUUID();
-  ok(await call('POST','/browser-clipper/clips',{version:1,requestId,profileId:profile.id,profileRevision:profile.revision,mode:'page',url:'https://source.example.test/article',title:'Retained original',capturedAt:new Date().toISOString(),markdown:'# Original content\\n\\n![original](https://clipper.invalid/images/'+imageId+')',images:[{id:imageId,name:'original.png',url:'https://source.example.test/original.png'}]},grant.token));
+  const dom=new JSDOM('<title>Retained original</title><article><h1>Original content</h1><a href="/image-details"><img src="/original.png" alt="original"></a><p>Original article ending.</p></article>',{url:'https://source.example.test/article',runScripts:'outside-only'});
+  Object.assign(dom.window,{TextEncoder});dom.window.eval(new TextDecoder().decode(files['capture.js']));
+  const capture=dom.window.DocaCapture.capture('page');dom.window.close();assert.equal(capture.images.length,1);
+  const requestId=randomUUID(),imageId=capture.images[0].id;
+  ok(await call('POST','/browser-clipper/clips',{version:1,requestId,profileId:profile.id,profileRevision:profile.revision,...capture},grant.token));
   const bytes=await sharp({create:{width:12,height:12,channels:3,background:'#3370ff'}}).png().toBuffer();
   const uploaded=await app.inject({method:'PUT',url:'/api/v1/browser-clipper/clips/'+requestId+'/images/'+imageId,headers:{host,origin:'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',authorization:'Bearer '+grant.token,'content-type':'application/octet-stream'},payload:bytes});ok(uploaded);
   const saved=ok(await call('POST','/browser-clipper/clips/'+requestId+'/commit',{},grant.token));
+  const document=await readAIDocument(db,{actor:user},saved.resourceId),body=JSON.stringify(document.value);
+  assert(body.includes('"type":"image"'));assert(body.includes('https://source.example.test/image-details'));assert(body.includes('Original article ending.'));
   const asset=await db.selectFrom('assets').select('id').where('resource_id','=',saved.resourceId).executeTakeFirstOrThrow();
   const original=await call('GET','/assets/'+asset.id+'/content');assert.equal(original.statusCode,200,original.body);assert(original.rawPayload.equals(bytes));
   ok(await call('POST','/auth/logout',{}));assert.equal((await call('GET','/browser-clipper/me',undefined,grant.token)).statusCode,401);
@@ -57,7 +64,7 @@ try {
   ok(await call('POST','/me/browser-clipper/revoke-all',{}));assert.equal((await call('GET','/browser-clipper/me',undefined,renewed.token)).statusCode,401);
   assert.equal((await authorize()).statusCode,403);
   assert.equal((await call('GET','/resources/'+saved.resourceId)).statusCode,200);
-  console.log(JSON.stringify({passed:true,version:${JSON.stringify(version)},arch:process.arch,uid:process.getuid(),health:200,web:200,publicExtensionPackage:true,singleUseWebsiteAuthorization:true,originalImageByteExact:true,websiteLogoutInvalidatesAccess:true,revokedConnectionCannotAutoRestore:true,savedContentPreserved:true}));
+  console.log(JSON.stringify({passed:true,version:${JSON.stringify(version)},arch:process.arch,uid:process.getuid(),health:200,web:200,publicExtensionPackage:true,linkedImageCapture:true,singleUseWebsiteAuthorization:true,originalImageByteExact:true,websiteLogoutInvalidatesAccess:true,revokedConnectionCannotAutoRestore:true,savedContentPreserved:true}));
 } finally {await app.close();await db.destroy();await rm(root,{recursive:true,force:true});}
 `;
 const run = promisify(execFile),
