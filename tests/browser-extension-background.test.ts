@@ -70,6 +70,7 @@ function runtime() {
       storage: { local: area(local), session: area(session) },
       runtime: {
         id: "fixture",
+        getManifest: () => ({ version: "0.2.7" }),
         getURL: (path: string) => "chrome-extension://fixture/" + path,
         onMessage: { addListener() {} },
         onInstalled: { addListener() {} },
@@ -99,6 +100,102 @@ function runtime() {
     handle: (message: any, sender: any) => context.handle(message, sender),
   };
 }
+it("checks the configured site's package numerically without login or pending-data writes", async () => {
+  const r = runtime();
+  delete r.session.authorization;
+  r.session.pending = { requestId: randomUUID(), markdown: "unsent" };
+  r.session.lastError = "existing error";
+  const before = JSON.stringify({ local: r.local, session: r.session });
+  r.context.chrome.runtime.getManifest = () => ({ version: "0.2.9" });
+  const requests: any[] = [];
+  let latest = "0.2.10";
+  r.context.fetch = async (url: string, options: any) => {
+    requests.push({ url, options });
+    return {
+      ok: true,
+      json: async () => ({
+        version: latest,
+        filename: `doca-browser-assistant-${latest}.zip`,
+      }),
+    };
+  };
+  const sender = {
+    id: "fixture",
+    url: "chrome-extension://fixture/ui.html#settings",
+  };
+  await expect(
+    r.handle({ type: "checkForUpdates" }, sender),
+  ).resolves.toMatchObject({
+    status: "available",
+    currentVersion: "0.2.9",
+    latestVersion: "0.2.10",
+    downloadUrl: origin + "/#/browser-assistant",
+  });
+  latest = "0.2.9.0";
+  expect((await r.handle({ type: "checkForUpdates" }, sender)).status).toBe(
+    "current",
+  );
+  latest = "0.2.8";
+  expect((await r.handle({ type: "checkForUpdates" }, sender)).status).toBe(
+    "ahead",
+  );
+  expect(
+    requests.every(
+      ({ url, options }) =>
+        url === origin + "/api/v1/browser-clipper/release" &&
+        options.credentials === "omit" &&
+        options.redirect === "error" &&
+        !options.headers,
+    ),
+  ).toBe(true);
+  expect(JSON.stringify({ local: r.local, session: r.session })).toBe(before);
+  await expect(
+    r.handle(
+      { type: "checkForUpdates" },
+      { id: "fixture", url: "https://source.test", tab: { id: 7 }, frameId: 0 },
+    ),
+  ).rejects.toThrow("clipper_scope_denied");
+});
+
+it("reports missing or invalid release metadata and network failures as failed checks", async () => {
+  const r = runtime();
+  for (const response of [
+    { ok: false, status: 404 },
+    { ok: true, json: async () => ({}) },
+    {
+      ok: true,
+      json: async () => ({
+        version: "65536.1",
+        filename: "doca-browser-assistant-65536.1.zip",
+      }),
+    },
+    {
+      ok: true,
+      json: async () => ({
+        version: "0.2.10",
+        filename: "https://other.test/package.zip",
+      }),
+    },
+    null,
+  ]) {
+    r.context.fetch = async () => {
+      if (!response) throw Error("network offline");
+      return response;
+    };
+    await expect(r.context.checkForUpdates()).resolves.toEqual({
+      status: "failed",
+      currentVersion: "0.2.7",
+      origin,
+    });
+  }
+  delete r.local.site;
+  r.context.boot = async () => {};
+  await expect(r.context.checkForUpdates()).resolves.toEqual({
+    status: "unconfigured",
+    currentVersion: "0.2.7",
+  });
+});
+
 it("opens standalone settings from a trusted top-frame page without requiring login", async () => {
   const r = runtime();
   delete r.session.authorization;
@@ -188,6 +285,40 @@ it("keeps escaped image labels safe and does not insert blob/data sources as per
     "before 图片未保存：a\\]b（格式不支持或图片内容无效） after",
   );
   expect(result.markdown).not.toContain("data:");
+});
+
+it("degrades unexpected image conversion exceptions and returns only current in-memory diagnostics", async () => {
+  const r = runtime(),
+    id = randomUUID();
+  r.context.bytes = async () => {
+    throw TypeError("unexpected decoder exception");
+  };
+  const capture = await r.context.prepareCapture(
+    {
+      url: "https://source.test/article",
+      capturedAt: "2026-10-26T00:00:00Z",
+      markdown: `Before ![Figure](https://clipper.invalid/images/${id}) After`,
+      images: [{ id, url: "https://source.test/f.png", name: "f.png" }],
+    },
+    7,
+  );
+  expect(capture.markdown).toContain("图片未保存：Figure（图片处理失败）");
+  expect(capture.images).toEqual([]);
+  const pending = { requestId: randomUUID(), origin, capture };
+  r.context.prepare = async () => {};
+  r.context.request = async () => ({
+    href: "/#/r/saved",
+    warnings: [
+      { code: "format-degraded", message: "Formula preserved as source" },
+    ],
+  });
+  const result = await r.context.submit(pending);
+  expect(result.warnings).toEqual([
+    { code: "imageProcessingFailed", message: "f.png: 图片处理失败" },
+    { code: "format-degraded", message: "Formula preserved as source" },
+  ]);
+  expect(JSON.stringify(r.session)).not.toContain("warnings");
+  expect(capture).not.toHaveProperty("warnings");
 });
 
 it("does not suppress authorization, quota or extension failures during preflight", async () => {
@@ -862,28 +993,53 @@ it("isolates shared UI session selection by site, browser connection and profile
   ).rejects.toThrow("clipper_scope_denied");
 });
 it("checks a saved browser chat before restoring it and preserves stale sessions and pending delivery", async () => {
-  const r = runtime(), id = randomUUID();
+  const r = runtime(),
+    id = randomUUID();
   r.session.assistant = { origin, connectionId, profileId: "profile", id };
   r.session.assistantDraft = { requestId: randomUUID(), text: "Keep my draft" };
   const saved = JSON.parse(JSON.stringify(r.session));
   const ui = { id: "fixture", url: "chrome-extension://fixture/ui.html" };
-  const message = { type: "assistantSession", operation: "get", origin, connectionId, profileId: "profile" };
+  const message = {
+    type: "assistantSession",
+    operation: "get",
+    origin,
+    connectionId,
+    profileId: "profile",
+  };
   const urls: string[] = [];
-  let status = 200, code = "";
+  let status = 200,
+    code = "";
   r.context.fetch = async (url: string) => {
     urls.push(url);
-    return { ok: status === 200, status, json: async () => ({ id, message: code }) };
+    return {
+      ok: status === 200,
+      status,
+      json: async () => ({ id, message: code }),
+    };
   };
   await expect(r.handle(message, ui)).resolves.toEqual({ sessionId: id });
-  expect(urls).toEqual([origin + `/api/v1/browser-clipper/assistant/sessions/${id}`]);
-  for (const failure of [{ status: 409, code: "clipper_profile_changed" }, { status: 404, code: "clipper_session_missing" }]) {
-    status = failure.status; code = failure.code;
+  expect(urls).toEqual([
+    origin + `/api/v1/browser-clipper/assistant/sessions/${id}`,
+  ]);
+  for (const failure of [
+    { status: 409, code: "clipper_profile_changed" },
+    { status: 404, code: "clipper_session_missing" },
+  ]) {
+    status = failure.status;
+    code = failure.code;
     await expect(r.handle(message, ui)).resolves.toEqual({ sessionId: null });
     expect(r.session).toEqual(saved);
   }
-  for (const failure of [{ status: 403, code: "clipper_scope_denied" }, { status: 503, code: "clipper_connection_failed" }]) {
-    status = failure.status; code = failure.code;
-    await expect(r.handle(message, ui)).rejects.toMatchObject({ message: code, status });
+  for (const failure of [
+    { status: 403, code: "clipper_scope_denied" },
+    { status: 503, code: "clipper_connection_failed" },
+  ]) {
+    status = failure.status;
+    code = failure.code;
+    await expect(r.handle(message, ui)).rejects.toMatchObject({
+      message: code,
+      status,
+    });
     expect(r.session).toEqual(saved);
   }
 });
@@ -1802,7 +1958,7 @@ for (const mode of ["page", "selection"]) {
 }
 
 for (const code of ["clipper_image_invalid", "clipper_image_failed"]) {
-  it(`allows AI material preparation after ${code} while keeping full capture strict`, async () => {
+  it(`keeps AI material and full capture usable after image validation returns ${code}`, async () => {
     const r = runtime(),
       profileId = randomUUID();
     const capture = {
@@ -1854,9 +2010,10 @@ for (const code of ["clipper_image_invalid", "clipper_image_failed"]) {
     ]);
     expect(r.session.assistantPending.capture).toEqual(capture);
     expect(r.session.transfer).toBeUndefined();
-    await expect(r.context.prepare(r.session.assistantPending)).rejects.toThrow(
-      code,
-    );
+    await expect(
+      r.context.prepare(r.session.assistantPending),
+    ).resolves.toMatchObject({ status: "pending" });
+    expect(r.session.assistantPending.capture).toEqual(capture);
   });
 }
 

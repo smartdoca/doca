@@ -1,9 +1,21 @@
 export const messages = {
   zh: {
+    "updates.installed": "当前版本 v{version}",
+    "updates.check": "检查更新",
+    "updates.checking": "正在检查更新…",
+    "updates.unconfigured": "填写 Doca 服务地址后可检查更新。",
+    "updates.available":
+      "发现新版 v{latest}，当前安装 v{current}。下载新包后需重新加载扩展。",
+    "updates.current": "已是本站提供的最新版本。",
+    "updates.ahead": "当前 v{current} 高于本站提供的 v{latest}。",
+    "updates.failed": "无法检查更新，请稍后重试。",
+    "updates.download": "前往 Doca 下载新包",
+    "updates.downloadPage": "打开插件下载页",
     imagePlaceholder: "图片未保存：{name}（{reason}）",
     imageUnsupported: "格式不支持或图片内容无效",
     imageReadFailed: "原图无法读取",
     imageCompressionFailed: "图片转换失败",
+    imageProcessingFailed: "图片处理失败",
     imageAnimationTooLarge: "动图超出大小上限",
     selectProfile: "选择收录规则",
     extensionSettings: "插件设置",
@@ -53,6 +65,7 @@ export const messages = {
     retry: "重试上次收录",
     saving: "正在保存正文与原图…",
     saved: "已保存到 Doca",
+    captureWarnings: "有 {count} 处内容未完整处理，文档已保留占位",
     open: "打开文档",
     connected: "已连接",
     notConnected: "连接你的 Doca",
@@ -114,10 +127,24 @@ export const messages = {
       "目标文档尚未就绪，请在 Doca 打开一次后重试。",
   },
   en: {
+    "updates.installed": "Installed version v{version}",
+    "updates.check": "Check for updates",
+    "updates.checking": "Checking for updates…",
+    "updates.unconfigured":
+      "Enter your Doca server address to check for updates.",
+    "updates.available":
+      "Version {latest} is available; {current} is installed. Download the package and reload the extension.",
+    "updates.current": "You have the latest version provided by this site.",
+    "updates.ahead":
+      "Installed version {current} is newer than this site's version {latest}.",
+    "updates.failed": "Unable to check for updates. Try again later.",
+    "updates.download": "Download the new package in Doca",
+    "updates.downloadPage": "Open the extension download page",
     imagePlaceholder: "Image not saved: {name} ({reason})",
     imageUnsupported: "unsupported format or invalid image",
     imageReadFailed: "source image could not be read",
     imageCompressionFailed: "image conversion failed",
+    imageProcessingFailed: "image processing failed",
     imageAnimationTooLarge: "animation exceeds the size limit",
     selectProfile: "Choose a capture rule",
     extensionSettings: "Extension settings",
@@ -173,6 +200,8 @@ export const messages = {
     retry: "Retry previous capture",
     saving: "Saving content and original images…",
     saved: "Saved to Doca",
+    captureWarnings:
+      "{count} items could not be fully processed; placeholders were saved",
     open: "Open document",
     connected: "Connected",
     notConnected: "Connect your Doca",
@@ -251,5 +280,9 @@ export const messages = {
       "Open the target document in Doca once and retry.",
   },
 };
-export const translate = (locale, key) =>
-  messages[locale]?.[key] || messages.en[key] || key;
+export const translate = (locale, key, params = {}) =>
+  (messages[locale]?.[key] || messages.en[key] || key).replace(
+    /\{(\w+)\}/g,
+    (match, name) =>
+      params[name] === undefined ? match : String(params[name]),
+  );

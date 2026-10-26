@@ -1433,9 +1433,11 @@ try {
   await settings.getByText("故障案例", { exact: true }).waitFor();
   const file = settings.waitForEvent("download");
   await settings
-    .getByRole("button", { name: "下载已配置扩展", exact: true })
+    .getByRole("button", { name: /^下载扩展 v\d+(?:\.\d+){0,3}$/ })
     .click();
-  assert.equal((await file).suggestedFilename(), "doca-browser-assistant.zip");
+  const downloadedName = (await file).suggestedFilename();
+  assert.match(downloadedName, /^doca-browser-assistant-\d+(?:\.\d+){0,3}\.zip$/);
+  assert.equal(await settings.locator(".clipper-package-filename").textContent(), downloadedName);
   await settings.locator(".account-menu > summary").click();
   await settings.locator('.account-menu [data-entry-id="doca.mcp"]').waitFor();
   const entries = await settings

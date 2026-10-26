@@ -28,6 +28,15 @@
     </header>
     <main>
       <div id="notice" role="status" aria-live="polite" hidden></div>
+      <div id="extension-update" role="status" aria-live="polite" hidden>
+        <p id="update-message"></p>
+        <a
+          id="update-download"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-label="updates.download"
+        ></a>
+      </div>
       <section id="capture-pane">
         <label class="field rule-field"
           ><span data-label="selectProfile"></span
@@ -81,6 +90,22 @@
       </section>
       <section id="connection-pane" hidden>
         <h1 data-label="extensionSettings"></h1>
+        <div class="extension-version">
+          <span id="installed-version"></span>
+          <button
+            id="check-updates"
+            type="button"
+            data-label="updates.check"
+          ></button>
+          <p id="update-status" role="status" aria-live="polite"></p>
+          <a
+            id="download-page"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-label="updates.downloadPage"
+            hidden
+          ></a>
+        </div>
         <a
           id="settings-link"
           class="rules-link"

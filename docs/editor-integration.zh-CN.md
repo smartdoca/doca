@@ -8,7 +8,7 @@
 
 | 格式 | 当前安装包 | 宿主入口 |
 | --- | --- | --- |
-| 富文本 | @smartdoca/slate 0.4.25 | document-editor.tsx |
+| 富文本 | @smartdoca/slate 0.4.26 | document-editor.tsx |
 | Markdown | @smartdoca/markdown 0.4.4 | markdown-editor.tsx |
 | 表格 | @smartdoca/sheet 0.2.12 | spreadsheet-editor.tsx |
 | 画布 | @smartdoca/canvas 0.5.15 | canvas-editor.tsx |
@@ -196,3 +196,5 @@ Canvas、Sheet、Slides 的评论标注默认隐藏，随宿主评论侧栏打�
 ## 正式筛选范围修复 — 2026-10-23
 
 Doca 0.2.11 锁定正式 Sheet 0.2.12，实现协同契约中用户明确批准的筛选范围规则。公开 exports、依赖和声明与 0.2.11 相同；改变的 Yjs 运行时通过现有 schema 6 一起提交正文和范围。原 baseline、epoch、checkpoint 与待确认更新保留。打开不修复旧短范围，显式确认有效条件才扩展。既有历史读取和默认值保持原状，无新增兼容适配或数据转换。回退保留前一 Sheet 0.2.11、宿主依赖/锁文件和后续内容及原生范围；详见[筛选验证](verification/sheet-filter-range-2026-10-23.md)。
+
+Slate 0.4.26 修复 Markdown 标点转义、参考文献方括号标签，以及价格和网址的公式误报。宿主使用正式 npm 包，175 个已安装分发文件与公开发布的源码构建一致。运行时改动限定在转换入口，codec、headless、Yjs 入口保留 0.4.25 字节，文档和协作结构均不变。浏览器收录接受可读降级，仅展示本次处理失败信息，不增加持久化报告。见 [Annual Reviews 验收](verification/annualreviews-capture-2026-10-26.md)。

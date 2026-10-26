@@ -16,6 +16,7 @@
       "dock.loading": "正在读取收录规则…",
       "dock.saving": "正在收录…",
       "dock.saved": "已保存到 Doca",
+      "dock.warnings": "有 {count} 处内容未完整处理，文档已保留占位",
       "dock.open": "打开文档",
       "dock.login": "登录 Doca",
       "dock.setup": "打开设置",
@@ -50,6 +51,8 @@
       "dock.loading": "Loading capture rules…",
       "dock.saving": "Capturing…",
       "dock.saved": "Saved to Doca",
+      "dock.warnings":
+        "{count} items could not be fully processed; placeholders were saved",
       "dock.open": "Open document",
       "dock.login": "Sign in to Doca",
       "dock.setup": "Open settings",
@@ -472,6 +475,22 @@
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       status.append(link);
+      if (result.warnings?.length) {
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = t("dock.warnings").replace(
+          "{count}",
+          result.warnings.length,
+        );
+        const list = document.createElement("ul");
+        for (const warning of result.warnings) {
+          const item = document.createElement("li");
+          item.textContent = warning.message;
+          list.append(item);
+        }
+        details.append(summary, list);
+        status.append(details);
+      }
       confirm.hidden = true;
     } catch (error) {
       showStatus(errorText(error), true);

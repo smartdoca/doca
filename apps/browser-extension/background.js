@@ -8,6 +8,10 @@ import { translate } from "./messages.js";
 
 // Source bytes stay in memory only; frozen tasks retain the existing URL manifest.
 const preparedImages = new Map();
+// Diagnostics live only for the current worker attempt, never in frozen tasks.
+const captureWarnings = new Map();
+const warningKey = (capture) =>
+  JSON.stringify([capture.url, capture.capturedAt, capture.markdown]);
 let preparedImageBytes = 0;
 function cacheImage(image, data, convertedSvg) {
   const old = preparedImages.get(image.id);
@@ -491,6 +495,63 @@ async function quickNoteRequest(message) {
     });
   return value;
 }
+function extensionVersionParts(version) {
+  if (
+    typeof version !== "string" ||
+    !/^(?:0|[1-9]\d{0,4})(?:\.(?:0|[1-9]\d{0,4})){0,3}$/.test(version)
+  )
+    throw Error("clipper_invalid_package_version");
+  const parts = version.split(".").map(Number);
+  if (parts.some((part) => part > 65535))
+    throw Error("clipper_invalid_package_version");
+  return Array.from({ length: 4 }, (_, index) => parts[index] ?? 0);
+}
+async function checkForUpdates() {
+  const currentVersion = chrome.runtime.getManifest().version;
+  let site;
+  try {
+    await boot();
+    site = (await local.get("site")).site;
+    if (!site) return { status: "unconfigured", currentVersion };
+    validateConfig(site);
+    const response = await fetch(
+      site.origin + "/api/v1/browser-clipper/release",
+      {
+        credentials: "omit",
+        redirect: "error",
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      },
+    );
+    if (!response.ok) throw Error("clipper_update_check_failed");
+    const release = await response.json();
+    const latest = extensionVersionParts(release.version),
+      current = extensionVersionParts(currentVersion);
+    if (
+      Object.keys(release).sort().join(",") !== "filename,version" ||
+      release.filename !== `doca-browser-assistant-${release.version}.zip`
+    )
+      throw Error("clipper_invalid_package_version");
+    const different = latest.findIndex(
+      (part, index) => part !== current[index],
+    );
+    return {
+      status:
+        different === -1
+          ? "current"
+          : latest[different] > current[different]
+            ? "available"
+            : "ahead",
+      currentVersion,
+      latestVersion: release.version,
+      filename: release.filename,
+      origin: site.origin,
+      downloadUrl: site.origin + "/#/browser-assistant",
+    };
+  } catch {
+    return { status: "failed", currentVersion, origin: site?.origin };
+  }
+}
 async function state(interactive = false) {
   const locale = (await local.get("locale")).locale || "zh";
   let config;
@@ -667,6 +728,9 @@ async function prepareCapture(capture, tabId) {
   )
     throw Error("clipper_invalid_input");
   const locale = (await local.get("locale")).locale || "zh";
+  // Extraction diagnostics are transient responses, never part of protocol v1
+  // or the persisted frozen capture. Document placeholders carry their context.
+  const { warnings: extractionWarnings = [], ...source } = capture;
   const failures = new Map(),
     images = [];
   const reasons = {
@@ -684,8 +748,16 @@ async function prepareCapture(capture, tabId) {
           : image,
       );
     } catch (error) {
-      if (!Object.hasOwn(reasons, error.message)) throw error;
-      failures.set(image.id, { image, reason: reasons[error.message] });
+      const code = error?.message || "";
+      if (
+        (code.startsWith("clipper_") && !Object.hasOwn(reasons, code)) ||
+        /quota|Extension context invalidated/i.test(code)
+      )
+        throw error;
+      failures.set(image.id, {
+        image,
+        reason: reasons[code] || "imageProcessingFailed",
+      });
     }
   }
   const markdown = capture.markdown.replace(
@@ -706,9 +778,19 @@ async function prepareCapture(capture, tabId) {
         : label;
     },
   );
-  return { ...capture, markdown, images };
+  const prepared = { ...source, markdown, images };
+  captureWarnings.set(warningKey(prepared), [
+    ...extractionWarnings,
+    ...[...failures.values()].map(({ image, reason }) => ({
+      code: reason,
+      message: `${image.name}: ${translate(locale, reason)}`,
+    })),
+  ]);
+  while (captureWarnings.size > 10)
+    captureWarnings.delete(captureWarnings.keys().next().value);
+  return prepared;
 }
-async function prepare(pending, requireImages = true) {
+async function prepare(pending) {
   const config = await connection();
   if (
     pending.connectionId !== config.connectionId ||
@@ -745,19 +827,37 @@ async function prepare(pending, requireImages = true) {
         name: image.name,
       },
     });
+    let data;
+    try {
+      data = await bytes(image, pending.tabId);
+    } catch (error) {
+      const code = error?.message || "";
+      if (
+        (code.startsWith("clipper_") &&
+          ![
+            "clipper_image_invalid",
+            "clipper_image_failed",
+            "clipper_image_compression_failed",
+            "clipper_animated_image_too_large",
+          ].includes(code)) ||
+        /quota|Extension context invalidated/i.test(code)
+      )
+        throw error;
+      continue;
+    }
     try {
       await request(
         `/clips/${pending.requestId}/images/${image.id}`,
         "PUT",
-        await bytes(image, pending.tabId),
+        data,
         true,
         pending,
       );
     } catch (error) {
-      // AI can read the staged Markdown even if a page image is unavailable.
-      // Keep its manifest intact: a later archive still requires every image.
+      // Conversion/decoding failures are local to this image, including errors
+      // detected by server-side image validation. Commit writes its placeholder.
+      // Network, authorization, quota and storage-write failures still reject.
       if (
-        requireImages ||
         ![
           "clipper_image_invalid",
           "clipper_image_failed",
@@ -787,7 +887,11 @@ async function submit(pending) {
     );
     if ((await session.get("pending")).pending?.requestId === pending.requestId)
       await session.remove(["pending", "lastError", "transfer"]);
-    return { ...result, url: pending.origin + result.href };
+    const warnings = [
+      ...(captureWarnings.get(warningKey(pending.capture)) || []),
+      ...(result.warnings || []),
+    ];
+    return { ...result, warnings, url: pending.origin + result.href };
   })()
     .catch(async (error) => {
       await session.set({ lastError: error.message });
@@ -826,6 +930,7 @@ async function handle(message, sender) {
   )
     throw Error("clipper_scope_denied");
   if (!fromPage && !fromUi) throw Error("clipper_scope_denied");
+  if (message.type === "checkForUpdates") return checkForUpdates();
   if (message.type === "openSettings") {
     await chrome.tabs.create({
       url: chrome.runtime.getURL("ui.html#settings"),
@@ -941,12 +1046,20 @@ async function handle(message, sender) {
       try {
         // Validate the stored selection against the current rule before mounting
         // its chat UI. Keep the original session and queued messages intact.
-        await request(`/assistant/sessions/${saved.id}`, "GET", undefined, false, saved);
+        await request(
+          `/assistant/sessions/${saved.id}`,
+          "GET",
+          undefined,
+          false,
+          saved,
+        );
       } catch (error) {
         if (
-          (error.status === 409 && error.message === "clipper_profile_changed") ||
+          (error.status === 409 &&
+            error.message === "clipper_profile_changed") ||
           (error.status === 404 && error.message === "clipper_session_missing")
-        ) return { sessionId: null };
+        )
+          return { sessionId: null };
         throw error;
       }
     }
@@ -988,7 +1101,7 @@ async function handle(message, sender) {
       );
       await session.set({ assistantPending: pending });
     }
-    await prepare(pending, false);
+    await prepare(pending);
     return {
       captureRequestId: pending.requestId,
       title: pending.capture.title,
