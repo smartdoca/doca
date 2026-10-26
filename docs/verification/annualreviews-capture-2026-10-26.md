@@ -29,3 +29,5 @@ Slate 0.4.26 在正式上游修复 Markdown 转义和公式判断，保留链接
 - 升级提示与带版本号下载已合并，见[单独验收](browser-extension-updates-2026-10-26.md)。容器验收脚本增加引用方括号、美元价格、真实公式降级和未提供坏图占位的检查，随正式双架构发布执行。
 
 原始 DOM、截图、浏览器刷新报告、图片清单、日志和隔离实例位于忽略目录 `artifacts/verification/annualreviews-capture-2026-10-26/`，不提交原始文章或执行输出。
+
+正式 GitHub Release 与 Docker Hub 双架构均已发布并独立核对，容器中的转换降级和坏图占位验收通过，见[0.2.20 发布验收](release-0.2.20.md)。
