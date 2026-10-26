@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://d.smartdoca.cc"><img src="docs/images/doca-logo.svg" alt="Doca" width="72" height="72"></a>
+  <a href="https://i.smartdoca.cc"><img src="docs/images/doca-logo.svg" alt="Doca" width="72" height="72"></a>
 </p>
 
 <h1 align="center">Doca</h1>
@@ -18,7 +18,8 @@
 </p>
 
 <p align="center">
-  <a href="https://d.smartdoca.cc"><b>Try the live demo →</b></a> &nbsp;·&nbsp;
+  <a href="https://i.smartdoca.cc"><b>Website →</b></a> &nbsp;·&nbsp;
+  <a href="https://d.smartdoca.cc">Try the live demo</a> &nbsp;·&nbsp;
   <a href="https://smartdoca.github.io/doca/#/en/">Documentation</a> &nbsp;·&nbsp;
   <a href="https://store.smartdoca.cc">Plugin marketplace</a> &nbsp;·&nbsp;
   <a href="#quick-start-with-docker">Self-host Doca</a>
@@ -93,6 +94,7 @@ Enable MCP in personal settings, create a service, and copy its generated client
 
 | Destination | Address |
 | --- | --- |
+| **Website** | [i.smartdoca.cc](https://i.smartdoca.cc) |
 | **Live demo** | [d.smartdoca.cc](https://d.smartdoca.cc) |
 | **Documentation** | [smartdoca.github.io/doca](https://smartdoca.github.io/doca/#/en/) |
 | **Plugin marketplace** | [store.smartdoca.cc](https://store.smartdoca.cc) |

@@ -4,7 +4,7 @@
 
 Doca 是面向个人和小团队的文档与知识工作台。本套文档随当前源码维护；安装与升级请对照 [0.2.19 发行说明](releases/0.2.19.zh-CN.md)，组件契约另行注明实现限制。
 
-[Demo 体验](https://d.smartdoca.cc) · [插件商城](https://store.smartdoca.cc)
+[官网](https://i.smartdoca.cc) · [Demo 体验](https://d.smartdoca.cc) · [插件商城](https://store.smartdoca.cc)
 
 **Demo 数据会不定期清理，请不要存放重要数据。**
 

@@ -10,7 +10,8 @@ See [Searching for repositories](https://docs.github.com/en/search-github/search
 These settings are applied on GitHub separately from the files in this repository:
 
 - Repository: `smartdoca/doca`
-- Website: `https://d.smartdoca.cc`
+- Website: `https://i.smartdoca.cc`
+- Live demo: `https://d.smartdoca.cc`
 - Description:
 
   > Doca｜开源文档管理与知识库，支持多人协同编辑、在线文档、Markdown、表格、幻灯片、画布和 AI 助手。Self-hosted document management, knowledge base & real-time collaborative editing for individuals and small teams.
@@ -23,7 +24,7 @@ These settings are applied on GitHub separately from the files in this repositor
 Keep the description bilingual so both Chinese and English searches can match.
 Chinese is the primary audience: `README.md` is the Chinese repository homepage,
 and `README.en.md` is the secondary English version linked near the top. Primary
-demo, documentation, marketplace, feature, and deployment links use Chinese copy
+website, demo, documentation, marketplace, feature, and deployment links use Chinese copy
 and the Chinese documentation routes on the default homepage.
 Use topics describing shipped capabilities and actual technologies. GitHub allows
 at most 20 topics; topic names use lowercase letters, numbers, and hyphens.
