@@ -4,6 +4,7 @@ import {
   type ConversionWarning,
 } from "@smartdoca/slate/conversion";
 import type { EditorValue } from "@smartdoca/slate";
+import { createEditorDocument } from "@smartdoca/slate/headless";
 
 const paragraph = (text: string) => ({
   type: "paragraph" as const,
@@ -17,7 +18,26 @@ export async function convertClipperMarkdown(
   assets: Map<string, string>,
   convert = importMarkdown,
   imageWarnings: ConversionWarning[] = [],
+  options: { maxDocumentBytes?: number; title?: string } = {},
 ) {
+  const literalContent = (): EditorValue => {
+    const content: EditorValue = [
+      ...(options.title ? [paragraph(options.title)] : []),
+      // Bound individual text blocks so a long fallback stays usable in the
+      // editor. Unicode matching preserves whole code points and every source
+      // character; no truncation or second parser is involved.
+      ...(markdown.match(/[\s\S]{1,8192}/gu) ?? [""]).map(paragraph),
+    ];
+    for (const [source, path] of assets)
+      if (markdown.includes(source))
+        content.push({
+          type: "image",
+          id: randomUUID(),
+          path,
+          children: [{ text: "" }],
+        });
+    return content;
+  };
   let value: EditorValue, warnings: ConversionWarning[];
   try {
     const result = await convert(markdown, {
@@ -42,26 +62,35 @@ export async function convertClipperMarkdown(
           "Content conversion failed; the original Markdown is preserved as plain text below.",
       },
     ];
-    value = [paragraph(markdown)];
-    for (const [source, path] of assets)
-      if (markdown.includes(source))
-        value.push({
-          type: "image",
-          id: randomUUID(),
-          path,
-          children: [{ text: "" }],
-        });
+    value = literalContent();
   }
   warnings = [...imageWarnings, ...warnings];
   // A visible note accompanies every reported degradation. The parser already
   // retains readable formula/code/HTML text and inserts missing-image markers.
-  for (const warning of warnings)
-    value.push(paragraph(`[Content not fully converted: ${warning.message}]`));
+  const withNotices = (content: EditorValue) => [
+    ...content,
+    ...warnings.map((warning) =>
+      paragraph(`[Content not fully converted: ${warning.message}]`),
+    ),
+  ];
+  let initialValue = withNotices(value);
+  if (
+    options.maxDocumentBytes !== undefined &&
+    Buffer.byteLength(JSON.stringify(createEditorDocument(initialValue))) >
+      options.maxDocumentBytes
+  ) {
+    warnings.push({
+      code: "format-degraded",
+      message:
+        "Formatted content exceeded the document import limit; the complete original Markdown is preserved as plain text, with uploaded images below.",
+    });
+    initialValue = withNotices(literalContent());
+  }
   const notes = warnings.map(
     (warning) => `[Content not fully converted: ${warning.message}]`,
   );
   return {
-    initialValue: value,
+    initialValue,
     warnings,
     markdown: markdown + (notes.length ? "\n\n" + notes.join("\n\n") : ""),
   };

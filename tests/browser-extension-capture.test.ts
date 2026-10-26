@@ -58,6 +58,27 @@ it("uses the selected range and the browser's current image source rather than c
   dom.window.close();
 });
 
+it("excludes CSS-hidden article copies and menus without losing below-the-fold content or visible images", () => {
+  const { dom, capture } = document(
+    `<title>Article</title><style>.closed{display:none}</style><div class="closed"><h2>Hidden article copy</h2><p>Duplicate references</p><img src="/hidden.png"><iframe src="/hidden-ad"></iframe></div><article><h1>Visible article</h1><img src="/visible.png"><p style="margin-top:10000px">Full article ending</p></article>`,
+  );
+  try {
+    const before = dom.window.document.body.innerHTML;
+    const result = capture("page");
+    expect(result.markdown).toContain("Visible article");
+    expect(result.markdown).toContain("Full article ending");
+    expect(result.markdown).not.toContain("Hidden article copy");
+    expect(result.markdown).not.toContain("Duplicate references");
+    expect(result.images.map((image: any) => image.url)).toEqual([
+      "https://web.example.test/visible.png",
+    ]);
+    expect(result.warnings).toBeUndefined();
+    expect(dom.window.document.body.innerHTML).toBe(before);
+  } finally {
+    dom.window.close();
+  }
+});
+
 it("captures inline SVG with its styles as an image while excluding hidden tracking pixels", () => {
   const { dom, capture } = document(
     `<article><h1>Vector figure</h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40"><title>Chart</title><style>.bar{fill:blue}</style><rect class="bar" width="30" height="40"/></svg><img src="/pixel.gif" style="display:none"></article>`,
@@ -69,6 +90,22 @@ it("captures inline SVG with its styles as an image while excluding hidden track
   expect(result.markdown).toContain("![Chart](https://clipper.invalid/images/");
   expect(result.markdown).not.toContain("pixel.gif");
   dom.window.close();
+});
+
+it("excludes a CSS-hidden SVG but retains definitions and styles inside a visible SVG", () => {
+  const { dom, capture } = document(
+    `<svg style="display:none"><title>Hidden vector</title><rect width="1" height="1"/></svg><svg xmlns="http://www.w3.org/2000/svg"><style>.bar{fill:blue}</style><defs><linearGradient id="color"><stop stop-color="red"/></linearGradient></defs><rect class="bar" width="20" height="20"/></svg>`,
+  );
+  try {
+    const result = capture("page");
+    expect(result.images).toHaveLength(1);
+    const source = decodeURIComponent(result.images[0].url);
+    expect(source).toContain(".bar{fill:blue}");
+    expect(source).toContain("linearGradient");
+    expect(source).not.toContain("Hidden vector");
+  } finally {
+    dom.window.close();
+  }
 });
 
 it("imports linked sponsor images and inline SVG without conversion warnings or losing their targets", async () => {
