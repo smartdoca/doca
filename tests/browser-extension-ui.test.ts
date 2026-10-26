@@ -216,6 +216,25 @@ it("keeps failed checks separate from connection errors and retries from setting
   } finally { f.dispose(); }
 });
 
+it.each([
+  ["clipper_too_many_pending", "未完成的收录任务过多", "Too many unfinished captures"],
+  ["clipper_external_rejection", "错误代码：clipper_external_rejection", "error code: clipper_external_rejection"],
+])("retains the current failure reason in settings and across a language change (%s)", async (code, chinese, english) => {
+  const f = await fixture("#settings");
+  try {
+    Object.assign(f.serverState, { error: code });
+    f.storageListeners[0]!({ lastError: { newValue: code } }, "session");
+    await flush();
+    expect(f.element("notice").textContent).toContain(chinese);
+    const locale = f.element<HTMLSelectElement>("locale");
+    locale.value = "en";
+    locale.dispatchEvent(new f.dom.window.Event("change", { bubbles: true }));
+    await flush();
+    expect(f.element("notice").textContent).toContain(english);
+    expect((f.serverState as any).error).toBe(code);
+  } finally { f.dispose(); }
+});
+
 it("opens the capture home and saves the page or selection using the chosen rule without mounting AI", async () => {
   const { dom, doc, element, mounts, calls, dispose } = await fixture();
   try {

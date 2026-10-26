@@ -106,8 +106,8 @@ function notice(message = "", success = false, url) {
 }
 function errorMessage(error) {
   const translated = t(error.message);
-  return translated === error.message && error.message.startsWith("clipper_")
-    ? t("generalError")
+  return translated === error.message && /^clipper_[a-z0-9_]{1,120}$/.test(error.message)
+    ? t("generalErrorWithCode", { code: error.message })
     : translated;
 }
 function savedNotice(result) {

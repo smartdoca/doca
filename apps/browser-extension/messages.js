@@ -97,6 +97,9 @@ export const messages = {
     aiDisabled: "当前连接未启用 AI，请在 Doca 的连接设置中开启。",
     expired: "激活配置已过期，请在 Doca 重新生成。",
     generalError: "操作未完成，请重试。",
+    generalErrorWithCode: "操作未完成（错误代码：{code}），请重试。",
+    clipper_too_many_pending:
+      "未完成的收录任务过多，请重试已有任务或等待旧任务到期后重新收录。",
     account: "当前账户",
     locale: "界面语言",
     clipper_not_connected: "请先粘贴 Doca 配置完成连接。",
@@ -237,6 +240,9 @@ export const messages = {
     expired:
       "The activation has expired. Generate a new configuration in Doca.",
     generalError: "The operation did not complete. Please retry.",
+    generalErrorWithCode: "The operation did not complete (error code: {code}). Please retry.",
+    clipper_too_many_pending:
+      "Too many unfinished captures. Retry an existing capture or wait for old tasks to expire.",
     account: "Current account",
     locale: "Language",
     clipper_not_connected: "Paste a Doca configuration to connect.",
