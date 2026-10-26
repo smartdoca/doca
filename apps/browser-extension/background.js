@@ -871,20 +871,50 @@ async function prepare(pending) {
   await session.remove("transfer");
   return progress;
 }
+async function rebuildExpiredCapture(pending, error, key) {
+  if (error.status !== 410 || error.message !== "clipper_capture_expired") throw error;
+  const config = await connection();
+  if (config.origin !== pending.origin || config.connectionId !== pending.connectionId)
+    throw Error("clipper_scope_denied");
+  const cache = await session.get(["pending", "assistantPending"]);
+  if (cache[key]?.requestId !== pending.requestId) throw error;
+  const fresh = { ...pending, requestId: crypto.randomUUID() }, updates = { [key]: fresh };
+  for (const other of ["pending", "assistantPending"])
+    if (cache[other]?.requestId === pending.requestId && cache[other].origin === pending.origin && cache[other].connectionId === pending.connectionId)
+      updates[other] = fresh;
+  await session.set(updates);
+  return fresh;
+}
+async function prepareAssistantCapture(pending) {
+  try { await prepare(pending); }
+  catch (error) {
+    pending = await rebuildExpiredCapture(pending, error, "assistantPending");
+    await prepare(pending);
+  }
+  return pending;
+}
 async function submit(pending) {
   if (submitting) {
     if (submitting.id !== pending.requestId) throw Error("clipper_busy");
     return submitting.promise;
   }
   const promise = (async () => {
-    await prepare(pending);
-    const result = await request(
-      `/clips/${pending.requestId}/commit`,
-      "POST",
-      {},
-      false,
-      pending,
-    );
+    let result;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await prepare(pending);
+        result = await request(
+          `/clips/${pending.requestId}/commit`, "POST", {}, false, pending,
+        );
+        break;
+      } catch (error) {
+        if (attempt) throw error;
+        // Rebuild a reclaimed slot once using the same material and scope;
+        // never rewrite the old frozen task or refetch another page.
+        pending = await rebuildExpiredCapture(pending, error, "pending");
+        submitting.id = pending.requestId;
+      }
+    }
     if ((await session.get("pending")).pending?.requestId === pending.requestId)
       await session.remove(["pending", "lastError", "transfer"]);
     const warnings = [
@@ -1101,7 +1131,7 @@ async function handle(message, sender) {
       );
       await session.set({ assistantPending: pending });
     }
-    await prepare(pending);
+    pending = await prepareAssistantCapture(pending);
     return {
       captureRequestId: pending.requestId,
       title: pending.capture.title,
@@ -1268,7 +1298,7 @@ async function handle(message, sender) {
           );
           await session.set({ assistantPending: pending });
         }
-        await prepare(pending);
+        pending = await prepareAssistantCapture(pending);
         captureRequestId = pending.requestId;
       }
       body = {

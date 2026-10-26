@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { build } from "vite";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -12,7 +12,8 @@ import { createUser, type Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import { readAIDocument } from "@core/workflows/ai-documents.js";
 import { createApp } from "@server/app/create-app.js";
-import { storageRuntime } from "@server/adapters/storage.js";
+import { createStorage, storageConfigForProfile, storageRuntime } from "@server/adapters/storage.js";
+import * as storageAdapters from "@server/adapters/storage.js";
 import {
   createBrowserClipper,
   imageMarker,
@@ -163,9 +164,155 @@ beforeEach(async () => {
   cookie = String(login.headers["set-cookie"]).split(";")[0]!;
 });
 afterEach(async () => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   await app?.close();
   await db?.destroy();
   if (root) await rm(root, { recursive: true, force: true });
+});
+
+async function pendingBatch(p: any, token: string, imageId?: string) {
+  const inputs = Array.from({ length: 10 }, (_, i) => capture(p,
+    i === 0 && imageId ? [{ id: imageId, name: "retained.png", url: "https://source.example.test/retained.png" }] : [],
+  ));
+  for (const input of inputs)
+    expect((await external("POST", "/clips", token, input)).statusCode).toBe(200);
+  return inputs;
+}
+async function makeIdle(inputs: ReturnType<typeof capture>[]) {
+  for (let i = 0; i < inputs.length; i++)
+    await db.updateTable("browser_clipper_receipts")
+      .set({ updated_at: new Date(Date.now() - (80 - i) * 60_000).toISOString() })
+      .where("request_id", "=", inputs[i]!.requestId).execute();
+}
+
+it("automatically frees only the needed oldest slots on each new capture and retains source/images until their original deadlines", async () => {
+  const p = await profile(), c = await connect(), imageId = randomUUID();
+  const completed = capture(p);
+  expect((await external("POST", "/clips", c.token, completed)).statusCode).toBe(200);
+  const saved = await external("POST", `/clips/${completed.requestId}/commit`, c.token, {});
+  expect(saved.statusCode, saved.body).toBe(200);
+  const inputs = await pendingBatch(p, c.token, imageId);
+  const bytes = await sharp({ create: { width: 12, height: 12, channels: 3, background: "blue" } }).png().toBuffer();
+  expect((await external("PUT", `/clips/${inputs[0]!.requestId}/images/${imageId}`, c.token, bytes, { "content-type": "application/octet-stream" })).statusCode).toBe(200);
+  await makeIdle(inputs);
+  const before = await db.selectFrom("browser_clipper_receipts").selectAll().where("status", "=", "pending").execute();
+  for (let i = 0; i < 2; i++) {
+    const fresh = await external("POST", "/clips", c.token, capture(p));
+    expect(fresh.statusCode, fresh.body).toBe(200);
+    const rows = await db.selectFrom("browser_clipper_receipts").selectAll().execute();
+    expect(rows.filter(r => r.status === "pending")).toHaveLength(10);
+    expect(rows.filter(r => r.status === "expired")).toHaveLength(i + 1);
+    const retired = rows.find(r => r.request_id === inputs[i]!.requestId)!;
+    const original = before.find(r => r.request_id === retired.request_id)!;
+    expect(retired).toEqual({ ...original, status: "expired", updated_at: retired.updated_at });
+    const retry = await external("POST", "/clips", c.token, inputs[i]);
+    expect(retry.statusCode).toBe(410);
+  }
+  const runtime = { ...storageRuntime(), root }, clipper = createBrowserClipper(db, runtime, async () => {});
+  const image = JSON.parse(before.find(r => r.request_id === inputs[0]!.requestId)!.images_json)[0];
+  const store = await db.selectFrom("storage_profiles").selectAll().where("id", "=", image.profileId).executeTakeFirstOrThrow();
+  const storage = createStorage(runtime), config = storageConfigForProfile(runtime, store);
+  await clipper.cleanup();
+  expect(await storage.read(config, image.key)).toEqual(bytes);
+  expect((await db.selectFrom("browser_clipper_receipts").selectAll().where("request_id", "=", inputs[1]!.requestId).executeTakeFirstOrThrow()).payload_json).not.toBe("");
+  await db.updateTable("browser_clipper_receipts").set({ expires_at: "2000-01-01T00:00:00.000Z" }).where("status", "=", "expired").execute();
+  await clipper.cleanup();
+  await clipper.cleanup();
+  await expect(storage.read(config, image.key)).rejects.toThrow();
+  const expired = await db.selectFrom("browser_clipper_receipts").selectAll().where("status", "=", "expired").execute();
+  expect(expired.every(r => r.payload_json === "" && r.images_json === "[]")).toBe(true);
+  expect((await external("POST", `/clips/${completed.requestId}/commit`, c.token, {})).json().resourceId).toBe(saved.json().resourceId);
+});
+
+it("keeps fresh work and resumed/uploading tasks active, and does not reclaim on an invalid new request", async () => {
+  const p = await profile(), c = await connect(), imageId = randomUUID();
+  const inputs = await pendingBatch(p, c.token, imageId);
+  expect((await external("POST", "/clips", c.token, capture(p))).statusCode).toBe(429);
+  await makeIdle(inputs);
+  const invalid = { ...capture(p), profileRevision: p.revision + 1 };
+  expect((await external("POST", "/clips", c.token, invalid)).statusCode).toBe(409);
+  expect(await db.selectFrom("browser_clipper_receipts").select("request_id").where("status", "=", "expired").execute()).toHaveLength(0);
+  expect((await external("POST", "/clips", c.token, inputs[1])).statusCode).toBe(200);
+  const bytes = await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } }).png().toBuffer();
+  expect((await external("PUT", `/clips/${inputs[0]!.requestId}/images/${imageId}`, c.token, bytes, { "content-type": "application/octet-stream" })).statusCode).toBe(200);
+  expect((await external("POST", "/clips", c.token, capture(p))).statusCode).toBe(200);
+  const expired = await db.selectFrom("browser_clipper_receipts").select("request_id").where("status", "=", "expired").execute();
+  expect(expired.map(r => r.request_id)).toEqual([inputs[2]!.requestId]);
+});
+
+it.each(["queued", "running", "awaiting_approval"] as const)("protects old material associated with %s browser AI jobs", async status => {
+  const p = await profile(), c = await connect(), inputs = await pendingBatch(p, c.token);
+  await makeIdle(inputs);
+  const now = new Date().toISOString(), sessionId = randomUUID(), jobId = randomUUID();
+  await db.insertInto("ai_sessions").values({ id: sessionId, user_id: owner.id, title: "Isolated browser job", model_id: null, resource_ids: "[]", archived: 0, revision: 1, created_at: now, updated_at: now }).execute();
+  await db.insertInto("browser_clipper_assistant_sessions").values({ session_id: sessionId, connection_id: c.connectionId, user_id: owner.id, profile_id: p.id, profile_revision: p.revision, resource_ids: '{"version":1,"ids":[]}', job_ids: JSON.stringify({ version: 1, ids: [jobId] }), created_at: now }).execute();
+  await db.insertInto("ai_jobs").values({ id: jobId, session_id: sessionId, user_id: owner.id, model_id: "unused-test-model", status, input: "{}", digest: "isolated", result: "", error: "", lease: null, lease_until: null, attempts: 0, cancelled: 0, created_at: now, updated_at: now }).execute();
+  const otherConnection = await connect();
+  expect((await external("POST", "/clips", otherConnection.token, capture(p))).statusCode).toBe(429);
+  expect(await db.selectFrom("browser_clipper_receipts").select("request_id").where("status", "=", "expired").execute()).toHaveLength(0);
+  await db.updateTable("ai_jobs").set({ status: "completed" }).where("id", "=", jobId).execute();
+  expect((await external("POST", "/clips", otherConnection.token, capture(p))).statusCode).toBe(200);
+});
+
+it("serializes simultaneous new captures without exceeding ten active slots", async () => {
+  const p = await profile(), c = await connect(), inputs = await pendingBatch(p, c.token);
+  await makeIdle(inputs);
+  const requests = [capture(p), capture(p)];
+  const results = await Promise.all(requests.map(input => external("POST", "/clips", c.token, input)));
+  expect(results.map(r => r.statusCode)).toEqual([200, 200]);
+  const rows = await db.selectFrom("browser_clipper_receipts").selectAll().execute();
+  expect(rows.filter(r => r.status === "pending")).toHaveLength(10);
+  expect(rows.filter(r => r.status === "expired")).toHaveLength(2);
+  for (const input of requests) expect((await external("POST", "/clips", c.token, input)).statusCode).toBe(200);
+  expect(await db.selectFrom("browser_clipper_receipts").select("request_id").execute()).toHaveLength(12);
+});
+
+it("keeps long-running object uploads active with a heartbeat while another capture reclaims an idle slot", async () => {
+  const p = await profile(), c = await connect(), imageId = randomUUID(), inputs = await pendingBatch(p, c.token, imageId);
+  await makeIdle(inputs);
+  let started!: () => void, release!: () => void;
+  const entered = new Promise<void>(resolve => { started = resolve; });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const original = storageAdapters.createStorage;
+  const spy = vi.spyOn(storageAdapters, "createStorage").mockImplementation(runtime => {
+    const storage = original(runtime);
+    return { ...storage, put: async (...args: Parameters<typeof storage.put>) => { started(); await gate; await storage.put(...args); } };
+  });
+  const clipper = createBrowserClipper(db, { ...storageRuntime(), root }, async () => {});
+  const bytes = await sharp({ create: { width: 8, height: 8, channels: 3, background: "blue" } }).png().toBuffer();
+  vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+  const uploading = clipper.upload(owner, c.connectionId, inputs[0]!.requestId, imageId, bytes);
+  try {
+    await entered;
+    await db.updateTable("browser_clipper_receipts").set({ updated_at: "2000-01-01T00:00:00.000Z" }).where("request_id", "=", inputs[0]!.requestId).execute();
+    await vi.advanceTimersByTimeAsync(60_000);
+    for (let turn = 0; turn < 10; turn++) await new Promise<void>(resolve => setImmediate(resolve));
+    const active = await db.selectFrom("browser_clipper_receipts").selectAll().where("request_id", "=", inputs[0]!.requestId).executeTakeFirstOrThrow();
+    expect(active.updated_at).not.toBe("2000-01-01T00:00:00.000Z");
+    expect((await external("POST", "/clips", c.token, capture(p))).statusCode).toBe(200);
+    release();
+    await expect(uploading).resolves.toMatchObject({ uploaded: true });
+    expect((await db.selectFrom("browser_clipper_receipts").selectAll().where("request_id", "=", inputs[0]!.requestId).executeTakeFirstOrThrow()).status).toBe("pending");
+  } finally {
+    release(); await uploading.catch(() => {}); vi.useRealTimers(); spy.mockRestore();
+  }
+});
+
+it("never reclaims another account's idle captures", async () => {
+  const p = await profile(), c = await connect(), inputs = await pendingBatch(p, c.token);
+  await makeIdle(inputs);
+  const ownerCookie = cookie;
+  const login = await request("POST", "/auth/login", { login: "clipperother", password }, { cookie: "" });
+  cookie = String(login.headers["set-cookie"]).split(";")[0]!;
+  const otherProfile = await profile(), otherConnection = await connect();
+  const otherInput = capture(otherProfile);
+  expect((await external("POST", "/clips", otherConnection.token, otherInput)).statusCode).toBe(200);
+  await db.updateTable("browser_clipper_receipts").set({ updated_at: "2000-01-01T00:00:00.000Z" }).where("request_id", "=", otherInput.requestId).execute();
+  const before = await db.selectFrom("browser_clipper_receipts").selectAll().where("user_id", "=", other.id).execute();
+  cookie = ownerCookie;
+  expect((await external("POST", "/clips", c.token, capture(p))).statusCode).toBe(200);
+  expect(await db.selectFrom("browser_clipper_receipts").selectAll().where("user_id", "=", other.id).execute()).toEqual(before);
 });
 
 it("saves readable missing-image placeholders together with converted PNG assets under the existing protocol", async () => {

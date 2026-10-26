@@ -100,6 +100,58 @@ function runtime() {
     handle: (message: any, sender: any) => context.handle(message, sender),
   };
 }
+it("rebuilds an expired capture once without changing its source, images, account or profile", async () => {
+  const r = runtime(), oldId = randomUUID();
+  const pending = { requestId: oldId, origin, connectionId, profileId: randomUUID(), profileRevision: 3, tabId: 7, capture: { mode: "selection", url: "https://source.test/original", markdown: "Frozen original", images: [{ id: randomUUID(), url: "https://source.test/figure.png" }] } };
+  r.session.pending = pending;
+  const prepared: any[] = [], commits: string[] = [];
+  r.context.prepare = async (value: any) => {
+    prepared.push(structuredClone(value));
+    if (prepared.length === 1) throw Object.assign(Error("clipper_capture_expired"), { status: 410 });
+  };
+  r.context.request = async (path: string) => { commits.push(path); return { href: "/#/r/saved", warnings: [] }; };
+  const result = await r.context.submit(pending);
+  expect(result.url).toBe(origin + "/#/r/saved");
+  expect(prepared).toHaveLength(2);
+  expect(prepared[1].requestId).not.toBe(oldId);
+  expect(prepared[1]).toEqual({ ...prepared[0], requestId: prepared[1].requestId });
+  expect(commits).toEqual([`/clips/${prepared[1].requestId}/commit`]);
+  expect(r.session.pending).toBeUndefined();
+});
+it.each(["again", "account", "newer capture", "quota"])("does not loop or overwrite another capture when expiry recovery meets %s", async change => {
+  const r = runtime(), pending = { requestId: randomUUID(), origin, connectionId, capture: { markdown: "Frozen", images: [] } };
+  r.session.pending = pending;
+  let calls = 0;
+  r.context.prepare = async () => {
+    calls++;
+    if (change === "account") r.session.authorization = { ...config, connectionId: randomUUID() };
+    if (change === "newer capture") r.session.pending = { requestId: "newer" };
+    throw Object.assign(Error(change === "quota" ? "clipper_too_many_pending" : "clipper_capture_expired"), { status: change === "quota" ? 429 : 410 });
+  };
+  await expect(r.context.submit(pending)).rejects.toThrow();
+  expect(calls).toBe(change === "again" ? 2 : 1);
+  if (change === "newer capture") expect(r.session.pending).toEqual({ requestId: "newer" });
+  if (change === "quota") expect(r.session.pending).toEqual(pending);
+});
+it("rebuilds an idle AI attachment once while retaining the exact selected material", async () => {
+  const r = runtime(), profileId = randomUUID(), requestId = randomUUID();
+  const pending = { requestId, origin, connectionId, profileId, profileRevision: 1, tabId: 7, capture: { mode: "selection", title: "Frozen selection", url: "https://source.test/original", markdown: "Original selected text", images: [] } };
+  r.session.assistantPending = pending;
+  r.session.pending = pending;
+  r.context.ensureLogin = async () => config;
+  r.context.chrome.tabs.get = async () => ({ id: 7, url: pending.capture.url });
+  const prepared: any[] = [];
+  r.context.prepare = async (value: any) => {
+    prepared.push(structuredClone(value));
+    if (prepared.length === 1) throw Object.assign(Error("clipper_capture_expired"), { status: 410 });
+  };
+  const result = await r.handle({ type: "assistantPreparePage", origin, connectionId, profileId, profileRevision: 1, tabId: 7 }, { id: "fixture", url: "chrome-extension://fixture/ui.html#assistant" });
+  expect(result.captureRequestId).not.toBe(requestId);
+  expect(prepared).toHaveLength(2);
+  expect(prepared[1].capture).toEqual(pending.capture);
+  expect(r.session.assistantPending.requestId).toBe(result.captureRequestId);
+  expect(r.session.pending.requestId).toBe(result.captureRequestId);
+});
 it("checks the configured site's package numerically without login or pending-data writes", async () => {
   const r = runtime();
   delete r.session.authorization;

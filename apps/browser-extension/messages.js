@@ -99,7 +99,7 @@ export const messages = {
     generalError: "操作未完成，请重试。",
     generalErrorWithCode: "操作未完成（错误代码：{code}），请重试。",
     clipper_too_many_pending:
-      "未完成的收录任务过多，请重试已有任务或等待旧任务到期后重新收录。",
+      "当前未完成的任务较多，请稍后重试。",
     account: "当前账户",
     locale: "界面语言",
     clipper_not_connected: "请先粘贴 Doca 配置完成连接。",
@@ -242,7 +242,7 @@ export const messages = {
     generalError: "The operation did not complete. Please retry.",
     generalErrorWithCode: "The operation did not complete (error code: {code}). Please retry.",
     clipper_too_many_pending:
-      "Too many unfinished captures. Retry an existing capture or wait for old tasks to expire.",
+      "Too many tasks are currently active. Please try again shortly.",
     account: "Current account",
     locale: "Language",
     clipper_not_connected: "Paste a Doca configuration to connect.",

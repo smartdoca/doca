@@ -203,8 +203,8 @@ it("shows successful capture together with every current processing issue as saf
   }
 });
 it.each([
-  ["zh", "clipper_too_many_pending", "未完成的收录任务过多"],
-  ["en", "clipper_too_many_pending", "Too many unfinished captures"],
+  ["zh", "clipper_too_many_pending", "当前未完成的任务较多"],
+  ["en", "clipper_too_many_pending", "Too many tasks are currently active"],
   ["zh", "clipper_external_rejection", "错误代码：clipper_external_rejection"],
   ["en", "clipper_external_rejection", "error code: clipper_external_rejection"],
 ])("keeps the current capture failure actionable in %s (%s)", async (locale, code, expected) => {

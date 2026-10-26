@@ -25,7 +25,7 @@
       "dock.failed": "收录未完成，请重试",
       "dock.failedWithCode": "收录未完成（错误代码：{code}）",
       clipper_too_many_pending:
-        "未完成的收录任务过多，请重试已有任务或等待旧任务到期后重新收录。",
+        "当前未完成的任务较多，请稍后重试。",
       "dock.connectionFailed": "暂时无法连接 Doca，请重试",
       "dock.selectionMissing": "请先选中需要收录的网页内容",
       "dock.updated": "插件已更新，请刷新当前网页",
@@ -64,7 +64,7 @@
       "dock.failed": "Capture incomplete. Please retry.",
       "dock.failedWithCode": "Capture incomplete (error code: {code}).",
       clipper_too_many_pending:
-        "Too many unfinished captures. Retry an existing capture or wait for old tasks to expire.",
+        "Too many tasks are currently active. Please try again shortly.",
       "dock.connectionFailed": "Could not connect to Doca. Please retry.",
       "dock.selectionMissing": "Select the webpage content to capture first",
       "dock.updated": "The extension was updated. Reload this page.",

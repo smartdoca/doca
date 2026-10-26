@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Doca Browser Assistant",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "minimum_chrome_version": "116",
   "description": "Capture pages and selected content with images from a floating toolbar, and use your Doca AI assistant.",
   "permissions": ["storage", "activeTab", "sidePanel", "scripting"],

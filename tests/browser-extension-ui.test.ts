@@ -217,7 +217,7 @@ it("keeps failed checks separate from connection errors and retries from setting
 });
 
 it.each([
-  ["clipper_too_many_pending", "未完成的收录任务过多", "Too many unfinished captures"],
+  ["clipper_too_many_pending", "当前未完成的任务较多", "Too many tasks are currently active"],
   ["clipper_external_rejection", "错误代码：clipper_external_rejection", "error code: clipper_external_rejection"],
 ])("retains the current failure reason in settings and across a language change (%s)", async (code, chinese, english) => {
   const f = await fixture("#settings");
