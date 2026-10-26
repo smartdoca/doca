@@ -287,9 +287,12 @@ it("keeps long-running object uploads active with a heartbeat while another capt
     await entered;
     await db.updateTable("browser_clipper_receipts").set({ updated_at: "2000-01-01T00:00:00.000Z" }).where("request_id", "=", inputs[0]!.requestId).execute();
     await vi.advanceTimersByTimeAsync(60_000);
-    for (let turn = 0; turn < 10; turn++) await new Promise<void>(resolve => setImmediate(resolve));
-    const active = await db.selectFrom("browser_clipper_receipts").selectAll().where("request_id", "=", inputs[0]!.requestId).executeTakeFirstOrThrow();
-    expect(active.updated_at).not.toBe("2000-01-01T00:00:00.000Z");
+    // Wait for the observable transaction commit, including PostgreSQL network
+    // I/O; draining event-loop turns alone only happened to work with SQLite.
+    await vi.waitFor(async () => {
+      const active = await db.selectFrom("browser_clipper_receipts").selectAll().where("request_id", "=", inputs[0]!.requestId).executeTakeFirstOrThrow();
+      expect(active.updated_at).not.toBe("2000-01-01T00:00:00.000Z");
+    });
     expect((await external("POST", "/clips", c.token, capture(p))).statusCode).toBe(200);
     release();
     await expect(uploading).resolves.toMatchObject({ uploaded: true });
