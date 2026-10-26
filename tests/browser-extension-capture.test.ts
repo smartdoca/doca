@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, it } from "vitest";
 import { importMarkdown } from "@smartdoca/slate/conversion";
+import { Node } from "slate";
 // @ts-expect-error jsdom is a runtime-only fixture dependency in this workspace.
 import { JSDOM } from "jsdom";
 const script = await readFile(
@@ -102,8 +103,72 @@ it("imports linked sponsor images and inline SVG without conversion warnings or 
       expect(model).toContain("https://web.example.test/" + target);
     expect(model).toContain("Article ending.");
     expect(result.markdown).not.toContain("[![");
-    expect(result.markdown).toContain("[Chart](https://web.example.test/chart)");
+    expect(result.markdown).toContain(
+      "[Chart](https://web.example.test/chart)",
+    );
     expect(result.markdown).not.toContain(".bar{fill:blue}");
+  } finally {
+    dom.window.close();
+  }
+});
+
+it("keeps multiline figure descriptions on a single image marker and preserves literal citations and prices", async () => {
+  const { dom, capture } = document(
+    `<article><p>Clinical [ETDRS] and $57 million.</p><a href="/figure"><img src="/f1.gif" alt="\n Figure 1 \n "></a><p>Article ending.</p></article>`,
+  );
+  try {
+    const result = capture("page");
+    expect(result.markdown).toContain(
+      "![Figure 1](https://clipper.invalid/images/",
+    );
+    const image = result.images[0];
+    const converted = await importMarkdown(
+      result.markdown.replaceAll(
+        "https://clipper.invalid/images/" + image.id,
+        image.id,
+      ),
+      {
+        resources: {
+          signal: new AbortController().signal,
+          async importResource() {
+            return "new-asset";
+          },
+        },
+      },
+    );
+    expect(converted.warnings).toEqual([]);
+    const body = JSON.stringify(converted.initialValue);
+    expect(
+      converted.initialValue.map((node) => Node.string(node)).join("\n"),
+    ).toContain("Clinical [ETDRS] and $57 million.");
+    for (const text of [
+      '"type":"image"',
+      "Article ending.",
+      "https://web.example.test/figure",
+    ])
+      expect(body).toContain(text);
+  } finally {
+    dom.window.close();
+  }
+});
+
+it("marks unsupported embedded media and preserves surrounding text while returning transient diagnostics", () => {
+  const { dom, capture } = document(
+    `<article><p>Before</p><canvas>Chart source text</canvas><video src="/movie.mp4">Video description</video><p>After</p></article>`,
+  );
+  try {
+    const result = capture("page");
+    for (const text of [
+      "Before",
+      "Embedded canvas not saved",
+      "Chart source text",
+      "Embedded video not saved",
+      "Video description",
+      "After",
+    ])
+      expect(result.markdown).toContain(text);
+    expect(result.warnings).toHaveLength(2);
+    expect(result.markdown).toContain("https://web.example.test/movie.mp4");
   } finally {
     dom.window.close();
   }

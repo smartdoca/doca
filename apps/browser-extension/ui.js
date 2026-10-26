@@ -35,7 +35,52 @@ if (isSettings) document.body.classList.add("settings-page");
 const dropdowns = [...document.querySelectorAll("select")].map((select) =>
   globalThis.DocaSelect.enhance(select),
 );
-const t = (key) => translate(state.locale, key);
+const t = (key, params) => translate(state.locale, key, params);
+let updateState = { status: "unconfigured" },
+  updateOrigin,
+  updateGeneration = 0,
+  updateCheckedAt = 0;
+function renderUpdates() {
+  $("installed-version").textContent = t("updates.installed", {
+    version: chrome.runtime.getManifest().version,
+  });
+  $("check-updates").disabled = !state.origin || updateState.status === "checking";
+  $("extension-update").hidden = updateState.status !== "available";
+  $("update-message").textContent = updateState.status === "available"
+    ? t("updates.available", { current: updateState.currentVersion, latest: updateState.latestVersion })
+    : "";
+  $("update-status").textContent = t("updates." + updateState.status, {
+    current: updateState.currentVersion,
+    latest: updateState.latestVersion,
+  });
+  for (const id of ["update-download", "download-page"]) {
+    $(id).hidden = !state.origin;
+    if (state.origin) $(id).href = state.origin + "/#/browser-assistant";
+    else $(id).removeAttribute("href");
+  }
+}
+async function refreshUpdates(force = false) {
+  const origin = state.origin;
+  if (!force && origin === updateOrigin && Date.now() - updateCheckedAt < 300_000) {
+    renderUpdates();
+    return;
+  }
+  updateOrigin = origin;
+  updateCheckedAt = Date.now();
+  const generation = ++updateGeneration;
+  updateState = { status: origin ? "checking" : "unconfigured" };
+  renderUpdates();
+  if (!origin) return;
+  try {
+    const result = await send({ type: "checkForUpdates" });
+    if (generation !== updateGeneration || state.origin !== origin) return;
+    updateState = result.origin === origin ? result : { status: "failed" };
+  } catch {
+    if (generation !== updateGeneration || state.origin !== origin) return;
+    updateState = { status: "failed" };
+  }
+  renderUpdates();
+}
 async function send(message) {
   const result = await chrome.runtime.sendMessage(message);
   if (!result?.ok)
@@ -64,6 +109,24 @@ function errorMessage(error) {
   return translated === error.message && error.message.startsWith("clipper_")
     ? t("generalError")
     : translated;
+}
+function savedNotice(result) {
+  notice(t("saved"), true, result.url);
+  if (!result.warnings?.length) return;
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = t("captureWarnings").replace(
+    "{count}",
+    result.warnings.length,
+  );
+  const list = document.createElement("ul");
+  for (const warning of result.warnings) {
+    const item = document.createElement("li");
+    item.textContent = warning.message;
+    list.append(item);
+  }
+  details.append(summary, list);
+  $("notice").append(details);
 }
 function selectTab(value) {
   tab = value;
@@ -322,6 +385,7 @@ function render() {
     tab = desired;
     void syncAssistant();
   } else selectTab(tab);
+  void refreshUpdates();
 }
 function profileDetail() {
   const profile = state.profiles.find(
@@ -400,6 +464,7 @@ async function action(work, label) {
   }
 }
 $("settings").onclick = () => selectTab("connection");
+$("check-updates").onclick = () => void refreshUpdates(true);
 $("back").onclick = () => selectTab(isSidebar ? "assistant" : "capture");
 $("locale").onchange = () => {
   const locale = $("locale").value;
@@ -482,12 +547,12 @@ for (const mode of ["page", "selection"])
         profileRevision: profile?.revision,
         tabId: activeTab?.id,
       });
-      notice(t("saved"), true, result.url);
+      savedNotice(result);
     }, "saving");
 $("retry").onclick = () =>
   action(async () => {
     const result = await send({ type: "retry" });
-    notice(t("saved"), true, result.url);
+    savedNotice(result);
   }, "saving");
 $("open-assistant").onclick = async () => {
   try {
@@ -536,6 +601,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
     refreshConnection();
 });
 window.addEventListener("focus", refreshConnection);
+setInterval(() => {
+  if (document.visibilityState === "visible") void refreshUpdates();
+}, 300_000);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") refreshConnection();
 });

@@ -8,7 +8,7 @@ The current checkout integrates five editors. Use actual installed exports; targ
 
 | Format | Installed package | Host entry |
 | --- | --- | --- |
-| Rich text | @smartdoca/slate 0.4.25 | document-editor.tsx |
+| Rich text | @smartdoca/slate 0.4.26 | document-editor.tsx |
 | Markdown | @smartdoca/markdown 0.4.4 | markdown-editor.tsx |
 | Spreadsheet | @smartdoca/sheet 0.2.12 | spreadsheet-editor.tsx |
 | Canvas | @smartdoca/canvas 0.5.15 | canvas-editor.tsx |
@@ -210,3 +210,5 @@ Verification uses isolated synthetic documents and databases, including native t
 ## Published filter-range fix — 2026-10-23
 
 Doca 0.2.11 pins official Sheet 0.2.12, which implements the explicitly approved filter range policy in the collaboration contract. Public exports, dependencies and declarations match 0.2.11; the changed Yjs runtimes author content and range together using schema 6. Original baselines, epochs, checkpoints and pending updates are preserved. Opening does not repair old short ranges; explicit criteria confirmation does. Existing historical readers/defaults remain unchanged, without a new compatibility adapter or data conversion. Keep 0.2.11 and the previous host pins/lockfile for rollback, preserving all later content and authored native ranges. See [filter verification](verification/sheet-filter-range-2026-10-23.md).
+
+Slate 0.4.26 fixes Markdown punctuation escapes, bracketed citation labels and false mathematical-source warnings for prices/URLs. The host pins the official npm archive; all 175 installed distribution files match the published source build. The conversion entry is the only changed runtime area; codec, headless and Yjs entrypoints retain the 0.4.25 bytes and document/collaboration schemas remain unchanged. Browser capture now accepts readable conversion degradation and exposes only current-attempt diagnostics, without adding persisted report fields. See [Annual Reviews acceptance](verification/annualreviews-capture-2026-10-26.md).

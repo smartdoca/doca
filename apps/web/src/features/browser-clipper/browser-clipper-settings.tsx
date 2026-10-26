@@ -50,6 +50,7 @@ type Destination = {
   libraryId: string | null;
   parentId: string | null;
 };
+type ExtensionRelease = { version: string; filename: string };
 type ProfileForm = Omit<Profile, "id" | "revision" | "destinationTitle"> & {
   id?: string;
   revision?: number;
@@ -75,6 +76,23 @@ export function BrowserClipperSettings() {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
+  const [release, setRelease] = useState<ExtensionRelease | null>(null),
+    [releaseError, setReleaseError] = useState(false);
+  async function loadRelease() {
+    setReleaseError(false);
+    try {
+      const value = await api<ExtensionRelease>("/browser-clipper/release");
+      if (
+        !/^\d+(?:\.\d+){0,3}$/.test(value.version) ||
+        value.filename !== `doca-browser-assistant-${value.version}.zip`
+      )
+        throw Error("clipper_invalid_package_version");
+      setRelease(value);
+    } catch {
+      setRelease(null);
+      setReleaseError(true);
+    }
+  }
   async function load() {
     const [p, c] = await Promise.all([
       api<{ items: Profile[] }>(base + "/profiles"),
@@ -85,6 +103,7 @@ export function BrowserClipperSettings() {
   }
   useEffect(() => {
     void load().catch((error) => setError(error.message));
+    void loadRelease();
   }, []);
   async function act(work: () => Promise<void>) {
     if (busy) return;
@@ -189,10 +208,16 @@ export function BrowserClipperSettings() {
       body: JSON.stringify({}),
     });
     if (!response.ok) throw Error((await response.json()).message);
+    const filename =
+      /^attachment; filename="(doca-browser-assistant-(\d+(?:\.\d+){0,3})\.zip)"$/.exec(
+        response.headers.get("Content-Disposition") || "",
+      );
+    if (!filename) throw Error(t("clipper.packageUnavailable"));
+    setRelease({ version: filename[2]!, filename: filename[1]! });
     const url = URL.createObjectURL(await response.blob()),
       link = document.createElement("a");
     link.href = url;
-    link.download = "doca-browser-assistant.zip";
+    link.download = filename[1]!;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -218,16 +243,36 @@ export function BrowserClipperSettings() {
       </header>
       <div className="clipper-download">
         <div>
-          <strong>{t("clipper.downloadTitle")}</strong>
+          <strong>
+            {release
+              ? t("clipper.packageName", { version: release.version })
+              : t("clipper.downloadTitle")}
+          </strong>
+          {release && (
+            <span className="clipper-package-filename">{release.filename}</span>
+          )}
           <p>{t("clipper.websiteSession")}</p>
+          {releaseError && (
+            <p role="alert">
+              {t("clipper.packageUnavailable")}{" "}
+              <button
+                className="clipper-rules-link"
+                onClick={() => void loadRelease()}
+              >
+                {t("clipper.retryPackage")}
+              </button>
+            </p>
+          )}
         </div>
         <button
           className="primary"
-          disabled={busy}
+          disabled={busy || !release}
           onClick={() => void act(download)}
         >
           <ArrowDownToLine size={17} />
-          {t("clipper.download")}
+          {release
+            ? t("clipper.downloadVersion", { version: release.version })
+            : t("clipper.download")}
         </button>
         <button
           className="clipper-rules-link"

@@ -24,7 +24,10 @@ import {
   profileInput,
   parseClipper,
 } from "../services/browser-clipper-protocol.js";
-import { browserExtensionPackage } from "../services/browser-clipper-package.js";
+import {
+  browserExtensionPackage,
+  browserExtensionRelease,
+} from "../services/browser-clipper-package.js";
 import { uploadLimits } from "../services/storage-policy.js";
 import {
   createBrowserQuickNote,
@@ -55,6 +58,7 @@ export function registerBrowserClipper(
     external = "/api/v1/browser-clipper";
   const service = createBrowserClipper(db, storage, notify);
   const quickNote = createBrowserQuickNote(db, origin, notify);
+  api.get(`${external}/release`, async () => browserExtensionRelease());
   api.get(`${external}/quick-note/targets`, browserClipperRoute, (req) =>
     quickNote.targets(req.headers.authorization),
   );
@@ -227,12 +231,13 @@ export function registerBrowserClipper(
   }));
   api.post(`${management}/download`, async (_req, reply) => {
     auth(_req);
+    const release = await browserExtensionRelease();
     const pack = await browserExtensionPackage();
     return reply
       .header("Content-Type", "application/zip")
       .header(
         "Content-Disposition",
-        'attachment; filename="doca-browser-assistant.zip"',
+        `attachment; filename="${release.filename}"`,
       )
       .send(pack({ version: 2, origin }));
   });

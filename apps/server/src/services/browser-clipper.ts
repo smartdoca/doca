@@ -1,8 +1,9 @@
 import { randomUUID, createHash } from "node:crypto";
 import sharp from "sharp";
 import { z } from "zod";
-import { importMarkdown } from "@smartdoca/slate/conversion";
 import { createEditorDocument } from "@smartdoca/slate/headless";
+import type { ConversionWarning } from "@smartdoca/slate/conversion";
+import { convertClipperMarkdown } from "./browser-clipper-conversion.js";
 import type { DB, Schema } from "@db/index.js";
 import { transact } from "@db/transactions.js";
 import { createContent } from "@core/workflows/resources.js";
@@ -423,12 +424,6 @@ export function createBrowserClipper(
         if (row.status === "completed") return result(row, actor, tx);
         const input = captureInput.parse(JSON.parse(row.payload_json)),
           images = imagesSchema.parse(JSON.parse(row.images_json));
-        if (
-          input.images.some(
-            (image) => !images.some((staged) => staged.id === image.id),
-          )
-        )
-          fail(409, "clipper_images_missing");
         const profile = snapshot.input;
         const title = captureTitle(profile, input);
         const escape = (text: string) => text.replace(/[\\[\]*_`<>]/g, "\\$&");
@@ -436,6 +431,35 @@ export function createBrowserClipper(
           encodeURIComponent(character),
         );
         let markdown = `# ${escape(title)}\n\n[${escape(input.title)}](${sourceUrl}) · ${input.capturedAt}\n\n${input.markdown}`;
+        const imageWarnings: ConversionWarning[] = [];
+        for (const image of input.images) {
+          if (images.some((staged) => staged.id === image.id)) continue;
+          const label = `Image not saved: ${image.name}`;
+          let replacement = escape(`[${label}]`);
+          try {
+            const url = new URL(image.url);
+            if (
+              ["http:", "https:"].includes(url.protocol) &&
+              !url.username &&
+              !url.password
+            )
+              replacement = `[${escape(label)}](${url.href.replace(/[()<>\s]/g, (character) => encodeURIComponent(character))})`;
+          } catch {
+            /* Embedded/invalid source addresses stay readable text. */
+          }
+          const marker = imageMarker(image.id).replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&",
+          );
+          markdown = markdown.replace(
+            new RegExp(`!\\[((?:\\\\.|[^\\]\\\\])*)\\]\\(${marker}\\)`, "g"),
+            () => replacement,
+          );
+          imageWarnings.push({
+            code: "resource-skipped",
+            message: `Image "${image.name}" was not received and was replaced by a source placeholder.`,
+          });
+        }
         const content = createContent(tx);
         const resource =
           profile.strategy === "append"
@@ -520,17 +544,13 @@ export function createBrowserClipper(
             .execute();
           await enqueueProjection(tx, "search-file", fileId, { fileId });
         }
-        const converted = await importMarkdown(markdown, {
-          resources: {
-            signal: new AbortController().signal,
-            async importResource(request) {
-              const asset = assetIds.get(request.url ?? request.path ?? "");
-              if (!asset) fail(400, "clipper_image_unlisted");
-              return asset;
-            },
-          },
-        });
-        if (converted.warnings.length) fail(400, "clipper_conversion_warning");
+        const converted = await convertClipperMarkdown(
+          markdown,
+          assetIds,
+          undefined,
+          imageWarnings,
+        );
+        markdown = converted.markdown;
         for (const [marker, id] of assetIds)
           markdown = markdown.replaceAll(marker, id);
         if (profile.strategy === "create")
@@ -566,7 +586,11 @@ export function createBrowserClipper(
           .where("user_id", "=", actor.id)
           .where("request_id", "=", requestId)
           .execute();
-        return result(next, actor, tx);
+        // Current-attempt diagnostics only: no schema or persisted payload change.
+        return {
+          ...(await result(next, actor, tx)),
+          warnings: converted.warnings,
+        };
       });
       if (saved.resourceId) await notify(saved.resourceId).catch(() => {});
       return saved;

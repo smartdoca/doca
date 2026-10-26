@@ -241,10 +241,6 @@ it("archives original image bytes and rich text atomically, with durable retries
   const prepared = await external("POST", "/clips", c.token, input);
   expect(prepared.statusCode, prepared.body).toBe(200);
   expect(
-    (await external("POST", `/clips/${input.requestId}/commit`, c.token, {}))
-      .statusCode,
-  ).toBe(409);
-  expect(
     await db
       .selectFrom("resources")
       .selectAll()
@@ -300,6 +296,137 @@ it("archives original image bytes and rich text atomically, with durable retries
     (await db.selectFrom("browser_clipper_receipts").selectAll().execute())[0]
       ?.payload_json,
   ).toBe("");
+});
+
+it("saves placeholders for images rejected during upload, preserving good images and later text", async () => {
+  const p = await profile(),
+    c = await connect(),
+    missing = randomUUID(),
+    valid = randomUUID();
+  const input = capture(
+    p,
+    [
+      {
+        id: missing,
+        name: "bad.avif",
+        url: "https://source.example.test/bad.avif",
+      },
+      {
+        id: valid,
+        name: "valid.png",
+        url: "https://source.example.test/valid.png",
+      },
+    ],
+    `Before\n\n![Broken](${imageMarker(missing)})\n\n![Valid](${imageMarker(valid)})\n\nAfter`,
+  );
+  expect((await external("POST", "/clips", c.token, input)).statusCode).toBe(
+    200,
+  );
+  expect(
+    (
+      await external(
+        "PUT",
+        `/clips/${input.requestId}/images/${missing}`,
+        c.token,
+        Buffer.from("not an image"),
+        { "content-type": "application/octet-stream" },
+      )
+    ).statusCode,
+  ).toBe(400);
+  const png = await sharp({
+    create: { width: 10, height: 10, channels: 3, background: "red" },
+  })
+    .png()
+    .toBuffer();
+  expect(
+    (
+      await external(
+        "PUT",
+        `/clips/${input.requestId}/images/${valid}`,
+        c.token,
+        png,
+        { "content-type": "application/octet-stream" },
+      )
+    ).statusCode,
+  ).toBe(200);
+  const saved = await external(
+    "POST",
+    `/clips/${input.requestId}/commit`,
+    c.token,
+    {},
+  );
+  expect(saved.statusCode, saved.body).toBe(200);
+  expect(saved.json().warnings).toHaveLength(1);
+  expect(saved.json().warnings[0].message).toContain("bad.avif");
+  const document = await readAIDocument(
+    db,
+    { actor: owner },
+    saved.json().resourceId,
+  );
+  const body = JSON.stringify(document.value);
+  for (const text of [
+    "Before",
+    "Image not saved: bad.avif",
+    "https://source.example.test/bad.avif",
+    "After",
+  ])
+    expect(body).toContain(text);
+  expect(body.match(/"type":"image"/g)).toHaveLength(1);
+  expect(body).not.toContain("clipper.invalid");
+});
+
+it("saves a degraded page and placeholders atomically and reports warnings only for this conversion attempt", async () => {
+  const p = await profile(),
+    c = await connect();
+  const input = capture(
+    p,
+    [],
+    "Before\n\n$x^2$\n\n<div>Readable HTML</div>\n\nAfter",
+  );
+  expect((await external("POST", "/clips", c.token, input)).statusCode).toBe(
+    200,
+  );
+  const committed = await external(
+    "POST",
+    `/clips/${input.requestId}/commit`,
+    c.token,
+    {},
+  );
+  expect(committed.statusCode, committed.body).toBe(200);
+  expect(committed.json().warnings.map((item: any) => item.code)).toEqual([
+    "format-degraded",
+    "unsupported-content",
+  ]);
+  const doc = await readAIDocument(
+    db,
+    { actor: owner },
+    committed.json().resourceId,
+  );
+  const body = JSON.stringify(doc.value);
+  for (const text of [
+    "Before",
+    "$x^2$",
+    "Readable HTML",
+    "After",
+    "Content not fully converted:",
+  ])
+    expect(body).toContain(text);
+  const retry = await external(
+    "POST",
+    `/clips/${input.requestId}/commit`,
+    c.token,
+    {},
+  );
+  expect(retry.statusCode, retry.body).toBe(200);
+  expect(retry.json().resourceId).toBe(committed.json().resourceId);
+  expect(retry.json()).not.toHaveProperty("warnings");
+  expect(
+    await db
+      .selectFrom("resources")
+      .select("id")
+      .where("kind", "=", "document")
+      .execute(),
+  ).toHaveLength(1);
 });
 
 for (const format of ["rich_text", "markdown"] as const)
@@ -797,6 +924,19 @@ it("downloads a complete private package without caching secrets or changing the
     expect(files[name]?.length).toBeGreaterThan(0);
   const manifest = JSON.parse(new TextDecoder().decode(files["manifest.json"]));
   expect(manifest.manifest_version).toBe(3);
+  const release = await request("GET", "/browser-clipper/release", undefined, {
+    cookie: "",
+    origin: extensionOrigin,
+  });
+  expect(release.statusCode, release.body).toBe(200);
+  expect(release.headers["cache-control"]).toBe("no-store");
+  expect(release.json()).toEqual({
+    version: manifest.version,
+    filename: `doca-browser-assistant-${manifest.version}.zip`,
+  });
+  expect(response.headers["content-disposition"]).toBe(
+    `attachment; filename="${release.json().filename}"`,
+  );
   expect(manifest.permissions).toContain("scripting");
   expect(config.activationSecret).toBeUndefined();
   expect(

@@ -18,6 +18,7 @@ async function fixture(
     pendingReference?: any;
     moduleReady?: Promise<void>;
     configuredState?: any;
+    updateReply?: any;
   } = {},
 ) {
   const dom = new JSDOM(await read("ui.html"), {
@@ -63,8 +64,13 @@ async function fixture(
     close: () => closes.push(true),
     chrome: {
       runtime: {
+        getManifest: () => ({ version: "0.2.7" }),
         sendMessage: async (message: any) => {
           calls.push(message);
+          if (message.type === "checkForUpdates") return {
+            ok: true,
+            value: { status: "current", currentVersion: "0.2.7", origin: state.origin, ...options.updateReply },
+          };
           if (message.type === "locale") state.locale = message.locale;
           if (message.type === "configure")
             Object.assign(
@@ -174,6 +180,42 @@ async function fixture(
   };
 }
 
+it.each(["", "#assistant", "#settings"])("shows a localized upgrade notice and the current site's download page in %s", async (hash) => {
+  const f = await fixture(hash, { updateReply: { status: "available", currentVersion: "0.2.7", latestVersion: "0.2.10" } });
+  try {
+    expect(f.element("extension-update").hidden).toBe(false);
+    expect(f.element("update-message").textContent).toContain("新版 v0.2.10");
+    expect(f.element("installed-version").textContent).toBe("当前版本 v0.2.7");
+    expect(f.element<HTMLAnchorElement>("update-download").href).toBe("https://doca.test/#/browser-assistant");
+    const locale = f.element<HTMLSelectElement>("locale");
+    locale.value = "en";
+    locale.dispatchEvent(new f.dom.window.Event("change", { bubbles: true }));
+    await flush();
+    expect(f.element("update-message").textContent).toContain("Version 0.2.10 is available");
+    expect(f.element("update-download").textContent).toBe("Download the new package in Doca");
+  } finally { f.dispose(); }
+});
+
+it("keeps failed checks separate from connection errors and retries from settings", async () => {
+  const updateReply = { status: "failed" };
+  const f = await fixture("#settings", { updateReply });
+  try {
+    expect(f.element("extension-update").hidden).toBe(true);
+    expect(f.element("update-status").textContent).toBe("无法检查更新，请稍后重试。");
+    expect(f.element("notice").hidden).toBe(true);
+    updateReply.status = "current";
+    f.element("check-updates").click();
+    await flush();
+    expect(f.element("update-status").textContent).toBe("已是本站提供的最新版本。");
+    expect(f.calls.filter((message) => message.type === "checkForUpdates")).toHaveLength(2);
+    f.element<HTMLInputElement>("endpoint").value = "https://other-doca.test";
+    f.element("endpoint-form").dispatchEvent(new f.dom.window.Event("submit", { bubbles: true, cancelable: true }));
+    await flush();
+    expect(f.element<HTMLAnchorElement>("download-page").href).toBe("https://other-doca.test/#/browser-assistant");
+    expect(f.calls.filter((message) => message.type === "checkForUpdates")).toHaveLength(3);
+  } finally { f.dispose(); }
+});
+
 it("opens the capture home and saves the page or selection using the chosen rule without mounting AI", async () => {
   const { dom, doc, element, mounts, calls, dispose } = await fixture();
   try {
@@ -223,6 +265,21 @@ it("opens the capture home and saves the page or selection using the chosen rule
   } finally {
     dispose();
   }
+});
+
+it("shows current processing failures alongside the saved document link", async () => {
+  const f = await fixture();
+  try {
+    const send = f.dom.window.chrome.runtime.sendMessage;
+    f.dom.window.chrome.runtime.sendMessage = async (message: any) => message.type === "capture" ? {ok:true,value:{url:"https://doca.test/#/r/saved",warnings:[{message:"Figure: image conversion failed"},{message:"<img src=x onerror=bad()>"}]}} : send(message);
+    f.element("capture-page").click();
+    await flush();
+    expect(f.element("notice").textContent).toContain("已保存到 Doca");
+    expect(f.doc.querySelector("#notice summary")?.textContent).toContain("2 处内容未完整处理");
+    expect(f.doc.querySelectorAll("#notice li")).toHaveLength(2);
+    expect(f.doc.querySelector("#notice img")).toBeNull();
+    expect(f.doc.querySelector("#notice a")?.getAttribute("href")).toBe("https://doca.test/#/r/saved");
+  } finally { f.dispose(); }
 });
 
 it("opens settings from the top-right action and returns to the capture home with its chosen rule", async () => {

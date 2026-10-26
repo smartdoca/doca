@@ -346,7 +346,7 @@ try {
     .selectAll()
     .where("user_id", "=", actor.id)
     .executeTakeFirstOrThrow();
-  assert.equal(JSON.parse(first.payload_json).images.length, 2);
+  assert.equal(JSON.parse(first.payload_json).images.length, 1);
   assert.equal(JSON.parse(first.images_json).length, 1);
   const strictCommit = await request(
     "POST",
@@ -354,8 +354,8 @@ try {
     {},
     auth.token,
   );
-  assert.equal(strictCommit.statusCode, 409, strictCommit.body);
-  assert.equal(strictCommit.json().message, "clipper_images_missing");
+  assert.equal(strictCommit.statusCode, 200, strictCommit.body);
+  assert.ok(strictCommit.json().resourceId);
   const second = await browser.newPage();
   await second.goto(sourceOrigin + "/two");
   await second.bringToFront();

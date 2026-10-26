@@ -1,5 +1,19 @@
 import { readdir, readFile } from "node:fs/promises";
 import { zipSync, strToU8 } from "fflate";
+
+export async function browserExtensionRelease() {
+  const manifest = JSON.parse(
+    await readFile(
+      new URL("../../../browser-extension/manifest.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const version: string = manifest.version;
+  if (!/^\d+(?:\.\d+){0,3}$/.test(version))
+    throw Error("clipper_invalid_package_version");
+  return { version, filename: `doca-browser-assistant-${version}.zip` };
+}
+
 const files = [
   "manifest.json",
   "background.js",

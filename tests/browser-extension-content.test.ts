@@ -173,6 +173,35 @@ it("confirms the chosen rule before capturing the page and freezes retry materia
     f.dispose();
   }
 });
+
+it("shows successful capture together with every current processing issue as safe text", async () => {
+  const f = await fixture([
+    connected(),
+    {
+      ok: true,
+      value: {
+        url: "https://doca.test/#/r/saved",
+        warnings: [
+          { message: "figure.png: 图片转换失败" },
+          { message: "<script>unsafe markup</script>" },
+        ],
+      },
+    },
+  ]);
+  try {
+    await f.click("page");
+    await f.get(".confirm").onclick({ isTrusted: true });
+    expect(f.get(".status").textContent).toContain("已保存到 Doca");
+    expect(f.get(".status summary").textContent).toContain(
+      "2 处内容未完整处理",
+    );
+    expect(f.shadow.querySelectorAll(".status li")).toHaveLength(2);
+    expect(f.get(".status script")).toBeNull();
+    expect(f.get(".status a").href).toBe("https://doca.test/#/r/saved");
+  } finally {
+    f.dispose();
+  }
+});
 it("captures the selected range from the permanent button without showing an automatic selection icon", async () => {
   const f = await fixture([
     connected(),

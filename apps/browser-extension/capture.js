@@ -15,7 +15,8 @@
     if (!["page", "selection"].includes(mode))
       throw Error("clipper_invalid_input");
     const images = [],
-      knownImages = new Map();
+      knownImages = new Map(),
+      warnings = [];
     let source, originals;
     if (mode === "selection") {
       const selection = window.getSelection(),
@@ -57,6 +58,24 @@
       });
     let nodes = 0;
     function walk(node, depth = 0) {
+      try {
+        return convertNode(node, depth);
+      } catch (error) {
+        if (
+          ["clipper_content_too_large", "clipper_too_many_images"].includes(
+            error?.message,
+          )
+        )
+          throw error;
+        const name = node.nodeName?.toLowerCase() || "content";
+        warnings.push({
+          code: "contentConversionFailed",
+          message: `${name}: content preserved as plain text after a conversion failure`,
+        });
+        return `\n\n[Content not fully converted: ${name}]\n\n${escape(node.textContent || "")}\n\n`;
+      }
+    }
+    function convertNode(node, depth) {
       if (++nodes > 100000 || depth > 60)
         throw Error("clipper_content_too_large");
       if (node.nodeType === Node.TEXT_NODE)
@@ -104,7 +123,9 @@
           })();
           images.push({ id, url, name: filename || "image" });
         }
-        return `![${escape(node.alt || "image")}](https://clipper.invalid/images/${id})`;
+        const alt =
+          (node.alt || "image").replace(/\s+/g, " ").trim() || "image";
+        return `![${escape(alt)}](https://clipper.invalid/images/${id})`;
       }
       if (tag === "pre") {
         const text = node.textContent,
@@ -125,12 +146,17 @@
         const media = node.querySelector("img,svg");
         if (media) {
           const textOnly = node.cloneNode(true);
-          textOnly.querySelectorAll("img,svg").forEach((image) => image.remove());
+          textOnly
+            .querySelectorAll("img,svg")
+            .forEach((image) => image.remove());
           const text =
             textOnly.textContent.trim().replace(/\s+/g, " ") ||
-            node.getAttribute("aria-label") ||
-            media.getAttribute("alt") ||
-            media.querySelector("title")?.textContent ||
+            node.getAttribute("aria-label")?.replace(/\s+/g, " ").trim() ||
+            media.getAttribute("alt")?.replace(/\s+/g, " ").trim() ||
+            media
+              .querySelector("title")
+              ?.textContent?.replace(/\s+/g, " ")
+              .trim() ||
             url;
           return `\n\n${label.trim()}\n\n[${escape(text)}](${target})\n\n`;
         }
@@ -186,9 +212,16 @@
       }
       if (["iframe", "canvas", "video", "audio"].includes(tag)) {
         const url = safeUrl(node.getAttribute("src") || "");
-        return url
-          ? `\n\n[${tag}](${url.replace(/[()<>\s]/g, (character) => encodeURIComponent(character))})\n\n`
-          : "";
+        const label = `Embedded ${tag} not saved`;
+        warnings.push({
+          code: "embeddedContentSkipped",
+          message: url ? `${label}: ${url}` : label,
+        });
+        return `\n\n${
+          url
+            ? `[${label}](${url.replace(/[()<>\s]/g, (character) => encodeURIComponent(character))})`
+            : `[${label}]`
+        }\n\n${children()}\n\n`;
       }
       const text = children();
       return [
@@ -223,6 +256,7 @@
       capturedAt: new Date().toISOString(),
       markdown,
       images,
+      ...(warnings.length ? { warnings } : {}),
     };
   }
   globalThis.DocaCapture = { capture };

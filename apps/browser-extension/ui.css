@@ -307,6 +307,46 @@ main:has(#assistant-pane:not([hidden])) > #notice {
   color: inherit;
   margin-left: 8px;
 }
+#extension-update {
+  flex: none;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid #e8def6;
+  border-radius: 8px;
+  background: #f7f3ff;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.6;
+}
+main:has(#assistant-pane:not([hidden])) > #extension-update {
+  margin: 10px 12px 0;
+}
+#extension-update p {
+  margin: 0 0 5px;
+}
+#extension-update a,
+.extension-version a {
+  color: var(--accent);
+}
+.extension-version {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+  font-size: 12px;
+}
+.extension-version #check-updates {
+  padding: 5px 8px;
+  color: var(--accent);
+}
+#connection-pane .extension-version p {
+  flex-basis: 100%;
+  margin: 0;
+  color: #778295;
+  font-size: 11px;
+}
 #assistant-pane {
   display: flex;
   flex-direction: column;

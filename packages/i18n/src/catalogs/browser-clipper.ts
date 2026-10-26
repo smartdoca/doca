@@ -15,6 +15,11 @@ export const browserClipperEn = {
   "clipper.chat.organizePrompt":
     "Organize the attached web material into structured notes, keep the source link, and save them using the selected capture profile.",
   "clipper.downloadTitle": "Bring Doca to your browser",
+  "clipper.packageName": "Doca Browser Assistant v{version}",
+  "clipper.downloadVersion": "Download extension v{version}",
+  "clipper.packageUnavailable":
+    "Unable to read the extension package version. Please retry.",
+  "clipper.retryPackage": "Retry",
   "clipper.rulesLink": "View capture destinations and rules",
   "clipper.connecting": "Connecting your browser",
   "clipper.connectingHelp":
@@ -132,6 +137,10 @@ export const browserClipperZh: Record<keyof typeof browserClipperEn, string> = {
   "clipper.chat.organizePrompt":
     "将附加的网页材料整理成结构清晰的笔记，保留来源链接，并按当前收录规则保存。",
   "clipper.downloadTitle": "把 Doca 带到浏览器",
+  "clipper.packageName": "Doca 浏览器助手 v{version}",
+  "clipper.downloadVersion": "下载扩展 v{version}",
+  "clipper.packageUnavailable": "无法读取插件包版本，请重试。",
+  "clipper.retryPackage": "重试",
   "clipper.rulesLink": "查看收录位置与规则",
   "clipper.connecting": "正在连接浏览器",
   "clipper.connectingHelp":

@@ -336,6 +336,13 @@
   border: 1px solid #e6ddf5;
   border-radius: 14px;
 }
+.clipper-package-filename {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #7b8595;
+  overflow-wrap: anywhere;
+}
 .clipper-download > div {
   flex: 1;
   min-width: 180px;
