@@ -4,7 +4,7 @@
 
 Doca is a document and knowledge workspace for individuals and small teams. These guides track current source; follow the [0.2.19 release notes](releases/0.2.19.md) for installation and upgrades. Package contracts identify their own implementation limits.
 
-[Live demo](https://d.smartdoca.cc) · [Plugin marketplace](https://store.smartdoca.cc)
+[Website](https://i.smartdoca.cc) · [Live demo](https://d.smartdoca.cc) · [Plugin marketplace](https://store.smartdoca.cc)
 
 **Demo data is cleared from time to time. Please do not store important data in the demo.**
 

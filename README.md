@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://d.smartdoca.cc"><img src="docs/images/doca-logo.svg" alt="Doca" width="72" height="72"></a>
+  <a href="https://i.smartdoca.cc"><img src="docs/images/doca-logo.svg" alt="Doca" width="72" height="72"></a>
 </p>
 
 <h1 align="center">Doca</h1>
@@ -18,7 +18,8 @@
 </p>
 
 <p align="center">
-  <a href="https://d.smartdoca.cc"><b>在线体验 →</b></a> &nbsp;·&nbsp;
+  <a href="https://i.smartdoca.cc"><b>官网 →</b></a> &nbsp;·&nbsp;
+  <a href="https://d.smartdoca.cc">在线体验</a> &nbsp;·&nbsp;
   <a href="https://smartdoca.github.io/doca/#/zh-cn/">详细文档</a> &nbsp;·&nbsp;
   <a href="https://store.smartdoca.cc">插件商城</a> &nbsp;·&nbsp;
   <a href="#docker-快速开始">部署自己的 Doca</a>
@@ -95,6 +96,7 @@ Doca 提供 Streamable HTTP MCP 服务，让支持 MCP 的客户端发现已授�
 
 | 入口 | 地址 |
 | --- | --- |
+| **官网** | [i.smartdoca.cc](https://i.smartdoca.cc) |
 | **在线体验** | [d.smartdoca.cc](https://d.smartdoca.cc) |
 | **详细文档** | [smartdoca.github.io/doca](https://smartdoca.github.io/doca/#/zh-cn/) |
 | **插件商城** | [store.smartdoca.cc](https://store.smartdoca.cc) |
