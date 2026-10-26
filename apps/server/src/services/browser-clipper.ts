@@ -16,6 +16,7 @@ import { lockAIUser } from "@core/modules/ai/config.js";
 import type { Actor } from "@core/modules/identity/passwords.js";
 import { requireBrowserConnection } from "@core/modules/browser-clipper/access.js";
 import { appendImportedContent } from "@core/modules/documents/append-import.js";
+import { MAX_INITIAL_IMPORT_BYTES } from "@core/modules/documents/import.js";
 import { AppError, fail } from "@core/shared/errors.js";
 import {
   createStorage,
@@ -549,6 +550,13 @@ export function createBrowserClipper(
           assetIds,
           undefined,
           imageWarnings,
+          {
+            title,
+            maxDocumentBytes:
+              profile.strategy === "create"
+                ? MAX_INITIAL_IMPORT_BYTES
+                : undefined,
+          },
         );
         markdown = converted.markdown;
         for (const [marker, id] of assetIds)

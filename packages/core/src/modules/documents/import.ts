@@ -17,6 +17,8 @@ import { DocaYjsDocument } from "./codecs/rich-runtime.js";
 import { provisionSurface } from "./codecs/surfaces.js";
 import { indexDocumentReferences } from "./references.js";
 
+export const MAX_INITIAL_IMPORT_BYTES = 768 * 1024;
+
 // Imports establish a NEW resource/epoch, never overwrite an active replica.
 // Asset remapping requires a portable bundle contract; reject rather than leak
 // another resource's asset IDs or silently strip embedded media.
@@ -70,7 +72,7 @@ export async function importInitialContent(
     )
   )
     fail(400, "不支持的导入目标");
-  if (Buffer.byteLength(JSON.stringify(value)) > 768 * 1024)
+  if (Buffer.byteLength(JSON.stringify(value)) > MAX_INITIAL_IMPORT_BYTES)
     fail(413, "转换后的文档不能超过 768 KB");
   const assets = await tx
     .selectFrom("assets")

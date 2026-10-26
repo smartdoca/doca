@@ -32,6 +32,31 @@
     } else {
       source = document.body.cloneNode(true);
       originals = [...document.images];
+      // Hidden menus/modals can contain another full article or reference list.
+      // Use the original page's computed display before removing styles from
+      // the clone. Descendants of a display:none ancestor cannot be visible.
+      const elements = [...document.body.querySelectorAll("*")],
+        copies = [...source.querySelectorAll("*")],
+        hidden = new Set();
+      for (let i = 0; i < copies.length; i++) {
+        const original = elements[i];
+        if (!original) continue;
+        if (hidden.has(original.parentElement)) {
+          hidden.add(original);
+          continue;
+        }
+        // SVG styles/defs are not displayed themselves, but are required when
+        // serializing the complete visible SVG as an image.
+        if (
+          original.namespaceURI === "http://www.w3.org/2000/svg" &&
+          original.localName !== "svg"
+        )
+          continue;
+        if (window.getComputedStyle(original).display === "none") {
+          copies[i].setAttribute("hidden", "");
+          hidden.add(original);
+        }
+      }
     }
     const copies = [...source.querySelectorAll("img")];
     for (let i = 0; i < copies.length; i++) {

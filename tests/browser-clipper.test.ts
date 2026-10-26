@@ -429,6 +429,96 @@ it("saves a degraded page and placeholders atomically and reports warnings only 
   ).toHaveLength(1);
 });
 
+it("saves all source text and original images when native formatting exceeds the import limit", async () => {
+  const p = await profile(),
+    c = await connect(),
+    image = randomUUID();
+  const markdown = `Before\n\n${Array.from({ length: 8000 }, (_, i) => `Paragraph ${i}`).join("\n\n")}\n\n![Figure](${imageMarker(image)})\n\nAfter`;
+  const input = capture(
+    p,
+    [
+      {
+        id: image,
+        name: "figure.png",
+        url: "https://source.example.test/figure.png",
+      },
+    ],
+    markdown,
+  );
+  expect((await external("POST", "/clips", c.token, input)).statusCode).toBe(
+    200,
+  );
+  const png = await sharp({
+    create: { width: 8, height: 8, channels: 3, background: "#3370ff" },
+  })
+    .png()
+    .toBuffer();
+  expect(
+    (
+      await external(
+        "PUT",
+        `/clips/${input.requestId}/images/${image}`,
+        c.token,
+        png,
+        { "content-type": "application/octet-stream" },
+      )
+    ).statusCode,
+  ).toBe(200);
+  const saved = await external(
+    "POST",
+    `/clips/${input.requestId}/commit`,
+    c.token,
+    {},
+  );
+  expect(saved.statusCode, saved.body).toBe(200);
+  expect(saved.json().warnings).toContainEqual(
+    expect.objectContaining({
+      code: "format-degraded",
+      message: expect.stringContaining("exceeded the document import limit"),
+    }),
+  );
+  expect(
+    (
+      await db
+        .selectFrom("resources")
+        .select("title")
+        .where("id", "=", saved.json().resourceId)
+        .executeTakeFirstOrThrow()
+    ).title,
+  ).toBe(input.title);
+  const document = await readAIDocument(
+    db,
+    { actor: owner },
+    saved.json().resourceId,
+  );
+  const serialized = JSON.stringify(document.value);
+  expect(serialized).toContain("Before");
+  expect(serialized).toContain("Paragraph 0");
+  expect(serialized).toContain("Paragraph 7999");
+  expect(serialized).toContain("After");
+  expect(serialized).not.toContain("clipper.invalid");
+  const asset = await db
+    .selectFrom("assets")
+    .select("id")
+    .where("resource_id", "=", saved.json().resourceId)
+    .executeTakeFirstOrThrow();
+  expect(document.value).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ type: "image", path: asset.id }),
+    ]),
+  );
+  const stored = await request("GET", `/assets/${asset.id}/content`);
+  expect(stored.rawPayload.equals(png)).toBe(true);
+  const retry = await external(
+    "POST",
+    `/clips/${input.requestId}/commit`,
+    c.token,
+    {},
+  );
+  expect(retry.statusCode).toBe(200);
+  expect(retry.json().resourceId).toBe(saved.json().resourceId);
+});
+
 for (const format of ["rich_text", "markdown"] as const)
   it(`appends structured ${format} content once without replacing existing text or concurrent captures`, async () => {
     const target = await createContent(db).create(owner, {

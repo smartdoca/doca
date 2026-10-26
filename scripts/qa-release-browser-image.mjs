@@ -61,12 +61,19 @@ try {
   assert(body.includes('"type":"image"'));assert(body.includes('https://source.example.test/image-details'));assert(body.includes('Original article ending.'));assert(document.value.map(node=>Node.string(node)).join('\\n').includes('Clinical [ETDRS] and $57 million.'));assert(body.includes('Content not fully converted:'));assert(body.includes('Image not saved: bad.avif'));
   const asset=await db.selectFrom('assets').select('id').where('resource_id','=',saved.resourceId).executeTakeFirstOrThrow();
   const original=await call('GET','/assets/'+asset.id+'/content');assert.equal(original.statusCode,200,original.body);assert(original.rawPayload.equals(bytes));
+  const expandedRequestId=randomUUID(),expandedMarkdown='Full source beginning.\\n\\n'+Array.from({length:8000},(_,i)=>'Paragraph '+i).join('\\n\\n')+'\\n\\nFull source ending.';
+  ok(await call('POST','/browser-clipper/clips',{...capture,version:1,requestId:expandedRequestId,profileId:profile.id,profileRevision:profile.revision,title:'Long-form capture',markdown:expandedMarkdown,images:[]},grant.token));
+  const expandedSaved=ok(await call('POST','/browser-clipper/clips/'+expandedRequestId+'/commit',{},grant.token));
+  assert(expandedSaved.warnings.some(w=>w.code==='format-degraded'&&w.message.includes('exceeded the document import limit')));
+  const expandedDocument=await readAIDocument(db,{actor:user},expandedSaved.resourceId),expandedText=expandedDocument.value.map(node=>Node.string(node)).join('\\n');
+  assert(expandedText.includes('Full source beginning.'));assert(expandedText.includes('Paragraph 7999'));assert(expandedText.includes('Full source ending.'));
+  assert.equal((await db.selectFrom('resources').select('title').where('id','=',expandedSaved.resourceId).executeTakeFirstOrThrow()).title,'Long-form capture');
   ok(await call('POST','/auth/logout',{}));assert.equal((await call('GET','/browser-clipper/me',undefined,grant.token)).statusCode,401);
   await signIn();const fresh=ok(await authorize()),renewed=ok(await call('POST','/browser-clipper/token',{version:2,code:fresh.code,verifier}));assert.equal(renewed.connectionId,grant.connectionId);
   ok(await call('POST','/me/browser-clipper/revoke-all',{}));assert.equal((await call('GET','/browser-clipper/me',undefined,renewed.token)).statusCode,401);
   assert.equal((await authorize()).statusCode,403);
   assert.equal((await call('GET','/resources/'+saved.resourceId)).statusCode,200);
-  console.log(JSON.stringify({passed:true,version:${JSON.stringify(version)},arch:process.arch,uid:process.getuid(),health:200,web:200,publicExtensionPackage:true,linkedImageCapture:true,degradedContentSaved:true,failedImagePlaceholderSaved:true,transientConversionWarnings:true,singleUseWebsiteAuthorization:true,originalImageByteExact:true,websiteLogoutInvalidatesAccess:true,revokedConnectionCannotAutoRestore:true,savedContentPreserved:true}));
+  console.log(JSON.stringify({passed:true,version:${JSON.stringify(version)},arch:process.arch,uid:process.getuid(),health:200,web:200,publicExtensionPackage:true,linkedImageCapture:true,degradedContentSaved:true,expandedDocumentSaved:true,failedImagePlaceholderSaved:true,transientConversionWarnings:true,singleUseWebsiteAuthorization:true,originalImageByteExact:true,websiteLogoutInvalidatesAccess:true,revokedConnectionCannotAutoRestore:true,savedContentPreserved:true}));
 } finally {await app.close();await db.destroy();await rm(root,{recursive:true,force:true});}
 `;
 const run = promisify(execFile),
