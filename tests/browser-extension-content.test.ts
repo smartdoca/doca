@@ -202,6 +202,23 @@ it("shows successful capture together with every current processing issue as saf
     f.dispose();
   }
 });
+it.each([
+  ["zh", "clipper_too_many_pending", "当前未完成的任务较多"],
+  ["en", "clipper_too_many_pending", "Too many tasks are currently active"],
+  ["zh", "clipper_external_rejection", "错误代码：clipper_external_rejection"],
+  ["en", "clipper_external_rejection", "error code: clipper_external_rejection"],
+])("keeps the current capture failure actionable in %s (%s)", async (locale, code, expected) => {
+  const connection = connected();
+  connection.value.locale = locale;
+  const f = await fixture([connection, { ok: false, error: code }]);
+  try {
+    await f.click("page");
+    await f.get(".confirm").onclick({ isTrusted: true });
+    expect(f.get(".status").textContent).toContain(expected);
+    expect(f.get(".confirm").disabled).toBe(false);
+    expect(f.get(".confirm").hidden).toBe(false);
+  } finally { f.dispose(); }
+});
 it("captures the selected range from the permanent button without showing an automatic selection icon", async () => {
   const f = await fixture([
     connected(),

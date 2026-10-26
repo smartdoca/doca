@@ -35,6 +35,8 @@ import {
 } from "./browser-clipper-protocol.js";
 
 type Profile = Schema["browser_clipper_profiles"];
+const MAX_PENDING_CAPTURES = 10;
+const CAPTURE_IDLE_MS = 30 * 60_000;
 const snapshotSchema = z
   .object({
     version: z.literal(1),
@@ -239,6 +241,12 @@ export function createBrowserClipper(
           )
             fail(409, "clipper_request_conflict");
           await usable(old, actor, tx);
+          if (old.status === "pending")
+            await tx.updateTable("browser_clipper_receipts")
+              .set({ updated_at: new Date().toISOString() })
+              .where("user_id", "=", actor.id)
+              .where("request_id", "=", old.request_id)
+              .execute();
           return result(old, actor, tx);
         }
         const profile = await tx
@@ -257,12 +265,41 @@ export function createBrowserClipper(
         );
         const pending = await tx
           .selectFrom("browser_clipper_receipts")
-          .select("request_id")
+          .select(["request_id", "connection_id", "updated_at"])
           .where("user_id", "=", actor.id)
           .where("status", "=", "pending")
           .where("expires_at", ">", new Date().toISOString())
+          .orderBy("updated_at")
+          .orderBy("created_at")
+          .orderBy("request_id")
           .execute();
-        if (pending.length >= 10) fail(429, "clipper_too_many_pending");
+        let remaining = pending.length;
+        if (remaining >= MAX_PENDING_CAPTURES) {
+          // The user lock also guards AI submission and capture commits. Protect
+          // all material on a connection with active browser AI work.
+          const active = await tx.selectFrom("browser_clipper_assistant_sessions as b")
+            .innerJoin("ai_jobs as j", "j.session_id", "b.session_id")
+            .select("b.connection_id")
+            .where("b.user_id", "=", actor.id)
+            .where("j.user_id", "=", actor.id)
+            .where("j.status", "in", ["queued", "running", "awaiting_approval"])
+            .execute();
+          const protectedConnections = new Set(active.map(row => row.connection_id));
+          const idleBefore = new Date(Date.now() - CAPTURE_IDLE_MS).toISOString();
+          for (const candidate of pending) {
+            if (remaining < MAX_PENDING_CAPTURES) break;
+            if (candidate.updated_at > idleBefore || protectedConnections.has(candidate.connection_id)) continue;
+            // Retire only the slot. Frozen source, images and the original
+            // retention deadline remain intact until normal cleanup.
+            await tx.updateTable("browser_clipper_receipts")
+              .set({ status: "expired", updated_at: new Date().toISOString() })
+              .where("user_id", "=", actor.id)
+              .where("request_id", "=", candidate.request_id)
+              .execute();
+            remaining--;
+          }
+        }
+        if (remaining >= MAX_PENDING_CAPTURES) fail(429, "clipper_too_many_pending");
         const now = new Date().toISOString();
         const row: Schema["browser_clipper_receipts"] = {
           user_id: actor.id,
@@ -364,7 +401,29 @@ export function createBrowserClipper(
         key = objectKey(objectId, mime),
         config = storageConfigForProfile(runtime, profile);
       await checkStorage(db, actor.id, body.length);
-      await storage.put(config, key, body, mime, source.name);
+      const touch = () => transact(db, async tx => {
+        await lockAIUser(tx, actor.id);
+        const current = await receipt(actor.id, requestId, tx);
+        await usable(current, actor, tx);
+        if (current.status !== "pending") fail(409, "clipper_capture_not_pending");
+        await tx.updateTable("browser_clipper_receipts")
+          .set({ updated_at: new Date().toISOString() })
+          .where("user_id", "=", actor.id)
+          .where("request_id", "=", requestId)
+          .execute();
+      });
+      await touch();
+      let touching: Promise<unknown> | undefined;
+      const heartbeat = setInterval(() => {
+        touching ??= touch().catch(() => {}).finally(() => { touching = undefined; });
+      }, 60_000);
+      heartbeat.unref();
+      try {
+        await storage.put(config, key, body, mime, source.name);
+      } finally {
+        clearInterval(heartbeat);
+        await touching;
+      }
       let committed = false;
       try {
         await transact(db, async (tx) => {
@@ -613,7 +672,10 @@ export function createBrowserClipper(
             eb("status", "=", "pending"),
             eb.and([
               eb("status", "=", "expired"),
-              eb("images_json", "!=", "[]"),
+              eb.or([
+                eb("images_json", "!=", "[]"),
+                eb("payload_json", "!=", ""),
+              ]),
             ]),
           ]),
         )

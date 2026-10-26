@@ -68,12 +68,26 @@ try {
   const expandedDocument=await readAIDocument(db,{actor:user},expandedSaved.resourceId),expandedText=expandedDocument.value.map(node=>Node.string(node)).join('\\n');
   assert(expandedText.includes('Full source beginning.'));assert(expandedText.includes('Paragraph 7999'));assert(expandedText.includes('Full source ending.'));
   assert.equal((await db.selectFrom('resources').select('title').where('id','=',expandedSaved.resourceId).executeTakeFirstOrThrow()).title,'Long-form capture');
+  const idle=[];
+  for(let index=0;index<10;index++){
+    const input={...capture,version:1,requestId:randomUUID(),profileId:profile.id,profileRevision:profile.revision,title:'Idle capture '+index,markdown:'Retained frozen source '+index,images:[]};
+    ok(await call('POST','/browser-clipper/clips',input,grant.token));idle.push(input);
+  }
+  await db.updateTable('browser_clipper_receipts').set({updated_at:new Date(Date.now()-3600000).toISOString()}).where('status','=','pending').execute();
+  const originalIdle=await db.selectFrom('browser_clipper_receipts').selectAll().where('status','=','pending').execute();
+  const recoveredInput={...idle[0],requestId:randomUUID(),title:'Automatic recovery',markdown:'Saved after automatically reclaiming an idle slot.'};
+  ok(await call('POST','/browser-clipper/clips',recoveredInput,grant.token));
+  const retired=await db.selectFrom('browser_clipper_receipts').selectAll().where('status','=','expired').execute();assert.equal(retired.length,1);
+  const oldIdle=originalIdle.find(row=>row.request_id===retired[0].request_id);assert.equal(retired[0].payload_json,oldIdle.payload_json);assert.equal(retired[0].expires_at,oldIdle.expires_at);
+  assert.equal((await db.selectFrom('browser_clipper_receipts').select('request_id').where('status','=','pending').execute()).length,10);
+  const recovered=ok(await call('POST','/browser-clipper/clips/'+recoveredInput.requestId+'/commit',{},grant.token));
+  assert(JSON.stringify((await readAIDocument(db,{actor:user},recovered.resourceId)).value).includes('Saved after automatically reclaiming an idle slot.'));
   ok(await call('POST','/auth/logout',{}));assert.equal((await call('GET','/browser-clipper/me',undefined,grant.token)).statusCode,401);
   await signIn();const fresh=ok(await authorize()),renewed=ok(await call('POST','/browser-clipper/token',{version:2,code:fresh.code,verifier}));assert.equal(renewed.connectionId,grant.connectionId);
   ok(await call('POST','/me/browser-clipper/revoke-all',{}));assert.equal((await call('GET','/browser-clipper/me',undefined,renewed.token)).statusCode,401);
   assert.equal((await authorize()).statusCode,403);
   assert.equal((await call('GET','/resources/'+saved.resourceId)).statusCode,200);
-  console.log(JSON.stringify({passed:true,version:${JSON.stringify(version)},arch:process.arch,uid:process.getuid(),health:200,web:200,publicExtensionPackage:true,linkedImageCapture:true,degradedContentSaved:true,expandedDocumentSaved:true,failedImagePlaceholderSaved:true,transientConversionWarnings:true,singleUseWebsiteAuthorization:true,originalImageByteExact:true,websiteLogoutInvalidatesAccess:true,revokedConnectionCannotAutoRestore:true,savedContentPreserved:true}));
+  console.log(JSON.stringify({passed:true,version:${JSON.stringify(version)},arch:process.arch,uid:process.getuid(),health:200,web:200,publicExtensionPackage:true,linkedImageCapture:true,degradedContentSaved:true,expandedDocumentSaved:true,automaticPendingRecovery:true,failedImagePlaceholderSaved:true,transientConversionWarnings:true,singleUseWebsiteAuthorization:true,originalImageByteExact:true,websiteLogoutInvalidatesAccess:true,revokedConnectionCannotAutoRestore:true,savedContentPreserved:true}));
 } finally {await app.close();await db.destroy();await rm(root,{recursive:true,force:true});}
 `;
 const run = promisify(execFile),
