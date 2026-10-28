@@ -29,7 +29,7 @@ export type RegionController = {
   flush?(): void | Promise<void>;
   capture(): unknown | null;
   valid(anchor: any): boolean;
-  reveal(anchor: any): void;
+  reveal(anchor: any, source: "comment" | "ai"): void;
   label(anchor: any): string;
   /** Source offset and viewport top, without moving selection or scrolling. */
   position?(anchor: any, id: string): { order: number; top: number } | null;
@@ -58,6 +58,7 @@ export function RegionComments({
   createAction,
   candidateIds,
   onOpenChange,
+  onHighlightChange,
 }: {
   detail: Detail;
   user: User | null;
@@ -74,9 +75,10 @@ export function RegionComments({
   createAction: MutableRefObject<() => void>;
   candidateIds?: string[];
   onOpenChange?(open: boolean): void;
+  onHighlightChange(id: string | null): void;
 }) {
   const { t } = useI18n();
-  useAIBridge(detail.resource.id, { capture: () => controller?.capture(), describe: a => controller?.label(a) ?? t("comment.quote"), reveal: a => { if (!controller?.valid(a)) throw Error(t("comment.quoteStale")); controller.reveal(a); }, ready: () => !!controller && connected && !dirty, flush: () => controller?.flush?.() });
+  useAIBridge(detail.resource.id, { capture: () => controller?.capture(), describe: a => controller?.label(a) ?? t("comment.quote"), reveal: a => { if (!controller?.valid(a)) throw Error(t("comment.quoteStale")); controller.reveal(a, "ai"); }, ready: () => !!controller && connected && !dirty, flush: () => controller?.flush?.() });
   const [open, setOpen] = useState(false),
     [sidebarReady, setSidebarReady] = useState(false),
     [revealComment, setRevealComment] = useState<string | null>(null),
@@ -88,6 +90,8 @@ export function RegionComments({
   const [publication, setPublication] = useState<CommentPublication | null>(null);
   const panel = useRef<HTMLElement>(null);
   useEffect(() => { onOpenChange?.(open); }, [open, onOpenChange]);
+  useEffect(() => { if (!open) onHighlightChange(null); }, [open, onHighlightChange]);
+  useEffect(() => () => onHighlightChange(null), [onHighlightChange]);
   // Native markers must include every page even while the drawer is closed.
   useCommentPages(detail.resource.id, true, detail.commentsNextCursor, loadMoreComments, open);
   const rail = useRef<HTMLDivElement>(null);
@@ -234,7 +238,7 @@ export function RegionComments({
     const root = roots.find((r) => r.id === (c?.parent_id ?? c?.id));
     if (root) {
       setActive(root.id);
-      controller.reveal(JSON.parse(root.anchor!));
+      controller.reveal(JSON.parse(root.anchor!), "comment");
     }
   }, [targetComment, controller]);
   useEffect(() => {
@@ -382,7 +386,8 @@ export function RegionComments({
                 select={(id) => {
                   const comment = roots.find((c) => c.id === id)!;
                   setActive(id);
-                  controller?.reveal(JSON.parse(comment.anchor!));
+                  onHighlightChange(id);
+                  controller?.reveal(JSON.parse(comment.anchor!), "comment");
                   // Ordered rails follow the source scroll; do not race it with
                   // a second scroll towards a card's pre-layout position.
                   if (!controller?.position) requestAnimationFrame(() =>
@@ -413,9 +418,9 @@ export function RegionComments({
                   <button
                     key={root.id}
                     onClick={() => {
-                      if (active === root.id) return;
                       setActive(root.id);
-                      controller?.reveal(JSON.parse(root.anchor!));
+                      onHighlightChange(root.id);
+                      controller?.reveal(JSON.parse(root.anchor!), "comment");
                     }}
                   >
                     {t("comment.regionIndex", { index: index + 1 })} ·{" "}
@@ -456,7 +461,6 @@ export function RegionComments({
                   data-anchor={root.anchor}
                   className={`selection-thread ${active === root.id ? "active" : ""}`}
                   onClick={(e) => {
-                    if (active === root.id) return;
                     if (
                       (e.target as HTMLElement).closest(
                         "button,a,input,textarea,select,[contenteditable]",
@@ -464,7 +468,8 @@ export function RegionComments({
                     )
                       return;
                     setActive(root.id);
-                    controller?.reveal(JSON.parse(root.anchor!));
+                    onHighlightChange(root.id);
+                    controller?.reveal(JSON.parse(root.anchor!), "comment");
                   }}
                 >
                   <div className="comment-quote">

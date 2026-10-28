@@ -7,6 +7,7 @@ import { DocumentFind } from "@web/features/documents/document-find.js";
 import { CommentNavigation } from "@web/features/comments/comment-navigation.js";
 import { ResolvedComments } from "@web/features/comments/resolved-comments.js";
 import { useCommentPages } from "@web/features/comments/use-comment-pages.js";
+import { useCommentHighlight } from "@web/features/comments/use-comment-highlight.js";
 import { scrollCommentIntoView } from "@web/features/comments/comment-scroll.js";
 import { EditorRecoveryBoundary } from "@web/features/documents/editor-recovery-boundary.js";
 import {
@@ -202,6 +203,7 @@ function RichDocument({
   discussion?: React.ReactNode;
 }) {
   const id = detail.resource.id;
+  const [highlightedComment, highlightComment] = useCommentHighlight(id, detail.comments);
   const { locale, t } = useI18n();
   const [pageWidth, setPageWidth] = useDocumentPageWidth(
     detail.resource,
@@ -311,6 +313,7 @@ function RichDocument({
   }, [availableWidth, commentsChoice, compact]);
   const setCommentsOpen = (open: boolean) => {
     setCommentsChoice(open);
+    if (!open) highlightComment(null);
   };
   useEffect(() => {
     setLiveInfo(document.getElementById("document-live-info"));
@@ -1114,7 +1117,7 @@ function RichDocument({
                 runtime={session.runtime}
                 comments={roots}
                 transientAnchor={aiHighlightedAnchor}
-                active={activeThread}
+                active={commentsOpen ? highlightedComment : null}
                 select={(threadId) => {
                   setActiveThread(threadId);
                   if (!threadId) return;
@@ -1155,6 +1158,7 @@ function RichDocument({
                 select={(id) => {
                   const c = roots.find((c) => c.id === id)!;
                   setActiveThread(id);
+                  highlightComment(id);
                   try {
                     scrollCommentIntoView(contentHost.current?.querySelector(
                       `[data-block-id="${CSS.escape(resolveRichAnchor(session.runtime, JSON.parse(c.anchor!))[0]!.blockId)}"]`,
@@ -1193,7 +1197,11 @@ function RichDocument({
                   <article
                     className={`selection-thread ${activeThread === c.id ? "active" : ""}`}
                     data-thread-id={c.id}
-                    onClick={() => setActiveThread(c.id)}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest("button:not(.comment-quote),a,input,textarea,select,[contenteditable]")) return;
+                      setActiveThread(c.id);
+                      highlightComment(c.id);
+                    }}
                     key={c.id}
                     data-anchor={c.anchor}
                     aria-label={t("comment.thread", { quote })}

@@ -106,11 +106,11 @@ Doca 提供 Streamable HTTP MCP 服务，让支持 MCP 的客户端发现已授�
 
 ## Docker 快速开始
 
-需要 Git、Docker Engine、Docker Compose，以及通过反向代理访问的 HTTP(S) 地址。本流程在新空数据库中安装已发布的 0.2.22 镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.2.22)并保留原数据。
+需要 Git、Docker Engine、Docker Compose，以及通过反向代理访问的 HTTP(S) 地址。本流程在新空数据库中安装 main 分支 compose.yaml 指定的镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.2.23)并保留原数据。
 
 ```sh
-# 1. 拉取对应发行版代码
-git clone --branch v0.2.22 --depth 1 https://github.com/smartdoca/doca.git
+# 1. 拉取 main 分支的部署文件
+git clone --branch main --depth 1 https://github.com/smartdoca/doca.git
 cd doca
 
 # 2. 配置环境变量
@@ -155,7 +155,7 @@ pnpm dev
 - [部署与配置](https://smartdoca.github.io/doca/#/zh-cn/operations/deployment)
 - [插件开发](https://smartdoca.github.io/doca/#/zh-cn/plugins/plugin-development)
 - [HTTP API](https://smartdoca.github.io/doca/#/zh-cn/reference/api)，运行中的应用还提供 `/api/openapi.json`。
-- [发行记录](https://smartdoca.github.io/doca/#/zh-cn/releases/0.2.22)
+- [发行记录](https://smartdoca.github.io/doca/#/zh-cn/releases/0.2.23)
 - [文档源码](docs/README.zh-CN.md)
 
 预览文档时，执行 `pnpm docs:dev` 并打开 `http://127.0.0.1:39140/#/zh-cn/`。`pnpm docs:check` 校验双语覆盖和本地链接。GitHub Pages 设置见[文档维护](docs/documentation.zh-CN.md)。

@@ -26,6 +26,7 @@ import {
   resetUserPassword,
 } from "../routes/admin-users.js";
 import { registerAccounts } from "../routes/accounts.js";
+import { registerResourceHandover } from "../routes/resource-handover.js";
 import { type MessagingRuntime } from "../adapters/messaging.js";
 import {
   passwordAllowed,
@@ -498,6 +499,10 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   );
   api.addHook("preClose", async () => realtimeCluster.close());
   registerWorkspace(api, db, authenticated, admin, realtime.onlineUsers);
+  registerResourceHandover(api, db, admin, async (userIds) => {
+    await realtime.enforceAccess();
+    await Promise.all(userIds.map((id) => realtime.notificationsChanged(id)));
+  });
   const webhookDb =
     options.webhookDatabase ??
     (await openWebhookDatabase({ driver: "sqlite", path: ":memory:" }));

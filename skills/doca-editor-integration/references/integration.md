@@ -10,9 +10,9 @@ The current checkout integrates five editors. Use actual installed exports; targ
 | --- | --- | --- |
 | Rich text | @smartdoca/slate 0.4.26 | document-editor.tsx |
 | Markdown | @smartdoca/markdown 0.4.4 | markdown-editor.tsx |
-| Spreadsheet | @smartdoca/sheet 0.2.12 | spreadsheet-editor.tsx |
-| Canvas | @smartdoca/canvas 0.5.15 | canvas-editor.tsx |
-| Slides | @smartdoca/slides 0.3.0-alpha.4 | presentation-editor.tsx |
+| Spreadsheet | @smartdoca/sheet 0.2.14 | spreadsheet-editor.tsx |
+| Canvas | @smartdoca/canvas 0.5.16 | canvas-editor.tsx |
+| Slides | @smartdoca/slides 0.3.0-alpha.5 | presentation-editor.tsx |
 
 Entries are in the [document feature](../apps/web/src/features/documents). Packages own models, editing commands, undo, rendering, selections, and conversion. The host owns identity, ACLs, uploads/downloads, references, user cards, navigation, comments, and collaboration transport. Locale updates chrome without translating content or rebuilding the editor.
 
@@ -212,3 +212,11 @@ Verification uses isolated synthetic documents and databases, including native t
 Doca 0.2.11 pins official Sheet 0.2.12, which implements the explicitly approved filter range policy in the collaboration contract. Public exports, dependencies and declarations match 0.2.11; the changed Yjs runtimes author content and range together using schema 6. Original baselines, epochs, checkpoints and pending updates are preserved. Opening does not repair old short ranges; explicit criteria confirmation does. Existing historical readers/defaults remain unchanged, without a new compatibility adapter or data conversion. Keep 0.2.11 and the previous host pins/lockfile for rollback, preserving all later content and authored native ranges. See [filter verification](verification/sheet-filter-range-2026-10-23.md).
 
 Slate 0.4.26 fixes Markdown punctuation escapes, bracketed citation labels and false mathematical-source warnings for prices/URLs. The host pins the official npm archive; all 175 installed distribution files match the published source build. The conversion entry is the only changed runtime area; codec, headless and Yjs entrypoints retain the 0.4.25 bytes and document/collaboration schemas remain unchanged. Browser capture now accepts readable conversion degradation and exposes only current-attempt diagnostics, without adding persisted report fields. See [Annual Reviews acceptance](verification/annualreviews-capture-2026-10-26.md).
+
+## npm comment backgrounds and table ports — 2026-10-28
+
+Doca 0.2.23 pins official npm releases: Sheet 0.2.14, Canvas 0.5.16 and Slides 0.3.0-alpha.5; Slate 0.4.26 and Markdown 0.4.4 are unchanged. Release builds use no local archives, file: editor dependencies or editor patches.
+
+Sheet adds `commentHighlightAnchor`: the host supplies the explicitly clicked comment anchor from its visible, authorized, unresolved markers. Slides adds `activeCommentId`: the host supplies a current marker ID. Across all five formats, opening the drawer, following a link or clicking a native content marker does not request a background. Clicking a comment card or its navigation requests only that comment’s background. Switching comments replaces it; clicking elsewhere (including the editor or drawer blank space), resolution or drawer close clears it, and reopening starts without a highlight; navigation still explicitly uses the existing reveal method. Readonly views support highlighting; slideshow hides it. The host continues choosing overlapping candidates. Sheet paints the parts resolved by its current stable cell anchor; Slides retains existing whole-element/table scope and adds no permanent cell or glyph anchors.
+
+Canvas exposes table ports on non-editing hover or whole-table selection, hiding them during cell editing. The host paints a translucent background for the explicitly clicked Canvas comment. These are runtime view changes, with no document-style, permanent-anchor, Yjs transaction, schema/codec, epoch, checkpoint, ACK or outbox change, and no historical reader, conversion or adapter. Retain prior official version pins/lockfiles and all later business data for rollback.

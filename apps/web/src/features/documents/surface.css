@@ -295,7 +295,7 @@ html[data-editor-shell="mobile"] .ai-document-main:has(> .document-comment-dock)
   box-shadow: none;
 }
 .doca-canvas .anchor-decorations [data-active="true"] .anchor-decoration-box {
-  background: transparent;
+  background: #ffc94c30;
   border: 1px dashed #d49a21;
   box-shadow: none;
 }

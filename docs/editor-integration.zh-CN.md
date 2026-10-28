@@ -10,9 +10,9 @@
 | --- | --- | --- |
 | 富文本 | @smartdoca/slate 0.4.26 | document-editor.tsx |
 | Markdown | @smartdoca/markdown 0.4.4 | markdown-editor.tsx |
-| 表格 | @smartdoca/sheet 0.2.12 | spreadsheet-editor.tsx |
-| 画布 | @smartdoca/canvas 0.5.15 | canvas-editor.tsx |
-| 幻灯片 | @smartdoca/slides 0.3.0-alpha.4 | presentation-editor.tsx |
+| 表格 | @smartdoca/sheet 0.2.14 | spreadsheet-editor.tsx |
+| 画布 | @smartdoca/canvas 0.5.16 | canvas-editor.tsx |
+| 幻灯片 | @smartdoca/slides 0.3.0-alpha.5 | presentation-editor.tsx |
 
 入口位于 [文档 feature](../apps/web/src/features/documents)。包负责模型、编辑命令、撤销、格式渲染、选择与转换；宿主负责身份、ACL、上传下载、引用、用户卡片、导航、评论和协同连接。语言只影响界面，不翻译用户正文，不重建编辑器。
 
@@ -198,3 +198,11 @@ Canvas、Sheet、Slides 的评论标注默认隐藏，随宿主评论侧栏打�
 Doca 0.2.11 锁定正式 Sheet 0.2.12，实现协同契约中用户明确批准的筛选范围规则。公开 exports、依赖和声明与 0.2.11 相同；改变的 Yjs 运行时通过现有 schema 6 一起提交正文和范围。原 baseline、epoch、checkpoint 与待确认更新保留。打开不修复旧短范围，显式确认有效条件才扩展。既有历史读取和默认值保持原状，无新增兼容适配或数据转换。回退保留前一 Sheet 0.2.11、宿主依赖/锁文件和后续内容及原生范围；详见[筛选验证](verification/sheet-filter-range-2026-10-23.md)。
 
 Slate 0.4.26 修复 Markdown 标点转义、参考文献方括号标签，以及价格和网址的公式误报。宿主使用正式 npm 包，175 个已安装分发文件与公开发布的源码构建一致。运行时改动限定在转换入口，codec、headless、Yjs 入口保留 0.4.25 字节，文档和协作结构均不变。浏览器收录接受可读降级，仅展示本次处理失败信息，不增加持久化报告。见 [Annual Reviews 验收](verification/annualreviews-capture-2026-10-26.md)。
+
+## npm 评论背景与表格连接点 — 2026-10-28
+
+Doca 0.2.23 使用正式 npm 精确版本：Sheet 0.2.14、Canvas 0.5.16、Slides 0.3.0-alpha.5；Slate 0.4.26 与 Markdown 0.4.4 保持不变。发布构建不使用本地压缩包、file: 依赖或编辑器补丁。
+
+Sheet 新增 `commentHighlightAnchor`，宿主从当前可见、授权、未解决的评论标记中选择明确点击的评论锚点；Slides 新增 `activeCommentId`，宿主传入当前标记的 ID。五种格式打开侧栏、链接定位或点击正文原生标记时均不添加背景；点击评论卡片或评论导航后，只高亮该评论对应内容。切换评论时替换，点击其他位置（包括编辑器和侧栏空白）、评论解决或侧栏关闭时清除，重新打开不恢复；定位仍显式使用既有 reveal 接口。只读模式也可高亮，进入放映时隐藏。重叠候选继续由宿主选择。表格支持当前稳定锚点解析出的多段区域；幻灯片遵循现有整元素/整表锚点范围，不新增永久单元格或字形锚点。
+
+Canvas 在非编辑悬停和小手选中整表时显示连接点，编辑单元格时隐藏。宿主仅为明确点击的画布评论对应内容增加半透明背景。所有变化仅为交互视图，不改文档样式、永久锚点、Yjs 事务、schema/codec、epoch、检查点、ACK 或 outbox，也不添加历史读取、转换或适配。回退保留正式旧包版本、锁文件及后续业务数据。

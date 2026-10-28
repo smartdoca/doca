@@ -1403,9 +1403,10 @@ body.ai-panel-resizing {
   width: 100%;
   min-height: 0;
 }
+/* The list already windows old turns. Keep visible bubbles fully laid out while
+   reverse scrolling and streamed replies change their position and image size. */
 .ai-bubble-list .ant-bubble {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 96px;
+  content-visibility: visible;
 }
 .ai-bubble-scroll {
   padding: 0;

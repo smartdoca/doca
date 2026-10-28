@@ -1,4 +1,5 @@
 import { useI18n } from "@web/shared/i18n.js";
+import { useCommentHighlight } from "@web/features/comments/use-comment-highlight.js";
 import { platformAssetId } from "@web/shared/utils/asset-path.js";
 import { useAI } from "@web/features/ai/ai-context.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -103,6 +104,7 @@ export default function MarkdownDocument({
   const { locale, t } = useI18n();
   const attachmentPreview = useAttachmentPreview();
   const id = detail.resource.id;
+  const [highlightedComment, highlightComment] = useCommentHighlight(id, detail.comments);
   const ai = useAI();
   const createComment = useRef<() => void>(() => {});
   const container = useRef<HTMLElement>(null);
@@ -543,11 +545,16 @@ export default function MarkdownDocument({
         }
       });
     handle.current.renderAnchors(anchors);
-    handle.current.setActiveAnchor(active);
-  }, [detail.comments, active, ready, revision]);
+    handle.current.setActiveAnchor(highlightedComment);
+  }, [detail.comments, active, highlightedComment, ready, revision]);
   useEffect(() => {
     if (!ready) return;
-    const stop = handle.current?.onAnchorClick(setActive);
+    const stop = handle.current?.onAnchorClick(id => {
+      // The SDK activates a clicked native mark before notifying the host.
+      // Content clicks navigate; only a comment click requests a background.
+      handle.current?.setActiveAnchor(null);
+      setActive(id);
+    });
     const clear = (e: PointerEvent) => {
       if (
         !(e.target as HTMLElement).closest(
@@ -715,6 +722,7 @@ export default function MarkdownDocument({
           )}
         </div>
         <RegionComments
+          onHighlightChange={highlightComment}
           createAction={createComment}
           detail={detail}
           user={user}

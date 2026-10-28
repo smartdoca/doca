@@ -2,7 +2,7 @@
 
 [English](deployment.md)
 
-一台服务器可以运行已发布镜像 `docker.io/smartdoca/doca:0.2.12`。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
+一台服务器可以运行 main 分支 `compose.yaml` 指定的镜像。单个容器使用 SQLite，不需要 PostgreSQL 或 Redis。只有运行多个应用副本时才需要它们。见 [单实例与水平扩展部署](horizontal-scaling.zh-CN.md)。
 
 ## 条件
 
@@ -14,9 +14,11 @@
 
 ## 文件
 
-可以使用匹配发行版的仓库检出，也可以转交[无需访问 GitHub 的部署包](deployment-without-github.zh-CN.md)。业务服务器无需拉取源码。镜像里没有 `scripts/bootstrap-admin.sh` 和 `scripts/reset-admin-password.sh`；这两个脚本留在宿主机上，用来启动一次性容器。Compose 引用的 `docker/chromium-seccomp.json` 也必须随部署文件提供。
+可以拉取 main 分支的部署文件，也可以转交[无需访问 GitHub 的部署包](deployment-without-github.zh-CN.md)。业务服务器无需拉取源码。镜像里没有 `scripts/bootstrap-admin.sh` 和 `scripts/reset-admin-password.sh`；这两个脚本留在宿主机上，用来启动一次性容器。Compose 引用的 `docker/chromium-seccomp.json` 也必须随部署文件提供。
 
 ```sh
+git clone --branch main --depth 1 https://github.com/smartdoca/doca.git
+cd doca
 cp docker.env.example .env
 ```
 
@@ -61,7 +63,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker compose up -d` 会拉取 `docker.io/smartdoca/doca:0.2.12`。只有要从当前检出构建镜像时才加 `--build`。
+`docker compose up -d` 会拉取 `compose.yaml` 指定的镜像。只有要从当前检出构建镜像时才加 `--build`。
 
 检查容器：
 
@@ -72,7 +74,7 @@ curl -fsS -H 'Host: docs.example.com' http://127.0.0.1:39120/health
 
 将 `docs.example.com` 替换为配置来源的主机名，非标准端口也需带上。镜像内置探针已经携带正确 Host，等待 `docker compose ps` 显示 `healthy`。直接以回环地址 curl 会返回 421。
 
-健康的进程返回 `{"status":"ok","version":"0.2.12"}`。
+健康的进程返回 `status: "ok"`，`version` 为实际镜像版本。
 
 文档渲染还需实际部署检查：当前检出新增 LibreOffice 和启用沙箱的 Chromium，可选 SAM 另需可信 Linux 运行环境。组件边界、内置 Chromium seccomp 策略和显式 SAM 挂载见 [Docker 文档渲染器](docker-rendering.zh-CN.md)，服务健康不代表这些工具已经可用。
 

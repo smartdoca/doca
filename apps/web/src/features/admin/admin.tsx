@@ -2,6 +2,7 @@ import { McpSettings } from "@web/features/mcp/mcp-settings.js";
 import { NavigationArea } from "@web/plugins/navigation.js";
 import { NavigationSettings } from "./navigation.js";
 import { Plugins } from "./plugins.js";
+import { ResourceHandoverDialog } from "./resource-handover.js";
 import {
   loginMethodLabel,
   type LoginMethodLabel,
@@ -198,6 +199,7 @@ export function Admin({
   const { locale, t } = useI18n();
   const [accountTarget, setAccountTarget] = useState<string | null>(null),
     [accountPolicy, setAccountPolicy] = useState<AccountOptions | null>(null);
+  const [handoverTarget, setHandoverTarget] = useState<Member | null>(null);
   const [tab, setTab] = useState(() => readAdminRoute().tab),
     [platformTab, setPlatformTab] = useState(
       () => readAdminRoute().platformTab,
@@ -701,6 +703,14 @@ export function Admin({
                           {loginTime(u.last_login_at)}
                         </span>
                         <span className="admin-member-actions">
+                          {u.status === "disabled" && (
+                            <button
+                              className="text-action"
+                              onClick={() => setHandoverTarget(u)}
+                            >
+                              {t("handover.open")}
+                            </button>
+                          )}
                           <button
                             className="text-action"
                             onClick={() => setAccountTarget(u.id)}
@@ -1139,6 +1149,12 @@ export function Admin({
             </footer>
           </form>
         </Dialog>
+      )}
+      {handoverTarget && (
+        <ResourceHandoverDialog
+          source={handoverTarget}
+          close={() => setHandoverTarget(null)}
+        />
       )}
       {target && (
         <Dialog

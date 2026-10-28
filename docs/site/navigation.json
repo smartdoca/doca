@@ -89,6 +89,11 @@
         "无需访问 GitHub 的部署"
       ],
       [
+        "admin-resource-handover",
+        "Resource handover",
+        "管理员资源交接"
+      ],
+      [
         "storage",
         "File storage",
         "文件存储"
@@ -276,6 +281,11 @@
     "en": "Releases",
     "zh": "发行记录",
     "pages": [
+      [
+        "releases/0.2.23",
+        "0.2.23",
+        "0.2.23"
+      ],
       [
         "releases/0.2.22",
         "0.2.22",

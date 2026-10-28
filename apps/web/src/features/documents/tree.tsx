@@ -215,7 +215,7 @@ export function DocumentTree({
               })
               .finally(() => setBusy(false));
           }}
-          style={{ paddingLeft: 2 + Math.min(depth, 6) * 18 }}
+          style={{ paddingLeft: 2 + Math.min(depth, 6) * 12 }}
         >
           {drop?.id === r.id &&
             createPortal(

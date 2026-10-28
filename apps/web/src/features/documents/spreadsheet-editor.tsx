@@ -33,6 +33,7 @@ import { SheetFind } from "@web/features/search/sheet-find.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { useSurfaceSync, type SurfaceFactory } from "@web/features/documents/surface-sync.js";
 import { RegionComments, type RegionController } from "@web/features/comments/region-comments.js";
+import { useCommentHighlight } from "@web/features/comments/use-comment-highlight.js";
 import { activeCommentCandidate } from "@web/features/comments/region-comment-interaction.js";
 import { renderSheetObject } from "@web/features/documents/sheet-interactions.js";
 import { useAttachmentPreview } from "@web/features/documents/attachment-preview.js";
@@ -116,6 +117,7 @@ export default function SheetDocument({
     [candidateIds, setCandidateIds] = useState<string[]>([]),
     [error, setError] = useState("");
   const [showCommentMarks, setShowCommentMarks] = useState(false);
+  const [highlightedComment, highlightComment] = useCommentHighlight(id, detail.comments);
   const attachmentPreview = useAttachmentPreview({ sheetImages: () => ref.current?.getImageGallery() ?? [] });
   const pasteDocumentLink = useSheetDocumentLinks(handle, editable, setError);
   const documentPicker = useSheetDocumentPicker(id, editable);
@@ -325,6 +327,9 @@ export default function SheetDocument({
           inlineActions={documentPicker.actions}
           commentMarkers={showCommentMarks ? markers : []}
           activeCommentId={showCommentMarks ? active : null}
+          commentHighlightAnchor={showCommentMarks
+            ? markers.find(marker => marker.id === highlightedComment)?.anchor ?? null
+            : null}
           onCommentAnchorsClick={({ candidateIds: ids }) => {
             setCandidateIds(ids);
             setActive(current => activeCommentCandidate(current, ids));
@@ -336,6 +341,7 @@ export default function SheetDocument({
         <p className="empty">正在加载表格…</p>
       )}
       <RegionComments
+        onHighlightChange={highlightComment}
         onOpenChange={setShowCommentMarks}
         candidateIds={candidateIds}
         createAction={createComment}
