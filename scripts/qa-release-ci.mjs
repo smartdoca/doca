@@ -40,6 +40,7 @@ if (process.argv[2] === "native") {
   const smoke = read(resolve(output, "docker-smoke.json"));
   assert(smoke.passed && smoke.results.length === 1 && smoke.results[0].passed);
   assert.equal(smoke.results[0].arch, arch === "amd64" ? "x64" : "arm64");
+  assert(smoke.results[0].systemLogoConfigured && smoke.results[0].systemLogoPublicPng && smoke.results[0].systemLogoReset && smoke.results[0].systemLogoPermissionAndRevision);
   const runtime = read(resolve(output, `runtime-${arch}.json`));
   assert(runtime.passed && runtime.arch === arch);
   const render = read(resolve(output, `render-${arch}.json`));

@@ -459,6 +459,12 @@
 .site-name-field {
   max-width: 420px;
 }
+.site-logo-controls { display: flex; align-items: center; gap: 20px; }
+.site-logo-preview { display: grid; place-items: center; flex: none; width: 80px; height: 80px; border: 1px solid var(--line); border-radius: 10px; background: var(--sidebar); }
+.site-logo-preview .brand-symbol.site-logo-custom { width: 64px; height: 64px; }
+.site-logo-controls > label { min-width: 0; }
+.site-logo-controls input[type="file"] { max-width: 100%; }
+@media (max-width: 600px) { .site-logo-controls { align-items: flex-start; flex-direction: column; gap: 12px; } }
 .admin-card label {
   font-size: 13px;
 }

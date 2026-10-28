@@ -35,6 +35,10 @@ export function decodeSystemError(value: string): SystemErrorReason | undefined 
 type Translator = (key: MessageKey, values?: MessageValues) => string;
 
 const reasonKeys = {
+  site_logo_invalid_image: "admin.siteLogoInvalidImage",
+  site_logo_too_large: "admin.siteLogoTooLarge",
+  site_logo_invalid_config: "admin.siteLogoInvalidConfig",
+  site_logo_conflict: "admin.siteLogoConflict",
   handover_forbidden: "handover.error.forbidden",
   handover_source_disabled: "handover.error.sourceDisabled",
   handover_target_active: "handover.error.targetActive",

@@ -55,11 +55,12 @@ import { UserBadge } from "@web/shared/components/user-badge.js";
 import { setCurrentUserId } from "@web/shared/components/user-mention.js";
 import { lazy, Suspense, useEffect, useLayoutEffect, useState, useRef, useMemo, useSyncExternalStore } from "react";
 import { loadBootstrap } from "@web/shared/bootstrap.js";
+import { SiteLogo } from "@web/shared/components/site-logo.js";
 import { documentFavicon } from "@web/shared/utils/document-favicon.js";
 import { splitTitleIcon } from "@web/shared/utils/resource-title.js";
 import { loadWebPlugins } from "@web/plugins/load.js";
 import { cacheStartupDocument, clearDocumentStartupCache, documentStartupCacheKey, forgetStartupDocument, invalidateStartupIdentity, readDocumentStartup, readStartupAccount } from "@web/shared/document-startup-cache.js";
-import { BookOpen, Plus, Search, Users, Settings, Bell, ShieldCheck, ThumbsUp, LogOut, FolderOpen, ArrowLeft, PanelLeft, LockKeyhole, UserRound, BookOpenCheck } from "lucide-react";
+import { Plus, Search, Users, Settings, Bell, ShieldCheck, ThumbsUp, LogOut, FolderOpen, ArrowLeft, PanelLeft, LockKeyhole, UserRound, BookOpenCheck } from "lucide-react";
 import {
   api,
   roleRank,
@@ -185,6 +186,7 @@ function WorkspaceApp() {
   const [createAnchor, setCreateAnchor] = useState<DOMRect | null>(null);
   const [templateFormat, setTemplateFormat] = useState<Resource["format"] | null>(null);
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(startup?.bootstrap ?? null),
+    [siteLogoUrl, setSiteLogoUrl] = useState<string | null>(null),
     [fatal, setFatal] = useState(""),
     [navigationOpen, setNavigationOpen] = useState(false),
     [me, setMe] = useState<Me | null>(null),
@@ -556,13 +558,15 @@ function WorkspaceApp() {
     currentDetail?.resource.title, navigationLayout, pluginNavigationByScope, scope,
     bootstrap?.plugins, fileTrail, sharedFolderId, sharedFolderName, bookContextId, bookContext]);
   useEffect(() => {
-    const href = documentFavicon(currentDetail?.resource ?? null);
+    const href = documentFavicon(currentDetail?.resource ?? null) ?? siteLogoUrl ?? "/favicon.svg";
     const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
     if (!href || !icon) return;
     const originalHref = icon.href;
+    const originalType = icon.type;
+    icon.removeAttribute("type");
     icon.href = href;
-    return () => { icon.href = originalHref; };
-  }, [currentDetail?.resource.title, currentDetail?.resource.kind, currentDetail?.resource.format]);
+    return () => { icon.href = originalHref; icon.type = originalType; };
+  }, [siteLogoUrl, currentDetail?.resource.title, currentDetail?.resource.kind, currentDetail?.resource.format]);
   useEffect(() => {
     if (!bootstrap?.user) return;
     const beat = () => {
@@ -633,6 +637,7 @@ function WorkspaceApp() {
             setLibraryInfo(null);
           }
           setBootstrap(b);
+          setSiteLogoUrl(b.siteLogoUrl);
           setBootstrapVerified(true);
           setFatal("");
           void loadWebPlugins(b).catch(e => console.error("Plugin discovery failed", e));
@@ -694,6 +699,7 @@ function WorkspaceApp() {
     window.addEventListener("hashchange", changed);
     window.addEventListener("session-expired", expired);
     window.addEventListener("profile-required", reloadBootstrap);
+    window.addEventListener("site-branding-changed", reloadBootstrap);
     window.addEventListener("online", online);
     window.addEventListener("storage", storage);
     return () => {
@@ -702,6 +708,7 @@ function WorkspaceApp() {
       window.removeEventListener("hashchange", changed);
       window.removeEventListener("session-expired", expired);
       window.removeEventListener("profile-required", reloadBootstrap);
+      window.removeEventListener("site-branding-changed", reloadBootstrap);
       window.removeEventListener("online", online);
       window.removeEventListener("storage", storage);
     };
@@ -926,6 +933,7 @@ function WorkspaceApp() {
     return (
       <Login
         bootstrap={bootstrap}
+        siteLogoUrl={siteLogoUrl}
         logged={async () => {
           setBootstrap(await api("/bootstrap"));
           const documentLocation = takeLoginDocument();
@@ -1161,7 +1169,7 @@ function WorkspaceApp() {
                 className="brand"
                 title={bootstrap.siteName}
               >
-                <span className="brand-symbol"><BookOpen size={22} /></span>
+                <SiteLogo url={siteLogoUrl} />
                 <span title={bootstrap.siteName}>{bootstrap.siteName}</span>
               </a>
             )}
@@ -1717,12 +1725,14 @@ function WorkspaceApp() {
 }
 function Login({
   bootstrap,
+  siteLogoUrl,
   logged,
 }: {
   bootstrap: Bootstrap;
+  siteLogoUrl: string | null;
   logged: () => Promise<void>;
 }) {
-  return <AccountLogin bootstrap={bootstrap} logged={logged} />;
+  return <AccountLogin bootstrap={bootstrap} siteLogoUrl={siteLogoUrl} logged={logged} />;
 }
 function Comments({
   detail,

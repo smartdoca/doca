@@ -6,6 +6,7 @@ import { DocumentDownload, downloadResult } from "@web/features/documents/file-t
 import { spreadsheetXlsxOptions } from "@web/features/documents/spreadsheet-xlsx.js";
 import { useDocumentReadOnly } from "@web/features/documents/document-mode.js";
 import { useSheetZoomPreference } from "@web/features/documents/sheet-zoom-preference.js";
+import { revealSheetComment } from "@web/features/documents/sheet-comment-reveal.js";
 import {
   SpreadsheetEditor,
   type SpreadsheetEditorHandle,
@@ -202,7 +203,7 @@ export default function SheetDocument({
             capture: () => handle.captureCommentAnchor(),
             valid: (a) => handle.resolveCommentAnchorRanges(a).length > 0,
             reveal: (a) => {
-              handle.revealCommentAnchor(a);
+              void revealSheetComment(handle, a).catch((error) => setError(error.message));
             },
             label: (a) =>
               a.version === 3

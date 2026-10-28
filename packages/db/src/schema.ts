@@ -1,4 +1,4 @@
-import type { Kysely } from "kysely";
+import type { Generated, Kysely } from "kysely";
 import type { BrowserClipperSchema } from "./browser-clipper-types.js";
 import type { KnowledgeBookTables } from "./knowledge-books-types.js";
 export interface User {
@@ -725,6 +725,7 @@ export interface Schema extends KnowledgeBookTables, BrowserClipperSchema {
     registration: number;
     revision: number;
     site_name: string;
+    site_logo: Generated<string | null>;
     default_locale?: string;
     default_timezone?: string;
     registration_review?: number;

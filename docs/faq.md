@@ -20,7 +20,7 @@ For the published Docker image, copy `docker.env.example`. For source developmen
 
 ## What should I do if startup rejects the database baseline?
 
-Stop and read the [database upgrade contract](database-schema-evolution.md) and matching [release requirements](releases/0.2.23.md). Supported generations receive approved structural reconciliation; unsupported generations, semantic changes and review-required differences stop startup before persistent changes. Preserve the old deployment, database, files, and secrets for rollback. Do not delete tables, reset the volume, or change the baseline marker to force startup.
+Stop and read the [database upgrade contract](database-schema-evolution.md) and matching [release requirements](releases/0.2.24.md). Supported generations receive approved structural reconciliation; unsupported generations, semantic changes and review-required differences stop startup before persistent changes. Preserve the old deployment, database, files, and secrets for rollback. Do not delete tables, reset the volume, or change the baseline marker to force startup.
 
 ## How do I inspect startup problems?
 

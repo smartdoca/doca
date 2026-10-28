@@ -28,7 +28,7 @@ cp docker.env.example .env
 
 文件存储还需要 `DOCA_FILE_STORE_ID` 和 `DOCA_FILE_STORES_JSON`，示例见 `docker.env.example`。后端路径和密钥通过环境变量提供，管理页只读展示。见[文件存储](storage.zh-CN.md)。
 
-当前宿主使用数据库代际 `doca-2026-10-12-book-payload-storage-v1`。对已发布 0.1.22 的 `doca-2026-10-09-history-storage-v1`，启动时以最新 DDL 检查并对齐结构、记录新代际；旧 SQL 知识册成果等全部业务行原样保留，不增加正文转换、单独清理或旧正文适配。残留旧知识册记录可能需人工处理，已有 0.1.23 对象存储数据保留。见[数据库结构演进](database-schema-evolution.zh-CN.md)及[当前发行要求](releases/0.2.23.zh-CN.md)。0.1.13 的准确基线 `doca-2026-10-08-knowledge-books-v2` 仍需按下方步骤显式升级历史存储。保留原数据库、私有对象、配置和凭证主密钥。
+当前宿主使用数据库代际 `doca-2026-10-12-book-payload-storage-v1`。对已发布 0.1.22 的 `doca-2026-10-09-history-storage-v1`，启动时以最新 DDL 检查并对齐结构、记录新代际；旧 SQL 知识册成果等全部业务行原样保留，不增加正文转换、单独清理或旧正文适配。残留旧知识册记录可能需人工处理，已有 0.1.23 对象存储数据保留。见[数据库结构演进](database-schema-evolution.zh-CN.md)及[当前发行要求](releases/0.2.24.zh-CN.md)。0.1.13 的准确基线 `doca-2026-10-08-knowledge-books-v2` 仍需按下方步骤显式升级历史存储。保留原数据库、私有对象、配置和凭证主密钥。
 
 `DOCA_ORIGIN` 是用户在浏览器里打开的地址。包括生产环境在内，均支持 HTTP 和 HTTPS。不要加子路径、查询参数或片段；根路径末尾斜杠会被规范化。
 

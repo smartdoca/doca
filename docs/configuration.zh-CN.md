@@ -59,7 +59,7 @@ DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root"
 
 Webhook 投递始终使用独立数据库。SQLite 在主库旁创建 `webhooks.db`。PostgreSQL 默认使用 `<主库名>_webhooks`，缺少该库时尝试创建；账号没有建库权限时，须预建独立库并授权，或设置 `DOCA_WEBHOOK_DATABASE_URL` 指向有权限的独立库。AI 存储在 Compose 中使用 `ai.db`，PostgreSQL 使用主库的 `doca_ai` schema，账号须有初始化权限。即使未配置外部模型，这些存储也需备份。
 
-多副本需要共享 PostgreSQL、Redis 和文件存储；修改变量不搬运已有数据，见[水平扩展](horizontal-scaling.zh-CN.md)与[发行要求](releases/0.2.23.zh-CN.md)。
+多副本需要共享 PostgreSQL、Redis 和文件存储；修改变量不搬运已有数据，见[水平扩展](horizontal-scaling.zh-CN.md)与[发行要求](releases/0.2.24.zh-CN.md)。
 
 ## Compose 环境变量传递
 
@@ -68,6 +68,8 @@ Webhook 投递始终使用独立数据库。SQLite 在主库旁创建 `webhooks.
 扩展环境变量需在 Compose 服务的 environment 中显式传递，并在部署目录的 `.env` 设置。
 
 ## 管理配置与生效
+
+系统 Logo 位于 **站点与服务 → 站点信息 → 系统 Logo**。管理员可预览并保存最大 5 MB 的 PNG/JPEG/WebP 图片，或恢复默认图标。它用于导航、登录页与非文档页面的浏览器图标，文档标签页保留自己的图标。规范化 PNG 保存在 `settings.site_logo`，与其他站点设置共用版本号；历史 NULL 沿用默认图标。更新已有部署前请阅读 [0.2.24 升级要求](releases/0.2.24.zh-CN.md)。
 
 注册、身份源、验证网关、搜索、AI 模型和 Webhook 订阅通过对应管理页配置。文件后端凭据位于环境，存储管理页只读；平台服务凭据与插件加密凭证是不同服务，见[服务凭据](service-credentials.zh-CN.md)。
 

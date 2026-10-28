@@ -34,6 +34,9 @@ The untracked raw attachments and seven temporary diagnostic or intermediate-run
 
 ## Feature and documentation acceptance
 
+- [System Logo](site-logo-2026-10-28.md)
+- [Spreadsheet comment navigation with frozen panes](sheet-comment-freeze-2026-10-28.md)
+
 - [画布 AI 调试记录（2026-10-19 至 20）](ai-canvas-tools-2026-10-19/README.md)
 - [AI 原生 PPT / 画布验收（2026-10-17）](ai-native-tools-2026-10-17/README.md)
 - [PostgreSQL 附件与发送交互验收 · 2026-10-10](ai-postgres-send-regression-2026-10-10/README.md)

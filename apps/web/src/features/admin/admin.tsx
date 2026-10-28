@@ -47,6 +47,7 @@ import { DirectorySettings } from "@web/features/settings/directory-settings.js"
 import { UserCardSettings } from "@web/features/settings/user-card-settings.js";
 import { DistributionSettings } from "@web/features/settings/distribution-settings.js";
 import { FileRecognitionSettings } from "@web/features/admin/file-recognition-settings.js";
+import { SiteLogoSettings } from "./site-logo-settings.js";
 import { useI18n } from "@web/shared/i18n.js";
 import type { MessageKey } from "@doca/i18n";
 import { webPluginRegistry } from "@web/plugins/registry.js";
@@ -79,6 +80,7 @@ type Settings = {
   default_locale: string;
   default_timezone: string;
   site_name: string;
+  siteLogoUrl: string | null;
   registration: number;
   revision: number;
 };
@@ -846,9 +848,11 @@ export function Admin({
                 </nav>
               </div>
               {platformTab === "general" && settings && (
+                <>
+                <SiteLogoSettings revision={settings.revision} logoUrl={settings.siteLogoUrl} changed={load} />
                 <form
                   className="admin-card site-identity-form"
-                  key={settings.revision}
+                  key={JSON.stringify([settings.site_name, settings.default_locale, settings.default_timezone])}
                   onSubmit={(e) => {
                     e.preventDefault();
                     const f = new FormData(e.currentTarget);
@@ -919,6 +923,7 @@ export function Admin({
                     </button>
                   </div>
                 </form>
+                </>
               )}
               {platformTab === "cards" && <UserCardSettings />}
               {platformTab === "storage" && <StorageSettings />}

@@ -4,7 +4,7 @@
 
 This guide installs the image specified by compose.yaml on main on one server, SQLite, and local file storage. You need Git, Docker Engine, the Docker Compose plugin, and a domain pointing at the server. A reverse proxy on that server can serve HTTPS or trusted internal HTTP. You do not need Node.js or pnpm to run the image.
 
-This is a fresh installation. Existing deployments must read the [release requirements](releases/0.2.23.md) first: reviewed additive changes upgrade automatically within the supported compatibility generation; incompatible baselines and semantic changes require separate handling. Preserve existing databases, files, and configuration.
+This is a fresh installation. Existing deployments must read the [release requirements](releases/0.2.24.md) first: reviewed additive changes upgrade automatically within the supported compatibility generation; incompatible baselines and semantic changes require separate handling. Preserve existing databases, files, and configuration.
 
 If the server cannot reach GitHub, transfer Compose, the environment example, the security policy, and administrator scripts without cloning source. See [deploy without GitHub access](deployment-without-github.md) for copyable Compose and `.env` files, offline image delivery, and initialization.
 
