@@ -381,9 +381,19 @@ try {
     await shadow(function () {
       return this.querySelectorAll(".tool").length;
     }),
-    4,
+    5,
   );
   await screenshot("desktop-dock");
+  assert.equal(await shadow(function () {
+    return this.querySelector('[data-action="site"]').getAttribute("aria-label");
+  }), "打开 Doca 网站");
+  const siteOpened = context.waitForEvent("page");
+  await click('[data-action="site"]');
+  const sitePage = await siteOpened;
+  await sitePage.waitForLoadState();
+  assert.equal(sitePage.url(), origin + "/", "Opens the configured Doca site");
+  assert.equal(captures.length, 0, "Opening Doca does not start capture");
+  await sitePage.close();
   await motionFrames(".dock", 240, "motion-entry");
   await page.evaluate(() => {
     const range = document.createRange();
@@ -928,6 +938,7 @@ try {
         narrow: [390, 844],
         zoom: "200%",
         controls: {
+          openConfiguredSite: true,
           customDropdown: true,
           collapseExpand: true,
           collapseInActionColumn: true,

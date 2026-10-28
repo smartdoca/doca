@@ -272,6 +272,37 @@ it("opens standalone settings from a trusted top-frame page without requiring lo
     r.handle({ type: "openSettings" }, { ...sender, id: "other" }),
   ).rejects.toThrow("clipper_scope_denied");
 });
+it("opens the current configured origin without login, network requests or pending-data changes", async () => {
+  const r = runtime();
+  delete r.session.authorization;
+  r.session.pending = { requestId: randomUUID(), markdown: "unsent" };
+  const created: unknown[] = [];
+  r.context.chrome.tabs.create = async (input: unknown) => created.push(input);
+  r.context.fetch = async () => { throw Error("Opening a site must not make API requests"); };
+  const sender = { id: "fixture", url: "https://source.test", tab: { id: 7 }, frameId: 0 };
+  const before = JSON.stringify({ local: r.local, session: r.session });
+  await expect(r.handle({ type: "openSite", url: "https://untrusted.test" }, sender)).resolves.toEqual({ opened: true });
+  expect(created).toEqual([{ url: origin }]);
+  expect(JSON.stringify({ local: r.local, session: r.session })).toBe(before);
+  r.local.site = { version: 2, origin: "https://another.doca.test" };
+  await r.handle({ type: "openSite" }, sender);
+  expect(created.at(-1)).toEqual({ url: "https://another.doca.test" });
+  for (const denied of [{ ...sender, frameId: 1 }, { ...sender, id: "other" }, { ...sender, tab: undefined }])
+    await expect(r.handle({ type: "openSite" }, denied)).rejects.toThrow("clipper_scope_denied");
+  expect(created).toHaveLength(2);
+});
+it("does not open a tab or rewrite a missing or invalid site configuration", async () => {
+  const r = runtime();
+  r.context.boot = async () => {};
+  r.context.chrome.tabs.create = async () => { throw Error("A tab must not open"); };
+  const sender = { id: "fixture", url: "chrome-extension://fixture/ui.html#settings" };
+  for (const site of [undefined, { version: 2, origin: "javascript:alert(1)" }, { version: 2, origin: "https://doca.test/untrusted" }, { version: 99, origin }]) {
+    r.local.site = site;
+    const before = JSON.stringify({ local: r.local, session: r.session });
+    await expect(r.handle({ type: "openSite" }, sender)).rejects.toThrow(/^clipper_(not_connected|invalid_origin|invalid_config)$/);
+    expect(JSON.stringify({ local: r.local, session: r.session })).toBe(before);
+  }
+});
 
 it("replaces incompatible images in place with source links, preserving valid images and frozen input", async () => {
   const r = runtime();

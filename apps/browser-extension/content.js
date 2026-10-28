@@ -6,6 +6,7 @@
       "dock.page": "收录当前页面",
       "dock.selection": "收录选中区域",
       "dock.assistant": "Doca 助手",
+      "dock.site": "打开 Doca 网站",
       "dock.settings": "设置",
       "dock.drag": "上下拖动工具条，也可使用方向键",
       "dock.collapse": "收起工具条",
@@ -24,8 +25,7 @@
       "dock.retry": "重试",
       "dock.failed": "收录未完成，请重试",
       "dock.failedWithCode": "收录未完成（错误代码：{code}）",
-      clipper_too_many_pending:
-        "当前未完成的任务较多，请稍后重试。",
+      clipper_too_many_pending: "当前未完成的任务较多，请稍后重试。",
       "dock.connectionFailed": "暂时无法连接 Doca，请重试",
       "dock.selectionMissing": "请先选中需要收录的网页内容",
       "dock.updated": "插件已更新，请刷新当前网页",
@@ -44,6 +44,7 @@
       "dock.page": "Capture this page",
       "dock.selection": "Capture selection",
       "dock.assistant": "Doca assistant",
+      "dock.site": "Open Doca website",
       "dock.settings": "Settings",
       "dock.drag": "Drag vertically or use the arrow keys",
       "dock.collapse": "Collapse toolbar",
@@ -162,6 +163,14 @@
         },
       ],
     ],
+    site: [
+      [
+        "path",
+        {
+          d: "M14 3h7v7m0-7L11 13M10 3H6a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-4",
+        },
+      ],
+    ],
     settings: [
       [
         "path",
@@ -203,8 +212,8 @@
   actions.className = "actions";
   actions.id = "doca-dock-actions";
   dock.append(actions);
-  for (const name of ["page", "selection", "assistant", "settings"]) {
-    if (name === "settings") {
+  for (const name of ["page", "selection", "assistant", "site", "settings"]) {
+    if (name === "site") {
       const line = document.createElement("div");
       line.className = "divider";
       actions.append(line);
@@ -542,6 +551,31 @@
   }
   buttons.get("page").onclick = (event) => openCapture("page", event);
   buttons.get("selection").onclick = (event) => openCapture("selection", event);
+  buttons.get("site").onclick = async (event) => {
+    if (!event.isTrusted) return;
+    dismiss();
+    try {
+      try {
+        await send({ type: "openSite" });
+      } catch (error) {
+        if (
+          ![
+            "clipper_not_connected",
+            "clipper_invalid_config",
+            "clipper_invalid_origin",
+          ].includes(error.message)
+        )
+          throw error;
+        await settings();
+      }
+    } catch (error) {
+      mode = "site";
+      panel.hidden = false;
+      fields.hidden = confirm.hidden = true;
+      title.textContent = t("dock.site");
+      showStatus(errorText(error), true);
+    }
+  };
   buttons.get("settings").onclick = (event) => {
     if (event.isTrusted)
       void settings().catch((error) => {
