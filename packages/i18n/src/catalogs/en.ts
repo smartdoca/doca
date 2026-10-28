@@ -1,7 +1,9 @@
 import { browserClipperEn } from "./browser-clipper.js";
+import { handoverEn } from "./resource-handover.js";
 /** English copy is the source catalog. Every other locale must provide these keys. */
 export const en = {
   ...browserClipperEn,
+  ...handoverEn,
   "mcp.unattendedConfig": "Optional: unattended Codex authorization",
   "mcp.unattendedHelp": "The optional configuration preapproves doca_call in this client. Use it only for a service whose selected Doca permissions you intend to allow without individual confirmations.",
   "mcp.title": "MCP services",

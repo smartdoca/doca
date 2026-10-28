@@ -86,6 +86,23 @@ async function syncInvitation(
     message,
   );
 }
+/** Cancel a pending invitation while preserving its ticket and decision history. */
+export async function cancelFolderInvitation(
+  db: DB,
+  invitation: Schema["file_folder_invitations"],
+  actorId: string,
+  now: string,
+) {
+  const cancelled = { ...invitation, state: "cancelled" as const, updated_at: now };
+  await db
+    .updateTable("file_folder_invitations")
+    .set({ state: cancelled.state, updated_at: now })
+    .where("id", "=", invitation.id)
+    .where("state", "=", "pending")
+    .execute();
+  await syncInvitation(db, cancelled, actorId, "", "invite");
+}
+
 export function createFolderSharing(db: DB) {
   async function manage(tx: DB, actor: Actor, id: string) {
     await activeActor(tx, actor);

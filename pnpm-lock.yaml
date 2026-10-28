@@ -154,8 +154,8 @@ importers:
         specifier: ^0.34.52
         version: 0.34.52
       '@smartdoca/canvas':
-        specifier: 0.5.15
-        version: 0.5.15(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: 0.5.16
+        version: 0.5.16(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@smartdoca/files-capability':
         specifier: workspace:*
         version: link:packages/files-capability
@@ -175,14 +175,14 @@ importers:
         specifier: workspace:*
         version: link:packages/search-host
       '@smartdoca/sheet':
-        specifier: 0.2.12
-        version: 0.2.12(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: 0.2.14
+        version: 0.2.14(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@smartdoca/slate':
         specifier: 0.4.26
         version: 0.4.26(katex@0.18.7)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate-history@0.113.1(slate@0.118.1))(slate-react@0.118.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(slate-dom@0.118.1(slate@0.118.1))(slate@0.118.1))(slate@0.118.1)
       '@smartdoca/slides':
-        specifier: 0.3.0-alpha.4
-        version: 0.3.0-alpha.4(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: 0.3.0-alpha.5
+        version: 0.3.0-alpha.5(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       antd:
         specifier: ^6.6.3
         version: 6.6.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3788,8 +3788,8 @@ packages:
       slate: '>=0.70.0'
       yjs: 13.6.32
 
-  '@smartdoca/canvas@0.5.15':
-    resolution: {integrity: sha512-iR+YHERkU3MaT4WVIaqLxlHMwtrbzXkS8DoysiZ4ub0+t10XVZqtfa1kKiHCfcqQQFNrGvUwj/vW1FafC6abZw==}
+  '@smartdoca/canvas@0.5.16':
+    resolution: {integrity: sha512-WrJWRvXM/Tizho2pdvZxE9pLHq/BmYc8aaQle/tf4S8YXkzP5qmEnf2oh9CnWmbn5wlncBik3/ZNtyiGoni8CA==}
     engines: {node: '>=20', yarn: '>=1.22'}
     peerDependencies:
       react: '>=18.2.0'
@@ -3802,8 +3802,8 @@ packages:
       react-dom: '>=18.2.0'
       yjs: 13.6.32
 
-  '@smartdoca/sheet@0.2.12':
-    resolution: {integrity: sha512-sGBf5UUif/gj33ZlRllG8wgfwMoP2gv7H4BO2bgqx8JwdaJqZY9rAP2MQowS+BIPnLJdxjzqGUPxbP1Xxa7tzg==}
+  '@smartdoca/sheet@0.2.14':
+    resolution: {integrity: sha512-XcLqpgdQ7CWzsw2g0ptmbsSw9jhNvqI+ykUSl1zOiD9of3rYGfM0z90Yfa+NraH/viiQFchLE6X8Z2p48ZPqJA==}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
@@ -3822,8 +3822,8 @@ packages:
       katex:
         optional: true
 
-  '@smartdoca/slides@0.3.0-alpha.4':
-    resolution: {integrity: sha512-1I2gT4stUsifHcz7IZloYTvdmIR3bpKSqHq3WEci1aduZ7Bt0dDYDFYCZ/TcAdvMZl/piaTK/EmqnX01AzXIZw==}
+  '@smartdoca/slides@0.3.0-alpha.5':
+    resolution: {integrity: sha512-ZommtGZxpjL/QZNDr3q9/LpKFeHnftJ7Q7kmxsRRI5YXSycmFAmfwzcvIq/BeSPWJWJ+uaofi4XSVbE1YB+Mhw==}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
@@ -6359,7 +6359,7 @@ packages:
 
   glob@10.5.0:
     resolution: {integrity: sha512-DfXN8DfhJ7NH3Oe7cFmu3NCu1wKbkReJ8TorzSAFbSKrlNaQSKfIzqYqVY8zlbs2NLBbWpRiU52GX2PbaBVNkg==}
-    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+    deprecated: Glob versions prior to v9 are no longer supported
     hasBin: true
 
   glob@7.2.3:
@@ -13611,7 +13611,7 @@ snapshots:
       y-protocols: 1.0.7(yjs@13.6.32)
       yjs: 13.6.32
 
-  '@smartdoca/canvas@0.5.15(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@smartdoca/canvas@0.5.16(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@icon-park/react': 1.4.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@leafer-in/arrow': 2.1.0(@leafer-in/interface@2.1.0(@leafer-ui/interface@2.1.0)(@leafer/interface@2.1.0))(@leafer-ui/draw@2.1.0)(@leafer-ui/interface@2.1.0)
@@ -13681,7 +13681,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@smartdoca/sheet@0.2.12(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@smartdoca/sheet@0.2.14(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@antv/g2': 5.4.8
       '@univerjs/core': 0.25.1(react@19.2.8)(rxjs@7.8.2)
@@ -13749,7 +13749,7 @@ snapshots:
     optionalDependencies:
       katex: 0.18.7
 
-  '@smartdoca/slides@0.3.0-alpha.4(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@smartdoca/slides@0.3.0-alpha.5(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@antv/g-svg': 2.1.1
       '@antv/g2': 5.4.8

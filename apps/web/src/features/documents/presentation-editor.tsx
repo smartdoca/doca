@@ -1,4 +1,5 @@
 import { useI18n } from "@web/shared/i18n.js";
+import { useCommentHighlight } from "@web/features/comments/use-comment-highlight.js";
 import { AIReferenceButton } from "@web/features/ai/ai-context.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Y from "yjs";
@@ -84,6 +85,7 @@ export default function PresentationDocument({
   const { locale, t } = useI18n();
   const attachmentPreview = useAttachmentPreview();
   const id = detail.resource.id;
+  const [highlightedComment, highlightComment] = useCommentHighlight(id, detail.comments);
   const sync = useSurfaceSync(id, user?.id, "eppt-yjs-v6", factory, changed, 2);
   const model = sync.binding?.value;
   const rank = Math.min(roleRank(detail.resource.role), sync.rank);
@@ -360,6 +362,7 @@ export default function PresentationDocument({
               onPresence={publish}
               status={sync.status}
               commentMarkers={presenting || !annotationsVisible ? [] : markers}
+              activeCommentId={presenting || !annotationsVisible ? null : highlightedComment}
               onCommentAnchorClick={(items) => {
                 setCandidates(items.map((c) => c.id));
                 setActive(items[0]?.id ?? null);
@@ -402,6 +405,7 @@ export default function PresentationDocument({
       )}
       {!presenting && (
         <RegionComments
+          onHighlightChange={highlightComment}
           createAction={createComment}
           detail={detail}
           user={user}

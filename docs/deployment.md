@@ -2,7 +2,7 @@
 
 [中文](deployment.zh-CN.md)
 
-One server can run the published image `docker.io/smartdoca/doca:0.2.12`. A single container uses SQLite and does not need PostgreSQL or Redis. Use those only when you run more than one application replica. See [single instance and horizontal scaling](horizontal-scaling.md).
+One server can run the image specified by `compose.yaml` on main. A single container uses SQLite and does not need PostgreSQL or Redis. Use those only when you run more than one application replica. See [single instance and horizontal scaling](horizontal-scaling.md).
 
 ## Requirements
 
@@ -14,9 +14,11 @@ The proxy must forward HTTP and the WebSocket path `/api/v1/ws`. Keep the origin
 
 ## Files
 
-Use a matching release checkout or transfer the [deployment bundle for servers without GitHub access](deployment-without-github.md). The business server does not need a source checkout. The image does not contain `scripts/bootstrap-admin.sh` or `scripts/reset-admin-password.sh`; those scripts stay on the host and start a one-off container. Include the `docker/chromium-seccomp.json` policy referenced by Compose as well.
+Clone the deployment files from main or transfer the [deployment bundle for servers without GitHub access](deployment-without-github.md). The business server does not need a source checkout. The image does not contain `scripts/bootstrap-admin.sh` or `scripts/reset-admin-password.sh`; those scripts stay on the host and start a one-off container. Include the `docker/chromium-seccomp.json` policy referenced by Compose as well.
 
 ```sh
+git clone --branch main --depth 1 https://github.com/smartdoca/doca.git
+cd doca
 cp docker.env.example .env
 ```
 
@@ -61,7 +63,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker compose up -d` pulls `docker.io/smartdoca/doca:0.2.12`. Add `--build` only when you want an image built from this checkout.
+`docker compose up -d` pulls the image specified by `compose.yaml`. Add `--build` only when you want an image built from this checkout.
 
 Check the container:
 
@@ -72,7 +74,7 @@ curl -fsS -H 'Host: docs.example.com' http://127.0.0.1:39120/health
 
 Replace `docs.example.com` with the host in your configured origin, including its port if nonstandard. The built-in container probe already supplies this Host; wait for `docker compose ps` to show `healthy`. A bare loopback curl is rejected with 421.
 
-A healthy process returns `{"status":"ok","version":"0.2.12"}`.
+A healthy process returns `status: "ok"` and the actual image version in `version`.
 
 Document rendering also needs its deployment checks: this checkout adds LibreOffice and sandboxed Chromium, while optional SAM requires a separate trusted Linux runtime. See [Docker document renderers](docker-rendering.md) for component availability, the included Chromium seccomp policy and the explicit SAM mount. A healthy server alone does not verify those tools.
 

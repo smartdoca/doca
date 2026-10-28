@@ -23,6 +23,7 @@ import "@web/features/account/account-menu.css";
 import { AccountMenu } from "@web/features/account/account-menu.js";
 import { LocaleSwitch } from "@web/features/account/locale-switch.js";
 import { AccountLogin } from "@web/features/auth/account-login.js";
+import { rememberLoginDocument, takeLoginDocument } from "@web/features/auth/login-return.js";
 import { AccountOnboarding } from "@web/features/auth/account-fields.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { BackLink } from "@web/shared/components/back-link.js";
@@ -360,6 +361,14 @@ function WorkspaceApp() {
   const librarySystemPage = libraryView === "system" && canManageLibrary;
 
   const currentDetail = detail?.resource.id === resourceId && detailAccount.current === bootstrap?.user?.id ? detail : null;
+  const [loginResource, setLoginResource] = useState<string | null>(null);
+  useEffect(() => {
+    if (!bootstrap?.user && resourceId && loginResource === resourceId)
+      rememberLoginDocument(hash);
+    else if (bootstrap && !bootstrap.user && !resourceId &&
+      hash !== "#/auth/complete" && hash !== "#/auth/error")
+      takeLoginDocument();
+  }, [bootstrap?.user, resourceId, loginResource, hash]);
   const bookContextId = /^#\/knowledge-books\/([0-9a-f-]{36})(?:\?|$)/i.exec(hash)?.[1];
   const [bookContext, setBookContext] = useState<{ userId: string; resource: Resource }>();
   useEffect(() => {
@@ -708,6 +717,7 @@ function WorkspaceApp() {
     if (!bootstrap) return;
     const controller = new AbortController();
     const requestAccount = bootstrap.user?.id;
+    setLoginResource(null);
     const stored = readDocumentStartup(hash);
     const cached = stored?.bootstrap.user?.id === requestAccount ? stored : null;
     if (detail?.resource.id !== resourceId && cached) {
@@ -770,6 +780,7 @@ function WorkspaceApp() {
       .catch((e) => {
         if (!controller.signal.aborted && e.name !== "AbortError") {
           if ([401, 403, 404].includes(e.status)) {
+            setLoginResource(resourceId);
             forgetStartupDocument(resourceId);
             setDetail(null);
           }
@@ -887,11 +898,10 @@ function WorkspaceApp() {
           const browserPending=sessionStorage.getItem("doca.browser-login.pending");
           if(browserPending?.startsWith("#/browser-connect?")) {location.hash=browserPending;return;}
           const token = rememberedShareToken();
+          const documentLocation = takeLoginDocument();
           location.hash = ["linked", "security_verified"].includes(status)
             ? "/account"
-            : token
-              ? "/s/" + token
-              : "/home";
+            : documentLocation ?? (token ? "/s/" + token : "/home");
         }}
       />
     );
@@ -910,15 +920,21 @@ function WorkspaceApp() {
       </main>
     );
 
-  if (!bootstrap.user && !resourceId)
+  if (!bootstrap.user && resourceId && !currentDetail && loginResource !== resourceId)
+    return <main className="auth">{t("shell.connecting")}</main>;
+  if (!bootstrap.user && (!resourceId || loginResource === resourceId))
     return (
       <Login
         bootstrap={bootstrap}
         logged={async () => {
           setBootstrap(await api("/bootstrap"));
+          const documentLocation = takeLoginDocument();
           const token = rememberedShareToken();
+          if (resourceId) return;
           if (hash.split("?")[0] === "#/shared-files/join" || hash.startsWith("#/browser-connect?")) return;
-          if(token) location.hash = "/s/" + token; else await navigateToDefaultHome().catch(()=>{location.hash="/home"});
+          if(token) location.hash = "/s/" + token;
+          else if (documentLocation) location.hash = documentLocation;
+          else await navigateToDefaultHome().catch(()=>{location.hash="/home"});
         }}
       />
     );

@@ -35,6 +35,12 @@ export function decodeSystemError(value: string): SystemErrorReason | undefined 
 type Translator = (key: MessageKey, values?: MessageValues) => string;
 
 const reasonKeys = {
+  handover_forbidden: "handover.error.forbidden",
+  handover_source_disabled: "handover.error.sourceDisabled",
+  handover_target_active: "handover.error.targetActive",
+  handover_changed: "handover.error.changed",
+  handover_conflict: "handover.error.conflict",
+  handover_selection: "handover.error.selection",
   file_trash_changed: "trash.filesChanged",
   file_trash_live_children: "trash.filesLiveChildren",
   mcp_invalid: "mcp.error.invalid",

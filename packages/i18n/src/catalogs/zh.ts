@@ -1,8 +1,10 @@
 import { browserClipperZh } from "./browser-clipper.js";
+import { handoverZh } from "./resource-handover.js";
 import type { MessageKey } from "./en";
 
 export const zh = {
   ...browserClipperZh,
+  ...handoverZh,
   "mcp.unattendedConfig": "可选：无人值守 Codex 授权",
   "mcp.unattendedHelp": "可选配置会在此客户端预先授权 doca_call。仅当你允许该服务按 Doca 中选定的权限直接执行、无需逐次确认时使用。",
   "mcp.title": "MCP 服务",

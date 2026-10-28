@@ -104,11 +104,11 @@ Enable MCP in personal settings, create a service, and copy its generated client
 
 ## Quick start with Docker
 
-Requires Git, Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. This installs the published 0.2.18 image into a fresh database. Existing installations must read the [release requirements](https://smartdoca.github.io/doca/#/en/releases/0.2.18) and preserve their data before changing versions.
+Requires Git, Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. This installs the image specified by compose.yaml on main into a fresh database. Existing installations must read the [release requirements](https://smartdoca.github.io/doca/#/en/releases/0.2.23) and preserve their data before changing versions.
 
 ```sh
-# 1. Clone the matching release
-git clone --branch v0.2.18 --depth 1 https://github.com/smartdoca/doca.git
+# 1. Clone deployment files from main
+git clone --branch main --depth 1 https://github.com/smartdoca/doca.git
 cd doca
 
 # 2. Configure the environment
@@ -154,7 +154,7 @@ Open `http://127.0.0.1:39130`. Initialize the administrator with `bash scripts/b
 - [Deployment and configuration](https://smartdoca.github.io/doca/#/en/operations/deployment)
 - [Plugin development](https://smartdoca.github.io/doca/#/en/plugins/plugin-development)
 - [HTTP API](https://smartdoca.github.io/doca/#/en/reference/api); the running application also provides `/api/openapi.json`.
-- [Release notes](https://smartdoca.github.io/doca/#/en/releases/0.2.18)
+- [Release notes](https://smartdoca.github.io/doca/#/en/releases/0.2.23)
 - [Documentation source](docs/README.md)
 
 For a documentation preview, run `pnpm docs:dev` and open `http://127.0.0.1:39140/#/en/`. `pnpm docs:check` verifies bilingual coverage and local links. GitHub Pages setup is in [documentation maintenance](docs/documentation.md).

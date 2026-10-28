@@ -1,5 +1,6 @@
 import { useCanvasRichExtensions } from "./canvas-rich-extensions.js";
 import { useI18n } from "@web/shared/i18n.js";
+import { useCommentHighlight } from "@web/features/comments/use-comment-highlight.js";
 import { useAI } from "@web/features/ai/ai-context.js";
 import { useDocumentReadOnly } from "@web/features/documents/document-mode.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -262,8 +263,13 @@ export default function CanvasDocument({
             capture: () => handle.captureAnchor(),
             flush: () => handle.flush(),
             valid: (a) => model.resolveAnchor(a).valid,
-            reveal: (a) => {
+            reveal: (a, source) => {
               handle.revealAnchor(a);
+              if (source === "comment") {
+                if (highlightTimer.current) clearTimeout(highlightTimer.current);
+                setReferenceHighlight(null);
+                return;
+              }
               if (!model.resolveAnchor(a).valid) return;
               if (highlightTimer.current) clearTimeout(highlightTimer.current);
               // Use the SDK's local decoration layer, never select or recolor CRDT elements.
@@ -284,6 +290,7 @@ export default function CanvasDocument({
     [handle, model],
   );
   const [showCommentMarks, setShowCommentMarks] = useState(false);
+  const [highlightedComment, highlightComment] = useCommentHighlight(id, detail.comments);
   const anchors = useMemo<CanvasAnchorDecoration[]>(
     () =>
       detail.comments.flatMap((c) => {
@@ -414,7 +421,7 @@ export default function CanvasDocument({
                   : []),
                 ...(referenceHighlight ? [referenceHighlight] : []),
               ]}
-              activeAnchorId={referenceHighlight?.anchorId ?? (showCommentMarks ? active : null)}
+              activeAnchorId={referenceHighlight?.anchorId ?? (showCommentMarks ? highlightedComment : null)}
               onAnchorClick={({ anchorId }) => {
                 if (anchorId !== "ai-reference-highlight") setActive(anchorId);
               }}
@@ -442,6 +449,7 @@ export default function CanvasDocument({
         />
       )}
       <RegionComments
+        onHighlightChange={highlightComment}
         onOpenChange={setShowCommentMarks}
         createAction={createComment}
         detail={detail}

@@ -36,6 +36,8 @@ import "@web/features/comments/rich-comments.css";
 import { EmojiPicker } from "@web/shared/components/emoji-picker.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { scrollCommentIntoView } from "./comment-scroll.js";
+import { useAttachmentPreview } from "@web/features/documents/attachment-preview.js";
+import { guessMime } from "@web/features/documents/document-file-preview.js";
 export type MentionUser = {
   id: string;
   display_name: string;
@@ -69,24 +71,34 @@ export function parsedComment(
 }
 export function CommentContent({ comment }: { comment: Comment }) {
   const { t } = useI18n();
+  const preview = useAttachmentPreview();
   if (comment.deleted_at)
     return <p className="subtle">{t("comment.deleted")}</p>;
+  const blocks = parsedComment(comment).blocks;
+  const images = blocks.filter(b => b.type === "image");
   return (
-    <div className="rich-comment-body">
-      {parsedComment(comment).blocks.map((b, i) =>
+    <div className="rich-comment-body" onPointerDown={event => event.stopPropagation()}>
+      {blocks.map((b, i) =>
         b.type === "image" ? (
-          <a
+          <button
+            type="button"
+            className="comment-image-preview"
             key={i}
-            href={assetUrl(b.assetId)}
-            target="_blank"
-            rel="noreferrer"
+            aria-label={b.alt || t("comment.image")}
+            onClick={() => preview.openImagePreview(images.map(image => ({
+              id: image.assetId,
+              name: image.alt || t("comment.image"),
+              mime: guessMime(image.alt || "", "image/*"),
+              url: assetUrl(image.assetId),
+              downloadUrl: assetUrl(image.assetId) + "?download=1",
+            })), images.indexOf(b))}
           >
             <img
               src={assetUrl(b.assetId)}
               alt={b.alt || t("comment.image")}
               loading="lazy"
             />
-          </a>
+          </button>
         ) : (
           <p key={i}>
             {b.children.map((n, j) =>
@@ -104,6 +116,7 @@ export function CommentContent({ comment }: { comment: Comment }) {
           </p>
         ),
       )}
+      {preview.dialog}
     </div>
   );
 }
@@ -318,6 +331,7 @@ export function CommentComposer({
       // clipboard and portalled file pickers, including the native textarea undo.
       onKeyDown={event => event.stopPropagation()}
       onKeyUp={event => event.stopPropagation()}
+      onPointerDown={event => event.stopPropagation()}
       onCopy={event => event.stopPropagation()}
       onCut={event => event.stopPropagation()}
       onPaste={event => event.stopPropagation()}

@@ -115,6 +115,14 @@
   border-radius: 6px;
   margin-top: 6px;
 }
+.rich-comment-body .comment-image-preview {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+  max-width: 100%;
+}
 .comment-mention {
   color: #3370ff;
   border-radius: 4px;

@@ -51,3 +51,5 @@ Lookups and lists use the same nearest decision, grant scope, and field override
 ## Verification
 
 Isolated tests cover multi-level inheritance, downgrade, blocking, future children, grant scope, turning inheritance off and on, field overrides, the public baseline, revoking a link source, accepting an invitation, approval results, and WebSocket revocation.
+
+Administrators can [hand over resources](admin-resource-handover.md) of disabled accounts after reviewing ownership and retained grants. This inventory exposes management metadata without granting access to private document bodies.
