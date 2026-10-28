@@ -15,7 +15,7 @@ DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root"
 
 Use a dedicated persistent directory, writable only by the service user and outside the static web tree. Multiple instances must share the same physical backend. Backups cover the database, every referenced file store and protected deployment configuration. A referenced storage ID must remain configured; changing its physical path or bucket does not move its bytes.
 
-Version 0.1.10 rejects the old database baseline, database-managed storage configuration and old plugin installation list. Old data is preserved without migration or conversion. Deploy to a new empty database and separate storage; see [release requirements](releases/0.1.10.md).
+Current startup reconciles supported database generations against the latest DDL. Unsupported generations and retired database-managed backend formats remain gated without automatic conversion. Existing deployments must follow the [database upgrade contract](database-schema-evolution.md) and [release requirements](releases/0.2.23.md), preserving their stores, rows and original credential master key.
 
 ## Docker uploads fail with EACCES
 
@@ -86,14 +86,14 @@ The database keeps the latest 20 full business snapshots. Each complete group of
 
 Live checkpoints, uncovered collaboration increments and attachments are not sampled. Trash preserves history; explicit permanent resource deletion queues archive reclamation after an hour and a reference recheck. No old recovery_json is decoded into a new schema or filled from the current baseline. Missing recovery metadata and unknown recovery versions still reject previews. Files require envelope v1, a matching hash, bounded decompression and index agreement. Background durable jobs retry failures without blocking content commits.
 
-The new database baseline is `doca-2026-10-09-history-storage-v1`; normal startup does not read old baselines. Upgrade accepts only `doca-2026-10-08-knowledge-books-v2`. Stop every host, back up the database, file store and configuration, then run:
+The current generation is `doca-2026-10-12-book-payload-storage-v1`. The following historical maintenance step applies only to exact `doca-2026-10-08-knowledge-books-v2` databases (released 0.1.13): it first records `doca-2026-10-09-history-storage-v1`, after which current startup can perform the approved structural alignment. Stop every host, back up the database, file store and configuration, retain the master key, then run:
 
 ```sh
 pnpm history:upgrade                 # Show requirements; no mutation
 pnpm history:upgrade --apply         # Add structure, update baseline and queue work; no immediate sampling
 ```
 
-Do not rebuild the database instead of upgrading. A failed upgrade transaction preserves the original database. Before returning to the previous host, stop every instance and import retained file-backed points:
+Do not rebuild the database instead of upgrading. A failed upgrade transaction preserves the original database. Direct history rollback accepts only `doca-2026-10-09-history-storage-v1` or its dedicated interrupted-rollback marker, not the current book-payload generation. For a current-generation database, first review [book-storage recovery](knowledge-book-storage-verification.md); stored checkpoint references can block that earlier rollback. Do not relabel a baseline to bypass validation. For an eligible history-generation database, stop every instance before importing retained points:
 
 ```sh
 pnpm history:rollback --apply --manifest /backup/history-cloud-references.json

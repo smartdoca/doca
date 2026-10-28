@@ -2,7 +2,7 @@
 
 [English](collaboration.md)
 
-本页描述宿主 0.1.10 当前实现。组件目标 API 与待实现事项见[协同契约](collaboration-sdk-contract.zh-CN.md)，早期单进程和临时包记录见[研发资料](research.zh-CN.md)。
+本页描述宿主 0.2.23 实现。组件目标 API 与待实现事项见[协同契约](collaboration-sdk-contract.zh-CN.md)，早期单进程和临时包记录见[研发资料](research.zh-CN.md)。
 
 ## 已接入格式
 

@@ -2,7 +2,7 @@
 
 [English](plugin-monitoring.md)
 
-SDK 源码 **0.1.11** 已实现。通过 `@smartdoca/plugin-sdk/monitoring` 导入 `monitoringServiceToken`（`monitoring.v1`）、`telemetryServiceToken`（`telemetry.v1`）及类型。源码实现与独立消费构建不表示已经发布 npm 包或部署生产环境。
+SDK 源码 **0.1.11** 已实现。通过 `@smartdoca/plugin-sdk/monitoring` 导入 `monitoringServiceToken`（`monitoring.v1`）、`telemetryServiceToken`（`telemetry.v1`）及类型。SDK 0.1.11 的 npm 验证记录见下方发布章节，生产部署另行验收。
 
 ## 声明与访问权限
 
@@ -88,4 +88,4 @@ telemetry.record(manifest.id, {
 
 ## SDK 发布 — 2026-10-13
 
-`@smartdoca/plugin-sdk@0.1.11` 已发布至 npm。公共注册表依赖消费者检查全部 17 个入口、监控与遥测 token 以及准确 SDK 版本；这不代表生产监控插件或移动设备验收完成。
+`@smartdoca/plugin-sdk@0.1.11` 已发布至 npm。公共注册表依赖消费者检查全部 16 个入口、监控与遥测 token 以及准确 SDK 版本；这不代表生产监控插件或移动设备验收完成。

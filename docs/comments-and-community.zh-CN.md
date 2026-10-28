@@ -7,7 +7,7 @@
 当前基线同时支持 SQLite / PostgreSQL：
 
 - `users.public_id`：独立于内部 UUID 的唯一用户标识，创建时归一化为小写，3–160 位，允许英文字母、数字和 `._@+-`。数据库唯一索引约束。注册和管理员创建可指定 `publicId`，省略则使用 login。创建后不随昵称变化。
-- SSO 使用已验证身份中的 preferred_username（OIDC）、login（GitHub），否则使用 subject。若无效或本站已占用，则生成身份源命名空间下的标识。绝不因同名、同邮箱、同 public_id 合并账号；认证关联仍由 provider + subject 唯一确定。绑定新登录方式不修改原用户标识。
+- SSO 资料按身份源配置映射；缺少合适的唯一用户名或其他必填资料时，`/auth/complete` 返回 `needs_profile`，由用户补全，不生成身份源命名空间下的用户名。绝不因同名、同邮箱、同 public_id 合并账号；认证关联仍由 provider + subject 唯一确定。绑定新登录方式不修改原用户标识。
 - `users.directory_mode`：可空，空表示跟随站点 `settings.directory_mode`。
 - `comments.body_json`：当前富评论 JSON；`body` 是用于检索、摘要和通知的派生纯文本。未删除评论必须具有合法的 `body_json`。
 - `notifications` 增加 actor_id、comment_id、dedupe_key。事件与业务修改在同一事务落库；dedupe_key 唯一索引抵御重复事件。
@@ -77,6 +77,8 @@
 
 
 五种格式各有永久评论锚点；上面的 Slate 选区说明仅适用于富文本。表格通过原生评论 API 捕获稳定行列 ID，结构变化后解析当前范围，服务端检查目标是否仍存在，见[实时协同](collaboration.zh-CN.md)。
+
+五种编辑器点击评论时只高亮该条关联内容；打开侧栏或跟随评论链接不恢复上次背景。点击另一条时替换高亮，点击其他位置、解决线程或关闭侧栏时清除。高亮仅属视图状态，不写单元格样式、图形填充、Yjs 更新或永久锚点。评论图片通过共享查看器缩放、复制和下载，见 [0.2.23 验收](verification/editor-comments-2026-10-28.md)。
 
 ## 通知
 

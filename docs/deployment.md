@@ -7,7 +7,7 @@ One server can run the image specified by `compose.yaml` on main. A single conta
 ## Requirements
 
 - Docker Engine and the Docker Compose plugin.
-- A DNS name and a TLS certificate for the public site.
+- An HTTP(S) origin reachable by users. Public HTTPS needs DNS and a TLS certificate; trusted internal HTTP is also supported.
 - A reverse proxy on the same machine as the container. Compose publishes Doca only on `127.0.0.1:39120`.
 
 The proxy must forward HTTP and the WebSocket path `/api/v1/ws`. Keep the original `Host` header.
@@ -28,7 +28,7 @@ Edit `.env` before the first start.
 
 File storage also requires `DOCA_FILE_STORE_ID` and `DOCA_FILE_STORES_JSON`, as provided by `docker.env.example`. Backend paths and credentials are read from the environment; the administration page is read-only. See [file storage](storage.md).
 
-Release 0.1.25 uses generation `doca-2026-10-12-book-payload-storage-v1`. Startup automatically aligns released 0.1.22 databases on `doca-2026-10-09-history-storage-v1` through current-DDL review/reconciliation and records the new generation. All old rows remain, including SQL book outcomes; no body conversion, cleanup or old-body adapter is added. Residual old book records can require manual handling. Existing 0.1.23 object data remains. See [database structure evolution](database-schema-evolution.md) and [0.1.25 requirements](releases/0.1.25.md). The exact 0.1.13 baseline `doca-2026-10-08-knowledge-books-v2` still needs the explicit history upgrade below. Preserve databases, private objects, configuration and the original credential master key.
+The current host uses generation `doca-2026-10-12-book-payload-storage-v1`. Startup automatically aligns released 0.1.22 databases on `doca-2026-10-09-history-storage-v1` through current-DDL review/reconciliation and records the new generation. All old rows remain, including SQL book outcomes; no body conversion, cleanup or old-body adapter is added. Residual old book records can require manual handling. Existing 0.1.23 object data remains. See [database structure evolution](database-schema-evolution.md) and [current release requirements](releases/0.2.23.md). The exact 0.1.13 baseline `doca-2026-10-08-knowledge-books-v2` still needs the explicit history upgrade below. Preserve databases, private objects, configuration and the original credential master key.
 
 `DOCA_ORIGIN` is the origin users type in the browser. HTTP and HTTPS are accepted, including in production. Use only the origin without a subpath, query, or fragment; a root trailing slash is normalized.
 
@@ -42,11 +42,11 @@ The Docker example already supplies the required file-store values. For a fresh 
 
 0.1.26 changes plugin storage to one [shared business database](plugin-database-isolation.md), separate from core. On 0.1.25, normally uninstall every external business plugin before stopping all instances. Private business records, credentials and objects are discarded without migration; core data and ordinary files remain. Remove obsolete per-plugin settings, configure one PostgreSQL database/account once (SQLite is automatic), then reinstall and reconfigure plugins. See [0.1.26 upgrade requirements](releases/0.1.26.md).
 
-Stop all old hosts and back up the database before updating. Released 0.1.22 schema aligns automatically on 0.1.25 startup with all existing business rows retained. No manual book command is required. Retained SQL book outcomes are not adapted to the native object format; handle residual records manually as needed. To preserve them as usable outcomes, run the existing optional [lossless conversion](knowledge-book-storage-verification.md) before first startup. Earlier supported generations first complete the history upgrade below. Update all host and web instances together.
+Stop all old hosts and back up the database before updating. Released 0.1.22 schema aligns automatically on current startup with all existing business rows retained. No manual book command is required. Retained SQL book outcomes are not adapted to the native object format; handle residual records manually as needed. To preserve them as usable outcomes, run the existing optional [lossless conversion](knowledge-book-storage-verification.md) before first startup. Earlier supported generations first complete the history upgrade below. Update all host and web instances together.
 
 ### Upgrade from 0.1.13
 
-Stop every Doca instance and back up databases (including SQLite WAL), file storage and configuration. Keep the original `DOCA_CREDENTIAL_MASTER_KEY`. Check out `v0.1.25`, pull the image and run one offline maintenance container with the existing deployment environment:
+Stop every Doca instance and back up databases (including SQLite WAL), file storage and configuration. Keep the original `DOCA_CREDENTIAL_MASTER_KEY`. Use the current main deployment files and their matching image. Pull it and run one offline maintenance container with the existing deployment environment:
 
 ```sh
 docker compose stop
@@ -56,7 +56,7 @@ docker compose run --rm --no-deps doca node --import tsx apps/server/src/bootstr
 
 Only `doca-2026-10-08-knowledge-books-v2` is accepted; the command never creates or resets the database. The transaction adds history archive tables and tasks while preserving all original snapshot bytes. After the new host starts, the latest 20 full snapshots remain in the database. For each group of 10 older snapshots, only the newest is retained in file storage; the other nine are removed after write/read verification and cannot be restored from the application. Storage failure retains the entire original group. History is displayed as one list; incomplete groups remain in the database. See [history storage and rollback](storage.md#history-storage-and-offline-upgrade).
 
-Before rollback, stop all instances and use this release's maintenance command with a new manifest path to restore retained points and the preceding baseline; then run the previous host. File bytes remain preserved. Sampled-away history requires the pre-upgrade backup. Never point the old image directly at the newer database.
+The command first records `doca-2026-10-09-history-storage-v1`; current startup then applies the approved structural alignment to `doca-2026-10-12-book-payload-storage-v1`. The direct history rollback command accepts only the history-storage generation or its interrupted rollback marker, so it cannot undo a database already aligned by the current host. See [history maintenance limits](storage.md#history-storage-and-offline-upgrade) and [book-storage recovery](knowledge-book-storage-verification.md) before any rollback. Preserve later writes and retained file bytes; sampled-away history requires the pre-upgrade backup. Never point an old image directly at a newer database.
 
 ```sh
 docker compose pull

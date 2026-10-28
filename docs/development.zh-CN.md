@@ -29,7 +29,7 @@ pnpm exec playwright-core install chromium --only-shell
 
 也可用 `DOCA_PDF_CHROMIUM` 指向支持的 Chromium 可执行文件。Linux 需要相应系统库并允许浏览器沙箱。本工作区 Dockerfile 为非 root 运行环境安装 Chromium 和中文字体；已发布镜像只有重新构建、发布后才包含这些改动。渲染不可用时会显示导出错误。
 
-运行 `node --import tsx scripts/qa-document-pdf.mts` 执行隔离视觉回归，不打开用户文档，在线截图、PDF 和本机重导入结果写入 `.local/document-pdf-qa/`。样式保真与已验收范围见[文件交换约定](editor-file-exchange-contract.zh-CN.md#按在线样式导出-pdf-与可编辑导入)。
+运行 `node --import tsx scripts/qa-document-pdf.mts` 执行隔离视觉回归，不打开用户文档，截图、PDF 和本机重导入结果默认写入 `artifacts/verification/document-pdf/`，可用 `DOCA_QA_OUTPUT` 指定 `artifacts/` 下的其他目录。样式保真与已验收范围见[文件交换约定](editor-file-exchange-contract.zh-CN.md#按在线样式导出-pdf-与可编辑导入)。
 
 ## 初始化管理员
 
@@ -61,7 +61,7 @@ unset DOCA_RESET_ADMIN_LOGIN DOCA_RESET_ADMIN_PASSWORD
 
 | 变量              | 默认                   | 用途                                |
 | ----------------- | ---------------------- | ----------------------------------- |
-| DOCA_ORIGIN       | http://127.0.0.1:39130 | 唯一浏览器源；部署为HTTPS域名       |
+| DOCA_ORIGIN       | http://127.0.0.1:39130 | 唯一浏览器源；生产支持 HTTP(S)       |
 | DOCA_HOST         | 127.0.0.1              | 监听地址                            |
 | DOCA_PORT         | 39120                  | API/发布服务端口                    |
 | DOCA_WEB_PORT     | 39130                  | 开发前端端口                        |
@@ -69,16 +69,16 @@ unset DOCA_RESET_ADMIN_LOGIN DOCA_RESET_ADMIN_PASSWORD
 | DOCA_SQLITE_PATH  | ./data/v1/doca.db      | 配置的 SQLite 数据库路径            |
 | DOCA_DATABASE_URL | 无                     | 配置的 PostgreSQL 数据库连接串      |
 | DOCA_BOOK_BATCH_CHECKPOINTS | on | 仅 on/off；off 停用批次恢复并保留检查点记录及对象 |
-| NODE_ENV          | 未设置                 | production强制HTTPS Origin并禁止dev |
-| DOCA_ASSET_BASE   | 空                     | 构建资源的 HTTPS 前缀；空则从本机 `/assets` 提供 |
+| NODE_ENV          | 未设置                 | production 提供构建产物并禁止 dev |
+| DOCA_ASSET_BASE   | 空                     | 构建资源的 HTTP(S) 前缀；空则从本机 `/assets` 提供 |
 
 ## 静态资源地址
 
 生产页面的 HTML 始终由 Doca 返回，接口也使用页面所在的源。`DOCA_ASSET_BASE` 只改写 HTML 里的 `/assets/...` 地址。
 
-不设置时，JS、CSS 和其他构建文件由容器从 `/assets` 读取。设置时，HTML 中的这些地址改为该前缀，例如 `https://cdn.example.com/doca/0.1.10/assets/index-abc.js`。前缀必须是没有账号、查询参数或哈希的 HTTP(S) URL；生产环境必须是 HTTPS。容器里的 `/assets` 仍然保留，样式表内部以根路径引用的字体和图片会继续回到 Doca。
+不设置时，JS、CSS 和其他构建文件由容器从 `/assets` 读取。设置时，HTML 中的这些地址改为该前缀，例如 `https://cdn.example.com/doca/0.1.10/assets/index-abc.js`。前缀必须是没有账号、查询参数或哈希的 HTTP(S) URL；公网部署使用 HTTPS，可信内网可使用 HTTP。容器里的 `/assets` 仍然保留，样式表内部以根路径引用的字体和图片会继续回到 Doca。
 
-推送正式版本标签 `v1.2.3` 时，GitHub Actions 会构建网页并创建 Release，附件是 `doca-web-assets-v1.2.3.tar.gz`。解压后保留其中的 `assets` 目录，再把包含该目录的 HTTPS 前缀写入 `DOCA_ASSET_BASE`。`v1.2.3-rc.1` 这类预发布标签不会创建 Release。推送到 `main` 也不会。浏览器不要直接使用 `github.com/.../releases/download` 作为 `DOCA_ASSET_BASE`：下载地址会跳转，也不为 ES module 提供跨源响应头。把解压出的 `assets` 目录放到允许跨源读取脚本的 CDN 或对象存储上。
+推送正式版本标签 `v1.2.3` 时，GitHub Actions 会构建网页并创建 Release，附件是 `doca-web-assets-v1.2.3.tar.gz`。解压后保留其中的 `assets` 目录，再把包含该目录的 HTTP(S) 前缀写入 `DOCA_ASSET_BASE`。`v1.2.3-rc.1` 这类预发布标签不会创建 Release。推送到 `main` 也不会。浏览器不要直接使用 `github.com/.../releases/download` 作为 `DOCA_ASSET_BASE`：下载地址会跳转，也不为 ES module 提供跨源响应头。把解压出的 `assets` 目录放到允许跨源读取脚本的 CDN 或对象存储上。
 
 ## 发布模式
 
@@ -121,7 +121,7 @@ kubectl logs -f deploy/doca --tail=200
 
 浏览器中的 AI 会话接口会返回 `jobs[].id`、`jobs[].status` 和 `jobs[].error`。用这个 job ID 在日志中定位对应的 `AI job failed` 记录即可；日志只记录脱敏后的错误分类，不会输出模型密钥或完整提示词。
 
-这是可运行开发基线，尚非生产验收发布：账号找回已实现，联系方式找回需配置验证网关；OIDC 提供方、完整监控、大规模查询优化等仍待完善。外部 OIDC 和社交登录适配已实现，凭据部署和真实平台联调见 [身份认证说明](authentication.zh-CN.md)，能力边界见 [架构](architecture.zh-CN.md)。
+这是可运行开发基线，尚非生产验收发布：账号找回已实现，联系方式找回需配置验证网关；OIDC 提供方尚未实现；目标基础设施监控和大规模查询优化仍需单独验收，公共[监控服务](plugin-monitoring.zh-CN.md)已实现。外部 OIDC 和社交登录适配已实现，凭据部署和真实平台联调见 [身份认证说明](authentication.zh-CN.md)，能力边界见 [架构](architecture.zh-CN.md)。
 
 ## 数据保护
 
@@ -154,4 +154,4 @@ tests/cloud.test.ts使用临时SQLite与临时账号，结束清理测试目录�
 
 覆盖私有隔离（含管理员）、公开阅读、权限继承/隐藏祖先、版本冲突、所有权转移、树环、移动重置授权、删除批次恢复、独立复制、评论权限、反应幂等、通知隔离、Host/Origin、注册停用、会话撤销、重启持久化与OpenAPI路由。
 
-已用本地浏览器检查登录、主页、搜索打开文档、实际访问记录和管理员统计；新增客户端无请求体回归测试。仍需完整浏览器端到端覆盖、真实PostgreSQL、全面键盘无障碍、反代HTTPS/限流、负载与长期运行验收，不能以SQLite通过代替。
+已用本地浏览器检查登录、主页、搜索打开文档、实际访问记录和管理员统计；新增客户端无请求体回归测试。专项浏览器和隔离 PostgreSQL 17/18 检查见[验收记录](verification/README.md)；完整浏览器端到端覆盖、目标环境 PostgreSQL、全面键盘无障碍、反代限流、负载与长期运行仍需验收，不能以 SQLite 通过代替。

@@ -3,9 +3,37 @@ name: Documentation
 on:
   push:
     branches: [main]
-    paths: ["docs/**", "README*.md", "scripts/docs-site.mjs", ".github/workflows/docs.yml", "package.json", "pnpm-lock.yaml"]
+    paths:
+      [
+        "**/*.md",
+        "**/*.mdx",
+        "docs/**",
+        "skills/**",
+        "scripts/docs-site.mjs",
+        "scripts/lib/documentation.mjs",
+        "scripts/sync-docs-skills.mjs",
+        "scripts/tests/documentation.test.mjs",
+        "packages/db/src/**",
+        ".github/workflows/docs.yml",
+        "package.json",
+        "pnpm-lock.yaml",
+      ]
   pull_request:
-    paths: ["docs/**", "README*.md", "scripts/docs-site.mjs", ".github/workflows/docs.yml", "package.json", "pnpm-lock.yaml"]
+    paths:
+      [
+        "**/*.md",
+        "**/*.mdx",
+        "docs/**",
+        "skills/**",
+        "scripts/docs-site.mjs",
+        "scripts/lib/documentation.mjs",
+        "scripts/sync-docs-skills.mjs",
+        "scripts/tests/documentation.test.mjs",
+        "packages/db/src/**",
+        ".github/workflows/docs.yml",
+        "package.json",
+        "pnpm-lock.yaml",
+      ]
   workflow_dispatch:
 
 permissions:
@@ -27,7 +55,9 @@ jobs:
         run: corepack enable && corepack prepare pnpm@11.25.0 --activate
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Check bilingual documents and links
+      - name: Test documentation checks
+        run: pnpm test:docs
+      - name: Check repository documents and bilingual publication
         run: pnpm docs:check
       - name: Prepare the Docsify site
         run: pnpm docs:build

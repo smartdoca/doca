@@ -2,6 +2,8 @@
 
 Doca's public plugin SDK. Plugins declare service requirements and own business models and authorization. All persistence uses public host-managed services; installed packages must declare `doca.storage: "host"` and never select local/remote backends or storage paths. Managed SQL/private objects are exported in 0.1.7, managed credentials in source 0.1.8; temporary workspaces are not exported; see the [storage contract](../../docs/plugin-horizontal-scaling.md). They must not import host source paths or use private runtime bridges.
 
+Current package: **0.1.11**. The [publication record](../../docs/plugin-monitoring.md#sdk-publication--2026-10-13) records npm verification; source interfaces do not establish production or native-device acceptance. Older version headings below describe when capabilities were introduced.
+
 ## Monitoring and telemetry (0.1.11)
 
 `@smartdoca/plugin-sdk/monitoring` exports `monitoringServiceToken` (`monitoring.v1`) and `telemetryServiceToken` (`telemetry.v1`). Declare required injections and `sdkRange: "^0.1.11"`. Read site counts, realtime online users, HTTP QPS/errors/duration histograms, bounded structured logs, existing audit, queue diagnostics, AI usage and health. Plugins can write installation-bound logs and counter/gauge/histogram metrics. `host.platform.monitoring` exposes the fixed read methods to active administrators of a live monitoring plugin.
@@ -34,7 +36,7 @@ This source version also contains the sidebar `web.leftMore` / `global.leftMore`
 
 ## Public capabilities added in 0.1.3
 
-- Installed plugins must implement `uninstall(context)`. The host calls it when an administrator uninstalls the plugin. The hook performs business cleanup through public host services, never by opening/deleting storage paths. Managed private-store cleanup belongs to the host and its cluster coordinator is not implemented yet. The call is idempotent. `dispose` only releases process resources and preserves durable state.
+- Installed plugins must implement `uninstall(context)`. The host calls it when an administrator uninstalls the plugin. The hook performs business cleanup through public host services, never by opening/deleting storage paths. Managed private-store cleanup and generation fencing belong to the host and are implemented; cluster-wide business-task draining remains unavailable. The call is idempotent. `dispose` only releases process resources and preserves durable state.
 - `PLUGIN_SDK_VERSION` is this package's version. Import it from `@smartdoca/plugin-sdk` or `@smartdoca/plugin-sdk/version`.
 
 ## Public capabilities added in 0.1.2
@@ -46,9 +48,9 @@ This source version also contains the sidebar `web.leftMore` / `global.leftMore`
 
 The source types and generated declarations define exact request/response fields. The Doca repository's `docs/plugin-development.md` is the development entry point, with `docs/plugin-content.md`, `docs/plugin-activity.md`, and `docs/plugin-native.md` describing integration and limits. A source must implement the current protocol; the host does not convert the earlier knowledge source protocol.
 
-## Template and material providers (SDK 0.1.5)
+## Template and material providers
 
-`@smartdoca/plugin-sdk/creation-resources` exports `templatesServiceToken` (`templates.v1`) and `materialsServiceToken` (`materials.v2`). Register providers/consumers through injected services; plugin lifecycle owns disposers. `host.platform.templates/materials` and injected `host.TemplatePicker/MaterialPicker` share the same authenticated services. No providers are installed by default. See [resource contract](../../docs/creation-resources.md).
+`@smartdoca/plugin-sdk/creation-resources` exports `templatesServiceToken` (`templates.v1`) and `materialsServiceToken` (`materials.v2`). Templates were introduced in SDK 0.1.5; the current materials.v2 collection contract requires SDK 0.1.9 or later. Register providers/consumers through injected services; plugin lifecycle owns disposers. `host.platform.templates/materials` and injected `host.TemplatePicker/MaterialPicker` share the same authenticated services. No providers are installed by default. See [resource contract](../../docs/creation-resources.md).
 
 ## Managed storage
 

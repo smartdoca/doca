@@ -61,7 +61,7 @@ Rich text for plans and meeting notes, with a library tree, formatting tools, pe
   </tr>
 </table>
 
-<p align="center"><sub>Five editor screenshots updated on 2026-10-17, captured from Doca 0.1.32 with sample content in an isolated local deployment.</sub></p>
+<p align="center"><sub>Five editor screenshots updated on 2026-10-17, captured from Doca 0.1.31 with sample content in an isolated local deployment.</sub></p>
 
 ## What you can do
 
@@ -114,6 +114,7 @@ cd doca
 # 2. Configure the environment
 cp docker.env.example .env
 # Edit .env: set DOCA_ORIGIN to your HTTP(S) origin.
+# For a fresh install, replace the public DOCA_CREDENTIAL_MASTER_KEY sample with openssl rand -hex 32 output.
 # Keep the example local file-store configuration for a single server.
 
 # 3. Pull the image
@@ -141,7 +142,7 @@ Node.js 22.12 or newer and pnpm 11.25.0:
 ```sh
 pnpm install --frozen-lockfile
 cp .env.example .env
-# Set the storage root in .env to an absolute writable local directory.
+# Set a writable absolute storage root; replace the public master-key sample for a fresh install.
 pnpm dev
 ```
 

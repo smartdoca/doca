@@ -63,7 +63,7 @@ Doca 把**在线文档、Markdown、在线表格、幻灯片、无限画布、�
   </tr>
 </table>
 
-<p align="center"><sub>五种编辑器截图更新于 2026-10-17，基于 Doca 0.1.32 的真实界面，使用隔离本地部署中的示例内容。</sub></p>
+<p align="center"><sub>五种编辑器截图更新于 2026-10-17，基于 Doca 0.1.31 的真实界面，使用隔离本地部署中的示例内容。</sub></p>
 
 ## 主要功能
 
@@ -116,6 +116,7 @@ cd doca
 # 2. 配置环境变量
 cp docker.env.example .env
 # 编辑 .env，将 DOCA_ORIGIN 改成自己的 HTTP(S) 来源。
+# 首次安装用 openssl rand -hex 32 生成密钥，替换公开示例的 DOCA_CREDENTIAL_MASTER_KEY。
 # 单机部署保留示例中的本地文件存储配置。
 
 # 3. 拉取镜像
@@ -143,6 +144,7 @@ bash scripts/bootstrap-admin.sh
 ```sh
 pnpm install --frozen-lockfile
 cp .env.example .env
+# 把存储 root 改为本机可写的绝对路径；首次安装替换公开示例主密钥。
 pnpm dev
 ```
 

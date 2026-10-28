@@ -13,7 +13,7 @@ MIT 许可证许可。
 
 ## 开发检查
 
-使用 Node.js 22 或更高版本，以及 `package.json` 中声明的 pnpm 版本。
+使用 Node.js 22.12 或更高版本，以及 `package.json` 中声明的 pnpm 版本。启动应用前先按[开发环境](docs/development.zh-CN.md)完成配置。
 
 ```sh
 pnpm install --frozen-lockfile
@@ -30,5 +30,7 @@ pnpm check
 - 保留第三方版权、许可证与署名声明。
 - 禁止提交凭据、用户数据、本地数据库或生成的验收输出。
 - 优先更新英文文档，并保持中文译文有链接且内容同步。
+- 遵守 [AGENTS.md](AGENTS.md)，兼容性变化须事先确认，数据库改动须遵守[升级规范](docs/database-schema-evolution.zh-CN.md)。生成的验收产物写入 `artifacts/`，审阅后的摘要提交到 `docs/verification/`。
+- 文档改动运行 `pnpm docs:check` 和 `pnpm docs:build`。
 
-安全漏洞不能通过公开 Issue 报告；正式公开前会在 `SECURITY.md` 中提供私密报告流程。
+安全漏洞请通过 README 中的作者邮箱 [smartdoca@163.com](mailto:smartdoca@163.com) 私下报告，不在公开 Issue 中披露利用细节或凭据。

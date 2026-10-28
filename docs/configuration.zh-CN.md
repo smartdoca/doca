@@ -59,7 +59,7 @@ DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root"
 
 Webhook 投递始终使用独立数据库。SQLite 在主库旁创建 `webhooks.db`。PostgreSQL 默认使用 `<主库名>_webhooks`，缺少该库时尝试创建；账号没有建库权限时，须预建独立库并授权，或设置 `DOCA_WEBHOOK_DATABASE_URL` 指向有权限的独立库。AI 存储在 Compose 中使用 `ai.db`，PostgreSQL 使用主库的 `doca_ai` schema，账号须有初始化权限。即使未配置外部模型，这些存储也需备份。
 
-多副本需要共享 PostgreSQL、Redis 和文件存储；修改变量不搬运已有数据，见[水平扩展](horizontal-scaling.zh-CN.md)与[发行要求](releases/0.1.10.zh-CN.md)。
+多副本需要共享 PostgreSQL、Redis 和文件存储；修改变量不搬运已有数据，见[水平扩展](horizontal-scaling.zh-CN.md)与[发行要求](releases/0.2.23.zh-CN.md)。
 
 ## Compose 环境变量传递
 

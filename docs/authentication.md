@@ -38,7 +38,7 @@ When sign-in methods change, the server checks every active user and administrat
 
 WeChat and QQ adapters are implemented and tested with simulated responses. They are not accepted against the live platforms. Every external provider needs an application and credentials from that platform. WeChat and QQ in this flow do not send PKCE and are not equivalent to OIDC PKCE.
 
-Doca is an SSO client only. Acting as an OIDC provider, SAML, and global SSO logout or revocation sync are not implemented. Disabling an account at the identity provider does not revoke a Doca session that was already issued for 8 hours. A site administrator disables the user, or a later IdP lifecycle event is required.
+Doca is an SSO client only. Acting as an OIDC provider, SAML, and global SSO logout or revocation sync are not implemented. Disabling an account at the identity provider does not revoke an already issued Doca session. Browser sessions default to 24 hours, configurable through [login lifetime](configuration.md#login-lifetime); existing sessions keep their stored expiry. A site administrator disables the user, or a later IdP lifecycle event is required.
 
 ## Deployment
 

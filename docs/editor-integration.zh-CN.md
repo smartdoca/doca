@@ -2,7 +2,7 @@
 
 [English](editor-integration.md)
 
-当前工作区已接入五种编辑器。按安装包真实导出使用接口，目标能力与未实现项不能作为已有 API；详细职责见[接入参考](../skills/doca-editor-integration/references/integration.md)及[协同契约](collaboration-sdk-contract.zh-CN.md)。
+本文是五种编辑器的集成源文档，子包通过可在仓库外使用的 [skill 引用](../skills/doca-editor-integration/references/integration.md)读取。按安装包真实导出使用接口，目标能力与未实现项不能作为已有 API；实时协同要求遵守[协同契约](collaboration-sdk-contract.zh-CN.md)。
 
 ## 已安装包与宿主适配
 

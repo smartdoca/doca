@@ -24,6 +24,7 @@
     "build:plugin-sdk": "node scripts/build-plugin-sdk.mjs",
     "deploy:pack": "node scripts/pack-deployment.mjs",
     "docs:check": "node scripts/docs-site.mjs check",
+    "test:docs": "node --test scripts/tests/documentation.test.mjs",
     "docs:build": "node scripts/docs-site.mjs build",
     "docs:dev": "pnpm docs:build && vite .cache/docs-site --host 127.0.0.1 --port 39140",
     "knowledge-books:storage": "tsx apps/server/src/bootstrap/knowledge-book-storage.ts",

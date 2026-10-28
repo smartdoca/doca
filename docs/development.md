@@ -29,7 +29,7 @@ pnpm exec playwright-core install chromium --only-shell
 
 Alternatively set `DOCA_PDF_CHROMIUM` to a supported Chromium executable. On Linux the browser's system libraries and sandbox must be available. This checkout's Dockerfile installs Chromium and CJK fonts for the non-root runtime; a published image gains these changes only after a build/release. Renderer failures return a visible export error.
 
-Run the isolated visual regression with `node --import tsx scripts/qa-document-pdf.mts`. It opens no user documents and writes online screenshots, PDFs and native reimports to `.local/document-pdf-qa/`. See [file exchange](editor-file-exchange-contract.md#rendered-pdf-and-editable-import) for fidelity and verified limits.
+Run the isolated visual regression with `node --import tsx scripts/qa-document-pdf.mts`. It opens no user documents and writes screenshots, PDFs and native reimports to `artifacts/verification/document-pdf/` by default; `DOCA_QA_OUTPUT` selects another directory under `artifacts/`. See [file exchange](editor-file-exchange-contract.md#rendered-pdf-and-editable-import) for fidelity and verified limits.
 
 ## Create the administrator
 
@@ -61,7 +61,7 @@ The command checks that the account is an enabled administrator, updates the pas
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| DOCA_ORIGIN | http://127.0.0.1:39130 | The only browser origin. Production uses an HTTPS name |
+| DOCA_ORIGIN | http://127.0.0.1:39130 | The only browser origin; HTTP(S) is supported in production |
 | DOCA_HOST | 127.0.0.1 | Bind address |
 | DOCA_PORT | 39120 | API and published server port |
 | DOCA_WEB_PORT | 39130 | Dev web port |
@@ -69,16 +69,16 @@ The command checks that the account is an enabled administrator, updates the pas
 | DOCA_SQLITE_PATH | ./data/v1/doca.db | The current database file |
 | DOCA_DATABASE_URL | none | PostgreSQL URL for the configured database |
 | DOCA_BOOK_BATCH_CHECKPOINTS | on | on/off only; off disables batch recovery, preserving stored checkpoints and objects |
-| NODE_ENV | unset | production requires an HTTPS origin and disables dev |
-| DOCA_ASSET_BASE | empty | HTTPS prefix for built assets. Empty serves `/assets` locally |
+| NODE_ENV | unset | production serves built assets and disables dev |
+| DOCA_ASSET_BASE | empty | HTTP(S) prefix for built assets. Empty serves `/assets` locally |
 
 ## Static asset URLs
 
 Production HTML always comes from Doca, and the API uses that same origin. `DOCA_ASSET_BASE` only rewrites `/assets/...` URLs inside the HTML.
 
-When it is unset, the container serves JS, CSS, and other build files from `/assets`. When it is set, those HTML URLs use the prefix, for example `https://cdn.example.com/doca/0.1.10/assets/index-abc.js`. The prefix is an HTTP(S) URL with no userinfo, query, or hash. Production requires HTTPS. `/assets` remains in the container. Fonts and images referenced from CSS with a root path still come back to Doca.
+When it is unset, the container serves JS, CSS, and other build files from `/assets`. When it is set, those HTML URLs use the prefix, for example `https://cdn.example.com/doca/0.1.10/assets/index-abc.js`. The prefix is an HTTP(S) URL with no userinfo, query, or hash. Use HTTPS for a public site or HTTP on a trusted internal network. `/assets` remains in the container. Fonts and images referenced from CSS with a root path still come back to Doca.
 
-An official tag such as `v1.2.3` makes GitHub Actions build the web app and create a Release. The attachment is `doca-web-assets-v1.2.3.tar.gz`. Keep the `assets` directory after unpacking, and set `DOCA_ASSET_BASE` to an HTTPS prefix that contains it. A prerelease tag such as `v1.2.3-rc.1` does not create a Release. A push to `main` does not either. Do not use `github.com/.../releases/download` as `DOCA_ASSET_BASE`. That URL redirects and does not send cross-origin headers for ES modules. Put the unpacked `assets` directory on a CDN or object store that allows cross-origin script reads.
+An official tag such as `v1.2.3` makes GitHub Actions build the web app and create a Release. The attachment is `doca-web-assets-v1.2.3.tar.gz`. Keep the `assets` directory after unpacking, and set `DOCA_ASSET_BASE` to an HTTP(S) prefix that contains it. A prerelease tag such as `v1.2.3-rc.1` does not create a Release. A push to `main` does not either. Do not use `github.com/.../releases/download` as `DOCA_ASSET_BASE`. That URL redirects and does not send cross-origin headers for ES modules. Put the unpacked `assets` directory on a CDN or object store that allows cross-origin script reads.
 
 ## Production process
 
@@ -108,7 +108,7 @@ docker compose logs --since=30m doca | grep -E "AI job failed|AI 工作流|模�
 
 With Docker alone, replace `doca` with the container name. On Kubernetes, read the pod stdout with `kubectl logs`. The browser session API returns `jobs[].id`, `jobs[].status`, and `jobs[].error`. Match that job id to `AI job failed`. Logs record a redacted error class. They do not print model keys or the full prompt.
 
-This is a runnable development baseline, not a finished production acceptance. Account recovery is implemented and requires configured verification gateways for contact-based recovery. Acting as an OIDC provider, complete monitoring and large-query tuning still need work. External OIDC and social sign-in adapters exist. Live credentials are in [authentication](authentication.md). Boundaries are in [architecture](architecture.md).
+This is a runnable development baseline, not a finished production acceptance. Account recovery is implemented and requires configured verification gateways for contact-based recovery. Acting as an OIDC provider remains unavailable; target-infrastructure monitoring and large-query tuning need separate acceptance. The public [monitoring service](plugin-monitoring.md) is implemented. External OIDC and social sign-in adapters exist. Live credentials are in [authentication](authentication.md). Boundaries are in [architecture](architecture.md).
 
 ## Data protection
 
@@ -141,4 +141,4 @@ pnpm build
 
 Coverage includes private isolation, including administrators, public reading, inheritance and hidden ancestors, version conflicts, ownership transfer, tree cycles, move resetting grants, batch restore, independent copy, comment permissions, idempotent reactions, notification isolation, Host and Origin, registration and disable, session revocation, restart persistence, and OpenAPI routes.
 
-Login, home, opening a document from search, visit records, and admin statistics have been checked in a local browser. A full browser end-to-end suite, real PostgreSQL, keyboard accessibility, HTTPS rate limits, load, and long-running acceptance are still required. Passing on SQLite does not replace them.
+Login, home, opening a document from search, visit records, and admin statistics have been checked in a local browser. Case-specific browser and isolated PostgreSQL 17/18 checks are recorded in [verification records](verification/README.md). Full browser coverage, target-infrastructure PostgreSQL, keyboard accessibility, proxy rate limits, load, and long-running acceptance are still required. Passing on SQLite does not replace them.

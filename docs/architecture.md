@@ -2,7 +2,7 @@
 
 [中文](architecture.zh-CN.md)
 
-Baseline: host 0.1.10 / SDK 0.1.9, checked against current source on 2026-10-04. This describes implemented assembly and boundaries; deployment-specific services and device behavior need separate acceptance. Start with [capabilities and limits](features.md).
+Baseline: host 0.2.23 / SDK 0.1.11, documentation checked against source on 2026-10-28. This describes implemented assembly and boundaries; deployment-specific services and device behavior need separate acceptance. Start with [capabilities and limits](features.md).
 
 ## Application and modules
 
@@ -35,7 +35,7 @@ The default host contains rich text, Markdown, spreadsheets, slides, canvas, doc
 | `apps/web/src/app/app.tsx` | Workspace routing and feature assembly |
 | `apps/web/src/features/documents/document-editor.tsx` | Dispatch to the five installed editor packages |
 | `packages/core/src` | Domain rules, authorization and transactions |
-| `packages/db/src/create-schema.ts` | Current empty-database baseline |
+| `packages/db/src/create-schema.ts` | Current target DDL for fresh creation and startup reconciliation |
 | `packages/plugin-sdk` | Public server/Web/plugin interfaces |
 | `tests` | Isolated unit and integration checks |
 
@@ -43,7 +43,7 @@ Web code calls HTTP DTOs rather than importing database or password internals. B
 
 ## Identity and security
 
-One deployment has one account system, without organization/space/tenant tables. Registration and external providers start disabled; no default administrator exists. Passwords use scrypt and random salts; the database stores session digests. Site sessions last eight hours. Password changes and account disabling revoke sessions.
+One deployment has one account system, without organization/space/tenant tables. Registration and external providers start disabled; no default administrator exists. Passwords use scrypt and random salts; the database stores session digests. Browser, QR-login and WebView sessions default to 24 hours; mobile bearer sessions default to 180 days. Both lifetimes are configurable through [session settings](configuration.md#login-lifetime). Password changes and account disabling revoke sessions.
 
 Every request checks configured Host. Mutations also check same-origin Origin. Site cookies are HttpOnly, SameSite=Strict, and Secure over HTTPS. Authentication adapters support external OIDC and social providers; contact verification and recovery are implemented, with verification gateways required. Registration approval has a dedicated review workflow. Doca as an OIDC provider, SAML, and IdP-wide logout are unavailable. See [authentication](authentication.md).
 
@@ -57,8 +57,8 @@ SQLite, AI and Webhook stores plus local files fit a single instance. PostgreSQL
 
 Objects retain stable store IDs and object references. Environment configuration selects physical stores; the storage administration page is read-only. Private downloads recheck access. A CDN supplies expiring authorized URLs and never replaces storage. Backups include every database, referenced backend, plugin archive and protected configuration. See [file storage](storage.md).
 
-Installed plugins use shared registry records and immutable archives, plus a writable per-instance cache restored on startup. Manual restart activates desired releases. Managed private SQL, objects and credentials are implemented; task draining, temporary workspaces and stronger process isolation remain gaps. Exact-version validation rejects unsupported baselines or structures; no migration or compatibility adapter is added here. Existing data must be preserved. See [release requirements](releases/0.1.10.md).
+Installed plugins use shared registry records and immutable archives, plus a writable per-instance cache restored on startup. Manual restart activates desired releases. Managed private SQL, objects and credentials are implemented; task draining, temporary workspaces and stronger process isolation remain gaps. Exact-version validation rejects unsupported baselines or structures; no migration or compatibility adapter is added here. Existing data must be preserved. See [release requirements](releases/0.2.23.md) and the [database upgrade contract](database-schema-evolution.md).
 
 ## Current limits and acceptance
 
-Comment threads and notifications have dedicated paginated endpoints; document detail is not a complete comment export. Persistent offline outboxes, native device integration, live identity/AI providers, production S3/CDN, and target-infrastructure failover require separate work or acceptance. Automated isolated tests demonstrate their stated scope; a build does not prove all external services are operational.
+Comment threads and notifications have dedicated paginated endpoints; document detail is not a complete comment export. Persistent local replicas and outboxes are implemented; a complete offline application shell is unavailable. Native device integration, live identity/AI providers, production S3/CDN, and target-infrastructure failover require separate acceptance. Automated isolated tests demonstrate their stated scope; a build does not prove all external services are operational.

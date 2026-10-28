@@ -8,11 +8,11 @@ No. Run `bash scripts/bootstrap-admin.sh` after the container is healthy. Passwo
 
 ## Why does the browser not connect to port 39120?
 
-Compose binds the port to server loopback. Production expects the HTTPS origin configured in `DOCA_ORIGIN`, reached through a reverse proxy. Do not open a production deployment using `http://server-ip:39120`. Check DNS, TLS, proxy headers, and WebSocket forwarding. See [deployment](deployment.md).
+Compose binds the port to server loopback. Use the HTTP(S) origin configured in `DOCA_ORIGIN`, reached through the configured reverse proxy. A server-IP URL works only when the origin and port mapping explicitly match it. Check the mapping, Host, TLS when used, and WebSocket forwarding. See [deployment](deployment.md).
 
 ## Which environment example should I use?
 
-For the published Docker image, copy `docker.env.example`. For source development, copy `.env.example`. Configure `DOCA_ORIGIN`, `DOCA_FILE_STORE_ID`, and `DOCA_FILE_STORES_JSON` before starting Compose. See [configuration](configuration.md).
+For the published Docker image, copy `docker.env.example`. For source development, copy `.env.example`. Configure `DOCA_ORIGIN`, `DOCA_FILE_STORE_ID`, `DOCA_FILE_STORES_JSON`, and the required persistent `DOCA_CREDENTIAL_MASTER_KEY` before starting Compose. Replace the public sample key for a fresh install; retain the original key for an existing database. See [configuration](configuration.md).
 
 ## Why do I get 421, 403, or a disconnected editor?
 
@@ -20,7 +20,7 @@ For the published Docker image, copy `docker.env.example`. For source developmen
 
 ## What should I do if startup rejects the database baseline?
 
-Stop and read the matching [release requirements](releases/0.1.10.md). Doca 0.1.10 does not automatically migrate older databases. Preserve the old deployment, database, files, and secrets for rollback. Do not delete tables, reset the volume, or change the baseline marker to force startup.
+Stop and read the [database upgrade contract](database-schema-evolution.md) and matching [release requirements](releases/0.2.23.md). Supported generations receive approved structural reconciliation; unsupported generations, semantic changes and review-required differences stop startup before persistent changes. Preserve the old deployment, database, files, and secrets for rollback. Do not delete tables, reset the volume, or change the baseline marker to force startup.
 
 ## How do I inspect startup problems?
 
@@ -35,7 +35,7 @@ Run these on the server in the checkout containing `compose.yaml`. Do not publis
 
 ## Are GitHub Pages and the Doca application the same deployment?
 
-GitHub Pages hosts this static documentation website. Doca's application requires its container/server, databases, persistent files, and HTTPS proxy. A documentation-site update does not start or upgrade a Doca application.
+GitHub Pages hosts this static documentation website. Doca's application requires its container/server, databases, persistent files, and an HTTP(S) origin. A documentation-site update does not start or upgrade a Doca application.
 
 ## Can I update or restart without deleting my files?
 

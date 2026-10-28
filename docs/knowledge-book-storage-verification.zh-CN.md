@@ -2,7 +2,7 @@
 
 [English](knowledge-book-storage-verification.md)
 
-2026-10-13，完整升级方案已于 2026-10-12 获用户明确同意。代码与隔离验收已完成，尚未部署或转换用户数据。目标协议见[实施方案](knowledge-book-payload-storage-plan.zh-CN.md)。
+2026-10-13，完整升级方案已于 2026-10-12 获用户明确同意。代码与隔离验收已完成，该次验收未部署生产或转换用户数据。目标协议见[实施方案](knowledge-book-payload-storage-plan.zh-CN.md)。
 
 ## 0.1.24 启动自动升级
 
@@ -29,7 +29,9 @@ pnpm knowledge-books:storage upgrade --apply --hosts-stopped --manifest /secure/
 
 中断后，普通宿主拒绝转换中代际。使用同一清单路径重新执行原命令继续，已转换正文仍须与清单一致；不能换一份清单来忽略变化。完成后普通启动只接受 `doca-2026-10-12-book-payload-storage-v1`。上线后重启会扫描仍待处理的通知，已结束任务不补发；历史输出与错误保留。
 
-回退前再次停掉所有宿主，保留新备份和新的回退清单。回退预检读取全部对象并验证原始字节；应用回退恢复升级后的新写入，云对象及回退清单保留，不恢复旧备份来丢弃后续成果。
+当前回退在修改前拒绝非空的 `knowledge_book_batch_checkpoints`：这些引用须另行确认保全与恢复方案。不能删除检查点或绕过代际、结构检查，见[检查点保留与恢复](knowledge-book-generation-performance.zh-CN.md)。下列历史往返验收早于批次检查点，不证明任意当前库均可降级到 0.1.22。
+
+符合条件的回退前再次停掉所有宿主，保留新备份和新的回退清单。回退预检读取全部对象并验证原始字节；应用回退恢复升级后的新写入，云对象及回退清单保留，不恢复旧备份来丢弃后续成果。
 
 ```sh
 pnpm knowledge-books:storage rollback

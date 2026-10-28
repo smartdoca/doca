@@ -1,9 +1,9 @@
-# Pending change: independent plugin databases
+# Historical change: independent plugin databases
 
 Historical record: this per-plugin database design was released in 0.1.25. [0.1.26](0.1.26.md) replaces it with one shared plugin business database and requires uninstall/reinstall without data migration.
 [简体中文](pending-plugin-database-isolation.zh-CN.md)
 
-2026-10-14. This working-tree change is not published or deployed.
+Original status on 2026-10-14: the candidate had not yet been published or deployed. The release status above supersedes that status; the verification results below retain their original scope.
 
 Plugin SQL business tables move to host-managed independent databases: one SQLite file or one configured PostgreSQL database with a restricted role per plugin. Public SDK APIs remain unchanged. Core documents, users, permissions, ordinary user files and platform-owned plugin metadata remain in their current stores.
 

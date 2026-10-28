@@ -8,11 +8,11 @@
 
 ## 为什么浏览器不能直接访问 39120 端口？
 
-Compose 把端口绑定到服务器回环地址。生产环境通过反向代理访问 `DOCA_ORIGIN` 配置的 HTTPS 来源，不使用 `http://服务器IP:39120`。检查 DNS、TLS、代理头和 WebSocket 转发，详见[部署说明](deployment.zh-CN.md)。
+Compose 把端口绑定到服务器回环地址。通过已配置的反向代理访问 `DOCA_ORIGIN` 对应的 HTTP(S) 来源；只有来源与端口映射明确匹配时，服务器 IP 地址才可直接使用。检查端口映射、Host、所用 TLS 和 WebSocket 转发，详见[部署说明](deployment.zh-CN.md)。
 
 ## 应该复制哪个环境变量示例？
 
-已发布 Docker 镜像使用 `docker.env.example`，源码开发使用 `.env.example`。启动 Compose 前配置 `DOCA_ORIGIN`、`DOCA_FILE_STORE_ID` 和 `DOCA_FILE_STORES_JSON`，详见[配置说明](configuration.zh-CN.md)。
+已发布 Docker 镜像使用 `docker.env.example`，源码开发使用 `.env.example`。启动 Compose 前配置 `DOCA_ORIGIN`、`DOCA_FILE_STORE_ID`、`DOCA_FILE_STORES_JSON` 和必填的持久 `DOCA_CREDENTIAL_MASTER_KEY`。首次安装替换公开示例密钥，已有数据库保留原密钥，详见[配置说明](configuration.zh-CN.md)。
 
 ## 为什么返回 421、403，或者编辑器断开？
 
@@ -20,7 +20,7 @@ Compose 把端口绑定到服务器回环地址。生产环境通过反向代理
 
 ## 数据库基线被拒绝时怎么办？
 
-停止操作并阅读对应[发行要求](releases/0.1.10.zh-CN.md)。Doca 0.1.10 不自动迁移旧数据库。保留旧部署、数据库、文件和密钥用于回退，不删除表、不重置数据卷、不修改基线标记来强行启动。
+停止操作并阅读[数据库升级规范](database-schema-evolution.zh-CN.md)和对应[发行要求](releases/0.2.23.zh-CN.md)。支持的代际按已批准规则对账结构；不支持的代际、语义变化及需复核差异在持久修改前停止启动。保留旧部署、数据库、文件和密钥用于回退，不删除表、不重置数据卷、不修改基线标记来强行启动。
 
 ## 怎样排查启动失败？
 
@@ -35,7 +35,7 @@ curl -fsS -H 'Host: doca.example.com' http://127.0.0.1:39120/health
 
 ## GitHub Pages 和 Doca 应用是同一种部署吗？
 
-GitHub Pages 托管这套静态文档网站。Doca 应用需要容器或服务器、数据库、持久文件和 HTTPS 代理。更新文档站不会启动或升级 Doca 应用。
+GitHub Pages 托管这套静态文档网站。Doca 应用需要容器或服务器、数据库、持久文件和 HTTP(S) 来源。更新文档站不会启动或升级 Doca 应用。
 
 ## 更新或重启会删除文件吗？
 

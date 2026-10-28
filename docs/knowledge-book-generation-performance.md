@@ -2,7 +2,7 @@
 
 [简体中文](knowledge-book-generation-performance.zh-CN.md)
 
-2026-10-19. The user explicitly approved the new checkpoint table and private persistence format. Implementation has been validated with isolated data and has not been deployed online. The reported 150,000-character, eight-hour production run was not available locally; these tests do not establish its specific causes or predict production duration.
+2026-10-19. The user explicitly approved the new checkpoint table and private persistence format. Implementation was validated with isolated data in that acceptance run, which did not deploy production. The reported 150,000-character, eight-hour production run was not available locally; these tests do not establish its specific causes or predict production duration.
 
 ## Execution improvements
 

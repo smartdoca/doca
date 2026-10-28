@@ -10,7 +10,7 @@ Status: approved contract, 2026-10-02; source host 0.1.10 / SDK 0.1.8, with no p
 
 `@smartdoca/plugin-sdk/storage` now exports installation-bound `pluginDatabaseToken` (`storage.sql.v1`) and `pluginObjectStorageToken` (`storage.objects.v1`). The database subset is explicit schema version 1, text/int32/double columns, primary/unique constraints, structured select/insert/update/remove and transactions with callbacks executed once. `pluginCredentialToken` (`storage.credentials.v1`, SDK source 0.1.8) provides server-only encrypted credentials with revision-checked refresh and deletion. Joins, foreign keys, generic SQL, upsert and workspaces are not exported. See [credential API and deployment](plugin-credentials.md). Business SQL uses one shared host-managed database separate from core: one SQLite file with table prefixes, or one PostgreSQL URL/account with automatic plugin schemas and a shared connection pool. Process isolation remains unimplemented. See [storage configuration and the uninstall-before-upgrade contract](plugin-database-isolation.md).
 
-Logical databases use `plugin:<pluginId>`, user-file attribution and private objects use `plugins/<pluginId>`, and release ZIPs use `host/plugin-releases/<sha256>.zip`. Complete immutable ZIP bytes live in environment-configured file storage; the shared database holds registry version 2, archive references and trusted file-hash indexes. Verified cache hits do not download ZIPs again. All instances are restarted manually. The new host baseline rejects older databases/formats/SDK packages and preserves their data, with no migration or fallback. See [exact implementation and limitations](unified-storage-implementation.md).
+Logical databases use `plugin:<pluginId>`, user-file attribution and private objects use `plugins/<pluginId>`, and release ZIPs use `host/plugin-releases/<sha256>.zip`. Complete immutable ZIP bytes live in environment-configured file storage; the shared database holds registry version 2, archive references and trusted file-hash indexes. Verified cache hits do not download ZIPs again. All instances are restarted manually. Unsupported plugin package/storage formats are rejected without automatic conversion; existing data is preserved. Core database upgrades separately follow the [database upgrade contract](database-schema-evolution.md). See [exact implementation and limitations](unified-storage-implementation.md).
 
 ## Current boundary and gaps
 
@@ -40,7 +40,7 @@ flowchart LR
   P[Plugin: model and permissions] --> S[SDK: installation-bound service]
   S --> D[Managed relational database]
   S --> F[Existing files.v1: user files and folders]
-  S --> B[Private object storage to implement]
+  S --> B[Private immutable object storage]
   D --> R[Remote database shared by instances]
   F --> O[Host shared object storage]
   B --> O
@@ -58,7 +58,7 @@ Name validation does not isolate arbitrary SQL. The managed service requires str
 
 Plugins currently run in a trusted Node.js process. SDK boundaries are not a hostile-code sandbox; enforcing filesystem/environment isolation against malicious code requires process/OS isolation.
 
-Hiding drivers does not make all PostgreSQL/SQLite/MySQL SQL interchangeable. Define a versioned, tested relational subset:
+Hiding drivers does not make all PostgreSQL/SQLite/MySQL SQL interchangeable. The current version-1 subset is listed above. The following broader relational requirements include future work; joins, foreign keys, arbitrary SQL and upsert are not exported:
 
 - Schema definitions, basic types, primary/unique/foreign keys and indexes. Initialize only an explicitly installed new database; validate existing structures without silently altering them.
 - Parameterized select/insert/update/delete, same-database joins, paging, ordering, count and unique-key upsert. Validate values and identifiers separately.
@@ -66,7 +66,7 @@ Hiding drivers does not make all PostgreSQL/SQLite/MySQL SQL interchangeable. De
 - Defined integer, boolean, UTC time, JSON, null, ordering and error semantics; result/query/transaction/connection limits and cancellation. Exact signatures/types/limits require an interface contract before implementation.
 - Stable conflict/timeout/cancellation errors without driver leakage. Unknown commits do not automatically replay a business callback; check durable operation records first.
 
-The host may use PostgreSQL for multiple instances and SQLite only for single-instance deployments/tests, both passing the same contract suite. These are host deployment choices; plugins never branch on driver or local/remote storage. Other drivers need acceptance before being declared supported. Dialect-specific features require explicit extensions, without silent degradation or driver-dependent plugin branches. These interface requirements imply no current SQL export and no old-database adapter.
+The host may use PostgreSQL for multiple instances and SQLite only for single-instance deployments/tests, both passing the same contract suite. These are host deployment choices; plugins never branch on driver or local/remote storage. Other drivers need acceptance before being declared supported. Dialect-specific features require explicit extensions, without silent degradation or driver-dependent plugin branches. The broader requirements do not extend the exported version-1 subset or supply an old-database adapter.
 
 The host handles pools, cancellation, monitoring and backups; plugins handle models, indexes and user permissions. Plugin isolation does not authorize users to read business rows. Physical colocation does not expose cross-plugin or host business transactions.
 
@@ -77,8 +77,8 @@ Prohibit durable business state depending on system directories. Databases, uplo
 | Content                                                                                                  | Host entry                                    | Requirements                                                                                                                                                                         |
 | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | User uploads, managed attachments, import originals and export deliverables                              | Existing `files.v1` files/folders             | Stable file IDs/bindings, user authorization, current quotas, upload checks and durable idempotency; no disk paths or permanent signed URLs                                          |
-| Rows, config, jobs, event cursors, operation records and outbox                                          | Managed relational service to implement       | Plugin-ID isolation and shared visibility                                                                                                                                            |
-| Private large binaries, durable intermediates and expensive internal indexes unsuitable for user folders | Private object storage to implement           | Host-bound identity, shared storage, limits, streams, opaque IDs, complete commit, validation, conditional writes/idempotency and controlled deletion; plugin business authorization |
+| Rows, config, jobs, event cursors, operation records and outbox                                          | Managed relational service       | Plugin-ID isolation and shared visibility                                                                                                                                            |
+| Private large binaries, durable intermediates and expensive internal indexes unsuitable for user folders | Private immutable object storage           | Host-bound identity, shared storage, limits, streams, opaque IDs, complete commit, validation, conditional writes/idempotency and controlled deletion; plugin business authorization |
 | OAuth tokens and business secrets                                                                        | `pluginCredentialToken`, SDK source 0.1.8 | Server-only, encrypted persistence, redaction and restrictions; no local credential files or browser-config exposure. The host binds plugin ID and installation generation; see [credential API](plugin-credentials.md)                                 |
 | Transcode/extraction/scanning/external-command work files                                                | Host-managed temporary workspace or streams   | Plugin/task isolation, size/time limits and crash cleanup; retry downloads/rebuilds inputs rather than requiring a previous instance's path                                          |
 | Rebuildable caches                                                                                       | Memory or approved temporary cache            | Loss affects performance only; current authorization; never locks, idempotency or authoritative state                                                                                |

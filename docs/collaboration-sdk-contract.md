@@ -2,7 +2,7 @@
 
 [中文](collaboration-sdk-contract.zh-CN.md)
 
-Applies to rich text, spreadsheets, and later document types. Dated 2026-09-11.
+Applies to rich text, Markdown, spreadsheets, canvas, slides and future document types. Established on 2026-09-11; implementation increments below retain their own dates and versions. Use the [current editor matrix](editor-integration.md) for installed packages.
 
 The platform owns one connection, permission, increment storage, commit acknowledgement, reconnect, and online session. Each component owns its data model and rendering. Shared behavior does not mean converting a spreadsheet into a rich text structure.
 
@@ -102,7 +102,7 @@ The current spreadsheet package and host implement region comments with stable r
 
 ## 9. What is implemented
 
-Host 0.1.10 integrates rich text, Markdown, spreadsheets, canvas, and slides with a shared reliable commit queue and durable ACKs. Idle synchronization does not echo content; selections and names use format adapters. All five formats expose history reads; manager restore is supported only for rich text and Markdown. Spreadsheet, canvas, and presentation previews report `canRestore:false`. This does not establish a unified component rollback API for every format.
+The current host integrates rich text, Markdown, spreadsheets, canvas, and slides with a shared reliable commit queue and durable ACKs. Idle synchronization does not echo content; selections and names use format adapters. All five formats expose history reads; manager restore is supported only for rich text and Markdown. Spreadsheet, canvas, and presentation previews report `canRestore:false`. This does not establish a unified component rollback API for every format.
 
 The platform implements epoch, protocol checks, commit receipts, and history recovery metadata. Without Redis, broadcast and presence are one process. With Redis, document updates, server refresh, permission invalidation, notifications, and presence cross instances. The database commit is still the ACK boundary and the source of document truth. After Redis reconnects, the server sends the authoritative state again to active rooms on this instance. Pub/Sub is not a durable log, and a Redis failure does not silently fall back to the local bus.
 

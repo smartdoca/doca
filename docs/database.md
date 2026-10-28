@@ -2,9 +2,9 @@
 
 [中文](database.zh-CN.md)
 
-The current baseline is `doca-2026-10-09-history-storage-v1`. [create-schema.ts](../packages/db/src/create-schema.ts) defines tables, indexes, foreign keys, and checks; [schema.ts](../packages/db/src/schema.ts) defines Kysely types; [connection.ts](../packages/db/src/connection.ts) opens connections; [transactions.ts](../packages/db/src/transactions.ts) manages transactions and conflict retries.
+The current compatibility generation is `doca-2026-10-12-book-payload-storage-v1`. [create-schema.ts](../packages/db/src/create-schema.ts) defines tables, indexes, foreign keys, and checks; [schema.ts](../packages/db/src/schema.ts) defines Kysely types; [connection.ts](../packages/db/src/connection.ts) opens connections; [transactions.ts](../packages/db/src/transactions.ts) manages transactions and conflict retries.
 
-Empty databases are initialized with the current schema. Startup compares current DDL with the installed structure and automatically applies reviewed additions within the supported compatibility generation. Destructive and semantic differences produce a review plan before persistent changes; the latest installed footprint distinguishes additions from lost existing fields. The [database upgrade contract](database-schema-evolution.md) is the project standard for future database development and release. Earlier incompatible baselines remain gated; only the exact preceding baseline supports the explicit offline history-storage upgrade in the [release requirements](releases/0.1.15.md). Preserve data, files and configuration. The existing document_templates table is retained without CRUD or automatic registration as a resource provider; see [templates and materials](creation-resources.md).
+Empty databases are initialized with the current schema. Startup compares current DDL with the installed structure and automatically applies reviewed additions within the supported compatibility generation. Destructive and semantic differences produce a review plan before persistent changes; the latest installed footprint distinguishes additions from lost existing fields. The [database upgrade contract](database-schema-evolution.md) is the project standard for future database development and release. Released `doca-2026-10-09-history-storage-v1` structures can align to the current generation under the approved rules, retaining old business rows without converting old book bodies. The exact `doca-2026-10-08-knowledge-books-v2` generation first requires the explicit offline history upgrade; earlier or interrupted generations remain gated. See [upgrade requirements](deployment.md#upgrade-from-0113). Preserve data, files and configuration. The existing document_templates table is retained without CRUD or automatic registration as a resource provider; see [templates and materials](creation-resources.md).
 
 ## Connections, initialization, and backup
 
@@ -45,7 +45,7 @@ Comments keep root/reply relationships, body/body_json, optional current-protoco
 
 storage_profiles contains only stable id, active, and created_at. Backend configuration and credentials come from the environment; there are no provider/config columns or writable administrator storage configuration in this baseline. assets and file_storage_objects retain stable store/object identities; file_items/folders/bindings, derivatives, extracts, and operation receipts manage user files and content processing. File bytes are separate from database rows. Never remove a shared physical object because one referencing document or history row was removed. See [file storage](storage.md).
 
-Plugin namespaces bind plugin_id, namespace, data_version, generation, state, and declared definitions. Managed SQL business tables are defined through the plugin storage service and are not a fixed list in Schema. Private objects, garbage records, immutable archives, registry state, WebView sessions, and navigation settings remain host-managed. plugin_credentials stores encrypted sealed values with namespace/generation/revision; plugin_credential_keys stores key fingerprints, not the master key. See [plugin storage](plugin-horizontal-scaling.md) and [credentials](plugin-credentials.md).
+Plugin namespaces bind plugin_id, namespace, data_version, generation, state, and declared definitions. Managed SQL business tables live in the separate shared plugin business database with tables declared through the plugin storage service rather than a fixed list in Schema. Private objects, garbage records, immutable archives, registry state, WebView sessions, and navigation settings remain host-managed. plugin_credentials stores encrypted sealed values with namespace/generation/revision; plugin_credential_keys stores key fingerprints, not the master key. See [plugin storage](plugin-horizontal-scaling.md) and [credentials](plugin-credentials.md).
 
 ## AI and knowledge workflows
 
@@ -72,11 +72,11 @@ The inventory below reflects the current Schema interface. Field names are liste
 | `ai_operations` | `id`, `user_id`, `job_id`, `digest`, `result`, `created_at` |
 | `ai_calls` | `id`, `user_id`, `job_id`, `model_id`, `model_snapshot`, `periods`, `state`, `input_tokens`, `output_tokens`, `cached_tokens`, `usage`, `created_at`, `updated_at` |
 | `ai_skills` | `id`, `user_id`, `name`, `description`, `content`, `formats`, `enabled`, `revision`, `updated_at` |
-| `ai_mcp_keys` | `id`, `user_id`, `name`, `token_hash`, `resource_ids`, `writable`, `expires_at`, `created_at` |
 | `mcp_user_settings` | `user_id`, `enabled`, `revision`, `updated_at` |
 | `mcp_services` | `id`, `kind`, `owner_id`, `name`, `token_hash`, `token_hint`, `enabled`, `grant_mode`, `tool_ids`, `skill_ids`, `expires_at`, `revoked_at`, `revision`, `created_at`, `updated_at` |
 | `mcp_contexts` | `id`, `service_id`, `user_id`, `session_id`, `job_id`, `instance_id`, `expires_at`, `closed_at`, `created_at` |
 | `mcp_tool_calls` | `context_id`, `request_id`, `tool_id`, `input_hash`, `status`, `created_at`, `updated_at` |
+| `ai_mcp_keys` | `id`, `user_id`, `name`, `token_hash`, `resource_ids`, `writable`, `expires_at`, `created_at` |
 | `ai_session_events` | `session_id`, `seq`, `event_id`, `digest`, `type`, `payload`, `created_at` |
 | `tickets` | `operation_json`, `id`, `kind`, `resource_kind`, `source_key`, `hidden_for_user_id`, `resource_id`, `user_id`, `initiator_id`, `status`, `role`, `message`, `created_at`, `updated_at`, `expires_at`, `reminded_at` |
 | `ticket_events` | `operation_json`, `id`, `ticket_id`, `actor_id`, `status`, `message`, `created_at` |
@@ -100,6 +100,9 @@ The inventory below reflects the current Schema interface. Field names are liste
 | `share_links` | `include_descendants`, `max_members`, `revoked`, `revoked_at`, `resource_id`, `token`, `token_hash`, `generation`, `revision`, `role`, `enabled`, `expires_at`, `created_by`, `created_at` |
 | `share_link_revocations` | `resource_id`, `share_id`, `revoked_by`, `revoked_at`, `revoked_user_ids` |
 | `document_versions` | `recovery_json`, `id`, `resource_id`, `seq`, `checkpoint`, `title`, `author_id`, `created_at` |
+| `document_version_archives` | `id`, `resource_id`, `seq`, `title`, `author_id`, `created_at`, `is_ai`, `store_id`, `object_key`, `size`, `sha256`, `archive_version`, `archived_at` |
+| `document_history_archive_operations` | `resource_id`, `snapshot_id`, `store_id`, `object_key`, `size`, `sha256`, `batch_json`, `created_at` |
+| `document_history_garbage` | `store_id`, `object_key`, `created_at` |
 | `visit_events` | `id`, `resource_id`, `user_id`, `created_at` |
 | `account_settings` | `id`, `config`, `revision` |
 | `login_identifiers` | `value`, `user_id`, `kind`, `active` |
@@ -157,16 +160,6 @@ The inventory below reflects the current Schema interface. Field names are liste
 | `plugin_archives` | `sha256`, `plugin_id`, `version`, `store_id`, `object_key`, `size`, `file_index`, `created_at` |
 | `audit_events` | `id`, `actor_id`, `resource_id`, `action`, `created_at` |
 | `user_page_state` | `user_id`, `key`, `value`, `version`, `updated_at` |
-| `knowledge_books` | `id`, `revision`, `configuration`, `published_release_id`, `created_at`, `updated_at` |
-| `knowledge_book_configurations` | `book_id`, `revision`, `configuration`, `author_id`, `created_at` |
-| `knowledge_book_sources` | `id`, `book_id`, `title`, `creator_id`, `revision`, `configuration`, `status`, `created_at`, `updated_at` |
-| `knowledge_book_source_versions` | `source_id`, `revision`, `title`, `configuration`, `status`, `author_id`, `created_at` |
-| `knowledge_book_feedback` | `id`, `book_id`, `author_id`, `revision`, `detail`, `status`, `created_at`, `updated_at` |
-| `knowledge_book_feedback_versions` | `feedback_id`, `revision`, `detail`, `status`, `author_id`, `created_at` |
-| `knowledge_book_runs` | `id`, `book_id`, `actor_id`, `configuration_revision`, `configuration`, `input_hash`, `status`, `lease_id`, `started_at`, `heartbeat_at`, `artifact`, `error`, `trigger_key`, `created_at`, `updated_at` |
-| `knowledge_book_node_runs` | `run_id`, `node_id`, `type`, `status`, `input_refs`, `output`, `error`, `started_at`, `completed_at` |
-| `knowledge_book_releases` | `id`, `book_id`, `run_id`, `revision`, `artifact`, `created_at` |
-| `knowledge_book_human_tasks` | `id`, `book_id`, `run_id`, `node_id`, `kind`, `title`, `status`, `revision`, `input_hash`, `resolution`, `created_at`, `updated_at` |
 | `knowledge_chunks` | `id`, `source_kind`, `source_id`, `ordinal`, `title`, `text`, `anchor`, `content_hash`, `reader_ids`, `updated_at` |
 | `knowledge_links` | `id`, `from_kind`, `from_id`, `to_kind`, `to_id`, `relation`, `score`, `reason`, `created_at` |
 | `knowledge_link_hides` | `user_id`, `link_id`, `created_at` |
@@ -177,3 +170,25 @@ The inventory below reflects the current Schema interface. Field names are liste
 | `webview_tickets` | `id`, `user_id`, `expires_at` |
 | `qr_logins` | `id`, `secret_hash`, `user_id`, `expires_at` |
 | `push_devices` | `id`, `user_id`, `token`, `platform`, `created_at`, `updated_at` |
+| `knowledge_book_batch_checkpoints` | `id`, `book_id`, `run_id`, `node_id`, `stage`, `phase`, `scope_hash`, `plan_hash`, `batch_key`, `input_hash`, `result_ref`, `root_kind`, `root_sha256`, `raw_sha256`, `raw_size`, `access_manifest`, `summary`, `created_at`, `updated_at` |
+| `knowledge_book_payload_objects` | `book_id`, `kind`, `sha256`, `store_id`, `object_key`, `stored_sha256`, `size`, `raw_size`, `state`, `created_at`, `updated_at` |
+| `knowledge_book_payload_edges` | `book_id`, `parent_kind`, `parent_sha256`, `child_kind`, `child_sha256` |
+| `knowledge_book_payload_references` | `book_id`, `owner_kind`, `owner_id`, `node_id`, `root_kind`, `root_sha256`, `raw_sha256`, `raw_size`, `access_manifest`, `summary`, `created_at`, `updated_at` |
+| `knowledge_book_payload_operations` | `id`, `book_id`, `owner_kind`, `owner_id`, `node_id`, `expected_sha256`, `definition`, `lease_id`, `lease_until`, `state`, `created_at`, `updated_at` |
+| `knowledge_books` | `id`, `revision`, `configuration`, `published_release_id`, `created_at`, `updated_at` |
+| `knowledge_book_configurations` | `book_id`, `revision`, `configuration`, `author_id`, `created_at` |
+| `knowledge_book_sources` | `id`, `book_id`, `title`, `creator_id`, `revision`, `configuration`, `status`, `created_at`, `updated_at` |
+| `knowledge_book_source_versions` | `source_id`, `revision`, `title`, `configuration`, `status`, `author_id`, `created_at` |
+| `knowledge_book_feedback` | `id`, `book_id`, `author_id`, `revision`, `detail`, `status`, `created_at`, `updated_at` |
+| `knowledge_book_feedback_versions` | `feedback_id`, `revision`, `detail`, `status`, `author_id`, `created_at` |
+| `knowledge_book_runs` | `id`, `book_id`, `actor_id`, `configuration_revision`, `configuration`, `input_hash`, `status`, `lease_id`, `started_at`, `heartbeat_at`, `artifact`, `error`, `trigger_key`, `created_at`, `updated_at` |
+| `knowledge_book_node_runs` | `run_id`, `node_id`, `type`, `status`, `input_refs`, `output`, `error`, `started_at`, `completed_at` |
+| `knowledge_book_releases` | `id`, `book_id`, `run_id`, `revision`, `artifact`, `created_at` |
+| `knowledge_book_human_tasks` | `id`, `book_id`, `run_id`, `node_id`, `kind`, `title`, `status`, `revision`, `input_hash`, `resolution`, `created_at`, `updated_at` |
+| `browser_clipper_web_sessions` | `connection_id`, `user_id`, `installation_id`, `website_session_id`, `token_hash`, `expires_at`, `created_at`, `updated_at` |
+| `browser_clipper_login_codes` | `code_hash`, `connection_id`, `website_session_id`, `challenge`, `expires_at`, `consumed_at`, `created_at` |
+| `browser_clipper_profiles` | `id`, `user_id`, `name`, `enabled`, `is_default`, `strategy`, `library_id`, `parent_id`, `target_id`, `title_template`, `ai_instruction`, `revision`, `created_at`, `updated_at` |
+| `browser_clipper_connections` | `id`, `user_id`, `name`, `token_hash`, `token_hint`, `assistant_enabled`, `revoked_at`, `expires_at`, `revision`, `created_at`, `updated_at` |
+| `browser_clipper_activations` | `id`, `connection_id`, `secret_hash`, `connection_revision`, `expires_at`, `consumed_at`, `created_at` |
+| `browser_clipper_receipts` | `user_id`, `request_id`, `connection_id`, `input_hash`, `profile_id`, `profile_json`, `payload_json`, `images_json`, `status`, `resource_id`, `expires_at`, `created_at`, `updated_at` |
+| `browser_clipper_assistant_sessions` | `session_id`, `connection_id`, `user_id`, `profile_id`, `profile_revision`, `resource_ids`, `job_ids`, `created_at` |
