@@ -954,6 +954,7 @@ async function handle(message, sender) {
       "capture",
       "prepareCapture",
       "openAssistant",
+      "openSite",
       "openSettings",
       "dockPreferences",
     ].includes(message.type)
@@ -961,6 +962,11 @@ async function handle(message, sender) {
     throw Error("clipper_scope_denied");
   if (!fromPage && !fromUi) throw Error("clipper_scope_denied");
   if (message.type === "checkForUpdates") return checkForUpdates();
+  if (message.type === "openSite") {
+    const site = await siteConfig();
+    await chrome.tabs.create({ url: site.origin });
+    return { opened: true };
+  }
   if (message.type === "openSettings") {
     await chrome.tabs.create({
       url: chrome.runtime.getURL("ui.html#settings"),

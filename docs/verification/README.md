@@ -9,6 +9,8 @@ The untracked raw attachments and seven temporary diagnostic or intermediate-run
 
 ## Release verification
 
+- [Doca 0.2.24 发布验收](release-0.2.24.md)
+
 - [Doca 0.2.22 发布验收](release-0.2.22.md)
 - [Doca 0.2.21 发布验收](release-0.2.21.md)
 - [Doca 0.2.20 发布验收](release-0.2.20.md)
@@ -33,6 +35,8 @@ The untracked raw attachments and seven temporary diagnostic or intermediate-run
 - [Doca 0.1.25 发布验证](release-0.1.25/README.md)
 
 ## Feature and documentation acceptance
+
+- [浏览器工具条打开 Doca 网站](browser-extension-open-site-2026-10-29.md)
 
 - [System Logo](site-logo-2026-10-28.md)
 - [Spreadsheet comment navigation with frozen panes](sheet-comment-freeze-2026-10-28.md)

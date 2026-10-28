@@ -124,10 +124,10 @@ async function fixture(
     dispose: () => dom.window.close(),
   };
 }
-it("mounts four permanent actions without a selection popup and registers one receiver", async () => {
+it("mounts five permanent actions without a selection popup and registers one receiver", async () => {
   const f = await fixture();
   try {
-    expect(f.shadow.querySelectorAll(".tool")).toHaveLength(4);
+    expect(f.shadow.querySelectorAll(".tool")).toHaveLength(5);
     expect(f.get(".panel").hidden).toBe(true);
     f.select();
     f.dom.window.document.dispatchEvent(
@@ -206,19 +206,28 @@ it.each([
   ["zh", "clipper_too_many_pending", "当前未完成的任务较多"],
   ["en", "clipper_too_many_pending", "Too many tasks are currently active"],
   ["zh", "clipper_external_rejection", "错误代码：clipper_external_rejection"],
-  ["en", "clipper_external_rejection", "error code: clipper_external_rejection"],
-])("keeps the current capture failure actionable in %s (%s)", async (locale, code, expected) => {
-  const connection = connected();
-  connection.value.locale = locale;
-  const f = await fixture([connection, { ok: false, error: code }]);
-  try {
-    await f.click("page");
-    await f.get(".confirm").onclick({ isTrusted: true });
-    expect(f.get(".status").textContent).toContain(expected);
-    expect(f.get(".confirm").disabled).toBe(false);
-    expect(f.get(".confirm").hidden).toBe(false);
-  } finally { f.dispose(); }
-});
+  [
+    "en",
+    "clipper_external_rejection",
+    "error code: clipper_external_rejection",
+  ],
+])(
+  "keeps the current capture failure actionable in %s (%s)",
+  async (locale, code, expected) => {
+    const connection = connected();
+    connection.value.locale = locale;
+    const f = await fixture([connection, { ok: false, error: code }]);
+    try {
+      await f.click("page");
+      await f.get(".confirm").onclick({ isTrusted: true });
+      expect(f.get(".status").textContent).toContain(expected);
+      expect(f.get(".confirm").disabled).toBe(false);
+      expect(f.get(".confirm").hidden).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  },
+);
 it("captures the selected range from the permanent button without showing an automatic selection icon", async () => {
   const f = await fixture([
     connected(),
@@ -248,6 +257,56 @@ it("opens the assistant from the direct click and routes settings through the tr
     expect(
       f.calls.some((c) => c.type === "capture" || c.type === "state"),
     ).toBe(false);
+  } finally {
+    f.dispose();
+  }
+});
+it.each([
+  ["zh", "打开 Doca 网站"],
+  ["en", "Open Doca website"],
+])(
+  "opens the configured site only on a trusted click with a %s label",
+  async (locale, label) => {
+    const f = await fixture([], { position: null, locale });
+    try {
+      const button = f.get('[data-action="site"]');
+      expect(button.getAttribute("aria-label")).toBe(label);
+      expect(button.querySelector(".tip").textContent).toBe(label);
+      await button.onclick({ isTrusted: false });
+      expect(f.calls.map((c) => c.type)).toEqual(["dockPreferences"]);
+      await f.click("site");
+      expect(f.calls.slice(1)).toEqual([{ type: "openSite" }]);
+      expect(f.get(".panel").hidden).toBe(true);
+    } finally {
+      f.dispose();
+    }
+  },
+);
+it.each([
+  "clipper_not_connected",
+  "clipper_invalid_config",
+  "clipper_invalid_origin",
+])("opens setup when the site cannot be used (%s)", async (error) => {
+  const f = await fixture([{ ok: false, error }]);
+  try {
+    await f.click("site");
+    expect(f.calls.slice(1).map((c) => c.type)).toEqual([
+      "openSite",
+      "openSettings",
+    ]);
+    expect(f.get(".panel").hidden).toBe(true);
+  } finally {
+    f.dispose();
+  }
+});
+it("shows site-opening failures in the toolbar without starting capture or login", async () => {
+  const f = await fixture([new Error("Cannot create tab")]);
+  try {
+    await f.click("site");
+    expect(f.get(".panel").hidden).toBe(false);
+    expect(f.get(".heading strong").textContent).toBe("打开 Doca 网站");
+    expect(f.get(".status").textContent).toBe("Cannot create tab");
+    expect(f.calls.slice(1)).toEqual([{ type: "openSite" }]);
   } finally {
     f.dispose();
   }
