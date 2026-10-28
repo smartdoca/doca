@@ -4,7 +4,7 @@ External AI clients use [MCP services](mcp.md). Tools must explicitly declare MC
 
 0.1.26 uses a [shared plugin business database](plugin-database-isolation.md), separate from core, with automatic namespaces. It replaces the per-plugin databases released in 0.1.25. Upgrade requires normal uninstall on the previous host and reinstall; plugin data is not migrated.
 
-Updated 2026-10-12 for source host 0.1.23 and SDK source 0.1.11 (SDK 0.1.11 npm publication verified; production deployment not verified). This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
+Documentation baseline: host 0.2.23 / SDK 0.1.11, checked on 2026-10-28. SDK 0.1.11 publication is recorded below; production deployment and native-device acceptance remain separate. This is the primary development guide, including current content, native and installation contracts. Linked documents provide full protocols and historical acceptance records. Any compatibility adapter, old-format conversion or database migration requires prior agreement with the project owner.
 
 [中文](plugin-development.zh-CN.md)
 
@@ -12,11 +12,11 @@ The full target, including parts that are not implemented, is the [SDK contract]
 
 The [horizontal scaling and managed storage contract](plugin-horizontal-scaling.md) is approved. All persistence is host-managed; packages must declare `doca.storage: "host"`. Missing or different declarations are rejected before code import on install, directory discovery and startup. Managed SQL/private objects are exported in SDK 0.1.7; credentials are exported in SDK source 0.1.9; workspaces remain a gap.
 
-## Implemented storage revision (2026-10-03, SDK source 0.1.7)
+## Implemented managed storage
 
 `@smartdoca/plugin-sdk/storage` now exports installation-bound `pluginDatabaseToken` (`storage.sql.v1`) and `pluginObjectStorageToken` (`storage.objects.v1`). The database subset is explicit schema version 1, text/int32/double columns, primary/unique constraints, structured select/insert/update/remove and transactions with callbacks executed once. `pluginCredentialToken` (`storage.credentials.v1`, SDK source 0.1.8) provides server-only encrypted credentials with revision-checked refresh and deletion. Joins, foreign keys, generic SQL, upsert and workspaces are not exported. See [credential API and deployment](plugin-credentials.md). Business SQL uses one shared host-managed database separate from core: one SQLite file with table prefixes, or one PostgreSQL URL/account with automatic plugin schemas and a shared connection pool. Process isolation remains unimplemented. See [storage configuration and the uninstall-before-upgrade contract](plugin-database-isolation.md).
 
-Logical databases use `plugin:<pluginId>`, user-file attribution and private objects use `plugins/<pluginId>`, and release ZIPs use `host/plugin-releases/<sha256>.zip`. Complete immutable ZIP bytes live in environment-configured file storage; the shared database holds registry version 2, archive references and trusted file-hash indexes. Verified cache hits do not download ZIPs again. All instances are restarted manually. The new host baseline rejects older databases/formats/SDK packages and preserves their data, with no migration or fallback. See [exact implementation and limitations](unified-storage-implementation.md).
+Logical databases use `plugin:<pluginId>`, user-file attribution and private objects use `plugins/<pluginId>`, and release ZIPs use `host/plugin-releases/<sha256>.zip`. Complete immutable ZIP bytes live in environment-configured file storage; the shared database holds registry version 2, archive references and trusted file-hash indexes. Verified cache hits do not download ZIPs again. All instances are restarted manually. Unsupported plugin package/storage formats are rejected without automatic conversion; existing data is preserved. Core database upgrades separately follow the [database upgrade contract](database-schema-evolution.md). See [exact implementation and limitations](unified-storage-implementation.md).
 
 ## License
 
@@ -224,7 +224,7 @@ Use the same Web bundle on Web and in the scoped mobile WebView. `PluginWebHost`
 - Android save returns completed/canceled. iOS save and system sharing may report presented, which does not prove a user completed the action. Account switching or page disposal cancels outstanding requests.
 - Mail account binding belongs on Web. Native OAuth is outside this delivery.
 
-The current SDK source package version is 0.1.11; this does not confirm npm publication. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
+The current SDK version is 0.1.11; its npm publication is recorded below. Host tests and builds do not replace independent mail-package integration or iOS/Android device acceptance; those remain pending. See [native protocol](plugin-native.md).
 
 ## Distribution and navigation
 
@@ -251,4 +251,4 @@ Material collections are implemented in SDK source 0.1.9: materials.v2 / version
 
 ## SDK publication — 2026-10-13
 
-`@smartdoca/plugin-sdk@0.1.11` is published on npm. The registry dependency consumer imports all 17 public entrypoints and verifies monitoring/telemetry tokens and the exact SDK version. This does not establish a production monitoring plugin or native-device acceptance.
+`@smartdoca/plugin-sdk@0.1.11` is published on npm. The registry dependency consumer imports all 16 public entrypoints and verifies monitoring/telemetry tokens and the exact SDK version. This does not establish a production monitoring plugin or native-device acceptance.

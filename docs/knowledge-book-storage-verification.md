@@ -2,7 +2,7 @@
 
 [简体中文](knowledge-book-storage-verification.zh-CN.md)
 
-The complete plan was explicitly approved on 2026-10-12. Implementation and isolated verification completed on 2026-10-13; no user database has been converted or deployed. See the [implementation plan](knowledge-book-payload-storage-plan.md).
+The complete plan was explicitly approved on 2026-10-12. Implementation and isolated verification completed on 2026-10-13; that verification did not convert a user database or deploy production. See the [implementation plan](knowledge-book-payload-storage-plan.md).
 
 ## Automatic startup upgrade in 0.1.24
 
@@ -29,7 +29,9 @@ Only `doca-2026-10-09-history-storage-v1` is accepted. Earlier generations must 
 
 After interruption, ordinary startup rejects the progress generation. Resume the same command with the same manifest path. Converted bytes must still match that manifest; replacing it cannot bypass changed data. On completion, startup accepts only `doca-2026-10-12-book-payload-storage-v1`. The independent heartbeat reconciles outstanding notifications after startup; completed historical tasks are not backfilled. Historical outputs and errors remain preserved.
 
-Stop all hosts again for rollback and preserve a new backup and recovery manifest. Preflight reads every object and verifies its original bytes. Rollback restores post-upgrade writes too and retains cloud objects and recovery materials.
+Current rollback rejects nonempty `knowledge_book_batch_checkpoints` before modification: their references require a separately approved preservation/recovery plan. Do not delete checkpoints or bypass the generation/structure checks. See [checkpoint retention and recovery](knowledge-book-generation-performance.md#deployment-retention-and-recovery). The historical roundtrip below predates batch checkpoints and does not verify arbitrary current-to-0.1.22 downgrades.
+
+Stop all hosts again for an eligible rollback and preserve a new backup and recovery manifest. Preflight reads every object and verifies its original bytes. Rollback restores post-upgrade writes too and retains cloud objects and recovery materials.
 
 ```sh
 pnpm knowledge-books:storage rollback

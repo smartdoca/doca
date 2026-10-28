@@ -1,5 +1,7 @@
 # Document integration and discovery
 
+> Historical implementation record. Use [current editor integration](editor-integration.md) for installed packages, exported APIs and supported operations. Original verification scope below is retained.
+
 [中文](editor-integration.zh-CN.md)
 
 ## What shipped

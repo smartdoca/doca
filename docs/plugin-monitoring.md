@@ -2,7 +2,7 @@
 
 [简体中文](plugin-monitoring.zh-CN.md)
 
-Implemented in SDK source **0.1.11**. Import `monitoringServiceToken` (`monitoring.v1`), `telemetryServiceToken` (`telemetry.v1`) and their types from `@smartdoca/plugin-sdk/monitoring`. Source implementation and an independent consumer build do not imply npm publication or deployment.
+Implemented in SDK source **0.1.11**. Import `monitoringServiceToken` (`monitoring.v1`), `telemetryServiceToken` (`telemetry.v1`) and their types from `@smartdoca/plugin-sdk/monitoring`. SDK 0.1.11 npm verification is recorded in the publication section below; production deployment remains separate.
 
 ## Installation and access
 
@@ -88,4 +88,4 @@ Tests use isolated databases/documents and a unique Redis namespace. Acceptance 
 
 ## SDK publication — 2026-10-13
 
-`@smartdoca/plugin-sdk@0.1.11` is published on npm. The registry dependency consumer imports all 17 public entrypoints and verifies monitoring/telemetry tokens and the exact SDK version. This does not establish a production monitoring plugin or native-device acceptance.
+`@smartdoca/plugin-sdk@0.1.11` is published on npm. The registry dependency consumer imports all 16 public entrypoints and verifies monitoring/telemetry tokens and the exact SDK version. This does not establish a production monitoring plugin or native-device acceptance.

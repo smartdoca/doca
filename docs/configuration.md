@@ -59,7 +59,7 @@ A missing, empty or malformed master key rejects startup, including deployments 
 
 Webhook delivery always uses a separate database. SQLite creates `webhooks.db` beside the main database. PostgreSQL defaults to `<main_database>_webhooks`; a missing database triggers a creation attempt. If the account lacks database-creation privileges, pre-create that dedicated database and grant access, or set `DOCA_WEBHOOK_DATABASE_URL` to an accessible dedicated database. The AI store uses `ai.db` in Compose and the `doca_ai` schema in the main PostgreSQL database; PostgreSQL permissions must allow its initialization. These stores need backups even when no external AI model is configured.
 
-Multiple replicas require shared PostgreSQL, Redis, and file storage. Changing a variable does not transfer existing data. Read [horizontal scaling](horizontal-scaling.md) and [release requirements](releases/0.1.10.md).
+Multiple replicas require shared PostgreSQL, Redis, and file storage. Changing a variable does not transfer existing data. Read [horizontal scaling](horizontal-scaling.md) and [release requirements](releases/0.2.23.md).
 
 ## Passing environment variables through Compose
 

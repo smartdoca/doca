@@ -4,17 +4,17 @@
 
 [中文](plugin-sdk-contract.zh-CN.md)
 
-Status: updated 2026-10-12 (source host 0.1.23 / SDK source 0.1.11; SDK 0.1.11 npm publication verified; production deployment not verified). All plugin persistence is host-managed; plugins own business models and authorization. This document is the acceptance standard for the refactor. It does not mean every interface is implemented. The gap is in section 12. A development tutorial must not present a target interface as an export that exists today.
+Documentation baseline: host 0.2.23 / SDK 0.1.11, checked on 2026-10-28. SDK 0.1.11 publication is recorded below; production deployment and native-device acceptance remain separate. All plugin persistence is host-managed; plugins own business models and authorization. This document is the acceptance standard for the refactor. It does not mean every interface is implemented. The gap is in section 12. A development tutorial must not present a target interface as an export that exists today.
 
 SDK source 0.1.11 exports monitoring.v1 and telemetry.v1 for site statistics, HTTP metrics, redacted operational logs, audit, queue/usage diagnostics and health, with administrator Web transport. See [monitoring access, retention, cluster coverage and rollback](plugin-monitoring.md). Existing interfaces and durable formats are unchanged.
 
 The [public capabilities and UI extension refactor plan](plugin-sdk-expansion.md) records the agreed additive direction, current implementation inventory, proposed interfaces and acceptance batches. A–D are now implemented; the [implemented methods and slots](plugin-extensions.md) record exact exports and limits. E/F remain future work.
 
-## Implemented storage revision (2026-10-03, SDK source 0.1.7)
+## Implemented managed storage
 
 `@smartdoca/plugin-sdk/storage` now exports installation-bound `pluginDatabaseToken` (`storage.sql.v1`) and `pluginObjectStorageToken` (`storage.objects.v1`). The database subset is explicit schema version 1, text/int32/double columns, primary/unique constraints, structured select/insert/update/remove and transactions with callbacks executed once. `pluginCredentialToken` (`storage.credentials.v1`, SDK source 0.1.8) provides server-only encrypted credentials with revision-checked refresh and deletion. Joins, foreign keys, generic SQL, upsert and workspaces are not exported. See [credential API and deployment](plugin-credentials.md). Business SQL uses one shared host-managed database separate from core: one SQLite file with table prefixes, or one PostgreSQL URL/account with automatic plugin schemas and a shared connection pool. Process isolation remains unimplemented. See [storage configuration and the uninstall-before-upgrade contract](plugin-database-isolation.md).
 
-Logical databases use `plugin:<pluginId>`, user-file attribution and private objects use `plugins/<pluginId>`, and release ZIPs use `host/plugin-releases/<sha256>.zip`. Complete immutable ZIP bytes live in environment-configured file storage; the shared database holds registry version 2, archive references and trusted file-hash indexes. Verified cache hits do not download ZIPs again. All instances are restarted manually. The new host baseline rejects older databases/formats/SDK packages and preserves their data, with no migration or fallback. See [exact implementation and limitations](unified-storage-implementation.md).
+Logical databases use `plugin:<pluginId>`, user-file attribution and private objects use `plugins/<pluginId>`, and release ZIPs use `host/plugin-releases/<sha256>.zip`. Complete immutable ZIP bytes live in environment-configured file storage; the shared database holds registry version 2, archive references and trusted file-hash indexes. Verified cache hits do not download ZIPs again. All instances are restarted manually. Unsupported plugin package/storage formats are rejected without automatic conversion; existing data is preserved. Core database upgrades separately follow the [database upgrade contract](database-schema-evolution.md). See [exact implementation and limitations](unified-storage-implementation.md).
 
 ## 1. Decisions
 
@@ -186,7 +186,7 @@ Mail, calendar, membership, and moderation are business plugins. Quick notes hav
 
 ## 12. What exists
 
-Updated 2026-10-03 against current exports and host implementation. Future targets above remain subject to the gaps below.
+Checked against host 0.2.23 and SDK 0.1.11 exports on 2026-10-28. Future targets above remain subject to the gaps below.
 
 | Item                   | Present                                                                                                                                                                                                                                                             | Still to do                                                                                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -246,4 +246,4 @@ Material collections are implemented in SDK source 0.1.9: materials.v2 / version
 
 ## SDK publication — 2026-10-13
 
-`@smartdoca/plugin-sdk@0.1.11` is published on npm. The registry dependency consumer imports all 17 public entrypoints and verifies monitoring/telemetry tokens and the exact SDK version. This does not establish a production monitoring plugin or native-device acceptance.
+`@smartdoca/plugin-sdk@0.1.11` is published on npm. The registry dependency consumer imports all 16 public entrypoints and verifies monitoring/telemetry tokens and the exact SDK version. This does not establish a production monitoring plugin or native-device acceptance.

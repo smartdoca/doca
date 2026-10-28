@@ -1,7 +1,7 @@
-# Local saved-image revision proposal (approved 2026-10-07; implementation in progress)
+# Local saved-image revision design (approved 2026-10-07)
 
 The user explicitly approved this revised proposal on 2026-10-07: “没问题吗升级吧”.
-Implementation and isolated verification are in progress; this status does not
+Original status on 2026-10-07: implementation and isolated verification were in progress. This dated design does not
 claim the 95-page image acceptance tasks have been completed. This revision replaces the earlier pending proposal that
 incorrectly relied only on the paid counter as a rollback fence. The existing
 whole-page workflow and its records remain

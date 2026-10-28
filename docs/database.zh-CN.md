@@ -2,9 +2,9 @@
 
 [English](database.md)
 
-当前基线为 `doca-2026-10-09-history-storage-v1`。[create-schema.ts](../packages/db/src/create-schema.ts) 定义建表、索引、外键和检查约束；[schema.ts](../packages/db/src/schema.ts) 定义 Kysely 类型；[connection.ts](../packages/db/src/connection.ts) 管理连接；[transactions.ts](../packages/db/src/transactions.ts) 管理事务和冲突重试。
+当前兼容代际为 `doca-2026-10-12-book-payload-storage-v1`。[create-schema.ts](../packages/db/src/create-schema.ts) 定义建表、索引、外键和检查约束；[schema.ts](../packages/db/src/schema.ts) 定义 Kysely 类型；[connection.ts](../packages/db/src/connection.ts) 管理连接；[transactions.ts](../packages/db/src/transactions.ts) 管理事务和冲突重试。
 
-空数据库按当前结构初始化。启动时比较最新 DDL 与已安装结构，在支持的兼容代际内自动补齐已审定的新增结构。破坏性与语义差异会在持久化修改前报告确认计划；最新已安装结构记录用于区分新增字段与原有字段丢失。[数据库升级规范](database-schema-evolution.zh-CN.md) 是后续数据库开发与发布必须遵守的项目约定。不兼容的更早基线仍会被拒绝；仅准确上一基线可按[发行要求](releases/0.1.15.zh-CN.md)显式离线升级。保留原数据、文件和配置。已有 document_templates 表保留，不提供原 CRUD，也不自动注册为资源来源，见[模板与素材](creation-resources.zh-CN.md)。
+空数据库按当前结构初始化。启动时比较最新 DDL 与已安装结构，在支持的兼容代际内自动补齐已审定的新增结构。破坏性与语义差异会在持久化修改前报告确认计划；最新已安装结构记录用于区分新增字段与原有字段丢失。[数据库升级规范](database-schema-evolution.zh-CN.md) 是后续数据库开发与发布必须遵守的项目约定。已发布的 `doca-2026-10-09-history-storage-v1` 结构可按已批准规则对齐当前代际，保留旧业务行而不转换旧知识册正文。准确的 `doca-2026-10-08-knowledge-books-v2` 代际须先显式离线升级历史；更早或中断代际仍被门禁拒绝，见[升级要求](deployment.zh-CN.md#从-0113-升级)。保留原数据、文件和配置。已有 document_templates 表保留，不提供原 CRUD，也不自动注册为资源来源，见[模板与素材](creation-resources.zh-CN.md)。
 
 ## 连接、初始化与备份
 
@@ -72,11 +72,11 @@ MCP 使用四张独立表记录用户开关、服务凭据哈希与授权、执�
 | `ai_operations` | `id`, `user_id`, `job_id`, `digest`, `result`, `created_at` |
 | `ai_calls` | `id`, `user_id`, `job_id`, `model_id`, `model_snapshot`, `periods`, `state`, `input_tokens`, `output_tokens`, `cached_tokens`, `usage`, `created_at`, `updated_at` |
 | `ai_skills` | `id`, `user_id`, `name`, `description`, `content`, `formats`, `enabled`, `revision`, `updated_at` |
-| `ai_mcp_keys` | `id`, `user_id`, `name`, `token_hash`, `resource_ids`, `writable`, `expires_at`, `created_at` |
 | `mcp_user_settings` | `user_id`, `enabled`, `revision`, `updated_at` |
 | `mcp_services` | `id`, `kind`, `owner_id`, `name`, `token_hash`, `token_hint`, `enabled`, `grant_mode`, `tool_ids`, `skill_ids`, `expires_at`, `revoked_at`, `revision`, `created_at`, `updated_at` |
 | `mcp_contexts` | `id`, `service_id`, `user_id`, `session_id`, `job_id`, `instance_id`, `expires_at`, `closed_at`, `created_at` |
 | `mcp_tool_calls` | `context_id`, `request_id`, `tool_id`, `input_hash`, `status`, `created_at`, `updated_at` |
+| `ai_mcp_keys` | `id`, `user_id`, `name`, `token_hash`, `resource_ids`, `writable`, `expires_at`, `created_at` |
 | `ai_session_events` | `session_id`, `seq`, `event_id`, `digest`, `type`, `payload`, `created_at` |
 | `tickets` | `operation_json`, `id`, `kind`, `resource_kind`, `source_key`, `hidden_for_user_id`, `resource_id`, `user_id`, `initiator_id`, `status`, `role`, `message`, `created_at`, `updated_at`, `expires_at`, `reminded_at` |
 | `ticket_events` | `operation_json`, `id`, `ticket_id`, `actor_id`, `status`, `message`, `created_at` |
@@ -100,6 +100,9 @@ MCP 使用四张独立表记录用户开关、服务凭据哈希与授权、执�
 | `share_links` | `include_descendants`, `max_members`, `revoked`, `revoked_at`, `resource_id`, `token`, `token_hash`, `generation`, `revision`, `role`, `enabled`, `expires_at`, `created_by`, `created_at` |
 | `share_link_revocations` | `resource_id`, `share_id`, `revoked_by`, `revoked_at`, `revoked_user_ids` |
 | `document_versions` | `recovery_json`, `id`, `resource_id`, `seq`, `checkpoint`, `title`, `author_id`, `created_at` |
+| `document_version_archives` | `id`, `resource_id`, `seq`, `title`, `author_id`, `created_at`, `is_ai`, `store_id`, `object_key`, `size`, `sha256`, `archive_version`, `archived_at` |
+| `document_history_archive_operations` | `resource_id`, `snapshot_id`, `store_id`, `object_key`, `size`, `sha256`, `batch_json`, `created_at` |
+| `document_history_garbage` | `store_id`, `object_key`, `created_at` |
 | `visit_events` | `id`, `resource_id`, `user_id`, `created_at` |
 | `account_settings` | `id`, `config`, `revision` |
 | `login_identifiers` | `value`, `user_id`, `kind`, `active` |
@@ -157,16 +160,6 @@ MCP 使用四张独立表记录用户开关、服务凭据哈希与授权、执�
 | `plugin_archives` | `sha256`, `plugin_id`, `version`, `store_id`, `object_key`, `size`, `file_index`, `created_at` |
 | `audit_events` | `id`, `actor_id`, `resource_id`, `action`, `created_at` |
 | `user_page_state` | `user_id`, `key`, `value`, `version`, `updated_at` |
-| `knowledge_books` | `id`, `revision`, `configuration`, `published_release_id`, `created_at`, `updated_at` |
-| `knowledge_book_configurations` | `book_id`, `revision`, `configuration`, `author_id`, `created_at` |
-| `knowledge_book_sources` | `id`, `book_id`, `title`, `creator_id`, `revision`, `configuration`, `status`, `created_at`, `updated_at` |
-| `knowledge_book_source_versions` | `source_id`, `revision`, `title`, `configuration`, `status`, `author_id`, `created_at` |
-| `knowledge_book_feedback` | `id`, `book_id`, `author_id`, `revision`, `detail`, `status`, `created_at`, `updated_at` |
-| `knowledge_book_feedback_versions` | `feedback_id`, `revision`, `detail`, `status`, `author_id`, `created_at` |
-| `knowledge_book_runs` | `id`, `book_id`, `actor_id`, `configuration_revision`, `configuration`, `input_hash`, `status`, `lease_id`, `started_at`, `heartbeat_at`, `artifact`, `error`, `trigger_key`, `created_at`, `updated_at` |
-| `knowledge_book_node_runs` | `run_id`, `node_id`, `type`, `status`, `input_refs`, `output`, `error`, `started_at`, `completed_at` |
-| `knowledge_book_releases` | `id`, `book_id`, `run_id`, `revision`, `artifact`, `created_at` |
-| `knowledge_book_human_tasks` | `id`, `book_id`, `run_id`, `node_id`, `kind`, `title`, `status`, `revision`, `input_hash`, `resolution`, `created_at`, `updated_at` |
 | `knowledge_chunks` | `id`, `source_kind`, `source_id`, `ordinal`, `title`, `text`, `anchor`, `content_hash`, `reader_ids`, `updated_at` |
 | `knowledge_links` | `id`, `from_kind`, `from_id`, `to_kind`, `to_id`, `relation`, `score`, `reason`, `created_at` |
 | `knowledge_link_hides` | `user_id`, `link_id`, `created_at` |
@@ -177,3 +170,25 @@ MCP 使用四张独立表记录用户开关、服务凭据哈希与授权、执�
 | `webview_tickets` | `id`, `user_id`, `expires_at` |
 | `qr_logins` | `id`, `secret_hash`, `user_id`, `expires_at` |
 | `push_devices` | `id`, `user_id`, `token`, `platform`, `created_at`, `updated_at` |
+| `knowledge_book_batch_checkpoints` | `id`, `book_id`, `run_id`, `node_id`, `stage`, `phase`, `scope_hash`, `plan_hash`, `batch_key`, `input_hash`, `result_ref`, `root_kind`, `root_sha256`, `raw_sha256`, `raw_size`, `access_manifest`, `summary`, `created_at`, `updated_at` |
+| `knowledge_book_payload_objects` | `book_id`, `kind`, `sha256`, `store_id`, `object_key`, `stored_sha256`, `size`, `raw_size`, `state`, `created_at`, `updated_at` |
+| `knowledge_book_payload_edges` | `book_id`, `parent_kind`, `parent_sha256`, `child_kind`, `child_sha256` |
+| `knowledge_book_payload_references` | `book_id`, `owner_kind`, `owner_id`, `node_id`, `root_kind`, `root_sha256`, `raw_sha256`, `raw_size`, `access_manifest`, `summary`, `created_at`, `updated_at` |
+| `knowledge_book_payload_operations` | `id`, `book_id`, `owner_kind`, `owner_id`, `node_id`, `expected_sha256`, `definition`, `lease_id`, `lease_until`, `state`, `created_at`, `updated_at` |
+| `knowledge_books` | `id`, `revision`, `configuration`, `published_release_id`, `created_at`, `updated_at` |
+| `knowledge_book_configurations` | `book_id`, `revision`, `configuration`, `author_id`, `created_at` |
+| `knowledge_book_sources` | `id`, `book_id`, `title`, `creator_id`, `revision`, `configuration`, `status`, `created_at`, `updated_at` |
+| `knowledge_book_source_versions` | `source_id`, `revision`, `title`, `configuration`, `status`, `author_id`, `created_at` |
+| `knowledge_book_feedback` | `id`, `book_id`, `author_id`, `revision`, `detail`, `status`, `created_at`, `updated_at` |
+| `knowledge_book_feedback_versions` | `feedback_id`, `revision`, `detail`, `status`, `author_id`, `created_at` |
+| `knowledge_book_runs` | `id`, `book_id`, `actor_id`, `configuration_revision`, `configuration`, `input_hash`, `status`, `lease_id`, `started_at`, `heartbeat_at`, `artifact`, `error`, `trigger_key`, `created_at`, `updated_at` |
+| `knowledge_book_node_runs` | `run_id`, `node_id`, `type`, `status`, `input_refs`, `output`, `error`, `started_at`, `completed_at` |
+| `knowledge_book_releases` | `id`, `book_id`, `run_id`, `revision`, `artifact`, `created_at` |
+| `knowledge_book_human_tasks` | `id`, `book_id`, `run_id`, `node_id`, `kind`, `title`, `status`, `revision`, `input_hash`, `resolution`, `created_at`, `updated_at` |
+| `browser_clipper_web_sessions` | `connection_id`, `user_id`, `installation_id`, `website_session_id`, `token_hash`, `expires_at`, `created_at`, `updated_at` |
+| `browser_clipper_login_codes` | `code_hash`, `connection_id`, `website_session_id`, `challenge`, `expires_at`, `consumed_at`, `created_at` |
+| `browser_clipper_profiles` | `id`, `user_id`, `name`, `enabled`, `is_default`, `strategy`, `library_id`, `parent_id`, `target_id`, `title_template`, `ai_instruction`, `revision`, `created_at`, `updated_at` |
+| `browser_clipper_connections` | `id`, `user_id`, `name`, `token_hash`, `token_hint`, `assistant_enabled`, `revoked_at`, `expires_at`, `revision`, `created_at`, `updated_at` |
+| `browser_clipper_activations` | `id`, `connection_id`, `secret_hash`, `connection_revision`, `expires_at`, `consumed_at`, `created_at` |
+| `browser_clipper_receipts` | `user_id`, `request_id`, `connection_id`, `input_hash`, `profile_id`, `profile_json`, `payload_json`, `images_json`, `status`, `resource_id`, `expires_at`, `created_at`, `updated_at` |
+| `browser_clipper_assistant_sessions` | `session_id`, `connection_id`, `user_id`, `profile_id`, `profile_revision`, `resource_ids`, `job_ids`, `created_at` |

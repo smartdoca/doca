@@ -1,10 +1,12 @@
 # HTTP API v0.1
 
+> Historical API record. Routes and example versions below describe earlier implementations; use the [current HTTP API](api.md) and the deployed `/api/openapi.json` for integration.
+
 [中文](api.zh-CN.md)
 
 AI sessions, model rates, and external MCP follow the current API routes, runtime configuration, and the web settings.
 
-Document statistics, people who liked a document, revocable share links, and history snapshots are in [document interaction](document-experience.md#http).
+Document statistics, people who liked a document, revocable share links, and history snapshots are in [document interaction](document-experience-history.md#http).
 
 Base URL is the same origin, `/api/v1`. The live request contract is `GET /api/openapi.json`, generated from the real route TypeBox schemas. It includes paths, parameters, and bodies. Responses and business rules are supplemented here. It is not yet a complete generated SDK.
 
@@ -157,7 +159,7 @@ WebSocket `/api/v1/ws` is specified in [collaboration](collaboration.md). Only d
 
 User cards: `GET /api/v1/user-card-settings` reads the site card. `PUT /api/v1/admin/user-card-settings` accepts `{enabled, text, style, url, revision}`. style is primary, secondary, or link. A conflict is 409. `{userId}` is the public id and `{uid}` is the internal UUID. Both are URL-encoded. Only HTTP(S) or an in-app relative path is allowed.
 
-Distribution, invitations, references, and forced download are in [editor integration](editor-integration.md#api).
+Distribution, invitations, references, and forced download are in [editor integration](editor-integration-history.md#api).
 
 ## AI sessions and approval
 

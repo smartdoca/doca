@@ -5,8 +5,8 @@ The initial approval question is withdrawn: its rollback protection was not
 valid because old counters skip `image_revision` and old v3 checkpoints can
 still resume. Only explicit agreement to the corrected version below authorizes
 implementation. The user explicitly agreed to the corrected proposal after
-the rollback behavior was explained on 2026-10-07. Source implementation and
-isolated validation are in progress; this approval is not proof that the two
+the rollback behavior was explained on 2026-10-07. At approval time, source implementation and
+isolated validation were in progress; this dated approval is not proof that the two
 real 95-page acceptance tasks have passed.
 
 The current batch `image_edit` uses its first image reference both as the

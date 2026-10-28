@@ -7,7 +7,7 @@
 The current baseline supports SQLite and PostgreSQL:
 
 - `users.public_id` is a unique user id separate from the internal UUID. It is normalized to lowercase on create, 3–160 characters, letters, digits, and `._@+-`. A unique index enforces it. Registration and administrator creation may set `publicId`. If omitted, the login is used. It does not change when the display name changes.
-- SSO uses `preferred_username` from a verified OIDC identity, or `login` from GitHub, otherwise the subject. If that value is invalid or already taken, an identifier is generated in the provider namespace. Accounts are never merged because of the same name, email, or public id. The authentication link remains provider plus subject. Linking a new sign-in method does not change the original user id.
+- SSO profile fields come from the provider's configured mapping. If a suitable unique username or another required field is missing, `/auth/complete` returns `needs_profile` and the person completes the profile; the host does not generate a username in the provider namespace. Accounts are never merged because of the same name, email, or public id. The authentication link remains provider plus subject. Linking a new sign-in method does not change the original user id.
 - `users.directory_mode` may be null, which follows the site `settings.directory_mode`.
 - `comments.body_json` is the rich comment JSON. `body` is derived plain text for search, summaries, and notifications. A comment that is not deleted must have valid `body_json`.
 - `notifications` add `actor_id`, `comment_id`, and `dedupe_key`. The event and the business change commit together. The unique `dedupe_key` index stops duplicate events.
@@ -58,6 +58,8 @@ An @ in the document body uses the editor mentions extension. Candidates come fr
 
 
 All five formats have permanent comment anchors; the Slate selection details above describe rich text only. Spreadsheet captures stable row/column IDs through its native comment API, resolves current ranges after structural changes, and validates target existence on the server. See [collaboration](collaboration.md).
+
+Clicking a comment highlights only its associated content in each of the five editors. Opening the sidebar or following a comment link does not restore a previous background. Clicking another comment replaces the highlight; clicking elsewhere, resolving the thread or closing the sidebar clears it. Highlighting is view state and does not write cell styles, shape fills, Yjs updates or permanent anchors. Comment images open in the shared image viewer with zoom, copy and download. See the [0.2.23 verification](verification/editor-comments-2026-10-28.md).
 
 ## Notifications
 

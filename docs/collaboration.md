@@ -2,7 +2,7 @@
 
 [中文](collaboration.zh-CN.md)
 
-This page describes current host 0.1.10 behavior. Target component APIs and remaining work are in the [collaboration contract](collaboration-sdk-contract.md); former single-process and temporary-package records are in [research](research.md).
+This page describes host 0.2.23 behavior. Target component APIs and remaining work are in the [collaboration contract](collaboration-sdk-contract.md); former single-process and temporary-package records are in [research](research.md).
 
 ## Integrated formats
 

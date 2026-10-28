@@ -1,5 +1,7 @@
 # 插件 SDK 公共能力与界面扩展重构
 
+> 阶段设计记录：下文的“当前版本”和 A–F 批次均对应各段记录日期。现行 SDK 版本、已导出能力与未实现目标见[插件开发](plugin-development.zh-CN.md)、[SDK 契约](plugin-sdk-contract.zh-CN.md)及[界面扩展](plugin-extensions.zh-CN.md)。
+
 日期：2026-10-02。状态：A–D 首轮实现完成；源码 SDK 0.1.4。实际导出、位置和限制见 [已实现接口说明](plugin-extensions.md)。E/F 继续保留为后续目标，本文设计示意不是完整实现清单。
 
 本轮只处理插件与 SDK。素材库、远端模板管理另行讨论。

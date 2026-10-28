@@ -2,7 +2,7 @@
 
 [中文](api.zh-CN.md)
 
-This is an index of principal host 0.1.10 routes. The running `/api/openapi.json` describes registered routes and schemas; server code defines authorization, unannotated fields, and behavior limits. Former interfaces are retained in [research](research.md) and cannot be assumed available today.
+This is an index of principal host 0.2.23 routes. The running `/api/openapi.json` describes registered routes and schemas; server code defines authorization, unannotated fields, and behavior limits. Former interfaces are retained in [research](research.md) and cannot be assumed available today.
 
 ## Conventions
 
@@ -24,6 +24,8 @@ Metadata `version`, configuration `revision`, and content `seq`/`epochId` have d
 | `GET /admin/registration-reviews` | Administrator review list |
 | `POST /admin/registration-reviews/:id` | `{decision:approved\|rejected,message?}`, dedicated review |
 | `GET /admin/stats` | Aggregate statistics without content permission |
+| `GET /admin/users/:id/resource-handover` | Disabled-account resource inventory; administrator only |
+| `POST /admin/users/:id/resource-handover/preview`, `POST /admin/users/:id/resource-handover/execute` | Preview / confirm selected ownership and grants; see [resource handover](admin-resource-handover.md) |
 
 Contact verification, recovery, identity linking, security verification, account policy, and callbacks are in [authentication](authentication.md). Platform credentials use [service settings](service-credentials.md); plugins use a separate [encrypted credential service](plugin-credentials.md).
 

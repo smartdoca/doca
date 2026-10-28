@@ -1,5 +1,7 @@
 # Document interaction, sharing, and history
 
+> Historical interaction record. Use [current documents and sharing](document-experience.md) for saving, history and current routes. Original dates and verification scope below are retained.
+
 [中文](document-experience.zh-CN.md)
 
 ## Editing and navigation

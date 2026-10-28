@@ -5,7 +5,7 @@ Doca 主项目已适配 Slate 0.4.22、Slides 0.3.0-alpha.3，以及修复打包
 ## 安装与数据决定
 
 - Slate 原有 DOCX 补丁内容不变，绑定到 0.4.22。codec、Yjs、headless 运行时代码与已安装 0.4.20 字节一致。
-- npm Canvas 0.5.0 遗漏 Slate/纯文本编辑器注册，浏览器中可创建节点但无法打开文字编辑。AidCanvas 源码通过 `sideEffects` 声明保留两个注册模块。Doca 固定使用带 SHA-256 前缀的本地包，见 [安装产物说明](../../../vendor/README.md) 和 [审计结果](package-audit.json)。Docker 在依赖获取前复制该产物。
+- npm Canvas 0.5.0 遗漏 Slate/纯文本编辑器注册，浏览器中可创建节点但无法打开文字编辑。AidCanvas 源码通过 `sideEffects` 声明保留两个注册模块。Doca 固定使用带 SHA-256 前缀的本地包，见 `vendor/README.md`（已移除的历史路径） 和 [审计结果](package-audit.json)。Docker 在依赖获取前复制该产物。
 - 用户明确选择 Slides **只支持新文稿**。新文稿严格使用 `eppt-yjs-v6`，旧 v5 文稿和旧客户端拒绝接入，旧字节、增量、epoch、历史保留，不转换或改写编码。没有数据库结构变更。
 - Canvas schema 1、Slate schema 3、Slides document schema 2、protocol 1 和原有 durable ACK/outbox 不变。Canvas 0.4.3 实际发布包生成的固定 checkpoint 在新包中原样恢复，查询/切只读不写入。
 

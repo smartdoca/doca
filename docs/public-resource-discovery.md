@@ -24,7 +24,7 @@ All three resource types use `resource_collections`, unique per user, resource t
 
 Search candidates are the union of the previous scope, favorites, and the collection list. Results are checked against current access again. Removing a collection deletes only that list row. It does not change membership or invitations. A resource that was already searchable stays searchable.
 
-The first time the collection table is created, older manual document, library, and folder collections are copied in. Automatic joins, invitations, or visit records are not treated as collections.
+The current schema creates an empty collection table; startup does not copy historical entries into it. Existing collection rows remain. Automatic joins, invitations, or visit records are not treated as collections.
 
 Search can switch among everything searchable, my scope, and site-wide public text. Site-wide text includes only resources the administrator allowed to be searched site-wide. Title queries in the discovery catalog do not call body search or vector search. File search and AI file retrieval also check container collection and the public search policy.
 

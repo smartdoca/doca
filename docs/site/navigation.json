@@ -99,6 +99,16 @@
         "文件存储"
       ],
       [
+        "docker-rendering",
+        "Docker document renderers",
+        "Docker 文档渲染器"
+      ],
+      [
+        "knowledge-book-storage-verification",
+        "Knowledge-book storage operations",
+        "知识册存储运维"
+      ],
+      [
         "horizontal-scaling",
         "Horizontal scaling",
         "水平扩展"
@@ -248,6 +258,11 @@
         "database",
         "Database",
         "数据库"
+      ],
+      [
+        "knowledge-book-generation-performance",
+        "Knowledge-book execution and checkpoints",
+        "知识册执行与检查点"
       ],
       [
         "plugin-sdk-contract",

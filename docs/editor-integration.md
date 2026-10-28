@@ -2,7 +2,7 @@
 
 [中文](editor-integration.zh-CN.md)
 
-The current checkout integrates five editors. Use actual installed exports; target interfaces and gaps are not existing APIs. Responsibilities are detailed in the [integration reference](../skills/doca-editor-integration/references/integration.md) and [collaboration contract](collaboration-sdk-contract.md).
+This is the integration source document for all five editors; subpackages consume its portable [skill reference](../skills/doca-editor-integration/references/integration.md). Use actual installed exports; target interfaces and gaps are not existing APIs. Realtime requirements follow the [collaboration contract](collaboration-sdk-contract.md).
 
 ## Installed packages and host adapters
 

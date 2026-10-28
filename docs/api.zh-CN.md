@@ -2,7 +2,7 @@
 
 [English](api.md)
 
-本页为宿主 0.1.10 的主要接口索引。运行中的 `/api/openapi.json` 提供已注册路由及 schema，服务端代码是授权、未标注字段和行为限制的最终依据。旧接口记录见[研发资料](research.zh-CN.md)，不能据此调用当前发行版。
+本页为宿主 0.2.23 的主要接口索引。运行中的 `/api/openapi.json` 提供已注册路由及 schema，服务端代码是授权、未标注字段和行为限制的最终依据。旧接口记录见[研发资料](research.zh-CN.md)，不能据此调用当前发行版。
 
 ## 通用约定
 
@@ -24,6 +24,8 @@
 | `GET /admin/registration-reviews` | 管理员审批列表 |
 | `POST /admin/registration-reviews/:id` | `{decision:approved\|rejected,message?}`，独立审批 |
 | `GET /admin/stats` | 聚合统计，不授予内容权限 |
+| `GET /admin/users/:id/resource-handover` | 停用账号的资源清单，仅管理员可用 |
+| `POST /admin/users/:id/resource-handover/preview`、`POST /admin/users/:id/resource-handover/execute` | 预览／确认所选所有权和授权变更，见[资源交接](admin-resource-handover.zh-CN.md) |
 
 联系方式验证码、恢复、身份绑定、安全验证、账号策略和外部身份回调见[身份认证](authentication.zh-CN.md)。服务凭据见[凭据说明](service-credentials.zh-CN.md)，插件凭证使用独立[加密服务](plugin-credentials.zh-CN.md)。
 

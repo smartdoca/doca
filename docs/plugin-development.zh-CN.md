@@ -4,7 +4,7 @@
 
 0.1.26 使用与核心库分开的[插件共享业务数据库](plugin-database-isolation.zh-CN.md)，自动创建插件命名空间，取代 0.1.25 的每插件独立库。升级须先在旧宿主正常卸载，再重装，不迁移插件数据。
 
-更新：2026-10-12；源码宿主 0.1.22，SDK 源码 0.1.11（npm 发布及生产部署未验收）。本文是插件开发的主入口，包含当前内容、App 和安装约定；链接文档补充完整类型、协议和历史验收记录。任何新增或修改兼容策略、旧格式转换或数据库迁移，必须先与项目负责人对齐方案。
+文档基线：宿主 0.2.23 / SDK 0.1.11，2026-10-28 按源码核对。SDK 0.1.11 的 npm 发布记录见下文，生产部署和移动真机验收另行确认。本文是插件开发的主入口，包含当前内容、App 和安装约定；链接文档补充完整类型、协议和历史验收记录。任何新增或修改兼容策略、旧格式转换或数据库迁移，必须先与项目负责人对齐方案。
 
 [English](plugin-development.md)
 
@@ -12,11 +12,11 @@
 
 水平扩展与存储职责按已确认的[托管存储规范](plugin-horizontal-scaling.zh-CN.md)执行。所有持久化由宿主管理，安装包必须声明 `doca.storage: "host"`；缺失或其他值在安装、目录发现和启动时于导入代码前拒绝。托管 SQL 与内部对象已导出；凭证已在 SDK 源码 0.1.8 实现，临时工作区仍有缺口。
 
-## 已实现存储修订（2026-10-03，SDK 源码 0.1.8）
+## 已实现的托管存储
 
 `@smartdoca/plugin-sdk/storage` 已导出安装身份绑定的 `pluginDatabaseToken`（`storage.sql.v1`）和 `pluginObjectStorageToken`（`storage.objects.v1`）。关系库支持显式 version 1 结构声明、text/int32/双精度列、主键/唯一约束、结构化查询/写入/删除，以及回调只执行一次的事务。SDK 源码 0.1.8 另导出 `pluginCredentialToken`（`storage.credentials.v1`），提供服务端加密凭证 CRUD、元数据与修订号检查，见[凭证接口](plugin-credentials.md)。联表、外键、通用 SQL、upsert 和临时工作区尚未导出。业务 SQL 使用与核心库分开的宿主管理共享数据库：SQLite 一个文件、按插件加表名前缀；PostgreSQL 一个 URL／账号、自动创建插件 schema，共用连接池。进程隔离仍未实现，见[存储配置与先卸载再升级约定](plugin-database-isolation.zh-CN.md)。
 
-逻辑库为 `plugin:<pluginId>`，用户文件归属及私有对象使用 `plugins/<pluginId>`，发行包使用 `host/plugin-releases/<sha256>.zip`。ZIP 字节进入环境变量配置的文件存储，共享数据库只保存 version 2 清单、归档引用和可信文件哈希索引。有效缓存无需重新下载 ZIP。全部实例由运维逐个重启。新宿主基线拒绝旧数据库/格式/SDK 包，原数据保留，不提供迁移或 fallback。详见[准确实现与限制](unified-storage-implementation.md)。
+逻辑库为 `plugin:<pluginId>`，用户文件归属及私有对象使用 `plugins/<pluginId>`，发行包使用 `host/plugin-releases/<sha256>.zip`。ZIP 字节进入环境变量配置的文件存储，共享数据库只保存 version 2 清单、归档引用和可信文件哈希索引。有效缓存无需重新下载 ZIP。全部实例由运维逐个重启。不支持的插件包和存储格式拒绝自动转换，原数据保留。核心数据库升级另遵守[数据库升级规范](database-schema-evolution.zh-CN.md)。详见[准确实现与限制](unified-storage-implementation.md)。
 
 ## 许可证边界
 
@@ -223,7 +223,7 @@ Web 与受限移动 WebView 复用插件 Web 产物。`@smartdoca/plugin-sdk/web
 - Android 保存可返回 completed/canceled；iOS 保存和系统分享的 presented 仅表示展示系统面板，不代表操作完成。切换账号或页面销毁会取消进行中的请求。
 - 邮箱绑定作为 Web 能力，当前不实现原生 OAuth。
 
-当前 SDK 源码包版本是 0.1.11，不表示已完成 npm 发布。宿主测试和构建不能替代独立邮箱包联调、iOS/Android 真机验收，这两项仍待完成；详细契约见[原生能力](plugin-native.md)。
+当前 SDK 版本是 0.1.11，npm 发布记录见下文。宿主测试和构建不能替代独立邮箱包联调、iOS/Android 真机验收，这两项仍待完成；详细契约见[原生能力](plugin-native.md)。
 
 ## 分发与导航
 
@@ -257,4 +257,4 @@ SDK 源码 0.1.10 已导出通用 `ai.continuations.v1`，插件通过公开入�
 
 ## SDK 发布 — 2026-10-13
 
-`@smartdoca/plugin-sdk@0.1.11` 已发布至 npm。公共注册表依赖消费者检查全部 17 个入口、监控与遥测 token 以及准确 SDK 版本；这不代表生产监控插件或移动设备验收完成。
+`@smartdoca/plugin-sdk@0.1.11` 已发布至 npm。公共注册表依赖消费者检查全部 16 个入口、监控与遥测 token 以及准确 SDK 版本；这不代表生产监控插件或移动设备验收完成。

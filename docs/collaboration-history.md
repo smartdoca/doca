@@ -1,5 +1,7 @@
 # Editors, collaboration, notifications, and search
 
+> Historical implementation record. Package versions, limitations and acceptance results below apply to their original changes. Use the [current collaboration guide](collaboration.md) and [contract](collaboration-sdk-contract.md).
+
 [中文](collaboration.zh-CN.md)
 
 Rich text and spreadsheets share a local queue of increments waiting for acknowledgement. Spreadsheets publish the live cell selection. The shared protocol, version fields, and component interface are in the [collaboration contract](collaboration-sdk-contract.md). Where an older paragraph below is narrower than the current code, the current code wins.

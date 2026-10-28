@@ -2,7 +2,7 @@
 
 [中文](horizontal-scaling.zh-CN.md)
 
-Doca keeps a single-instance mode with no extra infrastructure. SQLite, a local upload directory, and an in-process realtime bus fit a person, a small team, or a trial. Configure PostgreSQL, shared object storage, and Redis only when more than one application replica is running. Both modes use the same business protocol. There is no migration from an older deployment and no dual-write path.
+Doca keeps a single-instance mode with no extra infrastructure. SQLite, a local upload directory, and an in-process realtime bus fit a person, a small team, or a trial. Configure PostgreSQL, shared object storage, and Redis only when more than one application replica is running. Both modes use the same business protocol. There is no built-in SQLite-to-PostgreSQL data transfer or dual-write path. Supported database upgrades follow the [database upgrade contract](database-schema-evolution.md).
 
 ## Capability matrix
 
@@ -20,7 +20,7 @@ Doca keeps a single-instance mode with no extra infrastructure. SQLite, a local 
 
 ## Single instance
 
-When `DOCA_REDIS_URL` is unset, realtime events, presence, and rate limits stay in the process. Redis is not required. `pnpm dev`, `pnpm start`, and a single Compose container create the current baseline on an empty database, then only check the schema.
+When `DOCA_REDIS_URL` is unset, realtime events, presence, and rate limits stay in the process. Redis is not required. `pnpm dev`, `pnpm start`, and a single Compose container create the current baseline on an empty database, then reconcile supported existing structures against the current DDL.
 
 Do not run two replicas in this mode. Sticky WebSockets on a load balancer hide the problem for a while. Notifications, permission revocation, online users, and global limits are still split.
 
@@ -42,9 +42,9 @@ The orchestrator may set `DOCA_INSTANCE_ID` to the pod or container name. Otherw
 Release order:
 
 1. Start one instance against an empty database so it creates the baseline. Do not let several replicas initialize an empty database together.
-2. Start the other replicas. A schema mismatch fails startup. Nothing is upgraded or rewritten.
+2. Start the other replicas with the same release and configuration. Approved structural changes reconcile under the schema lock; unsupported or review-required differences stop startup without partial writes.
 3. The load balancer uses `/ready` for traffic and `/live` for process health. WebSocket upgrades and a normal drain must be allowed.
-4. A rolling update removes readiness first, then waits for HTTP and WebSocket connections to close within the stop grace period.
+4. Drain readiness and allow HTTP/WebSocket connections to close within the stop grace period. Follow the release requirements for stop/start order; rolling deployment does not establish compatibility between different host versions.
 
 Once Redis is configured it is required. A failed startup connection, a later outage, or a failed readiness check does not silently fall back to the local bus. That avoids splitting the cluster into several single instances that still look healthy.
 

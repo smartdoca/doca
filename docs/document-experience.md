@@ -2,13 +2,13 @@
 
 [中文](document-experience.zh-CN.md)
 
-Checked against current host 0.1.10 source. Early development and temporary package records are in [research](research.md).
+Describes host 0.2.23 source. Early development and temporary package records are in [research](research.md).
 
 ## Create and edit
 
 The creation menu provides rich text, Markdown, spreadsheets, slides, and canvas. All five have editors and independent collaboration codecs. Templates require installed providers; blank-document creation is available by default. Personal documents are independent pages; library documents use their library tree.
 
-Images and attachments use host uploads, asset IDs, and authorized downloads. Editing requires editor permission or above, and save confirmation follows database commit. Disconnecting retains pending edits in the current page; closing it creates no offline backup. Tools, find/replace, presence, and comments vary by format; see [editor integration](editor-integration.md).
+Images and attachments use host uploads, asset IDs, and authorized downloads. Editing requires editor permission or above, and save confirmation follows database commit. Original checkpoints and unacknowledged edits persist in IndexedDB when browser storage succeeds. Reopening requires an available local replica and application assets; follow [offline limits and recovery](collaboration.md#save-reconnect-and-history) and any storage-error feedback. Tools, find/replace, presence, and comments vary by format; see [editor integration](editor-integration.md).
 
 ## Sharing and permissions
 

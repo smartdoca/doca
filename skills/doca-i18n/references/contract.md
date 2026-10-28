@@ -1,5 +1,7 @@
 # Interface languages
 
+[中文](https://github.com/smartdoca/doca/blob/main/docs/i18n.zh-CN.md)
+
 This is the source document. Editor subpackages read the same rules through `skills/doca-i18n`, which may also be installed as `$doca-i18n`. When this file changes, update the skill's `references/contract.md` and every installed copy.
 
 The first version supports Chinese and English. Adding a language adds a language code and a catalog. It does not change keys or call sites.

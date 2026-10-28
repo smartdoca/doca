@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir, rm, cp, access } from "node:fs/promises";
 import { dirname, resolve, relative, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fromMarkdown } from "mdast-util-from-markdown";
+import { databaseInventory, documentLinks, expectedSkillReferences, headingIds, markdownFiles, repositoryTarget } from "./lib/documentation.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const docs = resolve(root, "docs");
@@ -28,48 +29,71 @@ if (problems.length) throw new Error(problems.join("\n"));
 
 const repository = "https://github.com/smartdoca/doca/blob/main/";
 const documents = new Map();
-const headingText = node => node.value ?? node.alt ?? (node.children ?? []).map(headingText).join("");
-// Match the vendored Docsify 5 slug rules, including repeated headings.
-function headingIds(tree) {
-  const counts = new Map();
-  const ids = new Set();
-  function visit(node) {
-    if (node.type === "heading") {
-      let id = headingText(node).trim().normalize("NFC")
-        .replace(/\uFE0F/g, "").replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
-        .replace(/[A-Z]+/g, value => value.toLowerCase()).replace(/<[^>]+>/g, "")
-        .replace(/[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,./:;<=>?@[\]^`{|}~]/g, "")
-        .replace(/\s/g, "-").replace(/^(\d)/, "_$1");
-      const count = counts.get(id) ?? 0;
-      counts.set(id, count + 1);
-      if (count) id += `-${count}`;
-      ids.add(id);
-    }
-    for (const child of node.children ?? []) visit(child);
-  }
-  visit(tree);
-  return ids;
-}
-for (const path of sourcePages.keys()) {
+for (const path of await markdownFiles(root)) {
   const markdown = await readFile(path, "utf8");
   const tree = fromMarkdown(markdown);
-  documents.set(path, { markdown, tree, headings: headingIds(tree) });
+  documents.set(path, { markdown, tree, headings: headingIds(tree), sourceHeadings: headingIds(tree, "github") });
+}
+let linkCount = 0;
+for (const [path, { tree }] of documents) {
+  for (const { href, node } of documentLinks(tree)) {
+    let target;
+    try { target = repositoryTarget(root, path, href); }
+    catch { problems.push(`${relative(root, path)}:${node.position.start.line} has malformed link encoding: ${href}`); continue; }
+    if (!target) continue;
+    linkCount++;
+    if (target.outside) problems.push(`${relative(root, path)} links outside the repository: ${href}`);
+    else {
+      try { await access(target.destination); } catch { problems.push(`${relative(root, path)}:${node.position.start.line} has a missing target: ${href}`); }
+      const document = documents.get(target.destination);
+      if (target.fragment && document && !document.headings.has(target.fragment) && !document.sourceHeadings.has(target.fragment)) {
+        problems.push(`${relative(root, path)}:${node.position.start.line} has a missing heading: ${href}`);
+      }
+    }
+  }
+}
+for (const [target, expected] of await expectedSkillReferences(root)) {
+  if (documents.get(resolve(root, "skills", target))?.markdown !== expected) problems.push(`Stale skill reference: skills/${target}; run node scripts/sync-docs-skills.mjs`);
+}
+const manifest = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
+if (navigation.find(group => group.id === "releases")?.pages[0]?.[0] !== `releases/${manifest.version}`) problems.push("The release navigation does not start with the current host version");
+for (const lang of languages) {
+  const home = documents.get(resolve(docs, lang === "en" ? "README.md" : "README.zh-CN.md"))?.markdown;
+  if (!home?.includes(`releases/${manifest.version}${lang === "en" ? "" : ".zh-CN"}.md`)) problems.push(`The ${lang} documentation home does not link to the current release`);
+  const editor = documents.get(resolve(docs, lang === "en" ? "editor-integration.md" : "editor-integration.zh-CN.md"))?.markdown;
+  for (const name of ["slate", "markdown", "sheet", "canvas", "slides"]) {
+    const pkg = `@smartdoca/${name}`;
+    if (!editor?.includes(`| ${pkg} ${manifest.dependencies[pkg]} |`)) problems.push(`The ${lang} editor matrix disagrees with package.json: ${pkg}`);
+  }
+}
+const inventory = databaseInventory(root);
+const payloadSource = await readFile(resolve(root, "packages/db/src/book-payload-schema.ts"), "utf8");
+const generation = payloadSource.match(/export const BOOK_PAYLOAD_BASELINE = "([^"]+)"/)?.[1];
+if (!generation) throw new Error("Cannot determine the current database compatibility generation");
+for (const name of ["database.md", "database.zh-CN.md"]) {
+  const markdown = documents.get(resolve(docs, name))?.markdown ?? "";
+  const baseline = markdown.split("\n").find(line => /^(The current compatibility generation|当前兼容代际)/.test(line));
+  if (!baseline?.includes(`\`${generation}\``)) problems.push(`${name} has a stale database compatibility generation`);
+  const rows = new Map([...markdown.matchAll(/^\| `([^`]+)` \| (.*?) \|$/gm)].map(match => [match[1], [...match[2].matchAll(/`([^`]+)`/g)].map(field => field[1])]));
+  if (rows.size !== inventory.length) problems.push(`${name} table count disagrees with Schema (${inventory.length})`);
+  for (const table of inventory) {
+    if (rows.get(table.name)?.join(",") !== table.fields.join(",")) problems.push(`${name} has stale fields for ${table.name}`);
+  }
 }
 const publishedRoutes = new Set(pages.flatMap(page => languages.map(lang => route(page, lang))));
 for (const [name, lang] of [["README.md", "zh-cn"], ["README.en.md", "en"]]) {
   const markdown = await readFile(resolve(root, name), "utf8");
   const entrance = `https://smartdoca.github.io/doca/#/${lang}/`;
-  if (!markdown.includes(`](${entrance})`)) problems.push(`${name} is missing its ${lang} documentation entrance`);
-  function visit(node) {
-    if (node.url?.startsWith("https://smartdoca.github.io/doca/#/")) {
-      const path = new URL(node.url).hash.slice(1).split("?")[0];
+  const links = documentLinks(fromMarkdown(markdown));
+  if (!links.some(({ href }) => href === entrance)) problems.push(`${name} is missing its ${lang} documentation entrance`);
+  for (const { href } of links) {
+    if (href.startsWith("https://smartdoca.github.io/doca/#/")) {
+      const path = new URL(href).hash.slice(1).split("?")[0];
       if (!publishedRoutes.has(path) || !path.startsWith(`/${lang}/`)) {
-        problems.push(`${name} has an invalid ${lang} documentation link: ${node.url}`);
+        problems.push(`${name} has an invalid ${lang} documentation link: ${href}`);
       }
     }
-    for (const child of node.children ?? []) visit(child);
   }
-  visit(fromMarkdown(markdown));
 }
 function checkFragment(path, destination, fragment) {
   if (fragment && !documents.get(destination)?.headings.has(decodeURIComponent(fragment))) {
@@ -126,7 +150,7 @@ for (const page of pages) {
 }
 if (problems.length) throw new Error(problems.join("\n"));
 if (process.argv[2] === "check") {
-  console.log(`Documentation verified: ${pages.length} pages × 2 languages; all local link targets and public heading anchors exist.`);
+  console.log(`Documentation verified: ${documents.size} repository documents, ${linkCount} repository links, ${pages.length} pages × 2 languages; headings, release/editor versions, ${inventory.length} schema tables and skill references agree.`);
 } else if (process.argv[2] === "build") {
   await rm(output, { recursive: true, force: true });
   await mkdir(output, { recursive: true });
