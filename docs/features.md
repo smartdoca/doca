@@ -2,7 +2,7 @@
 
 [中文](features.zh-CN.md)
 
-This page was checked against current source for host **0.2.23** and plugin SDK **0.1.11** on 2026-10-28. Before installing business plugins, the host provides the core capabilities below. Each independent plugin documents its own features, versions, and acceptance results.
+This page was checked against current source for host **0.2.24** and plugin SDK **0.1.11** on 2026-10-28. Before installing business plugins, the host provides the core capabilities below. Each independent plugin documents its own features, versions, and acceptance results.
 
 ## Core capabilities
 

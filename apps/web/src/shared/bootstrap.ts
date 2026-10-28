@@ -1,11 +1,13 @@
 import { api, type Bootstrap } from "./api.js";
 import { startupIdentityRevision } from "./document-startup-cache.js";
 
-let pending: Promise<Bootstrap> | undefined;
-let loaded: Bootstrap | undefined;
+// Live branding stays outside the existing persisted document-startup record.
+type LiveBootstrap = Bootstrap & { siteLogoUrl: string | null };
+let pending: Promise<LiveBootstrap> | undefined;
+let loaded: LiveBootstrap | undefined;
 let loadedIdentityRevision: number | undefined;
 /** Share the live startup request between plugin discovery and the application. */
-export function loadBootstrap(refresh = false): Promise<Bootstrap> {
+export function loadBootstrap(refresh = false): Promise<LiveBootstrap> {
   if (
     !refresh &&
     loaded &&
@@ -13,7 +15,7 @@ export function loadBootstrap(refresh = false): Promise<Bootstrap> {
   )
     return Promise.resolve(loaded);
   if (!pending) {
-    pending = api<Bootstrap>(
+    pending = api<LiveBootstrap>(
       "/bootstrap",
       "GET",
       undefined,

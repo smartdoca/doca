@@ -4,7 +4,7 @@
 
 本指南使用 main 分支 compose.yaml 指定的 Docker 镜像，在一台服务器上安装 Doca，数据库采用 SQLite，文件存储采用本地目录。需要 Git、Docker Engine、Docker Compose 插件，以及指向服务器的域名。同机反向代理可以提供 HTTPS，可信内网也支持 HTTP。运行镜像不需要安装 Node.js 或 pnpm。
 
-这是全新安装流程。已有部署请先阅读[发行要求](releases/0.2.23.zh-CN.md)：支持的兼容代际内会自动补齐已审定的增量结构，不兼容基线与语义变化仍需单独处理。保留已有数据库、文件和配置。
+这是全新安装流程。已有部署请先阅读[发行要求](releases/0.2.24.zh-CN.md)：支持的兼容代际内会自动补齐已审定的增量结构，不兼容基线与语义变化仍需单独处理。保留已有数据库、文件和配置。
 
 服务器无法访问 GitHub 时，可直接转交 Compose、环境变量示例、安全策略和管理员脚本，无需拉取源码。见[无需访问 GitHub 的部署](deployment-without-github.zh-CN.md)，其中提供可复制的 Compose 和 `.env`，以及离线镜像交付与初始化步骤。
 

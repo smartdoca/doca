@@ -59,7 +59,7 @@ A missing, empty or malformed master key rejects startup, including deployments 
 
 Webhook delivery always uses a separate database. SQLite creates `webhooks.db` beside the main database. PostgreSQL defaults to `<main_database>_webhooks`; a missing database triggers a creation attempt. If the account lacks database-creation privileges, pre-create that dedicated database and grant access, or set `DOCA_WEBHOOK_DATABASE_URL` to an accessible dedicated database. The AI store uses `ai.db` in Compose and the `doca_ai` schema in the main PostgreSQL database; PostgreSQL permissions must allow its initialization. These stores need backups even when no external AI model is configured.
 
-Multiple replicas require shared PostgreSQL, Redis, and file storage. Changing a variable does not transfer existing data. Read [horizontal scaling](horizontal-scaling.md) and [release requirements](releases/0.2.23.md).
+Multiple replicas require shared PostgreSQL, Redis, and file storage. Changing a variable does not transfer existing data. Read [horizontal scaling](horizontal-scaling.md) and [release requirements](releases/0.2.24.md).
 
 ## Passing environment variables through Compose
 
@@ -68,6 +68,8 @@ Multiple replicas require shared PostgreSQL, Redis, and file storage. Changing a
 Additional environment variables must be forwarded explicitly in the Compose service environment and configured in the deployment directory’s `.env`.
 
 ## Administrator settings and applying changes
+
+The system Logo is managed under **Site & services → Site information → System logo**. Administrators can preview and save a PNG/JPEG/WebP image up to 5 MB, or restore the default icon. It appears in navigation, sign-in and non-document favicons; document tabs keep their own icons. The normalized PNG is stored in `settings.site_logo`, using the same revision as other site settings. Historical NULL retains the default icon. See the [0.2.24 upgrade requirements](releases/0.2.24.md) before updating an existing installation.
 
 Registration, identity providers, verification gateways, search, AI models, and webhook subscriptions use their administration pages. File backend credentials stay in the environment; the storage page is read-only. Platform service credentials and plugin encrypted credentials are separate services; see [service credentials](service-credentials.md).
 

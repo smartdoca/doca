@@ -38,6 +38,18 @@ try {
   assert.equal((await app.inject({url:'/',headers:{host}})).statusCode,200);
   const signIn=async()=>{const result=await call('POST','/auth/login',{login:'releasesmoke',password:'isolated-release-smoke-password'});ok(result);cookie=String(result.headers['set-cookie']).split(';')[0];};
   await signIn();
+  const site=ok(await call('GET','/admin/settings'));
+  assert.equal(site.siteLogoUrl,null);
+  const logoBytes=await sharp({create:{width:512,height:256,channels:4,background:'#167a65'}}).png().toBuffer();
+  ok(await call('PUT','/admin/site-logo',{revision:site.revision,image:'data:image/png;base64,'+logoBytes.toString('base64')}));
+  const branded=ok(await call('GET','/bootstrap'));assert(branded.siteLogoUrl.startsWith('/api/v1/site-logo?v='));
+  const publicLogo=await app.inject({url:branded.siteLogoUrl,headers:{host}});assert.equal(publicLogo.statusCode,200);assert.equal(publicLogo.headers['content-type'],'image/png');
+  const logoMetadata=await sharp(publicLogo.rawPayload).metadata();assert.equal(logoMetadata.format,'png');assert.equal(logoMetadata.width,256);assert.equal(logoMetadata.height,128);
+  assert.equal((await call('PUT','/admin/site-logo',{revision:site.revision,image:null})).statusCode,409);
+  const brandedSite=ok(await call('GET','/admin/settings'));
+  const signedInCookie=cookie;cookie='';assert.equal((await call('PUT','/admin/site-logo',{revision:brandedSite.revision,image:null})).statusCode,401);cookie=signedInCookie;
+  ok(await call('PUT','/admin/site-logo',{revision:brandedSite.revision,image:null}));assert.equal(ok(await call('GET','/bootstrap')).siteLogoUrl,null);
+  assert.equal((await app.inject({url:'/api/v1/site-logo',headers:{host}})).statusCode,404);
   const zip=await call('POST','/me/browser-clipper/download',{});assert.equal(zip.statusCode,200,zip.body);
   const files=unzipSync(zip.rawPayload);assert.deepEqual(JSON.parse(new TextDecoder().decode(files['connection.json'])),{version:2,origin});
   for(const name of ['manifest.json','background.js','login-bridge.js','capture.js','content.js','ui.html','ui.js','icon.png']) assert(files[name]?.length>0,name);
@@ -87,7 +99,7 @@ try {
   ok(await call('POST','/me/browser-clipper/revoke-all',{}));assert.equal((await call('GET','/browser-clipper/me',undefined,renewed.token)).statusCode,401);
   assert.equal((await authorize()).statusCode,403);
   assert.equal((await call('GET','/resources/'+saved.resourceId)).statusCode,200);
-  console.log(JSON.stringify({passed:true,version:${JSON.stringify(version)},arch:process.arch,uid:process.getuid(),health:200,web:200,publicExtensionPackage:true,linkedImageCapture:true,degradedContentSaved:true,expandedDocumentSaved:true,automaticPendingRecovery:true,failedImagePlaceholderSaved:true,transientConversionWarnings:true,singleUseWebsiteAuthorization:true,originalImageByteExact:true,websiteLogoutInvalidatesAccess:true,revokedConnectionCannotAutoRestore:true,savedContentPreserved:true}));
+  console.log(JSON.stringify({passed:true,version:${JSON.stringify(version)},arch:process.arch,uid:process.getuid(),health:200,web:200,systemLogoConfigured:true,systemLogoPublicPng:true,systemLogoReset:true,systemLogoPermissionAndRevision:true,publicExtensionPackage:true,linkedImageCapture:true,degradedContentSaved:true,expandedDocumentSaved:true,automaticPendingRecovery:true,failedImagePlaceholderSaved:true,transientConversionWarnings:true,singleUseWebsiteAuthorization:true,originalImageByteExact:true,websiteLogoutInvalidatesAccess:true,revokedConnectionCannotAutoRestore:true,savedContentPreserved:true}));
 } finally {await app.close();await db.destroy();await rm(root,{recursive:true,force:true});}
 `;
 const run = promisify(execFile),

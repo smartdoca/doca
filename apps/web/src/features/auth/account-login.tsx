@@ -6,6 +6,7 @@ import { ExternalLoginOptions } from "@web/features/auth/authentication.js";
 import { QrLogin } from "@web/features/auth/qr-login.js";
 import { Feedback } from "@web/shared/components/feedback.js";
 import { Select } from "@web/shared/components/select.js";
+import { SiteLogo } from "@web/shared/components/site-logo.js";
 import {
   VerificationField,
   RegistrationFields,
@@ -17,9 +18,11 @@ import {
 } from "@web/features/auth/account-fields.js";
 export function AccountLogin({
   bootstrap,
+  siteLogoUrl,
   logged,
 }: {
   bootstrap: Bootstrap;
+  siteLogoUrl: string | null;
   logged: () => Promise<void>;
 }) {
   const { t } = useI18n();
@@ -184,7 +187,10 @@ export function AccountLogin({
           </button>
         )}
         <div className="auth-card-body" inert={scanningView}>
-        <span className="eyebrow">{bootstrap.siteName}</span>
+        <div className="auth-site-brand">
+          {siteLogoUrl && <SiteLogo url={siteLogoUrl} />}
+          <span className="eyebrow">{bootstrap.siteName}</span>
+        </div>
         <h2>
           {fields
             ? t("login.finishRegister")

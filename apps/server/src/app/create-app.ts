@@ -15,6 +15,8 @@ import {
   startMobilePush,
 } from "./mobile-client.js";
 import { registerRuntimeSettings } from "../routes/runtime-settings.js";
+import { registerSiteBranding } from "../routes/site-branding.js";
+import { readSiteLogo } from "../services/site-logo.js";
 import type { registerAI } from "../routes/ai.js";
 import { passwordIdentity } from "@core/modules/identity/accounts.js";
 import { registrationProfile } from "@core/modules/identity/accounts.js";
@@ -562,6 +564,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   const search = pluginComposition.search;
   registerProfiles(api, db, authenticated);
   registerAssets(api, db, authenticated, actor, admin, runtime.storage, limit);
+  registerSiteBranding(api, db, admin);
   registerBrowserClipper(api, db, authenticated, origin.origin, runtime.storage, realtime.documentChanged, limit);
   const id = Type.String({ format: "uuid" }),
     nullableId = Type.Union([id, Type.Null()]),
@@ -641,6 +644,7 @@ export async function createApp(db: DB, options: CreateAppOptions) {
         : null;
       return {
         siteName: settings.site_name,
+        siteLogoUrl: (await readSiteLogo(settings.site_logo))?.url ?? null,
         defaultLocale: settings.default_locale ?? "zh",
         defaultTimezone: settings.default_timezone ?? "Asia/Shanghai",
         registrationEnabled: !!settings.registration,
@@ -1065,11 +1069,12 @@ export async function createApp(db: DB, options: CreateAppOptions) {
     { schema: { summary: "读取系统设置", tags: ["Administration"] } },
     async (req) => {
       admin(req);
-      return db
+      const { site_logo, ...settings } = await db
         .selectFrom("settings")
         .selectAll()
         .where("id", "=", "system")
         .executeTakeFirstOrThrow();
+      return { ...settings, siteLogoUrl: (await readSiteLogo(site_logo))?.url ?? null };
     },
   );
   route<{
