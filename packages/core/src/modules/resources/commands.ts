@@ -533,11 +533,10 @@ export function createResourceCommands(
           parentId !== r.parent_id &&
           affected.some(
             (x) =>
-              x.deleted_at ||
               permission(x, actor, ctx.resources, ctx.grants) < 4,
           )
         )
-          fail(403, "需要管理整个子树，且不能包含回收站文档");
+          fail(403, "需要管理整个子树才能调整目录位置");
         if (parentId !== r.parent_id)
           protectManagers(
             ctx,

@@ -29,8 +29,33 @@ const queryFillers = new Set([
   "which",
   "with",
 ]);
-const topicParticles = new Set(["的", "了", "和", "与", "或", "在", "是", "也", "把", "被", ...queryFillers]);
-const normalizeTerm = (value: string) => value.toLowerCase().replace(/(.)\1+/gu, "$1").trim();
+const topicParticles = new Set([
+  "的",
+  "了",
+  "和",
+  "与",
+  "或",
+  "在",
+  "是",
+  "也",
+  "把",
+  "被",
+  "并",
+  "以及",
+  "有关",
+  "相关",
+  "请",
+  "麻烦",
+  "我",
+  "一下",
+  "吗",
+  ...queryFillers,
+]);
+const normalizeTerm = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/(.)\1+/gu, "$1")
+    .trim();
 /** Concrete topic tokens used as hard filters, including single Han characters like 猫/狗. */
 export function topicMatchTerms(topic: string) {
   const terms = searchTerms(topic).filter((term) => !topicParticles.has(term));
@@ -43,8 +68,34 @@ export function topicMatchTerms(topic: string) {
 }
 export function textMentionsTopic(text: string, topic: string) {
   if (!topic.trim()) return true;
-  const hay = text.toLowerCase();
-  return topicMatchTerms(topic).some((term) => hay.includes(term.toLowerCase()));
+  const normalize = (value: string) => value.normalize("NFKC").toLowerCase();
+  const hay = normalize(text);
+  const needle = normalize(topic).trim();
+  const mentions = (term: string) => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Latin terms must be words: AI must not match the middle of "chair".
+    const left = /^[\p{Script=Latin}\p{N}]/u.test(term)
+      ? "(?<![\\p{Script=Latin}\\p{N}_])"
+      : "";
+    const right = /[\p{Script=Latin}\p{N}]$/u.test(term)
+      ? "(?![\\p{Script=Latin}\\p{N}_])"
+      : "";
+    return new RegExp(left + escaped + right, "u").test(hay);
+  };
+  if (mentions(needle)) return true;
+  const terms = [
+    ...new Set(
+      Array.from(segmenter.segment(needle))
+        .filter((s) => s.isWordLike && !topicParticles.has(s.segment))
+        .map((s) => s.segment),
+    ),
+  ];
+  if (!terms.length) return false;
+  // Concise topics need every term, so one shared brand cannot admit a hit.
+  // Longer questions need a majority of their concrete terms in the source.
+  const required =
+    terms.length <= 3 ? terms.length : Math.ceil(terms.length * 0.6);
+  return terms.filter(mentions).length >= required;
 }
 export function queryCoverage(text: string, query: string) {
   const terms = [
@@ -71,7 +122,9 @@ export function searchTerms(query: string) {
     ...new Set([
       q,
       ...Array.from(segmenter.segment(q))
-        .filter((s) => s.isWordLike && !queryFillers.has(s.segment.toLowerCase()))
+        .filter(
+          (s) => s.isWordLike && !queryFillers.has(s.segment.toLowerCase()),
+        )
         .map((s) => normalizeTerm(s.segment)),
     ]),
   ]

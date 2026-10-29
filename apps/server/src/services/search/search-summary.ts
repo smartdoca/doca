@@ -2,6 +2,7 @@ import {
   searchExcerpt,
   textMatches,
   queryCoverage,
+  textMentionsTopic,
   type SearchMatch,
 } from "@core/modules/discovery/search-excerpts.js";
 import type { DB } from "@db/index.js";
@@ -22,6 +23,7 @@ export async function searchSummaries<T extends { id: string; title?: string }>(
       summaryMatches: SearchMatch[];
       titleMatches: SearchMatch[];
       searchCoverage: number;
+      searchRelevant: boolean;
     })[] = [];
     for (const item of items) {
       try {
@@ -36,6 +38,10 @@ export async function searchSummaries<T extends { id: string; title?: string }>(
           ...searchExcerpt(state?.text ?? "", query, 180),
           titleMatches: textMatches(item.title ?? "", query),
           searchCoverage: queryCoverage(
+            (item.title ?? "") + "\n" + (state?.text ?? ""),
+            query,
+          ),
+          searchRelevant: textMentionsTopic(
             (item.title ?? "") + "\n" + (state?.text ?? ""),
             query,
           ),

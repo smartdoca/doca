@@ -22,8 +22,12 @@ import {
 import {
   constrainedDocumentIds,
   searchIntent,
+  titleMatchTier,
 } from "@core/modules/discovery/search-intent.js";
-import { topicMatchTerms } from "@core/modules/discovery/search-excerpts.js";
+import {
+  textMentionsTopic,
+  topicMatchTerms,
+} from "@core/modules/discovery/search-excerpts.js";
 import { releaseDocumentFileIfUnused } from "@core/modules/documents/live-media.js";
 import {
   createBuiltinSearchSources,
@@ -42,6 +46,11 @@ import {
 } from "../services/search/meilisearch-provider.js";
 
 type Config = { enabled: number; endpoint: string; index_name: string };
+function publicSummaries<
+  T extends { searchCoverage: number; searchRelevant: boolean },
+>(items: T[]) {
+  return items.map(({ searchCoverage, searchRelevant, ...item }) => item);
+}
 export interface SearchRuntime {
   allowedOrigins: string[];
   apiKey?: string;
@@ -535,7 +544,9 @@ export async function registerSearch(
     let rowsQuery = db
       .selectFrom("file_items as f")
       .innerJoin("file_storage_objects as o", "o.id", "f.storage_object_id")
-      .select(["f.id", "f.parent_id"])
+      .select([
+        "f.id", "f.parent_id", "f.name", "f.ai_description_override", "o.ai_description",
+      ])
       .where("f.deleted_at", "is", null)
       .where("f.parent_type", "=", "document")
       .where((eb) =>
@@ -559,7 +570,14 @@ export async function registerSearch(
     >();
     const ids: string[] = [];
     for (const row of rows)
-      if (await releaseDocumentFileIfUnused(db, row.id, mediaCache))
+      if (
+        textMentionsTopic(
+          [row.name, row.ai_description_override, row.ai_description]
+            .filter(Boolean)
+            .join("\n"),
+          intent.topic,
+        ) && (await releaseDocumentFileIfUnused(db, row.id, mediaCache))
+      )
         ids.push(row.parent_id);
     const uniqueIds = [...new Set(ids)];
     if (!uniqueIds.length) return [];
@@ -649,7 +667,7 @@ export async function registerSearch(
           .where("id", "in", fileIds)
           .where("deleted_at", "is", null)
           .execute();
-        if (!mappings.length) return null;
+        if (!mappings.length) return [];
         const fileThreshold = Math.min(c.ai_min_score, 0.45);
         const result = await searchHost.query<{
           fileIds: string[];
@@ -675,7 +693,7 @@ export async function registerSearch(
           seenObjects.add(item.value.objectId);
           orderedItems.push(...item.value.fileIds);
         }
-        return orderedItems.length ? orderedItems : null;
+        return orderedItems;
       } catch {
         return null;
       }
@@ -728,7 +746,9 @@ export async function registerSearch(
           });
           return {
             ...page,
-            items: await searchSummaries(db, actor, page.items, highlight),
+            items: publicSummaries(
+              await searchSummaries(db, actor, page.items, highlight),
+            ),
             engine: "database",
             mode: query.mode === "ai" ? "ai" : "keyword",
             ...(reason ? { notice: reason } : {}),
@@ -740,10 +760,20 @@ export async function registerSearch(
             reason ??
               "AI 搜索尚未就绪，请管理员配置并应用向量模型，或切换关键词搜索",
           );
-        const page = await content.list(actor, { ...scoped, kind: "document" });
+        const page = await content.list(actor, {
+          ...scoped,
+          q: highlight,
+          kind: "document",
+        });
         return {
           ...page,
-          items: await searchSummaries(db, actor, page.items, highlight),
+          items: publicSummaries(
+            await searchSummaries(db, actor, page.items, highlight),
+          ).sort(
+            (a, b) =>
+              titleMatchTier(b.title ?? "", highlight ?? "") -
+              titleMatchTier(a.title ?? "", highlight ?? ""),
+          ),
           engine: "database",
           mode: "keyword",
           ...(reason ? { notice: reason } : {}),
@@ -786,7 +816,9 @@ export async function registerSearch(
               matchedIds: fromFiles,
             });
             return {
-              items: await searchSummaries(db, actor, page.items, highlight),
+              items: publicSummaries(
+                await searchSummaries(db, actor, page.items, highlight),
+              ),
               total: page.items.length,
               nextOffset: null,
               engine: "database",
@@ -855,16 +887,16 @@ export async function registerSearch(
         const values = new Map(
           result.items.map((item) => [item.id, item.value]),
         );
+        const relevant = new Set(
+          result.items
+            .filter((item) => item.value.searchRelevant)
+            .map((item) => item.id),
+        );
         const ids: string[] = constrainedDocumentIds(
           ranked,
           evidenced,
           intent,
-          new Map(
-            result.items.map((item) => [
-              item.id,
-              `${item.value.title ?? ""}\n${item.value.summary ?? ""}`,
-            ]),
-          ),
+          relevant,
         );
         if (!ids.length)
           return {
@@ -891,28 +923,14 @@ export async function registerSearch(
               b.searchCoverage * 0.08 -
               ((scores.get(a.id) ?? 0) + a.searchCoverage * 0.08),
           );
-          const reranked = constrainedDocumentIds(
-            summarized.map((item) => item.id),
-            evidenced,
-            intent,
-            new Map(
-              summarized.map((item) => [
-                item.id,
-                `${item.title ?? ""}\n${item.summary ?? ""}`,
-              ]),
-            ),
-          );
-          const evidenceRank = new Map(reranked.map((id, i) => [id, i]));
-          summarized.sort(
-            (a, b) =>
-              (evidenceRank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
-              (evidenceRank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
-          );
         }
+        summarized.sort(
+          (a, b) =>
+            titleMatchTier(b.title ?? "", highlight ?? "") -
+            titleMatchTier(a.title ?? "", highlight ?? ""),
+        );
         return {
-          items: summarized
-            .slice(start, start + 100)
-            .map(({ searchCoverage, ...r }) => r),
+          items: publicSummaries(summarized.slice(start, start + 100)),
           total: summarized.length,
           nextOffset: start + 100 < summarized.length ? start + 100 : null,
           engine: "meilisearch",

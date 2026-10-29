@@ -5,9 +5,24 @@ import {
   searchIntent,
   searchResultLayout,
   searchRetrieval,
-  topicIsSpecific,
+  titleMatchTier,
 } from "@core/modules/discovery/search-intent.js";
 import { textMentionsTopic } from "@core/modules/discovery/search-excerpts.js";
+
+it("extracts a requested document title from conversational Chinese", () => {
+  for (const query of [
+    "帮我找一下doca问题记录文档",
+    "请帮我找一下 doca 问题记录文档",
+    "麻烦 帮我 查找 doca问题记录文档",
+  ]) {
+    const intent = searchIntent(query);
+    expect(intent.focus).toBe("document");
+    expect(intent.topic.replace(/\s/g, "")).toBe("doca问题记录");
+    expect(titleMatchTier("🎯 doca问题记录2.0", intent.topic)).toBe(1);
+    expect(titleMatchTier("绘本项目说明 DOCA", intent.topic)).toBe(0);
+  }
+  expect(titleMatchTier("🎯 DOCA 问题记录", "doca问题记录")).toBe(2);
+});
 
 it("treats documents-containing-media queries as document retrieval", () => {
   expect(searchIntent("含有猫猫图片的文档")).toEqual({
@@ -212,7 +227,7 @@ it("does not turn attached files into document hits unless the user asked for th
       ["title-hit", "other"],
       ["only-file"],
       searchIntent("包含猫猫的文档"),
-      new Map([["title-hit", "猫猫观察笔记"], ["other", "会议纪要"]]),
+      new Set(["title-hit"]),
     ),
   ).toEqual(["title-hit"]);
   expect(
@@ -220,13 +235,12 @@ it("does not turn attached files into document hits unless the user asked for th
       ["title-hit"],
       ["only-file"],
       searchIntent("包含猫猫图片的文档"),
-      new Map([["title-hit", "猫猫观察笔记"]]),
+      new Set(["title-hit"]),
     ),
   ).toEqual(["only-file"]);
 });
 
 it("keeps format and topic as hard filters so cats cannot satisfy a dog query", () => {
-  expect(topicIsSpecific("狗狗")).toBe(true);
   expect(textMentionsTopic("橘猫趴在窗边", "猫猫")).toBe(true);
   expect(textMentionsTopic("橘猫趴在窗边", "狗狗")).toBe(false);
   expect(textMentionsTopic("英国短毛猫（蓝猫）", "狗狗")).toBe(false);
@@ -235,7 +249,7 @@ it("keeps format and topic as hard filters so cats cannot satisfy a dog query", 
       ["cat-doc", "other"],
       ["cat-doc"],
       searchIntent("包含猫猫图片的excel"),
-      new Map([["cat-doc", "猫猫图片集"], ["other", "会议纪要"]]),
+      new Set(["cat-doc"]),
     ),
   ).toEqual(["cat-doc"]);
   expect(
@@ -243,7 +257,7 @@ it("keeps format and topic as hard filters so cats cannot satisfy a dog query", 
       ["cat-doc"],
       [],
       searchIntent("包含狗狗图片的excel"),
-      new Map([["cat-doc", "猫猫图片集"]]),
+      new Set(),
     ),
   ).toEqual([]);
   expect(
@@ -251,7 +265,7 @@ it("keeps format and topic as hard filters so cats cannot satisfy a dog query", 
       ["cat-doc"],
       [],
       searchIntent("狗狗"),
-      new Map([["cat-doc", "猫猫图片集"]]),
+      new Set(),
     ),
   ).toEqual([]);
 });

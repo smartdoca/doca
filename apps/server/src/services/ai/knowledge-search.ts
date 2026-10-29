@@ -1,6 +1,7 @@
 import type { DB } from "@db/index.js";
 import { fail } from "@core/shared/errors.js";
 import { createContent } from "@core/workflows/resources.js";
+import { searchIntent } from "@core/modules/discovery/search-intent.js";
 import {
   aiSearchHit,
   checkScope,
@@ -41,8 +42,9 @@ export async function searchKnowledge(
   }
   if (!search && input.mode === "ai")
     fail(503, "AI 搜索尚未配置，请使用关键词搜索");
+  const topic = searchIntent(input.query).topic || input.query;
   const query = {
-    q: input.query,
+    q: search ? input.query : topic,
     kind: "document",
     mode: input.mode ?? "auto",
     libraryIds: input.libraryId ? [input.libraryId] : undefined,
@@ -53,7 +55,7 @@ export async function searchKnowledge(
   const items = [];
   for (const r of page.items) {
     try {
-      items.push(await aiSearchHit(db, ctx, r.id, input.query));
+      items.push(await aiSearchHit(db, ctx, r.id, topic));
     } catch (error) {
       if (![403, 404].includes((error as { status?: number }).status ?? 0))
         throw error;

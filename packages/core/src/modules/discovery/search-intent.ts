@@ -1,5 +1,3 @@
-import { textMentionsTopic } from "./search-excerpts.js";
-
 export type SearchFocus = "document" | "file" | "mixed";
 export type DocumentFormat =
   | "rich_text"
@@ -21,6 +19,21 @@ export type SearchHardLimits = {
   format?: string;
   mode?: SearchMode;
 };
+
+/** Explicit title matches outrank semantic neighbours. Ignore decoration and
+ * spacing, but require the whole topic rather than one shared brand token. */
+export function titleMatchTier(title: string, topic: string) {
+  const compact = (value: string) =>
+    value
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]/gu, "");
+  const needle = compact(topic),
+    haystack = compact(title);
+  if (needle.length < 2) return 0;
+  if (haystack === needle) return 2;
+  return haystack.includes(needle) ? 1 : 0;
+}
 
 const containPattern = /含有|包含|带有|带了|里面有|里边有|里头有|内含|里的|内的/u;
 const mediaPattern = /图片|照片|图像|截图|images?|photos?|pictures?/iu;
@@ -58,14 +71,6 @@ function asFormat(value?: string): DocumentFormat | undefined {
   return formatPatterns.some((row) => row.format === value)
     ? (value as DocumentFormat)
     : undefined;
-}
-
-/** Compact queries like 狗狗/猫猫 must mention the topic; longer questions may use semantics. */
-export function topicIsSpecific(topic: string) {
-  const value = topic.trim();
-  if (!value) return false;
-  if (/\s/.test(value)) return false;
-  return value.length <= 6;
 }
 
 /**
@@ -137,13 +142,12 @@ export function constrainedDocumentIds(
   ranked: string[],
   evidenced: string[],
   intent: SearchIntent,
-  titles: Map<string, string> = new Map(),
+  relevant: ReadonlySet<string>,
 ) {
   const evidenceSet = new Set(evidenced);
   const admits = (id: string) => {
     if (intent.requireEvidence) return evidenceSet.has(id);
-    if (!topicIsSpecific(intent.topic)) return true;
-    return textMentionsTopic(titles.get(id) ?? "", intent.topic);
+    return relevant.has(id);
   };
   const allowedRanked = ranked.filter(admits);
   if (intent.requireEvidence)
@@ -181,7 +185,10 @@ export function searchIntent(query: string): SearchIntent {
   if (!raw)
     return { focus: "mixed", topic: "", requireEvidence: false };
   let text = raw
-    .replace(/^(请|麻烦)?(帮我)?(找一下|找一找|搜索|查找|找|搜一下|搜)?/u, "")
+    .replace(
+      /^(?:(?:请|麻烦)\s*)?(?:帮我\s*)?(?:找一下|找一找|搜索|查找|找|搜一下|搜)?\s*/u,
+      "",
+    )
     .trim();
   const format = detectedFormat(text);
   const media = mediaPattern.test(text) ? ("image" as const) : undefined;
@@ -198,7 +205,7 @@ export function searchIntent(query: string): SearchIntent {
   const topic = stripConstraints(text) || raw;
   return {
     focus:
-      requireEvidence || documentAsk || documentSuffix || format
+      requireEvidence || documentAsk || documentSuffix || documentKind || format
         ? "document"
         : fileAsk
           ? "file"

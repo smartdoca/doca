@@ -62,6 +62,7 @@ import {
   searchIntent,
   searchRetrieval,
 } from "@core/modules/discovery/search-intent.js";
+import { textMentionsTopic } from "@core/modules/discovery/search-excerpts.js";
 import {
   imageInsertSchema,
   insertGeneratedImage,
@@ -4631,6 +4632,25 @@ export function createAIRunner(
                 "ai",
               )
             : null;
+          const topic = searchIntent(query).topic || query;
+          const ordered = ranked !== null
+            ? ranked
+                .map((id) => visible.find((row) => row.id === id))
+                .filter((row): row is NonNullable<typeof row> => !!row)
+            : visible.filter((row) =>
+                textMentionsTopic(
+                  [row.name, row.ai_description_override, row.ai_description]
+                    .filter(Boolean)
+                    .join("\n"),
+                  topic,
+                ),
+              );
+          const groups = new Map<string, typeof visible>();
+          for (const row of ordered) {
+            const group = groups.get(row.storage_object_id) ?? [];
+            group.push(row);
+            groups.set(row.storage_object_id, group);
+          }
           const normalized = query
             .toLocaleLowerCase()
             .replace(
@@ -4648,27 +4668,6 @@ export function createAIRunner(
               ].filter(Boolean),
             ),
           ];
-          const ordered = ranked?.length
-            ? ranked
-                .map((id) => visible.find((row) => row.id === id))
-                .filter((row): row is NonNullable<typeof row> => !!row)
-            : visible.filter((row) =>
-                [
-                  row.name,
-                  row.ai_description_override,
-                  row.ai_description,
-                ].some((value) =>
-                  terms.some((term) =>
-                    value?.toLocaleLowerCase().includes(term),
-                  ),
-                ),
-              );
-          const groups = new Map<string, typeof visible>();
-          for (const row of ordered) {
-            const group = groups.get(row.storage_object_id) ?? [];
-            group.push(row);
-            groups.set(row.storage_object_id, group);
-          }
           const folderTerms = terms.filter((term) => !isRootFolderQuery(term));
           const folderRows = await db
             .selectFrom("file_folders")
