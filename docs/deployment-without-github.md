@@ -9,7 +9,7 @@ The business server does not need a source checkout, Git, Node.js, or pnpm. Inst
 Someone with repository access clones main and generates the deployment bundle:
 
 ```sh
-git clone --branch main --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch main --depth 1 https://github.com/workhold/doca.git
 cd doca
 node scripts/pack-deployment.mjs
 ```

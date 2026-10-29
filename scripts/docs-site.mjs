@@ -27,7 +27,7 @@ for (const page of pages) {
 }
 if (problems.length) throw new Error(problems.join("\n"));
 
-const repository = "https://github.com/smartdoca/doca/blob/main/";
+const repository = "https://github.com/workhold/doca/blob/main/";
 const documents = new Map();
 for (const path of await markdownFiles(root)) {
   const markdown = await readFile(path, "utf8");
@@ -83,11 +83,11 @@ for (const name of ["database.md", "database.zh-CN.md"]) {
 const publishedRoutes = new Set(pages.flatMap(page => languages.map(lang => route(page, lang))));
 for (const [name, lang] of [["README.md", "zh-cn"], ["README.en.md", "en"]]) {
   const markdown = await readFile(resolve(root, name), "utf8");
-  const entrance = `https://smartdoca.github.io/doca/#/${lang}/`;
+  const entrance = `https://workhold.github.io/doca/#/${lang}/`;
   const links = documentLinks(fromMarkdown(markdown));
   if (!links.some(({ href }) => href === entrance)) problems.push(`${name} is missing its ${lang} documentation entrance`);
   for (const { href } of links) {
-    if (href.startsWith("https://smartdoca.github.io/doca/#/")) {
+    if (href.startsWith("https://workhold.github.io/doca/#/")) {
       const path = new URL(href).hash.slice(1).split("?")[0];
       if (!publishedRoutes.has(path) || !path.startsWith(`/${lang}/`)) {
         problems.push(`${name} has an invalid ${lang} documentation link: ${href}`);
@@ -129,7 +129,7 @@ for (const page of pages) {
               checkFragment(path, resolve(docs, source(target.page, targetLang)), fragment.slice(1));
               replacement = `${route(target.page, targetLang)}${fragment}`;
             } else {
-              const base = node.type === "image" ? "https://raw.githubusercontent.com/smartdoca/doca/main/" : repository;
+              const base = node.type === "image" ? "https://raw.githubusercontent.com/workhold/doca/main/" : repository;
               replacement = `${base}${repoPath}${fragment}`;
             }
             const start = node.position.start.offset;
@@ -172,7 +172,7 @@ if (process.argv[2] === "check") {
       }
     }
     await writeFile(resolve(output, lang, "_sidebar.md"), `${sidebar.join("\n")}\n`);
-    await writeFile(resolve(output, lang, "_navbar.md"), `- [English](/en/)\n- [简体中文](/zh-cn/)\n- [GitHub](https://github.com/smartdoca/doca)\n`);
+    await writeFile(resolve(output, lang, "_navbar.md"), `- [English](/en/)\n- [简体中文](/zh-cn/)\n- [GitHub](https://github.com/workhold/doca)\n`);
   }
   await writeFile(resolve(output, "README.md"), files.find(file => file.path === "en/README.md").content);
   await writeFile(resolve(output, "_404.md"), "# Page not found / 页面不存在\n\n[English](/en/) · [简体中文](/zh-cn/)\n");

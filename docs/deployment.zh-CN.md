@@ -17,7 +17,7 @@
 可以拉取 main 分支的部署文件，也可以转交[无需访问 GitHub 的部署包](deployment-without-github.zh-CN.md)。业务服务器无需拉取源码。镜像里没有 `scripts/bootstrap-admin.sh` 和 `scripts/reset-admin-password.sh`；这两个脚本留在宿主机上，用来启动一次性容器。Compose 引用的 `docker/chromium-seccomp.json` 也必须随部署文件提供。
 
 ```sh
-git clone --branch main --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch main --depth 1 https://github.com/workhold/doca.git
 cd doca
 cp docker.env.example .env
 ```

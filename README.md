@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/smartdoca/doca/releases"><img src="https://img.shields.io/github/v/release/smartdoca/doca?style=flat-square&amp;label=%E7%89%88%E6%9C%AC&amp;color=3370ff" alt="最新发行版"></a>
+  <a href="https://github.com/workhold/doca/releases"><img src="https://img.shields.io/github/v/release/workhold/doca?style=flat-square&amp;label=%E7%89%88%E6%9C%AC&amp;color=3370ff" alt="最新发行版"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-3370ff?style=flat-square" alt="MIT 开源许可证"></a>
   <a href="#docker-快速开始"><img src="https://img.shields.io/badge/%E9%83%A8%E7%BD%B2-Docker-2496ed?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="通过 Docker 部署"></a>
   <img src="https://img.shields.io/badge/%E6%96%87%E6%A1%A3%E6%A0%BC%E5%BC%8F-5%E7%A7%8D-6750a4?style=flat-square" alt="五种文档格式">
@@ -20,7 +20,7 @@
 <p align="center">
   <a href="https://i.smartdoca.cc"><b>官网 →</b></a> &nbsp;·&nbsp;
   <a href="https://d.smartdoca.cc">在线体验</a> &nbsp;·&nbsp;
-  <a href="https://smartdoca.github.io/doca/#/zh-cn/">详细文档</a> &nbsp;·&nbsp;
+  <a href="https://workhold.github.io/doca/#/zh-cn/">详细文档</a> &nbsp;·&nbsp;
   <a href="https://store.smartdoca.cc">插件商城</a> &nbsp;·&nbsp;
   <a href="#docker-快速开始">部署自己的 Doca</a>
 </p>
@@ -78,7 +78,7 @@ Doca 把**在线文档、Markdown、在线表格、幻灯片、无限画布、�
 | **账号与语言** | 密码、OIDC、Google、GitHub、微信扫码和 QQ 登录，中英文界面。外部登录需配置对应服务。 |
 | **私有化部署与扩展** | Docker 部署，单机 SQLite，多副本共享 PostgreSQL、Redis 和文件存储。业务插件通过公开 `@smartdoca/plugin-sdk` 扩展。 |
 
-一次部署只有一套账号系统。默认镜像不安装随手记、邮箱、日历、会员或内容审核插件。模板和素材需要单独安装提供者，详见[功能与边界](https://smartdoca.github.io/doca/#/zh-cn/getting-started/features)。
+一次部署只有一套账号系统。默认镜像不安装随手记、邮箱、日历、会员或内容审核插件。模板和素材需要单独安装提供者，详见[功能与边界](https://workhold.github.io/doca/#/zh-cn/getting-started/features)。
 
 ### 把网页资料带回自己的知识库
 
@@ -98,19 +98,19 @@ Doca 提供 Streamable HTTP MCP 服务，让支持 MCP 的客户端发现已授�
 | --- | --- |
 | **官网** | [i.smartdoca.cc](https://i.smartdoca.cc) |
 | **在线体验** | [d.smartdoca.cc](https://d.smartdoca.cc) |
-| **详细文档** | [smartdoca.github.io/doca](https://smartdoca.github.io/doca/#/zh-cn/) |
+| **详细文档** | [workhold.github.io/doca](https://workhold.github.io/doca/#/zh-cn/) |
 | **插件商城** | [store.smartdoca.cc](https://store.smartdoca.cc) |
-| **项目源码** | [github.com/smartdoca/doca](https://github.com/smartdoca/doca) |
-| **发行版本** | [下载与发行说明](https://github.com/smartdoca/doca/releases) |
-| **问题反馈** | [提交问题或功能建议](https://github.com/smartdoca/doca/issues) |
+| **项目源码** | [github.com/workhold/doca](https://github.com/workhold/doca) |
+| **发行版本** | [下载与发行说明](https://github.com/workhold/doca/releases) |
+| **问题反馈** | [提交问题或功能建议](https://github.com/workhold/doca/issues) |
 
 ## Docker 快速开始
 
-需要 Git、Docker Engine、Docker Compose，以及通过反向代理访问的 HTTP(S) 地址。本流程在新空数据库中安装 main 分支 compose.yaml 指定的镜像。已有部署更换版本前，先阅读[发行要求](https://smartdoca.github.io/doca/#/zh-cn/releases/0.2.25)并保留原数据。
+需要 Git、Docker Engine、Docker Compose，以及通过反向代理访问的 HTTP(S) 地址。本流程在新空数据库中安装 main 分支 compose.yaml 指定的镜像。已有部署更换版本前，先阅读[发行要求](https://workhold.github.io/doca/#/zh-cn/releases/0.2.25)并保留原数据。
 
 ```sh
 # 1. 拉取 main 分支的部署文件
-git clone --branch main --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch main --depth 1 https://github.com/workhold/doca.git
 cd doca
 
 # 2. 配置环境变量
@@ -133,9 +133,9 @@ bash scripts/bootstrap-admin.sh
 
 密码至少 12 位，没有默认账号。Compose 绑定 `127.0.0.1:39120`，浏览器访问前需要配置 HTTP(S) 反向代理。SQLite、文件、插件和 AI 数据库保存在 `doca_data` 卷。
 
-[完整快速开始](https://smartdoca.github.io/doca/#/zh-cn/getting-started/quickstart)包含 `.env`、反向代理、健康检查、管理员恢复和数据保留说明。
+[完整快速开始](https://workhold.github.io/doca/#/zh-cn/getting-started/quickstart)包含 `.env`、反向代理、健康检查、管理员恢复和数据保留说明。
 
-业务服务器无法访问 GitHub 时，按[无需访问 GitHub 的部署](https://smartdoca.github.io/doca/#/zh-cn/operations/deployment-without-github)转交部署文件即可，不需要 Git 或源码。交付方执行 `node scripts/pack-deployment.mjs` 生成部署包；指南也提供可复制的 Compose、`.env` 和初始化步骤。镜像仓库也不通时，可通过 `docker save` / `docker load` 离线交付同版本镜像。
+业务服务器无法访问 GitHub 时，按[无需访问 GitHub 的部署](https://workhold.github.io/doca/#/zh-cn/operations/deployment-without-github)转交部署文件即可，不需要 Git 或源码。交付方执行 `node scripts/pack-deployment.mjs` 生成部署包；指南也提供可复制的 Compose、`.env` 和初始化步骤。镜像仓库也不通时，可通过 `docker save` / `docker load` 离线交付同版本镜像。
 
 ## 源码开发
 
@@ -148,16 +148,16 @@ cp .env.example .env
 pnpm dev
 ```
 
-打开 `http://127.0.0.1:39130`，通过 `bash scripts/bootstrap-admin-local.sh` 初始化管理员。`pnpm check` 执行 TypeScript 检查、测试和 Web 构建。详见[开发环境](https://smartdoca.github.io/doca/#/zh-cn/development/development)。
+打开 `http://127.0.0.1:39130`，通过 `bash scripts/bootstrap-admin-local.sh` 初始化管理员。`pnpm check` 执行 TypeScript 检查、测试和 Web 构建。详见[开发环境](https://workhold.github.io/doca/#/zh-cn/development/development)。
 
 ## 文档
 
-- [使用指南](https://smartdoca.github.io/doca/#/zh-cn/getting-started/user-guide)
+- [使用指南](https://workhold.github.io/doca/#/zh-cn/getting-started/user-guide)
 - [浏览器助手](docs/browser-assistant.zh-CN.md) · [MCP 服务](docs/mcp.zh-CN.md)
-- [部署与配置](https://smartdoca.github.io/doca/#/zh-cn/operations/deployment)
-- [插件开发](https://smartdoca.github.io/doca/#/zh-cn/plugins/plugin-development)
-- [HTTP API](https://smartdoca.github.io/doca/#/zh-cn/reference/api)，运行中的应用还提供 `/api/openapi.json`。
-- [发行记录](https://smartdoca.github.io/doca/#/zh-cn/releases/0.2.25)
+- [部署与配置](https://workhold.github.io/doca/#/zh-cn/operations/deployment)
+- [插件开发](https://workhold.github.io/doca/#/zh-cn/plugins/plugin-development)
+- [HTTP API](https://workhold.github.io/doca/#/zh-cn/reference/api)，运行中的应用还提供 `/api/openapi.json`。
+- [发行记录](https://workhold.github.io/doca/#/zh-cn/releases/0.2.25)
 - [文档源码](docs/README.zh-CN.md)
 
 预览文档时，执行 `pnpm docs:dev` 并打开 `http://127.0.0.1:39140/#/zh-cn/`。`pnpm docs:check` 校验双语覆盖和本地链接。GitHub Pages 设置见[文档维护](docs/documentation.zh-CN.md)。

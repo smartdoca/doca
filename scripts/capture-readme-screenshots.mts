@@ -125,7 +125,7 @@ try {
 ## 启动本地工作台
 
 \`\`\`bash
-git clone https://github.com/smartdoca/doca.git
+git clone https://github.com/workhold/doca.git
 cd doca
 pnpm install
 pnpm dev
@@ -514,7 +514,7 @@ pnpm dev
         ),
         text(
           "closing-url",
-          "github.com/smartdoca/doca",
+          "github.com/workhold/doca",
           86,
           506,
           1080,

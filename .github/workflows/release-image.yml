@@ -63,7 +63,7 @@ jobs:
             --tag "smartdoca/doca:$VERSION-candidate" \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" \
             --label "org.opencontainers.image.version=$VERSION" \
-            --label org.opencontainers.image.source=https://github.com/smartdoca/doca \
+            --label org.opencontainers.image.source=https://github.com/workhold/doca \
             --metadata-file artifacts/verification/release-image/build/image-build-metadata.json .
       - name: Verify original images, sign-in, logout and revocation
         env:

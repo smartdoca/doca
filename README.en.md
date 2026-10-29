@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/smartdoca/doca/releases"><img src="https://img.shields.io/github/v/release/smartdoca/doca?style=flat-square&amp;color=3370ff" alt="Latest release"></a>
+  <a href="https://github.com/workhold/doca/releases"><img src="https://img.shields.io/github/v/release/workhold/doca?style=flat-square&amp;color=3370ff" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3370ff?style=flat-square" alt="License: MIT"></a>
   <a href="#quick-start-with-docker"><img src="https://img.shields.io/badge/deploy-Docker-2496ed?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Deploy with Docker"></a>
   <img src="https://img.shields.io/badge/editors-5_formats-6750a4?style=flat-square" alt="Five document formats">
@@ -20,7 +20,7 @@
 <p align="center">
   <a href="https://i.smartdoca.cc"><b>Website →</b></a> &nbsp;·&nbsp;
   <a href="https://d.smartdoca.cc">Try the live demo</a> &nbsp;·&nbsp;
-  <a href="https://smartdoca.github.io/doca/#/en/">Documentation</a> &nbsp;·&nbsp;
+  <a href="https://workhold.github.io/doca/#/en/">Documentation</a> &nbsp;·&nbsp;
   <a href="https://store.smartdoca.cc">Plugin marketplace</a> &nbsp;·&nbsp;
   <a href="#quick-start-with-docker">Self-host Doca</a>
 </p>
@@ -76,7 +76,7 @@ Rich text for plans and meeting notes, with a library tree, formatting tools, pe
 | **Accounts and languages** | Password, OIDC, Google, GitHub, WeChat QR, and QQ sign-in; Chinese and English interfaces. External login requires service configuration. |
 | **Self-hosting and extensions** | Docker deployment; SQLite for one server, or shared PostgreSQL, Redis, and file storage for multiple replicas. Business plugins use the public `@smartdoca/plugin-sdk`. |
 
-One deployment has one account system. The default image installs no quick-notes, mail, calendar, membership, or moderation plugins. Templates and materials need a separately installed provider. See [capabilities and limits](https://smartdoca.github.io/doca/#/en/getting-started/features).
+One deployment has one account system. The default image installs no quick-notes, mail, calendar, membership, or moderation plugins. Templates and materials need a separately installed provider. See [capabilities and limits](https://workhold.github.io/doca/#/en/getting-started/features).
 
 ### Bring web sources into your own knowledge library
 
@@ -96,19 +96,19 @@ Enable MCP in personal settings, create a service, and copy its generated client
 | --- | --- |
 | **Website** | [i.smartdoca.cc](https://i.smartdoca.cc) |
 | **Live demo** | [d.smartdoca.cc](https://d.smartdoca.cc) |
-| **Documentation** | [smartdoca.github.io/doca](https://smartdoca.github.io/doca/#/en/) |
+| **Documentation** | [workhold.github.io/doca](https://workhold.github.io/doca/#/en/) |
 | **Plugin marketplace** | [store.smartdoca.cc](https://store.smartdoca.cc) |
-| **Source code** | [github.com/smartdoca/doca](https://github.com/smartdoca/doca) |
-| **Releases** | [Download and release notes](https://github.com/smartdoca/doca/releases) |
-| **Feedback** | [Report an issue or request a feature](https://github.com/smartdoca/doca/issues) |
+| **Source code** | [github.com/workhold/doca](https://github.com/workhold/doca) |
+| **Releases** | [Download and release notes](https://github.com/workhold/doca/releases) |
+| **Feedback** | [Report an issue or request a feature](https://github.com/workhold/doca/issues) |
 
 ## Quick start with Docker
 
-Requires Git, Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. This installs the image specified by compose.yaml on main into a fresh database. Existing installations must read the [release requirements](https://smartdoca.github.io/doca/#/en/releases/0.2.25) and preserve their data before changing versions.
+Requires Git, Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. This installs the image specified by compose.yaml on main into a fresh database. Existing installations must read the [release requirements](https://workhold.github.io/doca/#/en/releases/0.2.25) and preserve their data before changing versions.
 
 ```sh
 # 1. Clone deployment files from main
-git clone --branch main --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch main --depth 1 https://github.com/workhold/doca.git
 cd doca
 
 # 2. Configure the environment
@@ -131,9 +131,9 @@ bash scripts/bootstrap-admin.sh
 
 The password must be at least 12 characters. There is no default account. Compose binds to `127.0.0.1:39120`; configure an HTTP(S) reverse proxy before browser access. SQLite, files, plugins, and the AI database persist in `doca_data`.
 
-The [complete quick start](https://smartdoca.github.io/doca/#/en/getting-started/quickstart) includes `.env`, the reverse proxy, health checks, administrator recovery, and data preservation.
+The [complete quick start](https://workhold.github.io/doca/#/en/getting-started/quickstart) includes `.env`, the reverse proxy, health checks, administrator recovery, and data preservation.
 
-For servers without GitHub access, [transfer deployment files](https://smartdoca.github.io/doca/#/en/operations/deployment-without-github) without Git or source code. The supplier runs `node scripts/pack-deployment.mjs` to generate the bundle; the guide also includes copyable Compose, `.env`, and initialization steps. If registries are unreachable too, deliver the matching image with `docker save` / `docker load`.
+For servers without GitHub access, [transfer deployment files](https://workhold.github.io/doca/#/en/operations/deployment-without-github) without Git or source code. The supplier runs `node scripts/pack-deployment.mjs` to generate the bundle; the guide also includes copyable Compose, `.env`, and initialization steps. If registries are unreachable too, deliver the matching image with `docker save` / `docker load`.
 
 ## Development
 
@@ -146,16 +146,16 @@ cp .env.example .env
 pnpm dev
 ```
 
-Open `http://127.0.0.1:39130`. Initialize the administrator with `bash scripts/bootstrap-admin-local.sh`. `pnpm check` runs TypeScript, tests, and the Web build. See [development](https://smartdoca.github.io/doca/#/en/development/development).
+Open `http://127.0.0.1:39130`. Initialize the administrator with `bash scripts/bootstrap-admin-local.sh`. `pnpm check` runs TypeScript, tests, and the Web build. See [development](https://workhold.github.io/doca/#/en/development/development).
 
 ## Documentation
 
-- [User guide](https://smartdoca.github.io/doca/#/en/getting-started/user-guide)
+- [User guide](https://workhold.github.io/doca/#/en/getting-started/user-guide)
 - [Browser assistant](docs/browser-assistant.md) · [MCP services](docs/mcp.md)
-- [Deployment and configuration](https://smartdoca.github.io/doca/#/en/operations/deployment)
-- [Plugin development](https://smartdoca.github.io/doca/#/en/plugins/plugin-development)
-- [HTTP API](https://smartdoca.github.io/doca/#/en/reference/api); the running application also provides `/api/openapi.json`.
-- [Release notes](https://smartdoca.github.io/doca/#/en/releases/0.2.25)
+- [Deployment and configuration](https://workhold.github.io/doca/#/en/operations/deployment)
+- [Plugin development](https://workhold.github.io/doca/#/en/plugins/plugin-development)
+- [HTTP API](https://workhold.github.io/doca/#/en/reference/api); the running application also provides `/api/openapi.json`.
+- [Release notes](https://workhold.github.io/doca/#/en/releases/0.2.25)
 - [Documentation source](docs/README.md)
 
 For a documentation preview, run `pnpm docs:dev` and open `http://127.0.0.1:39140/#/en/`. `pnpm docs:check` verifies bilingual coverage and local links. GitHub Pages setup is in [documentation maintenance](docs/documentation.md).
