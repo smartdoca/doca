@@ -90,6 +90,10 @@ beforeEach(async () => {
   app = await createApp(db, {
     origin,
     storage: { ...storageRuntime(), root },
+    search: {
+      allowedOrigins: ["http://127.0.0.1:7700"],
+      fetch: async (url) => Response.json(String(url).endsWith("/search") ? { hits: [] } : {}),
+    },
     ai: {
       memory: { driver: "sqlite", url: ":memory:" },
       fetch: (async (url, init) => {
@@ -610,9 +614,10 @@ it("lets the AI browse and search virtual session folders and retain them as the
     { name: "file_browse", args: { folderId } },
     { name: "file_browse", args: { fileId: file.id } },
     { name: "file_search", args: { query: "工具资料", folderId } },
+    { name: "file_search", args: { query: "工具火星发射流程", folderId } },
   ];
   await send(id, [], { currentFolder: { type: "system", id: folderId } });
-  expect(toolResults).toHaveLength(4);
+  expect(toolResults).toHaveLength(5);
   expect(toolResults[0].folders).toEqual([
     expect.objectContaining({ id: folderId, name: "工具验证会话" }),
   ]);
@@ -627,4 +632,12 @@ it("lets the AI browse and search virtual session folders and retain them as the
     movable: false,
   });
   expect(decodeURIComponent(toolResults[3].files[0].href)).toContain(folderId);
+  expect(toolResults[4].files).toEqual([]);
+  await db.updateTable("search_settings").set({
+    enabled: 1, endpoint: "http://127.0.0.1:7700", index_name: "doca",
+  }).where("id", "=", "system").execute();
+  toolPlan = [{ name: "file_search", args: { query: "工具资料", folderId } }];
+  await send(id, [], { currentFolder: { type: "system", id: folderId } });
+  expect(toolResults).toHaveLength(1);
+  expect(toolResults[0].files).toEqual([]);
 });

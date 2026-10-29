@@ -558,10 +558,34 @@ it("searches physical file content once while scoping location aliases before re
   hits = [{ id: `file_item_${secondId.replaceAll("-", "_")}` }];
   expect(
     await searchService.searchFiles("家庭相册", [firstId], "keyword"),
-  ).toBeNull();
+  ).toEqual([]);
   expect(
     calls.filter((call) => call.path.endsWith("/search")).at(-1)!.body.filter,
   ).not.toContain(`file_item_${secondId.replaceAll("-", "_")}`);
+
+  await save();
+  remoteStatus = "succeeded";
+  hits = [
+    { id: `file_object_${objectId.replaceAll("-", "_")}`, _rankingScore: 0.99 },
+  ];
+  expect(
+    await searchService.searchFiles(
+      "火星火箭发射流程",
+      [firstId, secondId],
+      "ai",
+    ),
+  ).toEqual([]);
+  expect(
+    await searchService.searchFiles("猫", [firstId, secondId], "ai"),
+  ).toHaveLength(2);
+  await db
+    .updateTable("file_storage_objects")
+    .set({ ai_description: "当前内容已变成绘本项目 DOCA" })
+    .where("id", "=", objectId)
+    .execute();
+  expect(
+    await searchService.searchFiles("doca问题记录", [firstId, secondId], "ai"),
+  ).toEqual([]);
 });
 
 it("explains Meilisearch Cloud rejected embedding URIs", () => {
@@ -952,6 +976,194 @@ it("retains the saved model and content settings before application, after failu
   expect(writes()).toHaveLength(1);
 });
 
+it("excludes shared-brand neighbours for platform and assistant search", async () => {
+  const content = createContent(db);
+  const target = await content.create(actor, {
+    kind: "document",
+    format: "markdown",
+    title: "🎯 doca问题记录2.0",
+  });
+  const neighbour = await content.create(actor, {
+    kind: "document",
+    format: "markdown",
+    title: "绘本项目说明 DOCA",
+  });
+  const outside = await content.create(actor, {
+    kind: "document",
+    format: "markdown",
+    title: "doca问题记录（范围外）",
+  });
+  hits = [
+    { id: neighbour.id, _rankingScore: 0.98 },
+    { id: target.id, _rankingScore: 0.71 },
+    { id: outside.id, _rankingScore: 0.99 },
+  ];
+  await save();
+  remoteStatus = "succeeded";
+  const query = "帮我找一下doca问题记录文档";
+  const scope = {
+    actor,
+    allowedResources: [target.id, neighbour.id],
+    exactResources: true,
+  };
+  const result = await searchKnowledge(
+    db,
+    scope,
+    { query },
+    searchService.search,
+  );
+  expect(result.items.map((r) => r.id)).toEqual([target.id]);
+  expect(calls.filter((c) => c.path.endsWith("/search")).at(-1)?.body.q).toBe(
+    "doca问题记录",
+  );
+  const platform = await searchService.search(actor, {
+    q: query,
+    mode: "ai",
+    matchedIds: [target.id, neighbour.id],
+  });
+  expect(platform.items.map((r) => r.id)).toEqual([target.id]);
+  expect(platform).toMatchObject({ total: 1, nextOffset: null });
+  broken = true;
+  const fallback = await searchKnowledge(
+    db,
+    scope,
+    { query },
+    searchService.search,
+  );
+  expect(fallback.items.map((r) => r.id)).toContain(target.id);
+  expect(fallback.items[0]?.id).toBe(target.id);
+  const withoutSearchService = await searchKnowledge(db, scope, { query });
+  expect(withoutSearchService.items.map((r) => r.id)).toEqual([target.id]);
+});
+
+it("returns a successful empty result when high-score candidates have no relevant current source", async () => {
+  const content = createContent(db);
+  const unrelated = await content.create(actor, {
+    kind: "document",
+    format: "markdown",
+    title: "绘本项目说明 DOCA",
+  });
+  // Stale remote titles/snippets and high scores are not evidence of relevance.
+  hits = [
+    {
+      id: unrelated.id,
+      _rankingScore: 0.99,
+      title: "doca问题记录",
+      summary: "doca问题记录",
+    },
+  ];
+  await save();
+  remoteStatus = "succeeded";
+  const query = "帮我找一下 doca 问题记录文档";
+  const ctx = { actor, allowedResources: [unrelated.id], exactResources: true };
+  for (const mode of ["ai", "auto", "keyword"] as const) {
+    for (const offset of [0, 100]) {
+      const page = await searchService.search(actor, {
+        q: query,
+        mode,
+        offset,
+      });
+      expect(page).toMatchObject({
+        items: [],
+        total: 0,
+        nextOffset: null,
+        engine: "meilisearch",
+      });
+    }
+    expect(
+      await searchKnowledge(db, ctx, { query, mode }, searchService.search),
+    ).toMatchObject({ items: [], nextOffset: null });
+  }
+  broken = true;
+  expect(
+    await searchService.search(actor, { q: query, mode: "auto" }),
+  ).toMatchObject({ items: [], total: 0, engine: "database" });
+  expect(
+    (await searchKnowledge(db, ctx, { query }, searchService.search)).items,
+  ).toEqual([]);
+  expect((await searchKnowledge(db, ctx, { query })).items).toEqual([]);
+});
+
+it("checks the full current body and filters before counting and pagination", async () => {
+  const content = createContent(db);
+  const unrelated = [];
+  for (let i = 0; i < 101; i++) {
+    unrelated.push(
+      await content.create(actor, {
+        kind: "document",
+        format: "markdown",
+        title: `DOCA 绘本方案 ${i}`,
+      }),
+    );
+  }
+  const target = await content.create(actor, {
+    kind: "document",
+    format: "markdown",
+    title: "doca问题记录",
+  });
+  const bodyHit = await content.create(actor, {
+    kind: "document",
+    format: "markdown",
+    title: "处理日志",
+  });
+  await db
+    .insertInto("document_states")
+    .values({
+      resource_id: bodyHit.id,
+      codec: "test",
+      checkpoint: "",
+      checkpoint_seq: 0,
+      seq: 0,
+      text: [
+        "DOCA 使用说明。" + "前言。".repeat(100),
+        "问题分类。" + "说明。".repeat(100),
+        "记录处理结果。",
+      ].join("\n"),
+      updated_at: new Date().toISOString(),
+    })
+    .execute();
+  hits = [
+    ...unrelated.map((item) => ({ id: item.id, _rankingScore: 0.99 })),
+    { id: target.id, _rankingScore: 0.8 },
+    { id: bodyHit.id, _rankingScore: 0.8 },
+  ];
+  await save();
+  remoteStatus = "succeeded";
+  const page = await searchService.search(actor, {
+    q: "doca问题记录",
+    mode: "ai",
+  });
+  expect(page.items.map((item) => item.id)).toEqual([target.id, bodyHit.id]);
+  expect(page).toMatchObject({ total: 2, nextOffset: null });
+  const bodyResult = page.items[1]!;
+  const excerpt = "summary" in bodyResult ? bodyResult.summary : "";
+  expect(
+    ["doca", "问题", "记录"].every((term) =>
+      excerpt.toLowerCase().includes(term),
+    ),
+  ).toBe(false);
+  expect(page.items[1]).not.toHaveProperty("searchRelevant");
+  expect(page.items[1]).not.toHaveProperty("searchCoverage");
+  const second = await searchService.search(actor, {
+    q: "doca问题记录",
+    mode: "ai",
+    offset: 1,
+  });
+  expect(second.items.map((item) => item.id)).toEqual([bodyHit.id]);
+  expect(second).toMatchObject({ total: 2, nextOffset: null });
+  await db
+    .updateTable("document_states")
+    .set({ text: "已改为与查询无关的介绍。" })
+    .where("resource_id", "=", bodyHit.id)
+    .execute();
+  const updated = await searchService.search(actor, {
+    q: "doca问题记录",
+    mode: "ai",
+  });
+  expect(updated.items.map((item) => item.id)).toEqual([target.id]);
+  expect(updated.total).toBe(1);
+});
+
 it("uses native Meilisearch vectors only in AI mode, preserves ranking, and returns current authorized summaries", async () => {
   const content = createContent(db);
   const first = await content.create(actor, {
@@ -1007,12 +1219,9 @@ it("uses native Meilisearch vectors only in AI mode, preserves ranking, and retu
   expect(result.json()).toMatchObject({
     mode: "ai",
     engine: "meilisearch",
-    total: 2,
+    total: 1,
   });
-  expect(result.json().items.map((r: any) => r.id)).toEqual([
-    first.id,
-    second.id,
-  ]);
+  expect(result.json().items.map((r: any) => r.id)).toEqual([first.id]);
   expect(result.json().items[0].summary).toContain("票据申请报销");
   expect(result.body).not.toContain("DO NOT TRUST");
   expect(
@@ -1128,10 +1337,7 @@ it("filters low semantic scores, reranks close matches using source terms, and c
     "/test-search?mode=ai&q=" +
       encodeURIComponent("支持多人一起修改文字并插入表格的编辑工具"),
   );
-  expect(result.json().items.map((r: any) => r.id)).toEqual([
-    editor.id,
-    sheet.id,
-  ]);
+  expect(result.json().items.map((r: any) => r.id)).toEqual([editor.id]);
   expect(
     calls.filter((c) => c.path.endsWith("/search")).at(-1)?.body
       .rankingScoreThreshold,

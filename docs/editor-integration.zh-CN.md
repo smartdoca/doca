@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 富文本 | @smartdoca/slate 0.4.26 | document-editor.tsx |
 | Markdown | @smartdoca/markdown 0.4.4 | markdown-editor.tsx |
-| 表格 | @smartdoca/sheet 0.2.14 | spreadsheet-editor.tsx |
+| 表格 | @smartdoca/sheet 0.2.15 | spreadsheet-editor.tsx |
 | 画布 | @smartdoca/canvas 0.5.16 | canvas-editor.tsx |
 | 幻灯片 | @smartdoca/slides 0.3.0-alpha.5 | presentation-editor.tsx |
 

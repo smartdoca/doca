@@ -188,6 +188,144 @@ it("uses predictable edge and middle drop zones, including small rows", () => {
   expect(treePlacement(128, 100, 36)).toBe("after");
   expect(treePlacement(112, 100, 24)).toBe("inside");
 });
+it.each(["after", "inside"] as const)(
+  "moves a subtree with retained trash (%s) and restores it beneath the same parent",
+  async (placement) => {
+    const parent = await create("Old parent"),
+      source = await create("Source", parent.id),
+      target = await create("Target");
+    const live = await create("Live child", source.id);
+    const deleted = await content.create(actor, {
+      kind: "document",
+      format: "markdown",
+      title: "Retained trash",
+      libraryId: lib.id,
+      parentId: source.id,
+      markdown: "# Retained content\nDo not lose this text.",
+    });
+    const grandchild = await create("Deleted grandchild", deleted.id);
+    await content.permissions(actor, deleted.id, {
+      version: deleted.version,
+      accessMode: "custom",
+      visibility: "invited",
+      grants: [{ userId: peer.id, role: "reader" }],
+    });
+    const latest = (await content.detail(actor, deleted.id)).resource;
+    await content.trash(actor, deleted.id, latest.version);
+    const rows = await db
+      .selectFrom("resources")
+      .selectAll()
+      .where("id", "in", [live.id, deleted.id, grandchild.id])
+      .orderBy("id")
+      .execute();
+    const states = await db
+      .selectFrom("document_states")
+      .selectAll()
+      .orderBy("resource_id")
+      .execute();
+    const grants = await db
+      .selectFrom("grants")
+      .selectAll()
+      .orderBy("resource_id")
+      .orderBy("user_id")
+      .execute();
+    await content.arrange(actor, source.id, {
+      version: source.version,
+      targetId: target.id,
+      placement,
+    });
+    expect((await content.detail(actor, source.id)).resource.parent_id).toBe(
+      placement === "inside" ? target.id : null,
+    );
+    expect(
+      await db
+        .selectFrom("resources")
+        .selectAll()
+        .where("id", "in", [live.id, deleted.id, grandchild.id])
+        .orderBy("id")
+        .execute(),
+    ).toEqual(rows);
+    expect(
+      await db
+        .selectFrom("document_states")
+        .selectAll()
+        .orderBy("resource_id")
+        .execute(),
+    ).toEqual(states);
+    expect(
+      await db
+        .selectFrom("grants")
+        .selectAll()
+        .orderBy("resource_id")
+        .orderBy("user_id")
+        .execute(),
+    ).toEqual(grants);
+    const trashed = rows.find((r) => r.id === deleted.id)!;
+    await content.trash(actor, deleted.id, trashed.version, true);
+    expect((await content.detail(actor, deleted.id)).resource).toMatchObject({
+      parent_id: source.id,
+      deleted_at: null,
+    });
+    expect((await content.detail(actor, grandchild.id)).resource).toMatchObject(
+      { parent_id: deleted.id, deleted_at: null },
+    );
+    expect((await content.detail(peer, deleted.id)).resource.role).toBe(
+      "reader",
+    );
+    expect(
+      await db
+        .selectFrom("document_states")
+        .select("text")
+        .where("resource_id", "=", deleted.id)
+        .executeTakeFirstOrThrow(),
+    ).toMatchObject({
+      text: expect.stringContaining("Do not lose this text."),
+    });
+  },
+);
+
+it.each([false, true])(
+  "still rejects moving descendants without management permission (trashed=%s)",
+  async (trashed) => {
+    const parent = await create("Parent"),
+      source = await create("Source", parent.id),
+      child = await create("Restricted", source.id),
+      target = await create("Target");
+    await content.permissions(actor, lib.id, {
+      version: lib.version,
+      visibility: "invited",
+      grants: [{ userId: peer.id, role: "editor" }],
+    });
+    await content.permissions(actor, source.id, {
+      version: source.version,
+      visibility: "invited",
+      accessMode: "custom",
+      grants: [{ userId: peer.id, role: "manager" }],
+    });
+    await content.permissions(actor, child.id, {
+      version: child.version,
+      visibility: "invited",
+      accessMode: "custom",
+      grants: [{ userId: peer.id, role: "reader" }],
+    });
+    if (trashed) await content.trash(actor, child.id, child.version + 1);
+    const before = await db
+      .selectFrom("resources")
+      .selectAll()
+      .orderBy("id")
+      .execute();
+    await expect(
+      content.arrange(peer, source.id, {
+        version: source.version + 1,
+        targetId: target.id,
+        placement: "after",
+      }),
+    ).rejects.toThrow("需要管理整个子树");
+    expect(
+      await db.selectFrom("resources").selectAll().orderBy("id").execute(),
+    ).toEqual(before);
+  },
+);
 it("keeps creation order through rename, appends new siblings and persists drag order", async () => {
   const a = await create("Z"),
     b = await create("A"),

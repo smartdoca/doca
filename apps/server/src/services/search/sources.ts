@@ -8,6 +8,7 @@ import type { Actor } from "@core/modules/identity/passwords.js";
 import { createContent } from "@core/workflows/resources.js";
 import type { DB } from "@db/index.js";
 import { searchDocument } from "@core/modules/discovery/search-reconciliation.js";
+import { textMentionsTopic } from "@core/modules/discovery/search-excerpts.js";
 import { searchSummaries } from "./search-summary.js";
 
 export const documentSearchSource = {
@@ -351,10 +352,13 @@ export function createFileSource(db: DB): SearchSource<SearchQueryContext> {
       if (context.kind !== "files") return new Map();
       const allowed = new Set(context.allowedFileIds);
       const current = await db
-        .selectFrom("file_items")
-        .select(["id", "storage_object_id"])
-        .where("id", "in", [...allowed])
-        .where("deleted_at", "is", null)
+        .selectFrom("file_items as f")
+        .innerJoin("file_storage_objects as o", "o.id", "f.storage_object_id")
+        .select([
+          "f.id", "f.storage_object_id", "f.name", "f.ai_description_override", "o.ai_description",
+        ])
+        .where("f.id", "in", [...allowed])
+        .where("f.deleted_at", "is", null)
         .execute();
       const values = new Map<string, { fileIds: string[]; objectId: string }>();
       for (const indexedId of ids) {
@@ -367,6 +371,17 @@ export function createFileSource(db: DB): SearchSource<SearchQueryContext> {
             (row) => fileObjectDocumentId(row.storage_object_id) === indexedId,
           )?.storage_object_id;
         if (!objectId) continue;
+        if (
+          !current.some((row) =>
+            row.storage_object_id === objectId &&
+            textMentionsTopic(
+              [row.name, row.ai_description_override, row.ai_description]
+                .filter(Boolean)
+                .join("\n"),
+              context.retrievalQuery,
+            ),
+          )
+        ) continue;
         const fileIds = current
           .filter((row) => row.storage_object_id === objectId)
           .map((row) => row.id);

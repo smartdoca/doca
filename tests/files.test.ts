@@ -681,6 +681,31 @@ it("shows one physical image result with AI, document and personal locations", a
   ]);
 });
 
+it("keeps a successful empty indexed file search empty instead of listing keyword candidates", async () => {
+  const uploaded = await request("POST", "/files/items?filename=doca问题记录.txt", Buffer.from("test"), "application/octet-stream");
+  expect(uploaded.statusCode, uploaded.body).toBe(200);
+  await db.updateTable("search_settings").set({
+    enabled: 1, endpoint: "http://127.0.0.1:7700", index_name: "doca",
+  }).where("id", "=", "system").execute();
+  await app.close();
+  app = await createApp(db, {
+    origin,
+    storage: { ...storageRuntime(), root: join(directory, "uploads") },
+    search: {
+      allowedOrigins: ["http://127.0.0.1:7700"],
+      fetch: async (url) => Response.json(String(url).endsWith("/search") ? { hits: [] } : {}),
+    },
+  });
+  const response = await request("GET", "/files/search?q=doca问题记录&mode=ai");
+  expect(response.statusCode, response.body).toBe(200);
+  expect(response.json().items).toEqual([]);
+  await db.updateTable("search_settings").set({ enabled: 0 }).where("id", "=", "system").execute();
+  const local = await request("GET", "/files/search?q=doca问题记录&mode=ai");
+  expect(local.json().items.map((item: any) => item.id)).toEqual([uploaded.json().id]);
+  const irrelevant = await request("GET", "/files/search?q=doca火星发射流程&mode=ai");
+  expect(irrelevant.json().items).toEqual([]);
+});
+
 it("keeps AI assistant files copy-only so originals stay in place", async () => {
   const uploaded = await request(
     "POST",

@@ -968,7 +968,7 @@ export function registerFiles(
               "ai",
             )
           : null;
-      const rank = rankedIds?.length
+      const rank = rankedIds !== null
         ? new Map(rankedIds.map((id, index) => [id, index]))
         : null;
       if (rank)

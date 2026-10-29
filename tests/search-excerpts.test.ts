@@ -58,3 +58,33 @@ it("requires the topic itself rather than related animals", () => {
   expect(textMentionsTopic("一只阳光下的橘色猫", "猫猫")).toBe(true);
   expect(textMentionsTopic("一只阳光下的橘色猫", "狗狗")).toBe(false);
 });
+it("requires concrete topic coverage instead of one shared brand or generic word", () => {
+  expect(textMentionsTopic("绘本项目说明 DOCA", "doca问题记录")).toBe(false);
+  expect(textMentionsTopic("DOCA 项目的相关说明", "doca 问题记录")).toBe(false);
+  expect(textMentionsTopic("🎯 DOCA 问题记录2.0", "doca问题记录")).toBe(true);
+  expect(
+    textMentionsTopic(
+      "单元格公式、筛选和图表数据分析。",
+      "支持多人一起修改文字并插入表格的编辑工具",
+    ),
+  ).toBe(false);
+  expect(
+    textMentionsTopic(
+      "支持多人一起修改文字、插入表格、列表和协作编辑。",
+      "支持多人一起修改文字并插入表格的编辑工具",
+    ),
+  ).toBe(true);
+  expect(textMentionsTopic("财务审批时间为每周五。", "如何报销交通费")).toBe(
+    false,
+  );
+  expect(
+    textMentionsTopic(
+      "交通和住宿费用，可以提交票据申请报销。",
+      "如何报销交通费",
+    ),
+  ).toBe(true);
+  expect(textMentionsTopic("chair", "AI")).toBe(false);
+  expect(textMentionsTopic("AI assistant", "AI")).toBe(true);
+  expect(textMentionsTopic("hello world", "hello")).toBe(true);
+  expect(textMentionsTopic("任意内容", "")).toBe(true);
+});

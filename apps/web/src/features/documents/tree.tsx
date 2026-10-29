@@ -1,6 +1,6 @@
 import { splitTitleIcon } from "@web/shared/utils/resource-title.js";
 import { useI18n } from "@web/shared/i18n.js";
-import { Feedback } from "@web/shared/components/feedback.js";
+import { Feedback, notifyFeedback } from "@web/shared/components/feedback.js";
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import { ChevronRight, MoreHorizontal, Plus } from "lucide-react";
@@ -210,7 +210,7 @@ export function DocumentTree({
                 setLocalRefresh((n) => n + 1);
               })
               .catch((e) => {
-                setError(e.message);
+                notifyFeedback(e.message, "error");
                 setLocalRefresh((n) => n + 1);
               })
               .finally(() => setBusy(false));

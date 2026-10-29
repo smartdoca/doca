@@ -10,7 +10,7 @@ This is the integration source document for all five editors; subpackages consum
 | --- | --- | --- |
 | Rich text | @smartdoca/slate 0.4.26 | document-editor.tsx |
 | Markdown | @smartdoca/markdown 0.4.4 | markdown-editor.tsx |
-| Spreadsheet | @smartdoca/sheet 0.2.14 | spreadsheet-editor.tsx |
+| Spreadsheet | @smartdoca/sheet 0.2.15 | spreadsheet-editor.tsx |
 | Canvas | @smartdoca/canvas 0.5.16 | canvas-editor.tsx |
 | Slides | @smartdoca/slides 0.3.0-alpha.5 | presentation-editor.tsx |
 
