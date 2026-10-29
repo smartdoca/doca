@@ -21,7 +21,7 @@
   }
   window.$docsify = {
     name: "Doca",
-    repo: "smartdoca/doca",
+    repo: "workhold/doca",
     nameLink: { "/zh-cn/": "#/zh-cn/", "/": "#/en/" },
     skipLink: { "/zh-cn/": "跳到正文", "/": "Skip to main content" },
     loadSidebar: true,
@@ -61,7 +61,7 @@
           if (!page) { next(markdown); return; }
           const source = chinese ? page.zhSource : page.enSource;
           const other = chinese ? page.en : page.zh;
-          next(`${markdown}\n\n---\n\n[${chinese ? "在 GitHub 编辑此页" : "Edit this page on GitHub"}](https://github.com/smartdoca/doca/edit/main/docs/${source}) · [${chinese ? "English" : "简体中文"}](${other})\n`);
+          next(`${markdown}\n\n---\n\n[${chinese ? "在 GitHub 编辑此页" : "Edit this page on GitHub"}](https://github.com/workhold/doca/edit/main/docs/${source}) · [${chinese ? "English" : "简体中文"}](${other})\n`);
         }).catch(error => {
           console.error(error);
           next(markdown);

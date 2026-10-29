@@ -13,7 +13,7 @@
 拉取 main 分支，一起获取当前 Compose 和管理员脚本：
 
 ```sh
-git clone --branch main --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch main --depth 1 https://github.com/workhold/doca.git
 cd doca
 ```
 

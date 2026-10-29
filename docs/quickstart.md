@@ -13,7 +13,7 @@ If the server cannot reach GitHub, transfer Compose, the environment example, th
 Clone main to obtain the current Compose file and administrator scripts together:
 
 ```sh
-git clone --branch main --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch main --depth 1 https://github.com/workhold/doca.git
 cd doca
 ```
 

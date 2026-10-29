@@ -9,7 +9,7 @@
 由能访问仓库的一方拉取 main 分支，再生成部署包：
 
 ```sh
-git clone --branch main --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch main --depth 1 https://github.com/workhold/doca.git
 cd doca
 node scripts/pack-deployment.mjs
 ```

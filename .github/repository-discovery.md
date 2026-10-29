@@ -9,7 +9,7 @@ See [Searching for repositories](https://docs.github.com/en/search-github/search
 
 These settings are applied on GitHub separately from the files in this repository:
 
-- Repository: `smartdoca/doca`
+- Repository: `workhold/doca`
 - Website: `https://i.smartdoca.cc`
 - Live demo: `https://d.smartdoca.cc`
 - Description:
@@ -37,11 +37,11 @@ repository search API. The `repo:` qualifier isolates this repository; it does
 not change which fields the keyword searches.
 
 ```sh
-gh repo view smartdoca/doca --json description,homepageUrl,repositoryTopics
-gh api -X GET search/repositories -f q='协同编辑 repo:smartdoca/doca' --jq '.items[].full_name'
-gh api -X GET search/repositories -f q='文档管理 repo:smartdoca/doca' --jq '.items[].full_name'
-gh api -X GET search/repositories -f q='knowledge-base repo:smartdoca/doca' --jq '.items[].full_name'
-gh api -X GET search/repositories -f q='topic:collaborative-editing repo:smartdoca/doca' --jq '.items[].full_name'
+gh repo view workhold/doca --json description,homepageUrl,repositoryTopics
+gh api -X GET search/repositories -f q='协同编辑 repo:workhold/doca' --jq '.items[].full_name'
+gh api -X GET search/repositories -f q='文档管理 repo:workhold/doca' --jq '.items[].full_name'
+gh api -X GET search/repositories -f q='knowledge-base repo:workhold/doca' --jq '.items[].full_name'
+gh api -X GET search/repositories -f q='topic:collaborative-editing repo:workhold/doca' --jq '.items[].full_name'
 ```
 
 Search indexing and result ranking are controlled by GitHub. A successful scoped

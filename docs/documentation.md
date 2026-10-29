@@ -43,8 +43,8 @@ The `.github/workflows/docs.yml` workflow checks documentation on pull requests 
 
 The intended entrances are:
 
-- English: <https://smartdoca.github.io/doca/#/en/>
-- Chinese: <https://smartdoca.github.io/doca/#/zh-cn/>
+- English: <https://workhold.github.io/doca/#/en/>
+- Chinese: <https://workhold.github.io/doca/#/zh-cn/>
 
 These addresses become available after the workflow successfully deploys. README links point to their corresponding language entrances. The site uses the default GitHub Pages domain and requires no custom-domain DNS or repository CNAME file.
 

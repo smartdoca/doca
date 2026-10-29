@@ -43,8 +43,8 @@ pnpm docs:dev
 
 预定入口为：
 
-- 英文：<https://smartdoca.github.io/doca/#/en/>
-- 中文：<https://smartdoca.github.io/doca/#/zh-cn/>
+- 英文：<https://workhold.github.io/doca/#/en/>
+- 中文：<https://workhold.github.io/doca/#/zh-cn/>
 
 工作流成功部署后，这些地址才可访问。README 指向对应语言入口。文档站使用 GitHub Pages 默认域名，无需配置自定义域名 DNS 或仓库 CNAME 文件。
 

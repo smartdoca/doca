@@ -6,7 +6,7 @@ import { parseDocument, DomUtils } from "htmlparser2";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import ts from "typescript";
 
-export const repository = "https://github.com/smartdoca/doca/blob/main/";
+export const repository = "https://github.com/workhold/doca/blob/main/";
 export const skillReferences = [
   [
     "collaboration-sdk-contract.md",
@@ -138,7 +138,7 @@ export function documentLinks(tree) {
 // Resolve only local links and this repository's main-branch links, never network requests.
 export function repositoryTarget(root, path, href) {
   const own = href.match(
-    /^https:\/\/(?:github\.com\/smartdoca\/doca\/(?:blob|tree)\/main|raw\.githubusercontent\.com\/smartdoca\/doca\/main)\/(.*)$/,
+    /^https:\/\/(?:github\.com\/workhold\/doca\/(?:blob|tree)\/main|raw\.githubusercontent\.com\/workhold\/doca\/main)\/(.*)$/,
   );
   if (!own && /^(?:[a-z][a-z0-9+.-]*:|\/\/|#\/)/i.test(href)) return null;
   const value = own ? own[1] : href;

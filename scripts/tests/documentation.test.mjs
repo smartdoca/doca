@@ -19,17 +19,17 @@ test("portable skill copies resolve source links from docs, including parent pat
   const output = portableSkillReference(input, "contract.md");
   assert.ok(
     output.includes(
-      "https://github.com/smartdoca/doca/blob/main/docs/contract.zh-CN.md",
+      "https://github.com/workhold/doca/blob/main/docs/contract.zh-CN.md",
     ),
   );
   assert.ok(
     output.includes(
-      "https://github.com/smartdoca/doca/blob/main/apps/web/index.ts",
+      "https://github.com/workhold/doca/blob/main/apps/web/index.ts",
     ),
   );
   assert.ok(
     output.includes(
-      "https://github.com/smartdoca/doca/blob/main/docs/storage.md#history",
+      "https://github.com/workhold/doca/blob/main/docs/storage.md#history",
     ),
   );
   assert.ok(output.includes("[Local](#contract)"));
@@ -64,7 +64,7 @@ test("repository links resolve main paths and encoded names, but detect traversa
     repositoryTarget(
       root,
       path,
-      "https://github.com/smartdoca/doca/blob/main/docs/guide.md#start",
+      "https://github.com/workhold/doca/blob/main/docs/guide.md#start",
     ).fragment,
     "start",
   );
@@ -72,7 +72,7 @@ test("repository links resolve main paths and encoded names, but detect traversa
     repositoryTarget(
       root,
       path,
-      "https://github.com/smartdoca/doca/blob/v0.1.0/old.md",
+      "https://github.com/workhold/doca/blob/v0.1.0/old.md",
     ),
     null,
   );

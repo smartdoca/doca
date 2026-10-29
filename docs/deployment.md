@@ -17,7 +17,7 @@ The proxy must forward HTTP and the WebSocket path `/api/v1/ws`. Keep the origin
 Clone the deployment files from main or transfer the [deployment bundle for servers without GitHub access](deployment-without-github.md). The business server does not need a source checkout. The image does not contain `scripts/bootstrap-admin.sh` or `scripts/reset-admin-password.sh`; those scripts stay on the host and start a one-off container. Include the `docker/chromium-seccomp.json` policy referenced by Compose as well.
 
 ```sh
-git clone --branch main --depth 1 https://github.com/smartdoca/doca.git
+git clone --branch main --depth 1 https://github.com/workhold/doca.git
 cd doca
 cp docker.env.example .env
 ```
