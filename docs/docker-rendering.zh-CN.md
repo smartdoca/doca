@@ -2,44 +2,27 @@
 
 [English](docker-rendering.md)
 
-当前检出的 Dockerfile 安装 Debian Bookworm 的 Chromium、沙箱组件、中文及 Liberation 字体，以及 LibreOffice Writer、Calc、Impress、Math。必须重新构建并发布镜像后才具有这些新增能力，不能据此声称已发布的 `0.1.11` 镜像包含它们。
+本次改造后的镜像使用 WeasyPrint 70.0 导出富文本/Markdown PDF，使用 Node、原生 Canvas 和 resvg 生成 AI 画板图片；不安装 Chromium 或 Playwright 运行时，不需要宿主 seccomp JSON、额外共享内存或浏览器用户命名空间设置。必须重新构建镜像后使用新 Compose；已发布旧镜像不会自动获得新渲染器。
 
-镜像显式设置 `DOCA_PDF_CHROMIUM=/usr/bin/chromium`、`DOCA_OFFICE_RENDERER=/usr/bin/soffice`，使用非 root 的 `node` 用户运行。Writer、Calc、Impress 覆盖支持的 `.docx`、`.xlsx`、`.pptx` 视觉转换，Math 提供嵌入公式渲染；`--no-install-recommends` 避免完整 LibreOffice 元包及无关推荐程序，Draw 等必要的间接依赖仍会安装。浏览器、字体和 Office 会增加镜像体积与渲染内存占用。缺少原稿字体可能改变换行和公式，健康检查不能替代实际文档的视觉检查。
+PDF 读取、逐页文字与图像提取及可编辑导入继续使用 PDF.js。LibreOffice Writer、Calc、Impress、Math 继续负责 `.docx`、`.xlsx`、`.pptx` 的视觉转换，中文及 Liberation 字体继续保留。公式、流程图、嵌入图片、长表格和中文分页需要实际导出检查，健康检查不能代替视觉验收。
 
-每次 Office 转换都在私有 `/tmp/doca-office-render-*` 临时目录中启动独立 headless 进程和全新的 LibreOffice 用户配置，120 秒超时，成功或失败后均清理临时目录。容器 `node` 用户必须能写入 `/tmp`；不要挂载桌面用户的 Office 配置，或改为 root 才能运行。旧二进制 Office 格式、主动内容和不支持的外部资源仍会拒绝，转换失败不会伪装成完整文本读取。详见 [AI 附件](ai-attachments.md)。
+PDF 任务使用 `DOCA_PDF_PYTHON=/opt/doca-pdf/bin/python` 启动固定 Python 环境，只允许内嵌 data 资源，拒绝网络/宿主文件读取；损坏或无法读取的图片/字体不能静默交付不完整 PDF。每个任务保留 32 MiB 输入、两个并发、60 秒期限以及权限二次校验。Node 画板任务继续通过宿主授权素材回调读取图片，保留场景/选区/裁剪、告警、排队和取消行为。两种任务在超时/取消时终止独立进程。
+
+旧 `DOCA_PDF_CHROMIUM` 配置会明确报错，不自动启用旧渲染器。现有文档、数据库、附件、密钥与持久卷保持原状；已有 SDK 历史读取规则沿用原路径，不转换存量数据。回滚恢复原代码、依赖锁和镜像，并保留之后写入的数据及原部署配置。旧版 `docker/chromium-seccomp.*` 仅保留来源记录和旧版对照验收用途，不再随新部署包交付。
 
 ## 镜像体积与更新下载量
 
-Chromium 以无窗口方式负责 PDF 导出、原生画布截图与 AI 看图；LibreOffice 负责 Office 文档渲染。完整镜像保留两种渲染器、沙箱和字体。
+移除浏览器会减少镜像内容，但 Python/Pango/resvg 会占用空间，LibreOffice、字体、应用依赖和 Web 资源仍然保留。实际下载量以相同版本/架构构建的压缩层对比为准，不以 Docker Desktop 多架构本地占用推算。
 
-Web 构建后会移除依赖类型声明、TypeScript 构建记录、SQLite 编译输入和其他平台的 SQLite 预编译文件。清理前先实际执行已安装的原生 SQLite 绑定，保留当前绑定、运行时 JS/TS、包清单及许可证。公开 npm 包、编辑器运行代码和应用数据不变。
+Web、通用依赖及各编辑器继续独立分层，部署路径和权限不变。见[分层核验记录](verification/image-web-layers-2026-10-23.md)。
 
-通用 Node 依赖、五个编辑器及 pnpm 安装记录分别使用独立 `COPY --link` 层；服务端源码、扩展和编译 Web 也分层。发布 CI 按架构读写 `buildcache-amd64` / `buildcache-arm64`，这些 BuildKit 缓存标签与运行镜像分开，使全新 CI runner 和后续业务更新也能复用未变的渲染器、依赖层。机制见 Docker 的[独立 COPY 层](https://docs.docker.com/reference/dockerfile/#copy---link)与[仓库构建缓存](https://docs.docker.com/build/cache/backends/registry/)。
-
-首次切换此布局需要下载新层；后续拉取会复用服务器已有层，基础镜像、渲染器或依赖变化时仍需下载对应新层。发布验收按架构记录压缩层字节。Docker Desktop 本地占用可包含双架构及解压内容，不等于单台服务器下载量。具体实验范围见[问题清单验收](verification/issue-tracker-2026-10-21/image-size.md)。
-
-## Linux Chromium 沙箱
-
-应用明确启用 Chromium 沙箱，容器及宿主安全策略须允许用户命名空间。安装沙箱包并以非 root 运行仍不足以赋予这些权限。[Playwright 官方 Docker 文档](https://playwright.dev/docs/docker)使用默认 seccomp 策略，加上用户命名空间所需的 `clone`、`setns`、`unshare` 许可。
-
-基础 Compose 已加载固定、未修改的 Playwright v1.62.1 官方策略 `docker/chromium-seccomp.json`，SHA-256 为 `cc3e61cabda6bbc1e53e54d27ba4d55a9d3be829b6dd1a596f4a7b31b1cc7849`，并提供独立共享内存。宿主策略文件须与 Compose 来自同一批准检出/发行版本，应用启动时不会下载或改写它。[来源与许可证](../docker/chromium-seccomp.md)已随文件保留。自定义部署须保留以下设置：
-
-```yaml
-services:
-  doca:
-    security_opt:
-      - seccomp=./docker/chromium-seccomp.json
-    shm_size: "1gb"
-```
-
-校验并应用基础部署：
+## 容器验收
 
 ```sh
-docker compose config --quiet
-docker compose up -d
+DOCA_RELEASE_QA_IMAGE=your-rebuilt-image node scripts/qa-release-render-image.mjs arm64
 ```
 
-基础 Compose 已设置 `init: true`；独立共享内存避免共享宿主 IPC。这套配置不需要 `--privileged`、`seccomp=unconfined` 或 `--no-sandbox`。宿主仍禁止用户命名空间时，应由管理员配置受支持的宿主策略或执行环境，应用不会因启动失败而关闭沙箱。部署时必须实际导出 PDF，不能只检查版本命令；[Playwright 不保证任意外部 Chromium 版本](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-option-executable-path)，浏览器或 Playwright 升级后须重验。
+x86-64 使用 `amd64`。验收在非 root、无网络、只读根文件系统的一次性容器中检查真实 PDF、画板像素和 Office 转换，不挂载用户文档；默认 Docker 安全策略即可。生产部署另须验证实际宿主，单个架构的成功不代表另一架构已验证。
 
 ## 可选 SAM 运行环境
 

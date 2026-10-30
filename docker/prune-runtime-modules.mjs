@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 
 const apply = process.argv.includes("--apply");
 const root = path.resolve(process.argv.slice(2).find((arg) => arg !== "--apply") ?? ".");
-const devOnly = new Set(["vite"]);
+const devOnly = new Set(["vite", "playwright-core"]);
 // These packages declare browser UI dependencies that the server entrypoints do not load.
 const traceOnly = new Set([
   "@smartdoca/sheet",
@@ -28,8 +28,9 @@ const required = [
   "pg",
   "sharp",
   "pdfjs-dist",
-  "playwright-core",
+  "jsdom",
   "@napi-rs/canvas",
+  "@resvg/resvg-js",
   "@mastra/core",
   "@mastra/memory",
   "@mastra/libsql",

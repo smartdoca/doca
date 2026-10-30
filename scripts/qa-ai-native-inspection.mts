@@ -44,7 +44,7 @@ async function inspectCurrentFixture() {
   const runtime = runtimes[1];
   const verifyRuntime = async () => {
     assert.equal(await hash("package.json"), runtime.manifestSha256); assert.equal(await hash("pnpm-lock.yaml"), runtime.lockSha256);
-    assert.equal(await hash("apps/server/dist/canvas-render/renderer.js"), runtime.rendererSha256);
+    assert.equal(await hash("apps/server/dist/canvas-render/sdk.js"), runtime.rendererSha256);
     for (const editor of runtime.editors) for (const file of editor.files) assert.equal(await hash(join("node_modules", editor.name, file.file)), file.sha256);
     for (const file of runtime.web.files) assert.equal(await hash(join("apps/web/dist", file.file)), file.sha256);
     assert.equal(runtime.web.indexSha256, process.env.DOCA_QA_EXPECT_INDEX_SHA256);

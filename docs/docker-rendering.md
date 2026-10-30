@@ -1,45 +1,28 @@
 # Docker document renderers
 
-[中文](docker-rendering.zh-CN.md)
+[简体中文](docker-rendering.zh-CN.md)
 
-This checkout's Dockerfile installs Debian Bookworm Chromium, its sandbox package, CJK/Liberation fonts, and the LibreOffice Writer, Calc, Impress and Math components. These changes become available in a published image only after that image is rebuilt and released; they are not a claim about the existing `0.1.11` image.
+The rebuilt image exports rich-text/Markdown PDFs with WeasyPrint 70.0 and creates AI canvas PNGs with Node, native Canvas and resvg. It ships no Chromium or Playwright runtime and needs no host seccomp JSON, extra browser shared memory, or browser user-namespace configuration. Build the new image before using the changed Compose file; previously published images do not gain this renderer automatically.
 
-The image sets `DOCA_PDF_CHROMIUM=/usr/bin/chromium` and `DOCA_OFFICE_RENDERER=/usr/bin/soffice`, and runs as the nonroot `node` user. Writer, Calc and Impress cover the supported `.docx`, `.xlsx` and `.pptx` visual conversion paths; Math supplies embedded equation rendering. Installing the components with `--no-install-recommends` avoids the full LibreOffice metapackage and unrelated recommended applications; necessary transitive components such as Draw still install. Chromium, fonts and Office increase image size and renderer memory use. Fonts absent from the image may change line breaks and formulas. A successful process/health check does not prove visual fidelity; verify representative documents on the deployed image.
+PDF reading, per-page text/images and editable import still use PDF.js. LibreOffice Writer, Calc, Impress and Math retain visual conversion of `.docx`, `.xlsx` and `.pptx`; CJK and Liberation fonts remain. Verify formulas, diagrams, embedded images, long tables and CJK pagination through real exports; a health check cannot establish visual fidelity.
 
-Office conversion starts a separate headless process with a private `/tmp/doca-office-render-*` directory and a fresh LibreOffice user profile per conversion. The `node` user must be able to write `/tmp`; conversion is limited to 120 seconds and the temporary directory is removed after success or failure. Do not mount a desktop LibreOffice profile or run the application as root to make conversion work. Older binary Office formats, active content and unsupported external resources remain rejected; a conversion failure does not become a text-only success. See [AI attachments](ai-attachments.md).
+PDF jobs use the pinned Python environment at `DOCA_PDF_PYTHON=/opt/doca-pdf/bin/python`. Only embedded data resources are allowed; network and host-file reads are refused. Unreadable/corrupt images or fonts fail instead of returning an incomplete PDF. The 32 MiB input limit, two-job concurrency, 60-second deadline and post-render permission recheck remain. Canvas jobs retain the SDK exporter, authorized assets, selection/crop, warnings, queue and cancellation. Both renderers run in disposable processes killed on cancellation/deadline.
+
+`DOCA_PDF_CHROMIUM` is explicitly rejected, with no browser fallback. Existing documents, databases, attachments, keys and volumes remain intact. SDK historical readers keep their existing paths with no stored-data conversion. Rollback restores the previous code, dependency locks, image and deployment configuration while preserving subsequent writes. The old `docker/chromium-seccomp.*` files remain for provenance and old-renderer comparison only; new deployment bundles omit them.
 
 ## Image size and update downloads
 
-Chromium runs without a visible window for PDF export and native canvas screenshots/AI visual inspection. LibreOffice handles Office document rendering. The complete image retains both renderers, their sandbox and fonts.
+Removing the browser saves space, while Python/Pango/resvg add dependencies. LibreOffice, fonts, application dependencies and Web assets remain. Compare compressed layers from equivalent versions/architectures; Docker Desktop's multi-architecture local usage is not a download estimate.
 
-After the Web build, runtime cleanup removes dependency declarations, TypeScript build metadata, SQLite compiler inputs and SQLite prebuilds for other platforms. It first executes the installed native SQLite binding, retains that binding and all runtime JS/TS, package manifests and license notices. Published npm packages, editor runtime code and application data are unchanged.
+Web assets, common dependencies and editors retain separate layers, paths and permissions. See [layer verification](verification/image-web-layers-2026-10-23.md).
 
-Common Node dependencies, each editor and pnpm installation metadata use separate `COPY --link` layers. Server sources, the extension and compiled Web assets also have independent layers. Release CI imports/exports architecture-specific BuildKit registry caches under `buildcache-amd64` and `buildcache-arm64`, separate from runnable release images. Unchanged renderer and dependency layers can survive fresh CI runners and subsequent app/editor changes. See Docker's [independent COPY layers](https://docs.docker.com/reference/dockerfile/#copy---link) and [registry build cache](https://docs.docker.com/build/cache/backends/registry/).
-
-The first release with this layout downloads its new layers. Later pulls reuse layers already present on the server; base, renderer or dependency changes still require their changed layers. Release verification records compressed bytes per architecture. Docker Desktop disk usage may include both architectures and unpacked storage; it is not the download size for one server. Scoped measurements are recorded in [the issue-tracker verification](verification/issue-tracker-2026-10-21/image-size.md).
-
-## Chromium sandbox on Linux
-
-The application explicitly enables the Chromium sandbox. Docker's runtime security policy and the host must permit user namespaces. Installing `chromium-sandbox` and using a nonroot UID does not by itself supply that permission. Playwright's [official Docker instructions](https://playwright.dev/docs/docker) use the default seccomp policy with the additional `clone`, `setns` and `unshare` allowances needed for user namespaces.
-
-The base Compose file already loads the pinned, unmodified official Playwright v1.62.1 policy at `docker/chromium-seccomp.json`, SHA-256 `cc3e61cabda6bbc1e53e54d27ba4d55a9d3be829b6dd1a596f4a7b31b1cc7849`, and allocates dedicated shared memory. Keep the host-side policy file from the same approved checkout/release as Compose. It is not downloaded or changed when the application starts. [Policy source and license](../docker/chromium-seccomp.md) are retained with it. Custom deployment files must preserve these settings:
-
-```yaml
-services:
-  doca:
-    security_opt:
-      - seccomp=./docker/chromium-seccomp.json
-    shm_size: "1gb"
-```
-
-Validate and apply the base deployment:
+## Container verification
 
 ```sh
-docker compose config --quiet
-docker compose up -d
+DOCA_RELEASE_QA_IMAGE=your-rebuilt-image node scripts/qa-release-render-image.mjs arm64
 ```
 
-The base Compose file already enables `init: true`. A dedicated shared-memory allocation avoids sharing the host IPC namespace. Neither `--privileged`, `seccomp=unconfined`, nor `--no-sandbox` is required by this configuration. Hosts that forbid user namespaces still need an administrator-approved host policy or a supported execution host; the application does not disable the sandbox when launch fails. Verify an actual PDF export, not only `chromium --version`. Playwright [does not guarantee arbitrary external Chromium versions](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-option-executable-path), so repeat this smoke test when the browser or Playwright changes.
+Use `amd64` for x86-64. This exercises real PDF output, canvas pixels and Office conversion in a non-root disposable container with no network and a read-only root, without user documents. Docker's default security policy is sufficient. Verify the actual production host separately; one architecture does not establish another's result.
 
 ## Optional SAM runtime
 

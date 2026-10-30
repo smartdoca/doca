@@ -14,7 +14,7 @@
 
 ## 文件
 
-可以拉取 main 分支的部署文件，也可以转交[无需访问 GitHub 的部署包](deployment-without-github.zh-CN.md)。业务服务器无需拉取源码。镜像里没有 `scripts/bootstrap-admin.sh` 和 `scripts/reset-admin-password.sh`；这两个脚本留在宿主机上，用来启动一次性容器。Compose 引用的 `docker/chromium-seccomp.json` 也必须随部署文件提供。
+可以拉取 main 分支的部署文件，也可以转交[无需访问 GitHub 的部署包](deployment-without-github.zh-CN.md)。业务服务器无需拉取源码。新镜像内置 `docker/admin.sh`，可在启动后执行 `docker compose exec doca bash docker/admin.sh bootstrap` 初始化管理员，或传入 `reset-password` 重置密码；宿主脚本方式仍按原路径工作。新渲染器不需要宿主 seccomp JSON。打包命令另生成一个用于全新安装的独立 YAML，可直接在文件中填写来源与主密钥。此改造必须配合重新构建的新镜像，不能直接用于未改造的已发布旧镜像。
 
 ```sh
 git clone --branch main --depth 1 https://github.com/workhold/doca.git

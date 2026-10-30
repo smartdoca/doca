@@ -14,7 +14,7 @@ The proxy must forward HTTP and the WebSocket path `/api/v1/ws`. Keep the origin
 
 ## Files
 
-Clone the deployment files from main or transfer the [deployment bundle for servers without GitHub access](deployment-without-github.md). The business server does not need a source checkout. The image does not contain `scripts/bootstrap-admin.sh` or `scripts/reset-admin-password.sh`; those scripts stay on the host and start a one-off container. Include the `docker/chromium-seccomp.json` policy referenced by Compose as well.
+Clone the deployment files from main or transfer the [deployment bundle for servers without GitHub access](deployment-without-github.md). The business server does not need a source checkout. The rebuilt image includes `docker/admin.sh`: after startup, run `docker compose exec doca bash docker/admin.sh bootstrap`, or use `reset-password` to reset an existing administrator. Host wrapper scripts retain their existing entrypoints. The new renderer needs no host seccomp JSON. The packer also emits a standalone fresh-install YAML with editable origin/key values. These changes require a rebuilt image and cannot be used directly with an unmodified published old image.
 
 ```sh
 git clone --branch main --depth 1 https://github.com/workhold/doca.git

@@ -4104,7 +4104,7 @@ export const en = {
     "PDF content exceeds 32 MB. Split the document before exporting.",
   "pdf.busy": "PDF export is busy. Please try again shortly.",
   "pdf.unavailable":
-    "The PDF renderer is unavailable. Install Chromium or configure DOCA_PDF_CHROMIUM.",
+    "The PDF renderer is unavailable. Install WeasyPrint or configure DOCA_PDF_PYTHON.",
   "pdf.invalidRequest": "Invalid PDF rendering request",
   "pdf.unsupportedFormat": "PDF export is unavailable for this document type",
 } as const;

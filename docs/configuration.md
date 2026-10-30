@@ -46,7 +46,7 @@ Store IDs and physical locations must remain available after objects are written
 | `DOCA_REDIS_PREFIX`, `DOCA_INSTANCE_ID` | Prefix defaults to `doca`; instance ID defaults to a random process ID |
 | `DOCA_TRUST_PROXY` | Comma-separated trusted proxy IPs/CIDRs; **no proxy is trusted by default**, including loopback |
 | `DOCA_PLUGINS_DIR` | Writable installation/cache directory; Compose defaults to `/data/plugins` |
-| `DOCA_PDF_CHROMIUM` | Optional Chromium executable for rich-text/Markdown PDF export; otherwise install the matching Playwright browser. The sandbox stays enabled |
+| `DOCA_PDF_PYTHON` | Python executable with pinned WeasyPrint dependencies for PDF export; defaults to `python3`, `/opt/doca-pdf/bin/python` in Docker. Obsolete `DOCA_PDF_CHROMIUM` is rejected |
 | `DOCA_PLUGIN_STORE_URL` | HTTP(S) origin; default `https://store.smartdoca.cc` |
 | `DOCA_PLUGIN_NPM_REGISTRY` | Prebuilt-package registry; default `https://registry.npmjs.org` |
 | `DOCA_ASSET_BASE` | Optional built-asset prefix; empty serves `/assets` from Doca |

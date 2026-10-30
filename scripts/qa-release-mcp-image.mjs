@@ -163,10 +163,6 @@ console.log(JSON.stringify({adminId:owner.id,userId:target.id})); } finally {awa
     `linux/${arch}`,
     "-p",
     `127.0.0.1:${qaPort}:39120`,
-    "--security-opt",
-    `seccomp=${resolve("docker/chromium-seccomp.json")}`,
-    "--shm-size",
-    "1g",
     "-v",
     `${volume}:/data`,
     ...[
