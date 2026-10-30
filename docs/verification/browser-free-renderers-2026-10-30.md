@@ -1,6 +1,6 @@
 # 无浏览器渲染器改造验收
 
-验收日期：2026-10-30（Asia/Shanghai）。本记录对应工作区内的改造及本机候选镜像，尚未发布、推送镜像或部署现有站点。`smartdoca/doca:0.2.26-renderer-candidate` 为 ARM64 候选；AMD64 候选使用同名加 `-amd64` 后缀。在 ARM64 主机的 Docker Desktop 中完成两种 Linux 架构检查，AMD64 属于模拟执行。
+验收日期：2026-10-30（Asia/Shanghai）。本记录保留发布前工作区改造及本机候选镜像的验收结果；正式 0.2.27 双架构发布见[发行验收](release-0.2.27.md)。`smartdoca/doca:0.2.26-renderer-candidate` 为 ARM64 候选；AMD64 候选使用同名加 `-amd64` 后缀。在 ARM64 主机的 Docker Desktop 中完成两种 Linux 架构检查，AMD64 属于模拟执行。
 
 ## 实现与已同意边界
 
