@@ -29,6 +29,8 @@ export function assetBase(value: string | undefined) {
 }
 
 export function config() {
+  if (Object.hasOwn(process.env, "DOCA_PDF_CHROMIUM"))
+    throw new Error("DOCA_PDF_CHROMIUM is no longer supported; remove it and configure DOCA_PDF_PYTHON for WeasyPrint if needed");
   bookBatchCheckpointsEnabled();
   // Validate before opening databases, including one-off administrator commands.
   createCredentialCipher().dispose();

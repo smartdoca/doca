@@ -2,15 +2,19 @@ ARG NODE_IMAGE=node:22-bookworm-slim
 FROM ${NODE_IMAGE} AS base
 
 WORKDIR /app
-RUN npm install --global pnpm@11.25.0
+ARG DOCA_NPM_REGISTRY=https://registry.npmjs.org
+RUN npm install --global pnpm@11.25.0 --registry "${DOCA_NPM_REGISTRY}" \
+    && pnpm config set registry "${DOCA_NPM_REGISTRY}"
 
 FROM base AS build
 
 # better-sqlite3 may fall back to node-gyp when the platform's prebuilt
 # binary is unavailable. Keep the compiler only in this build stage.
-RUN apt-get -o Acquire::Retries=5 update \
+ARG DOCA_APT_MIRROR=deb.debian.org
+RUN sed -i "s|deb.debian.org|${DOCA_APT_MIRROR}|g" /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=5 install --yes --no-install-recommends ca-certificates \
-    && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|http://|https://|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=5 install --yes --no-install-recommends \
       python3 make g++ \
@@ -58,18 +62,25 @@ ENV NODE_ENV=production \
     DOCA_DATA_DIR=/data \
     DOCA_SQLITE_PATH=/data/doca.db \
     DOCA_FILE_STORE_ID=local \
-    DOCA_PDF_CHROMIUM=/usr/bin/chromium \
+    DOCA_PDF_PYTHON=/opt/doca-pdf/bin/python \
     DOCA_OFFICE_RENDERER=/usr/bin/soffice \
     DOCA_FILE_STORES_JSON="{\"version\":1,\"stores\":{\"local\":{\"provider\":\"local\",\"root\":\"/data/storage\"}}}"
 
-RUN apt-get -o Acquire::Retries=5 update \
+COPY docker/pdf-requirements.txt /tmp/doca-pdf-requirements.txt
+ARG DOCA_APT_MIRROR=deb.debian.org
+ARG DOCA_PYPI_INDEX=https://pypi.org/simple
+RUN sed -i "s|deb.debian.org|${DOCA_APT_MIRROR}|g" /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=5 install --yes --no-install-recommends ca-certificates \
-    && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|http://|https://|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=5 install --yes --no-install-recommends \
-      chromium chromium-sandbox fonts-noto-cjk fonts-liberation \
+      python3 python3-venv libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
+      fonts-noto-cjk fonts-liberation \
       libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-math \
-    && rm -rf /var/lib/apt/lists/*
+    && python3 -m venv /opt/doca-pdf \
+    && /opt/doca-pdf/bin/pip install --no-cache-dir --index-url "${DOCA_PYPI_INDEX}" -r /tmp/doca-pdf-requirements.txt \
+    && rm -rf /var/lib/apt/lists/* /tmp/doca-pdf-requirements.txt
 
 RUN mkdir -p /data/storage && chown -R node:node /data
 USER node
@@ -89,6 +100,7 @@ COPY --link --from=build /app/artifacts/runtime-layers/slides/node_modules ./nod
 COPY --link --from=build /app/artifacts/runtime-layers/metadata/node_modules ./node_modules
 COPY --link --from=build /app/packages ./packages
 COPY --link --from=build /app/apps/server ./apps/server
+COPY --link docker/admin.sh ./docker/admin.sh
 COPY --link --from=build /app/apps/browser-extension ./apps/browser-extension
 COPY --link --from=build /app/artifacts/runtime-web-layers/cad ./apps/web/dist
 COPY --link --from=build /app/artifacts/runtime-web-layers/fonts ./apps/web/dist

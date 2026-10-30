@@ -21,15 +21,19 @@ pnpm dev
 
 ## 源码环境的 PDF 渲染
 
-富文本和 Markdown 的 PDF 导出使用启用沙箱的 Chromium。安装依赖后安装匹配的浏览器：
+富文本和 Markdown 的 PDF 导出使用独立 Python 进程中的 WeasyPrint 70.0。安装 Python 3.10+、Pango 和固定依赖：
 
 ```sh
-pnpm exec playwright-core install chromium --only-shell
+python3 -m venv .local/pdf-renderer
+.local/pdf-renderer/bin/pip install -r docker/pdf-requirements.txt
+export DOCA_PDF_PYTHON="$PWD/.local/pdf-renderer/bin/python"
 ```
 
-也可用 `DOCA_PDF_CHROMIUM` 指向支持的 Chromium 可执行文件。Linux 需要相应系统库并允许浏览器沙箱。本工作区 Dockerfile 为非 root 运行环境安装 Chromium 和中文字体；已发布镜像只有重新构建、发布后才包含这些改动。渲染不可用时会显示导出错误。
+macOS 用 `brew install pango` 安装系统库；若无法找到动态库，可将 `DYLD_FALLBACK_LIBRARY_PATH` 设为 `$(brew --prefix)/lib`。Debian/Ubuntu 需要 `python3-venv`、`libpango-1.0-0`、`libpangoft2-1.0-0`、`libharfbuzz-subset0`；Dockerfile 已安装这些依赖。旧 `DOCA_PDF_CHROMIUM` 会被明确拒绝，启动前删除该配置，不回退浏览器。
 
-运行 `node --import tsx scripts/qa-document-pdf.mts` 执行隔离视觉回归，不打开用户文档，截图、PDF 和本机重导入结果默认写入 `artifacts/verification/document-pdf/`，可用 `DOCA_QA_OUTPUT` 指定 `artifacts/` 下的其他目录。样式保真与已验收范围见[文件交换约定](editor-file-exchange-contract.zh-CN.md#按在线样式导出-pdf-与可编辑导入)。
+AI 画板图片复用已安装 Canvas SDK 的 SVG 导出，在隔离 Node DOM 中用原生 Canvas 测量文字，再用 resvg 与随包中文字体生成 PNG。依赖变化后运行 `pnpm build:canvas-render`。PDF 读取/导入继续使用 PDF.js，Office 转换继续使用 LibreOffice。
+
+`playwright-core` 仅用于开发验收。运行 `pnpm exec playwright-core install chromium`，或为 `scripts/qa-document-pdf.mts` 设置 `DOCA_QA_BROWSER`。该脚本执行隔离导出、重导入与视觉回归，产物默认写入 `artifacts/verification/document-pdf/`，可用 `DOCA_QA_OUTPUT` 指定 `artifacts/` 下的其他目录，不打开用户文档。见[文件交换约定](editor-file-exchange-contract.zh-CN.md#按在线样式导出-pdf-与可编辑导入)。
 
 ## 初始化管理员
 

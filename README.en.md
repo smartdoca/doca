@@ -104,29 +104,24 @@ Enable MCP in personal settings, create a service, and copy its generated client
 
 ## Quick start with Docker
 
-Requires Git, Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. This installs the image specified by compose.yaml on main into a fresh database. Existing installations must read the [release requirements](https://workhold.github.io/doca/#/en/releases/0.2.26) and preserve their data before changing versions.
+Requires Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. A fresh SQLite/local-storage installation needs one YAML file. Existing installations must read the [release requirements](https://workhold.github.io/doca/#/en/releases/0.2.27) and retain their project name, volumes, databases, attachments and master key.
 
 ```sh
-# 1. Clone deployment files from main
-git clone --branch main --depth 1 https://github.com/workhold/doca.git
-cd doca
+# 1. Download the standalone configuration into a permanent deployment directory
+mkdir doca && cd doca
+curl -fL https://github.com/workhold/doca/releases/download/v0.2.27/doca-compose-v0.2.27.yaml -o compose.yaml
 
-# 2. Configure the environment
-cp docker.env.example .env
-# Edit .env: set DOCA_ORIGIN to your HTTP(S) origin.
-# For a fresh install, replace the public DOCA_CREDENTIAL_MASTER_KEY sample with openssl rand -hex 32 output.
-# Keep the example local file-store configuration for a single server.
+# 2. Generate the master key with openssl rand -hex 32
+# Edit compose.yaml: fill in DOCA_ORIGIN and DOCA_CREDENTIAL_MASTER_KEY
+chmod 600 compose.yaml
 
-# 3. Pull the image
+# 3. Pull, start and wait for healthy
 docker compose pull
-
-# 4. Start and check health
 docker compose up -d
 docker compose ps
-# Wait for healthy before initializing the administrator
 
-# 5. Initialize the administrator login and password
-bash scripts/bootstrap-admin.sh
+# 4. Enter the administrator login and password at the terminal prompt
+docker compose exec doca bash docker/admin.sh bootstrap
 ```
 
 The password must be at least 12 characters. There is no default account. Compose binds to `127.0.0.1:39120`; configure an HTTP(S) reverse proxy before browser access. SQLite, files, plugins, and the AI database persist in `doca_data`.
@@ -155,7 +150,7 @@ Open `http://127.0.0.1:39130`. Initialize the administrator with `bash scripts/b
 - [Deployment and configuration](https://workhold.github.io/doca/#/en/operations/deployment)
 - [Plugin development](https://workhold.github.io/doca/#/en/plugins/plugin-development)
 - [HTTP API](https://workhold.github.io/doca/#/en/reference/api); the running application also provides `/api/openapi.json`.
-- [Release notes](https://workhold.github.io/doca/#/en/releases/0.2.26)
+- [Release notes](https://workhold.github.io/doca/#/en/releases/0.2.27)
 - [Documentation source](docs/README.md)
 
 For a documentation preview, run `pnpm docs:dev` and open `http://127.0.0.1:39140/#/en/`. `pnpm docs:check` verifies bilingual coverage and local links. GitHub Pages setup is in [documentation maintenance](docs/documentation.md).

@@ -21,15 +21,19 @@ Copy `.env.example` before starting: file-store variables are required. Its stor
 
 ## PDF rendering for source development
 
-Rich-text and Markdown PDF export use sandboxed Chromium. Install the matching browser after dependencies:
+Rich-text and Markdown PDF export use WeasyPrint 70.0 in a disposable Python process. Install Python 3.10+ and Pango, then the pinned dependencies:
 
 ```sh
-pnpm exec playwright-core install chromium --only-shell
+python3 -m venv .local/pdf-renderer
+.local/pdf-renderer/bin/pip install -r docker/pdf-requirements.txt
+export DOCA_PDF_PYTHON="$PWD/.local/pdf-renderer/bin/python"
 ```
 
-Alternatively set `DOCA_PDF_CHROMIUM` to a supported Chromium executable. On Linux the browser's system libraries and sandbox must be available. This checkout's Dockerfile installs Chromium and CJK fonts for the non-root runtime; a published image gains these changes only after a build/release. Renderer failures return a visible export error.
+On macOS, install Pango with `brew install pango`; if library discovery needs it, set `DYLD_FALLBACK_LIBRARY_PATH` to `$(brew --prefix)/lib`. Debian/Ubuntu require `python3-venv`, `libpango-1.0-0`, `libpangoft2-1.0-0` and `libharfbuzz-subset0`. The Dockerfile installs these dependencies. `DOCA_PDF_CHROMIUM` is obsolete and explicitly rejected; remove it before startup. There is no browser fallback.
 
-Run the isolated visual regression with `node --import tsx scripts/qa-document-pdf.mts`. It opens no user documents and writes screenshots, PDFs and native reimports to `artifacts/verification/document-pdf/` by default; `DOCA_QA_OUTPUT` selects another directory under `artifacts/`. See [file exchange](editor-file-exchange-contract.md#rendered-pdf-and-editable-import) for fidelity and verified limits.
+AI canvas images use the installed Canvas SDK's SVG exporter in an isolated Node DOM with native text measurement, followed by resvg rasterization and bundled CJK fonts. Run `pnpm build:canvas-render` after dependency changes. PDF reading/import still uses PDF.js; Office conversion still uses LibreOffice.
+
+`playwright-core` is a development dependency for browser acceptance only. Install its browser with `pnpm exec playwright-core install chromium`, or set `DOCA_QA_BROWSER` for `scripts/qa-document-pdf.mts`. Run that script for isolated export/reimport and visual regression; artifacts go under `artifacts/verification/document-pdf/` (override with `DOCA_QA_OUTPUT` under `artifacts/`). No user documents are opened. See [file exchange](editor-file-exchange-contract.md#rendered-pdf-and-editable-import).
 
 ## Create the administrator
 

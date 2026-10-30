@@ -1,5 +1,9 @@
 # Chromium namespace sandbox policy
 
+Historical policy retained for old-image comparison and provenance only. The
+browser-free runtime uses WeasyPrint and Node rendering; its Compose file and
+deployment bundle no longer load or distribute this policy.
+
 `chromium-seccomp.json` is the unmodified policy from the official Playwright **v1.62.1** source:
 
 - Source: https://github.com/microsoft/playwright/blob/v1.62.1/utils/docker/seccomp_profile.json

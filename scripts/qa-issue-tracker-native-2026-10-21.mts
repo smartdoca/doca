@@ -41,7 +41,7 @@ const fingerprints = async () => ({
   manifestSha256: await sha256("package.json"), lockSha256: await sha256("pnpm-lock.yaml"),
   scriptSha256: await sha256("scripts/qa-issue-tracker-native-2026-10-21.mts"),
   editors: await Promise.all(["canvas", "sheet", "slate", "markdown", "slides"].map(async name => ({ name: "@smartdoca/" + name, version: JSON.parse(await readFile(`node_modules/@smartdoca/${name}/package.json`, "utf8")).version, ...await fileTree(`node_modules/@smartdoca/${name}`) }))),
-  ...(builtWeb ? { web: { indexSha256: await sha256("apps/web/dist/index.html"), ...await fileTree("apps/web/dist") }, rendererSha256: await sha256("apps/server/dist/canvas-render/renderer.js") } : {}),
+  ...(builtWeb ? { web: { indexSha256: await sha256("apps/web/dist/index.html"), ...await fileTree("apps/web/dist") }, rendererSha256: await sha256("apps/server/dist/canvas-render/sdk.js") } : {}),
 });
 const runtimeBefore = await fingerprints();
 if (process.env.DOCA_QA_EXPECT_INDEX_SHA256) assert.equal(runtimeBefore.web?.indexSha256, process.env.DOCA_QA_EXPECT_INDEX_SHA256);

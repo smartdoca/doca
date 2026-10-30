@@ -18,7 +18,7 @@ const server = await createServer({ configFile: `${root}apps/web/vite.config.ts`
 await server.listen();
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 try {
-  browser = await chromium.launch({ headless: true, ...(process.env.DOCA_PDF_CHROMIUM ? { executablePath: process.env.DOCA_PDF_CHROMIUM } : {}) });
+  browser = await chromium.launch({ headless: true, ...(process.env.DOCA_QA_BROWSER ? { executablePath: process.env.DOCA_QA_BROWSER } : {}) });
   const page = await browser.newPage({ viewport: { width: 1100, height: 1300 } });
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -26,6 +26,7 @@ try {
   await page.route("**/api/v1/assets/**", route => route.fulfill({ contentType: "image/png", body: png }));
   await page.route("**/api/v1/resources/pdf-qa/pdf", async route => {
     const { html, width } = route.request().postDataJSON();
+    await writeFile(`${output}/projection-${width}-${Date.now()}.html`, html);
     assert(!html.includes("katex-mathml"), "Auxiliary math text duplicated in PDF");
     assert(!/<button\b|contenteditable=/.test(html), "Editing controls present in PDF");
     await route.fulfill({ contentType: "application/pdf", body: await renderDocumentPdf(html, width) });
@@ -39,10 +40,25 @@ try {
   assert(rich.unchanged, "PDF export changed the source Y.Doc");
   const markdown = await page.evaluate(() => (window as any).pdfQA.exportMarkdown());
   assert.equal(await page.locator("#markdown .katex .vlist > span").evaluate(element => !!(element as HTMLElement).style.top), true, "Markdown preview discarded math positioning");
-  await page.evaluate(() => (window as any).pdfQA.captureMarkdown());
+  const diagram = await page.evaluate(async () => {
+    const view = await (window as any).pdfQA.captureMarkdown();
+    const copy = new DOMParser().parseFromString(view.html, "text/html");
+    const image = Array.from(copy.images).find(image => image.alt.includes("Start") && image.alt.includes("Finish"));
+    return image?.src.split(",")[1];
+  });
+  assert(diagram, "HTML diagram was not preserved in the export projection");
+  const reference = await page.locator("#markdown .mermaid-diagram svg").screenshot({ path: `${output}/diagram-online.png` });
+  const expected = await sharp(reference).flatten({ background: "white" }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const projected = Buffer.from(diagram, "base64");
+  await writeFile(`${output}/diagram-projection.png`, projected);
+  const actual = await sharp(projected).flatten({ background: "white" }).resize(expected.info.width, expected.info.height).removeAlpha().raw().toBuffer();
+  let difference = 0;
+  for (let i = 0; i < actual.length; i++) difference += Math.abs(actual[i]! - expected.data[i]!);
+  const diagramPixelError = difference / actual.length;
+  assert(diagramPixelError < 10, `Diagram pixels differ from the online view: ${diagramPixelError}`);
   await page.locator("#rich .sk-page").screenshot({ path: `${output}/rich-online.png` });
   await page.locator("#markdown .markdown-body").screenshot({ path: `${output}/markdown-online.png` });
-  for (const [name, data, required] of [["rich", rich.bytes, ["Editable text", "Readable attachment.pdf", "Host context retained", "Row 34 / 2", "Last row remains visible"]], ["markdown", markdown, ["Start", "Finish", "Last Markdown paragraph"]]] as const) {
+  for (const [name, data, required] of [["rich", rich.bytes, ["Editable text", "Readable attachment.pdf", "Host context retained", "Row 34 / 2", "Last row remains visible"]], ["markdown", markdown, ["Markdown 中文验收", "Last Markdown paragraph"]]] as const) {
     const bytes = new Uint8Array(data);
     await writeFile(`${output}/${name}.pdf`, bytes);
     const pdf = await getDocument({ data: bytes.slice() }).promise;
@@ -54,10 +70,12 @@ try {
       console.log(`${name}: ${pdf.numPages} pages; text, images and controls verified`);
     } finally { await pdf.destroy(); }
     const imported = await page.evaluate(bytes => (window as any).pdfQA.importPdf(bytes), Array.from(bytes));
-    assert(imported.resources.length >= 1, `${name} image missing after import`);
+    // HTML diagram labels are preserved as a PNG; body text stays selectable.
+    assert(imported.resources.length >= (name === "markdown" ? 2 : 1), `${name} image/diagram missing after import`);
     await writeFile(`${output}/${name}-import.json`, JSON.stringify(imported.initialValue, null, 2));
   }
   assert.equal(await page.locator('[aria-hidden="true"].document-editor-shell, [aria-hidden="true"].doca-markdown').count(), 0, "Projection leaked after export");
   assert.deepEqual(errors, []);
+  await writeFile(`${output}/result.json`, JSON.stringify({ passed: true, diagramPixelError, sourceUnchanged: rich.unchanged, userDocumentsUsed: false }, null, 2) + "\n");
   console.log(`PDF browser QA passed; visual artifacts: ${output}`);
 } finally { await browser?.close(); await server.close(); }

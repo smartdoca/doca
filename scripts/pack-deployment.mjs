@@ -37,9 +37,6 @@ const files = [
   "docker.env.example",
   "scripts/bootstrap-admin.sh",
   "scripts/reset-admin-password.sh",
-  "docker/chromium-seccomp.json",
-  "docker/chromium-seccomp.md",
-  "docker/chromium-seccomp.LICENSE",
   "LICENSE",
 ];
 const staging = await mkdtemp(resolve(tmpdir(), "doca-deployment-"));
@@ -62,6 +59,12 @@ try {
     await writeFile(resolve(bundle, target), markdown.replace(/\[([^\]]+)\]\([^\n)]+\.md(?:#[^\n)]*)?\)/g, "$1"));
   }
   await mkdir(output, { recursive: true });
+  // A fresh-install alternative: edit this YAML's public placeholders directly.
+  // Existing installations keep their Compose project, volume and secret values.
+  const standalone = `# Fresh installation only. Uses this release's browser-free image.\n# Edit DOCA_ORIGIN and DOCA_CREDENTIAL_MASTER_KEY, then docker compose up -d.\n# Generate the key once: openssl rand -hex 32. Protect this file with chmod 600.\n# After startup: docker compose exec doca bash docker/admin.sh bootstrap\nservices:\n  doca:\n    image: docker.io/smartdoca/doca:${version}\n    restart: unless-stopped\n    init: true\n    stop_grace_period: 30s\n    environment:\n      DOCA_ORIGIN: https://docs.example.com\n      DOCA_CREDENTIAL_MASTER_KEY: REPLACE_WITH_YOUR_64_HEX_CHARACTER_KEY\n      DOCA_FILE_STORE_ID: local\n      DOCA_FILE_STORES_JSON: '{"version":1,"stores":{"local":{"provider":"local","root":"/data/storage"}}}'\n    ports:\n      - "127.0.0.1:39120:39120"\n    volumes:\n      - doca_data:/data\n\nvolumes:\n  doca_data:\n`;
+  const standalonePath = resolve(output, `doca-compose-v${version}.yaml`);
+  await writeFile(standalonePath, standalone);
+  await writeFile(`${standalonePath}.sha256`, `${createHash("sha256").update(standalone).digest("hex")}  doca-compose-v${version}.yaml\n`);
   const archive = resolve(output, `${name}.tar.gz`);
   execFileSync("tar", ["-C", staging, "-czf", archive, name]);
   const checksum = createHash("sha256").update(await readFile(archive)).digest("hex");

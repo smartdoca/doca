@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { chromium } from "playwright-core";
+import { fileURLToPath } from "node:url";
+import { renderProcess } from "../render-process.js";
 import type { CanvasExportSource } from "@smartdoca/canvas/io";
 import { AppError, fail } from "@core/shared/errors.js";
 
@@ -55,19 +55,7 @@ function releaseRender() {
   active--;
   waiting.shift()?.start();
 }
-let bundle: Promise<string> | undefined;
-async function rendererBundle() {
-  bundle ??= readFile(
-    new URL("../../../dist/canvas-render/renderer.js", import.meta.url),
-    "utf8",
-  ).catch(() => {
-    bundle = undefined;
-    fail(503, "画板渲染器尚未构建，请运行 pnpm build:canvas-render");
-  });
-  return bundle;
-}
-
-/** Isolated native export: no login, editor connection, filesystem or network in Chromium. */
+/** Disposable native export with only host-authorized assets and the installed SDK. */
 export async function renderCanvas(
   input: CanvasRenderInput,
   signal?: AbortSignal,
@@ -76,73 +64,28 @@ export async function renderCanvas(
   if (Buffer.byteLength(JSON.stringify(input)) > 48 * 1024 * 1024)
     fail(413, "canvas_render_too_large");
   await acquireRender(signal);
-  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
-  const abort = () => {
-    void browser?.close();
-  };
-  let timedOut = false;
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    abort();
-  }, 45_000);
-  signal?.addEventListener("abort", abort, { once: true });
   try {
-    const code = await rendererBundle();
-    signal?.throwIfAborted();
-    browser = await chromium.launch({
-      headless: true,
-      chromiumSandbox: true,
-      ...(process.env.DOCA_PDF_CHROMIUM
-        ? { executablePath: process.env.DOCA_PDF_CHROMIUM }
-        : {}),
-      timeout: 20_000,
-    });
-    signal?.throwIfAborted();
-    const context = await browser.newContext({
-      serviceWorkers: "block",
-      viewport: { width: 1600, height: 1000 },
-    });
-    await context.route("**/*", (route) => route.abort());
-    const page = await context.newPage();
-    page.setDefaultTimeout(20_000);
-    await page.setContent(
-      "<html><head><meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'\"></head><body></body></html>",
+    const bytes = await renderProcess(
+      process.execPath,
+      [
+        fileURLToPath(
+          new URL("../../renderers/canvas-worker.mjs", import.meta.url),
+        ),
+      ],
+      JSON.stringify(input),
+      { signal, timeout: 45_000, maxBytes: 24 * 1024 * 1024 },
     );
-    await page.addScriptTag({ content: code });
-    const result = await page.evaluate(async (input) => {
-      const renderer = (
-        window as unknown as {
-          DocaCanvasRenderer: {
-            render(input: CanvasRenderInput): Promise<CanvasRenderResult>;
-          };
-        }
-      ).DocaCanvasRenderer;
-      return renderer.render(input);
-    }, input);
-    signal?.throwIfAborted();
-    return result;
+    return JSON.parse(bytes.toString("utf8")) as CanvasRenderResult;
   } catch (error) {
     signal?.throwIfAborted();
-    if (timedOut) fail(504, "canvas_render_timeout");
+    if (error instanceof Error && error.message === "render_timeout")
+      fail(504, "canvas_render_timeout");
     if (error instanceof AppError) throw error;
-    if (
-      error instanceof Error &&
-      /Executable doesn't exist|executable.*not|Failed to launch/i.test(
-        error.message,
-      )
-    )
-      fail(503, "画板渲染需要 Chromium，可通过 DOCA_PDF_CHROMIUM 配置");
     throw new AppError(
       422,
       `画板渲染失败，尚未完成视觉检查：${error instanceof Error ? error.message.slice(0, 300) : "canvas_render_failed"}`,
     );
   } finally {
-    clearTimeout(timeout);
-    signal?.removeEventListener("abort", abort);
-    try {
-      await browser?.close();
-    } finally {
-      releaseRender();
-    }
+    releaseRender();
   }
 }

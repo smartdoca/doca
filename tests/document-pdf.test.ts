@@ -1,12 +1,13 @@
 import { expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { renderDocumentPdf } from "@server/services/document-pdf.js";
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { importEditablePdf, pdfTextBlocks } from "@web/features/documents/pdf-import.js";
 import { createEditorDocument, createTableBlock, type EditorValue } from "@smartdoca/slate/headless";
 import { exportDocument, importDocument } from "@smartdoca/slate/conversion";
 import { strFromU8, unzipSync } from "fflate";
 import { validateImport } from "@core/modules/documents/import.js";
+import sharp from "sharp";
 
 it("recognizes headings, native emphasis, spacing between runs and repeated table columns", () => {
   const runs = [
@@ -40,7 +41,8 @@ it("renders selectable Chinese text and imports a real PDF as editable headings,
   expect(JSON.stringify(imported.initialValue)).toContain('"bold":true');
   expect(JSON.stringify(imported.initialValue)).toContain('"italic":true');
   expect(imported.initialValue.some(block => "type" in block && block.type === "table")).toBe(true);
-  expect(imported.markdown.normalize("NFKC")).toContain("# 中文标题");
+  // Font metadata can retain the heading's bold mark as valid nested Markdown.
+  expect(imported.markdown.replace(/\*\*/g, "").normalize("NFKC")).toContain("# 中文标题");
   expect(imported.markdown).toContain("**Bold emphasis**");
 }, 30_000);
 
@@ -70,4 +72,24 @@ it("blocks active content and remote image loads instead of exporting missing im
     expect(text).toContain("Safe text"); expect(text).not.toContain("Executed");
   } finally { await pdf.destroy(); }
   await expect(renderDocumentPdf('<img src="https://example.com/private.png">', 794)).rejects.toThrow();
+});
+
+it("exports a valid embedded image without requiring an optional alt label", async () => {
+  const image = await sharp({ create: { width: 32, height: 32, channels: 3, background: "#123456" } }).png().toBuffer();
+  const bytes = await renderDocumentPdf(`<p>Valid embedded image</p><img src="data:image/png;base64,${image.toString("base64")}">`, 794);
+  const pdf = await getDocument({ data: new Uint8Array(bytes) }).promise;
+  try {
+    const page = await pdf.getPage(1);
+    expect((await page.getOperatorList()).fnArray).toContain(OPS.paintImageXObject);
+  } finally { await pdf.destroy(); }
+});
+
+it.each([
+  '<img src="file:///etc/passwd">',
+  '<style>@import url("http://127.0.0.1:1/private.css");</style><p>text</p>',
+  '<style>@font-face{font-family:private;src:url(file:///etc/passwd)}p{font-family:private}</style><p>text</p>',
+  '<img src="data:image/png;base64,bm90LWFuLWltYWdl">',
+  `<img src="data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><image href="file:///etc/passwd" width="100" height="100"/></svg>').toString("base64")}">`,
+])("refuses inaccessible or corrupt resources without returning an incomplete PDF: %s", async (html) => {
+  await expect(renderDocumentPdf(html, 794)).rejects.toThrow("pdf_render_failed");
 });

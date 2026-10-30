@@ -46,7 +46,7 @@ DOCA_FILE_STORES_JSON='{"version":1,"stores":{"local":{"provider":"local","root"
 | `DOCA_REDIS_PREFIX`、`DOCA_INSTANCE_ID` | 前缀默认 `doca`；实例 ID 默认每进程随机生成 |
 | `DOCA_TRUST_PROXY` | 逗号分隔的可信代理 IP/CIDR；**默认不信任任何代理，回环地址也不例外** |
 | `DOCA_PLUGINS_DIR` | 可写的安装与缓存目录；Compose 默认 `/data/plugins` |
-| `DOCA_PDF_CHROMIUM` | 富文本/Markdown PDF 导出的可选 Chromium 路径；不设置时须安装匹配的 Playwright 浏览器，沙箱保持启用 |
+| `DOCA_PDF_PYTHON` | 安装了固定 WeasyPrint 依赖的 Python 路径；默认 `python3`，Docker 内为 `/opt/doca-pdf/bin/python`；旧 `DOCA_PDF_CHROMIUM` 会被拒绝 |
 | `DOCA_PLUGIN_STORE_URL` | HTTP(S) 来源，默认 `https://store.smartdoca.cc` |
 | `DOCA_PLUGIN_NPM_REGISTRY` | 预构建包的注册表，默认 `https://registry.npmjs.org` |
 | `DOCA_ASSET_BASE` | 可选的构建资源前缀；空值由 Doca 提供 `/assets` |

@@ -37,13 +37,13 @@
 
 富文本导出将当前本机模型的副本放入只读 portal，保留宿主语言、插件及文档上下文；不接入协同、不替换原编辑器、不结束当前编辑、不写 checkpoint。Markdown 挂载子包预览并使用编辑器相同的字体样式。两者等待图片、公式和图表，复制计算样式，内嵌经授权读取的平台图片和字体，移除编辑控件，再向 `POST /api/v1/resources/:id/pdf` 提交自包含页面。音视频保留可读说明和受权限约束的下载链接，附件及提及标签保留可读内容。PDF 文字仍可选择。纸张宽度沿用文档实际宽度，宽高比为 √2，上下打印边距 24 px；分页与连续在线页面可能不同。
 
-宿主使用 `playwright-core` 与启用沙箱的 Chromium；禁用脚本、service worker，以 CSP 和请求拦截阻止网络读取。渲染完成后再次检查 `read_content`；只读和公开阅读沿用原权限规则。限制请求 32 MiB、同时两个任务、60 秒。浏览器是部署依赖，不是编辑器 SDK 已提供的能力。源码安装运行 `pnpm exec playwright-core install chromium --only-shell`，或配置 `DOCA_PDF_CHROMIUM`。本工作区 Dockerfile 安装 Chromium、中文字体并使用 `node` 用户；运行宿主须允许 Chromium 沙箱。容器镜像构建及 Windows/macOS Word 的视觉重开尚未验收。
+宿主使用固定 WeasyPrint 70.0 的独立 Python 进程，不执行脚本，仅允许内嵌 data 资源；网络与宿主文件读取被拒绝，图片资源缺失或损坏时导出失败。渲染完成后仍二次检查 `read_content`，保留只读/公开权限规则、32 MiB 输入、两个并发任务、60 秒期限。AI 画板复用已安装 Canvas SDK 的 SVG 导出，在宿主适配的隔离 Node DOM 中用原生 Canvas 测量文字，再用 resvg 与随包中文字体生成图片；这是宿主适配，不表示编辑器包新增了 Node API。PDF.js 读取/导入、LibreOffice 转换保持独立。重新构建的 Docker 运行时使用 `node`，包含 Python/Pango/中文字体，不含浏览器，不依赖宿主 seccomp 文件。旧 `DOCA_PDF_CHROMIUM` 被明确拒绝，源码安装通过 `DOCA_PDF_PYTHON` 指定固定 Python 环境。SDK 已有历史读取规则保留原路径，不做数据库/文档转换或浏览器回退；回滚恢复原代码、锁文件和镜像，保留部署配置及后续数据。 含 HTML 标签的流程图以 PNG 保留浏览器布局，普通正文文字仍可选择；中文字体使用 TTF，避免逐任务解码 WOFF2。导出时不把 colgroup 的计算总宽误作为各列最小宽。
 
 PDF 导入优先生成可编辑内容。已交付 Markdown 解析器继续校验文件、页数、图片限制，并提取素材与警告；宿主 PDF.js 适配补充字号、基础字体、粗斜体、文字颜色、安全链接、按字号识别的标题层级、简单列表、规则列距表格及按页面位置排列的图片。富文本直接使用该本机模型，Markdown 使用其便携序列化结果。素材重新绑定和新文档一次性初始化仍是保存边界。背景色、下划线、矢量图、复杂分栏/表格和公式重建可能简化；扫描页保留为图片，不进行 OCR；原解析器警告继续展示。本次不改变持久化模型、schema、旧格式转换或迁移规则。
 
 Slate 0.4.25 已将原宿主 DOCX 补丁正式发布到 ESM/CJS 转换入口：Word 直接字体、字号、颜色、背景、段落对齐、显式关闭 marks 和单元格文本格式，以及在线标题字号、1.6 行距和 A4 默认值。任意继承样式、复杂分节和精确分页仍不在验证范围。Markdown 0.4.4 已正式包含原 KaTeX/延迟 PDF 加载修复。Doca 直接安装这两个正式包，无编辑器补丁绑定。历史补丁可从上一版 Git 源码恢复；移除它们不转换已存文档或改变协作格式。
 
-验收：`tests/document-pdf.test.ts` 覆盖真实 Chromium PDF、可选择中文、本机 PDF 重建、真实 DOCX XML/重导入以及脚本/远端图片阻断；`tests/document-pdf-access.test.ts` 覆盖只读权限、撤销和正文 checkpoint 不变。`node --import tsx scripts/qa-document-pdf.mts` 使用隔离浏览器样本，验证上下文保留、Y.Doc 零更新、图片导出后重导入、Mermaid/公式及三页长表格，视觉产物写入 `artifacts/verification/document-pdf/`。使用 Poppler 将 PDF 渲染为图片，与在线截图对照；不打开用户文档或生产数据库。
+验收：`tests/document-pdf.test.ts` 覆盖真实 WeasyPrint PDF、可选择中文、本机 PDF 重建、真实 DOCX XML/重导入以及脚本/远端图片阻断；`tests/document-pdf-access.test.ts` 覆盖只读权限、撤销和正文 checkpoint 不变。`node --import tsx scripts/qa-document-pdf.mts` 使用隔离浏览器样本，验证上下文保留、Y.Doc 零更新、图片导出后重导入、Mermaid/公式及三页长表格，视觉产物写入 `artifacts/verification/document-pdf/`。使用 Poppler 将 PDF 渲染为图片，与在线截图对照；不打开用户文档或生产数据库。
 
 ## 验收证据
 

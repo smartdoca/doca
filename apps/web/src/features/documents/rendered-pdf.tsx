@@ -72,6 +72,38 @@ async function embeddedFonts(signal?: AbortSignal) {
   }))).join("\n");
 }
 
+/** Preserve browser-laid-out HTML diagram labels in a portable image. */
+async function rasterizeHtmlDiagram(svg: SVGSVGElement, fonts: string, signal?: AbortSignal) {
+  signal?.throwIfAborted();
+  const width = Number.parseFloat(svg.style.width) || svg.viewBox.baseVal.width;
+  const height = Number.parseFloat(svg.style.height) || svg.viewBox.baseVal.height;
+  if (!(width > 0 && height > 0) || width * height > 16_000_000) throw Error("pdf_media_read_failed");
+  const imageSvg = svg.cloneNode(true) as SVGSVGElement;
+  imageSvg.setAttribute("width", String(width));
+  imageSvg.setAttribute("height", String(height));
+  // Outer page centering belongs to the replacement image, not its SVG pixels.
+  Object.assign(imageSvg.style, { width: `${width}px`, height: `${height}px`, maxWidth: "none", margin: "0", position: "static", transform: "none" });
+  const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  style.textContent = fonts;
+  imageSvg.prepend(style);
+  const image = new Image();
+  image.src = await dataUrl(new Blob([new XMLSerializer().serializeToString(imageSvg)], { type: "image/svg+xml" }));
+  try { await image.decode(); } catch { throw Error("pdf_media_read_failed"); }
+  signal?.throwIfAborted();
+  const scale = Math.min(2, 4096 / Math.max(width, height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.ceil(width * scale));
+  canvas.height = Math.max(1, Math.ceil(height * scale));
+  canvas.getContext("2d")!.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const output = document.createElement("img");
+  output.style.cssText = svg.style.cssText;
+  output.style.width = `${width}px`;
+  output.style.height = `${height}px`;
+  output.alt = svg.textContent?.trim() || "";
+  try { output.src = canvas.toDataURL("image/png"); } catch { throw Error("pdf_media_read_failed"); }
+  return output;
+}
+
 export async function capturePdfView(source: HTMLElement, signal?: AbortSignal, locale = "zh") {
   signal?.throwIfAborted();
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -142,6 +174,9 @@ export async function capturePdfView(source: HTMLElement, signal?: AbortSignal, 
   }
   for (const code of Array.from(clone.querySelectorAll<HTMLElement>(".sk-code-highlight"))) Object.assign(code.style, { position: "static", transform: "none", height: "auto", whiteSpace: "pre-wrap" });
   for (const body of Array.from(clone.querySelectorAll<HTMLElement>(".sk-code-body"))) body.style.height = "auto";
+  // A computed colgroup width is the sum of its columns. Reapplying that sum
+  // as CSS makes print engines use it as EACH column's minimum width.
+  for (const group of Array.from(clone.querySelectorAll<HTMLElement>("colgroup"))) group.style.width = "auto";
   for (const link of Array.from(clone.querySelectorAll("a"))) {
     if (!/^(https?:|mailto:|#|\/)/i.test(link.getAttribute("href") ?? "")) link.removeAttribute("href");
   }
@@ -152,11 +187,18 @@ export async function capturePdfView(source: HTMLElement, signal?: AbortSignal, 
   const cjk = await loadPdfFontBytes(source.textContent ?? "").catch(() => { throw Error("pdf_font_read_failed"); });
   let fonts = await embeddedFonts(signal);
   if (cjk) {
-    const font = await dataUrl(new Blob([new Uint8Array(cjk)], { type: "font/woff2" }));
-    fonts += `@font-face{font-family:DocaPDFCJK;src:url("${font}") format("woff2")}`;
+    // TTF avoids decoding the entire CJK WOFF2 glyph collection in Python for
+    // every disposable job; only used glyphs are embedded in the resulting PDF.
+    const font = await dataUrl(new Blob([new Uint8Array(cjk)], { type: "font/ttf" }));
+    fonts += `@font-face{font-family:DocaPDFCJK;src:url("${font}") format("truetype")}`;
     for (const element of [clone, ...Array.from(clone.querySelectorAll<HTMLElement>("[style]"))]) {
       if (element.style?.fontFamily) element.style.fontFamily += ", DocaPDFCJK";
     }
+  }
+  // WeasyPrint renders SVG vectors, but does not lay out SVG foreignObject HTML.
+  // Rasterize only those diagrams; ordinary document text remains selectable.
+  for (const svg of Array.from(clone.querySelectorAll<SVGSVGElement>("svg"))) {
+    if (svg.querySelector("foreignObject")) svg.replaceWith(await rasterizeHtmlDiagram(svg, fonts, signal));
   }
   signal?.throwIfAborted();
   return { html: `<style>${fonts}</style>${clone.outerHTML}`, width };

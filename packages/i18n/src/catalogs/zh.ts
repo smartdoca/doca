@@ -3850,7 +3850,7 @@ export const zh = {
   "pdf.tooLarge": "PDF 内容超过 32MB，请拆分文档",
   "pdf.busy": "PDF 导出繁忙，请稍后重试",
   "pdf.unavailable":
-    "PDF 渲染服务未就绪，请安装 Chromium 或配置 DOCA_PDF_CHROMIUM",
+    "PDF 渲染服务未就绪，请安装 WeasyPrint 或配置 DOCA_PDF_PYTHON",
   "pdf.invalidRequest": "无效的 PDF 渲染内容",
   "pdf.unsupportedFormat": "此文档类型不支持 PDF 导出",
 } as const satisfies Record<MessageKey, string>;
