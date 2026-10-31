@@ -1953,6 +1953,8 @@ export const zh = {
   "chat.source.browserAssistant": "浏览器助手",
   "chat.nameRequired": "请填写会话名称",
   "chat.deleteConfirm": "删除此会话？",
+  "chat.deleteStopHelp": "此会话还有排队、运行或待审批的任务，请先停止任务，再确认删除。",
+  "chat.deleteStopRequested": "已请求停止任务，请等待任务结束后再次确认删除。",
   "fileManager.invalidSessionBinding": "AI 文件会话归属无效",
   "fileManager.invalidSessionFolder": "会话文件夹 ID 无效",
   "fileManager.sessionFolderMissing": "会话文件夹不存在",

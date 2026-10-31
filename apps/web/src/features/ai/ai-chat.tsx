@@ -19,6 +19,7 @@ import { AIGeneratedImage } from "@web/features/ai/ai-generated-image.js";
 import { FolderDeliveryCard } from "@web/features/ai/ai-folder-card.js";
 import { AIFolderPreview } from "./ai-folder-preview.js";
 import { notifyAISessionFilesChanged } from "./ai-file-events.js";
+import { AISessionDeleteDialog } from "./ai-session-delete.js";
 import { uploadErrorMessage } from "./ai-upload-errors.js";
 import { prepareSendFiles, type SendFile, type SendFileProgress } from "./ai-send-files.js";
 import { sendOrReconcilePendingItem, reconcilePendingItem, PendingMessageConflictError, type PendingSessionSnapshot } from "./ai-pending-runner.js";
@@ -537,6 +538,7 @@ export function AIChat({ full = false, browser = false }: { full?: boolean; brow
   const currentAI = useRef(ai);
   currentAI.current = ai;
   const [modal, modalContext] = Modal.useModal();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; active: boolean } | null>(null);
   const [files, setFiles] = useState<Attachment<ChatFile>[]>([]);
   const [filePickerOpen, setFilePickerOpen] = useState<boolean | "materials">(
     false,
@@ -1268,6 +1270,7 @@ export function AIChat({ full = false, browser = false }: { full?: boolean; brow
   const queueKey = ai.sessionId ?? DRAFT_QUEUE_KEY;
   const pendingScrollKey = useRef<string | null>(null);
   const threadCache = useRef<{
+    sessionId: string | null;
     conversation: Conversation | null;
     older: Conversation["messages"];
     olderJobs: Conversation["jobs"];
@@ -2596,6 +2599,7 @@ export function AIChat({ full = false, browser = false }: { full?: boolean; brow
   });
   const reuseThread = !!(
     threadCache.current &&
+    threadCache.current.sessionId === ai.sessionId &&
     threadCache.current.conversation === conversation &&
     threadCache.current.older === older &&
     threadCache.current.olderJobs === olderJobs &&
@@ -3112,7 +3116,11 @@ export function AIChat({ full = false, browser = false }: { full?: boolean; brow
         },
       );
   if (!reuseThread) {
-    if (!visibleMessages.length)
+    if (
+      !visibleMessages.length && !visibleJobs.length &&
+      !currentOptimistic.length && !pending.length &&
+      (!ai.sessionId || conversation?.session.id === ai.sessionId)
+    )
       bubbleItems.push({
         key: "welcome",
         role: "welcome",
@@ -3163,6 +3171,7 @@ export function AIChat({ full = false, browser = false }: { full?: boolean; brow
         ),
       });
     threadCache.current = {
+      sessionId: ai.sessionId,
       conversation,
       older,
       olderJobs,
@@ -3189,6 +3198,19 @@ export function AIChat({ full = false, browser = false }: { full?: boolean; brow
       }}
     >
       {modalContext}
+      {deleteTarget && <AISessionDeleteDialog
+        key={deleteTarget.id}
+        sessionId={deleteTarget.id}
+        active={deleteTarget.active}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={() => {
+          const sessionId = deleteTarget.id;
+          notifyAISessionFilesChanged({ sessionId, deleted: true });
+          if (currentAI.current.sessionId === sessionId) currentAI.current.setSessionId(null);
+          setDeleteTarget(null);
+          void refresh().catch(error => ai.setError(error.message));
+        }}
+      />}
       <section
         className={`ai-chat ${assistantProfileClass("personal")} ${full ? "ai-chat-full" : ""} ${list ? "ai-history-open" : ""} ${composerDrop ? "is-file-drop" : ""}`}
         aria-label={t("nav.assistant")}
@@ -3472,19 +3494,10 @@ export function AIChat({ full = false, browser = false }: { full?: boolean; brow
                                 archived: true,
                               }),
                             );
-                          if (key === "delete")
-                            modal.confirm({
-                              title: t("chat.deleteConfirm"),
-                              content: t("chat.deleteHelp"),
-                              okButtonProps: { danger: true },
-                              onOk: async () => {
-                                await api(`/ai/sessions/${item.key}`, "DELETE");
-                                notifyAISessionFilesChanged({ sessionId: String(item.key), deleted: true });
-                                if (ai.sessionId === item.key)
-                                  ai.setSessionId(null);
-                                await refresh();
-                              },
-                            });
+                          if (key === "delete") {
+                            const session = sessions.find(session => session.id === item.key);
+                            setDeleteTarget({ id: String(item.key), active: !!(session?.running || session?.awaitingApproval) });
+                          }
                         },
                       }
                 }

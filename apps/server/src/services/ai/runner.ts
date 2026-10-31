@@ -72,7 +72,7 @@ import {
   defaultOfficialSkills,
   relevantSkillFormats,
 } from "@core/modules/ai/skills.js";
-import { attachmentContent, checkAttachments } from "./attachments.js";
+import { attachmentContent, attachmentInfo, checkAttachments } from "./attachments.js";
 import {
   aiFileFolderLocation,
   aiSessionFolderLocation,
@@ -501,6 +501,35 @@ export function createAIRunner(
     const recordSource = (sessionId: string, userId: string, id: string) => recordSourceForJob(sessionId, userId, id, job.id);
     const actor = external?.actor ?? await sessionSources(db, job.user_id, session, goneIds),
       input = JSON.parse(job.input) as AIInput;
+    if (!external) {
+      // Keep the submitted turn visible even if file validation, intent routing,
+      // model setup or attachment recognition fails before beforeCompact runs.
+      // A resumed attempt must retain its existing context and original message.
+      const m = await ensureThread(session);
+      const store = await m.storage.getStore("memory");
+      if (!store) throw new Error("AI memory store is unavailable");
+      const saved = await store.listMessagesById({ messageIds: [job.id] });
+      if (!saved.messages.length) {
+        const attachments = input.attachments?.length
+          ? await db.selectFrom("assets")
+              .select(["id", "filename", "mime", "size"])
+              .where("id", "in", input.attachments)
+              .where("owner_id", "=", actor.id)
+              .where("purpose", "=", "ai_attachment")
+              .execute()
+          : [];
+        const byId = new Map(attachments.map(attachment => [attachment.id, attachment]));
+        await saveChatMessage(
+          m.memory, actor.id, session.id, job.id, "user", input.text,
+          input.references,
+          (input.attachments ?? []).flatMap(id => {
+            const attachment = byId.get(id);
+            return attachment ? [attachmentInfo(attachment)] : [];
+          }),
+          undefined, undefined, explorerTargets(input.files),
+        );
+      }
+    }
     if (input.files?.length) await verifyAIInputFileSnapshot(db, actor, input.files, input.fileInputSnapshot);
     if (!external) {
     await sessionEvents.append({
