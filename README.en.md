@@ -130,6 +130,10 @@ The [complete quick start](https://workhold.github.io/doca/#/en/getting-started/
 
 For servers without GitHub access, [transfer deployment files](https://workhold.github.io/doca/#/en/operations/deployment-without-github) without Git or source code. The supplier runs `node scripts/pack-deployment.mjs` to generate the bundle; the guide also includes copyable Compose, `.env`, and initialization steps. If registries are unreachable too, deliver the matching image with `docker save` / `docker load`.
 
+## One-click deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/Doca/)
+
 ## Development
 
 Node.js 22.12 or newer and pnpm 11.25.0:

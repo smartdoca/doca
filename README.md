@@ -132,6 +132,10 @@ docker compose exec doca bash docker/admin.sh bootstrap
 
 业务服务器无法访问 GitHub 时，按[无需访问 GitHub 的部署](https://workhold.github.io/doca/#/zh-cn/operations/deployment-without-github)转交部署文件即可，不需要 Git 或源码。交付方执行 `node scripts/pack-deployment.mjs` 生成部署包；指南也提供可复制的 Compose、`.env` 和初始化步骤。镜像仓库也不通时，可通过 `docker save` / `docker load` 离线交付同版本镜像。
 
+## 一键部署
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/Doca/)
+
 ## 源码开发
 
 需要 Node.js 22.12 或更新版本，以及 pnpm 11.25.0：
