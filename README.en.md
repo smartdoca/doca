@@ -104,12 +104,12 @@ Enable MCP in personal settings, create a service, and copy its generated client
 
 ## Quick start with Docker
 
-Requires Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. A fresh SQLite/local-storage installation needs one YAML file. Existing installations must read the [release requirements](https://workhold.github.io/doca/#/en/releases/0.2.28) and retain their project name, volumes, databases, attachments and master key.
+Requires Docker Engine, Docker Compose, and an HTTP(S) origin served by a reverse proxy. A fresh SQLite/local-storage installation needs one YAML file. Existing installations must read the [release requirements](https://workhold.github.io/doca/#/en/releases/0.2.29) and retain their project name, volumes, databases, attachments and master key.
 
 ```sh
 # 1. Download the standalone configuration into a permanent deployment directory
 mkdir doca && cd doca
-curl -fL https://github.com/workhold/doca/releases/download/v0.2.28/doca-compose-v0.2.28.yaml -o compose.yaml
+curl -fL https://github.com/workhold/doca/releases/download/v0.2.29/doca-compose-v0.2.29.yaml -o compose.yaml
 
 # 2. Generate the master key with openssl rand -hex 32
 # Edit compose.yaml: fill in DOCA_ORIGIN and DOCA_CREDENTIAL_MASTER_KEY
@@ -154,7 +154,7 @@ Open `http://127.0.0.1:39130`. Initialize the administrator with `bash scripts/b
 - [Deployment and configuration](https://workhold.github.io/doca/#/en/operations/deployment)
 - [Plugin development](https://workhold.github.io/doca/#/en/plugins/plugin-development)
 - [HTTP API](https://workhold.github.io/doca/#/en/reference/api); the running application also provides `/api/openapi.json`.
-- [Release notes](https://workhold.github.io/doca/#/en/releases/0.2.28)
+- [Release notes](https://workhold.github.io/doca/#/en/releases/0.2.29)
 - [Documentation source](docs/README.md)
 
 For a documentation preview, run `pnpm docs:dev` and open `http://127.0.0.1:39140/#/en/`. `pnpm docs:check` verifies bilingual coverage and local links. GitHub Pages setup is in [documentation maintenance](docs/documentation.md).

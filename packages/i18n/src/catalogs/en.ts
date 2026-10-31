@@ -2105,6 +2105,8 @@ export const en = {
   "chat.source.browserAssistant": "Browser assistant",
   "chat.nameRequired": "Enter a conversation name",
   "chat.deleteConfirm": "Delete this conversation?",
+  "chat.deleteStopHelp": "This conversation has queued, running, or approval-pending tasks. Stop them before confirming deletion.",
+  "chat.deleteStopRequested": "Task cancellation requested. Wait for the tasks to finish, then confirm deletion again.",
   "fileManager.invalidSessionBinding": "Invalid AI file conversation binding",
   "fileManager.invalidSessionFolder": "Invalid conversation folder ID",
   "fileManager.sessionFolderMissing": "Conversation folder not found",
