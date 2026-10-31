@@ -110,16 +110,18 @@ export function TransferDialog({
     >([]),
     [loadingCollaborators, setLoadingCollaborators] = useState(false),
     [retain, setRetain] = useState(true),
+    [hasGroupAccess, setHasGroupAccess] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const personal = !resource.library_id;
   useEffect(() => {
-    if (!personal) return;
     setLoadingCollaborators(true);
     void api<{
       members: { id: string; display_name: string }[];
+      groupSources?: unknown[];
     }>(`/resources/${resource.id}/permission-overview`)
       .then((overview) => {
+        setHasGroupAccess(!!overview.groupSources?.length);
         setCollaborators(
           overview.members.filter((member) => member.id !== resource.owner_id),
         );
@@ -170,6 +172,7 @@ export function TransferDialog({
         />
         {t("dialog.keepAdmin")}
       </label>
+      {hasGroupAccess && <p className="subtle">{t("groups.transferRetained")}</p>}
       {error && <Feedback message={error} tone="error" />}
       <footer>
         <button onClick={close}>{t("common.cancel")}</button>

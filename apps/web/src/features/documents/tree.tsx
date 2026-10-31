@@ -2,8 +2,8 @@ import { splitTitleIcon } from "@web/shared/utils/resource-title.js";
 import { useI18n } from "@web/shared/i18n.js";
 import { Feedback, notifyFeedback } from "@web/shared/components/feedback.js";
 import { createPortal } from "react-dom";
-import { useEffect, useState } from "react";
-import { ChevronRight, MoreHorizontal, Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronRight, LoaderCircle, MoreHorizontal, Plus } from "lucide-react";
 import { TreeDocumentMenu } from "@web/features/documents/tree-document-menu.js";
 import { ResourceActionDialog } from "@web/features/documents/uploads.js";
 import { FileIcon } from "@web/features/documents/document-controls.js";
@@ -30,6 +30,7 @@ export function DocumentTree({
   changed?: () => void;
 }) {
   const { t } = useI18n();
+  const arrangeRefreshPending = useRef(false);
   const [items, setItems] = useState<Resource[]>([]),
     [truncated, setTruncated] = useState(false),
     [menu, setMenu] = useState<{ resource: Resource; trigger: HTMLElement } | null>(null),
@@ -67,6 +68,8 @@ export function DocumentTree({
   }, [expanded, userId, libraryId]);
   useEffect(() => {
     const controller = new AbortController();
+    // Only the refresh started after arranging may clear its pending state.
+    const completingArrange = arrangeRefreshPending.current;
     void (async () => {
       const all: Resource[] = [];
       let wasTruncated = false;
@@ -87,9 +90,16 @@ export function DocumentTree({
         setTruncated(wasTruncated);
         setError("");
       }
-    })().catch((e) => {
-      if (e.name !== "AbortError") setError(e.message);
-    });
+    })()
+      .catch((e) => {
+        if (e.name !== "AbortError") setError(e.message);
+      })
+      .finally(() => {
+        if (completingArrange && !controller.signal.aborted) {
+          arrangeRefreshPending.current = false;
+          setBusy(false);
+        }
+      });
     return () => controller.abort();
   }, [refresh, localRefresh, userId, libraryId]);
   useEffect(() => {
@@ -144,7 +154,7 @@ export function DocumentTree({
           data-resource-id={r.id}
           draggable={!busy && r.kind === "document" && roleRank(r.role) >= 4}
           onDragStart={(e) => {
-            if ((e.target as HTMLElement).closest(".tree-more,.hover-add")) { e.preventDefault(); return; }
+            if (busy || (e.target as HTMLElement).closest(".tree-more,.hover-add")) { e.preventDefault(); return; }
             setMenu(null);
             setDragged(r);
             e.dataTransfer.effectAllowed = "move";
@@ -161,7 +171,7 @@ export function DocumentTree({
             setDrop(null);
           }}
           onDragOver={(e) => {
-            if (!dragged || dragged.id === r.id || r.kind !== "document")
+            if (busy || !dragged || dragged.id === r.id || r.kind !== "document")
               return;
             let ancestor: Resource | undefined = r;
             const seen = new Set<string>();
@@ -207,13 +217,14 @@ export function DocumentTree({
               .then(() => {
                 if (destination.placement === "inside")
                   setExpanded((old) => new Set([...old, r.id]));
-                setLocalRefresh((n) => n + 1);
               })
               .catch((e) => {
                 notifyFeedback(e.message, "error");
-                setLocalRefresh((n) => n + 1);
               })
-              .finally(() => setBusy(false));
+              .finally(() => {
+                arrangeRefreshPending.current = true;
+                setLocalRefresh((n) => n + 1);
+              });
           }}
           style={{ paddingLeft: 2 + Math.min(depth, 6) * 12 }}
         >
@@ -303,7 +314,13 @@ export function DocumentTree({
       {truncated && (
         <Feedback message={t("tree.tooLarge")} tone="warning" />
       )}
-      {roots.map((r) => node(r))}
+      {busy && (
+        <div className="tree-arrange-status" role="status">
+          <LoaderCircle size={14} aria-hidden="true" />
+          <span>{t("tree.arranging")}</span>
+        </div>
+      )}
+      <div aria-busy={busy}>{roots.map((r) => node(r))}</div>
       {!items.length && !error && !knowledgeEnabled && (
         <p className="subtle">暂无目录，创建第一篇文档吧</p>
       )}

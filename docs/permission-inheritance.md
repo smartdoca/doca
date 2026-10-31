@@ -2,7 +2,9 @@
 
 [中文](permission-inheritance.zh-CN.md)
 
-This page describes the current permission model. Grants live in `grants`. Public link definitions live in `share_links`. Link revocation events live in `share_link_revocations`. There is no other membership compatibility table.
+This page describes the current permission model. Personal grants live in `grants`; group grants live separately in `resource_group_grants` and are evaluated against active group membership without creating personal rows. Public link definitions live in `share_links`; link revocation events live in `share_link_revocations`. See [user groups](user-groups.md) for group invitations, directory scope, ownership and cleanup.
+
+Each group has an independent nearest-grant/inheritance boundary. Personal blocks do not erase group sources; a local disabled group grant blocks inheritance from that group. Library group managers retain the existing management floor on contained documents. Membership removal, leaving or dissolution invalidates that source immediately. Ownership transfer preserves group grants, including access the previous owner still receives through a group.
 
 ## Public reading
 
@@ -53,3 +55,13 @@ Lookups and lists use the same nearest decision, grant scope, and field override
 Isolated tests cover multi-level inheritance, downgrade, blocking, future children, grant scope, turning inheritance off and on, field overrides, the public baseline, revoking a link source, accepting an invitation, approval results, and WebSocket revocation.
 
 Administrators can [hand over resources](admin-resource-handover.md) of disabled accounts after reviewing ownership and retained grants. This inventory exposes management metadata without granting access to private document bodies.
+
+## Shared permission components
+
+The Web module `apps/web/src/shared/components/permission-grant-row.tsx` and its stylesheet own grant rows, role selection, source entry, descendant scope and confirmation bubbles. Documents, libraries and knowledge books use `PermissionDialog`; shared folders and group grants also use the same `PermissionGrantRow`. Callers supply identities, allowed role options, readonly/busy state and persistence callbacks. The component controls layout, copy, keyboard focus and confirmation. `permissionRoleChoices` centralizes host-resource and shared-folder role categories; custom permission adapters continue supplying their supported roles.
+
+Each row uses two lines: identity and actions above, metadata/member avatars and descendant scope below. Group member previews use `UserBadge` for avatar-only triggers and profile cards; More opens an avatar popover. Popup ownership follows the trigger's `aria-controls`, so interacting with a portalled card keeps its permission panel open.
+
+Source-detail entries also use `PermissionGrantRow`: the source label stays on the left, with its permission and removal controls on the right. Readonly source boundaries remain unchanged. `PermissionEffectiveAccess` highlights the effective role in bold blue when group access exceeds personal access and identifies the group source in the label.
+
+Mutation callbacks return success or failure: failure keeps the confirmation open, and only success closes it. Deleting a source and clearing an inheritance override have different confirmation copy; clearing an override resumes parent evaluation and must not be described as simply revoking access. Server-side ownership, management floors, invitation consent and scope checks remain authoritative.

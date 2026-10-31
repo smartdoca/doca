@@ -10,6 +10,7 @@ import {
   BookOpen,
   NotebookTabs,
   FolderOpen,
+  FolderSymlink,
   Sparkles,
   Settings,
   UserRound,
@@ -104,7 +105,8 @@ const icons: Record<string, typeof Package> = {
   menu: Menu,
   tickets: ClipboardList,
 
-  "shared-files": Users,
+  "shared-files": FolderSymlink,
+  groups: Users,
 };
 const adminIcons: Record<string, typeof Package> = {
   "doca.admin.overview": ChartNoAxesCombined,
@@ -184,7 +186,7 @@ export function NavigationArea({
                 data-display={display}
                 data-entry-id={entry.id}
                 className={
-                  (entry.webPath.includes("?")
+                  (entry.id === "doca.groups" && location.hash.startsWith("#/groups/")) || (entry.webPath.includes("?")
                     ? location.hash
                     : location.hash.split("?")[0]) === `#${entry.webPath}`
                     ? "active"

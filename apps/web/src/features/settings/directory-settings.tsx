@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@web/shared/api.js";
 import { Select } from "@web/shared/components/select.js";
 import { UserBadge } from "@web/shared/components/user-badge.js";
+import { GroupDirectorySettings } from "@web/features/groups/group-directory-settings.js";
 const modes = [
   {
     value: "all",
@@ -115,7 +116,7 @@ const { t } = useI18n();
               }
             >
               <strong>{m.label}</strong>
-              <small>{m.description}</small>
+              <small>{m.value === "related" ? t("groups.directory.userRelated") : m.description}</small>
             </button>
           ))}
         </div>
@@ -178,6 +179,7 @@ const { t } = useI18n();
           >{t("common.more")}</button>
         )}
       </section>
+      <GroupDirectorySettings users={users} />
     </section>
   );
 }

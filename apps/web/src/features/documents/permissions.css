@@ -534,7 +534,11 @@
 }
 .permissions-share-record-title code {
   color: #667085;
-  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    11px/1.4 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   overflow-wrap: anywhere;
 }
 .permissions-share-record-status {
@@ -663,32 +667,22 @@
   color: #6d7787;
   font-size: 12px;
 }
-.permissions-source-card {
+.permissions-member.permissions-source-card {
   padding: 12px;
   border: 1px solid #e8ebf1;
   border-radius: 9px;
   background: #fbfcfe;
 }
-.permissions-source-card-title,
-.permissions-source-card-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.permissions-source-card-title {
+.permission-source-identity {
+  display: block;
+  min-height: 32px;
+  line-height: 32px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: #344054;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-}
-.permissions-source-card-meta {
-  margin-top: 6px;
-  color: #8b95a5;
-  font-size: 11px;
-}
-.permissions-source-card-actions {
-  justify-content: flex-start;
-  margin-top: 10px;
 }
 .permissions-panel .permissions-confirm {
   flex-basis: 100%;
@@ -1006,11 +1000,33 @@
   color: #1f2937;
 }
 
-.permissions-inherit-control { display:flex; align-items:center; gap:4px; font-size:12px; color:#667085; white-space:nowrap; }
-.permissions-inherit-control input { width:14px; height:14px; }
-.permissions-origin { font-size:11px; font-weight:400; color:#667085; margin-left:6px; }
-.permissions-member-scope { width:100%; justify-content:flex-end; font-size:12px; margin:0; }
-.permissions-member { flex-wrap:wrap; }
+.permissions-inherit-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #667085;
+  white-space: nowrap;
+}
+.permissions-inherit-control input {
+  width: 14px;
+  height: 14px;
+}
+.permissions-origin {
+  font-size: 11px;
+  font-weight: 400;
+  color: #667085;
+  margin-left: 6px;
+}
+.permissions-member-scope {
+  width: 100%;
+  justify-content: flex-end;
+  font-size: 12px;
+  margin: 0;
+}
+.permissions-member {
+  flex-wrap: wrap;
+}
 .permissions-link-footer {
   display: flex;
   align-items: center;
@@ -1018,7 +1034,19 @@
   gap: 12px;
   margin-top: 12px;
 }
-.permissions-link-footer .permissions-link-scope { font-size: 13px; margin: 0; }
-.permissions-link-footer .permissions-text-button { flex-shrink: 0; }
-.permissions-panel .permissions-inherit-control { display: inline-flex; flex-direction: row; margin: 0; gap: 5px; }
-.permissions-panel .permissions-inherit-control input { margin: 0; }
+.permissions-link-footer .permissions-link-scope {
+  font-size: 13px;
+  margin: 0;
+}
+.permissions-link-footer .permissions-text-button {
+  flex-shrink: 0;
+}
+.permissions-panel .permissions-inherit-control {
+  display: inline-flex;
+  flex-direction: row;
+  margin: 0;
+  gap: 5px;
+}
+.permissions-panel .permissions-inherit-control input {
+  margin: 0;
+}

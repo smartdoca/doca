@@ -76,6 +76,7 @@ export const builtinNavigation: NavigationEntry[] = [
     60,
   ],
   ["discover", "Public resources", "公共资源", "/discover", undefined, 70],
+  ["groups", "User groups", "用户组", "/groups", undefined, 65],
   ["trash", "Trash", "回收站", "/trash", undefined, 80],
   ["account", "Profile", "个人资料", "/account", "/account", 90],
   ["preferences", "Settings", "设置", "/preferences", "/settings", 100],

@@ -3,6 +3,8 @@ import type { DB, Resource, Schema } from "@db/index.js";
 import { databaseDriver, readSnapshot, transact } from "@db/transactions.js";
 import { fail } from "../../shared/errors.js";
 import { archiveInvitation } from "../access/invitations.js";
+import { effectiveGrants } from "../access/grants.js";
+import { groupChanged, touchGroup } from "../groups/service.js";
 import { cancelFolderInvitation } from "../access/folder-sharing.js";
 import { namedPermission, type Grant } from "../access/policy.js";
 import { ranks } from "../access/roles.js";
@@ -18,7 +20,7 @@ import { securityAudit } from "./accounts.js";
 import type { Actor } from "./passwords.js";
 
 export type HandoverKind =
-  "resource" | "folder" | "file" | "resource_access" | "folder_access";
+  "resource" | "folder" | "file" | "resource_access" | "folder_access" | "group";
 export type HandoverEntry = {
   key: string;
   id: string;
@@ -35,7 +37,7 @@ export type HandoverEntry = {
 export type HandoverInput = { targetUserId: string; keys: string[] };
 export type HandoverChange = {
   id: string;
-  kind: "resource" | "folder" | "file";
+  kind: "resource" | "folder" | "file" | "group";
   name: string;
   action: "ownership" | "access" | "attachment";
   path: string[];
@@ -51,7 +53,8 @@ export type HandoverConflict = {
     | "permission_scope"
     | "permission_restricted"
     | "grant_shape"
-    | "protected_file";
+    | "protected_file"
+    | "group_membership";
 };
 export type HandoverPreview = {
   fingerprint: string;
@@ -174,7 +177,10 @@ async function snapshot(
     .orderBy("folder_id")
     .orderBy("user_id")
     .execute();
-  return { source: source!, target, resources, folders, files, grants, shares };
+  const groups = await db.selectFrom("user_groups").selectAll().where("owner_id", "=", sourceId).where("dissolved_at", "is", null).orderBy("id").execute();
+  const groupMembers = groups.length ? await db.selectFrom("user_group_members").selectAll().where("group_id", "in", groups.map(g => g.id)).orderBy("group_id").orderBy("user_id").execute() : [];
+  const groupGrants = (await effectiveGrants(db, resources.map(r => r.id))).filter(g => g.groupId);
+  return { source: source!, target, resources, folders, files, grants, shares, groups, groupMembers, groupGrants };
 }
 
 function fileReason(file: File): HandoverEntry["reason"] {
@@ -201,9 +207,10 @@ function fileReason(file: File): HandoverEntry["reason"] {
 
 function itemPath(
   s: Snapshot,
-  kind: "resource" | "folder" | "file",
+  kind: "resource" | "folder" | "file" | "group",
   id: string,
 ): string[] {
+  if (kind === "group") return [];
   let type: "resource" | "folder" = kind === "resource" ? "resource" : "folder";
   let parent: string | null;
   if (kind === "file") {
@@ -236,6 +243,7 @@ function itemPath(
 
 function entries(s: Snapshot): HandoverEntry[] {
   const result: Omit<HandoverEntry, "path">[] = [];
+  for (const group of s.groups) result.push({ key: `group:${group.id}`, id: group.id, kind: "group", name: group.name, parentId: null, role: "owner", deleted: false, size: 0, selectable: true, reason: null });
   for (const r of s.resources) {
     if (r.owner_id === s.source.id)
       result.push({
@@ -434,6 +442,11 @@ async function plan(
     if (!conflicts.some((c) => c.id === id && c.code === code))
       conflicts.push({ id, name, code });
   };
+  const ownGroups = s.groups.filter(group => selected.some(entry => entry.kind === "group" && entry.id === group.id));
+  for (const group of ownGroups) {
+    if (!s.groupMembers.some(member => member.group_id === group.id && member.user_id === input.targetUserId)) addConflict(group.id, group.name, "group_membership");
+    changes.push({ id: group.id, kind: "group", name: group.name, action: "ownership", role: "owner", includeDescendants: false, deleted: false, destination: "unchanged" });
+  }
   const movedFolders = new Set<string>(),
     movedFiles = new Set<string>();
   for (const r of ownResources)
@@ -506,7 +519,7 @@ async function plan(
       r,
       person,
       resources,
-      grants.map((g) => ({
+      [...grants, ...s.groupGrants].map((g) => ({
         ...g,
         blocked: g.status === "disabled",
       })) as Grant[],
@@ -711,6 +724,9 @@ async function plan(
     path: itemPath(s, change.kind, change.id),
   }));
   const facts = {
+    groups: ownGroups,
+    groupMembers: s.groupMembers.filter(member => ownGroups.some(group => group.id === member.group_id)),
+    groupGrants: s.groupGrants.filter(grant => relevantIds.has(grant.resource_id)),
     affectedFiles,
     invitations,
     folderInvitations,
@@ -769,6 +785,7 @@ async function plan(
     s,
     preview,
     ownResources,
+    ownGroups,
     ownFolders,
     ownFiles,
     assets,
@@ -814,6 +831,13 @@ export async function executeUserHandover(
       reject(409, "handover_changed");
     if (p.preview.conflicts.length) reject(409, "handover_conflict");
     const now = new Date().toISOString();
+    for (const group of p.ownGroups) {
+      await touchGroup(tx, group.id, group.revision);
+      await tx.updateTable("user_group_members").set({ role: "member" }).where("group_id", "=", group.id).where("user_id", "=", sourceId).execute();
+      await tx.updateTable("user_group_members").set({ role: "owner" }).where("group_id", "=", group.id).where("user_id", "=", input.targetUserId).execute();
+      await tx.updateTable("user_groups").set({ owner_id: input.targetUserId }).where("id", "=", group.id).execute();
+      await groupChanged(tx, group.id, actor, "admin_transferred");
+    }
     await checkStorage(tx, input.targetUserId, p.preview.bytes);
     for (const r of p.ownResources) {
       await checkTransfer(tx, r, input.targetUserId);

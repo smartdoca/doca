@@ -1,3 +1,4 @@
+import { ownsControlledPopup } from "@web/shared/components/popup-ownership.js";
 import { useEffect, useRef } from "react";
 
 /** Shared dismissal and focus behavior for resource permission panels. */
@@ -11,12 +12,11 @@ export function usePermissionPopover(close: () => void, embedded = false) {
         target.closest("[data-permissions-popup], [data-permissions-trigger]")
       )
         return;
-      const popup = target.closest("[role=listbox]");
       if (
-        popup &&
-        Array.from(
-          panel.current?.querySelectorAll("[aria-controls]") ?? [],
-        ).some((trigger) => trigger.getAttribute("aria-controls") === popup.id)
+        ownsControlledPopup(target, [
+          panel.current,
+          ...Array.from(document.querySelectorAll("[data-permissions-popup]")),
+        ])
       )
         return;
       if (!panel.current?.contains(target)) close();

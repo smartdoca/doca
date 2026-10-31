@@ -14,7 +14,7 @@ export async function activeResourceAudience(
   const candidates = [
     ...new Set([
       ...resources.map((r) => r.owner_id),
-      ...grants.map((g) => g.user_id),
+      ...grants.flatMap((g) => g.memberIds ?? [g.user_id]),
     ]),
   ];
   const active = new Set<string>();

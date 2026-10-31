@@ -1,0 +1,220 @@
+/* Personal and group grants share one management row. */
+.permissions-member.permission-grant-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 3px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.permission-grant-identity {
+  min-width: 0;
+}
+.permission-grant-identity > .user-badge,
+.permission-group-identity {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.permission-grant-identity > .user-badge > span:last-child,
+.permission-group-identity > span:last-child {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.permission-group-identity .group-avatar {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+}
+.permission-group-identity .group-avatar svg {
+  width: 18px;
+  height: 18px;
+}
+.permission-grant-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+}
+.permission-grant-role {
+  width: 108px;
+  min-width: 0;
+  text-align: right;
+}
+.permission-grant-role > span {
+  display: block;
+}
+.permission-grant-role .select-control {
+  width: 100%;
+}
+.permission-grant-role .select-trigger {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  min-height: 32px;
+  padding: 5px 6px;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.permission-grant-role .select-trigger:not(:disabled) {
+  color: var(--brand);
+  font-weight: 600;
+}
+.permission-grant-role .select-trigger > svg {
+  color: currentColor;
+}
+.permission-grant-role .select-trigger:hover {
+  background: var(--hover);
+}
+.permission-grant-role .select-trigger:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.permission-grant-role .permission-grant-role-label {
+  display: inline-block;
+  padding: 6px;
+}
+.permission-grant-controls .permission-grant-source,
+.permission-grant-controls .permission-grant-remove,
+.permission-grant-action-placeholder {
+  width: 28px;
+  height: 32px;
+  padding: 6px;
+  flex: 0 0 28px;
+}
+.icon.permission-grant-remove {
+  border: 0;
+  background: transparent;
+  color: #bd4545;
+}
+.icon.permission-grant-remove:hover {
+  color: #b42318;
+  background: var(--hover);
+}
+.icon.permission-grant-remove:disabled {
+  color: #b6bcc6;
+  background: transparent;
+}
+.permission-grant-secondary {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 22px;
+}
+.permission-grant-metadata {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+.permission-grant-subtitle,
+.permission-grant-details {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+}
+.permission-grant-subtitle {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+.permission-grant-details {
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+.permission-grant-details > small {
+  font-size: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.permission-effective-access strong {
+  color: var(--brand);
+  font-weight: 600;
+}
+.permission-grant-scope {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.permission-grant-row .permission-grant-scope .permissions-check {
+  width: auto;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.permission-remove-confirm {
+  width: min(290px, calc(100vw - 52px));
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.permission-remove-confirm p {
+  margin: 0 0 12px;
+}
+.permission-remove-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.permission-remove-confirm-actions button {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+.permission-remove-confirm-actions .permission-remove-confirm-submit {
+  color: #bd4545;
+  border-color: #f0caca;
+}
+@media (max-width: 700px) {
+  .permissions-member.permission-grant-row {
+    gap: 3px 8px;
+  }
+  .permission-grant-role {
+    width: 104px;
+  }
+  .permission-grant-controls {
+    gap: 2px;
+  }
+  .permission-grant-controls .permission-grant-source,
+  .permission-grant-controls .permission-grant-remove,
+  .permission-grant-action-placeholder {
+    width: 26px;
+    flex-basis: 26px;
+  }
+}
+
+.permission-grant-identity > .user-badge .user-avatar {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+}
+.permission-grant-controls .permission-grant-source {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+}
+.permission-grant-role-label {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.permission-grant-scope input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+}

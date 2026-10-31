@@ -2,6 +2,8 @@
 
 [简体中文](database-schema-evolution.zh-CN.md)
 
+The approved user-group addition retains this contract and compatibility generation: seven empty group/membership/invitation/ACL tables plus an independent directory policy explicitly initialized to joined groups only (`system/member/revision=1`). User overrides start empty. Historical personal/link grants, invitations, public settings and user directory policies remain unchanged, without conversion or per-member grant materialization. Installed configuration rows are not silently recreated. Update all servers and Web together; downgrade needs separate preservation/recovery review. See [group rules](user-groups.md), [release notes](releases/0.2.28.md) and [SQLite/PostgreSQL 17/18 verification](verification/user-groups-2026-10-30.md).
+
 This is Doca's project-wide contract for future core database changes. Development and review must follow it; it is not limited to the shared-folder release. Read it before changing tables, fields, indexes, constraints, initialization or persisted data formats. [AGENTS.md](../AGENTS.md) requires the concrete compatibility plan to be agreed before implementation, including the meaning of historical defaults, data preservation, validation and recovery. The reconciliation mechanism below is already agreed; each new business compatibility decision still needs its own agreement.
 
 ## One current target structure

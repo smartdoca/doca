@@ -6,11 +6,15 @@ import {
 } from "./inheritance.js";
 import type { DB, Resource } from "../../../../db/src/index.js";
 import type { Actor } from "../identity/passwords.js";
-import { distributionPolicy, internetPublicationOpen } from "../deployment/policies.js";
+import {
+  distributionPolicy,
+  internetPublicationOpen,
+} from "../deployment/policies.js";
 import { accessContext } from "./queries.js";
 import {
   permission,
   namedPermission,
+  groupPermission,
   ranks,
   label,
   isResourceOwnerLike,
@@ -40,7 +44,9 @@ export async function managers(
   const ids = [
     ...new Set([
       ...resources.map((r) => r.owner_id),
-      ...grants.filter((g) => g.role === "manager").map((g) => g.user_id),
+      ...grants
+        .filter((g) => g.role === "manager")
+        .flatMap((g) => g.memberIds ?? [g.user_id]),
     ]),
   ];
   if (!ids.length) return [];
@@ -111,9 +117,27 @@ export async function permissionOverview(
         : undefined;
   }
   const effectiveGrants = grants.filter((g) => chain.has(g.resource_id));
+  const personalGrants = grants.filter((g) => !g.groupId);
   const candidates = new Set([
-    ...grants.filter((grant) => grant.resource_id === r.library_id && grant.role === "manager" && !grant.blocked).map((grant) => grant.user_id),
-    ...resources.filter((resource) => resource.id === r.library_id).map((resource) => resource.owner_id),
+    ...(rank >= 4
+      ? grants
+          .filter(
+            (g) =>
+              g.groupId && groupPermission(r, g.groupId, resources, grants) > 0,
+          )
+          .flatMap((g) => g.memberIds ?? [])
+      : []),
+    ...grants
+      .filter(
+        (grant) =>
+          grant.resource_id === r.library_id &&
+          grant.role === "manager" &&
+          !grant.blocked,
+      )
+      .map((grant) => grant.user_id),
+    ...resources
+      .filter((resource) => resource.id === r.library_id)
+      .map((resource) => resource.owner_id),
     ...effectiveGrants.map((g) => g.user_id),
     ...resources.filter((x) => chain.has(x.id)).map((x) => x.owner_id),
   ]);
@@ -128,6 +152,10 @@ export async function permissionOverview(
       : [];
   const members = users.flatMap((u) => {
     const effective = namedPermission(r, u, resources, grants);
+    const personal = namedPermission(r, u, resources, personalGrants);
+    const library = resources.find((resource) => resource.id === r.library_id);
+    const libraryManagement =
+      library && namedPermission(library, u, resources, personalGrants) >= 4;
     if (!effective || (effective >= 4 && !show)) return [];
     const direct = grants.find(
       (g) =>
@@ -149,10 +177,48 @@ export async function permissionOverview(
       u.id !== r.owner_id &&
       !!parent &&
       !parentOverride &&
-      namedPermission(parent, u, resources, grants, true) > 0;
+      namedPermission(parent, u, resources, personalGrants, true) > 0;
     const includeDescendants =
       namedPermission(r, u, resources, grants, true) > 0;
     const sourceDetails = [
+      ...(isResourceOwnerLike(r, u, resources)
+        ? [
+            {
+              type: "owner",
+              sourceType: "owner",
+              id: null,
+              sourceResourceId: u.id === r.owner_id ? r.id : r.library_id,
+              role: "owner",
+              includeDescendants: true,
+              status: "active",
+            },
+          ]
+        : []),
+      ...[
+        ...new Set(
+          grants
+            .filter((g) => g.groupId && g.memberIds?.includes(u.id))
+            .map((g) => g.groupId!),
+        ),
+      ].flatMap((groupId) => {
+        const role = groupPermission(r, groupId, resources, grants);
+        const group = grants.find((g) => g.groupId === groupId)!;
+        return role
+          ? [
+              {
+                type: "group",
+                sourceType: "group",
+                id: groupId,
+                sourceResourceId: null,
+                role: label(role),
+                includeDescendants:
+                  groupPermission(r, groupId, resources, grants, true) > 0,
+                status: "active",
+                groupName: group.groupName,
+              },
+            ]
+          : [];
+      }),
       ...local.map((g) => ({
         type: g.source_type ?? "direct",
         sourceType: g.source_type ?? "direct",
@@ -178,7 +244,28 @@ export async function permissionOverview(
           includeDescendants: g.include_descendants !== 0,
           status: g.status ?? "active",
         })),
+      ...(libraryManagement &&
+      !effectiveGrants.some(
+        (g) =>
+          g.user_id === u.id &&
+          g.resource_id === library!.id &&
+          g.role === "manager" &&
+          !g.blocked,
+      )
+        ? [
+            {
+              type: "parent_inherited",
+              sourceType: "direct",
+              id: library!.id,
+              sourceResourceId: library!.id,
+              role: "manager",
+              includeDescendants: true,
+              status: "active",
+            },
+          ]
+        : []),
       ...(inherited &&
+      !libraryManagement &&
       !effectiveGrants.some(
         (g) =>
           g.user_id === u.id &&
@@ -191,7 +278,9 @@ export async function permissionOverview(
               sourceType: "parent_inherited",
               id: parent!.id,
               sourceResourceId: parent!.id,
-              role: label(namedPermission(parent!, u, resources, grants, true)),
+              role: label(
+                namedPermission(parent!, u, resources, personalGrants, true),
+              ),
               includeDescendants: true,
               status: "active",
             },
@@ -204,15 +293,29 @@ export async function permissionOverview(
         display_name: u.display_name,
         public_id: u.public_id,
         role: label(effective),
+        personalRole: personal ? label(personal) : null,
+        personalIncludeDescendants:
+          namedPermission(r, u, resources, personalGrants, true) > 0,
         directRole: direct?.role ?? null,
         includeDescendants,
         sourceDetails,
         sources: [
+          ...(grants.some(
+            (g) =>
+              g.groupId &&
+              g.memberIds?.includes(u.id) &&
+              groupPermission(r, g.groupId, resources, grants) > 0,
+          )
+            ? ["group"]
+            : []),
           ...(u.id === r.owner_id ? ["owner"] : []),
           ...(direct ? ["direct"] : []),
           ...(inherited ? ["inherit"] : []),
-          ...(effectiveGrants.some((g) =>
-            g.user_id === u.id && g.source_type === "link" && g.status === "active",
+          ...(effectiveGrants.some(
+            (g) =>
+              g.user_id === u.id &&
+              g.source_type === "link" &&
+              g.status === "active",
           )
             ? ["link"]
             : []),
@@ -220,13 +323,32 @@ export async function permissionOverview(
         ],
         canAdjust:
           rank >= 4 &&
-          u.id !== r.owner_id &&
-          (effective < 4 || actor?.id === r.owner_id),
+          !libraryManagement &&
+          !isResourceOwnerLike(r, u, resources) &&
+          (effective < 4 || isOwner),
       },
     ];
   });
   return {
     rank,
+    groupSources: [
+      ...new Set(
+        grants
+          .filter((g) => g.groupId && g.memberIds?.includes(actor?.id ?? ""))
+          .map((g) => g.groupId!),
+      ),
+    ].flatMap((groupId) => {
+      const role = groupPermission(r, groupId, resources, grants);
+      return role
+        ? [
+            {
+              groupId,
+              name: grants.find((g) => g.groupId === groupId)!.groupName,
+              role: label(role),
+            },
+          ]
+        : [];
+    }),
     currentUser: actor
       ? {
           id: actor.id,
@@ -248,7 +370,15 @@ export async function permissionOverview(
         ? "requestable"
         : r.visibility,
     effectiveVisibility: open.visibility,
-    publicContainerId: r.library_id && resources.some(l => l.id === r.library_id && ["public", "authenticated"].includes(l.visibility)) ? r.library_id : null,
+    publicContainerId:
+      r.library_id &&
+      resources.some(
+        (l) =>
+          l.id === r.library_id &&
+          ["public", "authenticated"].includes(l.visibility),
+      )
+        ? r.library_id
+        : null,
     publicRole: open.public_role ?? "reader",
     requestRoles: requestedRoles(r, resources).filter(
       (role) => ranks[role] > rank,

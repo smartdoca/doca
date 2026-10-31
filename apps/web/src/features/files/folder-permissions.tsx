@@ -1,4 +1,11 @@
+import { ownsControlledPopup } from "@web/shared/components/popup-ownership.js";
+import {
+  PermissionGrantRow,
+  PermissionEffectiveAccess,
+  permissionRoleChoices,
+} from "@web/shared/components/permission-grant-row.js";
 import { useI18n } from "@web/shared/i18n.js";
+import { GroupGrants } from "@web/features/groups/group-grants.js";
 import { writeClipboardText } from "@web/shared/clipboard.js";
 import {
   ArrowLeft,
@@ -22,7 +29,10 @@ type ShareRole = "admin" | "reader";
 type Member = {
   user_id: string;
   role: ShareRole;
-  version: number;
+  version: number | null;
+  personalRole: ShareRole | null;
+  canAdjust: boolean;
+  sources: { type: string; role: ShareRole; groupName?: string }[];
   display_name: string;
   public_id?: string | null;
 };
@@ -46,7 +56,7 @@ type ShareLink = {
   expiresAt: string | null;
   revision: number | null;
 };
-type Page = "main" | "invite" | "members";
+type Page = "main" | "invite" | "members" | "sources";
 
 export function FolderPermissionPanel({
   folder,
@@ -58,8 +68,8 @@ export function FolderPermissionPanel({
   const { t } = useI18n();
   const labels = {
     owner: t("search.owner"),
-    admin: t("admin.badge"),
-    reader: t("fileManager.reader"),
+    admin: t("role.manager"),
+    reader: t("role.reader"),
   } as const;
 
   const [publication, setPublication] = useState<{
@@ -67,6 +77,12 @@ export function FolderPermissionPanel({
     revision: number;
   } | null>(null);
   const [page, setPage] = useState<Page>("main");
+  const [sourceMember, setSourceMember] = useState<{
+    id: string;
+    name: string;
+    sources: { type: string; role: string; groupName?: string }[];
+  } | null>(null);
+  const [inviteKind, setInviteKind] = useState<"person" | "group">("person");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [link, setLink] = useState<ShareLink | null>(null);
   const [person, setPerson] = useState<{
@@ -95,12 +111,11 @@ export function FolderPermissionPanel({
       )
         setLimitOpen(false);
       if (target.closest("[data-permissions-popup]")) return;
-      const popup = target.closest("[role=listbox]");
       if (
-        popup &&
-        Array.from(
-          panel.current?.querySelectorAll("[aria-controls]") ?? [],
-        ).some((trigger) => trigger.getAttribute("aria-controls") === popup.id)
+        ownsControlledPopup(target, [
+          panel.current,
+          ...Array.from(document.querySelectorAll("[data-permissions-popup]")),
+        ])
       )
         return;
       if (
@@ -132,6 +147,7 @@ export function FolderPermissionPanel({
     ]);
     setLink(nextLink);
     setPublication(nextPublication);
+    return nextOverview;
   }
   useEffect(() => {
     void load().catch((e) => setError(e.message));
@@ -172,9 +188,19 @@ export function FolderPermissionPanel({
           `/files/folders/${folder.id}/shares/${member.user_id}`,
           "DELETE",
         );
-      await load();
+      const next = await load();
+      setNotice(
+        next?.members.some(
+          (m) =>
+            m.user_id === member.user_id && (!nextRole || m.role !== nextRole),
+        )
+          ? t("permissionsUi.otherAccess")
+          : t("permissionsUi.updated"),
+      );
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : t("sharingUi.updateFailed"));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -219,7 +245,9 @@ export function FolderPermissionPanel({
       ? t("share.title")
       : page === "invite"
         ? t("share.invite")
-        : t("share.members");
+        : page === "sources"
+          ? t("share.sources")
+          : t("share.members");
   return (
     <div
       ref={panel}
@@ -227,7 +255,10 @@ export function FolderPermissionPanel({
       role="dialog"
       aria-label={t("share.title")}
       onKeyDown={(event) => {
-        if (event.key === "Escape") page === "main" ? close() : setPage("main");
+        if (event.key === "Escape")
+          page === "main"
+            ? close()
+            : setPage(page === "sources" ? "members" : "main");
       }}
     >
       {limitOpen &&
@@ -315,7 +346,7 @@ export function FolderPermissionPanel({
             <button
               className="icon"
               aria-label={t("sharingUi.back")}
-              onClick={() => setPage("main")}
+              onClick={() => setPage(page === "sources" ? "members" : "main")}
             >
               <ArrowLeft size={18} />
             </button>
@@ -399,7 +430,7 @@ export function FolderPermissionPanel({
                   onClick={() => setPage("invite")}
                 >
                   <Search size={16} />
-                  <span>{t("permissionsUi.search")}</span>
+                  <span>{t("groups.inviteCollaborator")}</span>
                 </button>
               )}
             </section>
@@ -564,121 +595,236 @@ export function FolderPermissionPanel({
           </>
         )}
         {overview?.canManage && page === "invite" && (
-          <form
-            className="permissions-invite-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void addMember();
-            }}
-          >
-            <fieldset className="permissions-form" disabled={busy}>
-              <div className="permissions-invite-recipient">
-                <h3>{t("dialog.chooseCollaborator")}</h3>
-                <PersonPicker
-                  autoFocus
-                  selected={person}
-                  clear={() => setPerson(null)}
-                  select={setPerson}
-                />
-              </div>
-              <label>
-                {t("permissionsUi.grant")}
-                <Select
-                  aria-label={t("permissionsUi.inviteAccess")}
-                  value={role}
-                  onChange={(event) => setRole(event.target.value as ShareRole)}
-                >
-                  <option value="reader">{t("fileManager.reader")}</option>
-                  {overview.isOwner && (
-                    <option value="admin">{t("admin.badge")}</option>
-                  )}
-                </Select>
-              </label>
-              <label>
-                {t("ticket.inviteNote")}
-                <textarea
-                  aria-label={t("ticket.inviteNote")}
-                  placeholder={t("permissionsUi.noteHint")}
-                  maxLength={1000}
-                  rows={3}
-                  value={invitationMessage}
-                  onChange={(event) => setInvitationMessage(event.target.value)}
-                />
-              </label>
-              <footer>
-                <button type="button" onClick={() => setPage("main")}>
-                  {t("common.cancel")}
-                </button>
-                <button
-                  className="primary"
-                  type="submit"
-                  disabled={!person || busy}
-                >
-                  {busy
-                    ? t("sharingUi.adding")
-                    : t("sharingUi.addCollaborator")}
-                </button>
-              </footer>
-            </fieldset>
-          </form>
+          <div className="group-invite-tabs">
+            <button
+              type="button"
+              className={inviteKind === "person" ? "active" : ""}
+              onClick={() => setInviteKind("person")}
+            >
+              {t("groups.person")}
+            </button>
+            <button
+              type="button"
+              className={inviteKind === "group" ? "active" : ""}
+              onClick={() => setInviteKind("group")}
+            >
+              {t("groups.title")}
+            </button>
+          </div>
         )}
+        {overview?.canManage && page === "invite" && inviteKind === "group" && (
+          <GroupGrants
+            view="invite"
+            cancel={() => setPage("main")}
+            basePath={`/files/folders/${folder.id}`}
+            owner={overview.isOwner}
+            folder
+            changed={load}
+          />
+        )}
+        {overview?.canManage &&
+          page === "invite" &&
+          inviteKind === "person" && (
+            <form
+              className="permissions-invite-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void addMember();
+              }}
+            >
+              <fieldset className="permissions-form" disabled={busy}>
+                <div className="permissions-invite-recipient">
+                  <h3>{t("dialog.chooseCollaborator")}</h3>
+                  <PersonPicker
+                    autoFocus
+                    selected={person}
+                    clear={() => setPerson(null)}
+                    select={setPerson}
+                  />
+                </div>
+                <label>
+                  {t("permissionsUi.grant")}
+                  <Select
+                    aria-label={t("permissionsUi.inviteAccess")}
+                    value={role}
+                    onChange={(event) =>
+                      setRole(event.target.value as ShareRole)
+                    }
+                  >
+                    <option value="reader">{labels.reader}</option>
+                    {overview.isOwner && (
+                      <option value="admin">{labels.admin}</option>
+                    )}
+                  </Select>
+                </label>
+                <label>
+                  {t("ticket.inviteNote")}
+                  <textarea
+                    aria-label={t("ticket.inviteNote")}
+                    placeholder={t("permissionsUi.noteHint")}
+                    maxLength={1000}
+                    rows={3}
+                    value={invitationMessage}
+                    onChange={(event) =>
+                      setInvitationMessage(event.target.value)
+                    }
+                  />
+                </label>
+                <footer>
+                  <button type="button" onClick={() => setPage("main")}>
+                    {t("common.cancel")}
+                  </button>
+                  <button
+                    className="primary"
+                    type="submit"
+                    disabled={!person || busy}
+                  >
+                    {busy
+                      ? t("sharingUi.adding")
+                      : t("sharingUi.addCollaborator")}
+                  </button>
+                </footer>
+              </fieldset>
+            </form>
+          )}
         {overview?.canManage && page === "members" && (
           <>
-            {overview.members.map((member) => {
-              const canAdjust = overview.isOwner || member.role === "reader";
-              return (
-                <div className="permissions-member" key={member.user_id}>
-                  <div className="permissions-person">
-                    <UserBadge id={member.user_id} name={member.display_name} />
-                    <small>@{member.public_id || member.user_id}</small>
-                  </div>
-                  {canAdjust ? (
-                    <div className="permissions-member-controls">
-                      <Select
-                        aria-label={t("permissionsUi.accessFor", {
-                          name: member.display_name,
-                        })}
-                        value={member.role}
-                        disabled={busy}
-                        onChange={(event) =>
-                          void updateMember(
-                            member,
-                            event.target.value as ShareRole,
-                          )
-                        }
-                      >
-                        <option value="reader">
-                          {t("fileManager.reader")}
-                        </option>
-                        {overview.isOwner && (
-                          <option value="admin">{t("admin.badge")}</option>
-                        )}
-                      </Select>
-                      <button
-                        className="icon"
-                        disabled={busy}
-                        onClick={() => void updateMember(member, null)}
-                        aria-label={t("permissionsUi.removePerson", {
-                          name: member.display_name,
-                        })}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="permissions-member-role">
-                      {labels[member.role]}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+            {overview.owner && (
+              <PermissionGrantRow
+                identity={
+                  <UserBadge
+                    id={overview.owner.id}
+                    name={overview.owner.display_name}
+                  />
+                }
+                subtitle={<>@{overview.owner.public_id}</>}
+                permission={{ value: "owner", label: labels.owner }}
+                sources={{
+                  name: overview.owner.display_name,
+                  open: () => {
+                    setSourceMember({
+                      id: overview.owner!.id,
+                      name: overview.owner!.display_name,
+                      sources: [{ type: "owner", role: "owner" }],
+                    });
+                    setPage("sources");
+                  },
+                }}
+              />
+            )}
+            {overview.members.map((member) => (
+              <PermissionGrantRow
+                key={member.user_id}
+                identity={
+                  <UserBadge id={member.user_id} name={member.display_name} />
+                }
+                subtitle={<>@{member.public_id}</>}
+                details={
+                  <>
+                    {!member.personalRole && (
+                      <small>{t("permissionsUi.groupOnlyAccess")}</small>
+                    )}
+                    {member.personalRole &&
+                      member.personalRole !== member.role && (
+                        <PermissionEffectiveAccess role={labels[member.role]} />
+                      )}
+                  </>
+                }
+                sources={{
+                  name: member.display_name,
+                  disabled: busy,
+                  open: () => {
+                    setSourceMember({
+                      id: member.user_id,
+                      name: member.display_name,
+                      sources: member.sources,
+                    });
+                    setPage("sources");
+                  },
+                }}
+                permission={{
+                  value: member.personalRole ?? member.role,
+                  label: labels[member.role],
+                  ariaLabel: t("permissionsUi.accessFor", {
+                    name: member.display_name,
+                  }),
+                  options: member.canAdjust
+                    ? permissionRoleChoices(overview.isOwner, "folder").map(
+                        (value) => ({
+                          value,
+                          label: labels[value as ShareRole],
+                        }),
+                      )
+                    : undefined,
+                  disabled: busy,
+                  reason: !member.canAdjust
+                    ? t("permissionsUi.ownerOnlyRole")
+                    : undefined,
+                  change: (nextRole) =>
+                    void updateMember(member, nextRole as ShareRole),
+                }}
+                remove={
+                  member.canAdjust
+                    ? {
+                        name: member.display_name,
+                        disabled: busy || !member.personalRole,
+                        reason: !member.personalRole
+                          ? t("permissionsUi.groupOnlyRemove")
+                          : undefined,
+                        confirm: () => updateMember(member, null),
+                      }
+                    : undefined
+                }
+              />
+            ))}
             {!overview.members.length && (
               <p className="permissions-empty">
                 {t("permissionsUi.noCollaborators")}
               </p>
             )}
+            <GroupGrants
+              view="members"
+              basePath={`/files/folders/${folder.id}`}
+              owner={overview.isOwner}
+              folder
+              changed={load}
+            />
           </>
+        )}
+        {overview?.canManage && page === "sources" && sourceMember && (
+          <section className="permissions-source-list">
+            <div className="permissions-source-person">
+              <UserBadge id={sourceMember.id} name={sourceMember.name} />
+            </div>
+            {sourceMember.sources.map((source, index) => {
+              const sourceLabel =
+                source.type === "owner"
+                  ? t("permissionsUi.ownerSource")
+                  : source.type === "group"
+                    ? t("groups.groupSource", { name: source.groupName ?? "" })
+                    : source.type === "link"
+                      ? t("permissionsUi.folderLinkSource")
+                      : t("permissionsUi.directGrant");
+              return (
+                <PermissionGrantRow
+                  key={index}
+                  className="permissions-source-card"
+                  identity={
+                    <span
+                      className="permission-source-identity"
+                      title={sourceLabel}
+                    >
+                      {sourceLabel}
+                    </span>
+                  }
+                  permission={{
+                    value: source.role,
+                    label: labels[source.role as keyof typeof labels],
+                  }}
+                />
+              );
+            })}
+          </section>
         )}
       </div>
     </div>

@@ -1,4 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
+import { accessContext, authorize } from "../access/queries.js";
+import { groupPermission } from "../access/policy.js";
+import { authorizeFileFolder, authorizeFileItem } from "../access/file-access.js";
 import { enqueueProjection } from "../automation/jobs.js";
 import { authorizeKnowledgeFile, isRetiredKnowledgeSessionFile, readKnowledgeSessionFolder } from "./file-folders.js";
 import { AppError } from "../../shared/errors.js";
@@ -124,6 +127,13 @@ export function canReadChunk(readerIds: string[], userId: string) {
 }
 
 async function currentFileSourceAccess(db: DB, userId: string, kind: string, id: string) {
+  const currentActor = await db.selectFrom("users").select(["id", "admin", "display_name"]).where("id", "=", userId).where("status", "=", "active").executeTakeFirst();
+  if (!currentActor) return false;
+  try {
+    if (kind === "document" || kind === "library") { await authorize(db, currentActor, id); return true; }
+    if (kind === "folder") { await authorizeFileFolder(db, currentActor, id); return true; }
+    if (kind === "file") await authorizeFileItem(db, currentActor, id);
+  } catch (error) { if (error instanceof AppError && [401, 403, 404].includes(error.status)) return false; throw error; }
   if (kind !== "file") return true;
   const file = await db.selectFrom("file_items").select(["parent_type", "parent_id", "metadata", "deleted_at"])
     .where("id", "=", id).executeTakeFirst();
@@ -170,6 +180,10 @@ async function documentReaders(db: DB, id: string) {
     for (const invitation of invitations) readers.add(invitation.user_id);
   }
   const state = await db.selectFrom("document_states").select("text").where("resource_id", "=", id).executeTakeFirst();
+  const groupContext = await accessContext(db, null, [id]);
+  for (const grant of groupContext.grants.filter(g => g.groupId))
+    if (groupPermission(resource, grant.groupId!, groupContext.resources, groupContext.grants) > 0)
+      for (const userId of grant.memberIds ?? []) readers.add(userId);
   return {
     alive: resource.kind === "document" && !resource.deleted_at,
     title: resource.title,
@@ -188,6 +202,10 @@ async function folderReaders(db: DB, folderId: string) {
     readers.add(folder.owner_id);
     const shares: Array<{ user_id: string }> = await db.selectFrom("file_folder_shares").select("user_id").where("folder_id", "=", current).execute();
     for (const share of shares) readers.add(share.user_id);
+    const groupReaders = await db.selectFrom("file_folder_group_grants as gg").innerJoin("user_groups as g", "g.id", "gg.group_id")
+      .innerJoin("user_group_members as m", "m.group_id", "g.id").innerJoin("users as u", "u.id", "m.user_id")
+      .select("m.user_id").where("gg.folder_id", "=", current).where("g.dissolved_at", "is", null).where("u.status", "=", "active").execute();
+    for (const member of groupReaders) readers.add(member.user_id);
     current = folder.parent_id && folder.parent_id !== "shared" ? folder.parent_id : null;
   }
   return [...readers];

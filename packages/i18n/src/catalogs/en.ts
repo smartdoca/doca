@@ -1,9 +1,11 @@
 import { browserClipperEn } from "./browser-clipper.js";
 import { handoverEn } from "./resource-handover.js";
+import { groupsEn } from "./groups.js";
 /** English copy is the source catalog. Every other locale must provide these keys. */
 export const en = {
   ...browserClipperEn,
   ...handoverEn,
+  ...groupsEn,
   "mcp.unattendedConfig": "Optional: unattended Codex authorization",
   "mcp.unattendedHelp": "The optional configuration preapproves doca_call in this client. Use it only for a service whose selected Doca permissions you intend to allow without individual confirmations.",
   "mcp.title": "MCP services",
@@ -2970,6 +2972,7 @@ export const en = {
   "home.recent.today": "Today",
   "home.recent.yesterday": "Yesterday",
   "home.recent.last7Days": "Previous 7 days",
+  "tree.arranging": "Adjusting position…",
   "tree.tooLarge":
     "This tree has over 10,000 items. Only the first 10,000 are shown; use search to find the rest while layered loading is being introduced.",
   "home.recent.last30Days": "Previous 30 days",

@@ -35,6 +35,13 @@ export function decodeSystemError(value: string): SystemErrorReason | undefined 
 type Translator = (key: MessageKey, values?: MessageValues) => string;
 
 const reasonKeys = {
+  group_invalid: "groups.error.invalid",
+  group_unavailable: "groups.error.unavailable",
+  group_forbidden: "groups.error.forbidden",
+  group_conflict: "groups.error.conflict",
+  group_owner: "groups.error.owner",
+  group_scope: "groups.error.scope",
+  group_directory: "groups.error.directory",
   site_logo_invalid_image: "admin.siteLogoInvalidImage",
   site_logo_too_large: "admin.siteLogoTooLarge",
   site_logo_invalid_config: "admin.siteLogoInvalidConfig",

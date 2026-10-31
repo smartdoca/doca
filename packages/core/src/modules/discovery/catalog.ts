@@ -1,4 +1,5 @@
 import { sql } from "kysely";
+import { folderGroupRank } from "../groups/access.js";
 import type { DB } from "@db/index.js";
 import type { Actor } from "../identity/passwords.js";
 import {
@@ -63,7 +64,7 @@ export async function catalogPage(
           select a.id,a.parent_id,0 as depth from file_folders a where a.id=f.id
           union all select a.id,a.parent_id,p.depth+1 from file_folders a join ancestors p on a.id=p.parent_id where p.depth<1000
         ) select 1 from ancestors a where exists(select 1 from folder_publications pub where pub.folder_id=a.id and pub.enabled=1)
-          or (a.parent_id='shared' and exists(select 1 from file_folder_shares share where share.folder_id=a.id and share.user_id=${actor.id}))))`
+          or (a.parent_id='shared' and (exists(select 1 from file_folder_shares share where share.folder_id=a.id and share.user_id=${actor.id}) or ${folderGroupRank(sql.ref("a.id"), actor.id)}>0))))`
             : sql`and p.folder_id is not null`
         }`;
   });
@@ -122,7 +123,7 @@ export async function folderInSearch(
     union all select f.id,f.parent_id,a.depth+1 from file_folders f join ancestors a on f.id=a.parent_id where a.depth<1000
   ) select id from ancestors a where
     (${scope === "public" ? 0 : 1}=1 and (exists(select 1 from resource_collections e where e.resource_kind='folder' and e.resource_id=a.id and e.user_id=${actor.id})
-    or exists(select 1 from file_folder_shares s where s.folder_id=a.id and s.user_id=${actor.id})))
+    or exists(select 1 from file_folder_shares s where s.folder_id=a.id and s.user_id=${actor.id}) or ${folderGroupRank(sql.ref("a.id"), actor.id)}>0))
     or (${scope !== "personal" && publicMode(policy, "folder") === "search" ? 1 : 0}=1 and exists(select 1 from folder_publications p where p.folder_id=a.id and p.enabled=1))`.execute(
     db,
   );

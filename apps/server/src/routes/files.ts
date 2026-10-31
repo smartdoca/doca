@@ -1,4 +1,7 @@
-import { checkUploadLimits, userUploadLimits } from "@core/modules/ai/upload-policy.js";
+import {
+  checkUploadLimits,
+  userUploadLimits,
+} from "@core/modules/ai/upload-policy.js";
 import { sql } from "kysely";
 import { recordActivity } from "@core/modules/workspace/activity.js";
 import { folderInSearch } from "@core/modules/discovery/catalog.js";
@@ -23,7 +26,11 @@ import {
   thumbnailFor,
 } from "../services/stored-objects.js";
 import { sendFileContent } from "../services/file-content.js";
-import { assertFileTrashFolderContents, clearFileTrash, previewFileTrashClear } from "../services/file-trash-clear.js";
+import {
+  assertFileTrashFolderContents,
+  clearFileTrash,
+  previewFileTrashClear,
+} from "../services/file-trash-clear.js";
 import { randomUUID } from "node:crypto";
 import { Type } from "@sinclair/typebox";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -31,7 +38,12 @@ import { authorize } from "@core/modules/access/queries.js";
 import { createFolderSharing } from "@core/modules/access/folder-sharing.js";
 import type { Actor } from "@core/modules/identity/passwords.js";
 import { fail } from "@core/shared/errors.js";
-import { isRetiredKnowledgeSessionFile, knowledgeFolderKind, knowledgeFileLocation, readKnowledgeSessionFolder } from "@core/modules/knowledge/file-folders.js";
+import {
+  isRetiredKnowledgeSessionFile,
+  knowledgeFolderKind,
+  knowledgeFileLocation,
+  readKnowledgeSessionFolder,
+} from "@core/modules/knowledge/file-folders.js";
 import {
   isCopyOnlyParent,
   normalizeFolderParentId,
@@ -477,9 +489,11 @@ export function registerFiles(
       const actor = auth(req);
       const type = req.query.parentType ?? "system";
       const id = req.query.parentId ?? "root";
-      const aiSessionId = type === "system" ? aiSessionIdFromFolderId(id) : null;
+      const aiSessionId =
+        type === "system" ? aiSessionIdFromFolderId(id) : null;
       const knowledgeKind = type === "system" ? knowledgeFolderKind(id) : null;
-      {}
+      {
+      }
       if (type === "system" && id.startsWith("ai-session:"))
         await requireAISessionFolder(db, actor.id, id);
       let currentFolder: Schema["file_folders"] | null = null;
@@ -718,7 +732,11 @@ export function registerFiles(
       {
         files = files
           .where("file_items.parent_type", "=", type)
-          .where("file_items.parent_id", "=", aiSessionId || knowledgeKind ? "ai" : id);
+          .where(
+            "file_items.parent_id",
+            "=",
+            aiSessionId || knowledgeKind ? "ai" : id,
+          );
         if (type === "folder" && currentFolder)
           files = files.where(
             "file_items.owner_id",
@@ -727,7 +745,8 @@ export function registerFiles(
           );
         else if (type !== "document" && !knowledgeKind)
           files = files.where("file_items.owner_id", "=", actor.id);
-        {}
+        {
+        }
       }
       if (req.query.sessionId && type === "system" && id === "ai") {
         files = files.where(
@@ -738,10 +757,12 @@ export function registerFiles(
       }
       const rows = await files.execute();
       let visibleRows = rows;
-      {}
+      {
+      }
       if (type === "system" && (id === "ai" || aiSessionId)) {
         const projection = await projectAISessionFiles(db, actor.id, rows);
-        if (aiSessionId) visibleRows = projection.sessionFiles.get(aiSessionId) ?? [];
+        if (aiSessionId)
+          visibleRows = projection.sessionFiles.get(aiSessionId) ?? [];
         else {
           visibleRows = projection.rootFiles;
           virtualFolders.push(...projection.folders);
@@ -968,9 +989,10 @@ export function registerFiles(
               "ai",
             )
           : null;
-      const rank = rankedIds !== null
-        ? new Map(rankedIds.map((id, index) => [id, index]))
-        : null;
+      const rank =
+        rankedIds !== null
+          ? new Map(rankedIds.map((id, index) => [id, index]))
+          : null;
       if (rank)
         visible.sort(
           (a, b) =>
@@ -1018,9 +1040,11 @@ export function registerFiles(
           }
         } else if (row.parent_type === "system") {
           const knowledgeLocation = await knowledgeFileLocation(db, actor, row);
-          if (knowledgeLocation) return { navigation: knowledgeLocation.navigation, sharedRoot };
+          if (knowledgeLocation)
+            return { navigation: knowledgeLocation.navigation, sharedRoot };
           const aiLocation = await aiFileFolderLocation(db, actor.id, row);
-          if (aiLocation) return { navigation: aiLocation.navigation, sharedRoot };
+          if (aiLocation)
+            return { navigation: aiLocation.navigation, sharedRoot };
           navigation.push({
             type: "system",
             id: row.parent_id,
@@ -1210,7 +1234,9 @@ export function registerFiles(
       const filename = cleanName(req.query.filename);
       const ownerId = await parentOwner(db, actor, parent);
       await requireCapability(db, actor.id, "assets.upload");
-      const maxBytes = (await userUploadLimits(db, actor.id)).maxFileBytes || Number.MAX_SAFE_INTEGER;
+      const maxBytes =
+        (await userUploadLimits(db, actor.id)).maxFileBytes ||
+        Number.MAX_SAFE_INTEGER;
       if (Number(req.headers["content-length"]) > maxBytes)
         fail(413, "文件超过上传大小限制");
       const staged = await stageUpload(
@@ -1434,7 +1460,7 @@ export function registerFiles(
       const access = await folderAccess(db, actor, req.params.id, 1);
       if (access.folder.parent_id !== "shared")
         fail(400, "只有共享文件夹的第一层目录可以设置共享");
-      const members = await db
+      const personalMembers = await db
         .selectFrom("file_folder_shares as s")
         .innerJoin("users as u", "u.id", "s.user_id")
         .select([
@@ -1447,6 +1473,73 @@ export function registerFiles(
         .where("s.folder_id", "=", req.params.id)
         .orderBy("u.display_name")
         .execute();
+      const canManage = access.role === "owner" || access.role === "admin";
+      const groupMembers = canManage
+        ? await db
+            .selectFrom("file_folder_group_grants as grant")
+            .innerJoin("user_groups as g", "g.id", "grant.group_id")
+            .innerJoin("user_group_members as m", "m.group_id", "g.id")
+            .innerJoin("users as u", "u.id", "m.user_id")
+            .select([
+              "u.id as user_id",
+              "u.display_name",
+              "u.public_id",
+              "g.id as group_id",
+              "g.name as group_name",
+              "grant.role",
+            ])
+            .where("grant.folder_id", "=", req.params.id)
+            .where("g.dissolved_at", "is", null)
+            .where("u.status", "=", "active")
+            .execute()
+        : [];
+      const linkMembers = await db
+        .selectFrom("file_folder_link_members")
+        .select("user_id")
+        .where("folder_id", "=", req.params.id)
+        .execute();
+      const memberIds = new Set(
+        [...personalMembers, ...groupMembers].map((m) => m.user_id),
+      );
+      const members = [...memberIds]
+        .filter((userId) => userId !== access.folder.owner_id)
+        .map((userId) => {
+          const personal = personalMembers.find((m) => m.user_id === userId);
+          const groups = groupMembers.filter((m) => m.user_id === userId);
+          const identity = personal ?? groups[0]!;
+          const role =
+            personal?.role === "admin" || groups.some((m) => m.role === "admin")
+              ? "admin"
+              : "reader";
+          return {
+            user_id: userId,
+            display_name: identity.display_name,
+            public_id: identity.public_id,
+            role,
+            personalRole: personal?.role ?? null,
+            version: personal?.version ?? null,
+            canAdjust: access.role === "owner" || role === "reader",
+            sources: [
+              ...(personal
+                ? [
+                    {
+                      type: linkMembers.some((m) => m.user_id === userId)
+                        ? "link"
+                        : "direct",
+                      role: personal.role,
+                    },
+                  ]
+                : []),
+              ...groups.map((m) => ({
+                type: "group",
+                role: m.role,
+                groupId: m.group_id,
+                groupName: m.group_name,
+              })),
+            ],
+          };
+        })
+        .sort((a, b) => a.display_name.localeCompare(b.display_name));
       const owner = await db
         .selectFrom("users")
         .select(["id", "display_name", "public_id"])
@@ -1722,7 +1815,8 @@ export function registerFiles(
     async (req) => {
       const actor = auth(req);
       const source = await readableItem(db, actor, req.params.id);
-      if (req.body.purpose === "ai_attachment") checkUploadLimits(await userUploadLimits(db, actor.id), [source.size]);
+      if (req.body.purpose === "ai_attachment")
+        checkUploadLimits(await userUploadLimits(db, actor.id), [source.size]);
       let ownerId = actor.id;
       if (req.body.purpose === "attachment") {
         if (!req.body.resourceId) fail(400, "文档附件需要目标文档");
@@ -1767,7 +1861,9 @@ export function registerFiles(
               assetId,
               resourceId: req.body.resourceId ?? null,
               copiedFrom: source.id,
-              ...(req.body.purpose === "ai_attachment" ? { aiSessionFolder: pendingAISessionFolder } : {}),
+              ...(req.body.purpose === "ai_attachment"
+                ? { aiSessionFolder: pendingAISessionFolder }
+                : {}),
             }),
             ai_description_override: source.ai_description_override,
             locked: req.body.purpose === "attachment" ? 1 : 0,
@@ -2204,9 +2300,12 @@ export function registerFiles(
       } else {
         const type = req.body.parentType ?? "system";
         const id = req.body.parentId ?? "root";
-        const aiSessionId = type === "system" ? aiSessionIdFromFolderId(id) : null;
-        const knowledgeKind = type === "system" ? knowledgeFolderKind(id) : null;
-        {}
+        const aiSessionId =
+          type === "system" ? aiSessionIdFromFolderId(id) : null;
+        const knowledgeKind =
+          type === "system" ? knowledgeFolderKind(id) : null;
+        {
+        }
         if (aiSessionId) await requireAISessionFolder(db, actor.id, id);
         if (type === "document") await authorize(db, actor, id, 1);
         let rows = db
@@ -2215,10 +2314,19 @@ export function registerFiles(
           .where("deleted_at", "is", null)
           .where("parent_type", "=", type);
         if (type === "system") {
-          if (!["root", "ai", "shared"].includes(id) && !aiSessionId && !knowledgeKind)
+          if (
+            !["root", "ai", "shared"].includes(id) &&
+            !aiSessionId &&
+            !knowledgeKind
+          )
             fail(403, "这个系统文件夹不支持批量识别");
           if (!knowledgeKind) rows = rows.where("owner_id", "=", actor.id);
-          if (id !== "root") rows = rows.where("parent_id", "=", aiSessionId || knowledgeKind ? "ai" : id);
+          if (id !== "root")
+            rows = rows.where(
+              "parent_id",
+              "=",
+              aiSessionId || knowledgeKind ? "ai" : id,
+            );
         } else if (type === "folder") {
           const folderIds = new Set<string>([id]);
           if (req.body.recursive !== false) {
@@ -2249,9 +2357,18 @@ export function registerFiles(
         }
         const candidates = await rows.execute();
         let selected = candidates;
-        if (type === "system" && id === "ai") selected = candidates.filter(row => !isRetiredKnowledgeSessionFile(row.metadata) && !readKnowledgeSessionFolder(row.metadata));
+        if (type === "system" && id === "ai")
+          selected = candidates.filter(
+            (row) =>
+              !isRetiredKnowledgeSessionFile(row.metadata) &&
+              !readKnowledgeSessionFolder(row.metadata),
+          );
         for (const row of selected) {
-          if (aiSessionId && readAISessionFolder(row.metadata)?.sessionId !== aiSessionId) continue;
+          if (
+            aiSessionId &&
+            readAISessionFolder(row.metadata)?.sessionId !== aiSessionId
+          )
+            continue;
           objectIds.push(row.storage_object_id);
           ownerByObject.set(row.storage_object_id, row.owner_id);
         }
@@ -2264,12 +2381,22 @@ export function registerFiles(
   );
 
   api.get("/api/v1/files/trash/clear-preview", async (req) =>
-    previewFileTrashClear(db, auth(req).id));
+    previewFileTrashClear(db, auth(req).id),
+  );
   api.post<{ Body: { fingerprint: string } }>(
     "/api/v1/files/trash/clear",
-    { schema: { tags: ["Files"], summary: "按已确认清单清空个人文件回收站",
-      body: Type.Object({ fingerprint: Type.String({ pattern: "^[a-f0-9]{64}$" }) }, { additionalProperties: false }) } },
-    async (req) => clearFileTrash(db, auth(req).id, req.body.fingerprint, enqueueFileSearch),
+    {
+      schema: {
+        tags: ["Files"],
+        summary: "按已确认清单清空个人文件回收站",
+        body: Type.Object(
+          { fingerprint: Type.String({ pattern: "^[a-f0-9]{64}$" }) },
+          { additionalProperties: false },
+        ),
+      },
+    },
+    async (req) =>
+      clearFileTrash(db, auth(req).id, req.body.fingerprint, enqueueFileSearch),
   );
 
   api.get("/api/v1/files/trash", async (req) => {
@@ -2467,7 +2594,11 @@ export function registerFiles(
           .where("parent_type", "=", "folder")
           .where("parent_id", "in", [...ids])
           .execute();
-        await assertFileTrashFolderContents(tx, [...ids], purgedFiles.map(file => file.id));
+        await assertFileTrashFolderContents(
+          tx,
+          [...ids],
+          purgedFiles.map((file) => file.id),
+        );
         for (const file of purgedFiles) await enqueueFileSearch(tx, file.id);
         await tx
           .deleteFrom("file_items")

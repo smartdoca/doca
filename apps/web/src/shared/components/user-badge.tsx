@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useState, useRef, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useState,
+  useRef,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { ExternalLink, X } from "lucide-react";
 import {
@@ -53,6 +60,7 @@ export function UserBadge({
     top: number;
   } | null>(null);
   const [config, setConfig] = useState<UserCardSettings>(defaultUserCard);
+  const cardId = useId();
   const card = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLSpanElement>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -189,6 +197,8 @@ export function UserBadge({
           tabIndex={passive ? undefined : 0}
           aria-haspopup="dialog"
           aria-expanded={expanded}
+          aria-controls={expanded ? cardId : undefined}
+          aria-label={avatarOnly ? display : undefined}
           onMouseEnter={() => {
             if (!passive) open();
           }}
@@ -201,6 +211,12 @@ export function UserBadge({
           }}
           onKeyDown={(e) => {
             if (passive) return;
+            if (e.key === "Escape" && expanded) {
+              e.preventDefault();
+              e.stopPropagation();
+              close();
+              return;
+            }
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               e.stopPropagation();
@@ -220,10 +236,12 @@ export function UserBadge({
           {children ?? (!avatarOnly && <span>{display}</span>)}
         </span>
       )}
-      {expanded && !cardsSuppressed &&
+      {expanded &&
+        !cardsSuppressed &&
         createPortal(
           <div
             ref={card}
+            id={cardId}
             className="user-profile-card"
             role="dialog"
             aria-label="用户资料"
@@ -235,6 +253,13 @@ export function UserBadge({
             onClick={(e) => e.stopPropagation()}
             onMouseEnter={keepOpen}
             onMouseLeave={scheduleClose}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.stopPropagation();
+                close();
+                trigger.current?.focus();
+              }
+            }}
           >
             <button
               className="icon user-card-close"

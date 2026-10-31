@@ -47,6 +47,11 @@
         "权限"
       ],
       [
+        "user-groups",
+        "User groups",
+        "用户组"
+      ],
+      [
         "public-resource-discovery",
         "Discovery and collections",
         "发现与收录"
@@ -296,6 +301,11 @@
     "en": "Releases",
     "zh": "发行记录",
     "pages": [
+      [
+        "releases/0.2.28",
+        "0.2.28",
+        "0.2.28"
+      ],
       [
         "releases/0.2.27",
         "0.2.27",

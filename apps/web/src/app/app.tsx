@@ -60,7 +60,7 @@ import { documentFavicon } from "@web/shared/utils/document-favicon.js";
 import { splitTitleIcon } from "@web/shared/utils/resource-title.js";
 import { loadWebPlugins } from "@web/plugins/load.js";
 import { cacheStartupDocument, clearDocumentStartupCache, documentStartupCacheKey, forgetStartupDocument, invalidateStartupIdentity, readDocumentStartup, readStartupAccount } from "@web/shared/document-startup-cache.js";
-import { Plus, Search, Users, Settings, Bell, ShieldCheck, ThumbsUp, LogOut, FolderOpen, ArrowLeft, PanelLeft, LockKeyhole, UserRound, BookOpenCheck } from "lucide-react";
+import { Plus, Search, Users, Settings, Bell, ShieldCheck, ThumbsUp, LogOut, FolderOpen, FolderSymlink, ArrowLeft, PanelLeft, LockKeyhole, UserRound, BookOpenCheck } from "lucide-react";
 import {
   api,
   roleRank,
@@ -112,6 +112,7 @@ import { DocumentModeContext, DocumentModeSwitch, useDocumentModeState } from "@
 import "@web/features/workspace/navigation-collapse.css";
 import { useDesktopNavigation, useNavigationCollapse } from "@web/features/workspace/navigation-collapse.js";
 const Admin = lazy(() => import("@web/features/admin/admin.js").then((module) => ({ default: module.Admin })));
+const GroupsPage = lazy(() => import("@web/features/groups/groups.js").then(module => ({ default: module.GroupsPage })));
 const KnowledgeBooksPage = lazy(() => import("@web/features/knowledge-books/knowledge-books.js").then((module) => ({ default: module.KnowledgeBooksPage })));
 const DiscoveryPage = lazy(() => import("@web/features/discovery/discovery.js").then((module) => ({ default: module.DiscoveryPage })));
 const AIChat = lazy(() => import("@web/features/ai/ai-chat-host.js").then((module) => ({ default: module.AIChat })));
@@ -120,6 +121,7 @@ const DocumentEditor = lazy(() =>
 );
 
 const titleKeys: Record<string, MessageKey> = {
+  groups: "groups.title",
   "knowledge-books": "books.title",
   home: "workspace.home",
   documents: "home.title",
@@ -1282,7 +1284,7 @@ function WorkspaceApp() {
 
             {!resourceId && pluginRoute && (scope === "files" || scope === "shared-files") && user && (
               <div className="files-topbar-title">
-                {scope === "shared-files" ? <Users size={17} aria-hidden="true" /> : <FolderOpen size={17} aria-hidden="true" />}
+                {scope === "shared-files" ? <FolderSymlink size={17} aria-hidden="true" /> : <FolderOpen size={17} aria-hidden="true" />}
                 <strong>{scope === "shared-files" ? (sharedFolderId ? sharedFolderName : t("nav.sharedFiles")) : t("nav.files")}</strong>
                 {(scope === "files" || sharedFolderId) && <><span className="files-topbar-separator">/</span>
                 <nav aria-label={t("nav.folderPath")}>
@@ -1482,6 +1484,8 @@ function WorkspaceApp() {
             <><NavigationArea slot="web.home"/><WorkspaceHome name={user.display_name} /></>
           ) : !resourceId && (scope === "discover" || scope === "collected") && user ? (
             <LazyContent><DiscoveryPage key={scope + hash} collected={scope === "collected"} /></LazyContent>
+          ) : !resourceId && scope === "groups" && user ? (
+            <LazyContent><GroupsPage key={user.id} userId={user.id} hash={hash} /></LazyContent>
           ) : !resourceId && scope === "knowledge-books" && (user || /^#\/knowledge-books\/[0-9a-f-]{36}/i.test(hash)) ? (
             <LazyContent><KnowledgeBooksPage id={hash.replace(/^#\/knowledge-books\/?/, "").split("?")[0] || undefined} /></LazyContent>
           ) : !resourceId && scope === "ai" ? (

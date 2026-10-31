@@ -105,6 +105,18 @@ function source(
 
 export function builtinDirectorySources(database: () => DB): DirectorySource[] {
   return [
+    source("doca.groups.directory", async principalId => {
+      const rows = await database().selectFrom("user_group_members as own")
+        .innerJoin("user_groups as group", "group.id", "own.group_id")
+        .innerJoin("user_group_members as peer", "peer.group_id", "group.id")
+        .innerJoin("users as user", "user.id", "peer.user_id")
+        .select(["peer.user_id", "group.id", "group.revision"])
+        .where("own.user_id", "=", principalId).where("group.dissolved_at", "is", null).where("user.status", "=", "active")
+        .orderBy("peer.user_id").orderBy("group.id").execute();
+      const facts = new Map<string, typeof rows>();
+      for (const row of rows) { const list = facts.get(row.user_id) ?? []; list.push(row); facts.set(row.user_id, list); }
+      return [...facts].map(([userId, list]) => ({ userId, relationId: `group-member:${userId}`, revision: createHash("sha256").update(JSON.stringify(list)).digest("hex") }));
+    }),
     source("doca.documents.directory", (principalId) =>
       documentRelations(database(), principalId),
     ),

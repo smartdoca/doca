@@ -47,12 +47,27 @@ export function roleQuery(
       where g.user_id = ${userId}
         and ((select depth from boundaries) is null
           or a.depth <= (select depth from boundaries))
+  ), group_decisions as (
+    select g.group_id, a.depth, case when g.status='disabled' or (a.depth>0 and g.include_descendants=0) then 0
+      else case g.role when 'manager' then 4 when 'editor' then 3 when 'commenter' then 2 else 1 end end as rank
+    from resource_group_grants g join ancestry a on a.id=g.resource_id
+    join user_groups ug on ug.id=g.group_id and ug.dissolved_at is null
+    join user_group_members gm on gm.group_id=ug.id and gm.user_id=${userId}
+    join users gu on gu.id=gm.user_id and gu.status='active'
   ), openness as (
     select
       (select a.visibility from ancestry a where a.access_mode = 'custom' or (a.permission_overrides & 1) <> 0 or (a.parent_id is null and a.library_id is null) order by a.depth limit 1) as visibility,
       (select a.public_role from ancestry a where a.access_mode = 'custom' or (a.permission_overrides & 2) <> 0 or (a.parent_id is null and a.library_id is null) order by a.depth limit 1) as public_role
   ) select coalesce(max(effective.rank), 0) from (
     select rank from decisions where depth = (select min(depth) from decisions)
+    union all
+    select gd.rank from group_decisions gd where gd.depth=(select min(nearest.depth) from group_decisions nearest where nearest.group_id=gd.group_id)
+    union all
+    select 4 as rank from resources target join resource_group_grants gg on gg.resource_id=target.library_id
+      join user_groups ug on ug.id=gg.group_id and ug.dissolved_at is null
+      join user_group_members gm on gm.group_id=ug.id and gm.user_id=${userId}
+      join users gu on gu.id=gm.user_id and gu.status='active'
+      where target.id=${resourceId} and gg.role='manager' and gg.status='active'
     union all
     select 4 as rank from resources target join grants library_manager on library_manager.resource_id = target.library_id
       where target.id = ${resourceId} and library_manager.user_id = ${userId}
