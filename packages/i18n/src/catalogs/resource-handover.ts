@@ -1,4 +1,6 @@
 export const handoverEn = {
+  "handover.kind.group": "User group ownership",
+  "handover.conflict.group_membership": "The recipient must already be a member of this group",
   "handover.open": "Hand over resources",
   "handover.title": "Resource handover · {name}",
   "handover.intro":
@@ -79,6 +81,8 @@ export const handoverEn = {
 } as const;
 
 export const handoverZh: Record<keyof typeof handoverEn, string> = {
+  "handover.kind.group": "用户组所有权",
+  "handover.conflict.group_membership": "接收人需已是该用户组成员",
   "handover.open": "资源交接",
   "handover.title": "资源交接 · {name}",
   "handover.intro":

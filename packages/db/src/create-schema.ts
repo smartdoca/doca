@@ -1,4 +1,5 @@
 import { createMcpStructure, mcpTables } from "./mcp-schema.js";
+import { createGroupsSchema, groupTables } from "./groups-schema.js";
 import {
   createBrowserClipperStructure,
   browserClipperTables,
@@ -441,6 +442,7 @@ export async function createCurrentStructure(
   for (const statement of schemaStatements(targetDriver))
     await sql.raw(statement).execute(db);
   await createFileSchema(db);
+  await createGroupsSchema(db);
   await createDiscoverySchema(db);
   await createSearchSchema(db);
   await createKnowledgeSchema(db);
@@ -461,6 +463,7 @@ export async function createCurrentStructure(
 export const schemaEvolution = {
   alignColumns: true,
   newTables: [
+    ...groupTables,
     ...browserClipperTables,
     ...mcpTables,
     "file_folder_link_members",
@@ -508,6 +511,10 @@ export async function createSchema(db: Kysely<any>) {
       await createSystemSchema(tx);
       await recordSchemaStructure(tx, createCurrentStructure);
     }
+    // Initialize the explicitly approved default only when this table is first installed.
+    // A lost configuration row in an already installed table is never recreated silently.
+    if (!existing.some(table => table.name === "group_directory_policies"))
+      await tx.insertInto("group_directory_policies").values({ id: "system", user_id: null, mode: "member", revision: 1 }).execute();
   };
   if (databaseDriver(db) === "postgres" && !db.isTransaction) {
     // Take a fresh catalog snapshot after waiting for the schema lock. A serializable

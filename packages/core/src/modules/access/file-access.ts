@@ -1,4 +1,6 @@
 import type { DB } from "@db/index.js";
+import { sql } from "kysely";
+import { folderGroupRank } from "../groups/access.js";
 import type { Actor } from "../identity/passwords.js";
 import { authorize } from "./queries.js";
 import { fail } from "../../shared/errors.js";
@@ -54,7 +56,8 @@ export async function authorizeFileFolder(
     .where("folder_id", "=", cursor.id)
     .where("user_id", "=", actor.id)
     .executeTakeFirst();
-  const level = share?.role === "admin" ? 3 : share?.role === "reader" ? 1 : 0;
+  const group = await tx.selectFrom("file_folders").select(folderGroupRank(sql.ref("file_folders.id"), actor.id).as("rank")).where("id", "=", cursor.id).executeTakeFirstOrThrow();
+  const level = Math.max(share?.role === "admin" ? 3 : share?.role === "reader" ? 1 : 0, Number(group.rank));
   if (level < minimumRole && published && minimumRole <= 1)
     return { folder, role: "reader" as const, shareRootId: cursor.id };
   if (level < minimumRole)
@@ -62,7 +65,7 @@ export async function authorizeFileFolder(
       minimumRole > 1 ? 403 : 404,
       minimumRole > 1 ? "没有管理这个共享文件夹的权限" : "文件夹不存在",
     );
-  return { folder, role: share!.role, shareRootId: cursor.id };
+  return { folder, role: level >= 3 ? "admin" as const : "reader" as const, shareRootId: cursor.id };
 }
 
 export async function authorizeFileItem(db: DB, actor: Actor, id: string) {

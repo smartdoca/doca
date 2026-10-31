@@ -2,11 +2,11 @@
 
 [English](deployment-without-github.md)
 
-业务服务器无需拉取源码，也无需安装 Git、Node.js 或 pnpm。准备好 Docker Engine、Docker Compose 插件、Bash 和 OpenSSL 后，复制部署文件、准备镜像、启动并初始化管理员即可。本指南用于全新单机安装 Doca 0.2.27，采用 SQLite 和本地文件存储；已有部署先阅读[发行要求](releases/0.2.27.zh-CN.md)，保留原数据库、文件、配置和凭证主密钥。
+业务服务器无需拉取源码，也无需安装 Git、Node.js 或 pnpm。准备好 Docker Engine、Docker Compose 插件、Bash 和 OpenSSL 后，复制部署文件、准备镜像、启动并初始化管理员即可。本指南用于全新单机安装 Doca 0.2.28，采用 SQLite 和本地文件存储；已有部署先阅读[发行要求](releases/0.2.28.zh-CN.md)，保留原数据库、文件、配置和凭证主密钥。
 
 ## 单 YAML 全新安装
 
-`node scripts/pack-deployment.mjs` 另输出 `doca-compose-v版本.yaml` 和校验文件。交付此 YAML，保存为固定部署目录下的 `compose.yaml`，在文件中填写 `DOCA_ORIGIN` 与自行生成的 `DOCA_CREDENTIAL_MASTER_KEY`，执行 `chmod 600 compose.yaml` 后运行 `docker compose up -d`。无需 `.env`、seccomp JSON 或外部初始化脚本。使用匹配的 0.2.27 镜像；GitHub Release 也提供该独立 YAML 与校验文件。
+`node scripts/pack-deployment.mjs` 另输出 `doca-compose-v版本.yaml` 和校验文件。交付此 YAML，保存为固定部署目录下的 `compose.yaml`，在文件中填写 `DOCA_ORIGIN` 与自行生成的 `DOCA_CREDENTIAL_MASTER_KEY`，执行 `chmod 600 compose.yaml` 后运行 `docker compose up -d`。无需 `.env`、seccomp JSON 或外部初始化脚本。使用匹配的 0.2.28 镜像；GitHub Release 也提供该独立 YAML 与校验文件。
 
 服务健康后执行 `docker compose exec doca bash docker/admin.sh bootstrap`；重置密码用 `docker compose exec doca bash docker/admin.sh reset-password`。密码在终端隐藏输入，不写进 YAML。该示例仅用于全新 SQLite/本地存储安装，已有站点继续使用原项目名、持久卷和密钥；备份须包含受保护的 YAML。反向代理要求与下文一致。
 
@@ -20,22 +20,22 @@ cd doca
 node scripts/pack-deployment.mjs
 ```
 
-下文用 0.2.27 的文件名和镜像标签举例。实际以打包命令输出的文件名和生成的 Compose 镜像为准。
+下文用 0.2.28 的文件名和镜像标签举例。实际以打包命令输出的文件名和生成的 Compose 镜像为准。
 
-把生成的 `doca-deploy-v0.2.27.tar.gz` 和同名 `.sha256` 校验文件，通过企业文件服务、内网下载地址或移动存储转交给业务方。打包只读取公开部署文件，不包含本机 `.env`、用户数据或镜像。正式标签的 Release 工作流也会附上部署包和校验文件；这项工作流变更需要随新标签发布，已有 Release 不会自动补包。
+把生成的 `doca-deploy-v0.2.28.tar.gz` 和同名 `.sha256` 校验文件，通过企业文件服务、内网下载地址或移动存储转交给业务方。打包只读取公开部署文件，不包含本机 `.env`、用户数据或镜像。正式标签的 Release 工作流也会附上部署包和校验文件；这项工作流变更需要随新标签发布，已有 Release 不会自动补包。
 
 在业务服务器上将两个文件放到同一目录，校验并解压：
 
 ```sh
-sha256sum -c doca-deploy-v0.2.27.tar.gz.sha256
-tar -xzf doca-deploy-v0.2.27.tar.gz
-cd doca-deploy-v0.2.27
+sha256sum -c doca-deploy-v0.2.28.tar.gz.sha256
+tar -xzf doca-deploy-v0.2.28.tar.gz
+cd doca-deploy-v0.2.28
 ```
 
-macOS 校验可用 `shasum -a 256 -c doca-deploy-v0.2.27.tar.gz.sha256`。部署目录如下，后续命令均在此目录执行：
+macOS 校验可用 `shasum -a 256 -c doca-deploy-v0.2.28.tar.gz.sha256`。部署目录如下，后续命令均在此目录执行：
 
 ```text
-doca-deploy-v0.2.27/
+doca-deploy-v0.2.28/
   compose.yaml
   docker.env.example
   README.zh-CN.md
@@ -55,7 +55,7 @@ doca-deploy-v0.2.27/
 ```yaml
 services:
   doca:
-    image: docker.io/smartdoca/doca:0.2.27
+    image: docker.io/smartdoca/doca:0.2.28
     pull_policy: missing
     restart: unless-stopped
     init: true
@@ -136,21 +136,21 @@ docker compose pull doca
 由交付方在可拉取镜像的机器上准备镜像文件。先确认业务服务器的 CPU 架构；以下以 Linux x86-64（`linux/amd64`）为例，ARM64 服务器把平台改为 `linux/arm64`，并在交付文件名中相应标明：
 
 ```sh
-docker pull --platform linux/amd64 docker.io/smartdoca/doca:0.2.27
-docker image inspect docker.io/smartdoca/doca:0.2.27 --format '{{.Os}}/{{.Architecture}}'
-docker save -o doca-image-v0.2.27-linux-amd64.tar docker.io/smartdoca/doca:0.2.27
-sha256sum doca-image-v0.2.27-linux-amd64.tar > doca-image-v0.2.27-linux-amd64.tar.sha256
+docker pull --platform linux/amd64 docker.io/smartdoca/doca:0.2.28
+docker image inspect docker.io/smartdoca/doca:0.2.28 --format '{{.Os}}/{{.Architecture}}'
+docker save -o doca-image-v0.2.28-linux-amd64.tar docker.io/smartdoca/doca:0.2.28
+sha256sum doca-image-v0.2.28-linux-amd64.tar > doca-image-v0.2.28-linux-amd64.tar.sha256
 ```
 
 把镜像 `.tar` 和校验文件一起转交。业务方在这两个文件所在目录执行：
 
 ```sh
-sha256sum -c doca-image-v0.2.27-linux-amd64.tar.sha256
-docker load -i doca-image-v0.2.27-linux-amd64.tar
-docker image inspect docker.io/smartdoca/doca:0.2.27 --format '{{.Os}}/{{.Architecture}}'
+sha256sum -c doca-image-v0.2.28-linux-amd64.tar.sha256
+docker load -i doca-image-v0.2.28-linux-amd64.tar
+docker image inspect docker.io/smartdoca/doca:0.2.28 --format '{{.Os}}/{{.Architecture}}'
 ```
 
-确认导入的标签是 `smartdoca/doca:0.2.27`，架构与目标服务器一致，再回到部署目录。内网镜像仓库也是可选交付方式：交付方推送同版本镜像，业务方将 Compose 的 `image` 改为内网镜像完整地址并拉取；部署包、镜像和初始化脚本保持同一版本。
+确认导入的标签是 `smartdoca/doca:0.2.28`，架构与目标服务器一致，再回到部署目录。内网镜像仓库也是可选交付方式：交付方推送同版本镜像，业务方将 Compose 的 `image` 改为内网镜像完整地址并拉取；部署包、镜像和初始化脚本保持同一版本。
 
 ## 4. 启动与数据库初始化
 
@@ -170,7 +170,7 @@ docker compose ps
 curl -fsS -H 'Host: docs.example.com' http://127.0.0.1:39120/health
 ```
 
-应返回 `{"status":"ok","version":"0.2.27"}`。内网站点改用 `Host: doca.internal`。裸回环请求会被 Host 校验拒绝。启动失败可运行 `docker compose logs --tail=100 doca` 查看日志。
+应返回 `{"status":"ok","version":"0.2.28"}`。内网站点改用 `Host: doca.internal`。裸回环请求会被 Host 校验拒绝。启动失败可运行 `docker compose logs --tail=100 doca` 查看日志。
 
 ## 5. 初始化管理员
 
@@ -194,4 +194,4 @@ bash scripts/reset-admin-password.sh
 
 日常重启使用 `docker compose restart`，保留部署目录和 Compose 项目名，以继续使用同一个 `doca_data` 卷；不要通过改目录或项目名意外启动另一个空站点。备份覆盖持久卷中的全部数据库、文件存储以及受保护的 `.env` 和主密钥。`docker compose down -v` 会删除卷，不用于普通重启或升级。
 
-后续升级先确认[发行要求](releases/0.2.27.zh-CN.md)，交付匹配版本的部署包和镜像；本流程只初始化全新站点，不转换已有数据。基础密码登录和本地文档服务无需 GitHub；AI、外部登录、插件安装及云存储等配置的外部服务仍需业务网络可达。文档导出还需在目标宿主机验证渲染器，应用健康不等于 PDF、画板和 Office 渲染效果已验证，见 [Docker 文档渲染器](docker-rendering.zh-CN.md)。
+后续升级先确认[发行要求](releases/0.2.28.zh-CN.md)，交付匹配版本的部署包和镜像；本流程只初始化全新站点，不转换已有数据。基础密码登录和本地文档服务无需 GitHub；AI、外部登录、插件安装及云存储等配置的外部服务仍需业务网络可达。文档导出还需在目标宿主机验证渲染器，应用健康不等于 PDF、画板和 Office 渲染效果已验证，见 [Docker 文档渲染器](docker-rendering.zh-CN.md)。

@@ -3,7 +3,7 @@ import type { Resource, Schema } from "../../../../db/src/index.js";
 import type { Actor } from "../identity/passwords.js";
 import { ranks, type Role } from "./roles.js";
 export { ranks, type Role } from "./roles.js";
-export type Grant = Schema["grants"] & { source?: string; blocked?: boolean };
+export type Grant = Schema["grants"] & { source?: string; blocked?: boolean; groupId?: string; groupName?: string; groupAvatar?: string | null; memberIds?: string[] };
 /** A knowledge-base owner has owner-level control over every document in it. */
 export function isResourceOwnerLike(
   resource: Resource,
@@ -36,6 +36,30 @@ export function namedPermission(
   descendants = false,
   visited = new Set<string>(),
 ): number {
+  if (!actor) return 0;
+  const personal = personalPermission(resource, actor, resources, grants.filter(g => !g.groupId), descendants, visited);
+  const groups = new Set(grants.filter(g => g.groupId && g.memberIds?.includes(actor.id)).map(g => g.groupId!));
+  return Math.max(personal, 0, ...[...groups].map(groupId => groupPermission(resource, groupId, resources, grants, descendants)));
+}
+
+/** Each group has its own inheritance boundary. Individual blocks do not erase group grants. */
+export function groupPermission(resource: Resource, groupId: string, resources: Resource[], grants: Grant[], descendants = false, visited = new Set<string>()): number {
+  if (visited.has(resource.id)) return 0;
+  visited.add(resource.id);
+  if (resource.library_id) {
+    const library = resources.find(r => r.id === resource.library_id);
+    if (library && groupPermission(library, groupId, resources, grants, false, new Set(visited)) >= 4) return 4;
+  }
+  const local = grants.find(g => g.resource_id === resource.id && g.groupId === groupId);
+  if (local) return local.blocked || (descendants && local.include_descendants === 0) ? 0 : ranks[local.role];
+  if (resource.access_mode !== "inherit") return 0;
+  const parent = resources.find(r => r.id === (resource.parent_id ?? resource.library_id));
+  return parent ? groupPermission(parent, groupId, resources, grants, true, visited) : 0;
+}
+
+function personalPermission(
+  resource: Resource, actor: Actor | null, resources: Resource[], grants: Grant[], descendants = false, visited = new Set<string>(),
+): number {
   if (!actor || visited.has(resource.id)) return 0;
   visited.add(resource.id);
   if (isResourceOwnerLike(resource, actor, resources)) return 5;
@@ -43,7 +67,7 @@ export function namedPermission(
   // of child ACLs, inheritance switches, and explicit child-level blocks.
   if (resource.library_id) {
     const library = resources.find((r) => r.id === resource.library_id && r.kind === "library");
-    if (library && namedPermission(library, actor, resources, grants, false, new Set(visited)) >= 4) return 4;
+    if (library && personalPermission(library, actor, resources, grants, false, new Set(visited)) >= 4) return 4;
   }
   const local = grants.filter(
     (g) => g.resource_id === resource.id && g.user_id === actor.id,
@@ -72,7 +96,7 @@ export function namedPermission(
   return Math.max(
     localRank,
     parent
-      ? namedPermission(parent, actor, resources, grants, true, visited)
+      ? personalPermission(parent, actor, resources, grants, true, visited)
       : 0,
   );
 }

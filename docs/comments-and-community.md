@@ -21,10 +21,10 @@ Administrators set user visibility, with a site default and a per-user override:
 | Mode | New-user candidates |
 | --- | --- |
 | all | Active users of the site |
-| related | Users who currently share an explicit permission on a document or library, including inheritance, library ownership, and valid link members |
+| related | Users who currently share explicit document/library permission, including inheritance, library ownership, valid link members and effective group grants; also active members of the same active user group |
 | none | No candidates. A user UUID cannot be typed in to add a permission or a mention |
 
-Public and signed-in visibility do not create a relationship. Revoking permission removes the relationship. Existing permissions can still be changed or revoked. Existing comments and body mentions do not disappear because the policy tightened. The administrator user list is not limited by this search policy.
+Public and signed-in visibility do not create a relationship. Revoking the last permission/membership relationship removes it. Existing permissions can still be changed or revoked. Existing comments and body mentions do not disappear because the policy tightened. The administrator user list is not limited by this search policy. Group search has an independent administrator policy, defaulting to joined groups; see [user groups](user-groups.md).
 
 Routes are under `/api/v1`:
 

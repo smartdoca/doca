@@ -1,4 +1,5 @@
 import { pluginServices } from "@core/shared/plugin-services.js";
+import { registerGroups } from "../routes/groups.js";
 import { createUserDirectory } from "@core/modules/discovery/users.js";
 import { HOST_VERSION } from "./version.js";
 import { createHistoryWorker } from "../jobs/history-worker.js";
@@ -501,6 +502,10 @@ export async function createApp(db: DB, options: CreateAppOptions) {
   );
   api.addHook("preClose", async () => realtimeCluster.close());
   registerWorkspace(api, db, authenticated, admin, realtime.onlineUsers);
+  registerGroups(api, db, authenticated, admin, async userIds => {
+    await realtime.enforceAccess();
+    await Promise.all(userIds.map(id => realtime.notificationsChanged(id)));
+  });
   registerResourceHandover(api, db, admin, async (userIds) => {
     await realtime.enforceAccess();
     await Promise.all(userIds.map((id) => realtime.notificationsChanged(id)));

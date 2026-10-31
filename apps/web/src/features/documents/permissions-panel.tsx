@@ -1,11 +1,16 @@
+import {
+  PermissionGrantRow,
+  PermissionEffectiveAccess,
+  permissionRoleChoices as roles,
+} from "@web/shared/components/permission-grant-row.js";
 import { usePermissionPopover } from "./use-permission-popover.js";
+import { GroupGrants } from "@web/features/groups/group-grants.js";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   ChevronRight,
   ClipboardList,
   Globe,
-  Info,
   Search,
   X,
 } from "lucide-react";
@@ -30,6 +35,8 @@ type Member = {
   public_id: string;
   role: string;
   directRole: string | null;
+  personalRole: string | null;
+  personalIncludeDescendants: boolean;
   sources: string[];
   canAdjust: boolean;
   includeDescendants: boolean;
@@ -41,6 +48,7 @@ type Member = {
     role: string;
     includeDescendants: boolean;
     status: string;
+    groupName?: string;
   }[];
 };
 type Overview = {
@@ -68,12 +76,7 @@ type Overview = {
   administrators: Manager[];
   members: Member[];
 };
-const roles = (owner = false) => [
-  "reader",
-  "commenter",
-  "editor",
-  ...(owner ? ["manager"] : []),
-];
+
 const pageTitles = {
   main: "share.title",
   members: "share.members",
@@ -113,6 +116,7 @@ export function PermissionDialog({
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
   const [trail, setTrail] = useState<Array<keyof typeof pageTitles>>(["main"]);
+  const [inviteKind, setInviteKind] = useState<"person" | "group">("person");
   const page = trail[trail.length - 1] ?? "main";
   const [person, setPerson] = useState<{
       id: string;
@@ -121,7 +125,6 @@ export function PermissionDialog({
     [role, setRole] = useState("reader"),
     [includeDescendants, setIncludeDescendants] = useState(true),
     [invitationMessage, setInvitationMessage] = useState(""),
-    [removing, setRemoving] = useState<string | null>(null),
     [sourceMember, setSourceMember] = useState<Member | null>(null);
   const panel = usePermissionPopover(close, embedded);
   async function load() {
@@ -159,7 +162,6 @@ export function PermissionDialog({
     });
     setNotice("");
     setError("");
-    setRemoving(null);
   }
   function back() {
     if (page === "sources") setSourceMember(null);
@@ -168,7 +170,6 @@ export function PermissionDialog({
     );
     setNotice("");
     setError("");
-    setRemoving(null);
   }
   useEffect(() => {
     panel.current?.querySelector(".permissions-body")?.scrollTo(0, 0);
@@ -179,7 +180,14 @@ export function PermissionDialog({
     roleValue = source.role,
     scope = source.includeDescendants,
   ) {
-    if (!data || !sourceMember || source.type === "parent_inherited") return;
+    if (
+      !data ||
+      !sourceMember ||
+      source.type === "parent_inherited" ||
+      source.type === "group" ||
+      source.type === "owner"
+    )
+      return false;
     setBusy(true);
     setError("");
     try {
@@ -193,18 +201,22 @@ export function PermissionDialog({
           : {}),
       });
       const next = await load();
-      setSourceMember(
-        next.members.find((member) => member.id === sourceMember.id) ?? null,
+      const refreshedMember = next.members.find(
+        (member) => member.id === sourceMember.id,
       );
+      setSourceMember(refreshedMember ?? null);
+      if (!refreshedMember) back();
       await saved();
       setNotice(
         action === "delete"
           ? t("permissionsUi.sourceDeleted")
           : t("permissionsUi.sourceUpdated"),
       );
+      return true;
     } catch (e) {
       setError((e as Error).message);
       await load().catch(() => {});
+      return false;
     } finally {
       setBusy(false);
     }
@@ -241,9 +253,9 @@ export function PermissionDialog({
   async function member(
     m: Member,
     nextRole: string | null,
-    scope = m.includeDescendants,
+    scope = adapter ? m.includeDescendants : m.personalIncludeDescendants,
   ) {
-    if (!data) return;
+    if (!data) return false;
     const next = await act(
       `${basePath}/members/${m.id}`,
       {
@@ -256,11 +268,11 @@ export function PermissionDialog({
         : t("permissionsUi.collaboratorRemoved"),
     );
     if (next) {
-      setRemoving(null);
       const effective = next.members.find((x) => x.id === m.id);
       if (effective && effective.role !== (nextRole ?? "none"))
         setNotice(t("permissionsUi.otherAccess"));
     }
+    return !!next;
   }
   function origin(field: string) {
     if (!data || data.accessMode !== "inherit") return null;
@@ -449,7 +461,7 @@ export function PermissionDialog({
                     onClick={() => navigate("invite")}
                   >
                     <Search size={16} />
-                    <span>{t("permissionsUi.search")}</span>
+                    <span>{t("groups.inviteCollaborator")}</span>
                   </button>
                 )}
               </section>
@@ -466,100 +478,137 @@ export function PermissionDialog({
             )}
           </>
         )}
-        {data?.canManage && page === "invite" && (
-          <form
-            className="permissions-invite-form"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (!person || busy) return;
-              if (
-                await act(
-                  `${basePath}/members/${person.id}`,
-                  {
-                    revision: data.authzRevision,
-                    role,
-                    includeDescendants,
-                    message: invitationMessage.trim(),
-                  },
-                  t("permissionsUi.invited"),
-                )
-              ) {
-                setPerson(null);
-                setInvitationMessage("");
-                navigate("main");
-                setNotice(t("permissionsUi.invited"));
-              }
-            }}
-          >
-            <fieldset className="permissions-form" disabled={busy}>
-              <div className="permissions-invite-recipient">
-                <h3>{t("dialog.chooseCollaborator")}</h3>
-                <PersonPicker
-                  autoFocus
-                  selected={person}
-                  clear={() => setPerson(null)}
-                  select={setPerson}
-                />
-              </div>
-              <label>
-                {t("permissionsUi.grant")}
-                <Select
-                  aria-label={t("permissionsUi.inviteAccess")}
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                >
-                  {memberRoles(data.isOwner).map((r) => (
-                    <option key={r} value={r}>
-                      {accessText(t, r)}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-              {supportsDescendants && (
-                <label className="permissions-check">
-                  <input
-                    type="checkbox"
-                    checked={includeDescendants}
-                    onChange={(e) => setIncludeDescendants(e.target.checked)}
-                  />
-                  {t("role.scope.descendants")}
-                </label>
-              )}
-              {adapter?.invitationNote !== false && (
-                <label>
-                  <span>
-                    {t("permissionsUi.note")}
-                    <span className="permissions-optional">
-                      {t("permissionsUi.optional")}
-                    </span>
-                  </span>
-                  <textarea
-                    aria-label={t("ticket.inviteNote")}
-                    placeholder={t("permissionsUi.noteHint")}
-                    maxLength={1000}
-                    rows={3}
-                    value={invitationMessage}
-                    onChange={(e) => setInvitationMessage(e.target.value)}
-                  />
-                </label>
-              )}
-              <footer>
-                <button type="button" onClick={() => navigate("main")}>
-                  {t("common.cancel")}
-                </button>
-                <button
-                  className="primary"
-                  type="submit"
-                  disabled={!person || busy}
-                >
-                  {busy
-                    ? t("permissionsUi.inviting")
-                    : t("permissionsUi.sendInvite")}
-                </button>
-              </footer>
-            </fieldset>
-          </form>
+        {data?.canManage && page === "invite" && !adapter && (
+          <div className="group-invite-tabs">
+            <button
+              type="button"
+              className={inviteKind === "person" ? "active" : ""}
+              onClick={() => setInviteKind("person")}
+            >
+              {t("groups.person")}
+            </button>
+            <button
+              type="button"
+              className={inviteKind === "group" ? "active" : ""}
+              onClick={() => setInviteKind("group")}
+            >
+              {t("groups.title")}
+            </button>
+          </div>
         )}
+        {data?.canManage &&
+          page === "invite" &&
+          inviteKind === "group" &&
+          !adapter && (
+            <GroupGrants
+              view="invite"
+              cancel={() => navigate("main")}
+              basePath={basePath}
+              owner={data.isOwner}
+              supportsDescendants={data.supportsDescendants}
+              revision={data.authzRevision}
+              changed={async () => {
+                await load();
+                await saved();
+              }}
+            />
+          )}
+        {data?.canManage &&
+          page === "invite" &&
+          (inviteKind === "person" || !!adapter) && (
+            <form
+              className="permissions-invite-form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!person || busy) return;
+                if (
+                  await act(
+                    `${basePath}/members/${person.id}`,
+                    {
+                      revision: data.authzRevision,
+                      role,
+                      includeDescendants,
+                      message: invitationMessage.trim(),
+                    },
+                    t("permissionsUi.invited"),
+                  )
+                ) {
+                  setPerson(null);
+                  setInvitationMessage("");
+                  navigate("main");
+                  setNotice(t("permissionsUi.invited"));
+                }
+              }}
+            >
+              <fieldset className="permissions-form" disabled={busy}>
+                <div className="permissions-invite-recipient">
+                  <h3>{t("dialog.chooseCollaborator")}</h3>
+                  <PersonPicker
+                    autoFocus
+                    selected={person}
+                    clear={() => setPerson(null)}
+                    select={setPerson}
+                  />
+                </div>
+                <label>
+                  {t("permissionsUi.grant")}
+                  <Select
+                    aria-label={t("permissionsUi.inviteAccess")}
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                  >
+                    {memberRoles(data.isOwner).map((r) => (
+                      <option key={r} value={r}>
+                        {accessText(t, r)}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                {supportsDescendants && (
+                  <label className="permissions-check">
+                    <input
+                      type="checkbox"
+                      checked={includeDescendants}
+                      onChange={(e) => setIncludeDescendants(e.target.checked)}
+                    />
+                    {t("role.scope.descendants")}
+                  </label>
+                )}
+                {adapter?.invitationNote !== false && (
+                  <label>
+                    <span>
+                      {t("permissionsUi.note")}
+                      <span className="permissions-optional">
+                        {t("permissionsUi.optional")}
+                      </span>
+                    </span>
+                    <textarea
+                      aria-label={t("ticket.inviteNote")}
+                      placeholder={t("permissionsUi.noteHint")}
+                      maxLength={1000}
+                      rows={3}
+                      value={invitationMessage}
+                      onChange={(e) => setInvitationMessage(e.target.value)}
+                    />
+                  </label>
+                )}
+                <footer>
+                  <button type="button" onClick={() => navigate("main")}>
+                    {t("common.cancel")}
+                  </button>
+                  <button
+                    className="primary"
+                    type="submit"
+                    disabled={!person || busy}
+                  >
+                    {busy
+                      ? t("permissionsUi.inviting")
+                      : t("permissionsUi.sendInvite")}
+                  </button>
+                </footer>
+              </fieldset>
+            </form>
+          )}
         {data &&
           page === "request" &&
           data.rank < 4 &&
@@ -568,104 +617,112 @@ export function PermissionDialog({
           )}
         {data && page === "members" && data.canManage && (
           <>
-            {data.members.map((m) => (
-              <div className="permissions-member" key={m.id}>
-                <div className="permissions-person">
-                  <UserBadge id={m.id} name={m.display_name} />
-                  <small>
-                    @{m.public_id}
-                    {m.sources.includes("inherit")
-                      ? t("permissionsUi.inheritedSuffix")
-                      : ""}
-                  </small>
-                </div>
-                {m.canAdjust ? (
-                  <div className="permissions-member-controls">
-                    <button
-                      className="icon permissions-source-button"
-                      title={t("permissionsUi.viewSources")}
-                      aria-label={t("permissionsUi.sourcesFor", {
-                        name: m.display_name,
-                      })}
-                      disabled={busy}
-                      onClick={() => {
-                        setSourceMember(m);
-                        navigate("sources");
-                      }}
-                    >
-                      <Info size={15} />
-                    </button>
-                    <Select
-                      aria-label={t("permissionsUi.accessFor", {
-                        name: m.display_name,
-                      })}
-                      value={m.role}
-                      disabled={busy}
-                      onChange={(e) => void member(m, e.target.value)}
-                    >
-                      {memberRoles(data.isOwner).map((r) => (
-                        <option key={r} value={r}>
-                          {accessText(t, r)}
-                        </option>
-                      ))}
-                    </Select>
-                    {m.canAdjust && (
-                      <button disabled={busy} onClick={() => setRemoving(m.id)}>
-                        {t("credentials.remove")}
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    <span className="permissions-member-role">
-                      {accessText(t, m.role)}
-                    </span>
-                    <button
-                      className="icon permissions-source-button"
-                      title={t("permissionsUi.viewSources")}
-                      aria-label={t("permissionsUi.sourcesFor", {
-                        name: m.display_name,
-                      })}
-                      onClick={() => {
-                        setSourceMember(m);
-                        navigate("sources");
-                      }}
-                    >
-                      <Info size={15} />
-                    </button>
-                  </>
-                )}
-                {m.canAdjust && supportsDescendants && (
-                  <label className="permissions-check permissions-member-scope">
-                    <input
-                      type="checkbox"
-                      checked={m.includeDescendants}
-                      disabled={busy}
-                      onChange={(e) => void member(m, m.role, e.target.checked)}
-                    />
-                    {t("role.scope.descendants")}
-                  </label>
-                )}
-                {removing === m.id && (
-                  <div className="permissions-confirm">
-                    <p>{t("permissionsUi.removeHelp")}</p>
-                    <button
-                      disabled={busy}
-                      onClick={() => void member(m, null)}
-                    >
-                      {t("permissionsUi.confirmRemove")}
-                    </button>
-                    <button onClick={() => setRemoving(null)}>
-                      {t("common.cancel")}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+            {data.members.map((m) => {
+              const personalRole = adapter ? m.role : m.personalRole;
+              const selectedRole = personalRole ?? m.role;
+              const scope = adapter
+                ? m.includeDescendants
+                : m.personalIncludeDescendants;
+              return (
+                <PermissionGrantRow
+                  key={m.id}
+                  identity={<UserBadge id={m.id} name={m.display_name} />}
+                  subtitle={
+                    <>
+                      @{m.public_id}
+                      {m.sources.includes("inherit")
+                        ? t("permissionsUi.inheritedSuffix")
+                        : ""}
+                    </>
+                  }
+                  details={
+                    !adapter &&
+                    !m.sources.includes("owner") && (
+                      <>
+                        {!personalRole && (
+                          <small>{t("permissionsUi.groupOnlyAccess")}</small>
+                        )}
+                        {personalRole && personalRole !== m.role && (
+                          <PermissionEffectiveAccess
+                            role={accessText(t, m.role)}
+                          />
+                        )}
+                      </>
+                    )
+                  }
+                  sources={{
+                    name: m.display_name,
+                    disabled: busy,
+                    open: () => {
+                      setSourceMember(m);
+                      navigate("sources");
+                    },
+                  }}
+                  permission={{
+                    value: selectedRole,
+                    label: accessText(t, m.role),
+                    ariaLabel: t("permissionsUi.accessFor", {
+                      name: m.display_name,
+                    }),
+                    options: m.canAdjust
+                      ? memberRoles(data.isOwner).map((value) => ({
+                          value,
+                          label: accessText(t, value),
+                        }))
+                      : undefined,
+                    disabled: busy,
+                    reason:
+                      !m.canAdjust && m.role === "manager"
+                        ? t(
+                            data.isOwner
+                              ? "groups.inheritedManager"
+                              : "permissionsUi.ownerOnlyRole",
+                          )
+                        : undefined,
+                    change: (nextRole) => void member(m, nextRole),
+                  }}
+                  remove={
+                    m.canAdjust
+                      ? {
+                          name: m.display_name,
+                          disabled: busy || !personalRole,
+                          reason: !personalRole
+                            ? t("permissionsUi.groupOnlyRemove")
+                            : undefined,
+                          confirm: () => member(m, null),
+                        }
+                      : undefined
+                  }
+                  scope={
+                    m.canAdjust && supportsDescendants
+                      ? {
+                          checked: scope,
+                          disabled: busy,
+                          change: (nextScope) =>
+                            void member(m, selectedRole, nextScope),
+                        }
+                      : undefined
+                  }
+                />
+              );
+            })}
             {!data.members.length && (
               <p className="permissions-empty">
                 {t("permissionsUi.noCollaborators")}
               </p>
+            )}
+            {!adapter && (
+              <GroupGrants
+                view="members"
+                basePath={basePath}
+                owner={data.isOwner}
+                supportsDescendants={data.supportsDescendants}
+                revision={data.authzRevision}
+                changed={async () => {
+                  await load();
+                  await saved();
+                }}
+              />
             )}
           </>
         )}
@@ -681,92 +738,99 @@ export function PermissionDialog({
               </span>
             </div>
             {sourceMember.sourceDetails.map((source, index) => {
-              const inherited = source.type === "parent_inherited";
+              const inherited =
+                source.type === "parent_inherited" || source.type === "group";
               const parentOverride = source.type === "parent_override";
-              const sourceLabel = inherited
-                ? t("permissionsUi.parentSource")
-                : parentOverride
-                  ? source.status === "disabled"
-                    ? t("permissionsUi.blockParent")
-                    : t("permissionsUi.overrideParent")
-                  : source.type === "link"
-                    ? t("permissionsUi.shareSource", { id: source.id ?? "" })
-                    : t("permissionsUi.directGrant");
+              const sourceLabel =
+                source.type === "owner"
+                  ? t("permissionsUi.ownerSource")
+                  : source.type === "group"
+                    ? t("groups.groupSource", { name: source.groupName ?? "" })
+                    : inherited
+                      ? t("permissionsUi.parentSource")
+                      : parentOverride
+                        ? source.status === "disabled"
+                          ? t("permissionsUi.blockParent")
+                          : t("permissionsUi.overrideParent")
+                        : source.type === "link"
+                          ? t("permissionsUi.shareSource", {
+                              id: source.id ?? "",
+                            })
+                          : t("permissionsUi.directGrant");
+              const canEdit =
+                !inherited && source.type !== "owner" && sourceMember.canAdjust;
+              const active = source.status !== "disabled";
               return (
-                <div
+                <PermissionGrantRow
                   className="permissions-source-card"
                   key={`${source.type}:${source.id ?? index}`}
-                >
-                  <div className="permissions-source-card-title">
-                    <span>{sourceLabel}</span>
-                    <span>
-                      {source.status === "disabled"
-                        ? t("permissionsUi.disabled")
-                        : (accessText(t, source.role) ?? source.role)}
+                  identity={
+                    <span
+                      className="permission-source-identity"
+                      title={sourceLabel}
+                    >
+                      {sourceLabel}
                     </span>
-                  </div>
-                  <div className="permissions-source-card-meta">
-                    {supportsDescendants && source.includeDescendants
-                      ? t("role.scope.descendants")
-                      : t("permissionsUi.currentOnly")}
-                  </div>
-                  {!inherited && (
-                    <div className="permissions-source-card-actions">
-                      {source.status !== "disabled" && (
-                        <>
-                          <Select
-                            aria-label={t("permissionsUi.sourceAccess", {
-                              name: sourceLabel,
-                            })}
-                            value={source.role}
-                            disabled={
-                              busy || (!!adapter && source.type === "link")
-                            }
-                            onChange={(event) =>
-                              void sourceAction(
-                                source,
-                                "update",
-                                event.target.value,
-                              )
-                            }
-                          >
-                            {memberRoles(data.isOwner).map((roleName) => (
-                              <option key={roleName} value={roleName}>
-                                {accessText(t, roleName)}
-                              </option>
-                            ))}
-                          </Select>
-                          {supportsDescendants && (
-                            <label className="permissions-check">
-                              <input
-                                type="checkbox"
-                                checked={source.includeDescendants}
-                                disabled={busy}
-                                onChange={(event) =>
-                                  void sourceAction(
-                                    source,
-                                    "update",
-                                    source.role,
-                                    event.target.checked,
-                                  )
-                                }
-                              />
-                              {t("permissionsUi.children")}
-                            </label>
-                          )}
-                        </>
-                      )}
-                      <button
-                        disabled={busy}
-                        onClick={() => void sourceAction(source, "delete")}
-                      >
-                        {parentOverride
-                          ? t("permissionsUi.clearOverride")
-                          : t("permissionsUi.deleteSource")}
-                      </button>
-                    </div>
-                  )}
-                </div>
+                  }
+                  subtitle={
+                    !canEdit || !active || !supportsDescendants
+                      ? supportsDescendants && source.includeDescendants
+                        ? t("role.scope.descendants")
+                        : t("permissionsUi.currentOnly")
+                      : undefined
+                  }
+                  permission={{
+                    value: source.role,
+                    label: active
+                      ? accessText(t, source.role)
+                      : t("permissionsUi.disabled"),
+                    ariaLabel: t("permissionsUi.sourceAccess", {
+                      name: sourceLabel,
+                    }),
+                    options:
+                      canEdit && active
+                        ? memberRoles(data.isOwner).map((value) => ({
+                            value,
+                            label: accessText(t, value),
+                          }))
+                        : undefined,
+                    disabled: busy || (!!adapter && source.type === "link"),
+                    change: (nextRole) =>
+                      void sourceAction(source, "update", nextRole),
+                  }}
+                  scope={
+                    canEdit && active && supportsDescendants
+                      ? {
+                          checked: source.includeDescendants,
+                          disabled: busy,
+                          change: (checked) =>
+                            void sourceAction(
+                              source,
+                              "update",
+                              source.role,
+                              checked,
+                            ),
+                        }
+                      : undefined
+                  }
+                  remove={
+                    canEdit
+                      ? {
+                          name: sourceMember.display_name,
+                          disabled: busy,
+                          label: parentOverride
+                            ? t("permissionsUi.clearOverride")
+                            : t("permissionsUi.deleteSource"),
+                          description: parentOverride
+                            ? t("permissionsUi.clearOverrideConfirm")
+                            : t("permissionsUi.deleteSourceConfirm", {
+                                name: sourceLabel,
+                              }),
+                          confirm: () => sourceAction(source, "delete"),
+                        }
+                      : undefined
+                  }
+                />
               );
             })}
             {!sourceMember.sourceDetails.length && (
@@ -815,21 +879,21 @@ export function PermissionDialog({
                   <div className="permissions-public-options">
                     {(data.internetPublication !== false ||
                       data.effectiveVisibility === "public") && (
-                    <label className="permissions-check">
-                      <input
-                        type="checkbox"
-                        disabled={!!data.publicContainerId}
-                        checked={data.effectiveVisibility === "public"}
-                        onChange={(e) =>
-                          void settings({
-                            visibility: e.target.checked
-                              ? "public"
-                              : "authenticated",
-                          })
-                        }
-                      />
-                      {t("permissionsUi.publicWeb")}
-                    </label>
+                      <label className="permissions-check">
+                        <input
+                          type="checkbox"
+                          disabled={!!data.publicContainerId}
+                          checked={data.effectiveVisibility === "public"}
+                          onChange={(e) =>
+                            void settings({
+                              visibility: e.target.checked
+                                ? "public"
+                                : "authenticated",
+                            })
+                          }
+                        />
+                        {t("permissionsUi.publicWeb")}
+                      </label>
                     )}
                     <div className="permissions-option-row">
                       <span>

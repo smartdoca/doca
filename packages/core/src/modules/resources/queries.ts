@@ -52,7 +52,8 @@ export function entryQuery(
     and (entry.owner_id = ${userId}
       or exists(select 1 from resource_entries joined where joined.resource_id = entry.id and joined.user_id = ${userId} and joined.state = 'joined' and joined.source not in ('opened','manual'))
       or exists(select 1 from access_invitations invitation where invitation.resource_id = entry.id and invitation.user_id = ${userId} and invitation.state = 'accepted')
-      ${allowGranted ? sql`or exists(select 1 from grants g where g.resource_id = entry.id and g.user_id = ${userId} and g.status = 'active')` : sql``}
+      ${allowGranted ? sql`or exists(select 1 from grants g where g.resource_id = entry.id and g.user_id = ${userId} and g.status = 'active')
+        or exists(select 1 from resource_group_grants gg join user_groups ug on ug.id=gg.group_id and ug.dissolved_at is null join user_group_members gm on gm.group_id=ug.id and gm.user_id=${userId} where gg.resource_id=entry.id and gg.status='active')` : sql``}
       ${allowPublic ? sql`or (entry.kind = 'library' and entry.access_mode = 'custom' and entry.visibility in ('public', 'authenticated'))` : sql``}
     )))`;
 }
@@ -330,7 +331,8 @@ async function queryResourcePageUnchecked(
       case "shared":
         query = query.where("r.kind", "=", input.kind === "library" ? "library" : "document")
           .where("r.owner_id", "!=", actor.id)
-          .where(sql<boolean>`(exists(select 1 from grants g where g.user_id=${actor.id} and g.status='active' and (g.resource_id=r.id or (g.resource_id=r.library_id and g.include_descendants=1))) or exists(select 1 from access_invitations i where i.user_id=${actor.id} and i.state='accepted' and i.resource_id=r.id))`);
+          .where(sql<boolean>`(exists(select 1 from grants g where g.user_id=${actor.id} and g.status='active' and (g.resource_id=r.id or (g.resource_id=r.library_id and g.include_descendants=1))) or exists(select 1 from access_invitations i where i.user_id=${actor.id} and i.state='accepted' and i.resource_id=r.id)
+            or exists(select 1 from resource_group_grants gg join user_groups ug on ug.id=gg.group_id and ug.dissolved_at is null join user_group_members gm on gm.group_id=ug.id and gm.user_id=${actor.id} where gg.status='active' and (gg.resource_id=r.id or (gg.resource_id=r.library_id and gg.include_descendants=1))))`);
         break;
       case "collected":
         query = query.where(

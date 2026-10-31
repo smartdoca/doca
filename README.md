@@ -106,12 +106,12 @@ Doca 提供 Streamable HTTP MCP 服务，让支持 MCP 的客户端发现已授�
 
 ## Docker 快速开始
 
-需要 Docker Engine、Docker Compose，以及通过反向代理访问的 HTTP(S) 地址。全新 SQLite/本地存储安装只需一个 YAML，无需 Git、源码、seccomp JSON 或外部初始化脚本。已有部署更换版本前，先阅读[发行要求](https://workhold.github.io/doca/#/zh-cn/releases/0.2.27)，保留原项目名、持久卷、数据库、附件和主密钥。
+需要 Docker Engine、Docker Compose，以及通过反向代理访问的 HTTP(S) 地址。全新 SQLite/本地存储安装只需一个 YAML，无需 Git、源码、seccomp JSON 或外部初始化脚本。已有部署更换版本前，先阅读[发行要求](https://workhold.github.io/doca/#/zh-cn/releases/0.2.28)，保留原项目名、持久卷、数据库、附件和主密钥。
 
 ```sh
 # 1. 在固定部署目录下载单文件配置
 mkdir doca && cd doca
-curl -fL https://github.com/workhold/doca/releases/download/v0.2.27/doca-compose-v0.2.27.yaml -o compose.yaml
+curl -fL https://github.com/workhold/doca/releases/download/v0.2.28/doca-compose-v0.2.28.yaml -o compose.yaml
 
 # 2. 用 openssl rand -hex 32 生成主密钥
 # 编辑 compose.yaml，填写 DOCA_ORIGIN 和 DOCA_CREDENTIAL_MASTER_KEY
@@ -152,7 +152,7 @@ pnpm dev
 - [部署与配置](https://workhold.github.io/doca/#/zh-cn/operations/deployment)
 - [插件开发](https://workhold.github.io/doca/#/zh-cn/plugins/plugin-development)
 - [HTTP API](https://workhold.github.io/doca/#/zh-cn/reference/api)，运行中的应用还提供 `/api/openapi.json`。
-- [发行记录](https://workhold.github.io/doca/#/zh-cn/releases/0.2.27)
+- [发行记录](https://workhold.github.io/doca/#/zh-cn/releases/0.2.28)
 - [文档源码](docs/README.zh-CN.md)
 
 预览文档时，执行 `pnpm docs:dev` 并打开 `http://127.0.0.1:39140/#/zh-cn/`。`pnpm docs:check` 校验双语覆盖和本地链接。GitHub Pages 设置见[文档维护](docs/documentation.zh-CN.md)。

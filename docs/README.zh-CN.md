@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Doca 是面向个人和小团队的文档与知识工作台。本套文档随当前源码维护；安装与升级请对照 [0.2.27 发行说明](releases/0.2.27.zh-CN.md)，组件契约另行注明实现限制。
+Doca 是面向个人和小团队的文档与知识工作台。本套文档随当前源码维护；安装与升级请对照 [0.2.28 发行说明](releases/0.2.28.zh-CN.md)，组件契约另行注明实现限制。
 
 [官网](https://i.smartdoca.cc) · [Demo 体验](https://d.smartdoca.cc) · [插件商城](https://store.smartdoca.cc)
 
@@ -33,6 +33,6 @@ Doca 是面向个人和小团队的文档与知识工作台。本套文档随当
 
 ## 技术参考与项目记录
 
-[HTTP API](api.zh-CN.md) · [数据库](database.zh-CN.md) · [插件 SDK 契约](plugin-sdk-contract.zh-CN.md) · [插件存储契约](plugin-horizontal-scaling.zh-CN.md) · [协同契约](collaboration-sdk-contract.zh-CN.md) · [文件交换](editor-file-exchange-contract.zh-CN.md) · [发行说明](releases/0.2.27.zh-CN.md) · [文档维护](documentation.zh-CN.md) · [研发与验收资料](research.zh-CN.md)
+[HTTP API](api.zh-CN.md) · [数据库](database.zh-CN.md) · [插件 SDK 契约](plugin-sdk-contract.zh-CN.md) · [插件存储契约](plugin-horizontal-scaling.zh-CN.md) · [协同契约](collaboration-sdk-contract.zh-CN.md) · [文件交换](editor-file-exchange-contract.zh-CN.md) · [发行说明](releases/0.2.28.zh-CN.md) · [文档维护](documentation.zh-CN.md) · [研发与验收资料](research.zh-CN.md)
 
 运行中的应用提供 `/api/openapi.json`。相关契约会标明拟议能力；设计记录不代表接口已经导出。研发资料保留原始语言和日期。

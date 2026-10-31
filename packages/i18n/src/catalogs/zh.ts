@@ -1,10 +1,12 @@
 import { browserClipperZh } from "./browser-clipper.js";
 import { handoverZh } from "./resource-handover.js";
+import { groupsZh } from "./groups.js";
 import type { MessageKey } from "./en";
 
 export const zh = {
   ...browserClipperZh,
   ...handoverZh,
+  ...groupsZh,
   "mcp.unattendedConfig": "可选：无人值守 Codex 授权",
   "mcp.unattendedHelp": "可选配置会在此客户端预先授权 doca_call。仅当你允许该服务按 Doca 中选定的权限直接执行、无需逐次确认时使用。",
   "mcp.title": "MCP 服务",
@@ -2758,6 +2760,7 @@ export const zh = {
   "home.recent.today": "今天",
   "home.recent.yesterday": "昨天",
   "home.recent.last7Days": "最近 7 天",
+  "tree.arranging": "调整位置中…",
   "tree.tooLarge":
     "目录超过 10,000 项，当前仅显示前 10,000 项。请通过搜索定位其余文档；后续将改为按层加载。",
   "home.recent.last30Days": "最近 30 天",

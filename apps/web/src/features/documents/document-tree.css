@@ -25,6 +25,35 @@
   scrollbar-width: thin;
   scrollbar-color: #c5c9cf transparent;
 }
+.document-tree .tree-arrange-status {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  background: var(--selected);
+  color: var(--brand);
+  font-size: 12px;
+  line-height: 20px;
+}
+.document-tree .tree-arrange-status > svg {
+  flex: none;
+  animation: tree-arrange-spin 1s linear infinite;
+}
+@keyframes tree-arrange-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .document-tree .tree-arrange-status > svg {
+    animation: none;
+  }
+}
 .sidebar .document-tree .tree-row {
   min-height: 32px;
   margin: 1px 0;

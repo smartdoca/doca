@@ -2,11 +2,11 @@
 
 [简体中文](deployment-without-github.zh-CN.md)
 
-The business server does not need a source checkout, Git, Node.js, or pnpm. Install Docker Engine, the Docker Compose plugin, Bash, and OpenSSL beforehand, then transfer deployment files, prepare the image, start Doca, and initialize the administrator. This guide installs Doca 0.2.27 on a fresh single server with SQLite and local file storage. Existing installations must review the [release requirements](releases/0.2.27.md) and preserve their databases, files, configuration, and credential master key.
+The business server does not need a source checkout, Git, Node.js, or pnpm. Install Docker Engine, the Docker Compose plugin, Bash, and OpenSSL beforehand, then transfer deployment files, prepare the image, start Doca, and initialize the administrator. This guide installs Doca 0.2.28 on a fresh single server with SQLite and local file storage. Existing installations must review the [release requirements](releases/0.2.28.md) and preserve their databases, files, configuration, and credential master key.
 
 ## Fresh installation from one YAML
 
-`node scripts/pack-deployment.mjs` also outputs `doca-compose-vVERSION.yaml` and its checksum. Transfer the YAML, save it as `compose.yaml` in a permanent deployment directory, edit `DOCA_ORIGIN` and your generated `DOCA_CREDENTIAL_MASTER_KEY`, protect it with `chmod 600 compose.yaml`, then run `docker compose up -d`. No `.env`, seccomp JSON or external administrator script is needed. Use the matching 0.2.27 image; the standalone YAML and checksum are also attached to the GitHub Release.
+`node scripts/pack-deployment.mjs` also outputs `doca-compose-vVERSION.yaml` and its checksum. Transfer the YAML, save it as `compose.yaml` in a permanent deployment directory, edit `DOCA_ORIGIN` and your generated `DOCA_CREDENTIAL_MASTER_KEY`, protect it with `chmod 600 compose.yaml`, then run `docker compose up -d`. No `.env`, seccomp JSON or external administrator script is needed. Use the matching 0.2.28 image; the standalone YAML and checksum are also attached to the GitHub Release.
 
 After the service is healthy, run `docker compose exec doca bash docker/admin.sh bootstrap`; use `reset-password` for password reset. Password entry is hidden and does not go into the YAML. This example is only for fresh SQLite/local-storage installations. Existing sites retain their project name, volumes and key. Backups include the protected YAML. Reverse-proxy requirements remain as described below.
 
@@ -20,22 +20,22 @@ cd doca
 node scripts/pack-deployment.mjs
 ```
 
-The archive names and image tag below use 0.2.27 as an example. Use the filenames printed by the packer and the image specified in the generated Compose file.
+The archive names and image tag below use 0.2.28 as an example. Use the filenames printed by the packer and the image specified in the generated Compose file.
 
-Transfer `doca-deploy-v0.2.27.tar.gz` and its `.sha256` checksum through an enterprise file service, an internal download URL, or removable storage. The packer reads only public deployment files and includes no local `.env`, user data, or container image. The official-tag Release workflow also attaches the bundle and checksum; this workflow change takes effect with a new tag and does not backfill existing Releases.
+Transfer `doca-deploy-v0.2.28.tar.gz` and its `.sha256` checksum through an enterprise file service, an internal download URL, or removable storage. The packer reads only public deployment files and includes no local `.env`, user data, or container image. The official-tag Release workflow also attaches the bundle and checksum; this workflow change takes effect with a new tag and does not backfill existing Releases.
 
 Place both files in the same directory on the business server, verify, and extract:
 
 ```sh
-sha256sum -c doca-deploy-v0.2.27.tar.gz.sha256
-tar -xzf doca-deploy-v0.2.27.tar.gz
-cd doca-deploy-v0.2.27
+sha256sum -c doca-deploy-v0.2.28.tar.gz.sha256
+tar -xzf doca-deploy-v0.2.28.tar.gz
+cd doca-deploy-v0.2.28
 ```
 
-On macOS, use `shasum -a 256 -c doca-deploy-v0.2.27.tar.gz.sha256`. Run subsequent deployment commands from this directory:
+On macOS, use `shasum -a 256 -c doca-deploy-v0.2.28.tar.gz.sha256`. Run subsequent deployment commands from this directory:
 
 ```text
-doca-deploy-v0.2.27/
+doca-deploy-v0.2.28/
   compose.yaml
   docker.env.example
   README.zh-CN.md
@@ -55,7 +55,7 @@ For a text handoff, save this single-server configuration as `compose.yaml` and 
 ```yaml
 services:
   doca:
-    image: docker.io/smartdoca/doca:0.2.27
+    image: docker.io/smartdoca/doca:0.2.28
     pull_policy: missing
     restart: unless-stopped
     init: true
@@ -136,21 +136,21 @@ docker compose pull doca
 The supplier prepares an image archive on a machine with registry access. Confirm the target CPU architecture first. This example uses Linux x86-64 (`linux/amd64`); for ARM64, use `linux/arm64` and label the delivered files accordingly:
 
 ```sh
-docker pull --platform linux/amd64 docker.io/smartdoca/doca:0.2.27
-docker image inspect docker.io/smartdoca/doca:0.2.27 --format '{{.Os}}/{{.Architecture}}'
-docker save -o doca-image-v0.2.27-linux-amd64.tar docker.io/smartdoca/doca:0.2.27
-sha256sum doca-image-v0.2.27-linux-amd64.tar > doca-image-v0.2.27-linux-amd64.tar.sha256
+docker pull --platform linux/amd64 docker.io/smartdoca/doca:0.2.28
+docker image inspect docker.io/smartdoca/doca:0.2.28 --format '{{.Os}}/{{.Architecture}}'
+docker save -o doca-image-v0.2.28-linux-amd64.tar docker.io/smartdoca/doca:0.2.28
+sha256sum doca-image-v0.2.28-linux-amd64.tar > doca-image-v0.2.28-linux-amd64.tar.sha256
 ```
 
 Transfer the image `.tar` and checksum together. From their directory on the business server:
 
 ```sh
-sha256sum -c doca-image-v0.2.27-linux-amd64.tar.sha256
-docker load -i doca-image-v0.2.27-linux-amd64.tar
-docker image inspect docker.io/smartdoca/doca:0.2.27 --format '{{.Os}}/{{.Architecture}}'
+sha256sum -c doca-image-v0.2.28-linux-amd64.tar.sha256
+docker load -i doca-image-v0.2.28-linux-amd64.tar
+docker image inspect docker.io/smartdoca/doca:0.2.28 --format '{{.Os}}/{{.Architecture}}'
 ```
 
-Confirm the loaded tag is `smartdoca/doca:0.2.27` and the architecture matches the target, then return to the deployment directory. An internal registry is another delivery option: the supplier pushes the same release image and the business team changes Compose's `image` to that internal registry address before pulling. Keep the bundle, image, and initialization scripts on the same release.
+Confirm the loaded tag is `smartdoca/doca:0.2.28` and the architecture matches the target, then return to the deployment directory. An internal registry is another delivery option: the supplier pushes the same release image and the business team changes Compose's `image` to that internal registry address before pulling. Keep the bundle, image, and initialization scripts on the same release.
 
 ## 4. Start and initialize the database
 
@@ -170,7 +170,7 @@ Wait for `docker compose ps` to show `healthy`. A manual check must use the Host
 curl -fsS -H 'Host: docs.example.com' http://127.0.0.1:39120/health
 ```
 
-Expect `{"status":"ok","version":"0.2.27"}`. For the internal example, use `Host: doca.internal`. Bare loopback requests fail Host validation. Inspect startup failures with `docker compose logs --tail=100 doca`.
+Expect `{"status":"ok","version":"0.2.28"}`. For the internal example, use `Host: doca.internal`. Bare loopback requests fail Host validation. Inspect startup failures with `docker compose logs --tail=100 doca`.
 
 ## 5. Initialize the administrator
 
@@ -194,4 +194,4 @@ This does not create an account. If the database is locked, run `docker compose 
 
 Use `docker compose restart` for ordinary restarts. Keep the deployment directory and Compose project name so the same `doca_data` volume is used; changing either can accidentally start a separate empty site. Back up all databases and file storage in the persistent volume, plus the protected `.env` and master key. `docker compose down -v` deletes the volume and must not be used for an ordinary restart or upgrade.
 
-Review the [release requirements](releases/0.2.27.md) before upgrading and deliver a matching bundle and image. This guide initializes fresh sites and does not convert existing data. Password login and local document services need no GitHub access; configured external services for AI, external login, plugin installation, or cloud storage must still be reachable. Verify document rendering on the target host separately: application health alone does not establish PDF, Canvas and Office rendering correctness. See [Docker document rendering](docker-rendering.md).
+Review the [release requirements](releases/0.2.28.md) before upgrading and deliver a matching bundle and image. This guide initializes fresh sites and does not convert existing data. Password login and local document services need no GitHub access; configured external services for AI, external login, plugin installation, or cloud storage must still be reachable. Verify document rendering on the target host separately: application health alone does not establish PDF, Canvas and Office rendering correctness. See [Docker document rendering](docker-rendering.md).

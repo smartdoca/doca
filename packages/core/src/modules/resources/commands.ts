@@ -25,6 +25,8 @@ import {
   isResourceOwnerLike,
 } from "../access/policy.js";
 import { effectiveResource } from "../access/inheritance.js";
+import { accessContext } from "../access/queries.js";
+import { groupPermission } from "../access/policy.js";
 import { emitIntegrationEvent } from "../automation/events.js";
 import {
   DOCUMENT_CODECS,
@@ -75,6 +77,9 @@ async function isCollaborator(
     .where("status", "=", "active")
     .executeTakeFirst();
   if (granted) return true;
+  const context = await accessContext(tx, { id: userId, display_name: "", admin: 0 }, [resourceId]);
+  const resource = context.resources.find(r => r.id === resourceId);
+  if (resource && context.grants.some(g => g.groupId && g.memberIds?.includes(userId) && groupPermission(resource, g.groupId, context.resources, context.grants) > 0)) return true;
   return false;
 }
 async function erasePurgedResources(ctx: Context, actor: Actor, ids: string[]) {

@@ -203,7 +203,7 @@ export function protectManagers(
 ) {
   const ids = new Set([
     ...ctx.resources.map((x) => x.owner_id),
-    ...ctx.grants.filter((g) => g.role === "manager").map((g) => g.user_id),
+    ...ctx.grants.filter((g) => g.role === "manager").flatMap((g) => g.memberIds ?? [g.user_id]),
   ]);
   for (const doc of affected)
     if (!isResourceOwnerLike(doc, ctx.actor, ctx.resources))

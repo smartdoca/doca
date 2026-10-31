@@ -1,4 +1,5 @@
 import type { Generated, Kysely } from "kysely";
+import type { GroupTables } from "./groups-types.js";
 import type { BrowserClipperSchema } from "./browser-clipper-types.js";
 import type { KnowledgeBookTables } from "./knowledge-books-types.js";
 export interface User {
@@ -44,7 +45,7 @@ export interface Resource {
   created_at: string;
   updated_at: string;
 }
-export interface Schema extends KnowledgeBookTables, BrowserClipperSchema {
+export interface Schema extends KnowledgeBookTables, BrowserClipperSchema, GroupTables {
   schema_baseline: {
     id: string;
     created_at: string;

@@ -106,19 +106,54 @@ try {
   await destination.waitFor();
   const box = await destination.boundingBox();
   assert(box);
+  const saving = Promise.withResolvers<void>(),
+    refreshing = Promise.withResolvers<void>(),
+    refreshStarted = Promise.withResolvers<void>();
+  let holdRefresh = false;
+  const arrangeRoute = `**/resources/${source.id}/arrange`;
+  const treeRoute = "**/resources?**";
+  await page.route(arrangeRoute, async (route) => {
+    await saving.promise;
+    holdRefresh = true;
+    await route.continue();
+  });
+  await page.route(treeRoute, async (route) => {
+    if (holdRefresh && new URL(route.request().url()).searchParams.get("tree") === "true") {
+      refreshStarted.resolve();
+      await refreshing.promise;
+    }
+    await route.continue();
+  });
+  const status = page.getByRole("status").filter({ hasText: "调整位置中…" });
   const moved = page.waitForResponse(
     (r) =>
       r.url().endsWith(`/resources/${source.id}/arrange`) &&
       r.request().method() === "POST",
   );
+  const treeRefreshed = page.waitForResponse(
+    (r) => r.url().includes("/resources?") && new URL(r.url()).searchParams.get("tree") === "true",
+  );
   await row().dragTo(destination, {
     targetPosition: { x: 80, y: box.height - 2 },
   });
+  await status.waitFor();
+  assert.equal(await row().getAttribute("draggable"), "false");
+  await page.screenshot({ path: join(output, "arranging-save.png") });
+  saving.resolve();
   const response = await moved;
   assert.equal(response.status(), 200, await response.text());
-  await page.waitForResponse(
-    (r) => r.url().includes("/resources?") && r.request().method() === "GET",
-  );
+  await refreshStarted.promise;
+  assert.equal(await status.isVisible(), true, "Loading stays visible during the tree refresh");
+  assert.equal(await row().getAttribute("draggable"), "false");
+  await page.evaluate(() => { document.documentElement.style.zoom = "2"; });
+  await page.locator(".sidebar").screenshot({ path: join(output, "arranging-refresh-200.png") });
+  await page.evaluate(() => { document.documentElement.style.zoom = ""; });
+  refreshing.resolve();
+  await treeRefreshed;
+  await status.waitFor({ state: "hidden" });
+  assert.equal(await row().getAttribute("draggable"), "true");
+  await page.unroute(arrangeRoute);
+  await page.unroute(treeRoute);
   assert.equal(
     (
       await db
@@ -153,6 +188,8 @@ try {
     targetPosition: { x: 80, y: box.height / 2 },
   });
   await refreshed;
+  await status.waitFor({ state: "hidden" });
+  assert.equal(await row().getAttribute("draggable"), "true");
   // The notification must survive the successful list refresh and remain visible.
   await page.getByRole("alert").filter({ hasText: message }).waitFor();
   await page
@@ -171,6 +208,10 @@ try {
         moveWithTrash: true,
         retainedTrashUnchanged: true,
         errorSurvivesRefresh: true,
+        loadingDuringSave: true,
+        loadingDuringRefresh: true,
+        draggingBlockedWhileArranging: true,
+        loadingClearsAfterSuccessAndFailure: true,
         errors,
       },
       null,
